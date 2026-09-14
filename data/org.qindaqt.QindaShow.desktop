@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=QindaShow
+GenericName=Presentation
+Comment=Build and present slides in an ordinary QindaQt window — part of QindaQt Office
+Exec=qindashow %F
+Icon=org.qindaqt.QindaShow
+Terminal=false
+Categories=Qt;Office;Presentation;
+MimeType=application/vnd.openxmlformats-officedocument.presentationml.presentation;application/vnd.oasis.opendocument.presentation;
+StartupNotify=true
+StartupWMClass=qindashow

@@ -1,0 +1,89 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#pragma once
+
+#include <QAction>
+
+class QObject;
+
+namespace QindaOffice::Shell {
+
+// The suite-standard action objectNames (menu-export activation identity).
+//
+// AGENT-CONTRACT: these strings are how the panel's dbusmenu endpoint and any
+// saved keybindings address a command; they must never be renamed or reused
+// for a different command (mirror: text-editor.md action table). Add new
+// ids for new commands.
+namespace ActionId {
+inline const char kFileNew[] = "fileNewAction";
+inline const char kFileOpen[] = "fileOpenAction";
+inline const char kFileCloseWindow[] = "fileCloseWindowAction";
+inline const char kFileSave[] = "fileSaveAction";
+inline const char kFileSaveAs[] = "fileSaveAsAction";
+inline const char kFilePrint[] = "filePrintAction";
+inline const char kFilePrintPreview[] = "filePrintPreviewAction";
+inline const char kFileQuit[] = "fileQuitAction";
+inline const char kEditUndo[] = "editUndoAction";
+inline const char kEditRedo[] = "editRedoAction";
+inline const char kEditCut[] = "editCutAction";
+inline const char kEditCopy[] = "editCopyAction";
+inline const char kEditPaste[] = "editPasteAction";
+inline const char kEditSelectAll[] = "editSelectAllAction";
+inline const char kEditFind[] = "editFindAction";
+inline const char kEditReplace[] = "editReplaceAction";
+inline const char kEditFindNext[] = "editFindNextAction";
+inline const char kEditFindPrevious[] = "editFindPreviousAction";
+inline const char kViewZoomIn[] = "viewZoomInAction";
+inline const char kViewZoomOut[] = "viewZoomOutAction";
+inline const char kViewZoomReset[] = "viewZoomResetAction";
+inline const char kViewShowMenuBar[] = "viewShowMenuBarAction";
+inline const char kAiAssistant[] = "aiAssistantAction";
+inline const char kSettingsPreferences[] = "settingsPreferencesAction";
+inline const char kHelpAbout[] = "helpAboutAction";
+inline const char kHelpAboutQt[] = "helpAboutQtAction";
+} // namespace ActionId
+
+// One bundle per document window so the action discipline (every command is
+// a persistent window-scoped QAction with a stable objectName) lives in a
+// single factory. DocumentWindow owns an instance; look actions up with
+// DocumentWindow::action() or findChild<QAction*>(ActionId::...).
+struct StandardActions {
+    QAction *fileNew = nullptr;
+    QAction *fileOpen = nullptr;
+    QAction *fileCloseWindow = nullptr;
+    QAction *fileSave = nullptr;
+    QAction *fileSaveAs = nullptr;
+    QAction *filePrint = nullptr;
+    QAction *filePrintPreview = nullptr;
+    QAction *fileQuit = nullptr;
+
+    QAction *editUndo = nullptr;
+    QAction *editRedo = nullptr;
+    QAction *editCut = nullptr;
+    QAction *editCopy = nullptr;
+    QAction *editPaste = nullptr;
+    QAction *editSelectAll = nullptr;
+    QAction *editFind = nullptr;
+    QAction *editReplace = nullptr;
+    QAction *editFindNext = nullptr;
+    QAction *editFindPrevious = nullptr;
+
+    QAction *viewZoomIn = nullptr;
+    QAction *viewZoomOut = nullptr;
+    QAction *viewZoomReset = nullptr;
+    QAction *viewShowMenuBar = nullptr;
+
+    QAction *aiAssistant = nullptr;
+    QAction *settingsPreferences = nullptr;
+    QAction *helpAbout = nullptr;
+    QAction *helpAboutQt = nullptr;
+
+    [[nodiscard]] QList<QAction *> all() const;
+};
+
+// Builds the standard action set parented to `parent` (must be the owning
+// window so shortcuts resolve window-scoped). Commands the M0 skeleton has
+// no engine for yet (save/print/edit/zoom/AI/preferences) are created
+// disabled rather than omitted, so menus show the stable structure honestly.
+[[nodiscard]] StandardActions createStandardActions(QObject *parent);
+
+} // namespace QindaOffice::Shell

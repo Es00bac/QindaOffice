@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=QindaCalc
+GenericName=Spreadsheet
+Comment=Work with spreadsheets in an ordinary QindaQt window — part of QindaQt Office
+Exec=qindacalc %F
+Icon=org.qindaqt.QindaCalc
+Terminal=false
+Categories=Qt;Office;Spreadsheet;
+MimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.oasis.opendocument.spreadsheet;application/vnd.ms-excel;text/csv;
+StartupNotify=true
+StartupWMClass=qindacalc

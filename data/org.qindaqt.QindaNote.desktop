@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=QindaNote
+GenericName=Notes
+Comment=Handwritten and typed notes in an ordinary QindaQt window — part of QindaQt Office
+Exec=qindanote %F
+Icon=org.qindaqt.QindaNote
+Terminal=false
+Categories=Qt;Office;Utility;
+MimeType=application/x-qinda-notebook;
+StartupNotify=true
+StartupWMClass=qindanote

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d2130"/>
+      <stop offset="1" stop-color="#101319"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#58cd8f"/>
+      <stop offset="1" stop-color="#4fb7c4"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="12" fill="url(#bg)"/>
+  <rect x="2" y="2" width="60" height="60" rx="12" fill="none" stroke="#3a4254" stroke-width="1.5"/>
+  <rect x="12" y="12" width="40" height="40" rx="4" fill="#f2f0ea"/>
+  <rect x="12" y="12" width="40" height="40" rx="4" fill="none" stroke="#c8c4b8" stroke-width="1"/>
+  <path d="M12 24 H52 M12 36 H52 M12 48 H52 M25.3 12 V52 M38.6 12 V52" stroke="#c8c4b8" stroke-width="1.2"/>
+  <rect x="15" y="15.5" width="7" height="5" rx="1.5" fill="url(#accent)"/>
+  <rect x="28" y="27.5" width="7" height="5" rx="1.5" fill="#9aa1ad"/>
+  <rect x="41.5" y="39.5" width="7" height="5" rx="1.5" fill="url(#accent)"/>
+</svg>

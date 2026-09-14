@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=QindaWrite
+GenericName=Word Processor
+Comment=Write documents in an ordinary QindaQt window — part of QindaQt Office
+Exec=qindawrite %F
+Icon=org.qindaqt.QindaWrite
+Terminal=false
+Categories=Qt;Office;WordProcessor;
+MimeType=application/vnd.oasis.opendocument.text;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/msword;application/rtf;text/html;text/markdown;text/plain;
+StartupNotify=true
+StartupWMClass=qindawrite

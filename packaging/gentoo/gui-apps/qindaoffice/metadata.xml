@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>cabewse@localhost</email>
+		<name>QindaQt local overlay</name>
+	</maintainer>
+	<longdescription>
+		QindaQt Office is the office suite for the QindaQt desktop:
+		QindaWrite (word processor), QindaCalc (spreadsheet), QindaShow
+		(presentations) and QindaNote (notes with pen input). Every
+		document lives in an ordinary top-level window so the desktop's
+		window containers provide tab and split grouping, and each window
+		exports its menu to the panel over the desktop's D-Bus dbusmenu
+		stack. AI assistance runs through the user's Claude/Codex/Kimi
+		CLI subscriptions or OpenAI-/Anthropic-compatible HTTP endpoints.
+	</longdescription>
+	<use>
+		<flag name="libreoffice">Enable headless LibreOffice conversion for
+			docx/xls/ppt-class import and export (default on)</flag>
+	</use>
+	<upstream>
+		<remote-id type="github">Es00bac/QindaQt</remote-id>
+	</upstream>
+</pkgmetadata>
