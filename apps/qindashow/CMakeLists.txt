@@ -3,9 +3,18 @@ add_executable(qindashow
     main.cpp
     src/show_document.cpp
     src/show_document.h
+    src/pdf_export.cpp
+    src/pdf_export.h
+    src/presentation_controller.cpp
+    src/presentation_controller.h
+    src/presenter_window.cpp
+    src/presenter_window.h
+    src/show_ai.cpp
+    src/show_ai.h
     src/show_commands.cpp
     src/show_commands.h
     src/show_window.cpp
+    src/show_window_actions.cpp
     src/show_window.h
     src/slide_canvas.cpp
     src/slide_canvas.h
@@ -14,7 +23,7 @@ add_executable(qindashow
     src/text_bridge.cpp
     src/text_bridge.h
 )
-target_link_libraries(qindashow PRIVATE office_shell show_model)
+target_link_libraries(qindashow PRIVATE office_shell office_ai show_model)
 target_compile_definitions(qindashow PRIVATE
     QQO_DESKTOP_ID="org.qindaqt.QindaShow"
     QT_NO_CAST_FROM_ASCII

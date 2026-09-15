@@ -1,48 +1,70 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// The QindaShow player (plan section 6.3): a fullscreen window that
-// renders the deck through show_model::renderSlide. Click/Right/space
-// advance through builds then slides; Backspace goes back; Esc quits; B/W
-// blank the screen black/white. M9 adds the presenter view, transitions
-// and ink annotations.
+// The QindaShow player (plan section 7.5): a fullscreen window on the
+// chosen screen, driven by a shared PresentationController. Transitions
+// (cut/fade/slide/zoom) animate the incoming slide over 350 ms OutCubic
+// and are disabled entirely when the desktop reports
+// accessibility.reducedMotion. Keys: Space/arrows advance, Backspace back,
+// B/W blank, P pen and L laser annotations (ephemeral vectors, kept per
+// slide for the session), E erases the current slide's ink, Esc quits.
 
 #include "presentation.h"
-
-#include <QWidget>
 
 #ifndef QQO_SHOW_MODEL_ALIAS
 #define QQO_SHOW_MODEL_ALIAS
 namespace ShowModel = QindaOffice::Show;
 #endif
 
+#include <QHash>
+#include <QWidget>
+
+class QPropertyAnimation;
+class QScreen;
+
 namespace QindaOffice::Apps::Show {
+
+class PresentationController;
 
 class SlidePlayer final : public QWidget {
     Q_OBJECT
+    Q_PROPERTY(qreal transitionProgress READ transitionProgress WRITE setTransitionProgress)
 public:
-    SlidePlayer(ShowModel::Presentation *deck, int fromSlide, QWidget *parent = nullptr);
+    SlidePlayer(PresentationController *controller, QScreen *screen, QWidget *parent = nullptr);
 
-    [[nodiscard]] int currentSlide() const { return m_slide; }
-    [[nodiscard]] int currentBuild() const { return m_build; }
+    [[nodiscard]] qreal transitionProgress() const { return m_progress; }
+    void setTransitionProgress(qreal progress);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
 
 private:
-    void advance(int delta);
-    void ensureStepBounds();
-    [[nodiscard]] int maxBuild(int slideIndex) const;
+    enum class Tool { None, Pen, Laser };
 
-    ShowModel::Presentation *m_deck;
-    int m_slide = 0;
-    // (test-facing state readers live in the public section above)
-    int m_build = 0;      // how many build steps are revealed
-    int m_buildCap = 0;   // total build steps on the current slide
+    void keyAdvance(int delta);
+    void beginTransition();
+    [[nodiscard]] QPixmap renderSlideFrame(int slideIndex) const;
+    void paintTransition(QPainter *painter);
+    void paintInk(QPainter *painter);
+
+    PresentationController *m_controller;
+    QPixmap m_current;
+    QPixmap m_previous;
+    QPropertyAnimation *m_animation = nullptr;
+    qreal m_progress = 1.0;
+    bool m_reducedMotion = false;
     bool m_blank = false;
     Qt::GlobalColor m_blankColor = Qt::black;
+    Tool m_tool = Tool::None;
+    QList<QPolygonF> m_strokes;
+    QHash<int, QList<QPolygonF>> m_inkBySlide;
+    QPolygonF m_activeStroke;
+    QPointF m_laserPos;
+    bool m_laserVisible = false;
 };
 
 } // namespace QindaOffice::Apps::Show

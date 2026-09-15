@@ -20,6 +20,12 @@ class QComboBox;
 class QListWidget;
 class QPlainTextEdit;
 
+namespace QindaOffice::Ai {
+class AssistantPanel;
+class InlineActionFlow;
+class ModelCatalog;
+}
+
 namespace QindaOffice::Apps::Show {
 
 class SlideCanvas;
@@ -38,6 +44,12 @@ public:
     void duplicateSlide();
     void deleteSlide();
     void startShow();
+    void exportPdf();
+
+    // AI seams (show_ai.cpp).
+    [[nodiscard]] int currentSlideRow() const { return m_currentRow; }
+    void appendSlides(const QList<ShowModel::Slide> &slides);
+    void replaceCurrentSlideText(const QString &text);
 
 protected:
     void insertApplicationMenus(QMenu *before) override;
@@ -51,6 +63,9 @@ private:
     void pushSlideListCommand(const QList<ShowModel::Slide> &before);
     void wireCanvasUndo();
 
+    Ai::ModelCatalog *m_catalog = nullptr;
+    Ai::AssistantPanel *m_panel = nullptr;
+    Ai::InlineActionFlow *m_inline = nullptr;
     ShowDocument *m_document;
     SlideCanvas *m_canvas;
     QListWidget *m_sorter;

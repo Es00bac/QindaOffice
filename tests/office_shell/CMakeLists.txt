@@ -10,6 +10,7 @@ function(qqo_add_shell_test name)
 endfunction()
 
 qqo_add_shell_test(tst_standard_actions)
+qqo_add_shell_test(tst_desktop_settings)
 qqo_add_shell_test(tst_document_window)
 qqo_add_shell_test(tst_office_application)
 qqo_add_shell_test(tst_single_instance)

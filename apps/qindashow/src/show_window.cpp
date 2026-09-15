@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "show_window.h"
 
+#include "assistant_panel.h"
+#include "inline_action_flow.h"
+#include "model_catalog.h"
+#include "pdf_export.h"
+#include "presentation_controller.h"
+#include "presenter_window.h"
+#include "show_ai.h"
 #include "show_commands.h"
 #include "slide_canvas.h"
 #include "slide_player.h"
@@ -12,9 +19,16 @@
 #include <QFormLayout>
 #include <QLabel>
 #include <QListWidget>
+#include <QDir>
+#include <QGuiApplication>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMenuBar>
 #include <QPlainTextEdit>
+#include <QScreen>
+#include <QStandardPaths>
+#include <QStatusBar>
+#include <QWindow>
 #include <QUndoStack>
 #include <QUuid>
 #include <QVBoxLayout>
@@ -186,6 +200,28 @@ ShowWindow::ShowWindow()
             [this] { m_document->undoStack()->redo(); });
     connect(m_document->undoStack(), &QUndoStack::indexChanged, this,
             [this] { fullRefresh(); });
+
+    // AI: catalog per window (same contract as QindaWrite); panel docks
+    // right; inline actions and deck generation live in the AI menu.
+    const QString configRoot = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
+        + QStringLiteral("/qindaoffice/QindaShow");
+    QDir().mkpath(configRoot);
+    m_catalog = new Ai::ModelCatalog(configRoot + QStringLiteral("/ai-providers.json"));
+    m_catalog->setParent(this);
+    auto *context = new ShowContext(this);
+    auto *applier = new ShowApplier(this);
+    m_panel = new Ai::AssistantPanel(m_catalog, context, applier, this);
+    auto *assistantDock = new QDockWidget(tr("Assistant"), this);
+    assistantDock->setObjectName(QStringLiteral("assistantDock"));
+    assistantDock->setWidget(m_panel);
+    addDockWidget(Qt::RightDockWidgetArea, assistantDock);
+    assistantDock->hide();
+    m_actions.aiAssistant->setEnabled(true);
+    m_actions.aiAssistant->setCheckable(true);
+    connect(m_actions.aiAssistant, &QAction::toggled, assistantDock, &QDockWidget::setVisible);
+    connect(assistantDock, &QDockWidget::visibilityChanged, m_actions.aiAssistant,
+            &QAction::setChecked);
+    m_inline = new Ai::InlineActionFlow(m_catalog, context, applier, this);
 
     // The base ctor ran createMenus() before this subclass existed, so
     // insertApplicationMenus() was a no-op then; run it for real against
@@ -398,17 +434,6 @@ void ShowWindow::deleteSlide()
     fullRefresh();
 }
 
-void ShowWindow::startShow()
-{
-    ShowModel::Presentation *deck = m_document->presentation();
-    if (deck->slides.isEmpty()) {
-        return;
-    }
-    const int from = qMax(0, m_currentRow);
-    auto *player = new SlidePlayer(deck, from, this);
-    player->showFullScreen();
-}
-
 void ShowWindow::insertApplicationMenus(QMenu *before)
 {
     QMenu *slideMenu = new QMenu(tr("Slide"), this);
@@ -417,7 +442,22 @@ void ShowWindow::insertApplicationMenus(QMenu *before)
     slideMenu->addAction(tr("Delete slide"), this, [this] { deleteSlide(); });
     slideMenu->addSeparator();
     slideMenu->addAction(tr("Start show"), this, [this] { startShow(); });
+    slideMenu->addSeparator();
+    slideMenu->addAction(tr("Export PDF..."), this, [this] { exportPdf(); });
     menuBar()->insertMenu(before->menuAction(), slideMenu);
+
+    // AI actions go into the shell's AI menu next to the panel toggle.
+    before->addSeparator();
+    for (const Ai::InlineAction &action : Ai::inlineActions()) {
+        QAction *item = before->addAction(action.displayName);
+        connect(item, &QAction::triggered, this, [this, id = action.id] {
+            m_inline->run(id, this);
+        });
+    }
+    before->addSeparator();
+    before->addAction(tr("Generate deck from outline…"), this, [this] {
+        generateDeckFromOutline(this, m_catalog, this);
+    });
 
     QMenu *insertMenu = new QMenu(tr("Insert"), this);
     auto insert = [this](ShowModel::ShapeKind kind) {

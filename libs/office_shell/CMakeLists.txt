@@ -25,6 +25,8 @@ add_library(office_shell STATIC
     src/app_runner.cpp
     src/app_runner.h
     src/app_services.h
+    src/desktop_settings.cpp
+    src/desktop_settings.h
     src/document_window.cpp
     src/document_window.h
     src/global_menu_export.cpp

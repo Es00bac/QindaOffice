@@ -5,6 +5,9 @@
 // the window wires sorter, notes, transition and undo; the player reveals
 // builds before advancing slides.
 
+#include "src/pdf_export.h"
+#include "src/presentation_controller.h"
+#include "src/show_ai.h"
 #include "src/show_document.h"
 #include "src/show_window.h"
 #include "src/slide_canvas.h"
@@ -31,6 +34,9 @@ private slots:
     void canvasEditsModel();
     void windowWiresSorterNotesUndo();
     void playerRevealsBuildsThenAdvances();
+    void controllerAdvancesBuildsBeforeSlides();
+    void slidesFromOutlineParse();
+    void pdfExportWritesSlidesAndNotes();
     void textBridgeKeepsRuns();
 };
 
@@ -160,16 +166,81 @@ void QindaShowTest::playerRevealsBuildsThenAdvances()
     first.shapes.append(build);
     deck.addSlide(QStringLiteral("Two"));
 
-    SlidePlayer player(&deck, 0);
-    QCOMPARE(player.currentBuild(), 0);
+    PresentationController controller(&deck);
+    SlidePlayer player(&controller, nullptr);
+    QCOMPARE(controller.build(), 0);
     QTest::mouseClick(&player, Qt::LeftButton);
-    QCOMPARE(player.currentBuild(), 1); // build revealed
+    QCOMPARE(controller.build(), 1); // build revealed
     QTest::mouseClick(&player, Qt::LeftButton);
-    QCOMPARE(player.currentBuild(), 0); // next slide, fresh
-    QCOMPARE(player.currentSlide(), 1);
+    QCOMPARE(controller.build(), 0); // next slide, fresh
+    QCOMPARE(controller.slide(), 1);
     QTest::mouseClick(&player, Qt::RightButton);
-    QCOMPARE(player.currentSlide(), 0); // back, fully revealed
-    QCOMPARE(player.currentBuild(), 1);
+    QCOMPARE(controller.slide(), 0); // back, fully revealed
+    QCOMPARE(controller.build(), 1);
+}
+
+void QindaShowTest::controllerAdvancesBuildsBeforeSlides()
+{
+    ShowModel::Presentation deck;
+    ShowModel::Slide &first = deck.addSlide(QStringLiteral("One"));
+    ShowModel::Shape build;
+    build.id = QStringLiteral("b");
+    build.buildStep = 2;
+    first.shapes.append(build);
+    deck.addSlide(QStringLiteral("Two"));
+    PresentationController controller(&deck);
+    QCOMPARE(controller.buildCap(0), 2);
+    controller.advance(1);
+    QCOMPARE(controller.build(), 1);
+    controller.advance(1);
+    QCOMPARE(controller.build(), 2);
+    controller.advance(1); // builds exhausted: next slide
+    QCOMPARE(controller.slide(), 1);
+    QCOMPARE(controller.build(), 0);
+    QVERIFY(controller.atEnd());
+    controller.advance(1); // no-op at the end
+    QCOMPARE(controller.slide(), 1);
+    controller.advance(-1);
+    QCOMPARE(controller.slide(), 0);
+    QCOMPARE(controller.build(), 2); // fully revealed going back
+}
+
+void QindaShowTest::slidesFromOutlineParse()
+{
+    const QString outline = QStringLiteral(
+        "Here is your deck.\n"
+        "## Intro\n"
+        "- First point\n"
+        "- Second point\n"
+        "Notes: say hello\n"
+        "## Deep dive\n"
+        "- Detail\n");
+    const QList<ShowModel::Slide> slides = slidesFromOutline(outline, QSizeF(720, 405));
+    QCOMPARE(slides.size(), 2);
+    QCOMPARE(slides.at(0).title, QStringLiteral("Intro"));
+    QCOMPARE(slides.at(0).shapes.size(), 2);
+    QCOMPARE(slides.at(0).shapes.at(0).paragraphs.first().runs.first().text,
+             QStringLiteral("First point"));
+    QCOMPARE(slides.at(0).notes, QStringLiteral("say hello"));
+    QCOMPARE(slides.at(1).title, QStringLiteral("Deep dive"));
+    QCOMPARE(slides.at(1).shapes.size(), 1);
+}
+
+void QindaShowTest::pdfExportWritesSlidesAndNotes()
+{
+    ShowModel::Presentation deck;
+    deck.addSlide(QStringLiteral("One")).notes = QStringLiteral("First notes");
+    deck.addSlide(QStringLiteral("Two"));
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + QStringLiteral("/deck.pdf");
+    QString error;
+    QVERIFY2(exportDeckPdf(deck, path, /*withNotesPages=*/true, &error), qPrintable(error));
+    QVERIFY(QFile::exists(path));
+    QVERIFY(QFile(path).size() > 0);
+    QFile pdf(path);
+    QVERIFY(pdf.open(QIODevice::ReadOnly));
+    QCOMPARE(pdf.read(5), QByteArrayLiteral("%PDF-"));
 }
 
 void QindaShowTest::textBridgeKeepsRuns()
