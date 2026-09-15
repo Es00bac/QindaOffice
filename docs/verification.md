@@ -70,6 +70,18 @@ presenter-view-on-second-screen, reduced-motion, packaging).
   undo steps (Qt `setPageSize` undo quirk cleared); zoom actions move the
   view; the paper palette stays white-on-dark under any theme.
 
+### M12 additions (automated: `tst_calc_ui`)
+
+- Undo/redo restores values AND re-evaluates formulas (dependency index
+  rebuilt by the snapshot restore); sheet insert is undoable and the tab
+  bar follows `structureChanged`.
+- Rich clipboard round-trips formulas exactly; plain TSV pastes numbers,
+  booleans, text and formulas; cut clears in one undo step.
+- Bold/italic/underline, alignment, font family/size, text/fill colors and
+  the number-format combo write `CellStyle`s through one-undo-step
+  `StylePatch`es; the UI state re-reads the cursor cell.
+- The find bar walks matches row-major with wrap; F3/Shift+F3 drive it.
+
 ### M11 on-desktop checklist (interactive)
 
 - [ ] Under the QindaQt dark theme a .docx opens as a white page with dark

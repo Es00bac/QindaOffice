@@ -47,6 +47,7 @@ inline const char kFormatItalic[] = "formatItalicAction";
 inline const char kFormatUnderline[] = "formatUnderlineAction";
 inline const char kFormatStrikeOut[] = "formatStrikeOutAction";
 inline const char kFormatTextColor[] = "formatTextColorAction";
+inline const char kCalcFillColor[] = "calcFillColorAction";
 inline const char kFormatClearFormat[] = "formatClearFormatAction";
 inline const char kFormatAlignLeft[] = "formatAlignLeftAction";
 inline const char kFormatAlignCenter[] = "formatAlignCenterAction";

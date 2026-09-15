@@ -18,6 +18,8 @@ namespace QindaOffice::Apps::QindaCalc {
 
 class SpreadsheetDocument;
 class SpreadsheetView;
+class CalcFindBar;
+class CalcFormatController;
 
 class CalcWindow final : public Shell::DocumentWindow {
     Q_OBJECT
@@ -26,6 +28,9 @@ public:
     ~CalcWindow() override;
 
     [[nodiscard]] SpreadsheetDocument *spreadsheetDocument() const { return m_document; }
+    [[nodiscard]] SpreadsheetView *spreadsheetView() const { return m_view; }
+    [[nodiscard]] CalcFindBar *findBar() const { return m_findBar; }
+    [[nodiscard]] CalcFormatController *formatController() const { return m_format; }
 
     void loadWorkbookPath(const QString &path);
 
@@ -37,6 +42,7 @@ protected:
 private:
     void rebuildSheetTabs();
     void createCalcActions();
+    void wireEditingActions();
     void commitInput(const CalcEng::CellAddr &addr, const QString &input);
     void insertChart();
     void rebuildChartWindows();
@@ -46,6 +52,8 @@ private:
     QLineEdit *m_nameBox;
     QLineEdit *m_formulaBar;
     QTabBar *m_tabs;
+    CalcFindBar *m_findBar = nullptr;
+    CalcFormatController *m_format = nullptr;
     QAction *m_insertChartAction = nullptr;
     QAction *m_insertSheetAction = nullptr;
     QAction *m_thousandsAction = nullptr;

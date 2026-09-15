@@ -1,6 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 add_executable(qindacalc
     main.cpp
+    src/calc_clipboard.cpp
+    src/calc_clipboard.h
+    src/calc_find_bar.cpp
+    src/calc_find_bar.h
+    src/calc_format_controller.cpp
+    src/calc_format_controller.h
+    src/calc_undo.cpp
+    src/calc_undo.h
     src/calc_window.cpp
     src/chart_dialog.cpp
     src/calc_window.h

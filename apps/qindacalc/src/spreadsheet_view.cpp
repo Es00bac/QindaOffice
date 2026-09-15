@@ -68,29 +68,40 @@ void SpreadsheetView::setCursorCell(const CalcEng::CellAddr &addr, bool extendSe
 
 QString SpreadsheetView::inputTextAt(const CalcEng::CellAddr &addr) const
 {
-    const Workbook &wb = *m_document->workbook();
-    const Cell *cell = wb.sheetAt(wb.sheetIndex(wb.sheetName(m_document->activeSheet())))
-                         .cellAt(addr);
-    if (cell == nullptr) {
-        return QString();
-    }
-    return cell->hasFormula() ? QStringLiteral("=") + cell->formula
-                              : toText(cell->value);
+    // The document owns the text seams (clipboard, find bar and the view
+    // all read through the same active-sheet accessors).
+    return m_document->inputTextAt(addr);
 }
 
 QString SpreadsheetView::displayTextAt(qint32 sheet, const CalcEng::CellAddr &addr) const
 {
-    const Workbook &wb = *m_document->workbook();
-    const Sheet &s = wb.sheetAt(sheet);
-    const Cell *cell = s.cellAt(addr);
-    if (cell == nullptr || isBlank(cell->value)) {
-        return QString();
+    return m_document->displayTextAt(sheet, addr);
+}
+
+CalcEng::CellRange SpreadsheetView::selectionRange() const
+{
+    CalcEng::CellRange range;
+    range.topLeft = {qMin(m_anchor.row, m_cursor.row), qMin(m_anchor.col, m_cursor.col)};
+    range.bottomRight = {qMax(m_anchor.row, m_cursor.row), qMax(m_anchor.col, m_cursor.col)};
+    return range;
+}
+
+void SpreadsheetView::selectUsedRange()
+{
+    const CalcEng::Sheet &sheet =
+        m_document->workbook()->sheetAt(m_document->activeSheet());
+    if (sheet.cells().isEmpty()) {
+        setCursorCell({0, 0});
+        return;
     }
-    const CellStyle *style = cell->styleId >= 0 ? wb.style(s.styleIdAt(addr)) : nullptr;
-    const QString code = style != nullptr && !style->numberFormat.isEmpty()
-        ? style->numberFormat
-        : QStringLiteral("General");
-    return NumberFormat(code).format(cell->value).text;
+    qint32 maxRow = 0;
+    qint32 maxCol = 0;
+    for (auto it = sheet.cells().constBegin(); it != sheet.cells().constEnd(); ++it) {
+        maxRow = qMax(maxRow, qint32(it.key() & 0xffffffffu));
+        maxCol = qMax(maxCol, qint32(it.key() >> 32));
+    }
+    m_anchor = {0, 0};
+    setCursorCell({maxRow, maxCol}, /*extendSelection=*/true);
 }
 
 int SpreadsheetView::rowTop(qint32 row) const

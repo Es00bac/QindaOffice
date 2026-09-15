@@ -18,9 +18,16 @@
 #include <QStatusBar>
 #include <QTabBar>
 #include <QVBoxLayout>
+#include <QClipboard>
+#include <QGuiApplication>
+#include <QMimeData>
 #include <QIcon>
 #include <QToolBar>
+#include <QVBoxLayout>
 
+#include "calc_clipboard.h"
+#include "calc_find_bar.h"
+#include "calc_format_controller.h"
 #include "standard_actions.h"
 #include <QVBoxLayout>
 #include <QWidget>
@@ -56,6 +63,10 @@ CalcWindow::CalcWindow()
     m_tabs->setDrawBase(false);
     m_tabs->setExpanding(false);
     layout->addWidget(m_tabs);
+
+    m_findBar = new CalcFindBar(m_document, m_view, central);
+    m_findBar->hide();
+    layout->addWidget(m_findBar);
 
     setDocumentHost(central, m_document);
 
@@ -99,8 +110,71 @@ CalcWindow::CalcWindow()
     mainToolBar->addAction(m_insertSheetAction);
     mainToolBar->addAction(m_thousandsAction);
 
+    m_format = new CalcFormatController(m_document, m_view, this);
+    addToolBarBreak(Qt::TopToolBarArea);
+    addToolBar(Qt::TopToolBarArea, m_format->toolBar());
+
+    wireEditingActions();
+    connect(m_findBar, &CalcFindBar::message, this,
+            [this](const QString &text) { statusBar()->showMessage(text, 5000); });
+    // Undo of a sheet insert/delete (or a load) changes the sheet list.
+    connect(m_document, &SpreadsheetDocument::structureChanged, this, [this] {
+        rebuildSheetTabs();
+        m_view->refreshAll();
+        rebuildChartWindows();
+    });
+
     // App menus (Insert/Sheet/Format) need the fully constructed window.
     finalizeAppMenuHooks();
+}
+
+void CalcWindow::wireEditingActions()
+{
+    using namespace Shell::ActionId;
+    QAction *undo = m_actions.editUndo;
+    QAction *redo = m_actions.editRedo;
+    undo->setEnabled(false);
+    redo->setEnabled(false);
+    connect(m_document->undoStack(), &QUndoStack::canUndoChanged, undo, &QAction::setEnabled);
+    connect(m_document->undoStack(), &QUndoStack::canRedoChanged, redo, &QAction::setEnabled);
+    connect(undo, &QAction::triggered, m_document->undoStack(), &QUndoStack::undo);
+    connect(redo, &QAction::triggered, m_document->undoStack(), &QUndoStack::redo);
+
+    m_actions.editCut->setEnabled(true);
+    m_actions.editCopy->setEnabled(true);
+    connect(m_actions.editCut, &QAction::triggered, this, [this] {
+        cutRangeToClipboard(m_document, m_view->selectionRange());
+        m_view->refreshAll();
+    });
+    connect(m_actions.editCopy, &QAction::triggered, this, [this] {
+        copyRangeToClipboard(m_document, m_view->selectionRange());
+    });
+    m_actions.editPaste->setEnabled(false);
+    auto updatePaste = [this] {
+        const QMimeData *mime = QGuiApplication::clipboard()->mimeData();
+        m_actions.editPaste->setEnabled(mime != nullptr
+                                        && (mime->hasText()
+                                            || mime->hasFormat(
+                                                QString::fromLatin1(richCellsMimeType()))));
+    };
+    updatePaste();
+    connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, updatePaste);
+    connect(m_actions.editPaste, &QAction::triggered, this, [this] {
+        if (pasteClipboardAt(m_document, m_view->cursorCell())) {
+            m_view->refreshAll();
+        }
+    });
+    m_actions.editSelectAll->setEnabled(true);
+    connect(m_actions.editSelectAll, &QAction::triggered, m_view,
+            &SpreadsheetView::selectUsedRange);
+
+    m_actions.editFind->setEnabled(true);
+    m_actions.editFindNext->setEnabled(true);
+    m_actions.editFindPrevious->setEnabled(true);
+    connect(m_actions.editFind, &QAction::triggered, m_findBar, &CalcFindBar::openFind);
+    connect(m_actions.editFindNext, &QAction::triggered, m_findBar, &CalcFindBar::findNext);
+    connect(m_actions.editFindPrevious, &QAction::triggered, m_findBar,
+            &CalcFindBar::findPrevious);
 }
 
 CalcWindow::~CalcWindow() = default;
@@ -123,9 +197,8 @@ void CalcWindow::createCalcActions()
     m_insertSheetAction->setObjectName(
         QString::fromLatin1(Shell::ActionId::kInsertSheet));
     connect(m_insertSheetAction, &QAction::triggered, this, [this] {
-        Workbook *wb = m_document->workbook();
-        wb->addSheet(tr("Sheet%1").arg(wb->sheetCount() + 1));
-        rebuildSheetTabs();
+        // Undoable at the document layer; structureChanged rebuilds the tabs.
+        m_document->insertSheet(tr("Sheet%1").arg(m_document->workbook()->sheetCount() + 1));
         emit m_view->sheetCountChanged();
     });
 
@@ -261,6 +334,8 @@ void CalcWindow::insertApplicationMenus(QMenu *before)
     sheetMenu->addAction(m_insertSheetAction);
     auto *formatMenu = new QMenu(tr("F&ormat"), this);
     menuBar()->insertMenu(before->menuAction(), formatMenu);
+    m_format->populateFormatMenu(formatMenu);
+    formatMenu->addSeparator();
     formatMenu->addAction(m_thousandsAction);
 }
 

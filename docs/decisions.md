@@ -5,6 +5,31 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-006: QindaCalc undo is snapshot-based; clipboard carries a rich JSON format
+
+**Context.** QindaCalc grew edit depth (M12): undo/redo, cut/copy/paste, cell
+formatting toolbar, find bar. Cell-level inverse commands would duplicate
+the engine's parse/dependency/recalc pipeline; the style table turned out
+to already reserve id 0 as "no style" (ctor-seeded default, 1-based ids).
+
+**Decision.** Every structured mutation (cell input, clear, paste,
+StylePatch restyle, sheet insert) snapshots the whole workbook before and
+after into one `QUndoStack` command (`calc_undo.h`). The snapshot skips the
+reserved style id 0 - re-appending it on restore shifted every real style
+id by one (cells pointed at wrong entries; found by test). Restore rebuilds
+a fresh `Workbook` through public mutators, re-registers the dependency
+graph from the stored ASTs and recalcs once; the rebuilt book is
+move-assigned in. **Consequence:** `Sheet`/`CellStyle` references dangle
+across any undo point - code must re-fetch from the document (rule recorded
+where the seam lives). Clipboard: `text/plain` TSV (display text) plus
+`application/x-qindacalc-cells` JSON (raw inputs) so in-app copy/paste
+keeps formulas exact; cell styles do not travel yet (documented
+limitation).
+
+**Consequences.** Ctrl+Z/Y, Ctrl+X/C/V and F3 now behave like every other
+spreadsheet; formatting actions share the suite-standard `ActionId` names
+with QindaWrite's toolbar (same conceptual commands, different host).
+
 ## D-003: App-menu hooks are finalized explicitly after subclass construction
 
 **Context.** `DocumentWindow::createMenus()` runs inside the base

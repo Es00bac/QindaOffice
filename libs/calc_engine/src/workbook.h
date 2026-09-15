@@ -46,10 +46,14 @@ public:
     // Style table shared by the sheets.
     [[nodiscard]] qint32 addStyle(const CellStyle &style);
     [[nodiscard]] const CellStyle *style(qint32 id) const;
+    // Table length including the reserved id-0 default (snapshot/undo seam).
+    [[nodiscard]] qint32 styleCount() const { return qint32(m_styles.size()); }
 
     // Named ranges (simple refs in v1).
     void defineName(const QString &name, const RangeRef &target);
     [[nodiscard]] std::optional<RangeRef> namedRange(const QString &name) const;
+    // Full table (snapshot/undo seam; defineName stays the mutation path).
+    [[nodiscard]] const QHash<QString, RangeRef> &namedRanges() const { return m_names; }
 
     // EvalHost implementation.
     [[nodiscard]] Value cellValue(qint32 sheet, qint32 row, qint32 col) const override;

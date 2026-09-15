@@ -6,9 +6,18 @@
 // extension: .xlsx natively via calc_io, .csv/.tsv through the engine's
 // RFC 4180 reader, and foreign formats (ods/xls...) through the headless
 // LibreOffice bridge in a later pass (M3 documents the ods path).
+//
+// M12 editing depth: every structured mutation (cell input, clear, paste,
+// style patch, sheet insert) snapshots the workbook before/after and
+// pushes one QUndoStack command, so Ctrl+Z/Ctrl+Y behave like every other
+// spreadsheet (see calc_undo.h for the snapshot design).
 
 #include "document.h"
 #include "workbook.h"
+
+#include <QUndoStack>
+
+#include <optional>
 
 namespace QindaOffice::Calc {
 class Workbook;
@@ -16,6 +25,9 @@ class Workbook;
 
 namespace CalcEng = QindaOffice::Calc;
 namespace QindaOffice::Apps::QindaCalc {
+
+struct WorkbookSnapshot;
+struct StylePatch;
 
 class SpreadsheetDocument final : public Core::Document {
     Q_OBJECT
@@ -34,12 +46,54 @@ public:
     // UI-facing edits route through here so dirty/content signals stay
     // uniform for journaling and title updates.
     void applyInput(const CalcEng::CellAddr &addr, const QString &input);
+    void clearCells(const CalcEng::CellRange &range);
+    void pasteCells(const CalcEng::CellAddr &at, const QStringList &rows);
+    void restyleRange(const CalcEng::CellRange &range, const StylePatch &patch,
+                      const QString &undoText);
+    void insertSheet(const QString &name);
     void setActiveSheet(qint32 index) { m_activeSheet = index; }
     [[nodiscard]] qint32 activeSheet() const { return m_activeSheet; }
 
+    // Undo seam: the command object restores a snapshot through here so
+    // dirty/content/structure notifications stay uniform.
+    void applySnapshot(const WorkbookSnapshot &snapshot);
+
+    [[nodiscard]] QUndoStack *undoStack() { return &m_undoStack; }
+
+    // Text seams shared by the view (formula bar, painting), the
+    // clipboard and the find bar. Active sheet unless noted.
+    [[nodiscard]] QString inputTextAt(const CalcEng::CellAddr &addr) const;
+    [[nodiscard]] QString displayTextAt(qint32 sheet, const CalcEng::CellAddr &addr) const;
+    [[nodiscard]] QString displayTextAt(const CalcEng::CellAddr &addr) const
+    {
+        return displayTextAt(m_activeSheet, addr);
+    }
+
+signals:
+    // Sheet list/count changed (undo of sheet insert, sheet insert);
+    // windows rebuild their tab bars on this.
+    void structureChanged();
+
 private:
+    void pushUndo(const WorkbookSnapshot &before, const QString &text);
+
     CalcEng::Workbook m_workbook;
     qint32 m_activeSheet = 0;
+    QUndoStack m_undoStack;
+};
+
+// A partial update to the CellStyle of every cell in a range: each set
+// field overrides, fg/bg accept a nested optional to also *clear* a color.
+struct StylePatch {
+    std::optional<bool> bold;
+    std::optional<bool> italic;
+    std::optional<bool> underline;
+    std::optional<int> alignment;
+    std::optional<QString> numberFormat;
+    std::optional<QString> fontFamily;
+    std::optional<qreal> fontSize;
+    std::optional<std::optional<CalcEng::Rgb>> fg;
+    std::optional<std::optional<CalcEng::Rgb>> bg;
 };
 
 } // namespace QindaOffice::Apps::QindaCalc

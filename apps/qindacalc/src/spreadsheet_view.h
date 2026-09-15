@@ -26,6 +26,10 @@ public:
     [[nodiscard]] CalcEng::CellAddr anchor() const { return m_anchor; }
     [[nodiscard]] CalcEng::CellAddr cursorCell() const { return m_cursor; }
     void setCursorCell(const CalcEng::CellAddr &addr, bool extendSelection = false);
+    // Normalized anchor..cursor rectangle (selection for commands).
+    [[nodiscard]] CalcEng::CellRange selectionRange() const;
+    // Extends the selection to cover every used cell (Select All).
+    void selectUsedRange();
 
 signals:
     void cursorChanged(const CalcEng::CellAddr &addr, const QString &formulaText,
