@@ -126,8 +126,12 @@ DocumentWindow *OfficeApplication::newWindow(const QString &path)
 DocumentWindow *OfficeApplication::createWindow()
 {
     auto *window = m_windowFactory != nullptr ? m_windowFactory() : new DocumentWindow;
-    auto *document = new Core::PlainTextDocument; // M1 stub engine
-    window->setDocument(document);
+    // App factories (QindaCalc, later QindaShow/Note) install their own
+    // document in their window constructor; only the stub window needs the
+    // default plain-text engine.
+    if (!window->hasDocument()) {
+        window->setDocument(new Core::PlainTextDocument); // M1 stub engine
+    }
     wireWindow(window);
     return window;
 }

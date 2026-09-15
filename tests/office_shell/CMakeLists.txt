@@ -13,3 +13,14 @@ qqo_add_shell_test(tst_standard_actions)
 qqo_add_shell_test(tst_document_window)
 qqo_add_shell_test(tst_office_application)
 qqo_add_shell_test(tst_single_instance)
+
+add_executable(tst_calc_window tst_calc_window.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_window.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_document.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_view.cpp
+)
+target_link_libraries(tst_calc_window PRIVATE office_shell calc_io Qt6::Test)
+target_include_directories(tst_calc_window PRIVATE ${PROJECT_SOURCE_DIR}/apps)
+qqo_set_strict_warnings(tst_calc_window)
+add_test(NAME tst_calc_window COMMAND tst_calc_window)
+set_tests_properties(tst_calc_window PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

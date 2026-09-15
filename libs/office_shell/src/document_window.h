@@ -44,6 +44,7 @@ public:
     // stub editor wholesale; title/dirty/journal wiring is kept.
     void setDocumentHost(QWidget *widget, Core::Document *document);
     [[nodiscard]] Core::Document *document() const { return m_document; }
+    [[nodiscard]] bool hasDocument() const { return m_document != nullptr; }
 
     // Wired by OfficeApplication after construction; may stay null (tests,
     // degraded runs) - journaling/recents/path-uniqueness degrade visibly.
