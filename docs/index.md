@@ -18,7 +18,7 @@ lists what exists today.
 | `office_ink` | Qt Gui | M7: stroke model, builder filters, spatial grid, renderer, JSON persistence |
 | `calc_engine` | Qt Core | M2: model, lexer/Pratt parser, evaluator, dependency recalc, ~85 functions, number formats, CSV |
 | `calc_io` | Qt Core + QXlsx | M3: xlsx read/write, shared-formula reconstruction, LibreOffice gate |
-| `show_model` | Qt Gui + KArchive | M8 (planned) |
+| `show_model` | Qt Gui + KArchive | M8: presentation model, .fodp writer/reader (shapes, runs, images, notes, builds, transitions), slide renderer, single-shape editor paint |
 
 ## Applications
 
@@ -26,5 +26,5 @@ lists what exists today.
 | --- | --- | --- |
 | QindaWrite | M4/M5 | Word processor: paged view, WYSIWYG PDF/print, styles, full I/O matrix (html/md/txt/odt native, docx/rtf via LibreOffice), spell check, tables/images/lists |
 | QindaCalc | M2/M3 | Working app: engine-backed grid, in-cell editing, formula bar, sheet tabs, xlsx/csv I/O |
-| QindaShow | M8 (model+editor) / M9 (player) | M0 skeleton window |
+| QindaShow | M8 (model+editor) / M9 (player) | M8: full editor — canvas over show_model (select/move/resize/in-place text edit), insert text box/rect/ellipse/line/arrow/image, z-order, appear-on-click builds, thumbnail sorter with drag reorder, notes/transition/layout dock, full undo/redo, .fodp native + .odp/.pptx via LibreOffice, basic fullscreen player |
 | QindaNote | M7 | Working app: notebook directories, page view with pen/highlight/erase/text, growing page, undo, tablet + palm rejection |

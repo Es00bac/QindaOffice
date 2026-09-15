@@ -129,7 +129,12 @@ void DocumentWindow::createMenus()
     // before->menuAction(), ...). The AI title action already anchors the
     // position even while the menu is still empty.
     auto *aiMenu = new QMenu(tr("&AI"), this);
+    aiMenu->setObjectName(QStringLiteral("aiMenu"));
     menuBar()->addMenu(aiMenu);
+    // App menus are inserted in two passes: the base no-op here (virtual
+    // dispatch during construction), then the real insertion when the
+    // subclass ctor calls insertApplicationMenus(aiMenu()) after the shell
+    // frame exists.
     insertApplicationMenus(aiMenu);
     aiMenu->addAction(m_actions.aiAssistant);
 

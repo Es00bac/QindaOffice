@@ -13,6 +13,9 @@ namespace QindaOffice::Show {
 
 void renderSlide(QPainter *painter, const Slide &slide, const QSizeF &slideSize,
                  int buildStep = 1000);
+// Single-shape paint for editor items: identical pixels to the slide
+// render (the editor canvas must not drift from the player).
+void renderShape(QPainter *painter, const Shape &shape);
 [[nodiscard]] QPixmap renderSlideToPixmap(const Slide &slide, const QSizeF &slideSize,
                                           const QSize &pixels, int buildStep = 1000);
 

@@ -25,7 +25,7 @@ void drawArrowHead(QPainter *painter, const QPointF &tip, const QPointF &from)
     painter->drawPolygon({tip, left, right});
 }
 
-void renderShape(QPainter *painter, const Shape &shape)
+void paintShape(QPainter *painter, const Shape &shape)
 {
     painter->save();
     painter->translate(shape.rect.center());
@@ -95,7 +95,7 @@ void renderShape(QPainter *painter, const Shape &shape)
                 format.setFontItalic(run.italic);
                 format.setForeground(run.color);
                 if (!run.fontFamily.isEmpty()) {
-                    format.setFontFamily(run.fontFamily);
+                    format.setFontFamilies(QStringList{run.fontFamily});
                 }
                 cursor.insertText(run.text, format);
             }
@@ -120,6 +120,14 @@ void renderShape(QPainter *painter, const Shape &shape)
 
 } // namespace
 
+void renderShape(QPainter *painter, const Shape &shape)
+{
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    paintShape(painter, shape);
+    painter->restore();
+}
+
 void renderSlide(QPainter *painter, const Slide &slide, const QSizeF &slideSize, int buildStep)
 {
     painter->save();
@@ -129,7 +137,7 @@ void renderSlide(QPainter *painter, const Slide &slide, const QSizeF &slideSize,
         if (shape.buildStep > buildStep) {
             continue; // appears on a later click
         }
-        renderShape(painter, shape);
+        paintShape(painter, shape);
     }
     painter->restore();
 }

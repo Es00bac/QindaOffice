@@ -4,11 +4,12 @@
 // single-instance hand-off, recovery/restore startup); QQO_DESKTOP_ID is the
 // org.qindaqt.<App> id from this app's .desktop file.
 
-#include "app_runner.h"
+#include "src/show_window.h"
 
-#include <QString>
+#include "app_runner.h"
 
 int main(int argc, char *argv[])
 {
-    return QindaOffice::Shell::runOfficeApp(argc, argv, QStringLiteral(QQO_DESKTOP_ID));
+    return QindaOffice::Shell::runOfficeApp(argc, argv, QStringLiteral(QQO_DESKTOP_ID),
+                                            [] { return new QindaOffice::Apps::Show::ShowWindow; });
 }
