@@ -9,7 +9,8 @@
 
 namespace QindaOffice::Shell {
 
-int runOfficeApp(int &argc, char *argv[], const QString &desktopId)
+int runOfficeApp(int &argc, char *argv[], const QString &desktopId,
+                 const std::function<DocumentWindow *()> &windowFactory)
 {
     QApplication application(argc, argv);
 
@@ -37,6 +38,9 @@ int runOfficeApp(int &argc, char *argv[], const QString &desktopId)
     const QStringList paths = parser.positionalArguments();
 
     OfficeApplication office;
+    if (windowFactory != nullptr) {
+        office.setWindowFactory(windowFactory);
+    }
     if (!parser.isSet(newInstance)) {
         bool handedOff = false;
         if (!office.acquirePrimary(paths, &handedOff) && handedOff) {

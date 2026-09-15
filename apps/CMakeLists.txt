@@ -17,6 +17,6 @@ function(qqo_add_app target desktopId)
 endfunction()
 
 add_subdirectory(qindawrite)
-add_subdirectory(qindacalc)
 add_subdirectory(qindashow)
 add_subdirectory(qindanote)
+add_subdirectory(qindacalc)

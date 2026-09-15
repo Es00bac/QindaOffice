@@ -40,6 +40,9 @@ public:
     // other document types show a disabled editor placeholder until their
     // app milestones land (fail honestly).
     void setDocument(Core::Document *document);
+    // App-specific hosts (QindaCalc's grid, QindaShow's canvas) replace the
+    // stub editor wholesale; title/dirty/journal wiring is kept.
+    void setDocumentHost(QWidget *widget, Core::Document *document);
     [[nodiscard]] Core::Document *document() const { return m_document; }
 
     // Wired by OfficeApplication after construction; may stay null (tests,
@@ -91,7 +94,7 @@ private:
     void clearJournalEntry();
     void commitSuccessfulSave();
     void rebuildRecentMenu();
-    [[nodiscard]] QString filterString() const;
+    [[nodiscard]] virtual QString filterString() const;
     [[nodiscard]] bool ensureWritableTarget(const QString &path);
 
     StandardActions m_actions;

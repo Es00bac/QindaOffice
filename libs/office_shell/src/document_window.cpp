@@ -150,6 +150,27 @@ void DocumentWindow::insertApplicationMenus(QMenu *before)
     Q_UNUSED(before);
 }
 
+void DocumentWindow::setDocumentHost(QWidget *widget, Core::Document *document)
+{
+    if (m_editor != nullptr) {
+        delete m_editor;
+        m_editor = nullptr;
+    }
+    if (m_document != nullptr) {
+        disconnect(m_document, nullptr, this, nullptr);
+        delete m_document;
+    }
+    m_document = document;
+    if (m_document != nullptr) {
+        m_document->setParent(this);
+        connect(m_document, &Core::Document::dirtyChanged, this, [this] { syncTitle(); });
+        connect(m_document, &Core::Document::contentChanged, this,
+                [this] { scheduleJournalSnapshot(); });
+    }
+    setCentralWidget(widget);
+    syncTitle();
+}
+
 void DocumentWindow::setDocument(Core::Document *document)
 {
     if (m_document != nullptr) {

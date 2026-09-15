@@ -22,6 +22,8 @@ namespace QindaOffice::Shell {
 class DocumentWindow;
 class SingleInstance;
 
+using WindowFactory = std::function<DocumentWindow *()>;
+
 // GUI-thread owner of the process's ordinary document windows (mirrors
 // container-wm/src/apps/text_editor/ui/editor_application.h per ADR-0110)
 // and the application's AppServices provider. One process hosts at most
@@ -39,6 +41,10 @@ public:
 
     explicit OfficeApplication(QObject *parent = nullptr);
     ~OfficeApplication() override;
+
+    // Lets an app (QindaCalc, QindaShow...) create its own window subclass;
+    // the default builds a plain DocumentWindow.
+    void setWindowFactory(WindowFactory factory);
 
     // Tries to become the D-Bus primary (call before creating windows).
     // Returns false when this process should hand off and exit
@@ -100,6 +106,7 @@ private:
     std::unique_ptr<Core::RestoreInventory> m_inventory;
     std::unique_ptr<Core::RecoveryJournal> m_journal;
     std::unique_ptr<Core::JsonSettings> m_settings;
+    WindowFactory m_windowFactory;
 };
 
 } // namespace QindaOffice::Shell

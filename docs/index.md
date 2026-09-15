@@ -17,7 +17,7 @@ lists what exists today.
 | `office_ai` | Qt Core/Gui/Network + `office_core` | M6 (planned) |
 | `office_ink` | Qt Gui | M7 (planned) |
 | `calc_engine` | Qt Core | M2: model, lexer/Pratt parser, evaluator, dependency recalc, ~85 functions, number formats, CSV |
-| `calc_io` | Qt Core + QXlsx | M3 (planned) |
+| `calc_io` | Qt Core + QXlsx | M3: xlsx read/write, shared-formula reconstruction, LibreOffice gate |
 | `show_model` | Qt Gui + KArchive | M8 (planned) |
 
 ## Applications
@@ -25,6 +25,6 @@ lists what exists today.
 | App | Engine milestone | Status |
 | --- | --- | --- |
 | QindaWrite | M4 (page view) / M5 (formats) | M0 skeleton window |
-| QindaCalc | M2 (engine) / M3 (UI) | M0 skeleton window |
+| QindaCalc | M2/M3 | Working app: engine-backed grid, in-cell editing, formula bar, sheet tabs, xlsx/csv I/O |
 | QindaShow | M8 (model+editor) / M9 (player) | M0 skeleton window |
 | QindaNote | M7 (ink + notes) | M0 skeleton window |

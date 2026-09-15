@@ -24,6 +24,11 @@ OfficeApplication::OfficeApplication(QObject *parent)
 {
 }
 
+void OfficeApplication::setWindowFactory(WindowFactory factory)
+{
+    m_windowFactory = std::move(factory);
+}
+
 OfficeApplication::~OfficeApplication() = default;
 
 // Lazily builds the persisted stores so a bare OfficeApplication (tests,
@@ -120,7 +125,7 @@ DocumentWindow *OfficeApplication::newWindow(const QString &path)
 
 DocumentWindow *OfficeApplication::createWindow()
 {
-    auto *window = new DocumentWindow;
+    auto *window = m_windowFactory != nullptr ? m_windowFactory() : new DocumentWindow;
     auto *document = new Core::PlainTextDocument; // M1 stub engine
     window->setDocument(document);
     wireWindow(window);
