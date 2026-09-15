@@ -29,7 +29,14 @@ history):
 - [x] `gtk-launch org.qindaqt.QindaWrite` launches the Portage-installed
       binary (launcher path end-to-end).
 - [x] Packaging: `emerge -1 gui-apps/qindaoffice` from the `qindaqt` overlay
-      builds and installs all four apps + desktop files + icons + MIME.
+      builds and installs all four apps + desktop files + icons + MIME
+      (M10 acceptance; +charts USE flag drives QQO_WITH_CHARTS and pulls
+      dev-qt/qtcharts).
+- [x] M10 gates: 385-row function oracle green; chart part lands in the
+      xlsx package (series range + title in chart XML); the paged view
+      answers QAccessible queries (Document role, cursor/selection);
+      TemplateLoader surfaces the bundled starters and a picked template
+      opens detached from its path.
 
 Still interactive-only (pointer/focus on a busy live desktop; the
 app-side requirements above are the parts the suite owns):
