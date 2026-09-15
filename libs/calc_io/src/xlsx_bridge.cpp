@@ -1,0 +1,326 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "xlsx_bridge.h"
+
+#include "eval.h"
+#include "number_format.h"
+
+#include <xlsxcell.h>
+#include <xlsxcellformula.h>
+#include <xlsxdocument.h>
+#include <xlsxformat.h>
+#include <xlsxworkbook.h>
+#include <xlsxworksheet.h>
+
+namespace QindaOffice::Calc::IO {
+
+namespace {
+
+// QXlsx measures column widths in character units (~7 px + 5 padding per
+// the plan) and row heights in points.
+qreal charWidthToPx(qreal chars)
+{
+    return chars * 7.0 + 5.0;
+}
+
+qreal pxToCharWidth(qreal px)
+{
+    return qMax(1.0, (px - 5.0) / 7.0);
+}
+
+qreal ptToPx(qreal pt)
+{
+    return pt * 96.0 / 72.0;
+}
+
+qreal pxToPt(qreal px)
+{
+    return px * 72.0 / 96.0;
+}
+
+CellStyle styleFromFormat(const QXlsx::Format &format)
+{
+    CellStyle style;
+    // Built-in formats may carry only the numFmtId (empty format string).
+    style.numberFormat = !format.numberFormat().isEmpty()
+        ? format.numberFormat()
+        : NumberFormat::builtinCode(format.numberFormatIndex());
+    style.bold = format.fontBold();
+    style.italic = format.fontItalic();
+    style.fontSize = format.fontSize();
+    style.fontFamily = format.fontName();
+    if (format.fontColor().isValid()) {
+        const QColor c = format.fontColor();
+        style.fg = Rgb{quint8(c.red()), quint8(c.green()), quint8(c.blue())};
+    }
+    return style;
+}
+
+QXlsx::Format formatFromStyle(const CellStyle &style, QXlsx::Format base = {})
+{
+    QXlsx::Format format = base;
+    if (!style.numberFormat.isEmpty()
+        && style.numberFormat.compare(QLatin1String("General"), Qt::CaseInsensitive) != 0) {
+        // Built-in formats serialize reliably through their numFmtId; custom
+        // codes go through the format-code path (font attributes persist on
+        // both, but QXlsx 1.5.1 drops custom codes on write).
+        static const QHash<QString, int> kBuiltin = {
+            {QStringLiteral("0"), 1}, {QStringLiteral("0.00"), 2},
+            {QStringLiteral("#,##0"), 3}, {QStringLiteral("#,##0.00"), 4},
+            {QStringLiteral("0%"), 9}, {QStringLiteral("0.00%"), 10},
+            {QStringLiteral("0.00E+00"), 11}, {QStringLiteral("mm-dd-yy"), 14},
+            {QStringLiteral("d-mmm-yy"), 15}, {QStringLiteral("d-mmm"), 16},
+            {QStringLiteral("mmm-yy"), 17}, {QStringLiteral("h:mm AM/PM"), 18},
+            {QStringLiteral("h:mm:ss AM/PM"), 19}, {QStringLiteral("h:mm"), 20},
+            {QStringLiteral("h:mm:ss"), 21}, {QStringLiteral("m/d/yy h:mm"), 22},
+            {QStringLiteral("@"), 49},
+        };
+        const auto it = kBuiltin.constFind(style.numberFormat);
+        if (it != kBuiltin.constEnd()) {
+            format.setNumberFormatIndex(it.value());
+        } else {
+            format.setNumberFormat(style.numberFormat);
+        }
+    }
+    format.setFontBold(style.bold);
+    format.setFontItalic(style.italic);
+    if (style.fontSize > 0) {
+        format.setFontSize(style.fontSize);
+    }
+    if (!style.fontFamily.isEmpty()) {
+        format.setFontName(style.fontFamily);
+    }
+    return format;
+}
+
+Value valueFromCell(const std::shared_ptr<QXlsx::Cell> &cell, bool date1904)
+{
+    const QVariant v = cell->value();
+    switch (v.metaType().id()) {
+    case QMetaType::Bool:
+        return v.toBool();
+    case QMetaType::Double:
+    case QMetaType::Int:
+    case QMetaType::LongLong:
+        return v.toDouble();
+    case QMetaType::QString:
+        return v.toString();
+    case QMetaType::QDateTime:
+    case QMetaType::QDate: {
+        const QDate date = v.metaType().id() == QMetaType::QDate
+            ? v.toDate()
+            : v.toDateTime().date();
+        double serial = serialFromDate(date);
+        if (v.metaType().id() == QMetaType::QDateTime) {
+            serial += v.toDateTime().time().msecsSinceStartOfDay() / 86400000.0;
+        }
+        // Normalize the 1904 date system to the 1900 serial space (plan
+        // section 7.2).
+        return date1904 ? serial + 1462.0 : serial;
+    }
+    default:
+        if (cell->isDateTime()) {
+            return serialFromDate(v.toDateTime().date())
+                + v.toDateTime().time().msecsSinceStartOfDay() / 86400000.0 + (date1904 ? 1462.0 : 0.0);
+        }
+        return Value(std::monostate{});
+    }
+}
+
+} // namespace
+
+bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
+{
+    if (out == nullptr) {
+        if (error != nullptr) {
+            *error = QStringLiteral("null workbook output");
+        }
+        return false;
+    }
+    const bool date1904 = doc.workbook()->isDate1904();
+    const QStringList names = doc.sheetNames();
+    if (names.isEmpty()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("workbook has no sheets");
+        }
+        return false;
+    }
+    for (int sheetIndex = 0; sheetIndex < names.size(); ++sheetIndex) {
+        if (!doc.selectSheet(sheetIndex)) {
+            continue;
+        }
+        QXlsx::Worksheet *worksheet = static_cast<QXlsx::Worksheet *>(doc.sheet(names.at(sheetIndex)));
+        if (worksheet == nullptr) {
+            continue;
+        }
+        Sheet &sheet = out->addSheet(names.at(sheetIndex));
+        QHash<QString, qint32> styleIds;
+
+        // Shared formulas: only the master cell carries text. Resolve each
+        // shared cell's master through its reference and shift the master
+        // AST by the cell's offset (plan section 7.2).
+        const QXlsx::CellRange dim = worksheet->dimension();
+        for (int row = qMax(1, dim.firstRow()); row <= dim.lastRow(); ++row) {
+            for (int col = qMax(1, dim.firstColumn()); col <= dim.lastColumn(); ++col) {
+                std::shared_ptr<QXlsx::Cell> cell = worksheet->cellAt(row, col);
+                if (cell == nullptr) {
+                    continue;
+                }
+                const CellAddr addr{row - 1, col - 1};
+                const QXlsx::CellFormula formula = cell->formula();
+                const QString text = formula.formulaText();
+                if (!text.isEmpty()) {
+                    ParseResult parsed = parseFormula(text);
+                    if (!parsed.error.isEmpty() || !parsed.root) {
+                        out->setCellValue(sheetIndex, addr,
+                                          QStringLiteral("=") + text);
+                        continue;
+                    }
+                    // Volatility/dependency tracking happens in setCellInput;
+                    // formulas install via the shared installer.
+                    out->installFormula(sheetIndex, addr, parsed.root, text);
+                } else if (formula.formulaType() == QXlsx::CellFormula::SharedType) {
+                    // Reconstruct from the master.
+                    const QXlsx::CellRange sharedRange = formula.reference();
+                    const QXlsx::CellReference master = sharedRange.topLeft();
+                    std::shared_ptr<QXlsx::Cell> masterCell =
+                        worksheet->cellAt(master.row(), master.column());
+                    if (masterCell == nullptr) {
+                        continue;
+                    }
+                    const QString masterText = masterCell->formula().formulaText();
+                    if (masterText.isEmpty()) {
+                        continue;
+                    }
+                    ParseResult parsed = parseFormula(masterText);
+                    if (!parsed.error.isEmpty() || !parsed.root) {
+                        continue;
+                    }
+                    const NodePtr shifted = shiftNode(parsed.root, row - master.row(),
+                                                      col - master.column());
+                    out->installFormula(sheetIndex, addr, shifted, masterText);
+                } else {
+                    out->setCellValue(sheetIndex, addr,
+                                      valueFromCell(cell, date1904));
+                }
+                const QXlsx::Format format = cell->format();
+                if (!format.numberFormat().isEmpty() || format.fontBold()
+                    || format.fontItalic()) {
+                    const QString key = format.numberFormat();
+                    if (!styleIds.contains(key)) {
+                        styleIds.insert(key, out->addStyle(styleFromFormat(format)));
+                    }
+                    sheet.setStyleIdAt(addr, styleIds.value(key));
+                }
+            }
+        }
+        for (int col = qMax(1, dim.firstColumn()); col <= dim.lastColumn(); ++col) {
+            const qreal width = worksheet->columnWidth(col);
+            if (width > 0) {
+                sheet.setColumnWidth(col - 1, charWidthToPx(width));
+            }
+        }
+        for (int row = qMax(1, dim.firstRow()); row <= dim.lastRow(); ++row) {
+            const qreal height = worksheet->rowHeight(row);
+            if (height > 0) {
+                sheet.setRowHeight(row - 1, ptToPx(height));
+            }
+        }
+        for (const QXlsx::CellRange &range : worksheet->mergedCells()) {
+            sheet.addMerge({{range.firstRow() - 1, range.firstColumn() - 1},
+                            {range.lastRow() - 1, range.lastColumn() - 1}});
+        }
+    }
+    return true;
+}
+
+bool readXlsxFile(const QString &path, Workbook *out, QString *error)
+{
+    QXlsx::Document doc(path);
+    if (!doc.load()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("cannot open %1 as xlsx").arg(path);
+        }
+        return false;
+    }
+    return readXlsx(doc, out, error);
+}
+
+std::unique_ptr<QXlsx::Document> writeXlsx(const Workbook &wb, QString *error)
+{
+    Q_UNUSED(error);
+    auto doc = std::make_unique<QXlsx::Document>();
+    QHash<qint32, QXlsx::Format> formats;
+    for (qint32 s = 0; s < wb.sheetCount(); ++s) {
+        const Sheet &sheet = wb.sheetAt(s);
+        if (s == 0 && !doc->sheetNames().isEmpty()) {
+            doc->renameSheet(doc->sheetNames().first(), sheet.name());
+        } else {
+            doc->addSheet(sheet.name());
+        }
+        doc->selectSheet(sheet.name());
+        QXlsx::Worksheet *worksheet =
+            static_cast<QXlsx::Worksheet *>(doc->sheet(sheet.name()));
+        for (auto it = sheet.cells().constBegin(); it != sheet.cells().constEnd(); ++it) {
+            const quint64 key = it.key();
+            const CellAddr addr{qint32(key & 0xffffffffu), qint32(key >> 32)};
+            const Cell &cell = it.value();
+            const qint32 styleId = sheet.styleIdAt(addr);
+            const QXlsx::Format format =
+                styleId != 0 && wb.style(styleId) != nullptr
+                ? formatFromStyle(*wb.style(styleId))
+                : QXlsx::Format();
+            const int row = addr.row + 1;
+            const int col = addr.col + 1;
+            // AGENT-NOTE: value writes go through Document (it registers the
+            // cell format into the workbook style table; Worksheet::write
+            // drops it). Formulas use the Worksheet API - QXlsx has no
+            // Document::writeFormula - so formula cells keep the default
+            // format in v1 (documented limitation). The engine's evaluated
+            // value is written as the cached result: consumers that do not
+            // recalculate on load (LibreOffice's default for xlsx) still
+            // show correct data.
+            if (cell.hasFormula()) {
+                const double cached = isNumber(cell.value) ? std::get<double>(cell.value) : 0.0;
+                worksheet->writeFormula(row, col, QStringLiteral("=") + cell.formula,
+                                        QXlsx::Format(), cached);
+            } else if (isNumber(cell.value)) {
+                doc->write(row, col, std::get<double>(cell.value), format);
+            } else if (isText(cell.value)) {
+                doc->write(row, col, std::get<QString>(cell.value), format);
+            } else if (isBool(cell.value)) {
+                doc->write(row, col, std::get<bool>(cell.value), format);
+            } else if (isErr(cell.value)) {
+                doc->write(row, col, errText(std::get<Err>(cell.value)), format);
+            }
+        }
+        for (const CellRange &merge : sheet.merges()) {
+            doc->mergeCells(QXlsx::CellRange(merge.topLeft.row + 1, merge.topLeft.col + 1,
+                                             merge.bottomRight.row + 1,
+                                             merge.bottomRight.col + 1));
+        }
+        for (const qint32 col : sheet.sizedColumns()) {
+            worksheet->setColumnWidth(col + 1, col + 1, pxToCharWidth(sheet.columnWidth(col)));
+        }
+        for (const qint32 row : sheet.sizedRows()) {
+            worksheet->setRowHeight(row + 1, row + 1, pxToPt(sheet.rowHeight(row)));
+        }
+    }
+    return doc;
+}
+
+bool writeXlsxFile(const Workbook &wb, const QString &path, QString *error)
+{
+    std::unique_ptr<QXlsx::Document> doc = writeXlsx(wb, error);
+    if (doc == nullptr) {
+        return false;
+    }
+    if (!doc->saveAs(path)) {
+        if (error != nullptr) {
+            *error = QStringLiteral("cannot write %1").arg(path);
+        }
+        return false;
+    }
+    return true;
+}
+
+} // namespace QindaOffice::Calc::IO

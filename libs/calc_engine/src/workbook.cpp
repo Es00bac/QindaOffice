@@ -3,7 +3,12 @@
 
 namespace QindaOffice::Calc {
 
-Workbook::Workbook() = default;
+Workbook::Workbook()
+{
+    // Style id 0 is the implicit default style so user styles start at 1;
+    // the io bridge and the view treat 0 as "no explicit style".
+    m_styles.append(CellStyle{});
+}
 
 QString Workbook::sheetName(qint32 index) const
 {

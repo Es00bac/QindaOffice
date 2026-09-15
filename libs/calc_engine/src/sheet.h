@@ -28,6 +28,9 @@ public:
     [[nodiscard]] qreal rowHeight(qint32 row) const;    // px, 96 dpi
     void setColumnWidth(qint32 col, qreal px);
     void setRowHeight(qint32 row, qreal px);
+    // Explicitly-sized geometry only (for round-tripping to files).
+    [[nodiscard]] QList<qint32> sizedColumns() const { return m_colWidths.keys(); }
+    [[nodiscard]] QList<qint32> sizedRows() const { return m_rowHeights.keys(); }
 
     [[nodiscard]] const QList<CellRange> &merges() const { return m_merges; }
     void addMerge(const CellRange &range) { m_merges.append(range); }

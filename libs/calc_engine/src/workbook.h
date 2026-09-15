@@ -31,6 +31,10 @@ public:
     // Parses and installs cell input; returns false when the input is a
     // formula that failed to parse (it is stored as text instead).
     bool setCellInput(qint32 sheet, const CellAddr &addr, const QString &input);
+    // Installs an already-parsed formula (used by calc_io; shared formulas
+    // arrive shifted from the master). Takes the canonical text for storage.
+    void installFormula(qint32 sheet, const CellAddr &addr, const NodePtr &ast,
+                        const QString &formula);
     // Installs a pre-parsed literal (number/text/bool/error) without parsing.
     void setCellValue(qint32 sheet, const CellAddr &addr, const Value &value);
 
@@ -54,8 +58,6 @@ public:
     [[nodiscard]] DependencyGraph &dependencies() { return m_dependencies; }
 
 private:
-    void installFormula(qint32 sheet, const CellAddr &addr, const NodePtr &ast,
-                        const QString &formula);
     static Value parseLiteral(const QString &input, bool *isFormula, NodePtr *ast,
                               QString *formulaText);
 
