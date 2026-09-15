@@ -16,7 +16,8 @@ lists what exists today.
 | `office_core` | Qt Core/Gui | M1: `Document`, `PlainTextDocument`, `AtomicFileStore`, `JsonSettings`, `RecentFiles`, `RestoreInventory`, `RecoveryJournal`, `LibreOfficeConverter`, `Paths` |
 | `office_ai` | Qt Core/Gui/Network + `office_core` | M6 (planned) |
 | `office_ink` | Qt Gui | M7 (planned) |
-| `calc_engine` / `calc_io` | Qt Core (+QXlsx) | M2/M3 (planned) |
+| `calc_engine` | Qt Core | M2: model, lexer/Pratt parser, evaluator, dependency recalc, ~85 functions, number formats, CSV |
+| `calc_io` | Qt Core + QXlsx | M3 (planned) |
 | `show_model` | Qt Gui + KArchive | M8 (planned) |
 
 ## Applications

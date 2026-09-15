@@ -19,6 +19,7 @@ add_library(calc_engine STATIC
     src/functions/functions.h
     src/functions/logical.cpp
     src/functions/lookup.cpp
+    src/functions/statistical.cpp
     src/functions/text.cpp
     src/lexer.cpp
     src/lexer.h
