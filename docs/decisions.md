@@ -77,6 +77,27 @@ one-character nudge.
 header/footer through HTML; table row/column ops keep the cursor in the
 table so follow-up ops and action enablement stay live.
 
+## D-009: QindaNote zoom is a view transform; ink stays in page coordinates
+
+**Context.** M15 added pen width/color, page background choice and zoom.
+Strokes are stored in page coordinates with per-sample pressure; text
+blocks are child QTextEdits positioned in widget space.
+
+**Decision.** Zoom is purely a view transform: `pageRect`/`growHeight`
+scale, events map widget->page coordinates through `toPagePos`, and the
+spatial grid is queried in page space (the grid indexes page coordinates
+and must not be rebuilt on zoom). Text block geometry derives from the
+block index in page coordinates, so zoom repositions blocks without
+touching their content; fonts intentionally stay unscaled (documented).
+Pen width/color are presentation state on the view (toolbar widgets, not
+ActionId commands - they are not document commands), and flow into every
+new stroke; the highlighter keeps its fixed translucent yellow.
+
+**Consequences.** Zoom never rewrites the document (no dirty flag, no
+persistence impact); inking at any zoom lands identical page coordinates
+(test-verified). Shape tools remain the one deliberate boundary: they need
+a new envelope block kind and are recorded as future work.
+
 ## D-003: App-menu hooks are finalized explicitly after subclass construction
 
 **Context.** `DocumentWindow::createMenus()` runs inside the base

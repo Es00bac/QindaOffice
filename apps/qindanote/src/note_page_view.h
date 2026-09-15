@@ -30,6 +30,20 @@ public:
     void setTool(NoteTool tool) { m_tool = tool; }
     [[nodiscard]] NoteTool tool() const { return m_tool; }
 
+    // M15 polish: pen presentation + view zoom + page background.
+    void setPenWidth(qreal width);
+    void setPenColor(const QColor &color);
+    [[nodiscard]] qreal penWidth() const { return m_penWidth; }
+    [[nodiscard]] const QColor &penColor() const { return m_penColor; }
+    void setZoom(qreal zoom);
+    [[nodiscard]] qreal zoom() const { return m_zoom; }
+    // Sets the page background style (blank|ruled|grid|dotted); edits the
+    // live envelope and reports the page as edited (window persists).
+    void setBackground(const QString &background);
+    // The page rect in widget coordinates (zoom-aware); public for the
+    // window's layout math and tests.
+    [[nodiscard]] QRectF pageRect() const;
+
 public slots:
     void undo();
     void addTextBlock();
@@ -48,11 +62,14 @@ private:
     void syncBlocks();
     void syncBlocksGeometry();
     void pushUndoSnapshot();
-    [[nodiscard]] QRectF pageRect() const;
+    [[nodiscard]] QPointF toPagePos(const QPointF &widgetPos) const;
     [[nodiscard]] qreal growHeight() const;
 
     NotePage *m_page = nullptr;
     NoteTool m_tool = NoteTool::Pen;
+    qreal m_penWidth = 2.5;
+    QColor m_penColor = Qt::black; // black reads correctly on light paper
+    qreal m_zoom = 1.0;
     Ink::StrokeBuilder m_builder;
     bool m_inking = false;
     Ink::SpatialGrid m_grid{64.0};

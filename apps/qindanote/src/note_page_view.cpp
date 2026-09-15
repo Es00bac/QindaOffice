@@ -23,8 +23,50 @@ NotePageView::NotePageView(QWidget *parent)
 
 QRectF NotePageView::pageRect() const
 {
-    const qreal height = qMax(m_minPageHeight, growHeight());
-    return {(width() - m_pageWidth) / 2.0, 24.0, m_pageWidth, height};
+    const qreal height = qMax(m_minPageHeight * m_zoom, growHeight());
+    const qreal pageW = m_pageWidth * m_zoom;
+    return {(width() - pageW) / 2.0, 24.0, pageW, height};
+}
+
+void NotePageView::setPenWidth(qreal width)
+{
+    m_penWidth = qBound(1.0, width, 24.0);
+}
+
+void NotePageView::setPenColor(const QColor &color)
+{
+    if (color.isValid()) {
+        m_penColor = color;
+    }
+}
+
+void NotePageView::setZoom(qreal zoom)
+{
+    const qreal next = qBound(0.5, zoom, 3.0);
+    if (qFuzzyCompare(next, m_zoom)) {
+        return;
+    }
+    m_zoom = next;
+    updateGeometry();
+    syncBlocksGeometry();
+    update();
+}
+
+void NotePageView::setBackground(const QString &background)
+{
+    if (m_page == nullptr || m_page->envelope.background == background) {
+        return;
+    }
+    m_page->envelope.background = background;
+    update();
+    emit pageEdited();
+}
+
+// Widget (event) coordinates -> page coordinates (strokes are stored in
+// page space so zoom never rewrites the document).
+QPointF NotePageView::toPagePos(const QPointF &widgetPos) const
+{
+    return (widgetPos - pageRect().topLeft()) / m_zoom;
 }
 
 qreal NotePageView::growHeight() const
@@ -37,7 +79,8 @@ qreal NotePageView::growHeight() const
         contentBottom = qMax(contentBottom, qreal(block->y() + block->height() + 40));
     }
     const int pages = qBound(1, int(std::ceil(contentBottom / m_minPageHeight)), int(kMaxPages));
-    return pages * m_minPageHeight;
+    // The widget height of the page: page-space height times zoom.
+    return pages * m_minPageHeight * m_zoom;
 }
 
 void NotePageView::setPage(NotePage *page)
@@ -84,7 +127,6 @@ void NotePageView::syncBlocks()
     // QTextEdit per block, positioned under the previous content.
     const QJsonObject blocks = QJsonDocument::fromJson(m_page->envelope.blocksJson).object();
     const QJsonArray list = blocks.value(QStringLiteral("blocks")).toArray();
-    qreal y = 40;
     for (const QJsonValue &value : list) {
         const QJsonObject object = value.toObject();
         if (object.value(QStringLiteral("type")).toString() != QLatin1String("text")) {
@@ -93,12 +135,10 @@ void NotePageView::syncBlocks()
         auto *edit = new QTextEdit(this);
         edit->setPlainText(object.value(QStringLiteral("text")).toString());
         edit->setAcceptRichText(false);
-        edit->move(int(pageRect().x()) + 40, int(y));
-        edit->resize(int(m_pageWidth) - 80, 90);
         edit->show();
         m_textBlocks.append(edit);
-        y += 100;
     }
+    syncBlocksGeometry();
 }
 
 void NotePageView::addTextBlock()
@@ -159,14 +199,15 @@ bool NotePageView::event(QEvent *event)
         if (tablet->pointerType() != QPointingDevice::PointerType::Pen) {
             return true; // consumed and ignored
         }
-        const QPointF pos = tablet->position();
+        const QPointF pos = toPagePos(tablet->position());
         const StrokeSample sample{pos, tablet->pressure(), tablet->xTilt(), tablet->yTilt()};
         if (event->type() == QEvent::TabletPress) {
-            const qreal width = m_tool == NoteTool::Highlighter ? 6.0 : 2.5;
-            m_builder.begin(sample, m_tool == NoteTool::Highlighter ? StrokeTool::Highlighter
-                                                                    : StrokeTool::Pen,
-                            m_tool == NoteTool::Highlighter ? QColor(255, 210, 0) : palette().text().color(),
-                            width);
+            const bool highlight = m_tool == NoteTool::Highlighter;
+            m_builder.begin(sample,
+                            m_tool == NoteTool::Highlighter ? StrokeTool::Highlighter
+                                                            : StrokeTool::Pen,
+                            highlight ? QColor(255, 210, 0) : m_penColor,
+                            highlight ? 6.0 : m_penWidth);
             m_inking = true;
         } else if (event->type() == QEvent::TabletMove && m_inking) {
             m_builder.add(sample);
@@ -182,17 +223,16 @@ bool NotePageView::event(QEvent *event)
         && static_cast<QMouseEvent *>(event)->button() == Qt::LeftButton
         && pageRect().contains(static_cast<QMouseEvent *>(event)->position())
         && m_tool != NoteTool::Text) {
-        const QPointF pos = static_cast<QMouseEvent *>(event)->position();
-        m_builder.begin({pos, 0.6}, m_tool == NoteTool::Highlighter ? StrokeTool::Highlighter
-                                                                     : StrokeTool::Pen,
-                        m_tool == NoteTool::Highlighter ? QColor(255, 210, 0)
-                                                        : palette().text().color(),
-                        m_tool == NoteTool::Highlighter ? 6.0 : 2.5);
+        const bool highlight = m_tool == NoteTool::Highlighter;
+        m_builder.begin({toPagePos(static_cast<QMouseEvent *>(event)->position()), 0.6},
+                        highlight ? StrokeTool::Highlighter : StrokeTool::Pen,
+                        highlight ? QColor(255, 210, 0) : m_penColor,
+                        highlight ? 6.0 : m_penWidth);
         m_inking = true;
         return true;
     }
     if (event->type() == QEvent::MouseMove && m_inking) {
-        m_builder.add({static_cast<QMouseEvent *>(event)->position(), 0.6});
+        m_builder.add({toPagePos(static_cast<QMouseEvent *>(event)->position()), 0.6});
         m_page->envelope.ink.updateLast(m_builder.current());
         update();
         return true;
@@ -237,17 +277,25 @@ void NotePageView::paintEvent(QPaintEvent *event)
 
     if (m_page != nullptr) {
         painter.setClipRect(page);
-        const QVector<int> visible =
-            m_grid.query(event->rect().translated(-page.topLeft().toPoint())).values();
+        // The spatial grid indexes page coordinates; query in page space
+        // and render strokes through the zoom transform.
+        const QRect pageClip = QRectF(event->rect().x() / m_zoom, event->rect().y() / m_zoom,
+                                      event->rect().width() / m_zoom,
+                                      event->rect().height() / m_zoom)
+                                   .toAlignedRect();
+        const QVector<int> visible = m_grid.query(pageClip).values();
+        painter.save();
+        painter.translate(page.topLeft());
+        painter.scale(m_zoom, m_zoom);
         for (const int index : visible) {
             renderStroke(&painter, m_page->envelope.ink.strokes().at(index));
         }
         if (m_inking) {
             renderStroke(&painter, m_builder.current());
         }
+        painter.restore();
         painter.setClipping(false);
     }
-    Q_UNUSED(event);
 }
 
 void NotePageView::resizeEvent(QResizeEvent *event)
@@ -258,10 +306,16 @@ void NotePageView::resizeEvent(QResizeEvent *event)
 
 void NotePageView::syncBlocksGeometry()
 {
+    // Positions derive from the block index in PAGE coordinates, so zoom
+    // repositions every block consistently (fonts intentionally stay
+    // unscaled - the text tool is for typed notes, not slides).
     const QRectF page = pageRect();
+    int index = 0;
     for (QTextEdit *block : m_textBlocks) {
-        block->move(int(page.x()) + 40, block->y());
-        block->resize(int(page.width()) - 80, block->height());
+        const qreal yPage = 40 + index * 100;
+        block->move(int(page.x() + 40 * m_zoom), int(page.y() + (yPage - 24) * m_zoom));
+        block->resize(int(page.width() - 80 * m_zoom), int(90 * m_zoom));
+        ++index;
     }
 }
 

@@ -70,6 +70,15 @@ presenter-view-on-second-screen, reduced-motion, packaging).
   undo steps (Qt `setPageSize` undo quirk cleared); zoom actions move the
   view; the paper palette stays white-on-dark under any theme.
 
+### M15 additions (automated: `tst_qindanote`)
+
+- Pen width (1-24 px) and pen color flow into newly inked strokes
+  (mouse-fallback inking verified stroke width/color).
+- Page background choice (blank/ruled/grid/dotted) edits the envelope and
+  reports pageEdited.
+- Zoom (50-200%) scales the page rect and repositions text blocks while
+  inked coordinates stay in page space (identical samples at 1x and 2x).
+
 ### M14 additions (automated: `tst_write_ui`, `tst_write_view`)
 
 - Table menu + toolbar section: row/column insert+delete, merge, split -

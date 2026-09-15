@@ -9,6 +9,7 @@
 #include <QApplication>
 #include <QMouseEvent>
 #include <QTemporaryDir>
+#include <QSignalSpy>
 #include <QTabletEvent>
 #include <QtTest>
 
@@ -21,6 +22,9 @@ private slots:
     void notebookSurvivesReopen();
     void undoRemovesStrokes();
     void penEventsInkAndTouchIsIgnored();
+    void penPresentationFlowsIntoStrokes();
+    void backgroundChoiceEditsEnvelope();
+    void zoomScalesPageNotTheDocument();
 };
 
 void QindaNoteTest::notebookSurvivesReopen()
@@ -125,6 +129,77 @@ int main(int argc, char *argv[])
     QApplication::setDesktopFileName(QStringLiteral("org.qindaqt.QindaNote"));
     QindaNoteTest test;
     return QTest::qExec(&test, argc, argv);
+}
+
+void QindaNoteTest::penPresentationFlowsIntoStrokes()
+{
+    NotePageView view;
+    NotePage page;
+    page.id = QStringLiteral("p1");
+    view.setPage(&page);
+    view.resize(800, 600);
+    view.setPenWidth(7);
+    view.setPenColor(QColor(200, 30, 40));
+
+    // Mouse-fallback inking inside the page area.
+    const QPoint start = view.pageRect().center().toPoint();
+    QTest::mousePress(&view, Qt::LeftButton, {}, start);
+    QTest::mouseMove(&view, start + QPoint(60, 10));
+    QTest::mouseRelease(&view, Qt::LeftButton, {}, start + QPoint(60, 10));
+
+    QCOMPARE(page.envelope.ink.strokes().size(), 1);
+    const Ink::Stroke &stroke = page.envelope.ink.strokes().first();
+    QCOMPARE(stroke.width, 7.0);
+    QCOMPARE(stroke.color, QColor(200, 30, 40));
+    QVERIFY(stroke.samples.size() >= 2);
+}
+
+void QindaNoteTest::backgroundChoiceEditsEnvelope()
+{
+    NotePageView view;
+    NotePage page;
+    page.id = QStringLiteral("p1");
+    view.setPage(&page);
+    QSignalSpy editedSpy(&view, &NotePageView::pageEdited);
+
+    view.setBackground(QStringLiteral("grid"));
+    QCOMPARE(page.envelope.background, QStringLiteral("grid"));
+    QCOMPARE(editedSpy.count(), 1);
+
+    // Unknown styles are still stored verbatim (forward-compatible with
+    // future backgrounds); blank default round-trips.
+    view.setBackground(QStringLiteral("blank"));
+    QCOMPARE(page.envelope.background, QStringLiteral("blank"));
+}
+
+void QindaNoteTest::zoomScalesPageNotTheDocument()
+{
+    NotePageView view;
+    NotePage page;
+    page.id = QStringLiteral("p1");
+    view.setPage(&page);
+    view.resize(1200, 800);
+    const QRectF at100 = view.pageRect();
+    view.setZoom(2.0);
+    const QRectF at200 = view.pageRect();
+    QVERIFY(at200.width() > at100.width() * 1.9);
+    QVERIFY(at200.height() > at100.height() * 1.9);
+
+    // Inked coordinates land in PAGE space regardless of zoom: the same
+    // widget-relative point produces the same document sample.
+    auto inkAt = [&view, &page](qreal zoom) {
+        page.envelope.ink.clear();
+        view.setZoom(zoom);
+        const QPoint widgetPt = view.pageRect().center().toPoint();
+        QTest::mousePress(&view, Qt::LeftButton, {}, widgetPt);
+        QTest::mouseMove(&view, widgetPt + QPoint(40, 0));
+        QTest::mouseRelease(&view, Qt::LeftButton, {}, widgetPt + QPoint(40, 0));
+        return page.envelope.ink.strokes().first().samples.first().pos;
+    };
+    const QPointF sample100 = inkAt(1.0);
+    const QPointF sample200 = inkAt(2.0);
+    QVERIFY(qAbs(sample100.x() - sample200.x()) < 2.0);
+    QVERIFY(qAbs(sample100.y() - sample200.y()) < 2.0);
 }
 
 #include "tst_qindanote.moc"

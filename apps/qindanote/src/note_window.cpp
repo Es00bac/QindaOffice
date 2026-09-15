@@ -3,9 +3,12 @@
 
 #include "note_page_view.h"
 
+#include <QColorDialog>
+#include <QComboBox>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QMenu>
+#include <QSpinBox>
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QToolBar>
@@ -74,6 +77,52 @@ NoteWindow::NoteWindow()
         action->setCheckable(true);
         connect(action, &QAction::triggered, this, [this, tool] { m_view->setTool(tool); });
     }
+    tools->addSeparator();
+
+    // M15 polish: pen width/color, page background and zoom live on the
+    // tool strip (they are presentation state, not document commands, so
+    // they are toolbar widgets rather than ActionId commands).
+    auto *width = new QSpinBox(tools);
+    width->setObjectName(QStringLiteral("penWidthSpin"));
+    width->setRange(1, 24);
+    width->setValue(int(m_view->penWidth()));
+    width->setSuffix(tr(" px"));
+    width->setToolTip(tr("Pen width"));
+    tools->addWidget(width);
+    connect(width, &QSpinBox::valueChanged, m_view,
+            [this](int value) { m_view->setPenWidth(value); });
+
+    QAction *colorAction = tools->addAction(tr("Pen color"));
+    connect(colorAction, &QAction::triggered, this, [this] {
+        const QColor picked =
+            QColorDialog::getColor(m_view->penColor(), this, tr("Pen Color"));
+        if (picked.isValid()) {
+            m_view->setPenColor(picked);
+        }
+    });
+
+    auto *background = new QComboBox(tools);
+    background->setObjectName(QStringLiteral("pageBackgroundCombo"));
+    background->addItem(tr("Blank"), QStringLiteral("blank"));
+    background->addItem(tr("Ruled"), QStringLiteral("ruled"));
+    background->addItem(tr("Grid"), QStringLiteral("grid"));
+    background->addItem(tr("Dotted"), QStringLiteral("dotted"));
+    tools->addWidget(background);
+    connect(background, &QComboBox::activated, this, [this](int index) {
+        QObject *box = sender();
+        m_view->setBackground(
+            qobject_cast<QComboBox *>(box)->itemData(index).toString());
+    });
+
+    auto *zoom = new QComboBox(tools);
+    zoom->setObjectName(QStringLiteral("zoomCombo"));
+    for (const int percent : {50, 75, 100, 150, 200}) {
+        zoom->addItem(tr("%1%").arg(percent), percent);
+    }
+    zoom->setCurrentIndex(2);
+    tools->addWidget(zoom);
+    connect(zoom, &QComboBox::activated, this,
+            [this](int index) { m_view->setZoom(qobject_cast<QComboBox *>(sender())->itemData(index).toInt() / 100.0); });
     tools->addSeparator();
     QAction *undo = tools->addAction(tr("Undo"));
     connect(undo, &QAction::triggered, m_view, &NotePageView::undo);
