@@ -70,6 +70,16 @@ presenter-view-on-second-screen, reduced-motion, packaging).
   undo steps (Qt `setPageSize` undo quirk cleared); zoom actions move the
   view; the paper palette stays white-on-dark under any theme.
 
+### M14 additions (automated: `tst_write_ui`, `tst_write_view`)
+
+- Table menu + toolbar section: row/column insert+delete, merge, split -
+  all persistent named actions enabled only inside a table; deletion keeps
+  the cursor in the table.
+- Page Setup dialog edits header/footer ({page}/{pages} tokens); the
+  exported PDF carries header and per-page footer text on every page
+  (poppler-verified); HTML save/reload round-trips page size, margin and
+  header/footer metas.
+
 ### M13 additions (automated: `tst_show_ui`, `tst_show_model`)
 
 - Shapes toolbar + Insert/Shape menus share persistent named actions

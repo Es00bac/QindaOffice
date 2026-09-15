@@ -53,6 +53,30 @@ fresh shape ids on decode, so paste never collides.
 **Consequences.** Insert-style ops, styling and clipboard all share one undo
 stream; new ShowWindows are safe to create/destroy in tests and real sessions.
 
+## D-008: Write page setup persists in HTML metas; headers/footers render from the shared page loop
+
+**Context.** M14 added table operations and headers/footers. Two findings:
+the `qindawrite-page` meta was written on save but never parsed on load
+(HTML reload always reverted to A4), and QTextDocument has no header/footer
+concept at all.
+
+**Decision.** `page_setup_io` owns three HTML metas (`qindawrite-page`,
+`-header`, `-footer`); `WriteDocument::load` parses the raw source HTML
+(ODT/DOCX via the LibreOffice bridge still lose them - documented).
+Headers/footers are `PageDecoration` text with `{page}/{pages}` tokens,
+drawn by `drawPageDecoration` from THE shared pagination loop
+(`renderDocumentPages`), which the screen view also calls - so screen,
+print and PDF agree by construction. Two Qt quirks are load-bearing and
+recorded as AGENT-NOTEs: `QTextTable::splitCell`'s row/col args are the
+spans AFTER splitting (1x1 = full split), and on an empty cell
+`firstCursorPosition()` lands on the boundary character where `cellAt()`
+answers invalid - table row/column deletion repositions the cursor with a
+one-character nudge.
+
+**Consequences.** Save/reload now round-trips page size, margin and
+header/footer through HTML; table row/column ops keep the cursor in the
+table so follow-up ops and action enablement stay live.
+
 ## D-003: App-menu hooks are finalized explicitly after subclass construction
 
 **Context.** `DocumentWindow::createMenus()` runs inside the base

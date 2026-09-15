@@ -7,18 +7,22 @@
 
 #include "qindawrite/src/find_replace_bar.h"
 #include "qindawrite/src/format_controller.h"
+#include "qindawrite/src/page_setup_io.h"
 #include "qindawrite/src/page_text_view.h"
+#include "qindawrite/src/table_actions.h"
 #include "qindawrite/src/write_document.h"
 #include "qindawrite/src/write_window.h"
 
 #include "standard_actions.h"
 
 #include <QComboBox>
+#include <QFile>
 #include <QFontComboBox>
 #include <QFontDatabase>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMenuBar>
+#include <QTemporaryDir>
 #include <QTextList>
 #include <QTextTable>
 #include <QToolBar>
@@ -41,6 +45,8 @@ private slots:
     void editActionsFollowControlAvailability();
     void paperPaletteIsPinned();
     void zoomActionsAdjustView();
+    void tableOperationsWork();
+    void pageSetupRoundTripsThroughHtml();
 };
 
 namespace {
@@ -338,6 +344,88 @@ void WriteUiTest::zoomActionsAdjustView()
     QVERIFY(window.pageView()->zoom() > before);
     zoomReset->trigger();
     QCOMPARE(window.pageView()->zoom(), 1.0);
+}
+
+void WriteUiTest::tableOperationsWork()
+{
+    WriteWindow window;
+    selectFirstWord(&window);
+    window.formatController()->insertTableAtCursor(2, 2);
+    TableController *tables = window.tableController();
+    QVERIFY(tables != nullptr);
+    QMenu *tableMenu = window.findChild<QMenu *>(QStringLiteral("tableMenu"));
+    QVERIFY(tableMenu != nullptr);
+    QVERIFY(tables->actions().insertRowBelow->isEnabled());
+    QVERIFY(tables->actions().mergeCells->isEnabled());
+
+    QTextDocument *doc = window.writeDocument()->textDocument();
+    QTextCursor cursor = window.pageView()->control()->textCursor();
+    QTextTable *table = cursor.currentTable();
+    QVERIFY(table != nullptr);
+    QCOMPARE(table->rows(), 2);
+    QCOMPARE(table->columns(), 2);
+
+    tables->actions().insertRowBelow->trigger();
+    QCOMPARE(table->rows(), 3);
+    tables->actions().insertColumnRight->trigger();
+    QCOMPARE(table->columns(), 3);
+
+    // Merge the cursor cell with its right neighbour, then split back.
+    // Re-read the cursor after every mutation: positions shift as the
+    // table geometry changes.
+    tables->actions().mergeCells->trigger();
+    QVERIFY(table->cellAt(window.pageView()->control()->textCursor()).columnSpan() >= 2);
+    QVERIFY(tables->actions().splitCell->isEnabled());
+    tables->actions().splitCell->trigger();
+    QCOMPARE(table->cellAt(window.pageView()->control()->textCursor()).columnSpan(), 1);
+    Q_UNUSED(cursor);
+
+    tables->actions().deleteRow->trigger();
+    QCOMPARE(table->rows(), 2);
+    tables->actions().deleteColumn->trigger();
+    QCOMPARE(table->columns(), 2);
+
+    // Moving the cursor out of the table disables the ops.
+    QTextCursor outside(doc);
+    outside.movePosition(QTextCursor::End);
+    window.pageView()->control()->setTextCursor(outside);
+    QCoreApplication::processEvents();
+    QVERIFY(!tables->actions().insertRowBelow->isEnabled());
+}
+
+void WriteUiTest::pageSetupRoundTripsThroughHtml()
+{
+    WriteWindow window;
+    window.writeDocument()->textDocument()->setPlainText(QStringLiteral("body"));
+    // Non-default page + margin + header/footer with tokens.
+    window.writeDocument()->setupPaged(QSizeF(816, 1056), 64);
+    window.writeDocument()->setHeaderFooter(QStringLiteral("Report & <Quotes>"),
+                                            QStringLiteral("Page {page} of {pages}"));
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + QStringLiteral("/doc.html");
+    QString error;
+    QVERIFY2(window.writeDocument()->save(path, &error), qPrintable(error));
+
+    // The raw HTML carries the metas; the header is attribute-escaped.
+    QFile raw(path);
+    QVERIFY(raw.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString html = QString::fromUtf8(raw.readAll());
+    QVERIFY(html.contains(QStringLiteral("qindawrite-page")));
+    QVERIFY(html.contains(QStringLiteral("qindawrite-header")));
+    QVERIFY(html.contains(QStringLiteral("&amp;")));
+
+    WriteDocument reloaded;
+    QVERIFY2(reloaded.load(path, &error), qPrintable(error));
+    QCOMPARE(reloaded.pageSize(), QSizeF(816, 1056));
+    QCOMPARE(reloaded.pageMargin(), 64.0);
+    QCOMPARE(reloaded.headerText(), QStringLiteral("Report & <Quotes>"));
+    QCOMPARE(reloaded.footerText(), QStringLiteral("Page {page} of {pages}"));
+
+    // Token expansion is a pure function shared by screen, print and PDF.
+    QCOMPARE(formatPageDecoration(QStringLiteral("{page}/{pages}"), 2, 7),
+             QStringLiteral("2/7"));
 }
 
 QTEST_MAIN(WriteUiTest)

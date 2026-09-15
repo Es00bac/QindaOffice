@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "page_text_view.h"
 
+#include "pdf_exporter.h"
 #include "write_document.h"
 
 #include <QContextMenuEvent>
@@ -137,6 +138,17 @@ void PageTextView::paintPage(QPainter &painter, int index, const QRect &clip)
     m_control->drawContents(&painter, QRectF(0, index * size.height(), size.width(), size.height()),
                              viewport());
     painter.restore();
+
+    // Header/footer live in the margin bands (same source as print/PDF).
+    const PageDecoration decoration = m_document->decoration();
+    if (!decoration.header.isEmpty() || !decoration.footer.isEmpty()) {
+        painter.save();
+        painter.translate(page.topLeft());
+        painter.scale(m_geometry.zoom(), m_geometry.zoom());
+        drawPageDecoration(&painter, QRectF(QPointF(0, 0), size), decoration, index + 1,
+                           pageCount());
+        painter.restore();
+    }
 }
 
 void PageTextView::paintEvent(QPaintEvent *event)

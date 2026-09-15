@@ -65,6 +65,16 @@ inline const char kInsertImage[] = "insertImageAction";
 inline const char kInsertColumns[] = "insertColumnsAction";
 inline const char kInsertPageBreak[] = "insertPageBreakAction";
 
+// QindaWrite table commands (M14).
+inline const char kTableInsertRowAbove[] = "tableInsertRowAboveAction";
+inline const char kTableInsertRowBelow[] = "tableInsertRowBelowAction";
+inline const char kTableInsertColumnLeft[] = "tableInsertColumnLeftAction";
+inline const char kTableInsertColumnRight[] = "tableInsertColumnRightAction";
+inline const char kTableDeleteRow[] = "tableDeleteRowAction";
+inline const char kTableDeleteColumn[] = "tableDeleteColumnAction";
+inline const char kTableMergeCells[] = "tableMergeCellsAction";
+inline const char kTableSplitCell[] = "tableSplitCellAction";
+
 // QindaCalc commands.
 inline const char kInsertChart[] = "insertChartAction";
 inline const char kInsertSheet[] = "insertSheetAction";

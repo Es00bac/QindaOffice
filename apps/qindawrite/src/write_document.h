@@ -9,6 +9,7 @@
 // round-tripped through ODT/DOCX in v1).
 
 #include "document.h"
+#include "page_setup_io.h"
 
 #include <QSizeF>
 #include <QTextDocument>
@@ -34,9 +35,21 @@ public:
     [[nodiscard]] QSizeF pageSize() const;
     [[nodiscard]] qreal pageMargin() const;
 
+    // Header/footer drawn into the page margins on screen, print and PDF
+    // (M14). {page}/{pages} tokens expand per page at render time.
+    void setHeaderFooter(const QString &header, const QString &footer);
+    [[nodiscard]] QString headerText() const { return m_header; }
+    [[nodiscard]] QString footerText() const { return m_footer; }
+    [[nodiscard]] PageDecoration decoration() const
+    {
+        return {m_header, m_footer, m_margin};
+    }
+
 private:
     std::unique_ptr<QTextDocument> m_text;
     qreal m_margin = 96;
+    QString m_header;
+    QString m_footer;
 };
 
 } // namespace QindaOffice::Apps::Write

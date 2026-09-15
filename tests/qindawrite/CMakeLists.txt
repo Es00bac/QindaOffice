@@ -24,6 +24,8 @@ add_executable(tst_write_view tst_write_view.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_controller.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_actions.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_geometry.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_setup_io.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/table_actions.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_accessibility.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_view.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/spell_checker.cpp
@@ -47,6 +49,8 @@ add_executable(tst_write_ui tst_write_ui.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_controller.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_actions.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_geometry.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_setup_io.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/table_actions.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_accessibility.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_view.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/spell_checker.cpp

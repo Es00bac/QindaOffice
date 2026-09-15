@@ -30,6 +30,7 @@ private slots:
     void stylesSurviveHtmlRoundTrip();
     void geometryRoundTripsInsidePages();
     void pageViewExposesAccessibleText();
+    void headerFooterAppearInExportedPdf();
 
 };
 
@@ -194,6 +195,39 @@ int main(int argc, char *argv[])
     QApplication::setDesktopFileName(QStringLiteral("org.qindaqt.QindaWrite"));
     WriteViewTest test;
     return QTest::qExec(&test, argc, argv);
+}
+
+void WriteViewTest::headerFooterAppearInExportedPdf()
+{
+    WriteWindow window;
+    window.writeDocument()->textDocument()->setHtml(
+        QStringLiteral("<p>body one</p><p style=\"page-break-before:always\">body two</p>"));
+    window.writeDocument()->setHeaderFooter(QStringLiteral("Acme Report"),
+                                            QStringLiteral("Page {page} of {pages}"));
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QCOMPARE(window.pageView()->pageCount(), 2);
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + QStringLiteral("/hf.pdf");
+    QString error;
+    QVERIFY2(exportDocumentPdf(window.writeDocument()->textDocument(), path, &error,
+                               window.writeDocument()->decoration()),
+             qPrintable(error));
+
+    std::unique_ptr<Poppler::Document> pdf(Poppler::Document::load(path));
+    QVERIFY(pdf != nullptr);
+    QCOMPARE(pdf->numPages(), 2);
+    for (int page = 0; page < 2; ++page) {
+        std::unique_ptr<Poppler::Page> pdfPage(pdf->page(page));
+        QVERIFY(pdfPage != nullptr);
+        const QString text = pdfPage->text(QRectF());
+        QVERIFY2(text.contains(QStringLiteral("Acme Report")),
+                 qPrintable(QStringLiteral("header on page %1").arg(page)));
+        QVERIFY2(text.contains(QStringLiteral("Page %1 of 2").arg(page + 1)),
+                 qPrintable(QStringLiteral("footer on page %1: %2").arg(page).arg(text)));
+    }
 }
 
 #include "tst_write_view.moc"

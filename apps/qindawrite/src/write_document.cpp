@@ -48,6 +48,21 @@ bool WriteDocument::load(const QString &path, QString *error)
     if (!loadDocument(path, m_text.get(), error)) {
         return false;
     }
+    // Page setup + header/footer travel in HTML metas (see page_setup_io);
+    // QTextDocument::setHtml drops them, so parse the raw source. ODT/DOCX
+    // via the LibreOffice bridge lose them - documented limitation.
+    if (path.endsWith(QLatin1String(".html"), Qt::CaseInsensitive)
+        || path.endsWith(QLatin1String(".htm"), Qt::CaseInsensitive)) {
+        QFile raw(path);
+        if (raw.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            const PageSetup setup = pageSetupFromHtml(QString::fromUtf8(raw.readAll()));
+            if (setup.hasCustomPageSize) {
+                setupPaged(setup.pageSize, setup.margin);
+            }
+            m_header = setup.header;
+            m_footer = setup.footer;
+        }
+    }
     setCanonicalPath(path);
     refreshByteRevision();
     setDirty(false);
@@ -62,22 +77,20 @@ bool WriteDocument::save(const QString &path, QString *error)
     }
     const QString ext = QFileInfo(path).suffix().toLower();
     if (ext == QLatin1String("html") || ext == QLatin1String("htm")) {
-        // Page setup meta (plan 6.1): re-inject after the generic writer.
+        // Page setup + header/footer metas: re-inject after the generic
+        // writer (QTextDocumentWriter does not know about them).
         QFile file(path);
         if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
             QString html = QString::fromUtf8(file.readAll());
             file.close();
-            const QString meta =
-                QStringLiteral("<meta name=\"qindawrite-page\" content=\"%1 %2 %3\">")
-                    .arg(m_text->pageSize().width())
-                    .arg(m_text->pageSize().height())
-                    .arg(m_margin);
-            const int head = html.indexOf(QStringLiteral("</head>"));
-            if (head > 0) {
-                html.insert(head, meta);
-                if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                    file.write(html.toUtf8());
-                }
+            PageSetup setup;
+            setup.pageSize = m_text->pageSize();
+            setup.margin = m_margin;
+            setup.header = m_header;
+            setup.footer = m_footer;
+            html = injectPageSetupMeta(html, setup);
+            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                file.write(html.toUtf8());
             }
         }
     }
@@ -94,6 +107,17 @@ QStringList WriteDocument::mimeTypes() const
             QStringLiteral("application/vnd.oasis.opendocument.text"),
             QStringLiteral("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
             QStringLiteral("application/rtf")};
+}
+
+void WriteDocument::setHeaderFooter(const QString &header, const QString &footer)
+{
+    if (m_header == header && m_footer == footer) {
+        return;
+    }
+    m_header = header;
+    m_footer = footer;
+    setDirty(true);
+    emit contentChanged();
 }
 
 QByteArray WriteDocument::recoverySnapshot() const

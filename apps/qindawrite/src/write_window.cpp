@@ -3,6 +3,7 @@
 
 #include "find_replace_bar.h"
 #include "format_controller.h"
+#include "table_actions.h"
 #include "page_text_accessibility.h"
 #include "page_text_view.h"
 #include "pdf_exporter.h"
@@ -29,6 +30,7 @@
 #include <QDockWidget>
 #include <QDir>
 #include <QInputDialog>
+#include <QLineEdit>
 #include <QStandardPaths>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -118,10 +120,13 @@ WriteWindow::WriteWindow()
     // Format commands live in the controller; the window adds its toolbar
     // below the shell's main toolbar and reuses the same actions in menus.
     m_format = new FormatController(m_view, m_document, this);
+    m_tables = new TableController(m_view, m_document, this);
     QToolBar *mainToolBar = addMainToolBar();
     Q_UNUSED(mainToolBar);
     addToolBarBreak(Qt::TopToolBarArea);
-    addToolBar(Qt::TopToolBarArea, m_format->toolBar());
+    QToolBar *formatToolBar = m_format->toolBar();
+    m_tables->appendToToolBar(formatToolBar);
+    addToolBar(Qt::TopToolBarArea, formatToolBar);
 
     wireEditingActions();
 
@@ -233,7 +238,7 @@ void WriteWindow::exportPdf()
         return;
     }
     QString error;
-    if (exportDocumentPdf(m_document->textDocument(), path, &error)) {
+    if (exportDocumentPdf(m_document->textDocument(), path, &error, m_document->decoration())) {
         statusBar()->showMessage(tr("Exported %1").arg(path), 5000);
     } else {
         statusBar()->showMessage(tr("Export failed: %1").arg(error), 8000);
@@ -267,7 +272,7 @@ Shell::PrintRenderCallback WriteWindow::printRenderCallback() const
     return [this](QPrinter *printer, QPainter *painter) {
         renderDocumentPages(painter, QSizeF(printer->width(), printer->height()),
                             m_document->textDocument(),
-                            [printer] { printer->newPage(); });
+                            [printer] { printer->newPage(); }, m_document->decoration());
     };
 }
 
@@ -346,6 +351,11 @@ void WriteWindow::insertApplicationMenus(QMenu *before)
     formatMenu->addSeparator();
     m_format->populateFormatMenu(formatMenu);
 
+    auto *tableMenu = new QMenu(tr("&Table"), this);
+    tableMenu->setObjectName(QStringLiteral("tableMenu"));
+    menuBar()->insertMenu(before->menuAction(), tableMenu);
+    m_tables->populateTableMenu(tableMenu);
+
     auto *insertMenu = new QMenu(tr("&Insert"), this);
     insertMenu->setObjectName(QStringLiteral("insertMenu"));
     menuBar()->insertMenu(before->menuAction(), insertMenu);
@@ -379,9 +389,16 @@ void WriteWindow::insertApplicationMenus(QMenu *before)
         connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
         layout->addRow(tr("Paper"), size);
         layout->addRow(tr("Margin (px)"), margin);
+        auto *header = new QLineEdit(m_document->headerText(), &dialog);
+        auto *footer = new QLineEdit(m_document->footerText(), &dialog);
+        header->setPlaceholderText(tr("Header ({page} of {pages})"));
+        footer->setPlaceholderText(tr("Footer ({page} of {pages})"));
+        layout->addRow(tr("Header"), header);
+        layout->addRow(tr("Footer"), footer);
         layout->addRow(buttons);
         if (dialog.exec() == QDialog::Accepted) {
             m_document->setupPaged(size->currentData().toSizeF(), margin->value());
+            m_document->setHeaderFooter(header->text(), footer->text());
             m_view->geometry()->setPageSize(size->currentData().toSizeF());
             m_view->viewport()->update();
             m_document->setDirty(true);

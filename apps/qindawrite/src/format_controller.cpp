@@ -323,7 +323,10 @@ void FormatController::insertTableAtCursor(int rows, int columns)
     format.setCellSpacing(2);
     format.setCellPadding(4);
     format.setWidth(QTextLength(QTextLength::PercentageLength, 100));
-    cursor.insertTable(rows, columns, format);
+    QTextTable *table = cursor.insertTable(rows, columns, format);
+    // Leave the control cursor inside the first cell so table-scoped UI
+    // (the Table menu/actions) enables immediately.
+    m_view->control()->setTextCursor(table->cellAt(0, 0).firstCursorPosition());
     m_document->setDirty(true);
 }
 
@@ -388,7 +391,8 @@ void FormatController::insertColumnsAtCursor(int columns, int gutterPx)
     format.setCellSpacing(0);
     format.setCellPadding(gutterPx / 2);
     format.setWidth(QTextLength(QTextLength::PercentageLength, 100));
-    cursor.insertTable(1, columns, format);
+    QTextTable *table = cursor.insertTable(1, columns, format);
+    m_view->control()->setTextCursor(table->cellAt(0, 0).firstCursorPosition());
     m_document->setDirty(true);
 }
 

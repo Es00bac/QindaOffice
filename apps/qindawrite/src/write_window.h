@@ -29,6 +29,7 @@ class FindReplaceBar;
 class FormatController;
 class PageTextView;
 class SpellChecker;
+class TableController;
 class WriteDocument;
 
 class WriteWindow final : public Shell::DocumentWindow {
@@ -40,6 +41,7 @@ public:
     [[nodiscard]] WriteDocument *writeDocument() const { return m_document; }
     [[nodiscard]] PageTextView *pageView() const { return m_view; }
     [[nodiscard]] FormatController *formatController() const { return m_format; }
+    [[nodiscard]] TableController *tableController() const { return m_tables; }
     [[nodiscard]] FindReplaceBar *findReplaceBar() const { return m_findBar; }
 
     void exportPdf();
@@ -60,6 +62,7 @@ private:
     WriteDocument *m_document;
     PageTextView *m_view;
     FormatController *m_format;
+    TableController *m_tables;
     FindReplaceBar *m_findBar;
     SpellChecker *m_spell = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;

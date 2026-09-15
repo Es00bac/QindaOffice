@@ -9,8 +9,12 @@ add_executable(qindawrite
     src/page_geometry.h
     src/page_text_accessibility.cpp
     src/page_text_accessibility.h
+    src/page_setup_io.cpp
+    src/page_setup_io.h
     src/page_text_view.cpp
     src/page_text_view.h
+    src/table_actions.cpp
+    src/table_actions.h
     src/spell_checker.cpp
     src/format_io.cpp
     src/pdf_exporter.cpp
