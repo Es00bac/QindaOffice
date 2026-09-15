@@ -29,8 +29,8 @@ RDEPEND="
 	>=dev-qt/qtbase-6.11:6=[dbus,gui,wayland,widgets]
 	>=kde-frameworks/karchive-6.0:6=
 	>=kde-frameworks/sonnet-6.0:6=
-	dev-libs/qtkeychain[qt6]
-	x11-libs/poppler[qt6]
+	dev-libs/qtkeychain
+	app-text/poppler[qt6]
 	libreoffice? ( app-office/libreoffice )
 "
 DEPEND="${RDEPEND}"

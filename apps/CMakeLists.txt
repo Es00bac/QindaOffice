@@ -12,7 +12,7 @@ function(qqo_add_app target desktopId)
     )
     qqo_set_strict_warnings(${target})
     install(TARGETS ${target} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../data/${desktopId}.desktop
+    install(FILES ${PROJECT_SOURCE_DIR}/data/${desktopId}.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 endfunction()
 

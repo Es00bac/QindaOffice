@@ -151,6 +151,12 @@ QString OfficeApplication::canonical(const QString &path) const
 
 bool OfficeApplication::openPaths(const QStringList &paths, QString *diagnostic)
 {
+    // A bare second launch hands off an empty path list; mirroring the
+    // first-party terminal's default-request semantics it opens a fresh
+    // untitled window rather than doing nothing.
+    if (paths.isEmpty()) {
+        return newWindow() != nullptr;
+    }
     bool allOpened = true;
     for (const QString &path : paths) {
         const QString canon = canonical(path);
