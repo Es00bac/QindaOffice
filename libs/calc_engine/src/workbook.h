@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "chart_spec.h"
 #include "dependencies.h"
 #include "eval.h"
 #include "sheet.h"
@@ -56,6 +57,10 @@ public:
         qint32 sheet, const CellRange &range) const override;
 
     [[nodiscard]] DependencyGraph &dependencies() { return m_dependencies; }
+
+    // Floating charts anchored on the sheets (plan section 7.2); exported
+    // to xlsx, dropped with a warning on import (QXlsx has no chart read).
+    QList<ChartSpec> charts;
 
 private:
     static Value parseLiteral(const QString &input, bool *isFormula, NodePtr *ast,

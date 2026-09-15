@@ -18,7 +18,12 @@ add_library(calc_engine STATIC
     src/functions/functions.cpp
     src/functions/functions.h
     src/functions/logical.cpp
+    src/chart_spec.cpp
+    src/chart_spec.h
     src/functions/lookup.cpp
+    src/functions/conditional_agg.cpp
+    src/functions/math_extra.cpp
+    src/functions/regression.cpp
     src/functions/statistical.cpp
     src/functions/text.cpp
     src/lexer.cpp

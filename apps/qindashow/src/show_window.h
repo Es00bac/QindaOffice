@@ -53,7 +53,11 @@ public:
 
 protected:
     void insertApplicationMenus(QMenu *before) override;
+    void insertFileMenuActions(QMenu *fileMenu) override;
     QString filterString() const override;
+
+private:
+    void openTemplateAsUntitled(const QString &path);
 
 private:
     void rebuildSorter();

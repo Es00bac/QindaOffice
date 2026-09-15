@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_window.h"
 
+#include "page_text_accessibility.h"
 #include "page_text_view.h"
 #include "pdf_exporter.h"
+#include "template_loader.h"
 #include "assistant_panel.h"
 #include "document_context.h"
 #include "format_io.h"
@@ -96,6 +98,7 @@ WriteWindow::WriteWindow()
     , m_view(new PageTextView(m_document))
     , m_spell(new SpellChecker(m_document->textDocument()))
 {
+    installPageTextAccessibility();
     setDocumentHost(m_view, m_document);
 
     // Print and print preview share the PDF exporter's pagination loop, so
@@ -231,6 +234,27 @@ void WriteWindow::addSpellingActions(QMenu *menu, const QPointF &docPos)
         menu->insertAction(first, ignore);
     } else {
         menu->addAction(ignore);
+    }
+}
+
+void WriteWindow::insertFileMenuActions(QMenu *fileMenu)
+{
+    const QList<Shell::TemplateEntry> templates = Shell::templatesFor(QStringLiteral("QindaWrite"));
+    if (templates.isEmpty()) {
+        return;
+    }
+    QMenu *submenu = fileMenu->addMenu(tr("New from &Template"));
+    for (const Shell::TemplateEntry &entry : templates) {
+        submenu->addAction(entry.name, this, [this, path = entry.path] {
+            QString error;
+            // The view renders the document's shared QTextDocument, so a
+            // load refreshes it directly; detach so saving never touches
+            // the shared template.
+            if (m_document->load(path, &error)) {
+                m_document->adoptPath(QString());
+                m_document->setDirty(true);
+            }
+        });
     }
 }
 

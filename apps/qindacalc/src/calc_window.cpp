@@ -3,6 +3,11 @@
 
 #include "spreadsheet_document.h"
 #include "spreadsheet_view.h"
+#include "template_loader.h"
+
+#ifdef QQO_WITH_CHARTS
+#include "chart_dialog.h"
+#endif
 
 #include <QAction>
 #include <QHBoxLayout>
@@ -12,6 +17,7 @@
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QTabBar>
+#include <QVBoxLayout>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -116,8 +122,84 @@ void CalcWindow::rebuildSheetTabs()
     m_tabs->setCurrentIndex(int(m_document->activeSheet()));
 }
 
+void CalcWindow::insertChart()
+{
+#ifdef QQO_WITH_CHARTS
+    Workbook *wb = m_document->workbook();
+    const CalcEng::CellAddr cursor = m_view->cursorCell();
+    auto colName = [](int col) {
+        QString name;
+        for (++col; col > 0; col /= 26) {
+            name.prepend(QChar(QLatin1Char('A' + (col - 1) % 26)));
+        }
+        return name;
+    };
+    const QString initial = QStringLiteral("%1%2:%3%4")
+        .arg(colName(cursor.col), QString::number(cursor.row + 1),
+             colName(cursor.col + 1), QString::number(cursor.row + 6));
+    ChartDialog dialog(wb, initial, this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    CalcEng::ChartSpec spec = dialog.spec();
+    spec.sheet = m_document->activeSheet();
+    spec.anchorRow = cursor.row;
+    spec.anchorCol = cursor.col;
+    wb->charts.append(spec);
+    m_document->setDirty(true);
+    rebuildChartWindows();
+#endif
+}
+
+void CalcWindow::rebuildChartWindows()
+{
+#ifdef QQO_WITH_CHARTS
+    qDeleteAll(m_chartWindows);
+    m_chartWindows.clear();
+    const Workbook *wb = m_document->workbook();
+    for (const CalcEng::ChartSpec &spec : wb->charts) {
+        auto *floating = new QWidget(this, Qt::Tool | Qt::WindowStaysOnTopHint);
+        floating->setWindowTitle(spec.title.isEmpty() ? tr("Chart") : spec.title);
+        auto *layout = new QVBoxLayout(floating);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->addWidget(chartWidgetFor(spec, *wb, floating));
+        floating->resize(spec.widthPx, spec.heightPx);
+        floating->move(140 + spec.anchorCol * 24, 120 + spec.anchorRow * 22);
+        floating->show();
+        m_chartWindows.append(floating);
+    }
+#endif
+}
+
+void CalcWindow::insertFileMenuActions(QMenu *fileMenu)
+{
+    const QList<Shell::TemplateEntry> templates = Shell::templatesFor(QStringLiteral("QindaCalc"));
+    if (templates.isEmpty()) {
+        return;
+    }
+    QMenu *submenu = fileMenu->addMenu(tr("New from &Template"));
+    for (const Shell::TemplateEntry &entry : templates) {
+        submenu->addAction(entry.name, this, [this, path = entry.path] {
+            QString error;
+            if (m_document->load(path, &error)) {
+                m_document->adoptPath(QString());
+                m_document->setDirty(true);
+                rebuildSheetTabs();
+                m_view->refreshAll();
+                rebuildChartWindows();
+            }
+        });
+    }
+}
+
 void CalcWindow::insertApplicationMenus(QMenu *before)
 {
+#ifdef QQO_WITH_CHARTS
+    auto *insertMenu = new QMenu(tr("&Insert"), this);
+    menuBar()->insertMenu(before->menuAction(), insertMenu);
+    QAction *chart = insertMenu->addAction(tr("&Chart…"));
+    connect(chart, &QAction::triggered, this, [this] { insertChart(); });
+#endif
     auto *sheetMenu = new QMenu(tr("&Sheet"), this);
     menuBar()->insertMenu(before->menuAction(), sheetMenu);
     QAction *insertSheet = sheetMenu->addAction(tr("&Insert Sheet"));

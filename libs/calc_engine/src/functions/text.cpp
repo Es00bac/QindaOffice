@@ -239,4 +239,86 @@ void registerTextFunctions(QHash<QString, FunctionSpec> &r)
                           }});
 }
 
+
+void registerTextJoinFunctions(QHash<QString, FunctionSpec> &r)
+{
+    r.insert(QStringLiteral("TEXTJOIN"),
+             FunctionSpec{3, 255, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+                              const QString delimiter = toText(scalarOrValue(args.at(0)));
+                              const auto ignoreEmpty = toBool(scalarOrValue(args.at(1)));
+                              if (!ignoreEmpty) return Err::Value;
+                              QStringList pieces;
+                              for (int i = 2; i < args.size(); ++i) {
+                                  if (std::holds_alternative<RangeView>(args.at(i))) {
+                                      QVector<Value> values;
+                                      const Value err = sparseRangeValues(
+                                          ctx, std::get<RangeView>(args.at(i)), &values);
+                                      if (isErr(err)) return err;
+                                      for (const Value &v : values) {
+                                          const QString t = toText(v);
+                                          if (*ignoreEmpty && t.isEmpty()) continue;
+                                          pieces.append(t);
+                                      }
+                                  } else {
+                                      const QString t = toText(std::get<Value>(args.at(i)));
+                                      if (*ignoreEmpty && t.isEmpty()) continue;
+                                      pieces.append(t);
+                                  }
+                              }
+                              return pieces.join(delimiter);
+                          }});
+    r.insert(QStringLiteral("UNICHAR"),
+             FunctionSpec{1, 1, false, [](EvalContext &, const QVector<Arg> &args) -> Value {
+                              const auto code = scalarNumber(args.at(0));
+                              if (!code) return Err::Value;
+                              if (*code < 1 || *code > 0x10FFFF) return Err::Value;
+                              QString out;
+                              out.append(QChar::fromUcs4(uint(*code)));
+                              return out;
+                          }});
+    r.insert(QStringLiteral("UNICODE"),
+             FunctionSpec{1, 1, false, [](EvalContext &, const QVector<Arg> &args) -> Value {
+                              const QString text = toText(scalarOrValue(args.at(0)));
+                              if (text.isEmpty()) return Err::Value;
+                              return double(text.at(0).unicode());
+                          }});
+    r.insert(QStringLiteral("FIXED"),
+             FunctionSpec{1, 3, false, [](EvalContext &, const QVector<Arg> &args) -> Value {
+                              const auto number = scalarNumber(args.at(0));
+                              if (!number) return Err::Value;
+                              int decimals = 2;
+                              if (args.size() > 1) {
+                                  const auto d = scalarNumber(args.at(1));
+                                  if (!d) return Err::Value;
+                                  decimals = int(*d);
+                              }
+                              bool noCommas = false;
+                              if (args.size() > 2) {
+                                  const auto n = toBool(scalarOrValue(args.at(2)));
+                                  if (!n) return Err::Value;
+                                  noCommas = *n;
+                              }
+                              const double factor = std::pow(10.0, decimals);
+                              const double rounded = std::copysign(
+                                  std::floor(std::abs(*number) * factor + 0.5) / factor,
+                                  *number);
+                              QString out = QString::number(rounded, 'f', qMax(0, decimals));
+                              if (!noCommas) {
+                                  const int dot = out.indexOf(QLatin1Char('.'));
+                                  const int start = dot < 0 ? out.size() - 1 : dot - 1;
+                                  for (int i = start, group = 0; i > 0; --i) {
+                                      if (out.at(i).isDigit()) {
+                                          if (++group == 3) {
+                                              out.insert(i, QLatin1Char(','));
+                                              group = 0;
+                                          }
+                                      } else {
+                                          break;
+                                      }
+                                  }
+                              }
+                              return out;
+                          }});
+}
+
 } // namespace QindaOffice::Calc

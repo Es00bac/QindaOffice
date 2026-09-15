@@ -11,6 +11,7 @@
 #include "qindawrite/src/write_document.h"
 #include "qindawrite/src/write_window.h"
 
+#include <QAccessible>
 #include <QApplication>
 #include <QTemporaryDir>
 #include <QTextCursor>
@@ -28,6 +29,8 @@ private slots:
     void zoomTransformsGeometryOnly();
     void stylesSurviveHtmlRoundTrip();
     void geometryRoundTripsInsidePages();
+    void pageViewExposesAccessibleText();
+
 };
 
 static WriteDocument *threePageDocument(QObject *parent, QStringList *markers)
@@ -154,6 +157,34 @@ void WriteViewTest::geometryRoundTripsInsidePages()
     }
     QCOMPARE(geometry.pageCount(1123 * 2.5), 3);
     QVERIFY(geometry.scrollRange(1123 * 2.5, 800) > 0);
+}
+
+void WriteViewTest::pageViewExposesAccessibleText()
+{
+    WriteWindow window;
+    PageTextView *view = window.pageView();
+    view->writeDocument()->textDocument()->setPlainText(QStringLiteral("Hello QindaWrite"));
+    const QString plain = view->writeDocument()->textDocument()->toPlainText();
+    QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(view);
+    QVERIFY(iface != nullptr);
+    QCOMPARE(iface->role(), QAccessible::Document);
+    auto *textIface = iface->textInterface();
+    QVERIFY(textIface != nullptr);
+    QCOMPARE(textIface->characterCount(), plain.size());
+    QCOMPARE(textIface->text(0, 5), plain.left(5));
+    QCOMPARE(iface->text(QAccessible::Value), plain);
+    textIface->setCursorPosition(plain.size());
+    QCOMPARE(textIface->cursorPosition(), plain.size());
+    textIface->addSelection(0, 5);
+    QCOMPARE(textIface->selectionCount(), 1);
+    int selStart = -1;
+    int selEnd = -1;
+    textIface->selection(0, &selStart, &selEnd);
+    QCOMPARE(selStart, 0);
+    QCOMPARE(selEnd, 5);
+    // Qt's accessibility cache owns interfaces returned by
+    // queryAccessibleInterface; do not delete or re-register them.
+    Q_UNUSED(iface);
 }
 
 int main(int argc, char *argv[])

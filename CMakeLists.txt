@@ -27,9 +27,7 @@ find_package(KF6Sonnet REQUIRED)
 find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Widgets DBus Network PrintSupport Svg Test GuiPrivate WidgetsPrivate)
 
 if(QQO_WITH_CHARTS)
-    find_package(KF6Archive REQUIRED)
-find_package(KF6Sonnet REQUIRED)
-find_package(Qt6 6.11 REQUIRED COMPONENTS Charts)
+    find_package(Qt6 6.11 REQUIRED COMPONENTS Charts)
 endif()
 
 # QXlsx (MIT) is vendored as a git submodule (plan section 3): the suite's

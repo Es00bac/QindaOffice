@@ -21,6 +21,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(POPPLER_QT6 REQUIRED poppler-qt6)
 add_executable(tst_write_view tst_write_view.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_geometry.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_accessibility.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_view.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/spell_checker.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_io.cpp

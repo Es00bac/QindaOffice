@@ -5,6 +5,7 @@
 #include "number_format.h"
 
 #include <xlsxcell.h>
+#include <xlsxchart.h>
 #include <xlsxcellformula.h>
 #include <xlsxdocument.h>
 #include <xlsxformat.h>
@@ -304,6 +305,40 @@ std::unique_ptr<QXlsx::Document> writeXlsx(const Workbook &wb, QString *error)
         for (const qint32 row : sheet.sizedRows()) {
             worksheet->setRowHeight(row + 1, row + 1, pxToPt(sheet.rowHeight(row)));
         }
+    }
+    // Floating charts (plan section 7.2): one chart part per spec, anchored
+    // at its cell. QXlsx renders clustered bars for StackedBar (its chart
+    // API has no grouping control) - a documented export limitation.
+    for (const ChartSpec &chart : wb.charts) {
+        const CellRange range = parseChartRange(chart.rangeText);
+        if (!range.isValid() || chart.sheet < 0 || chart.sheet >= wb.sheetCount()) {
+            continue;
+        }
+        doc->selectSheet(wb.sheetName(chart.sheet));
+        auto *worksheet = static_cast<QXlsx::Worksheet *>(doc->sheet(wb.sheetName(chart.sheet)));
+        if (worksheet == nullptr) {
+            continue;
+        }
+        QXlsx::Chart *qxChart =
+            worksheet->insertChart(chart.anchorRow + 1, chart.anchorCol + 1,
+                                   QSize(chart.widthPx, chart.heightPx));
+        if (qxChart == nullptr) {
+            continue;
+        }
+        qxChart->addSeries(QXlsx::CellRange(range.topLeft.row + 1, range.topLeft.col + 1,
+                                            range.bottomRight.row + 1, range.bottomRight.col + 1),
+                           worksheet, chart.headerH, chart.headerV);
+        QXlsx::Chart::ChartType type = QXlsx::Chart::CT_BarChart;
+        switch (chart.kind) {
+        case ChartSpec::Kind::Line: type = QXlsx::Chart::CT_LineChart; break;
+        case ChartSpec::Kind::Area: type = QXlsx::Chart::CT_AreaChart; break;
+        case ChartSpec::Kind::Pie: type = QXlsx::Chart::CT_PieChart; break;
+        case ChartSpec::Kind::Scatter: type = QXlsx::Chart::CT_ScatterChart; break;
+        case ChartSpec::Kind::Bar:
+        case ChartSpec::Kind::StackedBar: type = QXlsx::Chart::CT_BarChart; break;
+        }
+        qxChart->setChartType(type);
+        qxChart->setChartTitle(chart.title);
     }
     return doc;
 }

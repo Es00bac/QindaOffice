@@ -228,6 +228,205 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
                               }
                               return count;
                           }});
+    // M10: *A variants count text as 0 and logicals as 1/0 (Excel rule).
+    const auto aggA = [](bool average, bool extrema, bool maxima) {
+        return FunctionSpec{1, 255, false,
+                            [average, extrema, maxima](EvalContext &ctx,
+                                                       const QVector<Arg> &args) -> Value {
+                                QVector<Value> values;
+                                const Value err = sparseRangeValues(
+                                    ctx, std::get<RangeView>(args.at(0)), &values);
+                                if (isErr(err)) return err;
+                                double result = 0;
+                                bool any = false;
+                                for (const Value &v : values) {
+                                    double d = 0;
+                                    if (isBool(v)) {
+                                        d = std::get<bool>(v) ? 1.0 : 0.0;
+                                    } else if (!isText(v)) {
+                                        const auto n = toNumber(v);
+                                        d = n.value_or(0.0);
+                                    }
+                                    if (!any) {
+                                        result = d;
+                                        any = true;
+                                    } else if (average) {
+                                        result += d;
+                                    } else if ((maxima && d > result) || (!maxima && d < result)) {
+                                        result = d;
+                                    }
+                                }
+                                if (!any) return 0.0;
+                                return average ? result / double(values.size()) : result;
+                            }};
+    };
+    r.insert(QStringLiteral("AVERAGEA"), aggA(true, false, false));
+    r.insert(QStringLiteral("MAXA"), aggA(false, true, true));
+    r.insert(QStringLiteral("MINA"), aggA(false, true, false));
+    const auto devA = [](bool variance) {
+        return FunctionSpec{1, 255, false,
+                            [variance](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+                                QVector<Value> values;
+                                const Value err = sparseRangeValues(
+                                    ctx, std::get<RangeView>(args.at(0)), &values);
+                                if (isErr(err)) return err;
+                                if (values.size() < 2) return Err::Div0;
+                                QVector<double> nums;
+                                for (const Value &v : values) {
+                                    if (isBool(v)) {
+                                        nums.append(std::get<bool>(v) ? 1.0 : 0.0);
+                                    } else if (!isText(v)) {
+                                        const auto n = toNumber(v);
+                                        nums.append(n.value_or(0.0));
+                                    } else {
+                                        nums.append(0.0);
+                                    }
+                                }
+                                const double mean =
+                                    std::accumulate(nums.begin(), nums.end(), 0.0)
+                                    / double(nums.size());
+                                double acc = 0;
+                                for (double x : nums) acc += (x - mean) * (x - mean);
+                                return variance ? acc / double(nums.size() - 1)
+                                                : std::sqrt(acc / double(nums.size() - 1));
+                            }};
+    };
+    r.insert(QStringLiteral("STDEVA"), devA(false));
+    r.insert(QStringLiteral("VARA"), devA(true));
+    // Percentile-style: sorted rank with linear interpolation (INC rule).
+    const auto percentile = [](const QVector<double> &sorted, double k) -> Value {
+        if (sorted.isEmpty() || k < 0.0 || k > 1.0) return Err::Num;
+        const double rank = k * double(sorted.size() - 1);
+        const int lower = int(std::floor(rank));
+        const int upper = qMin(lower + 1, sorted.size() - 1);
+        return sorted.at(lower)
+            + (sorted.at(upper) - sorted.at(lower)) * (rank - lower);
+    };
+    r.insert(QStringLiteral("PERCENTILE"),
+             FunctionSpec{2, 2, false, [percentile](EvalContext &ctx,
+                                                    const QVector<Arg> &args) -> Value {
+                              QVector<Value> values;
+                              const Value err = sparseRangeValues(
+                                  ctx, std::get<RangeView>(args.at(0)), &values);
+                              if (isErr(err)) return err;
+                              const auto k = scalarNumber(args.at(1));
+                              if (!k) return Err::Value;
+                              QVector<double> nums;
+                              for (const Value &v : values) {
+                                  if (const auto d = toNumber(v); d.has_value() && !isText(v)) {
+                                      nums.append(*d);
+                                  }
+                              }
+                              std::sort(nums.begin(), nums.end());
+                              return percentile(nums, *k);
+                          }});
+    r.insert(QStringLiteral("QUARTILE"),
+             FunctionSpec{2, 2, false, [percentile](EvalContext &ctx,
+                                                    const QVector<Arg> &args) -> Value {
+                              QVector<Value> values;
+                              const Value err = sparseRangeValues(
+                                  ctx, std::get<RangeView>(args.at(0)), &values);
+                              if (isErr(err)) return err;
+                              const auto q = scalarNumber(args.at(1));
+                              if (!q) return Err::Value;
+                              if (*q < 0 || *q > 4) return Err::Num;
+                              QVector<double> nums;
+                              for (const Value &v : values) {
+                                  if (const auto d = toNumber(v); d.has_value() && !isText(v)) {
+                                      nums.append(*d);
+                                  }
+                              }
+                              std::sort(nums.begin(), nums.end());
+                              return percentile(nums, *q / 4.0);
+                          }});
+    r.insert(QStringLiteral("RANK"),
+             FunctionSpec{2, 3, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+                              QVector<Value> values;
+                              const Value err = sparseRangeValues(
+                                  ctx, std::get<RangeView>(args.at(1)), &values);
+                              if (isErr(err)) return err;
+                              const auto x = scalarNumber(args.at(0));
+                              if (!x) return Err::Value;
+                              double order = 0;
+                              if (args.size() > 2) {
+                                  const auto o = scalarNumber(args.at(2));
+                                  if (!o) return Err::Value;
+                                  order = *o;
+                              }
+                              QVector<double> nums;
+                              for (const Value &v : values) {
+                                  if (const auto d = toNumber(v); d.has_value() && !isText(v)) {
+                                      nums.append(*d);
+                                  }
+                              }
+                              int rank = 1;
+                              for (double n : nums) {
+                                  if (order == 0 ? n > *x : n < *x) ++rank;
+                              }
+                              bool found = false;
+                              for (double n : nums) {
+                                  if (n == *x) found = true;
+                              }
+                              return found ? double(rank) : Value(Err::NA);
+                          }});
+    r.insert(QStringLiteral("GEOMEAN"),
+             FunctionSpec{1, 255, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+                              return numberAgg(ctx, args, [](const QVector<double> &ns) -> Value {
+                                  if (ns.isEmpty()) return Err::Num;
+                                  double logSum = 0;
+                                  for (double x : ns) {
+                                      if (x <= 0) return Value(Err::Num);
+                                      logSum += std::log(x);
+                                  }
+                                  return std::exp(logSum / double(ns.size()));
+                              });
+                          }});
+    r.insert(QStringLiteral("HARMEAN"),
+             FunctionSpec{1, 255, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+                              return numberAgg(ctx, args, [](const QVector<double> &ns) -> Value {
+                                  if (ns.isEmpty()) return Err::Num;
+                                  double acc = 0;
+                                  for (double x : ns) {
+                                      if (x <= 0) return Value(Err::Num);
+                                      acc += 1.0 / x;
+                                  }
+                                  return double(ns.size()) / acc;
+                              });
+                          }});
+    r.insert(QStringLiteral("AVEDEV"),
+             FunctionSpec{1, 255, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+                              return numberAgg(ctx, args, [](const QVector<double> &ns) -> Value {
+                                  if (ns.isEmpty()) return Err::Div0;
+                                  const double mean =
+                                      std::accumulate(ns.begin(), ns.end(), 0.0)
+                                      / double(ns.size());
+                                  double acc = 0;
+                                  for (double x : ns) acc += std::abs(x - mean);
+                                  return acc / double(ns.size());
+                              });
+                          }});
+    r.insert(QStringLiteral("TRIMMEAN"),
+             FunctionSpec{2, 2, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+                              QVector<Value> values;
+                              const Value err = sparseRangeValues(
+                                  ctx, std::get<RangeView>(args.at(0)), &values);
+                              if (isErr(err)) return err;
+                              const auto p = scalarNumber(args.at(1));
+                              if (!p) return Err::Value;
+                              if (*p < 0 || *p >= 1) return Err::Num;
+                              QVector<double> nums;
+                              for (const Value &v : values) {
+                                  if (const auto d = toNumber(v); d.has_value() && !isText(v)) {
+                                      nums.append(*d);
+                                  }
+                              }
+                              std::sort(nums.begin(), nums.end());
+                              const int trim = int(std::floor(*p / 2.0 * nums.size()));
+                              if (nums.size() - 2 * trim <= 0) return Err::Num;
+                              double acc = 0;
+                              for (int i = trim; i < nums.size() - trim; ++i) acc += nums.at(i);
+                              return acc / double(nums.size() - 2 * trim);
+                          }});
 }
 
 } // namespace QindaOffice::Calc

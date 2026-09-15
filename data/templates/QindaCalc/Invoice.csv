@@ -1,0 +1,4 @@
+Item,Quantity,Unit price,Total
+Consulting hours,10,120,=B2*C2
+Design review,1,800,=B3*C3
+,,Sum,=SUM(D2:D3)

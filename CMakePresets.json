@@ -18,7 +18,8 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "BUILD_TESTING": "ON",
-                "QQO_STRICT_WARNINGS": "ON"
+                "QQO_STRICT_WARNINGS": "ON",
+                "QQO_WITH_CHARTS": "ON"
             }
         },
         {

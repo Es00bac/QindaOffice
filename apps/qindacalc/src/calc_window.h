@@ -31,11 +31,14 @@ public:
 
 protected:
     void insertApplicationMenus(QMenu *before) override;
+    void insertFileMenuActions(QMenu *fileMenu) override;
     QString filterString() const override;
 
 private:
     void rebuildSheetTabs();
     void commitInput(const CalcEng::CellAddr &addr, const QString &input);
+    void insertChart();
+    void rebuildChartWindows();
 
     SpreadsheetDocument *m_document;
     SpreadsheetView *m_view;
@@ -43,6 +46,7 @@ private:
     QLineEdit *m_formulaBar;
     QTabBar *m_tabs;
     bool m_syncingBar = false;
+    QList<class QWidget *> m_chartWindows;
 };
 
 } // namespace QindaOffice::Apps::QindaCalc

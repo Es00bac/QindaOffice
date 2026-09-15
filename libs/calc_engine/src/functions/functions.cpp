@@ -16,13 +16,19 @@ const QHash<QString, FunctionSpec> &functionRegistry()
     static const QHash<QString, FunctionSpec> registry = [] {
         QHash<QString, FunctionSpec> r;
         registerMathFunctions(r);
+        registerMathExtraFunctions(r);
         registerStatisticalFunctions(r);
+        registerRegressionFunctions(r);
+        registerConditionalAggFunctions(r);
         registerTextFunctions(r);
+        registerTextJoinFunctions(r);
         registerLogicalFunctions(r);
         registerLookupFunctions(r);
         registerDateFunctions(r);
+        registerDateExtraFunctions(r);
         registerInfoFunctions(r);
         registerFinancialFunctions(r);
+        registerFinancialExtraFunctions(r);
         return r;
     }();
     return registry;

@@ -7,18 +7,48 @@
 #include "show_window.h"
 
 #include "pdf_export.h"
+#include "template_loader.h"
 #include "presentation_controller.h"
 #include "presenter_window.h"
 #include "slide_player.h"
 
 #include <QFileDialog>
 #include <QGuiApplication>
+#include <QMenu>
 #include <QMessageBox>
 #include <QScreen>
 #include <QStatusBar>
 #include <QWindow>
 
 namespace QindaOffice::Apps::Show {
+
+void ShowWindow::openTemplateAsUntitled(const QString &path)
+{
+    QString error;
+    if (m_document->load(path, &error)) {
+        // Detach from the shared template path: the window hosts the
+        // content as a dirty untitled document.
+        m_document->adoptPath(QString());
+        m_document->setDirty(true);
+        fullRefresh();
+    } else {
+        statusBar()->showMessage(tr("Template failed: %1").arg(error), 8000);
+    }
+}
+
+void ShowWindow::insertFileMenuActions(QMenu *fileMenu)
+{
+    const QList<Shell::TemplateEntry> templates = Shell::templatesFor(QStringLiteral("QindaShow"));
+    if (templates.isEmpty()) {
+        return;
+    }
+    QMenu *submenu = fileMenu->addMenu(tr("New from &Template"));
+    for (const Shell::TemplateEntry &entry : templates) {
+        submenu->addAction(entry.name, this, [this, path = entry.path] {
+            openTemplateAsUntitled(path);
+        });
+    }
+}
 
 void ShowWindow::startShow()
 {

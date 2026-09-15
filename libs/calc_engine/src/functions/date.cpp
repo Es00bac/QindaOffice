@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "functions.h"
 
+#include <QSet>
+
 #include <QDateTime>
 
 namespace QindaOffice::Calc {
@@ -203,6 +205,165 @@ void registerDateFunctions(QHash<QString, FunctionSpec> &r)
                                   }
                               }
                               return Err::Value;
+                          }});
+}
+
+void registerDateExtraFunctions(QHash<QString, FunctionSpec> &r)
+{
+    // DAYS360 (US 30/360): both dates shifted per the NASD convention.
+    r.insert(QStringLiteral("DAYS360"),
+             FunctionSpec{2, 3, false, [](EvalContext &, const QVector<Arg> &args) -> Value {
+                              const auto s = scalarNumber(args.at(0));
+                              const auto e = scalarNumber(args.at(1));
+                              if (!s || !e) return Err::Value;
+                              QDate start = dateFromSerial(*s);
+                              QDate end = dateFromSerial(*e);
+                              bool euMethod = false;
+                              if (args.size() > 2) {
+                                  const auto m = toBool(scalarOrValue(args.at(2)));
+                                  if (!m) return Err::Value;
+                                  euMethod = *m;
+                              }
+                              int d1 = start.day();
+                              int d2 = end.day();
+                              if (!euMethod) {
+                                  if (d1 == 31 || (start.month() == 2
+                                                   && start.daysInMonth() == 28 && d1 == 28)) {
+                                      d1 = 30;
+                                  }
+                                  if (d2 == 31 && d1 >= 30) {
+                                      d2 = 30;
+                                  }
+                              } else {
+                                  d1 = qMin(d1, 30);
+                                  d2 = qMin(d2, 30);
+                              }
+                              return double((end.year() - start.year()) * 360
+                                            + (end.month() - start.month()) * 30 + (d2 - d1));
+                          }});
+    r.insert(QStringLiteral("ISOWEEKNUM"),
+             FunctionSpec{1, 1, false, [](EvalContext &, const QVector<Arg> &args) -> Value {
+                              const auto s = scalarNumber(args.at(0));
+                              if (!s) return Err::Value;
+                              return double(dateFromSerial(*s).weekNumber());
+                          }});
+    r.insert(QStringLiteral("YEARFRAC"),
+             FunctionSpec{2, 3, false, [](EvalContext &, const QVector<Arg> &args) -> Value {
+                              const auto s = scalarNumber(args.at(0));
+                              const auto e = scalarNumber(args.at(1));
+                              if (!s || !e) return Err::Value;
+                              int basis = 0;
+                              if (args.size() > 2) {
+                                  const auto b = scalarNumber(args.at(2));
+                                  if (!b) return Err::Value;
+                                  basis = int(*b);
+                                  if (basis < 0 || basis > 4) return Err::Num;
+                              }
+                              QDate start = dateFromSerial(*s);
+                              QDate end = dateFromSerial(*e);
+                              if (basis == 0 || basis == 4) {
+                                  // 30/360 US (basis 0) or 30E/360 (4).
+                                  int d1 = start.day();
+                                  int d2 = end.day();
+                                  if (basis == 0) {
+                                      if (d1 == 31) d1 = 30;
+                                      if (d2 == 31 && d1 == 30) d2 = 30;
+                                  } else {
+                                      d1 = qMin(d1, 30);
+                                      d2 = qMin(d2, 30);
+                                  }
+                                  return double((end.year() - start.year()) * 360
+                                                + (end.month() - start.month()) * 30
+                                                + (d2 - d1))
+                                      / 360.0;
+                              }
+                              if (basis == 1) {
+                                  // Actual/actual: the year count is 366
+                                  // when the interval contains Feb 29.
+                                  double years = 0;
+                                  QDate cursor = start;
+                                  while (cursor < end) {
+                                      const int y = cursor.year();
+                                      const QDate feb29(y, 2, 29);
+                                      const QDate boundary = feb29.isValid() && feb29 > cursor
+                                          ? feb29
+                                          : QDate(y + 1, 1, 1);
+                                      const QDate stop = qMin(boundary, end);
+                                      years += double(stop.toJulianDay() - cursor.toJulianDay())
+                                          / (feb29.isValid() && cursor <= feb29 && stop > feb29
+                                                 || (feb29.isValid() && boundary == feb29
+                                                     && feb29.isValid() && cursor.year() == y
+                                                     && feb29 > cursor && stop >= feb29)
+                                                 ? 366.0
+                                                 : 365.0);
+                                      cursor = stop;
+                                  }
+                                  return years;
+                              }
+                              if (basis == 2) {
+                                  return (end.toJulianDay() - start.toJulianDay()) / 360.0;
+                              }
+                              return (end.toJulianDay() - start.toJulianDay()) / 365.0;
+                          }});
+    const auto holidaySet = [](EvalContext &ctx, const QVector<Arg> &args, int index) {
+        QSet<qint64> holidays;
+        if (args.size() > index
+            && std::holds_alternative<RangeView>(args.at(index))) {
+            QVector<Value> values;
+            const Value err =
+                sparseRangeValues(ctx, std::get<RangeView>(args.at(index)), &values);
+            if (!isErr(err)) {
+                for (const Value &v : values) {
+                    if (const auto d = toNumber(v); d.has_value()) {
+                        holidays.insert(qint64(std::floor(*d)));
+                    }
+                }
+            }
+        }
+        return holidays;
+    };
+    r.insert(QStringLiteral("NETWORKDAYS"),
+             FunctionSpec{2, 3, false, [holidaySet](EvalContext &ctx,
+                                                    const QVector<Arg> &args) -> Value {
+                              const auto s = scalarNumber(args.at(0));
+                              const auto e = scalarNumber(args.at(1));
+                              if (!s || !e) return Err::Value;
+                              QDate start = dateFromSerial(*s);
+                              QDate end = dateFromSerial(*e);
+                              const QSet<qint64> holidays = holidaySet(ctx, args, 2);
+                              int days = 0;
+                              for (QDate d = qMin(start, end); d <= qMax(start, end);
+                                   d = d.addDays(1)) {
+                                  const int dow = d.dayOfWeek();
+                                  if (dow >= 6) continue;
+                                  if (holidays.contains(qint64(std::floor(
+                                          serialFromDate(d)))))
+                                      continue;
+                                  ++days;
+                              }
+                              return double(days);
+                          }});
+    r.insert(QStringLiteral("WORKDAY"),
+             FunctionSpec{2, 3, false, [holidaySet](EvalContext &ctx,
+                                                    const QVector<Arg> &args) -> Value {
+                              const auto s = scalarNumber(args.at(0));
+                              const auto days = scalarNumber(args.at(1));
+                              if (!s || !days) return Err::Value;
+                              QDate date = dateFromSerial(*s);
+                              const QSet<qint64> holidays = holidaySet(ctx, args, 2);
+                              int remaining = int(*days);
+                              int step = remaining < 0 ? -1 : 1;
+                              remaining = std::abs(remaining);
+                              while (remaining > 0) {
+                                  date = date.addDays(step);
+                                  const int dow = date.dayOfWeek();
+                                  if (dow < 6
+                                      && !holidays.contains(qint64(std::floor(
+                                          serialFromDate(date))))) {
+                                      --remaining;
+                                  }
+                              }
+                              return serialFromDate(date);
                           }});
 }
 

@@ -10,7 +10,13 @@
 #include <QElapsedTimer>
 #include <QTemporaryDir>
 #include <QProcess>
+#include <KArchiveDirectory>
+#include <KArchiveFile>
+#include <KZip>
+
 #include <QtTest>
+
+#include <functional>
 
 using namespace QindaOffice::Calc;
 
@@ -20,6 +26,9 @@ private slots:
     void roundTrip();
     void opensInLibreOffice();
     void largeSheetStaysResponsive();
+    void chartExportWritesChartPart();
+    void chartRangeParsing();
+
 };
 
 static Workbook sampleWorkbook()
@@ -74,6 +83,82 @@ void CalcIoTest::roundTrip()
     const CellStyle *readStyle = back.style(back.sheetAt(0).styleIdAt({0, 0}));
     QVERIFY(readStyle != nullptr);
     QCOMPARE(readStyle->numberFormat, QStringLiteral("#,##0.00"));
+}
+
+void CalcIoTest::chartRangeParsing()
+{
+    const CellRange single = parseChartRange(QStringLiteral("B2"));
+    QVERIFY(single.isValid());
+    QCOMPARE(single.topLeft.row, 1);
+    QCOMPARE(single.topLeft.col, 1);
+    const CellRange range = parseChartRange(QStringLiteral("a1:$c$5"));
+    QVERIFY(range.isValid());
+    QCOMPARE(range.topLeft.row, 0);
+    QCOMPARE(range.bottomRight.row, 4);
+    QCOMPARE(range.bottomRight.col, 2);
+    QVERIFY(!parseChartRange(QStringLiteral("1A:B2")).isValid());
+    QVERIFY(!parseChartRange(QStringLiteral("")).isValid());
+}
+
+void CalcIoTest::chartExportWritesChartPart()
+{
+    Workbook wb;
+    Sheet &sheet = wb.addSheet(QStringLiteral("Data"));
+    for (int r = 0; r < 4; ++r) {
+        for (int c = 0; c < 2; ++c) {
+            wb.setCellValue(0, {r, c}, double(r * 10 + c));
+        }
+    }
+    Q_UNUSED(sheet);
+    ChartSpec chart;
+    chart.kind = ChartSpec::Kind::Bar;
+    chart.title = QStringLiteral("Quarterly");
+    chart.rangeText = QStringLiteral("A1:B4");
+    chart.sheet = 0;
+    wb.charts.append(chart);
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + QStringLiteral("/charted.xlsx");
+    QString error;
+    QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+
+    // The xlsx package must carry a chart part with the series range and
+    // title (the gate QXlsx::Chart promised).
+    KZip zip(path);
+    QVERIFY(zip.open(QIODevice::ReadOnly));
+    QHash<QString, const KArchiveFile *> files;
+    std::function<void(const KArchiveDirectory *)> walk = [&](const KArchiveDirectory *dir) {
+        const QStringList names = dir->entries();
+        for (const QString &name : names) {
+            const KArchiveEntry *entry = dir->entry(name);
+            const QString full = dir->name() == QLatin1String("/")
+                ? entry->name()
+                : dir->name() + QLatin1Char('/') + entry->name();
+            if (entry->isDirectory()) {
+                walk(static_cast<const KArchiveDirectory *>(entry));
+            } else {
+                files.insert(full, static_cast<const KArchiveFile *>(entry));
+            }
+        }
+    };
+    walk(zip.directory());
+    bool foundChart = false;
+    bool foundDrawing = false;
+    for (auto it = files.constBegin(); it != files.constEnd(); ++it) {
+        const QString &name = it.key();
+        if (name.contains(QLatin1String("charts/chart"))) {
+            foundChart = true;
+            const QByteArray xml = it.value()->data();
+            QVERIFY(xml.contains("Quarterly"));
+            QVERIFY(xml.contains("Data"));
+        }
+        if (name.contains(QLatin1String("drawing")) && name.endsWith(QLatin1String(".xml"))) {
+            foundDrawing = true;
+        }
+    }
+    QVERIFY2(foundChart, "chart part missing in the xlsx package");
+    QVERIFY2(foundDrawing, "drawing part missing in the xlsx package");
 }
 
 void CalcIoTest::opensInLibreOffice()

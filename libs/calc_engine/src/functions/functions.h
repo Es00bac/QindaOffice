@@ -91,12 +91,18 @@ struct FunctionSpec {
 
 // Registration entry points, one per category file.
 void registerMathFunctions(QHash<QString, FunctionSpec> &registry);
+void registerMathExtraFunctions(QHash<QString, FunctionSpec> &registry);
 void registerStatisticalFunctions(QHash<QString, FunctionSpec> &registry);
+void registerRegressionFunctions(QHash<QString, FunctionSpec> &registry);
+void registerConditionalAggFunctions(QHash<QString, FunctionSpec> &registry);
 void registerTextFunctions(QHash<QString, FunctionSpec> &registry);
+void registerTextJoinFunctions(QHash<QString, FunctionSpec> &registry);
 void registerLogicalFunctions(QHash<QString, FunctionSpec> &registry);
 void registerLookupFunctions(QHash<QString, FunctionSpec> &registry);
 void registerDateFunctions(QHash<QString, FunctionSpec> &registry);
+void registerDateExtraFunctions(QHash<QString, FunctionSpec> &registry);
 void registerInfoFunctions(QHash<QString, FunctionSpec> &registry);
 void registerFinancialFunctions(QHash<QString, FunctionSpec> &registry);
+void registerFinancialExtraFunctions(QHash<QString, FunctionSpec> &registry);
 
 } // namespace QindaOffice::Calc

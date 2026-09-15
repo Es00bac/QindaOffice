@@ -31,5 +31,7 @@ target_compile_definitions(qindashow PRIVATE
 target_include_directories(qindashow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 qqo_set_strict_warnings(qindashow)
 install(TARGETS qindashow RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/data/templates/QindaShow
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/qindaoffice/templates)
 install(FILES ${PROJECT_SOURCE_DIR}/data/org.qindaqt.QindaShow.desktop
     DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)

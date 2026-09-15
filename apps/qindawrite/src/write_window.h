@@ -40,6 +40,7 @@ public:
 
 protected:
     void insertApplicationMenus(QMenu *before) override;
+    void insertFileMenuActions(QMenu *fileMenu) override;
     QString filterString() const override;
     QString saveFilterString() const override;
 

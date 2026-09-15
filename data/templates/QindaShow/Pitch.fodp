@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:xi="http://www.w3.org/2001/XInclude" office:mimetype="application/vnd.oasis.opendocument.presentation" xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0" xmlns:smil="urn:oasis:names:tc:opendocument:xmlns:smil-compatible:1.0" xmlns:qq="https://qindaqt.example.org/qqo">
+    <office:automatic-styles>
+        <style:page-layout style:name="Default">
+            <style:page-layout-properties fo:page-width="25.40000cm" fo:page-height="14.28750cm"/>
+        </style:page-layout>
+        <style:style style:name="trans-s1" style:family="drawing-page">
+            <style:drawing-page-properties/>
+        </style:style>
+        <style:style style:name="shape-s1t" style:family="graphic">
+            <style:graphic-properties draw:fill="none" draw:stroke="none"/>
+        </style:style>
+        <style:style style:name="shape-s1b" style:family="graphic">
+            <style:graphic-properties draw:fill="none" draw:stroke="none"/>
+        </style:style>
+        <style:style style:name="trans-s2" style:family="drawing-page">
+            <style:drawing-page-properties/>
+        </style:style>
+        <style:style style:name="shape-s2t" style:family="graphic">
+            <style:graphic-properties draw:fill="none" draw:stroke="none"/>
+        </style:style>
+        <style:style style:name="shape-s2b" style:family="graphic">
+            <style:graphic-properties draw:fill="none" draw:stroke="none"/>
+        </style:style>
+        <style:style style:name="trans-s3" style:family="drawing-page">
+            <style:drawing-page-properties/>
+        </style:style>
+        <style:style style:name="shape-s3t" style:family="graphic">
+            <style:graphic-properties draw:fill="none" draw:stroke="none"/>
+        </style:style>
+        <style:style style:name="shape-s3b" style:family="graphic">
+            <style:graphic-properties draw:fill="none" draw:stroke="none"/>
+        </style:style>
+    </office:automatic-styles>
+    <office:master-styles>
+        <style:master-page style:name="Default" style:page-layout-name="Default"/>
+    </office:master-styles>
+    <office:body>
+        <office:presentation>
+            <draw:page draw:name="s1" draw:master-page-name="Default" draw:style-name="trans-s1" qq:title="The Problem" qq:layout="title+content">
+                <draw:frame draw:name="s1t" svg:x="2.54000" svg:y="1.12889" svg:width="20.32000" svg:height="2.46944">
+                    <draw:text-box>
+                        <text:p>
+                            <text:span fo:font-weight="bold" fo:font-size="36pt">The Problem</text:span>
+                        </text:p>
+                    </draw:text-box>
+                </draw:frame>
+                <draw:frame draw:name="s1b" svg:x="2.54000" svg:y="4.23333" svg:width="20.32000" svg:height="9.17222">
+                    <draw:text-box>
+                        <text:p>
+                            <text:span fo:font-size="22pt">• Current tools force a choice</text:span>
+                        </text:p>
+                        <text:p>
+                            <text:span fo:font-size="22pt">• The cost of context switching</text:span>
+                        </text:p>
+                    </draw:text-box>
+                </draw:frame>
+                <presentation:notes>
+                    <draw:frame presentation:class="notes" svg:x="0cm" svg:y="0cm" svg:width="1cm" svg:height="1cm">
+                        <draw:text-box>
+                            <text:p>Open with the pain, 30 seconds max.</text:p>
+                        </draw:text-box>
+                    </draw:frame>
+                </presentation:notes>
+            </draw:page>
+            <draw:page draw:name="s2" draw:master-page-name="Default" draw:style-name="trans-s2" qq:title="Our Solution" qq:layout="title+content">
+                <draw:frame draw:name="s2t" svg:x="2.54000" svg:y="1.12889" svg:width="20.32000" svg:height="2.46944">
+                    <draw:text-box>
+                        <text:p>
+                            <text:span fo:font-weight="bold" fo:font-size="36pt">Our Solution</text:span>
+                        </text:p>
+                    </draw:text-box>
+                </draw:frame>
+                <draw:frame draw:name="s2b" svg:x="2.54000" svg:y="4.23333" svg:width="20.32000" svg:height="9.17222">
+                    <draw:text-box>
+                        <text:p>
+                            <text:span fo:font-size="22pt">• One suite, four apps</text:span>
+                        </text:p>
+                        <text:p>
+                            <text:span fo:font-size="22pt">• Ordinary windows, grouped by the desktop</text:span>
+                        </text:p>
+                    </draw:text-box>
+                </draw:frame>
+                <presentation:notes>
+                    <draw:frame presentation:class="notes" svg:x="0cm" svg:y="0cm" svg:width="1cm" svg:height="1cm">
+                        <draw:text-box>
+                            <text:p>Name the four apps.</text:p>
+                        </draw:text-box>
+                    </draw:frame>
+                </presentation:notes>
+            </draw:page>
+            <draw:page draw:name="s3" draw:master-page-name="Default" draw:style-name="trans-s3" qq:title="Ask" qq:layout="title+content">
+                <draw:frame draw:name="s3t" svg:x="2.54000" svg:y="1.12889" svg:width="20.32000" svg:height="2.46944">
+                    <draw:text-box>
+                        <text:p>
+                            <text:span fo:font-weight="bold" fo:font-size="36pt">Ask</text:span>
+                        </text:p>
+                    </draw:text-box>
+                </draw:frame>
+                <draw:frame draw:name="s3b" svg:x="2.54000" svg:y="4.23333" svg:width="20.32000" svg:height="9.17222">
+                    <draw:text-box>
+                        <text:p>
+                            <text:span fo:font-size="22pt">• Try it this week</text:span>
+                        </text:p>
+                        <text:p>
+                            <text:span fo:font-size="22pt">• Feedback welcome</text:span>
+                        </text:p>
+                    </draw:text-box>
+                </draw:frame>
+                <presentation:notes>
+                    <draw:frame presentation:class="notes" svg:x="0cm" svg:y="0cm" svg:width="1cm" svg:height="1cm">
+                        <draw:text-box>
+                            <text:p>Close with the single next step.</text:p>
+                        </draw:text-box>
+                    </draw:frame>
+                </presentation:notes>
+            </draw:page>
+        </office:presentation>
+    </office:body>
+</office:document>

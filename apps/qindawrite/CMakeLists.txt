@@ -3,6 +3,8 @@ add_executable(qindawrite
     main.cpp
     src/page_geometry.cpp
     src/page_geometry.h
+    src/page_text_accessibility.cpp
+    src/page_text_accessibility.h
     src/page_text_view.cpp
     src/page_text_view.h
     src/spell_checker.cpp
@@ -23,5 +25,7 @@ target_compile_definitions(qindawrite PRIVATE
 )
 qqo_set_strict_warnings(qindawrite)
 install(TARGETS qindawrite RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/data/templates/QindaWrite
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/qindaoffice/templates)
 install(FILES ${PROJECT_SOURCE_DIR}/data/org.qindaqt.QindaWrite.desktop
     DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)

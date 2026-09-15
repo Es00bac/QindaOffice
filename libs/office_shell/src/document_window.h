@@ -34,6 +34,7 @@ public:
     ~DocumentWindow() override;
 
     [[nodiscard]] QAction *action(const QString &objectName) const;
+    void insertFileMenuActionsDeferred();
     [[nodiscard]] StandardActions *standardActions() { return &m_actions; }
 
     // The window takes ownership. The M1 stub hosts PlainTextDocument;
@@ -82,6 +83,12 @@ protected:
     // App hook: subclasses insert their app-specific menus (Format/Insert/
     // Table/Data/Slide/Page) before the AI menu. Default inserts nothing.
     virtual void insertApplicationMenus(QMenu *before);
+    // Subclass hook: append entries to the shell's File menu (New from
+    // Template…). Default inserts nothing; reach the menu through
+    // insertFileMenuActionsDeferred() in the subclass ctor (the shell
+    // creates menus before the subclass exists, same two-phase pattern as
+    // insertApplicationMenus + the named aiMenu anchor).
+    virtual void insertFileMenuActions(QMenu *fileMenu);
 
 protected:
     StandardActions m_actions;
