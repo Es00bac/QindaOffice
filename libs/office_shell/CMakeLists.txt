@@ -22,12 +22,17 @@ foreach(dependency IN ITEMS
 endforeach()
 
 add_library(office_shell STATIC
+    src/app_runner.cpp
+    src/app_runner.h
+    src/app_services.h
     src/document_window.cpp
     src/document_window.h
     src/global_menu_export.cpp
     src/global_menu_export.h
     src/office_application.cpp
     src/office_application.h
+    src/single_instance.cpp
+    src/single_instance.h
     src/standard_actions.cpp
     src/standard_actions.h
 )
@@ -51,6 +56,7 @@ target_link_libraries(office_shell
     PUBLIC
         Qt6::Widgets
         Qt6::DBus
+        office_core
     PRIVATE
         Qt6::GuiPrivate
         # AGENT-NOTE: static-archive link order matters - dependents before

@@ -12,8 +12,8 @@ lists what exists today.
 
 | Library | Depends on | Status |
 | --- | --- | --- |
-| `office_shell` | Qt Widgets/DBus, `gui-wm/qindaqt-desktop` archives | M0: `OfficeApplication`, `DocumentWindow`, `StandardActions`, `GlobalMenuExport` |
-| `office_core` | Qt Core/Gui | M1 (planned) |
+| `office_shell` | Qt Widgets/DBus + `office_core`, `gui-wm/qindaqt-desktop` archives | M0 frame; M1: document host (save/save-as/close consent, recents, drag-drop), `SingleInstance`, `runOfficeApp`, `AppServices` |
+| `office_core` | Qt Core/Gui | M1: `Document`, `PlainTextDocument`, `AtomicFileStore`, `JsonSettings`, `RecentFiles`, `RestoreInventory`, `RecoveryJournal`, `LibreOfficeConverter`, `Paths` |
 | `office_ai` | Qt Core/Gui/Network + `office_core` | M6 (planned) |
 | `office_ink` | Qt Gui | M7 (planned) |
 | `calc_engine` / `calc_io` | Qt Core (+QXlsx) | M2/M3 (planned) |

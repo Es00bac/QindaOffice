@@ -1,0 +1,168 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "libre_office_converter.h"
+
+#include <QFileInfo>
+#include <QTemporaryDir>
+#include <QTimer>
+
+namespace QindaOffice::Core {
+
+QString LibreOfficeConverter::convertTokenFor(const QString &targetExtension)
+{
+    const QString ext = targetExtension.toLower();
+    // Plan-verified registry names (docx/html/fodp/pptx); everything else
+    // converts by bare extension so soffice resolves the default filter.
+    if (ext == QLatin1String("docx")) {
+        return QStringLiteral("docx:MS Word 2007 XML");
+    }
+    if (ext == QLatin1String("html")) {
+        return QStringLiteral("html:HTML (StarWriter)");
+    }
+    if (ext == QLatin1String("fodp")) {
+        return QStringLiteral("fodp:OpenDocument Presentation Flat XML");
+    }
+    if (ext == QLatin1String("pptx")) {
+        return QStringLiteral("pptx:Impress MS PowerPoint 2007 XML");
+    }
+    return ext;
+}
+
+LibreOfficeConverter::LibreOfficeConverter(QObject *parent)
+    : QObject(parent)
+{
+}
+
+LibreOfficeConverter::~LibreOfficeConverter()
+{
+    if (m_process != nullptr && m_process->state() == QProcess::Running) {
+        m_process->kill();
+    }
+}
+
+bool LibreOfficeConverter::probe(QString *diagnostic)
+{
+    QProcess check;
+    check.start(QStringLiteral("soffice"),
+                {QStringLiteral("--headless"), QStringLiteral("--version")});
+    if (!check.waitForFinished(15000)) {
+        check.kill();
+        if (diagnostic != nullptr) {
+            *diagnostic = QStringLiteral("soffice --version timed out");
+        }
+        return false;
+    }
+    if (check.exitCode() != 0) {
+        if (diagnostic != nullptr) {
+            *diagnostic = QString::fromUtf8(check.readAllStandardError()).trimmed();
+        }
+        return false;
+    }
+    return true;
+}
+
+bool LibreOfficeConverter::isAvailable() const
+{
+    return m_available;
+}
+
+int LibreOfficeConverter::convert(const QString &inputPath, const QString &targetExtension,
+                                  const QString &outputDir, QString *error)
+{
+    if (!m_probed) {
+        m_probed = true;
+        m_available = probe(nullptr);
+    }
+    if (!m_available) {
+        if (error != nullptr) {
+            *error = tr("LibreOffice is not available on this system.");
+        }
+        return 0;
+    }
+    const QFileInfo input(inputPath);
+    if (!input.isFile() || !input.isReadable()) {
+        if (error != nullptr) {
+            *error = tr("Input file is not readable: %1").arg(inputPath);
+        }
+        return 0;
+    }
+    Job job;
+    job.id = ++m_nextId;
+    job.input = input.absoluteFilePath();
+    job.token = convertTokenFor(targetExtension);
+    job.outDir = outputDir;
+    m_queue.append(std::move(job));
+    if (m_process == nullptr) {
+        runNext();
+    }
+    return m_queue.isEmpty() ? m_nextId : m_queue.last().id;
+}
+
+void LibreOfficeConverter::runNext()
+{
+    if (m_queue.isEmpty()) {
+        return;
+    }
+    const Job job = m_queue.takeFirst();
+    m_currentId = job.id;
+
+    m_profile = std::make_unique<QTemporaryDir>();
+    m_profile->setAutoRemove(true);
+
+    auto *process = new QProcess(this);
+    m_process = process;
+    connect(process, &QProcess::errorOccurred, this, [this, job](QProcess::ProcessError) {
+        finishCurrent(false, tr("soffice failed to start"));
+        Q_UNUSED(job);
+    });
+    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
+            [this, job](int exitCode, QProcess::ExitStatus status) {
+                if (status != QProcess::NormalExit || exitCode != 0) {
+                    finishCurrent(false, tr("soffice exited with code %1").arg(exitCode));
+                    return;
+                }
+                const QFileInfo input(job.input);
+                const QString output =
+                    job.outDir + QLatin1Char('/') + input.completeBaseName() + QLatin1Char('.')
+                    + job.token.section(QLatin1Char(':'), 0, 0);
+                if (!QFileInfo::exists(output)) {
+                    finishCurrent(false, tr("soffice produced no output for %1").arg(job.input));
+                    return;
+                }
+                finishCurrent(true, output);
+            });
+
+    // AGENT-GUARD: one job at a time, private profile per run (probe #8);
+    // --norestore keeps a crashed instance from blocking this run.
+    process->start(QStringLiteral("soffice"),
+                   {QStringLiteral("--headless"), QStringLiteral("--norestore"),
+                    QStringLiteral("--nologo"),
+                    QStringLiteral("-env:UserInstallation=file://%1").arg(m_profile->path()),
+                    QStringLiteral("--convert-to"), job.token,
+                    QStringLiteral("--outdir"), job.outDir, job.input});
+
+    QTimer::singleShot(kJobTimeoutMs, process, [this, process] {
+        if (m_process == process && process->state() == QProcess::Running) {
+            process->kill();
+            finishCurrent(false, tr("conversion timed out"));
+        }
+    });
+}
+
+void LibreOfficeConverter::finishCurrent(bool ok, const QString &message)
+{
+    QProcess *process = m_process;
+    const int jobId = m_currentId;
+    m_process = nullptr;
+    m_profile.reset();
+    if (process != nullptr) {
+        process->deleteLater();
+    }
+    if (ok) {
+        emit jobFinished(jobId, message);
+    } else {
+        emit jobFailed(jobId, message);
+    }
+    runNext(); // next queued job, if any
+}
+
+} // namespace QindaOffice::Core
