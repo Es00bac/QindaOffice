@@ -15,7 +15,7 @@ lists what exists today.
 | `office_shell` | Qt Widgets/DBus + `office_core`, `gui-wm/qindaqt-desktop` archives | M0 frame; M1: document host (save/save-as/close consent, recents, drag-drop), `SingleInstance`, `runOfficeApp`, `AppServices` |
 | `office_core` | Qt Core/Gui | M1: `Document`, `PlainTextDocument`, `AtomicFileStore`, `JsonSettings`, `RecentFiles`, `RestoreInventory`, `RecoveryJournal`, `LibreOfficeConverter`, `Paths` |
 | `office_ai` | Qt Core/Gui/Network + `office_core` | M6 (planned) |
-| `office_ink` | Qt Gui | M7 (planned) |
+| `office_ink` | Qt Gui | M7: stroke model, builder filters, spatial grid, renderer, JSON persistence |
 | `calc_engine` | Qt Core | M2: model, lexer/Pratt parser, evaluator, dependency recalc, ~85 functions, number formats, CSV |
 | `calc_io` | Qt Core + QXlsx | M3: xlsx read/write, shared-formula reconstruction, LibreOffice gate |
 | `show_model` | Qt Gui + KArchive | M8 (planned) |
@@ -27,4 +27,4 @@ lists what exists today.
 | QindaWrite | M4/M5 | Word processor: paged view, WYSIWYG PDF/print, styles, full I/O matrix (html/md/txt/odt native, docx/rtf via LibreOffice), spell check, tables/images/lists |
 | QindaCalc | M2/M3 | Working app: engine-backed grid, in-cell editing, formula bar, sheet tabs, xlsx/csv I/O |
 | QindaShow | M8 (model+editor) / M9 (player) | M0 skeleton window |
-| QindaNote | M7 (ink + notes) | M0 skeleton window |
+| QindaNote | M7 | Working app: notebook directories, page view with pen/highlight/erase/text, growing page, undo, tablet + palm rejection |
