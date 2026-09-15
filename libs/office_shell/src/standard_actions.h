@@ -70,6 +70,14 @@ inline const char kInsertChart[] = "insertChartAction";
 inline const char kInsertSheet[] = "insertSheetAction";
 
 // QindaShow commands.
+inline const char kShowFillColor[] = "showFillColorAction";
+inline const char kShowStrokeColor[] = "showStrokeColorAction";
+inline const char kShowInsertTextBox[] = "showInsertTextBoxAction";
+inline const char kShowInsertRectangle[] = "showInsertRectangleAction";
+inline const char kShowInsertEllipse[] = "showInsertEllipseAction";
+inline const char kShowInsertLine[] = "showInsertLineAction";
+inline const char kShowInsertArrow[] = "showInsertArrowAction";
+inline const char kShowInsertImage[] = "showInsertImageAction";
 inline const char kSlideNew[] = "slideNewAction";
 inline const char kSlideDuplicate[] = "slideDuplicateAction";
 inline const char kSlideDelete[] = "slideDeleteAction";

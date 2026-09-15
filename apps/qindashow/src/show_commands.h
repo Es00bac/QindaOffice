@@ -102,6 +102,25 @@ private:
     QStringList m_newOrder;
 };
 
+// Whole-shape state replace for styling ops (M13): the canvas snapshots
+// the shape before/after a fill/stroke/text-style change; this command
+// swaps between the two. Shape copies share the image payload implicitly.
+class ShapeStateCommand final : public QUndoCommand {
+public:
+    ShapeStateCommand(ShowModel::Slide *slide, QString shapeId, ShowModel::Shape before,
+                      ShowModel::Shape after, QUndoCommand *parent = nullptr);
+    void redo() override;
+    void undo() override;
+
+private:
+    void apply(const ShowModel::Shape &state);
+
+    ShowModel::Slide *m_slide;
+    QString m_shapeId;
+    ShowModel::Shape m_before;
+    ShowModel::Shape m_after;
+};
+
 class SlideListCommand final : public QUndoCommand {
 public:
     SlideListCommand(ShowModel::Presentation *deck, QList<ShowModel::Slide> before,

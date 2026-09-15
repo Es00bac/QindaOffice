@@ -30,6 +30,29 @@ limitation).
 spreadsheet; formatting actions share the suite-standard `ActionId` names
 with QindaWrite's toolbar (same conceptual commands, different host).
 
+## D-007: QindaShow styling flows through canvas old/new payloads; selection survives rebuilds
+
+**Context.** M13 added shape styling (bold/italic/fill/stroke), a shapes
+toolbar with persistent insert actions, and a shape clipboard. Two
+invariants turned out to be load-bearing. First, the canvas owns all model
+mutation and reports old/new payloads the window turns into undo commands;
+letting the toolbox mutate shapes directly would have bypassed that. Second,
+every undo push fires `indexChanged` -> `fullRefresh()` -> `setSlide()` ->
+`rebuildItems()`, which recreates every item - selection used to die there,
+and during window teardown the scene re-fires selection changes after the
+window's actions are already destroyed (SIGSEGV found by test).
+
+**Decision.** Styling ops are canvas methods (`setSelectedFill/Stroke/TextBold/
+TextItalic`) emitting a new `shapeStyled(shapeId, before, after)` payload the
+window wraps in `ShapeStateCommand`. `setSlide` preserves selection by shape
+id across rebuilds; `~SlideCanvas` disconnects the scene before item
+destruction so no signal escapes teardown. The clipboard codec
+(`show_model/shape_json`) is total (images base64, colors, runs) and assigns
+fresh shape ids on decode, so paste never collides.
+
+**Consequences.** Insert-style ops, styling and clipboard all share one undo
+stream; new ShowWindows are safe to create/destroy in tests and real sessions.
+
 ## D-003: App-menu hooks are finalized explicitly after subclass construction
 
 **Context.** `DocumentWindow::createMenus()` runs inside the base

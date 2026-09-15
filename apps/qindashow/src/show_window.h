@@ -30,6 +30,8 @@ namespace QindaOffice::Apps::Show {
 
 class SlideCanvas;
 
+class ShowToolbox;
+
 class ShowWindow final : public Shell::DocumentWindow {
     Q_OBJECT
 public:
@@ -38,6 +40,7 @@ public:
 
     [[nodiscard]] ShowDocument *showDocument() const { return m_document; }
     [[nodiscard]] SlideCanvas *canvas() const { return m_canvas; }
+    [[nodiscard]] ShowToolbox *toolbox() const { return m_toolbox; }
 
     void newDeck();
     void addSlide();
@@ -66,12 +69,14 @@ private:
     void syncMetaWidgets();
     void pushSlideListCommand(const QList<ShowModel::Slide> &before);
     void wireCanvasUndo();
+    void wireShowEditingActions();
 
     Ai::ModelCatalog *m_catalog = nullptr;
     Ai::AssistantPanel *m_panel = nullptr;
     Ai::InlineActionFlow *m_inline = nullptr;
     ShowDocument *m_document;
     SlideCanvas *m_canvas;
+    ShowToolbox *m_toolbox = nullptr;
     QListWidget *m_sorter;
     QPlainTextEdit *m_notes;
     QComboBox *m_transition;

@@ -9,6 +9,7 @@
 #include "presenter_window.h"
 #include "show_ai.h"
 #include "show_commands.h"
+#include "show_toolbox.h"
 #include "slide_canvas.h"
 #include "slide_player.h"
 #include "slide_renderer.h"
@@ -261,12 +262,20 @@ ShowWindow::ShowWindow()
     mainToolBar->addSeparator();
     mainToolBar->addAction(m_startShowAction);
 
+    // The toolbox must exist BEFORE finalizeAppMenuHooks: the app menus
+    // reuse its persistent insert/style actions (AGENT-GUARD: the hook
+    // runs insertApplicationMenus, which dereferences m_toolbox).
+    m_toolbox = new ShowToolbox(m_canvas, this);
+    addToolBarBreak(Qt::TopToolBarArea);
+    addToolBar(Qt::TopToolBarArea, m_toolbox->toolBar());
+
     // The base ctor ran createMenus() before this subclass existed, so the
     // app-menu hooks only dispatched the base no-ops then; run them now
     // (shell contract: app menus between View and AI).
     finalizeAppMenuHooks();
 
     wireCanvasUndo();
+    wireShowEditingActions();
     connect(m_document, &ShowDocument::loaded, this, [this] { fullRefresh(); });
     connect(m_canvas, &SlideCanvas::slideEdited, this, [this] {
         m_document->setDirty(true);
@@ -285,63 +294,6 @@ ShowWindow::~ShowWindow()
     disconnect(m_document->undoStack(), nullptr, this, nullptr);
 }
 
-void ShowWindow::wireCanvasUndo()
-{
-    connect(m_canvas, &SlideCanvas::shapeInserted, this, [this](const QString &shapeId) {
-        if (m_currentRow < 0) {
-            return;
-        }
-        ShowModel::Presentation *deck = m_document->presentation();
-        m_document->undoStack()->push(
-            new InsertShapeCommand(&deck->slides[m_currentRow], shapeId));
-    });
-    connect(m_canvas, &SlideCanvas::shapeRemoved, this,
-            [this](int index, const ShowModel::Shape &removed) {
-                if (m_currentRow < 0) {
-                    return;
-                }
-                ShowModel::Presentation *deck = m_document->presentation();
-                m_document->undoStack()->push(
-                    new RemoveShapeCommand(&deck->slides[m_currentRow], index, removed));
-            });
-    connect(m_canvas, &SlideCanvas::shapeGeometryEdited, this,
-            [this](const QString &shapeId, const QRectF &oldRect, const QRectF &newRect) {
-                if (m_currentRow < 0) {
-                    return;
-                }
-                ShowModel::Presentation *deck = m_document->presentation();
-                m_document->undoStack()->push(
-                    new GeometryCommand(&deck->slides[m_currentRow], shapeId, oldRect, newRect));
-            });
-    connect(m_canvas, &SlideCanvas::shapeTextEdited, this,
-            [this](const QString &shapeId, const QList<ShowModel::TextParagraph> &oldText,
-                   const QList<ShowModel::TextParagraph> &newText) {
-                if (m_currentRow < 0) {
-                    return;
-                }
-                ShowModel::Presentation *deck = m_document->presentation();
-                m_document->undoStack()->push(
-                    new TextEditCommand(&deck->slides[m_currentRow], shapeId, oldText, newText));
-            });
-    connect(m_canvas, &SlideCanvas::shapeBuildEdited, this,
-            [this](const QString &shapeId, int oldStep, int newStep) {
-                if (m_currentRow < 0) {
-                    return;
-                }
-                ShowModel::Presentation *deck = m_document->presentation();
-                m_document->undoStack()->push(
-                    new BuildStepCommand(&deck->slides[m_currentRow], shapeId, oldStep, newStep));
-            });
-    connect(m_canvas, &SlideCanvas::shapesReordered, this,
-            [this](const QStringList &oldOrder, const QStringList &newOrder) {
-                if (m_currentRow < 0) {
-                    return;
-                }
-                ShowModel::Presentation *deck = m_document->presentation();
-                m_document->undoStack()->push(
-                    new ShapeOrderCommand(&deck->slides[m_currentRow], oldOrder, newOrder));
-            });
-}
 
 void ShowWindow::fullRefresh()
 {
@@ -470,58 +422,6 @@ void ShowWindow::deleteSlide()
     fullRefresh();
 }
 
-void ShowWindow::insertApplicationMenus(QMenu *before)
-{
-    QMenu *slideMenu = new QMenu(tr("Slide"), this);
-    slideMenu->addAction(m_newSlideAction);
-    slideMenu->addAction(m_duplicateSlideAction);
-    slideMenu->addAction(m_deleteSlideAction);
-    slideMenu->addSeparator();
-    slideMenu->addAction(m_startShowAction);
-    slideMenu->addSeparator();
-    slideMenu->addAction(tr("Export PDF..."), this, [this] { exportPdf(); });
-    menuBar()->insertMenu(before->menuAction(), slideMenu);
-
-    // AI actions go into the shell's AI menu next to the panel toggle.
-    before->addSeparator();
-    for (const Ai::InlineAction &action : Ai::inlineActions()) {
-        QAction *item = before->addAction(action.displayName);
-        connect(item, &QAction::triggered, this, [this, id = action.id] {
-            m_inline->run(id, this);
-        });
-    }
-    before->addSeparator();
-    before->addAction(tr("Generate deck from outline…"), this, [this] {
-        generateDeckFromOutline(this, m_catalog, this);
-    });
-
-    QMenu *insertMenu = new QMenu(tr("Insert"), this);
-    auto insert = [this](ShowModel::ShapeKind kind) {
-        m_canvas->addShape(kind, QRectF());
-    };
-    insertMenu->addAction(tr("Text box"), this, [insert] { insert(ShowModel::ShapeKind::TextBox); });
-    insertMenu->addAction(tr("Rectangle"), this, [insert] { insert(ShowModel::ShapeKind::Rectangle); });
-    insertMenu->addAction(tr("Ellipse"), this, [insert] { insert(ShowModel::ShapeKind::Ellipse); });
-    insertMenu->addAction(tr("Line"), this, [insert] { insert(ShowModel::ShapeKind::Line); });
-    insertMenu->addAction(tr("Arrow"), this, [insert] { insert(ShowModel::ShapeKind::Arrow); });
-    insertMenu->addSeparator();
-    insertMenu->addAction(tr("Image..."), this, [this] {
-        const QString path = QFileDialog::getOpenFileName(this, tr("Insert image"));
-        if (!path.isEmpty()) {
-            m_canvas->addImage(path, QRectF());
-        }
-    });
-    insertMenu->addSeparator();
-    insertMenu->addAction(tr("Appear on click"), this, [this] {
-        m_canvas->toggleBuildSelected();
-    });
-    menuBar()->insertMenu(before->menuAction(), insertMenu);
-
-    QMenu *arrangeMenu = new QMenu(tr("Arrange"), this);
-    arrangeMenu->addAction(tr("Bring forward"), this, [this] { m_canvas->raiseSelected(); });
-    arrangeMenu->addAction(tr("Send backward"), this, [this] { m_canvas->lowerSelected(); });
-    menuBar()->insertMenu(before->menuAction(), arrangeMenu);
-}
 
 QString ShowWindow::filterString() const
 {

@@ -11,8 +11,12 @@ add_executable(qindashow
     src/presenter_window.h
     src/show_ai.cpp
     src/show_ai.h
+    src/show_clipboard.cpp
+    src/show_clipboard.h
     src/show_commands.cpp
     src/show_commands.h
+    src/show_toolbox.cpp
+    src/show_toolbox.h
     src/show_window.cpp
     src/show_window_actions.cpp
     src/show_window.h

@@ -7,14 +7,24 @@
 #include "show_window.h"
 
 #include "pdf_export.h"
+#include "show_clipboard.h"
+#include "show_commands.h"
+#include "show_toolbox.h"
 #include "template_loader.h"
 #include "presentation_controller.h"
 #include "presenter_window.h"
 #include "slide_player.h"
 
+#include <QClipboard>
 #include <QFileDialog>
 #include <QGuiApplication>
 #include <QMenu>
+#include <QMenuBar>
+#include <QMimeData>
+
+#include "inline_action_flow.h"
+#include "show_ai.h"
+#include "slide_canvas.h"
 #include <QMessageBox>
 #include <QScreen>
 #include <QStatusBar>
@@ -137,6 +147,137 @@ void ShowWindow::replaceCurrentSlideText(const QString &text)
     }
     m_document->setDirty(true);
     fullRefresh();
+}
+
+void ShowWindow::insertApplicationMenus(QMenu *before)
+{
+    QMenu *slideMenu = new QMenu(tr("Slide"), this);
+    slideMenu->addAction(m_newSlideAction);
+    slideMenu->addAction(m_duplicateSlideAction);
+    slideMenu->addAction(m_deleteSlideAction);
+    slideMenu->addSeparator();
+    slideMenu->addAction(m_startShowAction);
+    slideMenu->addSeparator();
+    slideMenu->addAction(tr("Export PDF..."), this, [this] { exportPdf(); });
+    menuBar()->insertMenu(before->menuAction(), slideMenu);
+
+    // AI actions go into the shell's AI menu next to the panel toggle.
+    before->addSeparator();
+    for (const Ai::InlineAction &action : Ai::inlineActions()) {
+        QAction *item = before->addAction(action.displayName);
+        connect(item, &QAction::triggered, this, [this, id = action.id] {
+            m_inline->run(id, this);
+        });
+    }
+    before->addSeparator();
+    before->addAction(tr("Generate deck from outline…"), this, [this] {
+        generateDeckFromOutline(this, m_catalog, this);
+    });
+
+    // The insert commands are persistent toolbox actions shared with the
+    // shapes toolbar (action discipline, AGENTS.md rule 5).
+    QMenu *insertMenu = new QMenu(tr("Insert"), this);
+    insertMenu->setObjectName(QStringLiteral("showInsertMenu"));
+    for (QAction *action : m_toolbox->insertActions().all()) {
+        insertMenu->addAction(action);
+    }
+    insertMenu->addSeparator();
+    insertMenu->addAction(tr("Appear on click"), this, [this] {
+        m_canvas->toggleBuildSelected();
+    });
+    menuBar()->insertMenu(before->menuAction(), insertMenu);
+
+    QMenu *shapeMenu = new QMenu(tr("S&hape"), this);
+    shapeMenu->setObjectName(QStringLiteral("showShapeMenu"));
+    menuBar()->insertMenu(before->menuAction(), shapeMenu);
+    for (QAction *action : m_toolbox->styleActions().styleActions()) {
+        shapeMenu->addAction(action);
+    }
+
+    QMenu *arrangeMenu = new QMenu(tr("Arrange"), this);
+    arrangeMenu->addAction(tr("Bring forward"), this, [this] { m_canvas->raiseSelected(); });
+    arrangeMenu->addAction(tr("Send backward"), this, [this] { m_canvas->lowerSelected(); });
+    menuBar()->insertMenu(before->menuAction(), arrangeMenu);
+}
+
+void ShowWindow::wireCanvasUndo()
+{
+    connect(m_canvas, &SlideCanvas::shapeInserted, this, [this](const QString &shapeId) {
+        ShowModel::Shape *shape = m_canvas->slide()->findShape(shapeId);
+        if (shape != nullptr) {
+            m_document->undoStack()->push(
+                new InsertShapeCommand(m_canvas->slide(), shapeId));
+        }
+    });
+    connect(m_canvas, &SlideCanvas::shapeRemoved, this,
+            [this](int index, const ShowModel::Shape &removed) {
+                m_document->undoStack()->push(
+                    new RemoveShapeCommand(m_canvas->slide(), index, removed));
+            });
+    connect(m_canvas, &SlideCanvas::shapeGeometryEdited, this,
+            [this](const QString &shapeId, const QRectF &oldRect, const QRectF &newRect) {
+                m_document->undoStack()->push(
+                    new GeometryCommand(m_canvas->slide(), shapeId, oldRect, newRect));
+            });
+    connect(m_canvas, &SlideCanvas::shapeTextEdited, this,
+            [this](const QString &shapeId, const QList<ShowModel::TextParagraph> &oldText,
+                   const QList<ShowModel::TextParagraph> &newText) {
+                m_document->undoStack()->push(
+                    new TextEditCommand(m_canvas->slide(), shapeId, oldText, newText));
+            });
+    connect(m_canvas, &SlideCanvas::shapeBuildEdited, this,
+            [this](const QString &shapeId, int oldStep, int newStep) {
+                m_document->undoStack()->push(
+                    new BuildStepCommand(m_canvas->slide(), shapeId, oldStep, newStep));
+            });
+    connect(m_canvas, &SlideCanvas::shapesReordered, this,
+            [this](const QStringList &oldOrder, const QStringList &newOrder) {
+                m_document->undoStack()->push(
+                    new ShapeOrderCommand(m_canvas->slide(), oldOrder, newOrder));
+            });
+    // M13 styling ops arrive as whole-shape before/after states.
+    connect(m_canvas, &SlideCanvas::shapeStyled, this,
+            [this](const QString &shapeId, const ShowModel::Shape &before,
+                   const ShowModel::Shape &after) {
+                m_document->undoStack()->push(
+                    new ShapeStateCommand(m_canvas->slide(), shapeId, before, after));
+            });
+}
+
+void ShowWindow::wireShowEditingActions()
+{
+    m_actions.editCopy->setEnabled(false);
+    m_actions.editCut->setEnabled(false);
+    connect(m_canvas, &SlideCanvas::selectionChanged, this, [this](bool hasSelection) {
+        m_actions.editCopy->setEnabled(hasSelection);
+        m_actions.editCut->setEnabled(hasSelection);
+    });
+    connect(m_actions.editCopy, &QAction::triggered, this,
+            [this] { copySelectedShape(m_canvas); });
+    connect(m_actions.editCut, &QAction::triggered, this,
+            [this] { cutSelectedShape(m_canvas); });
+
+    m_actions.editPaste->setEnabled(false);
+    auto updatePaste = [this] {
+        const QMimeData *mime = QGuiApplication::clipboard()->mimeData();
+        m_actions.editPaste->setEnabled(mime != nullptr
+                                        && mime->hasFormat(
+                                            QString::fromLatin1(shapeClipboardMimeType())));
+    };
+    updatePaste();
+    connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, updatePaste);
+    connect(m_actions.editPaste, &QAction::triggered, this,
+            [this] { pasteShapeAtClipboard(m_canvas); });
+
+    m_actions.editSelectAll->setEnabled(true);
+    connect(m_actions.editSelectAll, &QAction::triggered, m_canvas,
+            &SlideCanvas::selectAllShapes);
+    connect(m_toolbox, &ShowToolbox::imageInsertRequested, this, [this] {
+        const QString path = QFileDialog::getOpenFileName(this, tr("Insert image"));
+        if (!path.isEmpty()) {
+            m_canvas->addImage(path, QRectF());
+        }
+    });
 }
 
 } // namespace QindaOffice::Apps::Show

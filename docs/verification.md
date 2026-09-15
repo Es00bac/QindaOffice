@@ -70,6 +70,17 @@ presenter-view-on-second-screen, reduced-motion, packaging).
   undo steps (Qt `setPageSize` undo quirk cleared); zoom actions move the
   view; the paper palette stays white-on-dark under any theme.
 
+### M13 additions (automated: `tst_show_ui`, `tst_show_model`)
+
+- Shapes toolbar + Insert/Shape menus share persistent named actions
+  (objectNames from the shell ActionId table).
+- Bold/italic/fill/stroke mutate through the canvas with undoable
+  before/after payloads; two undos walk a fill then a bold back.
+- The shape clipboard round-trips through the JSON codec with a fresh id
+  and a +12 pt offset; cut removes the source; paste selects the new shape.
+- Insert actions land shapes through the normal undo path; editing actions
+  follow selection and clipboard shape; Select All selects every shape.
+
 ### M12 additions (automated: `tst_calc_ui`)
 
 - Undo/redo restores values AND re-evaluates formulas (dependency index

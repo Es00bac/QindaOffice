@@ -10,6 +10,8 @@ add_library(show_model STATIC
     src/fodp_reader.h
     src/fodp_writer.cpp
     src/fodp_writer.h
+    src/shape_json.cpp
+    src/shape_json.h
     src/presentation.cpp
     src/presentation.h
     src/slide_renderer.cpp

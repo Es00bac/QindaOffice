@@ -57,6 +57,7 @@ class SlideCanvas final : public QGraphicsView {
     Q_OBJECT
 public:
     explicit SlideCanvas(QWidget *parent = nullptr);
+    ~SlideCanvas() override;
 
     void setSlide(ShowModel::Slide *slide, const QSizeF &slideSize);
     [[nodiscard]] ShowModel::Slide *slide() const { return m_slide; }
@@ -72,6 +73,17 @@ public:
     void raiseSelected();
     void lowerSelected();
     void toggleBuildSelected();
+    // Selects every shape on the slide (Select All).
+    void selectAllShapes();
+    // M13 styling ops; each emits shapeStyled with the full before/after
+    // shape states for the window's ShapeStateCommand.
+    void setSelectedFill(const QColor &color);
+    void setSelectedStroke(const QColor &color);
+    void setSelectedTextBold(bool bold);
+    void setSelectedTextItalic(bool italic);
+    // Inserts an externally-built shape (clipboard paste), selects it and
+    // reports it through the normal shapeInserted undo payload.
+    void insertShape(ShowModel::Shape shape);
 
 signals:
     void shapeInserted(const QString &shapeId);
@@ -81,6 +93,9 @@ signals:
                          const QList<ShowModel::TextParagraph> &newText);
     void shapeBuildEdited(const QString &shapeId, int oldStep, int newStep);
     void shapesReordered(const QStringList &oldOrder, const QStringList &newOrder);
+    void shapeStyled(const QString &shapeId, const ShowModel::Shape &before,
+                     const ShowModel::Shape &after);
+    void selectionChanged(bool hasSelection);
     void slideEdited(); // any of the above; window marks dirty + journals
 
 protected:

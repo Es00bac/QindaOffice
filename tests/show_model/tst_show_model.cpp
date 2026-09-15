@@ -8,6 +8,7 @@
 #include "fodp_reader.h"
 #include "fodp_writer.h"
 #include "presentation.h"
+#include "shape_json.h"
 #include "slide_renderer.h"
 
 #include <QApplication>
@@ -25,6 +26,7 @@ private slots:
     void fodpConvertsToPptx();
     void rendererPaints();
     void buildsHideFutureShapes();
+    void shapeJsonCodecRoundTrips();
 };
 
 static Presentation sampleDeck()
@@ -198,6 +200,67 @@ void ShowModelTest::buildsHideFutureShapes()
     renderSlide(&painter2, slide, QSizeF(200, 100), 2);
     painter2.end();
     QVERIFY(late.pixelColor(85, 25) != QColor(Qt::white)); // now visible
+}
+
+void ShowModelTest::shapeJsonCodecRoundTrips()
+{
+    QindaOffice::Show::Shape shape;
+    shape.id = QStringLiteral("ignored-on-wire");
+    shape.kind = QindaOffice::Show::ShapeKind::TextBox;
+    shape.rect = QRectF(1.5, 2.25, 300, 90);
+    shape.rotation = 12.5;
+    shape.fill = QColor(10, 20, 30, 40);
+    shape.stroke = QColor(200, 100, 50);
+    shape.strokeWidth = 2.5;
+    shape.buildStep = 2;
+    shape.extra.insert(QStringLiteral("qq:note"), QStringLiteral("hi"));
+    QindaOffice::Show::TextParagraph paragraph;
+    paragraph.alignment = int(Qt::AlignHCenter);
+    paragraph.bullet = true;
+    paragraph.listLevel = 1;
+    QindaOffice::Show::TextRun run;
+    run.text = QStringLiteral("Hello \u00e9");
+    run.bold = true;
+    run.italic = true;
+    run.color = QColor(1, 2, 3);
+    run.pointSize = 24;
+    run.fontFamily = QStringLiteral("DejaVu Sans");
+    paragraph.runs.append(run);
+    shape.paragraphs.append(paragraph);
+    shape.imagePng = QByteArray("\x89PNG\x01\x02", 6);
+
+    const QByteArray payload = QindaOffice::Show::shapesToJson({shape});
+    const QList<QindaOffice::Show::Shape> back = QindaOffice::Show::shapesFromJson(payload);
+    QCOMPARE(back.size(), 1);
+    const QindaOffice::Show::Shape &decoded = back.first();
+    // The codec assigns a fresh id (clipboard consumers must not reuse).
+    QVERIFY(!decoded.id.isEmpty());
+    QVERIFY(decoded.id != shape.id);
+    QCOMPARE(int(decoded.kind), int(shape.kind));
+    QCOMPARE(decoded.rect, shape.rect);
+    QCOMPARE(decoded.rotation, shape.rotation);
+    QCOMPARE(decoded.fill, shape.fill);
+    QCOMPARE(decoded.stroke, shape.stroke);
+    QCOMPARE(decoded.strokeWidth, shape.strokeWidth);
+    QCOMPARE(decoded.buildStep, shape.buildStep);
+    QCOMPARE(decoded.extra.value(QStringLiteral("qq:note")).toString(),
+             QStringLiteral("hi"));
+    QCOMPARE(decoded.paragraphs.size(), 1);
+    QCOMPARE(decoded.paragraphs.first().runs.size(), 1);
+    const QindaOffice::Show::TextRun &runBack = decoded.paragraphs.first().runs.first();
+    QCOMPARE(runBack.text, run.text);
+    QVERIFY(runBack.bold && runBack.italic);
+    QCOMPARE(runBack.color, run.color);
+    QCOMPARE(runBack.pointSize, 24);
+    QCOMPARE(runBack.fontFamily, run.fontFamily);
+    QCOMPARE(decoded.paragraphs.first().alignment, paragraph.alignment);
+    QVERIFY(decoded.paragraphs.first().bullet);
+    QCOMPARE(decoded.paragraphs.first().listLevel, 1);
+    QCOMPARE(decoded.imagePng, shape.imagePng);
+
+    // Empty/garbage payloads decode to nothing, never crash.
+    QVERIFY(QindaOffice::Show::shapesFromJson({}).isEmpty());
+    QVERIFY(QindaOffice::Show::shapesFromJson("{nope").isEmpty());
 }
 
 int main(int argc, char *argv[])

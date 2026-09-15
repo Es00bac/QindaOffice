@@ -182,6 +182,39 @@ void ShapeOrderCommand::apply(const QStringList &order)
     m_slide->shapes = reordered;
 }
 
+ShapeStateCommand::ShapeStateCommand(ShowModel::Slide *slide, QString shapeId,
+                                     ShowModel::Shape before, ShowModel::Shape after,
+                                     QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_slide(slide)
+    , m_shapeId(std::move(shapeId))
+    , m_before(std::move(before))
+    , m_after(std::move(after))
+{
+    setText(QObject::tr("Style shape"));
+}
+
+void ShapeStateCommand::apply(const ShowModel::Shape &state)
+{
+    if (ShowModel::Shape *shape = m_slide->findShape(m_shapeId)) {
+        // Keep the id stable: state copies carry their own id, but the
+        // slide looks the shape up by the original one.
+        const QString id = shape->id;
+        *shape = state;
+        shape->id = id;
+    }
+}
+
+void ShapeStateCommand::redo()
+{
+    apply(m_after);
+}
+
+void ShapeStateCommand::undo()
+{
+    apply(m_before);
+}
+
 SlideListCommand::SlideListCommand(ShowModel::Presentation *deck, QList<ShowModel::Slide> before,
                                    QList<ShowModel::Slide> after, QUndoCommand *parent)
     : QUndoCommand(parent)

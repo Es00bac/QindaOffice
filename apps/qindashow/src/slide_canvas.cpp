@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "slide_canvas.h"
 
+#include <functional>
+
 #include "slide_renderer.h"
 #include "text_bridge.h"
 
@@ -117,14 +119,36 @@ SlideCanvas::SlideCanvas(QWidget *parent)
     setAlignment(Qt::AlignCenter);
     setBackgroundBrush(QColor(70, 70, 70));
     setFrameShape(QFrame::NoFrame);
+    connect(m_scene, &QGraphicsScene::selectionChanged, this,
+            [this] { emit selectionChanged(selectedItem() != nullptr); });
 }
 
 void SlideCanvas::setSlide(ShowModel::Slide *slide, const QSizeF &slideSize)
 {
     commitTextEdit(true); // never drop an in-flight edit
+    // Selection survives rebuilds (setSlide re-runs after every undo via
+    // the window's fullRefresh): remember shape ids, not item pointers.
+    QStringList selectedIds;
+    for (const QGraphicsItem *item : m_scene->selectedItems()) {
+        if (const auto *shapeItem = qgraphicsitem_cast<const ShapeItem *>(item)) {
+            selectedIds.append(shapeItem->shapeId());
+        }
+    }
     m_slide = slide;
     m_slideSize = slideSize;
     rebuildItems();
+    for (const QString &id : selectedIds) {
+        if (ShapeItem *item = itemFor(id)) item->setSelected(true);
+    }
+}
+
+SlideCanvas::~SlideCanvas()
+{
+    // QObject teardown order is not ours: the window's actions may be
+    // gone while the scene still destroys items and re-fires selection
+    // changes. Never emit signals from the destructor path (a connected
+    // window lambda would touch dead QObjects).
+    disconnect(m_scene, nullptr, this, nullptr);
 }
 
 void SlideCanvas::rebuildItems()
@@ -158,9 +182,7 @@ ShapeItem *SlideCanvas::itemFor(const QString &shapeId) const
     const QList<QGraphicsItem *> all = m_scene->items(Qt::AscendingOrder);
     for (QGraphicsItem *item : all) {
         if (auto *shapeItem = qgraphicsitem_cast<ShapeItem *>(item)) {
-            if (shapeItem->shapeId() == shapeId) {
-                return shapeItem;
-            }
+            if (shapeItem->shapeId() == shapeId) return shapeItem;
         }
     }
     return nullptr;
@@ -168,13 +190,9 @@ ShapeItem *SlideCanvas::itemFor(const QString &shapeId) const
 
 int SlideCanvas::shapeIndex(const QString &shapeId) const
 {
-    if (m_slide == nullptr) {
-        return -1;
-    }
+    if (m_slide == nullptr) return -1;
     for (int i = 0; i < m_slide->shapes.size(); ++i) {
-        if (m_slide->shapes.at(i).id == shapeId) {
-            return i;
-        }
+        if (m_slide->shapes.at(i).id == shapeId) return i;
     }
     return -1;
 }
@@ -182,31 +200,91 @@ int SlideCanvas::shapeIndex(const QString &shapeId) const
 QStringList SlideCanvas::shapeOrder() const
 {
     QStringList ids;
-    if (m_slide == nullptr) {
-        return ids;
-    }
+    if (m_slide == nullptr) return ids;
     for (const ShowModel::Shape &shape : m_slide->shapes) {
         ids.append(shape.id);
     }
     return ids;
 }
 
+namespace {
+
+// Styling helper: snapshot the selected shape, apply `mutate`, emit the
+// before/after payload; false when nothing is selected or unchanged.
+bool restyleSelection(SlideCanvas *canvas,
+                      const std::function<void(ShowModel::Shape &)> &mutate)
+{
+    ShapeItem *item = canvas->selectedItem();
+    if (item == nullptr || item->modelShape() == nullptr) return false;
+    ShowModel::Shape *shape = item->modelShape();
+    const ShowModel::Shape before = *shape;
+    mutate(*shape);
+    if (*shape == before) return false;
+    emit canvas->shapeStyled(shape->id, before, *shape);
+    emit canvas->slideEdited();
+    return true;
+}
+
+} // namespace
+
+void SlideCanvas::setSelectedFill(const QColor &color)
+{
+    restyleSelection(this, [color](ShowModel::Shape &shape) { shape.fill = color; });
+}
+
+void SlideCanvas::setSelectedStroke(const QColor &color)
+{
+    restyleSelection(this, [color](ShowModel::Shape &shape) { shape.stroke = color; });
+}
+
+void SlideCanvas::setSelectedTextBold(bool bold)
+{
+    restyleSelection(this, [bold](ShowModel::Shape &shape) {
+        for (auto &paragraph : shape.paragraphs)
+            for (auto &run : paragraph.runs) run.bold = bold;
+    });
+}
+
+void SlideCanvas::setSelectedTextItalic(bool italic)
+{
+    restyleSelection(this, [italic](ShowModel::Shape &shape) {
+        for (auto &paragraph : shape.paragraphs)
+            for (auto &run : paragraph.runs) run.italic = italic;
+    });
+}
+
+void SlideCanvas::selectAllShapes()
+{
+    const auto items = m_scene->items();
+    for (QGraphicsItem *item : items) item->setSelected(true);
+}
+
+void SlideCanvas::insertShape(ShowModel::Shape shape)
+{
+    if (m_slide == nullptr) return;
+    const QString id = shape.id;
+    m_slide->shapes.append(shape);
+    rebuildItems();
+    m_scene->clearSelection();
+    if (ShapeItem *item = itemFor(id)) {
+        item->setSelected(true);
+    }
+    emit shapeInserted(id);
+    emit slideEdited();
+}
+
 ShapeItem *SlideCanvas::selectedItem() const
 {
     const QList<QGraphicsItem *> selected = m_scene->selectedItems();
     for (QGraphicsItem *item : selected) {
-        if (auto *shapeItem = qgraphicsitem_cast<ShapeItem *>(item)) {
-            return shapeItem;
-        }
+        if (auto *shapeItem = qgraphicsitem_cast<ShapeItem *>(item)) return shapeItem;
     }
     return nullptr;
 }
 
 ShapeItem *SlideCanvas::addShape(ShowModel::ShapeKind kind, const QRectF &rect)
 {
-    if (m_slide == nullptr) {
-        return nullptr;
-    }
+    if (m_slide == nullptr) return nullptr;
     ShowModel::Shape shape;
     shape.id = freshId();
     shape.kind = kind;
