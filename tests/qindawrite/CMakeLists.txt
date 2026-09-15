@@ -29,7 +29,7 @@ add_executable(tst_write_view tst_write_view.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_document.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_window.cpp
 )
-target_link_libraries(tst_write_view PRIVATE office_shell Qt6::Test Qt6::WidgetsPrivate
+target_link_libraries(tst_write_view PRIVATE office_shell office_ai Qt6::Test Qt6::WidgetsPrivate
     ${POPPLER_QT6_LIBRARIES} KF6::SonnetCore)
 target_include_directories(tst_write_view PRIVATE ${POPPLER_QT6_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}/apps)

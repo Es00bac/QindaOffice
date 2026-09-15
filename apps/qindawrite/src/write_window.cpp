@@ -3,7 +3,11 @@
 
 #include "page_text_view.h"
 #include "pdf_exporter.h"
+#include "assistant_panel.h"
+#include "document_context.h"
 #include "format_io.h"
+#include "inline_action_flow.h"
+#include "model_catalog.h"
 #include "print_helper.h"
 #include "spell_checker.h"
 #include "style_catalog.h"
@@ -18,7 +22,10 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QStatusBar>
+#include <QDockWidget>
+#include <QDir>
 #include <QInputDialog>
+#include <QStandardPaths>
 #include <QPrinter>
 #include <QTextBlock>
 #include <QTextList>
@@ -27,6 +34,62 @@
 #include <QTextCursor>
 
 namespace QindaOffice::Apps::Write {
+
+
+namespace {
+
+// DocumentContext/EditApplier seams (plan 5.3) for the Write document.
+class WriteContext final : public Ai::DocumentContextProvider {
+public:
+    explicit WriteContext(PageTextView *view)
+        : m_view(view)
+    {
+    }
+    Ai::DocumentContext context(bool withDocument) override
+    {
+        Ai::DocumentContext out;
+        const QTextCursor cursor = m_view->control()->textCursor();
+        if (cursor.hasSelection()) {
+            out.selection = cursor.selectedText().replace(QChar::ParagraphSeparator,
+                                                          QLatin1Char('\n'));
+        }
+        if (withDocument) {
+            out.document = m_view->writeDocument()->textDocument()->toPlainText();
+        }
+        return out;
+    }
+
+private:
+    PageTextView *m_view;
+};
+
+class WriteApplier final : public Ai::EditApplier {
+public:
+    WriteApplier(PageTextView *view, WriteDocument *doc)
+        : m_view(view)
+        , m_doc(doc)
+    {
+    }
+    void replaceSelection(const QString &text) override
+    {
+        QTextCursor cursor = m_view->control()->textCursor();
+        cursor.insertText(text);
+        m_doc->setDirty(true);
+    }
+    void insertAtCursor(const QString &text) override
+    {
+        QTextCursor cursor = m_view->control()->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        cursor.insertText(QStringLiteral("\n") + text);
+        m_doc->setDirty(true);
+    }
+
+private:
+    PageTextView *m_view;
+    WriteDocument *m_doc;
+};
+
+} // namespace
 
 WriteWindow::WriteWindow()
     : m_document(new WriteDocument)
@@ -46,9 +109,34 @@ WriteWindow::WriteWindow()
         Shell::PrintHelper::printPreview(this, printRenderCallback());
     });
     connect(m_view, &PageTextView::contextMenuBuilt, this, &WriteWindow::addSpellingActions);
+
+    // AI: the catalog lives per window (providers.json is a small seeded
+    // document); the panel docks right, inline actions live in the AI menu.
+    const QString configRoot = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
+        + QStringLiteral("/qindaoffice/QindaWrite");
+    QDir().mkpath(configRoot);
+    m_catalog = new Ai::ModelCatalog(configRoot + QStringLiteral("/ai-providers.json"));
+    m_catalog->setParent(this);
+
+    auto *context = new WriteContext(m_view);
+    auto *applier = new WriteApplier(m_view, m_document);
+    m_panel = new Ai::AssistantPanel(m_catalog, context, applier, this);
+    auto *dock = new QDockWidget(tr("Assistant"), this);
+    dock->setObjectName(QStringLiteral("assistantDock"));
+    dock->setWidget(m_panel);
+    addDockWidget(Qt::RightDockWidgetArea, dock);
+    dock->hide();
+    m_actions.aiAssistant->setEnabled(true);
+    m_actions.aiAssistant->setCheckable(true);
+    connect(m_actions.aiAssistant, &QAction::toggled, dock, &QDockWidget::setVisible);
+    connect(dock, &QDockWidget::visibilityChanged, m_actions.aiAssistant,
+            &QAction::setChecked);
+
+    m_inline = new Ai::InlineActionFlow(m_catalog, context, applier, this);
 }
 
 WriteWindow::~WriteWindow() = default;
+
 
 void WriteWindow::exportPdf()
 {
@@ -254,6 +342,15 @@ void WriteWindow::insertApplicationMenus(QMenu *before)
         cursor.createList(format);
         m_document->setDirty(true);
     });
+
+    auto *aiMenu = new QMenu(tr("&AI"), this);
+    menuBar()->insertMenu(before->menuAction(), aiMenu);
+    for (const Ai::InlineAction &action : Ai::inlineActions()) {
+        QAction *item = aiMenu->addAction(action.displayName);
+        connect(item, &QAction::triggered, this, [this, id = action.id] {
+            m_inline->run(id, this);
+        });
+    }
 
     auto *pageMenu = new QMenu(tr("&Page"), this);
     menuBar()->insertMenu(before->menuAction(), pageMenu);

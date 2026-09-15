@@ -22,9 +22,10 @@ struct ProviderConfig {
     QJsonObject extra;
 };
 
-class ModelCatalog {
+class ModelCatalog : public QObject {
+    Q_OBJECT
 public:
-    explicit ModelCatalog(QString path);
+    explicit ModelCatalog(QString path, QObject *parent = nullptr);
 
     [[nodiscard]] QList<ProviderConfig> providers() const { return m_providers; }
     [[nodiscard]] QStringList modelIds() const;

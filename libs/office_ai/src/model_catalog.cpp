@@ -11,8 +11,9 @@
 
 namespace QindaOffice::Ai {
 
-ModelCatalog::ModelCatalog(QString path)
-    : m_path(std::move(path))
+ModelCatalog::ModelCatalog(QString path, QObject *parent)
+    : QObject(parent)
+    , m_path(std::move(path))
 {
     QString error;
     if (!load(&error)) {

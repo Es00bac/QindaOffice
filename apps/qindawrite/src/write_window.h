@@ -8,11 +8,20 @@
 
 #include "document_window.h"
 
+#include "assistant_panel.h"
+#include "inline_action_flow.h"
+
 #include "print_helper.h"
 
 #include <QTextCharFormat>
 
 namespace QindaOffice::Apps::Write {
+
+namespace QindaOffice::Ai {
+class AssistantPanel;
+class InlineActionFlow;
+class ModelCatalog;
+}
 
 class PageTextView;
 class SpellChecker;
@@ -44,6 +53,9 @@ private:
     WriteDocument *m_document;
     PageTextView *m_view;
     SpellChecker *m_spell = nullptr;
+    Ai::ModelCatalog *m_catalog = nullptr;
+    Ai::AssistantPanel *m_panel = nullptr;
+    Ai::InlineActionFlow *m_inline = nullptr;
 };
 
 } // namespace QindaOffice::Apps::Write

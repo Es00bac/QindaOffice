@@ -16,7 +16,7 @@ add_executable(qindawrite
     src/write_window.cpp
     src/write_window.h
 )
-target_link_libraries(qindawrite PRIVATE office_shell Qt6::WidgetsPrivate KF6::SonnetCore)
+target_link_libraries(qindawrite PRIVATE office_shell office_ai Qt6::WidgetsPrivate KF6::SonnetCore)
 target_compile_definitions(qindawrite PRIVATE
     QQO_DESKTOP_ID="org.qindaqt.QindaWrite"
     QT_NO_CAST_FROM_ASCII

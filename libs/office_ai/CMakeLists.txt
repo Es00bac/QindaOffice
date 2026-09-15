@@ -7,6 +7,10 @@
 # consume this library from the apps.
 add_library(office_ai STATIC
     src/anthropic_provider.cpp
+    src/assistant_panel.cpp
+    src/assistant_panel.h
+    src/inline_action_flow.cpp
+    src/inline_action_flow.h
     src/anthropic_provider.h
     src/chat_types.cpp
     src/chat_types.h
@@ -33,6 +37,7 @@ target_link_libraries(office_ai
         Qt6::Core
         Qt6::Gui
         Qt6::Network
+        Qt6::Widgets
         office_core
     PRIVATE
         qt6keychain
