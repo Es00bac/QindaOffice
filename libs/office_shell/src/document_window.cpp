@@ -320,7 +320,7 @@ bool DocumentWindow::saveDocumentAs()
         return false;
     }
     const QString path =
-        QFileDialog::getSaveFileName(this, tr("Save As"), QString(), filterString());
+        QFileDialog::getSaveFileName(this, tr("Save As"), QString(), saveFilterString());
     if (path.isEmpty()) {
         return false; // cancelled
     }

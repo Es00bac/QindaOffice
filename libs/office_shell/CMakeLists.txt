@@ -31,6 +31,8 @@ add_library(office_shell STATIC
     src/global_menu_export.h
     src/office_application.cpp
     src/office_application.h
+    src/print_helper.cpp
+    src/print_helper.h
     src/single_instance.cpp
     src/single_instance.h
     src/standard_actions.cpp
@@ -56,6 +58,7 @@ target_link_libraries(office_shell
     PUBLIC
         Qt6::Widgets
         Qt6::DBus
+        Qt6::PrintSupport
         office_core
     PRIVATE
         Qt6::GuiPrivate

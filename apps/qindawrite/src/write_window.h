@@ -8,11 +8,14 @@
 
 #include "document_window.h"
 
+#include "print_helper.h"
+
 #include <QTextCharFormat>
 
 namespace QindaOffice::Apps::Write {
 
 class PageTextView;
+class SpellChecker;
 class WriteDocument;
 
 class WriteWindow final : public Shell::DocumentWindow {
@@ -29,13 +32,18 @@ public:
 protected:
     void insertApplicationMenus(QMenu *before) override;
     QString filterString() const override;
+    QString saveFilterString() const override;
 
 private:
     void applyStyle(int styleId);
     void applyCharFormat(const QTextCharFormat &format);
 
+    void addSpellingActions(QMenu *menu, const QPointF &docPos);
+    [[nodiscard]] Shell::PrintRenderCallback printRenderCallback() const;
+
     WriteDocument *m_document;
     PageTextView *m_view;
+    SpellChecker *m_spell = nullptr;
 };
 
 } // namespace QindaOffice::Apps::Write

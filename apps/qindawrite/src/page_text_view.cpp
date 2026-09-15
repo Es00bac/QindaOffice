@@ -218,8 +218,9 @@ void PageTextView::contextMenuEvent(QContextMenuEvent *event)
     // The control opens its menu at the cursor; position it near the click
     // by moving the cursor there first is deliberately avoided (a context
     // menu must not move the insertion point).
-    Q_UNUSED(event);
+    const QPointF docPos = m_geometry.viewToDoc(event->pos(), viewport()->width());
     QMenu *menu = m_control->createStandardContextMenu(QPointF(), nullptr);
+    emit contextMenuBuilt(menu, docPos);
     menu->exec(event->globalPos());
     delete menu;
 }

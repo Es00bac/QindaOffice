@@ -83,6 +83,9 @@ protected:
     // Table/Data/Slide/Page) before the AI menu. Default inserts nothing.
     virtual void insertApplicationMenus(QMenu *before);
 
+protected:
+    StandardActions m_actions;
+
 private:
     void createActions();
     void createMenus();
@@ -96,9 +99,11 @@ private:
     void commitSuccessfulSave();
     void rebuildRecentMenu();
     [[nodiscard]] virtual QString filterString() const;
+    // Save-As filters default to the open filter; apps with a default
+    // save format (QindaWrite: ODT) override.
+    [[nodiscard]] virtual QString saveFilterString() const { return filterString(); }
     [[nodiscard]] bool ensureWritableTarget(const QString &path);
 
-    StandardActions m_actions;
     GlobalMenuExport *m_menuExport = nullptr;
     bool m_menuExportStarted = false;
     AppServices *m_services = nullptr;

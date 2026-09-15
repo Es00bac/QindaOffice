@@ -35,6 +35,9 @@ public:
 signals:
     void zoomChanged(qreal zoom);
     void pageCountChanged(int pages);
+    // The control's standard menu is built; apps (spelling suggestions)
+    // may augment it before it shows. docPos is the document-space click.
+    void contextMenuBuilt(QMenu *menu, const QPointF &docPos);
 
 protected:
     void paintEvent(QPaintEvent *event) override;

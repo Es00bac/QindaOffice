@@ -22,10 +22,12 @@ option(QQO_STRICT_WARNINGS "Enable the suite's strict warning set on first-party
 # Qt 6.11 with the private Gui headers the per-window global-menu
 # announcement builds on (version-locked like the desktop per ADR-0116;
 # Qt6::GuiPrivate ships with qtbase's private-headers package).
-find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Widgets DBus Test GuiPrivate WidgetsPrivate)
+find_package(KF6Sonnet REQUIRED)
+find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Widgets DBus Network PrintSupport Svg Test GuiPrivate WidgetsPrivate)
 
 if(QQO_WITH_CHARTS)
-    find_package(Qt6 6.11 REQUIRED COMPONENTS Charts)
+    find_package(KF6Sonnet REQUIRED)
+find_package(Qt6 6.11 REQUIRED COMPONENTS Charts)
 endif()
 
 # QXlsx (MIT) is vendored as a git submodule (plan section 3): the suite's

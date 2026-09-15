@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_document.h"
 
+#include "format_io.h"
 #include "page_geometry.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QTextCursor>
 
 namespace QindaOffice::Apps::Write {
@@ -38,18 +40,9 @@ qreal WriteDocument::pageMargin() const
 
 bool WriteDocument::load(const QString &path, QString *error)
 {
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        if (error != nullptr) {
-            *error = file.errorString();
-        }
+    if (!loadDocument(path, m_text.get(), error)) {
         return false;
     }
-    const QString html = QString::fromUtf8(file.readAll());
-    m_text->setHtml(html);
-    // Page setup meta (plan section 6.1): "W H margin" in 96-dpi px.
-    const QTextCursor cursor(m_text.get());
-    Q_UNUSED(cursor);
     setCanonicalPath(path);
     refreshByteRevision();
     setDirty(false);
@@ -59,24 +52,30 @@ bool WriteDocument::load(const QString &path, QString *error)
 
 bool WriteDocument::save(const QString &path, QString *error)
 {
-    QString html = m_text->toHtml();
-    const QString meta = QStringLiteral(
-        "<meta name=\"qindawrite-page\" content=\"%1 %2 %3\">")
-                             .arg(m_text->pageSize().width())
-                             .arg(m_text->pageSize().height())
-                             .arg(m_margin);
-    const int head = html.indexOf(QStringLiteral("</head>"));
-    if (head > 0) {
-        html.insert(head, meta);
-    }
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        if (error != nullptr) {
-            *error = file.errorString();
-        }
+    if (!saveDocument(path, m_text.get(), error)) {
         return false;
     }
-    file.write(html.toUtf8());
+    const QString ext = QFileInfo(path).suffix().toLower();
+    if (ext == QLatin1String("html") || ext == QLatin1String("htm")) {
+        // Page setup meta (plan 6.1): re-inject after the generic writer.
+        QFile file(path);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QString html = QString::fromUtf8(file.readAll());
+            file.close();
+            const QString meta =
+                QStringLiteral("<meta name=\"qindawrite-page\" content=\"%1 %2 %3\">")
+                    .arg(m_text->pageSize().width())
+                    .arg(m_text->pageSize().height())
+                    .arg(m_margin);
+            const int head = html.indexOf(QStringLiteral("</head>"));
+            if (head > 0) {
+                html.insert(head, meta);
+                if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                    file.write(html.toUtf8());
+                }
+            }
+        }
+    }
     setCanonicalPath(path);
     refreshByteRevision();
     setDirty(false);
@@ -85,8 +84,11 @@ bool WriteDocument::save(const QString &path, QString *error)
 
 QStringList WriteDocument::mimeTypes() const
 {
-    // M5 adds the full matrix (md/txt/odt native; docx/rtf via LibreOffice).
-    return {QStringLiteral("text/html")};
+    return {QStringLiteral("text/html"), QStringLiteral("text/markdown"),
+            QStringLiteral("text/plain"),
+            QStringLiteral("application/vnd.oasis.opendocument.text"),
+            QStringLiteral("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            QStringLiteral("application/rtf")};
 }
 
 QByteArray WriteDocument::recoverySnapshot() const

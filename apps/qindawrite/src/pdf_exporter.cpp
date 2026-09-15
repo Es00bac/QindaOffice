@@ -32,24 +32,34 @@ bool exportDocumentPdf(QTextDocument *document, const QString &path, QString *er
         return false;
     }
     const QSizeF paper = writer.pageLayout().paintRectPixels(96).size();
-    const QSizeF page = document->pageSize();
-    painter.scale(paper.width() / page.width(), paper.height() / page.height());
+    renderDocumentPages(&painter, paper, document, [&writer] { writer.newPage(); });
+    painter.end();
+    return true;
+}
 
+void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDocument *document,
+                         const std::function<void()> &newPage)
+{
+    // Probe-verified pattern (tst_write_probe_pagination): scale once, then
+    // per page translate by -i*pageH, clip, draw; newPage between pages
+    // (the painter transform persists across newPage on QPdfWriter/QPrinter).
+    const QSizeF page = document->pageSize();
+    painter->save();
+    painter->scale(targetPixels.width() / page.width(), targetPixels.height() / page.height());
     const QAbstractTextDocumentLayout *layout = document->documentLayout();
     const int pages = qMax(1, int(std::ceil(layout->documentSize().height() / page.height())));
     for (int i = 0; i < pages; ++i) {
-        painter.save();
-        painter.translate(0, -i * page.height());
+        if (i > 0 && newPage != nullptr) {
+            newPage();
+        }
+        painter->save();
+        painter->translate(0, -i * page.height());
         QAbstractTextDocumentLayout::PaintContext context;
         context.clip = QRectF(0, i * page.height(), page.width(), page.height());
-        const_cast<QAbstractTextDocumentLayout *>(layout)->draw(&painter, context);
-        painter.restore();
-        if (i + 1 < pages) {
-            writer.newPage();
-        }
+        const_cast<QAbstractTextDocumentLayout *>(layout)->draw(painter, context);
+        painter->restore();
     }
-    painter.end();
-    return true;
+    painter->restore();
 }
 
 } // namespace QindaOffice::Apps::Write
