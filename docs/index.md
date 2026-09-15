@@ -24,7 +24,7 @@ lists what exists today.
 
 | App | Engine milestone | Status |
 | --- | --- | --- |
-| QindaWrite | M4 (page view) / M5 (formats) | M0 skeleton window |
+| QindaWrite | M4/M5 | Working page view: paged editing, WYSIWYG PDF, named styles (M5 formats next) |
 | QindaCalc | M2/M3 | Working app: engine-backed grid, in-cell editing, formula bar, sheet tabs, xlsx/csv I/O |
 | QindaShow | M8 (model+editor) / M9 (player) | M0 skeleton window |
 | QindaNote | M7 (ink + notes) | M0 skeleton window |

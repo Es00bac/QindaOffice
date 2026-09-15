@@ -11,3 +11,22 @@ endfunction()
 
 qqo_add_write_test(tst_write_probe_pagination)
 qqo_add_write_test(tst_write_probe_control)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(POPPLER_QT6 REQUIRED poppler-qt6)
+add_executable(tst_write_view tst_write_view.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_geometry.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_view.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/pdf_exporter.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/style_catalog.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_document.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_window.cpp
+)
+target_link_libraries(tst_write_view PRIVATE office_shell Qt6::Test Qt6::WidgetsPrivate
+    ${POPPLER_QT6_LIBRARIES})
+target_include_directories(tst_write_view PRIVATE ${POPPLER_QT6_INCLUDE_DIRS}
+    ${PROJECT_SOURCE_DIR}/apps)
+target_compile_options(tst_write_view PRIVATE ${POPPLER_QT6_CFLAGS_OTHER})
+qqo_set_strict_warnings(tst_write_view)
+add_test(NAME tst_write_view COMMAND tst_write_view)
+set_tests_properties(tst_write_view PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
