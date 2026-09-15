@@ -36,6 +36,7 @@ protected:
 
 private:
     void rebuildSheetTabs();
+    void createCalcActions();
     void commitInput(const CalcEng::CellAddr &addr, const QString &input);
     void insertChart();
     void rebuildChartWindows();
@@ -45,6 +46,9 @@ private:
     QLineEdit *m_nameBox;
     QLineEdit *m_formulaBar;
     QTabBar *m_tabs;
+    QAction *m_insertChartAction = nullptr;
+    QAction *m_insertSheetAction = nullptr;
+    QAction *m_thousandsAction = nullptr;
     bool m_syncingBar = false;
     QList<class QWidget *> m_chartWindows;
 };

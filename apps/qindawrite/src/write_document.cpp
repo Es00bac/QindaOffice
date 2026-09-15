@@ -14,6 +14,11 @@ WriteDocument::WriteDocument()
     : m_text(std::make_unique<QTextDocument>())
 {
     setupPaged(QSizeF(PageGeometry::kDefaultPageW, PageGeometry::kDefaultPageH), m_margin);
+    // AGENT-NOTE (Qt 6.11 quirk): QTextDocument::setPageSize() records an
+    // undo item, so every fresh document was born with one phantom undo
+    // step - Undo looked enabled on a pristine document and triggering it
+    // reset the page size. Page geometry is setup, not user content.
+    m_text->clearUndoRedoStacks();
     connect(m_text.get(), &QTextDocument::contentsChange, this, [this] {
         setDirty(true);
         emit contentChanged();

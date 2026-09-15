@@ -20,6 +20,9 @@ target_sources(tst_write_formats PRIVATE
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(POPPLER_QT6 REQUIRED poppler-qt6)
 add_executable(tst_write_view tst_write_view.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/find_replace_bar.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_controller.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_actions.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_geometry.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_accessibility.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_view.cpp
@@ -38,3 +41,24 @@ target_compile_options(tst_write_view PRIVATE ${POPPLER_QT6_CFLAGS_OTHER})
 qqo_set_strict_warnings(tst_write_view)
 add_test(NAME tst_write_view COMMAND tst_write_view)
 set_tests_properties(tst_write_view PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(tst_write_ui tst_write_ui.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/find_replace_bar.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_controller.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_actions.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_geometry.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_accessibility.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_view.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/spell_checker.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_io.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/pdf_exporter.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/style_catalog.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_document.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_window.cpp
+)
+target_link_libraries(tst_write_ui PRIVATE office_shell office_ai Qt6::Test Qt6::WidgetsPrivate
+    KF6::SonnetCore)
+target_include_directories(tst_write_ui PRIVATE ${PROJECT_SOURCE_DIR}/apps)
+qqo_set_strict_warnings(tst_write_ui)
+add_test(NAME tst_write_ui COMMAND tst_write_ui)
+set_tests_properties(tst_write_ui PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

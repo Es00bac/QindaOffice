@@ -40,6 +40,39 @@ inline const char kAiAssistant[] = "aiAssistantAction";
 inline const char kSettingsPreferences[] = "settingsPreferencesAction";
 inline const char kHelpAbout[] = "helpAboutAction";
 inline const char kHelpAboutQt[] = "helpAboutQtAction";
+
+// Rich-text formatting commands (QindaWrite; shared with any text host).
+inline const char kFormatBold[] = "formatBoldAction";
+inline const char kFormatItalic[] = "formatItalicAction";
+inline const char kFormatUnderline[] = "formatUnderlineAction";
+inline const char kFormatStrikeOut[] = "formatStrikeOutAction";
+inline const char kFormatTextColor[] = "formatTextColorAction";
+inline const char kFormatClearFormat[] = "formatClearFormatAction";
+inline const char kFormatAlignLeft[] = "formatAlignLeftAction";
+inline const char kFormatAlignCenter[] = "formatAlignCenterAction";
+inline const char kFormatAlignRight[] = "formatAlignRightAction";
+inline const char kFormatAlignJustify[] = "formatAlignJustifyAction";
+inline const char kFormatListBullet[] = "formatListBulletAction";
+inline const char kFormatListNumbered[] = "formatListNumberedAction";
+inline const char kFormatIndentMore[] = "formatIndentMoreAction";
+inline const char kFormatIndentLess[] = "formatIndentLessAction";
+
+// Document-building commands (QindaWrite inserts; app-specific inserts
+// keep their own stable ids below).
+inline const char kInsertTable[] = "insertTableAction";
+inline const char kInsertImage[] = "insertImageAction";
+inline const char kInsertColumns[] = "insertColumnsAction";
+inline const char kInsertPageBreak[] = "insertPageBreakAction";
+
+// QindaCalc commands.
+inline const char kInsertChart[] = "insertChartAction";
+inline const char kInsertSheet[] = "insertSheetAction";
+
+// QindaShow commands.
+inline const char kSlideNew[] = "slideNewAction";
+inline const char kSlideDuplicate[] = "slideDuplicateAction";
+inline const char kSlideDelete[] = "slideDeleteAction";
+inline const char kSlideStartShow[] = "slideStartShowAction";
 } // namespace ActionId
 
 // One bundle per document window so the action discipline (every command is

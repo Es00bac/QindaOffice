@@ -76,6 +76,10 @@ private:
     QPlainTextEdit *m_notes;
     QComboBox *m_transition;
     QComboBox *m_layout;
+    QAction *m_newSlideAction = nullptr;
+    QAction *m_duplicateSlideAction = nullptr;
+    QAction *m_deleteSlideAction = nullptr;
+    QAction *m_startShowAction = nullptr;
     int m_currentRow = -1;
     bool m_syncingMeta = false;
     bool m_sortSyncing = false;

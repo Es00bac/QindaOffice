@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 add_executable(qindawrite
     main.cpp
+    src/find_replace_bar.cpp
+    src/find_replace_bar.h
+    src/format_controller.cpp
+    src/format_controller.h
     src/page_geometry.cpp
     src/page_geometry.h
     src/page_text_accessibility.cpp
@@ -13,6 +17,8 @@ add_executable(qindawrite
     src/pdf_exporter.h
     src/style_catalog.cpp
     src/style_catalog.h
+    src/write_actions.cpp
+    src/write_actions.h
     src/write_document.cpp
     src/write_document.h
     src/write_window.cpp

@@ -22,6 +22,7 @@
 #include <QMimeData>
 #include <QStatusBar>
 #include <QTextEdit>
+#include <QToolBar>
 
 namespace QindaOffice::Shell {
 
@@ -166,6 +167,46 @@ void DocumentWindow::insertFileMenuActionsDeferred()
 void DocumentWindow::insertApplicationMenus(QMenu *before)
 {
     Q_UNUSED(before);
+}
+
+void DocumentWindow::finalizeAppMenuHooks()
+{
+    if (m_appMenusFinalized) {
+        return;
+    }
+    m_appMenusFinalized = true;
+    insertFileMenuActionsDeferred();
+    if (auto *aiMenu = findChild<QMenu *>(QStringLiteral("aiMenu"))) {
+        insertApplicationMenus(aiMenu);
+    }
+}
+
+QToolBar *DocumentWindow::addMainToolBar()
+{
+    if (m_mainToolBar != nullptr) {
+        return m_mainToolBar;
+    }
+    m_mainToolBar = new QToolBar(tr("Main toolbar"), this);
+    // Stable objectName: QMainWindow state restore and the platform theme
+    // key toolbars by it.
+    m_mainToolBar->setObjectName(QStringLiteral("mainToolBar"));
+    m_mainToolBar->addAction(m_actions.fileNew);
+    m_mainToolBar->addAction(m_actions.fileOpen);
+    m_mainToolBar->addAction(m_actions.fileSave);
+    m_mainToolBar->addSeparator();
+    m_mainToolBar->addAction(m_actions.editUndo);
+    m_mainToolBar->addAction(m_actions.editRedo);
+    m_mainToolBar->addSeparator();
+    m_mainToolBar->addAction(m_actions.editCut);
+    m_mainToolBar->addAction(m_actions.editCopy);
+    m_mainToolBar->addAction(m_actions.editPaste);
+    m_mainToolBar->addSeparator();
+    m_mainToolBar->addAction(m_actions.editFind);
+    m_mainToolBar->addSeparator();
+    m_mainToolBar->addAction(m_actions.viewZoomOut);
+    m_mainToolBar->addAction(m_actions.viewZoomIn);
+    addToolBar(Qt::TopToolBarArea, m_mainToolBar);
+    return m_mainToolBar;
 }
 
 void DocumentWindow::setDocumentHost(QWidget *widget, Core::Document *document)
@@ -323,6 +364,9 @@ void DocumentWindow::rebuildRecentMenu()
 void DocumentWindow::showEvent(QShowEvent *event)
 {
     QMainWindow::showEvent(event);
+    // Safety net for any subclass that forgot the ctor call: the app menus
+    // must exist before the global-menu export snapshots them below.
+    finalizeAppMenuHooks();
     if (!m_menuExportStarted) {
         m_menuExportStarted = true;
         startMenuExport();

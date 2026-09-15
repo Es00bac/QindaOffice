@@ -81,6 +81,8 @@ NoteWindow::NoteWindow()
     connect(text, &QAction::triggered, m_view, &NotePageView::addTextBlock);
 
     setDocumentHost(central, m_document);
+    QToolBar *mainToolBar = addMainToolBar();
+    Q_UNUSED(mainToolBar);
     addToolBar(Qt::LeftToolBarArea, tools);
 
     connect(m_view, &NotePageView::pageEdited, this, [this] {
@@ -112,6 +114,10 @@ NoteWindow::NoteWindow()
                 m_view->setPage(page);
             });
     rebuildNavigator();
+
+    // App menus (Page) need the fully constructed window - the base ctor's
+    // hook dispatch only reaches the base no-op.
+    finalizeAppMenuHooks();
 }
 
 NoteWindow::~NoteWindow() = default;

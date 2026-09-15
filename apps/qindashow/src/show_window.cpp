@@ -26,6 +26,9 @@
 #include <QMenuBar>
 #include <QPlainTextEdit>
 #include <QScreen>
+#include <QToolBar>
+
+#include "standard_actions.h"
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QWindow>
@@ -223,12 +226,45 @@ ShowWindow::ShowWindow()
             &QAction::setChecked);
     m_inline = new Ai::InlineActionFlow(m_catalog, context, applier, this);
 
-    // The base ctor ran createMenus() before this subclass existed, so
-    // insertApplicationMenus() was a no-op then; run it for real against
-    // the named AI anchor (shell contract: app menus between View and AI).
-    if (auto *aiMenu = findChild<QMenu *>(QStringLiteral("aiMenu"))) {
-        insertApplicationMenus(aiMenu);
-    }
+    // Persistent named slide actions (action discipline, AGENTS.md rule 5),
+    // shared by the Slide menu and the main toolbar.
+    using Shell::ActionId::kSlideNew;
+    using Shell::ActionId::kSlideDuplicate;
+    using Shell::ActionId::kSlideDelete;
+    using Shell::ActionId::kSlideStartShow;
+    m_newSlideAction = new QAction(QIcon::fromTheme(QStringLiteral("list-add")),
+                                   tr("New slide"), this);
+    m_newSlideAction->setObjectName(QString::fromLatin1(kSlideNew));
+    m_newSlideAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+M")));
+    connect(m_newSlideAction, &QAction::triggered, this, [this] { addSlide(); });
+    m_duplicateSlideAction =
+        new QAction(QIcon::fromTheme(QStringLiteral("edit-duplicate")),
+                    tr("Duplicate slide"), this);
+    m_duplicateSlideAction->setObjectName(QString::fromLatin1(kSlideDuplicate));
+    connect(m_duplicateSlideAction, &QAction::triggered, this, [this] { duplicateSlide(); });
+    m_deleteSlideAction = new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")),
+                                      tr("Delete slide"), this);
+    m_deleteSlideAction->setObjectName(QString::fromLatin1(kSlideDelete));
+    connect(m_deleteSlideAction, &QAction::triggered, this, [this] { deleteSlide(); });
+    m_startShowAction =
+        new QAction(QIcon::fromTheme(QStringLiteral("media-playback-start")),
+                    tr("Start show"), this);
+    m_startShowAction->setObjectName(QString::fromLatin1(kSlideStartShow));
+    m_startShowAction->setShortcut(QKeySequence(QStringLiteral("F5")));
+    connect(m_startShowAction, &QAction::triggered, this, [this] { startShow(); });
+
+    QToolBar *mainToolBar = addMainToolBar();
+    mainToolBar->addSeparator();
+    mainToolBar->addAction(m_newSlideAction);
+    mainToolBar->addAction(m_duplicateSlideAction);
+    mainToolBar->addAction(m_deleteSlideAction);
+    mainToolBar->addSeparator();
+    mainToolBar->addAction(m_startShowAction);
+
+    // The base ctor ran createMenus() before this subclass existed, so the
+    // app-menu hooks only dispatched the base no-ops then; run them now
+    // (shell contract: app menus between View and AI).
+    finalizeAppMenuHooks();
 
     wireCanvasUndo();
     connect(m_document, &ShowDocument::loaded, this, [this] { fullRefresh(); });
@@ -437,11 +473,11 @@ void ShowWindow::deleteSlide()
 void ShowWindow::insertApplicationMenus(QMenu *before)
 {
     QMenu *slideMenu = new QMenu(tr("Slide"), this);
-    slideMenu->addAction(tr("New slide"), this, [this] { addSlide(); });
-    slideMenu->addAction(tr("Duplicate slide"), this, [this] { duplicateSlide(); });
-    slideMenu->addAction(tr("Delete slide"), this, [this] { deleteSlide(); });
+    slideMenu->addAction(m_newSlideAction);
+    slideMenu->addAction(m_duplicateSlideAction);
+    slideMenu->addAction(m_deleteSlideAction);
     slideMenu->addSeparator();
-    slideMenu->addAction(tr("Start show"), this, [this] { startShow(); });
+    slideMenu->addAction(m_startShowAction);
     slideMenu->addSeparator();
     slideMenu->addAction(tr("Export PDF..."), this, [this] { exportPdf(); });
     menuBar()->insertMenu(before->menuAction(), slideMenu);

@@ -2,6 +2,7 @@
 #include "standard_actions.h"
 
 #include <QCoreApplication>
+#include <QIcon>
 #include <QKeySequence>
 #include <QObject>
 
@@ -19,11 +20,17 @@ QList<QAction *> StandardActions::all() const
 
 namespace {
 
+// Freedesktop theme icons (ADR-0115: icons via QIcon::fromTheme only). A
+// missing icon degrades to the action text, so every action still reads
+// honestly on a minimal icon theme.
 QAction *make(QObject *parent, const char *id, const QString &text,
-              const QKeySequence &shortcut = {})
+              const QKeySequence &shortcut = {}, const char *iconName = nullptr)
 {
     auto *action = new QAction(text, parent);
     action->setObjectName(QString::fromLatin1(id));
+    if (iconName != nullptr) {
+        action->setIcon(QIcon::fromTheme(QString::fromLatin1(iconName)));
+    }
     if (!shortcut.isEmpty()) {
         action->setShortcut(shortcut);
     }
@@ -51,32 +58,33 @@ StandardActions createStandardActions(QObject *parent)
     const QKeySequence ctrlMinus(QKeySequence::ZoomOut);
     const QKeySequence ctrl0(QStringLiteral("Ctrl+0"));
 
-    a.fileNew = make(parent, kFileNew, QObject::tr("&New"), ctrlN);
-    a.fileOpen = make(parent, kFileOpen, QObject::tr("&Open…"), ctrlO);
-    a.fileCloseWindow = make(parent, kFileCloseWindow, QObject::tr("&Close Window"), ctrlW);
-    a.fileSave = make(parent, kFileSave, QObject::tr("&Save"), ctrlS);
-    a.fileSaveAs = make(parent, kFileSaveAs, QObject::tr("Save &As…"), ctrlShiftS);
-    a.filePrint = make(parent, kFilePrint, QObject::tr("&Print…"), ctrlP);
+    a.fileNew = make(parent, kFileNew, QObject::tr("&New"), ctrlN, "document-new");
+    a.fileOpen = make(parent, kFileOpen, QObject::tr("&Open…"), ctrlO, "document-open");
+    a.fileCloseWindow = make(parent, kFileCloseWindow, QObject::tr("&Close Window"), ctrlW, "window-close");
+    a.fileSave = make(parent, kFileSave, QObject::tr("&Save"), ctrlS, "document-save");
+    a.fileSaveAs = make(parent, kFileSaveAs, QObject::tr("Save &As…"), ctrlShiftS, "document-save-as");
+    a.filePrint = make(parent, kFilePrint, QObject::tr("&Print…"), ctrlP, "document-print");
     a.filePrintPreview =
         make(parent, kFilePrintPreview, QObject::tr("Print Pre&view…"), ctrlShiftS);
-    a.fileQuit = make(parent, kFileQuit, QObject::tr("&Quit"), ctrlQ);
+    a.fileQuit = make(parent, kFileQuit, QObject::tr("&Quit"), ctrlQ, "application-exit");
 
-    a.editUndo = make(parent, kEditUndo, QObject::tr("&Undo"), QKeySequence::Undo);
-    a.editRedo = make(parent, kEditRedo, QObject::tr("&Redo"), QKeySequence::Redo);
-    a.editCut = make(parent, kEditCut, QObject::tr("Cu&t"), QKeySequence::Cut);
-    a.editCopy = make(parent, kEditCopy, QObject::tr("&Copy"), QKeySequence::Copy);
-    a.editPaste = make(parent, kEditPaste, QObject::tr("&Paste"), QKeySequence::Paste);
+    a.editUndo = make(parent, kEditUndo, QObject::tr("&Undo"), QKeySequence::Undo, "edit-undo");
+    a.editRedo = make(parent, kEditRedo, QObject::tr("&Redo"), QKeySequence::Redo, "edit-redo");
+    a.editCut = make(parent, kEditCut, QObject::tr("Cu&t"), QKeySequence::Cut, "edit-cut");
+    a.editCopy = make(parent, kEditCopy, QObject::tr("&Copy"), QKeySequence::Copy, "edit-copy");
+    a.editPaste = make(parent, kEditPaste, QObject::tr("&Paste"), QKeySequence::Paste, "edit-paste");
     a.editSelectAll =
-        make(parent, kEditSelectAll, QObject::tr("Select &All"), QKeySequence::SelectAll);
-    a.editFind = make(parent, kEditFind, QObject::tr("&Find…"), ctrlF);
-    a.editReplace = make(parent, kEditReplace, QObject::tr("Replace…"), ctrlH);
+        make(parent, kEditSelectAll, QObject::tr("Select &All"), QKeySequence::SelectAll,
+             "edit-select-all");
+    a.editFind = make(parent, kEditFind, QObject::tr("&Find…"), ctrlF, "edit-find");
+    a.editReplace = make(parent, kEditReplace, QObject::tr("Replace…"), ctrlH, "edit-find-replace");
     a.editFindNext = make(parent, kEditFindNext, QObject::tr("Find &Next"), f3);
     a.editFindPrevious =
         make(parent, kEditFindPrevious, QObject::tr("Find &Previous"), shiftF3);
 
-    a.viewZoomIn = make(parent, kViewZoomIn, QObject::tr("Zoom &In"), ctrlPlus);
-    a.viewZoomOut = make(parent, kViewZoomOut, QObject::tr("Zoom &Out"), ctrlMinus);
-    a.viewZoomReset = make(parent, kViewZoomReset, QObject::tr("&Reset Zoom"), ctrl0);
+    a.viewZoomIn = make(parent, kViewZoomIn, QObject::tr("Zoom &In"), ctrlPlus, "zoom-in");
+    a.viewZoomOut = make(parent, kViewZoomOut, QObject::tr("Zoom &Out"), ctrlMinus, "zoom-out");
+    a.viewZoomReset = make(parent, kViewZoomReset, QObject::tr("&Reset Zoom"), ctrl0, "zoom-original");
     a.viewShowMenuBar = make(parent, kViewShowMenuBar, QObject::tr("Show Menu &Bar"));
     a.viewShowMenuBar->setCheckable(true);
     a.viewShowMenuBar->setChecked(true);

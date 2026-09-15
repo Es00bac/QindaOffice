@@ -8,6 +8,7 @@
 
 class QMenu;
 class QTextEdit;
+class QToolBar;
 
 namespace QindaOffice::Core {
 class Document;
@@ -36,6 +37,20 @@ public:
     [[nodiscard]] QAction *action(const QString &objectName) const;
     void insertFileMenuActionsDeferred();
     [[nodiscard]] StandardActions *standardActions() { return &m_actions; }
+
+    // Runs the two app-menu hooks (insertFileMenuActions + the real
+    // insertApplicationMenus against the AI anchor). The base ctor can only
+    // dispatch the no-op base versions (the subclass does not exist yet),
+    // so every subclass ctor must call this once its own state exists;
+    // showEvent also calls it as a safety net. Idempotent.
+    void finalizeAppMenuHooks();
+
+    // The suite-standard icon strip (New/Open/Save, Undo/Redo/Cut/Copy/
+    // Paste, Find, Zoom). Idempotent: the first call creates it, later
+    // calls return the same toolbar so apps can append their own actions.
+    // Buttons mirror their action's real enabled state - an app that has
+    // not wired a command shows it disabled, never hidden.
+    [[nodiscard]] QToolBar *addMainToolBar();
 
     // The window takes ownership. The M1 stub hosts PlainTextDocument;
     // other document types show a disabled editor placeholder until their
@@ -112,6 +127,8 @@ private:
     [[nodiscard]] bool ensureWritableTarget(const QString &path);
 
     GlobalMenuExport *m_menuExport = nullptr;
+    QToolBar *m_mainToolBar = nullptr;
+    bool m_appMenusFinalized = false;
     bool m_menuExportStarted = false;
     AppServices *m_services = nullptr;
     Core::Document *m_document = nullptr;

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_window.h"
 
+#include "find_replace_bar.h"
+#include "format_controller.h"
 #include "page_text_accessibility.h"
 #include "page_text_view.h"
 #include "pdf_exporter.h"
@@ -28,10 +30,10 @@
 #include <QDir>
 #include <QInputDialog>
 #include <QStandardPaths>
+#include <QToolBar>
+#include <QVBoxLayout>
 #include <QPrinter>
 #include <QTextBlock>
-#include <QTextList>
-#include <QTextTable>
 #include <QtWidgets/private/qwidgettextcontrol_p.h>
 #include <QTextCursor>
 
@@ -99,7 +101,32 @@ WriteWindow::WriteWindow()
     , m_spell(new SpellChecker(m_document->textDocument()))
 {
     installPageTextAccessibility();
-    setDocumentHost(m_view, m_document);
+
+    // Central stack: the page view above the find/replace bar (hidden
+    // until Ctrl+F/Ctrl+H). The bar is part of the document host so it
+    // never overlaps the page area.
+    auto *central = new QWidget(this);
+    auto *stack = new QVBoxLayout(central);
+    stack->setContentsMargins(0, 0, 0, 0);
+    stack->setSpacing(0);
+    m_findBar = new FindReplaceBar(m_view, m_document, central);
+    m_findBar->hide();
+    stack->addWidget(m_view, 1);
+    stack->addWidget(m_findBar, 0);
+    setDocumentHost(central, m_document);
+
+    // Format commands live in the controller; the window adds its toolbar
+    // below the shell's main toolbar and reuses the same actions in menus.
+    m_format = new FormatController(m_view, m_document, this);
+    QToolBar *mainToolBar = addMainToolBar();
+    Q_UNUSED(mainToolBar);
+    addToolBarBreak(Qt::TopToolBarArea);
+    addToolBar(Qt::TopToolBarArea, m_format->toolBar());
+
+    wireEditingActions();
+
+    connect(m_findBar, &FindReplaceBar::message, this,
+            [this](const QString &text) { statusBar()->showMessage(text, 5000); });
 
     // Print and print preview share the PDF exporter's pagination loop, so
     // paper matches the screen by construction (plan 6.1).
@@ -136,10 +163,67 @@ WriteWindow::WriteWindow()
             &QAction::setChecked);
 
     m_inline = new Ai::InlineActionFlow(m_catalog, context, applier, this);
+
+    // App menus (Format/Insert/Page) need the fully constructed window -
+    // the base ctor's hook dispatch only reaches the base no-op.
+    finalizeAppMenuHooks();
 }
 
 WriteWindow::~WriteWindow() = default;
 
+void WriteWindow::wireEditingActions()
+{
+    // The M1 stub wired these to a QTextEdit; the real engine is the
+    // QWidgetTextControl behind the page view. Undo/cut/copy follow the
+    // control's availability signals instead of staying always-on.
+    QWidgetTextControl *control = m_view->control();
+    connect(m_actions.editUndo, &QAction::triggered, control, &QWidgetTextControl::undo);
+    connect(m_actions.editRedo, &QAction::triggered, control, &QWidgetTextControl::redo);
+    connect(m_actions.editCut, &QAction::triggered, control, &QWidgetTextControl::cut);
+    connect(m_actions.editCopy, &QAction::triggered, control, &QWidgetTextControl::copy);
+    connect(m_actions.editPaste, &QAction::triggered, control,
+            [control] { control->paste(); });
+    connect(m_actions.editSelectAll, &QAction::triggered, control,
+            &QWidgetTextControl::selectAll);
+
+    m_actions.editUndo->setEnabled(false);
+    m_actions.editRedo->setEnabled(false);
+    m_actions.editCut->setEnabled(false);
+    m_actions.editCopy->setEnabled(false);
+    m_actions.editPaste->setEnabled(true);
+    m_actions.editSelectAll->setEnabled(true);
+    connect(control, &QWidgetTextControl::undoAvailable, m_actions.editUndo,
+            &QAction::setEnabled);
+    connect(control, &QWidgetTextControl::redoAvailable, m_actions.editRedo,
+            &QAction::setEnabled);
+    connect(control, &QWidgetTextControl::copyAvailable, m_actions.editCut,
+            &QAction::setEnabled);
+    connect(control, &QWidgetTextControl::copyAvailable, m_actions.editCopy,
+            &QAction::setEnabled);
+
+    m_actions.editFind->setEnabled(true);
+    m_actions.editReplace->setEnabled(true);
+    m_actions.editFindNext->setEnabled(true);
+    m_actions.editFindPrevious->setEnabled(true);
+    connect(m_actions.editFind, &QAction::triggered, m_findBar,
+            &FindReplaceBar::openFind);
+    connect(m_actions.editReplace, &QAction::triggered, m_findBar,
+            &FindReplaceBar::openReplace);
+    connect(m_actions.editFindNext, &QAction::triggered, m_findBar,
+            &FindReplaceBar::findNext);
+    connect(m_actions.editFindPrevious, &QAction::triggered, m_findBar,
+            &FindReplaceBar::findPrevious);
+
+    m_actions.viewZoomIn->setEnabled(true);
+    m_actions.viewZoomOut->setEnabled(true);
+    m_actions.viewZoomReset->setEnabled(true);
+    connect(m_actions.viewZoomIn, &QAction::triggered, this,
+            [this] { m_view->setZoom(m_view->zoom() * 1.1); });
+    connect(m_actions.viewZoomOut, &QAction::triggered, this,
+            [this] { m_view->setZoom(m_view->zoom() / 1.1); });
+    connect(m_actions.viewZoomReset, &QAction::triggered, this,
+            [this] { m_view->setZoom(1.0); });
+}
 
 void WriteWindow::exportPdf()
 {
@@ -175,19 +259,6 @@ void WriteWindow::applyStyle(int styleId)
         block = block.next();
     }
     cursor.endEditBlock();
-    m_document->setDirty(true);
-}
-
-void WriteWindow::applyCharFormat(const QTextCharFormat &format)
-{
-    QTextCursor cursor = m_view->control()->textCursor();
-    if (cursor.hasSelection()) {
-        cursor.mergeCharFormat(format);
-    } else {
-        QTextCharFormat merged = m_view->control()->currentCharFormat();
-        merged.merge(format);
-        m_view->control()->setCurrentCharFormat(merged);
-    }
     m_document->setDirty(true);
 }
 
@@ -261,6 +332,7 @@ void WriteWindow::insertFileMenuActions(QMenu *fileMenu)
 void WriteWindow::insertApplicationMenus(QMenu *before)
 {
     auto *formatMenu = new QMenu(tr("F&ormat"), this);
+    formatMenu->setObjectName(QStringLiteral("formatMenu"));
     menuBar()->insertMenu(before->menuAction(), formatMenu);
 
     auto *styleMenu = new QMenu(tr("&Style"), this);
@@ -272,100 +344,12 @@ void WriteWindow::insertApplicationMenus(QMenu *before)
         connect(action, &QAction::triggered, this, [this, id] { applyStyle(id); });
     }
     formatMenu->addSeparator();
-    QAction *bold = formatMenu->addAction(tr("&Bold"));
-    bold->setCheckable(true);
-    connect(bold, &QAction::triggered, this, [this](bool on) {
-        QTextCharFormat format;
-        format.setFontWeight(on ? QFont::Bold : QFont::Normal);
-        applyCharFormat(format);
-    });
-    QAction *italic = formatMenu->addAction(tr("&Italic"));
-    italic->setCheckable(true);
-    connect(italic, &QAction::triggered, this, [this](bool on) {
-        QTextCharFormat format;
-        format.setFontItalic(on);
-        applyCharFormat(format);
-    });
-    QAction *underline = formatMenu->addAction(tr("&Underline"));
-    underline->setCheckable(true);
-    connect(underline, &QAction::triggered, this, [this](bool on) {
-        QTextCharFormat format;
-        format.setFontUnderline(on);
-        applyCharFormat(format);
-    });
+    m_format->populateFormatMenu(formatMenu);
 
     auto *insertMenu = new QMenu(tr("&Insert"), this);
+    insertMenu->setObjectName(QStringLiteral("insertMenu"));
     menuBar()->insertMenu(before->menuAction(), insertMenu);
-    QAction *pageBreak = insertMenu->addAction(tr("&Page Break"));
-    connect(pageBreak, &QAction::triggered, this, [this] {
-        QTextCursor cursor = m_view->control()->textCursor();
-        QTextBlockFormat format;
-        format.setPageBreakPolicy(QTextFormat::PageBreak_AlwaysBefore);
-        cursor.insertBlock(format);
-        m_document->setDirty(true);
-    });
-    QAction *table = insertMenu->addAction(tr("&Table…"));
-    connect(table, &QAction::triggered, this, [this] {
-        bool ok = false;
-        const int rows = QInputDialog::getInt(this, tr("Insert Table"), tr("Rows"), 3, 1, 200, 1, &ok);
-        if (!ok) {
-            return;
-        }
-        const int cols = QInputDialog::getInt(this, tr("Insert Table"), tr("Columns"), 3, 1, 20, 1, &ok);
-        if (!ok) {
-            return;
-        }
-        QTextCursor cursor = m_view->control()->textCursor();
-        QTextTableFormat format;
-        format.setBorder(1);
-        format.setCellSpacing(2);
-        format.setCellPadding(4);
-        format.setWidth(QTextLength(QTextLength::PercentageLength, 100));
-        cursor.insertTable(rows, cols, format);
-        m_document->setDirty(true);
-    });
-    QAction *image = insertMenu->addAction(tr("&Image…"));
-    connect(image, &QAction::triggered, this, [this] {
-        const QString path = QFileDialog::getOpenFileName(
-            this, tr("Insert Image"), QString(),
-            tr("Images (*.png *.jpg *.jpeg *.bmp *.gif *.svg);;All files (*)"));
-        if (path.isEmpty()) {
-            return;
-        }
-        QImage loaded(path);
-        if (loaded.isNull()) {
-            statusBar()->showMessage(tr("Could not load image %1").arg(path), 6000);
-            return;
-        }
-        // Scale to the content width on insert (plan 6.1).
-        const qreal contentWidth = m_document->pageSize().width() - 2 * m_document->pageMargin();
-        if (loaded.width() > contentWidth) {
-            loaded = loaded.scaledToWidth(int(contentWidth), Qt::SmoothTransformation);
-        }
-        QTextCursor cursor = m_view->control()->textCursor();
-        QTextImageFormat format;
-        format.setName(path);
-        format.setWidth(loaded.width());
-        format.setHeight(loaded.height());
-        cursor.insertImage(format);
-        m_document->setDirty(true);
-    });
-    QAction *bullets = insertMenu->addAction(tr("&Bullet List"));
-    connect(bullets, &QAction::triggered, this, [this] {
-        QTextCursor cursor = m_view->control()->textCursor();
-        QTextListFormat format;
-        format.setStyle(QTextListFormat::ListDisc);
-        cursor.createList(format);
-        m_document->setDirty(true);
-    });
-    QAction *numbered = insertMenu->addAction(tr("&Numbered List"));
-    connect(numbered, &QAction::triggered, this, [this] {
-        QTextCursor cursor = m_view->control()->textCursor();
-        QTextListFormat format;
-        format.setStyle(QTextListFormat::ListDecimal);
-        cursor.createList(format);
-        m_document->setDirty(true);
-    });
+    m_format->populateInsertMenu(insertMenu);
 
     auto *aiMenu = new QMenu(tr("&AI"), this);
     menuBar()->insertMenu(before->menuAction(), aiMenu);
@@ -377,6 +361,7 @@ void WriteWindow::insertApplicationMenus(QMenu *before)
     }
 
     auto *pageMenu = new QMenu(tr("&Page"), this);
+    pageMenu->setObjectName(QStringLiteral("pageMenu"));
     menuBar()->insertMenu(before->menuAction(), pageMenu);
     QAction *pageSetup = pageMenu->addAction(tr("&Page Setup…"));
     connect(pageSetup, &QAction::triggered, this, [this] {

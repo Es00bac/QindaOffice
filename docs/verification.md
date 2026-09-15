@@ -56,6 +56,27 @@ Added per milestone in the milestone commit (formula tables, xlsx
 round-trips, fodp→pptx conversion, provider smoke tests, pen-input checks,
 presenter-view-on-second-screen, reduced-motion, packaging).
 
+### M11 UI completeness (automated: `tst_write_ui`)
+
+- Main + formatting toolbars exist with persistent named actions
+  (objectNames from the shell's `ActionId` table); Format/Insert menus
+  exist after `finalizeAppMenuHooks()` and share the same action objects.
+- Bold/italic/underline/strikethrough toggle and re-read from the cursor;
+  font family/size combos apply and sync; alignment, bullet/numbered
+  lists (toggle + convert), indent clamp at 0.
+- Insert Table (2x3 bordered) and Insert Columns (1xN borderless) land as
+  real `QTextTable`s; find wraps and reports, replace-all counts.
+- Edit actions follow control availability; a pristine document has zero
+  undo steps (Qt `setPageSize` undo quirk cleared); zoom actions move the
+  view; the paper palette stays white-on-dark under any theme.
+
+### M11 on-desktop checklist (interactive)
+
+- [ ] Under the QindaQt dark theme a .docx opens as a white page with dark
+      text (no "white boxes on dark"), matching PDF export.
+- [ ] Toolbar icons resolve from the Breeze theme (offscreen runs show the
+      text fallback by design); `Ctrl+F` opens the find bar, Esc closes it.
+
 ### M1 additions (automated)
 
 - `tst_single_instance` — two helper processes over a private session bus:

@@ -18,7 +18,10 @@
 #include <QStatusBar>
 #include <QTabBar>
 #include <QVBoxLayout>
+#include <QIcon>
 #include <QToolBar>
+
+#include "standard_actions.h"
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -86,9 +89,63 @@ CalcWindow::CalcWindow()
         }
     });
     rebuildSheetTabs();
+
+    createCalcActions();
+    QToolBar *mainToolBar = addMainToolBar();
+    if (m_insertChartAction != nullptr) {
+        mainToolBar->addSeparator();
+        mainToolBar->addAction(m_insertChartAction);
+    }
+    mainToolBar->addAction(m_insertSheetAction);
+    mainToolBar->addAction(m_thousandsAction);
+
+    // App menus (Insert/Sheet/Format) need the fully constructed window.
+    finalizeAppMenuHooks();
 }
 
 CalcWindow::~CalcWindow() = default;
+
+void CalcWindow::createCalcActions()
+{
+    // Persistent named actions (action discipline, AGENTS.md rule 5) shared
+    // by the menus and the main toolbar.
+    m_insertChartAction = new QAction(QIcon::fromTheme(QStringLiteral("insert-chart")),
+                                      tr("&Chart…"), this);
+    m_insertChartAction->setObjectName(
+        QString::fromLatin1(Shell::ActionId::kInsertChart));
+    connect(m_insertChartAction, &QAction::triggered, this, [this] { insertChart(); });
+#ifndef QQO_WITH_CHARTS
+    m_insertChartAction->setEnabled(false);
+#endif
+
+    m_insertSheetAction = new QAction(QIcon::fromTheme(QStringLiteral("list-add")),
+                                      tr("&Insert Sheet"), this);
+    m_insertSheetAction->setObjectName(
+        QString::fromLatin1(Shell::ActionId::kInsertSheet));
+    connect(m_insertSheetAction, &QAction::triggered, this, [this] {
+        Workbook *wb = m_document->workbook();
+        wb->addSheet(tr("Sheet%1").arg(wb->sheetCount() + 1));
+        rebuildSheetTabs();
+        emit m_view->sheetCountChanged();
+    });
+
+    m_thousandsAction = new QAction(tr("Number format: #,##0.00"), this);
+    m_thousandsAction->setObjectName(QStringLiteral("calcThousandsFormatAction"));
+    connect(m_thousandsAction, &QAction::triggered, this, [this] {
+        // v1: applies to the cursor cell only.
+        Workbook *wb = m_document->workbook();
+        Sheet &sheet = wb->sheetAt(m_document->activeSheet());
+        const CellAddr addr = m_view->cursorCell();
+        CellStyle style = [wb, &sheet, addr] {
+            const qint32 id = sheet.styleIdAt(addr);
+            return id != 0 && wb->style(id) != nullptr ? *wb->style(id) : CellStyle{};
+        }();
+        style.numberFormat = QStringLiteral("#,##0.00");
+        sheet.setStyleIdAt(addr, wb->addStyle(style));
+        m_document->setDirty(true);
+        m_view->viewport()->update();
+    });
+}
 
 void CalcWindow::loadWorkbookPath(const QString &path)
 {
@@ -197,35 +254,14 @@ void CalcWindow::insertApplicationMenus(QMenu *before)
 #ifdef QQO_WITH_CHARTS
     auto *insertMenu = new QMenu(tr("&Insert"), this);
     menuBar()->insertMenu(before->menuAction(), insertMenu);
-    QAction *chart = insertMenu->addAction(tr("&Chart…"));
-    connect(chart, &QAction::triggered, this, [this] { insertChart(); });
+    insertMenu->addAction(m_insertChartAction);
 #endif
     auto *sheetMenu = new QMenu(tr("&Sheet"), this);
     menuBar()->insertMenu(before->menuAction(), sheetMenu);
-    QAction *insertSheet = sheetMenu->addAction(tr("&Insert Sheet"));
-    connect(insertSheet, &QAction::triggered, this, [this] {
-        Workbook *wb = m_document->workbook();
-        wb->addSheet(tr("Sheet%1").arg(wb->sheetCount() + 1));
-        rebuildSheetTabs();
-        emit m_view->sheetCountChanged();
-    });
+    sheetMenu->addAction(m_insertSheetAction);
     auto *formatMenu = new QMenu(tr("F&ormat"), this);
     menuBar()->insertMenu(before->menuAction(), formatMenu);
-    QAction *thousands = formatMenu->addAction(tr("Number format: #,##0.00"));
-    connect(thousands, &QAction::triggered, this, [this] {
-        // v1: applies to the cursor cell only.
-        Workbook *wb = m_document->workbook();
-        Sheet &sheet = wb->sheetAt(m_document->activeSheet());
-        const CellAddr addr = m_view->cursorCell();
-        CellStyle style = [wb, &sheet, addr] {
-            const qint32 id = sheet.styleIdAt(addr);
-            return id != 0 && wb->style(id) != nullptr ? *wb->style(id) : CellStyle{};
-        }();
-        style.numberFormat = QStringLiteral("#,##0.00");
-        sheet.setStyleIdAt(addr, wb->addStyle(style));
-        m_document->setDirty(true);
-        m_view->viewport()->update();
-    });
+    formatMenu->addAction(m_thousandsAction);
 }
 
 QString CalcWindow::filterString() const

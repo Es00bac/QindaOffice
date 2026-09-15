@@ -2,9 +2,11 @@
 #pragma once
 
 // The QindaWrite window: shared document frame hosting the PageTextView,
-// with the Format (styles, character formats), Insert (page break) and
-// Page Setup app menus (plan section 6.1 v1 scope; full format/insert
-// richness lands with M5).
+// the main toolbar (shell) plus the formatting toolbar and find/replace
+// bar (M11 UI completeness), with the Format (styles + character/paragraph
+// formats), Insert, Page Setup and AI app menus. All format commands are
+// persistent actions owned by the FormatController and shared between
+// menus and toolbar (action discipline, AGENTS.md rule 5).
 
 #include "document_window.h"
 
@@ -23,6 +25,8 @@ class InlineActionFlow;
 class ModelCatalog;
 }
 
+class FindReplaceBar;
+class FormatController;
 class PageTextView;
 class SpellChecker;
 class WriteDocument;
@@ -35,6 +39,8 @@ public:
 
     [[nodiscard]] WriteDocument *writeDocument() const { return m_document; }
     [[nodiscard]] PageTextView *pageView() const { return m_view; }
+    [[nodiscard]] FormatController *formatController() const { return m_format; }
+    [[nodiscard]] FindReplaceBar *findReplaceBar() const { return m_findBar; }
 
     void exportPdf();
 
@@ -45,14 +51,16 @@ protected:
     QString saveFilterString() const override;
 
 private:
+    void wireEditingActions();
     void applyStyle(int styleId);
-    void applyCharFormat(const QTextCharFormat &format);
 
     void addSpellingActions(QMenu *menu, const QPointF &docPos);
     [[nodiscard]] Shell::PrintRenderCallback printRenderCallback() const;
 
     WriteDocument *m_document;
     PageTextView *m_view;
+    FormatController *m_format;
+    FindReplaceBar *m_findBar;
     SpellChecker *m_spell = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;
     Ai::AssistantPanel *m_panel = nullptr;

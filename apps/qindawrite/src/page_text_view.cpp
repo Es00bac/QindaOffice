@@ -10,6 +10,7 @@
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPalette>
 #include <QScrollBar>
 #include <QTextDocument>
 #include <QWheelEvent>
@@ -30,6 +31,22 @@ PageTextView::PageTextView(WriteDocument *document, QWidget *parent)
 
     m_control->setTextInteractionFlags(Qt::TextEditorInteraction);
     m_control->setFocus(true);
+
+    // AGENT-NOTE (ADR-0115): the qindaqt platform theme owns the window
+    // chrome, but a document page is *paper*. Every word processor renders
+    // paper light with dark default text even under a dark desktop theme,
+    // and the print/PDF path does exactly that. Without this pin, a dark
+    // theme turns the page dark and only imported blocks with explicit
+    // backgrounds stay light (the "white boxes on dark" bug). The canvas
+    // between pages still follows the theme.
+    QPalette paper = viewport()->palette();
+    paper.setColor(QPalette::Base, Qt::white);
+    paper.setColor(QPalette::Window, Qt::white);
+    paper.setColor(QPalette::Text, Qt::black);
+    paper.setColor(QPalette::WindowText, Qt::black);
+    paper.setColor(QPalette::HighlightedText, Qt::white);
+    viewport()->setPalette(paper);
+    m_control->setPalette(paper);
 
     connect(m_control, &QWidgetTextControl::updateRequest, this, [this](const QRectF &) {
         viewport()->update();
@@ -105,8 +122,8 @@ void PageTextView::paintPage(QPainter &painter, int index, const QRect &clip)
     if (!page.intersects(QRectF(clip))) {
         return;
     }
-    // Paper: palette base with a thin shadow frame.
-    painter.fillRect(page, palette().base().color());
+    // Paper: the pinned paper base (see the ctor note), theme border.
+    painter.fillRect(page, viewport()->palette().base().color());
     painter.setPen(palette().dark().color());
     painter.setBrush(Qt::NoBrush);
     painter.drawRect(page.adjusted(0, 0, -1, -1));
