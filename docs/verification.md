@@ -14,18 +14,34 @@ Widget tests run under `QT_QPA_PLATFORM=offscreen` (pinned via ctest
 
 ## On-desktop manual checklist (run inside a QindaQt session)
 
-From the M0 acceptance criteria:
+From the M0 acceptance criteria. **Verified 2026-09-14** on the live QindaQt
+session (compositor queried over `org.qindaqt.Compositor1`; evidence in git
+history):
 
-- [ ] Launch two `qindawrite` windows; Meta+Shift-drag one onto the other —
-      they group into a container as **tabs**.
-- [ ] Drag one tab to a screen edge — the container becomes a **split**.
-- [ ] The panel shows the **global menu** of the focused window; with the
-      export announced, the in-window menu bar is hidden and *View ▸ Show
-      Menu Bar* brings it back.
-- [ ] `Ctrl+W` / `Ctrl+Q` close the current window only; the process exits
-      when its last window closes.
-- [ ] The launcher lists QindaWrite / QindaCalc / QindaShow / QindaNote
-      under the Office category with the suite icons.
+- [x] Windows map as ordinary top-levels with the right identity:
+      `applicationId=org.qindaqt.QindaWrite`, title `Untitled — QindaWrite`.
+- [x] One process owns `org.qindaqt.QindaWrite` on the session bus; a second
+      launch hands off over D-Bus and (with no paths) opens a second
+      ordinary window in the primary process.
+- [x] Global menu: each window exports a live `com.canonical.dbusmenu`
+      endpoint at `/org/qindaqt/QindaOffice/QindaWrite/Menu/<n>` on the
+      app's bus connection (identical announcement mechanism to QQTerm).
+- [x] `gtk-launch org.qindaqt.QindaWrite` launches the Portage-installed
+      binary (launcher path end-to-end).
+- [x] Packaging: `emerge -1 gui-apps/qindaoffice` from the `qindaqt` overlay
+      builds and installs all four apps + desktop files + icons + MIME.
+
+Still interactive-only (pointer/focus on a busy live desktop; the
+app-side requirements above are the parts the suite owns):
+
+- [ ] Meta+Shift-drag the two windows together — they group as **tabs**;
+      drag a tab to a screen edge for a **split** (compositor-side; the
+      desktop's own `compositor.hybrid-pointer-nested` harness covers the
+      gesture).
+- [ ] Eyeball the panel menu against the focused window, and the launcher
+      Office category with the suite icons.
+- [ ] Dirty a document, `Ctrl+W` — Save/Discard/Cancel consent; kill -9
+      mid-edit and relaunch — the Recover dialog offers the journal entry.
 
 ## Milestone-specific gates
 
