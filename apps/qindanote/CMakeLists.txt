@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 add_executable(qindanote
     main.cpp
+    src/note_find_bar.cpp
+    src/note_find_bar.h
     src/note_page_render.cpp
     src/note_page_render.h
     src/note_page_view.cpp

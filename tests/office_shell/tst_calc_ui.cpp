@@ -22,6 +22,7 @@
 #include <QLineEdit>
 #include <QToolBar>
 #include <QToolButton>
+#include <QUndoStack>
 #include <QtTest>
 
 using namespace QindaOffice::Apps::QindaCalc;
@@ -38,6 +39,7 @@ private slots:
     void findBarSelectsMatchesWithWrap();
     void cursorOutlineLandsOnTheCursorCell();
     void formatStripWrapsInsteadOfHidingCommands();
+    void replaceEditsInputsAndUndoesInOneStep();
 };
 
 namespace ActionId = ::QindaOffice::Shell::ActionId;
@@ -322,6 +324,49 @@ void CalcUiTest::formatStripWrapsInsteadOfHidingCommands()
         // Inside the strip, not clipped off its right edge.
         QVERIFY2(button->geometry().right() <= bar->strip()->width(), qPrintable(id));
     }
+}
+
+// Ctrl+H was a dead menu entry: the find bar had no replace at all.
+void CalcUiTest::replaceEditsInputsAndUndoesInOneStep()
+{
+    CalcWindow window;
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    SpreadsheetDocument *doc = window.spreadsheetDocument();
+    doc->applyInput({0, 0}, QStringLiteral("alpha one"));
+    doc->applyInput({1, 0}, QStringLiteral("alpha two"));
+    doc->applyInput({2, 0}, QStringLiteral("=1+1"));
+    const int stepsBefore = doc->undoStack()->count();
+
+    QAction *replace = window.action(QString::fromLatin1(ActionId::kEditReplace));
+    QVERIFY(replace != nullptr);
+    QVERIFY2(replace->isEnabled(), "Edit > Replace must be reachable");
+    replace->trigger(); // opens the bar with the replace row revealed
+
+    auto *findEdit = window.findChild<QLineEdit *>(QStringLiteral("calcFindEdit"));
+    auto *replaceEdit = window.findChild<QLineEdit *>(QStringLiteral("calcReplaceEdit"));
+    auto *all = window.findChild<QToolButton *>(QStringLiteral("calcReplaceAllButton"));
+    QVERIFY(findEdit != nullptr);
+    QVERIFY(replaceEdit != nullptr);
+    QVERIFY(all != nullptr);
+    QVERIFY2(replaceEdit->isVisible(), "Ctrl+H reveals the replace row");
+
+    findEdit->setText(QStringLiteral("alpha"));
+    replaceEdit->setText(QStringLiteral("beta"));
+    all->click();
+
+    QCOMPARE(doc->inputTextAt({0, 0}), QStringLiteral("beta one"));
+    QCOMPARE(doc->inputTextAt({1, 0}), QStringLiteral("beta two"));
+    QCOMPARE(toText(doc->workbook()->cellValue(0, 2, 0)), QStringLiteral("2")); // untouched
+    // One sweep is one undo step, however many cells it touched.
+    QCOMPARE(doc->undoStack()->count(), stepsBefore + 1);
+    doc->undoStack()->undo();
+    QCOMPARE(doc->inputTextAt({0, 0}), QStringLiteral("alpha one"));
+    QCOMPARE(doc->inputTextAt({1, 0}), QStringLiteral("alpha two"));
+
+    // Find-only mode keeps the replace row out of the way.
+    window.action(QString::fromLatin1(ActionId::kEditFind))->trigger();
+    QVERIFY(!replaceEdit->isVisible());
 }
 
 int main(int argc, char *argv[])

@@ -17,6 +17,8 @@
 #include <QGuiApplication>
 #include <QMenu>
 #include <QToolBar>
+#include <QToolButton>
+#include <QLineEdit>
 
 #include "wrapping_tool_bar.h"
 #include <QUndoStack>
@@ -38,6 +40,7 @@ private slots:
     void shapeClipboardRoundTrips();
     void insertActionsLandShapes();
     void editingActionsFollowSelection();
+    void findSelectsTheMatchingSlide();
 };
 
 namespace ActionId = ::QindaOffice::Shell::ActionId;
@@ -186,6 +189,45 @@ void ShowUiTest::editingActionsFollowSelection()
 
     canvas->selectAllShapes();
     QCOMPARE(canvas->scene()->selectedItems().size(), base + 1);
+}
+
+// Edit > Find/Find Next/Find Previous were three dead menu entries: the deck
+// had no search at all. The bar searches titles, shape text and notes.
+void ShowUiTest::findSelectsTheMatchingSlide()
+{
+    ShowWindow window;
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    ShowModel::Presentation *deck = window.showDocument()->presentation();
+    deck->slides.clear();
+    QList<ShowModel::Slide> slides;
+    for (const char *title : {"Opening", "Budget review", "Closing"}) {
+        ShowModel::Slide slide;
+        slide.id = QString::fromLatin1(title);
+        slide.title = QString::fromLatin1(title);
+        slides.append(slide);
+    }
+    slides[2].notes = QStringLiteral("mention the budget again");
+    // Through the public path, so the sorter that owns slide selection is
+    // rebuilt; poking deck->slides directly leaves the view behind.
+    window.appendSlides(slides);
+    QCOMPARE(deck->slides.size(), 3);
+
+    QAction *find = window.action(QString::fromLatin1(ActionId::kEditFind));
+    QVERIFY(find != nullptr);
+    QVERIFY2(find->isEnabled(), "Edit > Find must be reachable");
+    find->trigger();
+    auto *findEdit = window.findChild<QLineEdit *>(QStringLiteral("showFindEdit"));
+    QVERIFY(findEdit != nullptr);
+    QVERIFY(findEdit->isVisible());
+
+    findEdit->setText(QStringLiteral("budget"));
+    auto *next = window.findChild<QToolButton *>(QStringLiteral("showFindNextButton"));
+    QVERIFY(next != nullptr);
+    next->click();
+    QCOMPARE(window.currentSlideRow(), 1); // "Budget review"
+    next->click();
+    QCOMPARE(window.currentSlideRow(), 2); // matched in the speaker notes
 }
 
 int main(int argc, char *argv[])

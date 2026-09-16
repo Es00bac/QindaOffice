@@ -12,11 +12,13 @@ add_executable(qindacalc
     src/calc_undo.cpp
     src/calc_undo.h
     src/calc_window.cpp
+    src/calc_window_commands.cpp
     src/chart_dialog.cpp
     src/calc_window.h
     src/spreadsheet_document.cpp
     src/spreadsheet_document.h
     src/spreadsheet_view.cpp
+    src/spreadsheet_view_paint.cpp
     src/spreadsheet_view.h
 )
 target_link_libraries(qindacalc PRIVATE office_shell calc_io)

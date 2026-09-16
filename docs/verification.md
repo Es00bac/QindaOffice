@@ -205,6 +205,31 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M19 the rest of the standard commands
+
+Automated by `tst_calc_ui`, `tst_show_ui` and `tst_qindanote`. Print,
+Print Preview, View ▸ Zoom and Edit ▸ Find/Replace were created disabled by
+`createStandardActions()` and wired only in QindaWrite, so in the other three
+apps they were menu entries the app did not implement.
+
+- QindaShow prints through the same pure `renderSlide` the PDF export uses;
+  QindaNote through `note_page_render.cpp`, a page renderer with no widget or
+  palette in it, covering the whole notebook (pages never opened are read
+  from disk first); QindaCalc paginates its used range by rows, never
+  splitting a row across pages.
+- Zoom works in all four and is presentation state only — it never touches
+  stored column widths, row heights or the slide model, so it cannot dirty a
+  document. QindaCalc's grid geometry and hit-testing both go through
+  `colWidthPx()`/`rowHeightPx()`, which is what keeps painting and clicking
+  agreeing at any zoom.
+- QindaCalc's find bar gained Replace and Replace All. Replace edits the
+  cell INPUT, never the formatted display text, and a whole Replace All
+  sweep is ONE undo step however many cells it touched.
+- QindaShow's find searches slide titles, shape text and speaker notes and
+  selects the matching slide. QindaNote's searches page titles and typed
+  text blocks, reading pages that were never opened first — a search that
+  skipped them would report "not found" for text that is really there.
+
 ### M18 toolbar reachability
 
 Automated by `tst_calc_ui` and `tst_write_ui`. Rationale in D-013: a command

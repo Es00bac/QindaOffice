@@ -23,9 +23,11 @@ add_executable(tst_calc_window tst_calc_window.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_recovery.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_undo.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_window.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_window_commands.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/chart_dialog.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_document.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_view.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_view_paint.cpp
 )
 target_link_libraries(tst_calc_window PRIVATE office_shell calc_io Qt6::Test)
 if(QQO_WITH_CHARTS)
@@ -44,9 +46,11 @@ add_executable(tst_calc_ui tst_calc_ui.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_recovery.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_undo.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_window.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_window_commands.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/chart_dialog.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_document.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_view.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_view_paint.cpp
 )
 target_link_libraries(tst_calc_ui PRIVATE office_shell calc_io Qt6::Test)
 if(QQO_WITH_CHARTS)

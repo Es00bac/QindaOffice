@@ -17,6 +17,7 @@ class QTreeWidget;
 namespace QindaOffice::Apps::Notes {
 
 class NotePageView;
+class NoteFindBar;
 
 class NoteDocument final : public Core::Document {
     Q_OBJECT
@@ -68,6 +69,9 @@ private:
     // notebook's QVectors reallocate on every append/load and a stale
     // pointer was use-after-free (and once wrote garbage-named page files).
     void setCurrentIds(const QString &sectionId, const QString &pageId);
+    // Selects a page in the navigator by id, which drives the existing
+    // currentItemChanged path (load, persist, show). Used by the find bar.
+    void selectPage(const QString &sectionId, const QString &pageId);
     // Paginating renderer shared by Print and Print Preview: one notebook
     // page per sheet of paper, through the same pure renderer the screen
     // agrees with.
@@ -76,6 +80,7 @@ private:
     NoteDocument *m_document;
     NotePageView *m_view;
     QTreeWidget *m_navigator;
+    NoteFindBar *m_findBar = nullptr;
     QString m_currentSectionId;
     QString m_currentPageId;
 };

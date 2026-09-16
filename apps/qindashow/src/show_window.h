@@ -31,6 +31,7 @@ class ModelCatalog;
 namespace QindaOffice::Apps::Show {
 
 class SlideCanvas;
+class ShowFindBar;
 
 class ShowToolbox;
 
@@ -78,6 +79,7 @@ private:
     // paper and PDF agree by construction (plan 5.2).
     [[nodiscard]] Shell::PrintRenderCallback printRenderCallback() const;
 
+    ShowFindBar *m_findBar = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;
     Ai::AssistantPanel *m_panel = nullptr;
     Ai::InlineActionFlow *m_inline = nullptr;

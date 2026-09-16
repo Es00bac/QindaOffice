@@ -7,10 +7,12 @@ add_executable(tst_qindashow tst_qindashow.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_clipboard.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_commands.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_document.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_find_bar.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_toolbox.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_window.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_window_actions.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas_input.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_player.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/text_bridge.cpp
 )
@@ -31,10 +33,12 @@ add_executable(tst_show_ui tst_show_ui.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_clipboard.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_commands.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_document.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_find_bar.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_toolbox.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_window.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_window_actions.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas_input.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_player.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindashow/src/text_bridge.cpp
 )

@@ -2,6 +2,8 @@
 add_executable(qindashow
     main.cpp
     src/show_document.cpp
+    src/show_find_bar.cpp
+    src/show_find_bar.h
     src/show_document.h
     src/pdf_export.cpp
     src/pdf_export.h
@@ -21,6 +23,7 @@ add_executable(qindashow
     src/show_window_actions.cpp
     src/show_window.h
     src/slide_canvas.cpp
+    src/slide_canvas_input.cpp
     src/slide_canvas.h
     src/slide_player.cpp
     src/slide_player.h

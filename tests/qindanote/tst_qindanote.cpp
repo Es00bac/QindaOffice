@@ -9,6 +9,9 @@
 #include <QApplication>
 #include <QMouseEvent>
 #include <QTemporaryDir>
+#include "standard_actions.h"
+#include <QToolButton>
+#include <QLineEdit>
 #include <QSignalSpy>
 #include <QTabletEvent>
 #include <QtTest>
@@ -28,6 +31,7 @@ private slots:
     void savingNeverBlanksPagesThatWereNeverOpened();
     void redoReplaysAnUndoneStroke();
     void recoverySnapshotRoundTripsTheNotebook();
+    void findSelectsThePageHoldingTheText();
 };
 
 void QindaNoteTest::notebookSurvivesReopen()
@@ -312,6 +316,52 @@ void QindaNoteTest::recoverySnapshotRoundTripsTheNotebook()
     QCOMPARE(recovered.envelope.background, QStringLiteral("grid"));
     QCOMPARE(recovered.envelope.ink.strokes().size(), 1);
     QVERIFY(restored.isDirty());
+}
+
+
+// Edit > Find was a dead menu entry in QindaNote, and a search that skipped
+// pages nobody had opened would report "not found" for text that is there.
+void QindaNoteTest::findSelectsThePageHoldingTheText()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + QStringLiteral("/Search");
+    QString error;
+    QString wantedPageId;
+    {
+        NoteDocument seed;
+        QVERIFY2(seed.save(path, &error), qPrintable(error));
+        Notebook *book = seed.notebook();
+        NoteSection *section = book->sectionById(book->sections().first().id);
+        QVERIFY(section != nullptr);
+        NotePage &second = book->addPage(*section, QStringLiteral("Second"));
+        second.envelope.blocksJson =
+            R"({"blocks":[{"type":"text","text":"remember the pangolin"}]})";
+        wantedPageId = second.id;
+        QVERIFY2(seed.save(path, &error), qPrintable(error));
+    }
+
+    NoteWindow window;
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    window.openNotebookPath(path);
+    // The window lands on the FIRST page; the match is on a page that has
+    // never been opened, so its envelope is empty in memory right now.
+    QVERIFY(window.noteDocument()->notebook()->sections().first().pages.size() >= 2);
+
+    QAction *find = window.action(QString::fromLatin1(QindaOffice::Shell::ActionId::kEditFind));
+    QVERIFY(find != nullptr);
+    QVERIFY2(find->isEnabled(), "Edit > Find must be reachable");
+    find->trigger();
+    auto *findEdit = window.findChild<QLineEdit *>(QStringLiteral("noteFindEdit"));
+    QVERIFY(findEdit != nullptr);
+    findEdit->setText(QStringLiteral("pangolin"));
+    auto *next = window.findChild<QToolButton *>(QStringLiteral("noteFindNextButton"));
+    QVERIFY(next != nullptr);
+    next->click();
+
+    QCOMPARE(window.pageView()->page() != nullptr, true);
+    QCOMPARE(window.pageView()->page()->id, wantedPageId);
 }
 
 #include "tst_qindanote.moc"

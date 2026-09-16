@@ -47,6 +47,11 @@ public:
     // uniform for journaling and title updates.
     void applyInput(const CalcEng::CellAddr &addr, const QString &input);
     void clearCells(const CalcEng::CellRange &range);
+    // Applies many cell inputs as ONE undo step. Replace All would otherwise
+    // push a command per cell, so undoing it would take as many Ctrl+Z
+    // presses as there were matches.
+    void applyInputs(const QList<QPair<CalcEng::CellAddr, QString>> &edits,
+                     const QString &undoText);
     void pasteCells(const CalcEng::CellAddr &at, const QStringList &rows);
     void restyleRange(const CalcEng::CellRange &range, const StylePatch &patch,
                       const QString &undoText);

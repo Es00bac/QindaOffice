@@ -228,6 +228,21 @@ void SpreadsheetDocument::applyInput(const CalcEng::CellAddr &addr, const QStrin
     emit contentChanged();
 }
 
+void SpreadsheetDocument::applyInputs(const QList<QPair<CalcEng::CellAddr, QString>> &edits,
+                                     const QString &undoText)
+{
+    if (edits.isEmpty()) {
+        return;
+    }
+    const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
+    for (const auto &[addr, input] : edits) {
+        m_workbook.setCellInput(m_activeSheet, addr, input);
+    }
+    pushUndo(before, undoText);
+    setDirty(true);
+    emit contentChanged();
+}
+
 void SpreadsheetDocument::clearCells(const CalcEng::CellRange &range)
 {
     if (!range.isValid()) {

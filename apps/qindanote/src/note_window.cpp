@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "note_window.h"
 
+#include "note_find_bar.h"
 #include "note_page_render.h"
 #include "note_page_view.h"
 
@@ -78,10 +79,20 @@ NoteWindow::NoteWindow()
 {
     m_navigator->setHeaderHidden(true);
     auto *central = new QWidget(this);
-    auto *layout = new QHBoxLayout(central);
+    // Navigator beside the page, with a find bar underneath both that stays
+    // hidden until Ctrl+F (the shape QindaWrite and QindaCalc use).
+    auto *stack = new QVBoxLayout(central);
+    stack->setContentsMargins(0, 0, 0, 0);
+    stack->setSpacing(0);
+    auto *row = new QWidget(central);
+    auto *layout = new QHBoxLayout(row);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->addWidget(m_navigator, 1);
     layout->addWidget(m_view, 4);
+    stack->addWidget(row, 1);
+    m_findBar = new NoteFindBar(m_document, central);
+    m_findBar->hide();
+    stack->addWidget(m_findBar, 0);
 
     auto *tools = new Shell::WrappingToolBar(tr("Note tools"), this);
     // AGENT-GUARD: a QToolBar without an objectName is skipped (with a
@@ -173,6 +184,24 @@ NoteWindow::NoteWindow()
             zoom->setCurrentText(tr("%1%").arg(percent));
         }
     };
+    // Find was three dead menu entries until the notebook gained a find bar.
+    Shell::StandardActions *findActions = standardActions();
+    for (QAction *action : {findActions->editFind, findActions->editFindNext,
+                            findActions->editFindPrevious}) {
+        action->setEnabled(true);
+    }
+    connect(findActions->editFind, &QAction::triggered, m_findBar, &NoteFindBar::openFind);
+    connect(findActions->editFindNext, &QAction::triggered, m_findBar,
+            &NoteFindBar::findNext);
+    connect(findActions->editFindPrevious, &QAction::triggered, m_findBar,
+            &NoteFindBar::findPrevious);
+    connect(m_findBar, &NoteFindBar::message, this,
+            [this](const QString &text) { statusBar()->showMessage(text, 5000); });
+    connect(m_findBar, &NoteFindBar::pageRequested, this,
+            [this](const QString &sectionId, const QString &pageId) {
+                selectPage(sectionId, pageId);
+            });
+
     // Print and preview: created disabled and never wired.
     Shell::StandardActions *printActions = standardActions();
     printActions->filePrint->setEnabled(true);
@@ -292,6 +321,25 @@ void NoteWindow::setCurrentIds(const QString &sectionId, const QString &pageId)
 {
     m_currentSectionId = sectionId;
     m_currentPageId = pageId;
+    if (m_findBar != nullptr) {
+        // Keep Find Next advancing from where the user actually is.
+        m_findBar->setCurrentPage(sectionId, pageId);
+    }
+}
+
+void NoteWindow::selectPage(const QString &sectionId, const QString &pageId)
+{
+    for (int s = 0; s < m_navigator->topLevelItemCount(); ++s) {
+        QTreeWidgetItem *sectionItem = m_navigator->topLevelItem(s);
+        for (int p = 0; p < sectionItem->childCount(); ++p) {
+            QTreeWidgetItem *pageItem = sectionItem->child(p);
+            if (pageItem->data(0, Qt::UserRole).toString() == sectionId
+                && pageItem->data(0, Qt::UserRole + 1).toString() == pageId) {
+                m_navigator->setCurrentItem(pageItem);
+                return;
+            }
+        }
+    }
 }
 
 void NoteWindow::persistCurrentPage()

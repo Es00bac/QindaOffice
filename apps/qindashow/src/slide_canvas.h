@@ -56,6 +56,10 @@ private:
 class SlideCanvas final : public QGraphicsView {
     Q_OBJECT
 public:
+    // Half-size of the bottom-right resize grip, in scene units. Shared by
+    // the painting half and the hit-testing half of the canvas.
+    static constexpr qreal kGripRadius = 5.0;
+
     // View zoom (View > Zoom In/Out/Reset). Presentation state only: the
     // canvas transform scales, the slide model is untouched, so nothing here
     // dirties the document.

@@ -8,6 +8,7 @@
 #include "presentation_controller.h"
 #include "presenter_window.h"
 #include "show_ai.h"
+#include "show_find_bar.h"
 #include "show_commands.h"
 #include "show_toolbox.h"
 #include "slide_canvas.h"
@@ -97,8 +98,26 @@ ShowWindow::ShowWindow()
     , m_transition(new QComboBox)
     , m_layout(new QComboBox)
 {
-    setDocumentHost(m_canvas, m_document);
+    // The canvas sits above a find bar that stays hidden until Ctrl+F, the
+    // same shape QindaWrite and QindaCalc use, so the bar never overlaps the
+    // slide area.
+    auto *central = new QWidget(this);
+    auto *stack = new QVBoxLayout(central);
+    stack->setContentsMargins(0, 0, 0, 0);
+    stack->setSpacing(0);
+    stack->addWidget(m_canvas, 1);
+    m_findBar = new ShowFindBar(this, central);
+    m_findBar->hide();
+    stack->addWidget(m_findBar, 0);
+    setDocumentHost(central, m_document);
     setWindowTitle(tr("QindaShow"));
+
+    connect(m_findBar, &ShowFindBar::message, this,
+            [this](const QString &text) { statusBar()->showMessage(text, 5000); });
+    connect(m_findBar, &ShowFindBar::slideRequested, this, [this](int row) {
+        // Drive the sorter, which is what owns slide selection.
+        m_sorter->setCurrentRow(row);
+    });
 
     m_sorter->setViewMode(QListWidget::IconMode);
     m_sorter->setIconSize(QSize(160, 90));

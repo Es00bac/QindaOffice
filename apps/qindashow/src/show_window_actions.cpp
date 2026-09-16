@@ -24,6 +24,7 @@
 
 #include "inline_action_flow.h"
 #include "show_ai.h"
+#include "show_find_bar.h"
 #include "slide_canvas.h"
 #include "slide_renderer.h"
 #include <QMessageBox>
@@ -383,6 +384,16 @@ void ShowWindow::wireShowEditingActions()
     connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, updatePaste);
     connect(m_actions.editPaste, &QAction::triggered, this,
             [this] { pasteShapeAtClipboard(m_canvas); });
+
+    // Find was three dead menu entries until the deck gained a find bar.
+    for (QAction *action : {m_actions.editFind, m_actions.editFindNext,
+                            m_actions.editFindPrevious}) {
+        action->setEnabled(true);
+    }
+    connect(m_actions.editFind, &QAction::triggered, m_findBar, &ShowFindBar::openFind);
+    connect(m_actions.editFindNext, &QAction::triggered, m_findBar, &ShowFindBar::findNext);
+    connect(m_actions.editFindPrevious, &QAction::triggered, m_findBar,
+            &ShowFindBar::findPrevious);
 
     m_actions.editSelectAll->setEnabled(true);
     connect(m_actions.editSelectAll, &QAction::triggered, m_canvas,
