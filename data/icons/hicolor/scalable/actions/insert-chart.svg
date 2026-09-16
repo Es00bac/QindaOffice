@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- QindaQt Office action glyph. Shipped into hicolor (the freedesktop
+     fallback every icon theme ends at) so QIcon::fromTheme() resolves it
+     whatever theme is active: the desktop theme carries the shell names
+     but none of the format/insert/zoom family, and a null icon makes Qt
+     fall back to the action TEXT, which is what overran the toolbars.
+     One neutral mid tone, because hicolor has no light/dark variants. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <path d="M3.5 4.5 h17 v15 h-17 Z" fill="none" stroke="#8a8496" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="6.6" y="11" width="2.6" height="5.6" rx="1" fill="#8a8496"/>
+  <rect x="10.7" y="7.6" width="2.6" height="9" rx="1" fill="#8a8496"/>
+  <rect x="14.8" y="13" width="2.6" height="3.6" rx="1" fill="#8a8496"/>
+</svg>

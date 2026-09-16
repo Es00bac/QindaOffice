@@ -4,6 +4,8 @@
 #include "spreadsheet_view.h"
 #include "standard_actions.h"
 
+#include "wrapping_tool_bar.h"
+
 #include <QAction>
 #include <QActionGroup>
 #include <QColorDialog>
@@ -141,13 +143,17 @@ QToolBar *CalcFormatController::toolBar()
         return m_toolBar;
     }
     auto *window = qobject_cast<QWidget *>(parent());
-    m_toolBar = new QToolBar(tr("Formatting"), window);
+    // WrappingToolBar: the strip wraps onto another row instead of hiding
+    // Align Left/Center/Right behind the extension chevron (see
+    // wrapping_tool_bar.h).
+    auto *bar = new Shell::WrappingToolBar(tr("Formatting"), window);
+    m_toolBar = bar;
     m_toolBar->setObjectName(QStringLiteral("formatToolBar"));
 
     m_fontCombo = new QFontComboBox(m_toolBar);
     m_fontCombo->setObjectName(QStringLiteral("cellFontFamilyCombo"));
     m_fontCombo->setMinimumWidth(160);
-    m_toolBar->addWidget(m_fontCombo);
+    bar->addStripWidget(m_fontCombo);
     connect(m_fontCombo, &QFontComboBox::currentFontChanged, this, [this](const QFont &font) {
         if (m_syncing) {
             return;
@@ -163,7 +169,7 @@ QToolBar *CalcFormatController::toolBar()
     for (const int size : kFontSizes) {
         m_sizeCombo->addItem(QString::number(size));
     }
-    m_toolBar->addWidget(m_sizeCombo);
+    bar->addStripWidget(m_sizeCombo);
     connect(m_sizeCombo, &QComboBox::activated, this, [this](int) {
         bool ok = false;
         const qreal size = m_sizeCombo->currentText().toDouble(&ok);
@@ -175,24 +181,24 @@ QToolBar *CalcFormatController::toolBar()
         applyPatch(patch, tr("Font size"));
     });
 
-    m_toolBar->addSeparator();
-    m_toolBar->addAction(m_actions.bold);
-    m_toolBar->addAction(m_actions.italic);
-    m_toolBar->addAction(m_actions.underline);
-    m_toolBar->addAction(m_actions.textColor);
-    m_toolBar->addAction(m_actions.fillColor);
-    m_toolBar->addSeparator();
-    m_toolBar->addAction(m_actions.alignLeft);
-    m_toolBar->addAction(m_actions.alignCenter);
-    m_toolBar->addAction(m_actions.alignRight);
-    m_toolBar->addSeparator();
+    bar->addStripSeparator();
+    for (QAction *action : {m_actions.bold, m_actions.italic, m_actions.underline,
+                            m_actions.textColor, m_actions.fillColor}) {
+        bar->addStripAction(action);
+    }
+    bar->addStripSeparator();
+    for (QAction *action : {m_actions.alignLeft, m_actions.alignCenter,
+                            m_actions.alignRight}) {
+        bar->addStripAction(action);
+    }
+    bar->addStripSeparator();
 
     m_numberCombo = new QComboBox(m_toolBar);
     m_numberCombo->setObjectName(QStringLiteral("cellNumberFormatCombo"));
     for (const NumberFormatEntry &entry : kNumberFormats) {
         m_numberCombo->addItem(tr(entry.label), QString::fromLatin1(entry.code));
     }
-    m_toolBar->addWidget(m_numberCombo);
+    bar->addStripWidget(m_numberCombo);
     connect(m_numberCombo, &QComboBox::activated, this, [this](int index) {
         StylePatch patch;
         patch.numberFormat = m_numberCombo->itemData(index).toString();

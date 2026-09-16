@@ -205,6 +205,18 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M18 toolbar reachability
+
+Automated by `tst_calc_ui` and `tst_write_ui`. Rationale in D-013: a command
+behind an extension chevron is a command the user never sees.
+
+- Squeezing the window to a third of its width grows the format strip a row
+  instead of dropping commands; every strip command still has a visible
+  button inside the strip (QindaCalc: 8 commands; QindaWrite: 16+).
+- Every strip command carries a non-empty objectName.
+- The cursor outline is painted on the cursor cell, not one header offset
+  down and to the right of it.
+
 ### M16 manual checklist (live desktop)
 
 - [ ] `Ctrl+S` saves in each of the four apps; `Ctrl+W` closes the window
@@ -219,5 +231,10 @@ skip with a message where `soffice` is unavailable.
       removes the definition.
 - [ ] QindaNote: open a multi-page notebook, view one page, Ctrl+S, reopen —
       the pages you never opened still have their ink.
+- [ ] Formatting strips show ICONS, not words: the suite's own
+      hicolor/scalable/actions set resolves under the QindaQt icon theme
+      (which inherits hicolor and carries none of the format family).
+- [ ] Narrow any app window until the strip wraps — no "»" chevron appears
+      and no command disappears.
 - [ ] QindaCalc with a chart open: type into cells — the chart re-renders
       in place; its window does not disappear, move or jump to the front.

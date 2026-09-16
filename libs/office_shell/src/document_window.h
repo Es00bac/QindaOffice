@@ -18,6 +18,7 @@ namespace QindaOffice::Shell {
 
 class AppServices;
 class GlobalMenuExport;
+class WrappingToolBar;
 
 // One document = one ordinary top-level window (ADR-0110): no tab strip, no
 // MDI, no document switcher. DocumentWindow is the suite's shared frame -
@@ -47,10 +48,13 @@ public:
 
     // The suite-standard icon strip (New/Open/Save, Undo/Redo/Cut/Copy/
     // Paste, Find, Zoom). Idempotent: the first call creates it, later
-    // calls return the same toolbar so apps can append their own actions.
+    // calls return the same toolbar so apps can append their own actions
+    // with addStripAction()/addStripSeparator().
     // Buttons mirror their action's real enabled state - an app that has
-    // not wired a command shows it disabled, never hidden.
-    [[nodiscard]] QToolBar *addMainToolBar();
+    // not wired a command shows it disabled, never hidden. The strip WRAPS
+    // rather than pushing overflow behind an extension chevron, so a
+    // command is never invisible just because the window is narrow.
+    [[nodiscard]] WrappingToolBar *addMainToolBar();
 
     // The window takes ownership. The M1 stub hosts PlainTextDocument;
     // other document types show a disabled editor placeholder until their
@@ -133,7 +137,7 @@ private:
     [[nodiscard]] bool ensureWritableTarget(const QString &path);
 
     GlobalMenuExport *m_menuExport = nullptr;
-    QToolBar *m_mainToolBar = nullptr;
+    WrappingToolBar *m_mainToolBar = nullptr;
     bool m_appMenusFinalized = false;
     bool m_menuExportStarted = false;
     AppServices *m_services = nullptr;

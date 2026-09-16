@@ -4,6 +4,7 @@
 #include "note_page_view.h"
 
 #include "standard_actions.h"
+#include "wrapping_tool_bar.h"
 
 #include <QColorDialog>
 #include <QComboBox>
@@ -79,7 +80,7 @@ NoteWindow::NoteWindow()
     layout->addWidget(m_navigator, 1);
     layout->addWidget(m_view, 4);
 
-    auto *tools = new QToolBar(tr("Note tools"), this);
+    auto *tools = new Shell::WrappingToolBar(tr("Note tools"), this);
     // AGENT-GUARD: a QToolBar without an objectName is skipped (with a
     // runtime warning) by QMainWindow::saveState/restoreState, and the
     // platform theme keys toolbars by it — same contract as the shell's
@@ -94,7 +95,8 @@ NoteWindow::NoteWindow()
     QActionGroup *toolGroup = new QActionGroup(this);
     bool firstTool = true;
     for (const auto &[label, id, tool] : entries) {
-        QAction *action = tools->addAction(label);
+        auto *action = new QAction(label, this);
+        tools->addStripAction(action);
         // Stable objectName: the dbusmenu/global-menu activation identity
         // (AGENTS.md rule 5) — unnamed actions are unreachable from the panel.
         action->setObjectName(id);
@@ -109,7 +111,7 @@ NoteWindow::NoteWindow()
             action->setChecked(true);
         });
     }
-    tools->addSeparator();
+    tools->addStripSeparator();
 
     // M15 polish: pen width/color, page background and zoom live on the
     // tool strip (they are presentation state, not document commands, so
@@ -120,11 +122,12 @@ NoteWindow::NoteWindow()
     width->setValue(int(m_view->penWidth()));
     width->setSuffix(tr(" px"));
     width->setToolTip(tr("Pen width"));
-    tools->addWidget(width);
+    tools->addStripWidget(width);
     connect(width, &QSpinBox::valueChanged, m_view,
             [this](int value) { m_view->setPenWidth(value); });
 
-    QAction *colorAction = tools->addAction(tr("Pen color"));
+    auto *colorAction = new QAction(tr("Pen color"), this);
+    tools->addStripAction(colorAction);
     colorAction->setObjectName(QStringLiteral("notePenColorAction"));
     connect(colorAction, &QAction::triggered, this, [this] {
         const QColor picked =
@@ -140,7 +143,7 @@ NoteWindow::NoteWindow()
     background->addItem(tr("Ruled"), QStringLiteral("ruled"));
     background->addItem(tr("Grid"), QStringLiteral("grid"));
     background->addItem(tr("Dotted"), QStringLiteral("dotted"));
-    tools->addWidget(background);
+    tools->addStripWidget(background);
     connect(background, &QComboBox::activated, this, [this, background](int index) {
         m_view->setBackground(background->itemData(index).toString());
     });
@@ -151,10 +154,10 @@ NoteWindow::NoteWindow()
         zoom->addItem(tr("%1%").arg(percent), percent);
     }
     zoom->setCurrentIndex(2);
-    tools->addWidget(zoom);
+    tools->addStripWidget(zoom);
     connect(zoom, &QComboBox::activated, this,
             [this, zoom](int index) { m_view->setZoom(zoom->itemData(index).toInt() / 100.0); });
-    tools->addSeparator();
+    tools->addStripSeparator();
     // AGENT-GUARD: put the SHELL's Undo/Redo on the strip, do not clone them.
     // setDocumentHost() deleted the stub editor the base connections pointed
     // at, so Ctrl+Z fired into the void and the strip carried a second,
@@ -163,8 +166,8 @@ NoteWindow::NoteWindow()
     // exactly the identity collision rule 5 forbids. One action per command:
     // the strip, the Edit menu and the exported global menu now share it.
     Shell::StandardActions *actions = standardActions();
-    tools->addAction(actions->editUndo);
-    tools->addAction(actions->editRedo);
+    tools->addStripAction(actions->editUndo);
+    tools->addStripAction(actions->editRedo);
     connect(actions->editUndo, &QAction::triggered, m_view, &NotePageView::undo);
     connect(actions->editRedo, &QAction::triggered, m_view, &NotePageView::redo);
     // Both commands follow the view's real history depth. Undo used to be
@@ -174,12 +177,13 @@ NoteWindow::NoteWindow()
     connect(m_view, &NotePageView::undoAvailable, actions->editUndo, &QAction::setEnabled);
     connect(m_view, &NotePageView::redoAvailable, actions->editRedo, &QAction::setEnabled);
 
-    QAction *text = tools->addAction(tr("Add text"));
+    auto *text = new QAction(tr("Add text"), this);
+    tools->addStripAction(text);
     text->setObjectName(QStringLiteral("noteAddTextAction"));
     connect(text, &QAction::triggered, m_view, &NotePageView::addTextBlock);
 
     setDocumentHost(central, m_document);
-    QToolBar *mainToolBar = addMainToolBar();
+    Shell::WrappingToolBar *mainToolBar = addMainToolBar();
     Q_UNUSED(mainToolBar);
     addToolBar(Qt::LeftToolBarArea, tools);
 

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "table_actions.h"
 
+#include "wrapping_tool_bar.h"
+
 #include "page_text_view.h"
 #include "standard_actions.h"
 #include "write_document.h"
@@ -76,6 +78,15 @@ void TableController::populateTableMenu(QMenu *menu)
 
 void TableController::appendToToolBar(QToolBar *toolBar)
 {
+    // The formatting strip wraps, so the table commands join the flow rather
+    // than pushing the tail of it behind an extension chevron.
+    if (auto *wrapping = qobject_cast<Shell::WrappingToolBar *>(toolBar)) {
+        wrapping->addStripSeparator();
+        for (QAction *action : m_actions.all()) {
+            wrapping->addStripAction(action);
+        }
+        return;
+    }
     toolBar->addSeparator();
     for (QAction *action : m_actions.all()) {
         toolBar->addAction(action);

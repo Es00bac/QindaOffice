@@ -3,6 +3,7 @@
 
 #include "app_services.h"
 #include "global_menu_export.h"
+#include "wrapping_tool_bar.h"
 
 #include "atomic_file_store.h"
 #include "document.h"
@@ -191,30 +192,30 @@ void DocumentWindow::finalizeAppMenuHooks()
     }
 }
 
-QToolBar *DocumentWindow::addMainToolBar()
+WrappingToolBar *DocumentWindow::addMainToolBar()
 {
     if (m_mainToolBar != nullptr) {
         return m_mainToolBar;
     }
-    m_mainToolBar = new QToolBar(tr("Main toolbar"), this);
+    m_mainToolBar = new WrappingToolBar(tr("Main toolbar"), this);
     // Stable objectName: QMainWindow state restore and the platform theme
     // key toolbars by it.
     m_mainToolBar->setObjectName(QStringLiteral("mainToolBar"));
-    m_mainToolBar->addAction(m_actions.fileNew);
-    m_mainToolBar->addAction(m_actions.fileOpen);
-    m_mainToolBar->addAction(m_actions.fileSave);
-    m_mainToolBar->addSeparator();
-    m_mainToolBar->addAction(m_actions.editUndo);
-    m_mainToolBar->addAction(m_actions.editRedo);
-    m_mainToolBar->addSeparator();
-    m_mainToolBar->addAction(m_actions.editCut);
-    m_mainToolBar->addAction(m_actions.editCopy);
-    m_mainToolBar->addAction(m_actions.editPaste);
-    m_mainToolBar->addSeparator();
-    m_mainToolBar->addAction(m_actions.editFind);
-    m_mainToolBar->addSeparator();
-    m_mainToolBar->addAction(m_actions.viewZoomOut);
-    m_mainToolBar->addAction(m_actions.viewZoomIn);
+    m_mainToolBar->addStripAction(m_actions.fileNew);
+    m_mainToolBar->addStripAction(m_actions.fileOpen);
+    m_mainToolBar->addStripAction(m_actions.fileSave);
+    m_mainToolBar->addStripSeparator();
+    m_mainToolBar->addStripAction(m_actions.editUndo);
+    m_mainToolBar->addStripAction(m_actions.editRedo);
+    m_mainToolBar->addStripSeparator();
+    m_mainToolBar->addStripAction(m_actions.editCut);
+    m_mainToolBar->addStripAction(m_actions.editCopy);
+    m_mainToolBar->addStripAction(m_actions.editPaste);
+    m_mainToolBar->addStripSeparator();
+    m_mainToolBar->addStripAction(m_actions.editFind);
+    m_mainToolBar->addStripSeparator();
+    m_mainToolBar->addStripAction(m_actions.viewZoomOut);
+    m_mainToolBar->addStripAction(m_actions.viewZoomIn);
     addToolBar(Qt::TopToolBarArea, m_mainToolBar);
     return m_mainToolBar;
 }

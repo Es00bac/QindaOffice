@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "format_controller.h"
 
+#include "wrapping_tool_bar.h"
+
 #include "page_text_view.h"
 #include "write_document.h"
 
@@ -119,13 +121,17 @@ QToolBar *FormatController::toolBar()
         return m_toolBar;
     }
     auto *window = qobject_cast<QWidget *>(parent());
-    m_toolBar = new QToolBar(tr("Formatting"), window);
+    // WrappingToolBar: this strip carries ~16 commands plus three combos
+    // and overflowed at any ordinary width, hiding the tail behind the
+    // extension chevron. It wraps now (see wrapping_tool_bar.h).
+    auto *bar = new Shell::WrappingToolBar(tr("Formatting"), window);
+    m_toolBar = bar;
     m_toolBar->setObjectName(QStringLiteral("formatToolBar"));
 
     m_fontCombo = new QFontComboBox(m_toolBar);
     m_fontCombo->setObjectName(QStringLiteral("fontFamilyCombo"));
     m_fontCombo->setMinimumWidth(180);
-    m_toolBar->addWidget(m_fontCombo);
+    bar->addStripWidget(m_fontCombo);
     connect(m_fontCombo, &QFontComboBox::currentFontChanged, this,
             [this](const QFont &font) {
                 if (m_syncing) {
@@ -142,7 +148,7 @@ QToolBar *FormatController::toolBar()
     for (const int size : kFontSizes) {
         m_sizeCombo->addItem(QString::number(size));
     }
-    m_toolBar->addWidget(m_sizeCombo);
+    bar->addStripWidget(m_sizeCombo);
     connect(m_sizeCombo, &QComboBox::activated, this, [this](int) {
         bool ok = false;
         const qreal size = m_sizeCombo->currentText().toDouble(&ok);
@@ -154,26 +160,26 @@ QToolBar *FormatController::toolBar()
         applyCharFormat(format);
     });
 
-    m_toolBar->addSeparator();
-    m_toolBar->addAction(m_actions.bold);
-    m_toolBar->addAction(m_actions.italic);
-    m_toolBar->addAction(m_actions.underline);
-    m_toolBar->addAction(m_actions.strikeOut);
-    m_toolBar->addAction(m_actions.textColor);
-    m_toolBar->addSeparator();
-    m_toolBar->addAction(m_actions.alignLeft);
-    m_toolBar->addAction(m_actions.alignCenter);
-    m_toolBar->addAction(m_actions.alignRight);
-    m_toolBar->addAction(m_actions.alignJustify);
-    m_toolBar->addSeparator();
-    m_toolBar->addAction(m_actions.listBullet);
-    m_toolBar->addAction(m_actions.listNumbered);
-    m_toolBar->addAction(m_actions.indentLess);
-    m_toolBar->addAction(m_actions.indentMore);
-    m_toolBar->addSeparator();
-    m_toolBar->addAction(m_actions.insertTable);
-    m_toolBar->addAction(m_actions.insertImage);
-    m_toolBar->addAction(m_actions.insertColumns);
+    bar->addStripSeparator();
+    bar->addStripAction(m_actions.bold);
+    bar->addStripAction(m_actions.italic);
+    bar->addStripAction(m_actions.underline);
+    bar->addStripAction(m_actions.strikeOut);
+    bar->addStripAction(m_actions.textColor);
+    bar->addStripSeparator();
+    bar->addStripAction(m_actions.alignLeft);
+    bar->addStripAction(m_actions.alignCenter);
+    bar->addStripAction(m_actions.alignRight);
+    bar->addStripAction(m_actions.alignJustify);
+    bar->addStripSeparator();
+    bar->addStripAction(m_actions.listBullet);
+    bar->addStripAction(m_actions.listNumbered);
+    bar->addStripAction(m_actions.indentLess);
+    bar->addStripAction(m_actions.indentMore);
+    bar->addStripSeparator();
+    bar->addStripAction(m_actions.insertTable);
+    bar->addStripAction(m_actions.insertImage);
+    bar->addStripAction(m_actions.insertColumns);
 
     syncFromControl();
     return m_toolBar;

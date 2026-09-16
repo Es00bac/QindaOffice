@@ -32,6 +32,7 @@
 #include "calc_find_bar.h"
 #include "calc_format_controller.h"
 #include "standard_actions.h"
+#include "wrapping_tool_bar.h"
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -126,13 +127,13 @@ CalcWindow::CalcWindow()
     rebuildSheetTabs();
 
     createCalcActions();
-    QToolBar *mainToolBar = addMainToolBar();
+    Shell::WrappingToolBar *mainToolBar = addMainToolBar();
     if (m_insertChartAction != nullptr) {
-        mainToolBar->addSeparator();
-        mainToolBar->addAction(m_insertChartAction);
+        mainToolBar->addStripSeparator();
+        mainToolBar->addStripAction(m_insertChartAction);
     }
-    mainToolBar->addAction(m_insertSheetAction);
-    mainToolBar->addAction(m_thousandsAction);
+    mainToolBar->addStripAction(m_insertSheetAction);
+    mainToolBar->addStripAction(m_thousandsAction);
 
     m_format = new CalcFormatController(m_document, m_view, this);
     addToolBarBreak(Qt::TopToolBarArea);
@@ -241,6 +242,10 @@ void CalcWindow::createCalcActions()
 
     m_thousandsAction = new QAction(tr("Number format: #,##0.00"), this);
     m_thousandsAction->setObjectName(QStringLiteral("calcThousandsFormatAction"));
+    // QToolButton labels itself from iconText(), so the strip gets the short
+    // form while the menu keeps the full sentence. The long one was the
+    // widest thing on the main toolbar by a wide margin.
+    m_thousandsAction->setIconText(QStringLiteral("#,##0.00"));
     connect(m_thousandsAction, &QAction::triggered, this, [this] {
         // Route through restyleRange (undoable, journaled, contentChanged) —
         // the direct mutation here bypassed Ctrl+Z and the recovery journal.

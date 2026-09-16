@@ -17,6 +17,8 @@
 #include <QGuiApplication>
 #include <QMenu>
 #include <QToolBar>
+
+#include "wrapping_tool_bar.h"
 #include <QUndoStack>
 #include <QtTest>
 
@@ -43,22 +45,22 @@ namespace ActionId = ::QindaOffice::Shell::ActionId;
 void ShowUiTest::toolboxExposesNamedActions()
 {
     ShowWindow window;
-    QToolBar *mainBar = window.findChild<QToolBar *>(QStringLiteral("mainToolBar"));
-    QToolBar *shapeBar = window.findChild<QToolBar *>(QStringLiteral("shapeToolBar"));
+    auto *mainBar = window.findChild<::QindaOffice::Shell::WrappingToolBar *>(QStringLiteral("mainToolBar"));
+    auto *shapeBar = window.findChild<::QindaOffice::Shell::WrappingToolBar *>(QStringLiteral("shapeToolBar"));
     QVERIFY(mainBar != nullptr);
     QVERIFY(shapeBar != nullptr);
     for (const char *id : {ActionId::kFileSave, ActionId::kEditUndo, ActionId::kEditCopy,
                            ActionId::kEditPaste}) {
         QAction *action = window.action(QString::fromLatin1(id));
         QVERIFY2(action != nullptr, id);
-        QVERIFY2(mainBar->actions().contains(action), id);
+        QVERIFY2(mainBar->stripActions().contains(action), id);
     }
     const ShowApp::ShowStyleActions &style = window.toolbox()->styleActions();
     for (QAction *action : style.styleActions()) {
         QVERIFY2(!action->objectName().isEmpty(), qPrintable(action->text()));
     }
-    QVERIFY(shapeBar->actions().contains(style.bold));
-    QVERIFY(shapeBar->actions().contains(style.fillColor));
+    QVERIFY(shapeBar->stripActions().contains(style.bold));
+    QVERIFY(shapeBar->stripActions().contains(style.fillColor));
     const ShowApp::ShowInsertActions &insert = window.toolbox()->insertActions();
     for (QAction *action : insert.all()) {
         QVERIFY2(!action->objectName().isEmpty(), qPrintable(action->text()));

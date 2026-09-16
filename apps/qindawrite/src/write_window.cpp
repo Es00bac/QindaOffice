@@ -130,7 +130,7 @@ WriteWindow::WriteWindow()
     // below the shell's main toolbar and reuses the same actions in menus.
     m_format = new FormatController(m_view, m_document, this);
     m_tables = new TableController(m_view, m_document, this);
-    QToolBar *mainToolBar = addMainToolBar();
+    Shell::WrappingToolBar *mainToolBar = addMainToolBar();
     Q_UNUSED(mainToolBar);
     addToolBarBreak(Qt::TopToolBarArea);
     QToolBar *formatToolBar = m_format->toolBar();

@@ -26,6 +26,9 @@
 #include <QTextList>
 #include <QTextTable>
 #include <QToolBar>
+#include <QToolButton>
+
+#include "wrapping_tool_bar.h"
 #include <QtTest>
 #include <QtWidgets/private/qwidgettextcontrol_p.h>
 
@@ -47,6 +50,7 @@ private slots:
     void zoomActionsAdjustView();
     void tableOperationsWork();
     void pageSetupRoundTripsThroughHtml();
+    void formatStripWrapsInsteadOfHidingCommands();
 };
 
 namespace {
@@ -69,8 +73,8 @@ QTextCursor selectFirstWord(WriteWindow *window)
 void WriteUiTest::toolbarsExposeNamedActions()
 {
     WriteWindow window;
-    QToolBar *mainBar = window.findChild<QToolBar *>(QStringLiteral("mainToolBar"));
-    QToolBar *formatBar = window.findChild<QToolBar *>(QStringLiteral("formatToolBar"));
+    auto *mainBar = window.findChild<::QindaOffice::Shell::WrappingToolBar *>(QStringLiteral("mainToolBar"));
+    auto *formatBar = window.findChild<::QindaOffice::Shell::WrappingToolBar *>(QStringLiteral("formatToolBar"));
     QVERIFY(mainBar != nullptr);
     QVERIFY(formatBar != nullptr);
 
@@ -81,7 +85,7 @@ void WriteUiTest::toolbarsExposeNamedActions()
     for (const char *id : mainIds) {
         QAction *action = window.action(QString::fromLatin1(id));
         QVERIFY2(action != nullptr, id);
-        QVERIFY2(mainBar->actions().contains(action), id);
+        QVERIFY2(mainBar->stripActions().contains(action), id);
     }
 
     const WriteActions &format = window.formatController()->actions();
@@ -90,7 +94,7 @@ void WriteUiTest::toolbarsExposeNamedActions()
     }
     for (QAction *action : {format.bold, format.italic, format.underline,
                             format.alignLeft, format.listBullet, format.insertTable}) {
-        QVERIFY(formatBar->actions().contains(action));
+        QVERIFY(formatBar->stripActions().contains(action));
     }
     // Font family and size controls live on the formatting toolbar.
     QVERIFY(formatBar->findChild<QFontComboBox *>(QStringLiteral("fontFamilyCombo"))
@@ -426,6 +430,45 @@ void WriteUiTest::pageSetupRoundTripsThroughHtml()
     // Token expansion is a pure function shared by screen, print and PDF.
     QCOMPARE(formatPageDecoration(QStringLiteral("{page}/{pages}"), 2, 7),
              QStringLiteral("2/7"));
+}
+
+// The widest strip in the suite: ~20 format/list/indent/insert commands plus
+// three combos. Plain QToolBar pushed the tail of it behind the "»"
+// extension chevron at any ordinary width — commands that existed, were
+// enabled, and were never seen. It wraps now.
+void WriteUiTest::formatStripWrapsInsteadOfHidingCommands()
+{
+    WriteWindow window;
+    window.resize(1400, 700);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    auto *bar = window.findChild<::QindaOffice::Shell::WrappingToolBar *>(
+        QStringLiteral("formatToolBar"));
+    QVERIFY(bar != nullptr);
+    QVERIFY2(bar->stripActions().size() >= 16,
+             qPrintable(QStringLiteral("only %1 commands on the strip")
+                            .arg(bar->stripActions().size())));
+    for (QAction *action : bar->stripActions()) {
+        QVERIFY2(!action->objectName().isEmpty(), "every strip command is addressable");
+    }
+    const int wideHeight = bar->height();
+
+    // Squeeze it to a third of the width: the strip grows rows, and every
+    // command keeps a visible button inside the strip.
+    window.resize(520, 700);
+    QTRY_VERIFY(bar->height() > wideHeight);
+    const QList<QToolButton *> buttons = bar->findChildren<QToolButton *>();
+    for (QAction *action : bar->stripActions()) {
+        bool shown = false;
+        for (QToolButton *button : buttons) {
+            if (button->defaultAction() == action && button->isVisible()
+                && button->geometry().right() <= bar->strip()->width()) {
+                shown = true;
+                break;
+            }
+        }
+        QVERIFY2(shown, qPrintable(action->objectName()));
+    }
 }
 
 QTEST_MAIN(WriteUiTest)

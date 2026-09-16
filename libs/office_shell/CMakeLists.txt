@@ -30,6 +30,8 @@ add_library(office_shell STATIC
     src/document_window.cpp
     src/document_window.h
     src/document_window_persistence.cpp
+    src/flow_layout.cpp
+    src/flow_layout.h
     src/global_menu_export.cpp
     src/global_menu_export.h
     src/office_application.cpp
@@ -42,6 +44,8 @@ add_library(office_shell STATIC
     src/standard_actions.h
     src/template_loader.cpp
     src/template_loader.h
+    src/wrapping_tool_bar.cpp
+    src/wrapping_tool_bar.h
 )
 
 target_compile_definitions(office_shell

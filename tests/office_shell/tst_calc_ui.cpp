@@ -13,6 +13,7 @@
 #include "qindacalc/src/spreadsheet_view.h"
 
 #include "standard_actions.h"
+#include "wrapping_tool_bar.h"
 
 #include <QClipboard>
 #include <QComboBox>
@@ -20,6 +21,7 @@
 #include <QImage>
 #include <QLineEdit>
 #include <QToolBar>
+#include <QToolButton>
 #include <QtTest>
 
 using namespace QindaOffice::Apps::QindaCalc;
@@ -35,6 +37,7 @@ private slots:
     void formattingPatchesStylesUndoably();
     void findBarSelectsMatchesWithWrap();
     void cursorOutlineLandsOnTheCursorCell();
+    void formatStripWrapsInsteadOfHidingCommands();
 };
 
 namespace ActionId = ::QindaOffice::Shell::ActionId;
@@ -61,21 +64,21 @@ static QRect pixelBoundsOf(const QImage &image, const QColor &colour)
 void CalcUiTest::toolbarsExposeNamedActions()
 {
     CalcWindow window;
-    QToolBar *mainBar = window.findChild<QToolBar *>(QStringLiteral("mainToolBar"));
-    QToolBar *formatBar = window.findChild<QToolBar *>(QStringLiteral("formatToolBar"));
+    auto *mainBar = window.findChild<::QindaOffice::Shell::WrappingToolBar *>(QStringLiteral("mainToolBar"));
+    auto *formatBar = window.findChild<::QindaOffice::Shell::WrappingToolBar *>(QStringLiteral("formatToolBar"));
     QVERIFY(mainBar != nullptr);
     QVERIFY(formatBar != nullptr);
     for (const char *id : {ActionId::kFileSave, ActionId::kEditUndo, ActionId::kEditCopy,
                            ActionId::kEditPaste, ActionId::kEditFind}) {
         QAction *action = window.action(QString::fromLatin1(id));
         QVERIFY2(action != nullptr, id);
-        QVERIFY2(mainBar->actions().contains(action), id);
+        QVERIFY2(mainBar->stripActions().contains(action), id);
     }
     const CalcFormatActions &format = window.formatController()->actions();
     for (QAction *action : format.all()) {
         QVERIFY2(!action->objectName().isEmpty(), qPrintable(action->text()));
     }
-    QVERIFY(formatBar->actions().contains(format.bold));
+    QVERIFY(formatBar->stripActions().contains(format.bold));
     QVERIFY(formatBar->findChild<QComboBox *>(QStringLiteral("cellNumberFormatCombo"))
             != nullptr);
     // Fresh document: nothing to undo yet, pasteboard may be anything.
@@ -267,6 +270,58 @@ void CalcUiTest::cursorOutlineLandsOnTheCursorCell()
     // And specifically NOT one header offset away, which is what the bug did.
     QVERIFY(painted.left() < expected.left() + 40);
     QVERIFY(painted.top() < expected.top() + 20);
+}
+
+// A toolbar shows its commands. Plain QToolBar hid whatever did not fit
+// behind the "»" extension chevron, so at ordinary window widths the
+// formatting strip silently lost Align Left/Center/Right — enabled buttons
+// the user could never see. The strip must wrap instead.
+void CalcUiTest::formatStripWrapsInsteadOfHidingCommands()
+{
+    CalcWindow window;
+    window.resize(1200, 600);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    auto *bar = window.findChild<::QindaOffice::Shell::WrappingToolBar *>(
+        QStringLiteral("formatToolBar"));
+    QVERIFY(bar != nullptr);
+
+    // Every format command has a visible button, at a wide window...
+    const QList<QToolButton *> buttons = bar->findChildren<QToolButton *>();
+    const QStringList wanted = {QString::fromLatin1(ActionId::kFormatBold),
+                                QString::fromLatin1(ActionId::kFormatItalic),
+                                QString::fromLatin1(ActionId::kFormatUnderline),
+                                QString::fromLatin1(ActionId::kFormatTextColor),
+                                QString::fromLatin1(ActionId::kCalcFillColor),
+                                QString::fromLatin1(ActionId::kFormatAlignLeft),
+                                QString::fromLatin1(ActionId::kFormatAlignCenter),
+                                QString::fromLatin1(ActionId::kFormatAlignRight)};
+    const auto buttonFor = [&buttons](const QString &id) -> QToolButton * {
+        for (QToolButton *b : buttons) {
+            if (b->defaultAction() != nullptr && b->defaultAction()->objectName() == id) {
+                return b;
+            }
+        }
+        return nullptr;
+    };
+    const int wideHeight = bar->height();
+    for (const QString &id : wanted) {
+        QToolButton *button = buttonFor(id);
+        QVERIFY2(button != nullptr, qPrintable(id));
+        QVERIFY2(button->isVisible(), qPrintable(id));
+    }
+
+    // ...and still at a window far too narrow for one row, where the strip
+    // grows taller rather than dropping commands.
+    window.resize(560, 600);
+    QTRY_VERIFY(bar->height() > wideHeight);
+    for (const QString &id : wanted) {
+        QToolButton *button = buttonFor(id);
+        QVERIFY2(button != nullptr, qPrintable(id));
+        QVERIFY2(button->isVisible(), qPrintable(id));
+        // Inside the strip, not clipped off its right edge.
+        QVERIFY2(button->geometry().right() <= bar->strip()->width(), qPrintable(id));
+    }
 }
 
 int main(int argc, char *argv[])

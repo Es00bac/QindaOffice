@@ -30,6 +30,7 @@
 #include <QToolBar>
 
 #include "standard_actions.h"
+#include "wrapping_tool_bar.h"
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QWindow>
@@ -266,7 +267,7 @@ ShowWindow::ShowWindow()
     m_startShowAction->setShortcut(QKeySequence(QStringLiteral("F5")));
     connect(m_startShowAction, &QAction::triggered, this, [this] { startShow(); });
 
-    QToolBar *mainToolBar = addMainToolBar();
+    Shell::WrappingToolBar *mainToolBar = addMainToolBar();
     mainToolBar->addSeparator();
     mainToolBar->addAction(m_newSlideAction);
     mainToolBar->addAction(m_duplicateSlideAction);

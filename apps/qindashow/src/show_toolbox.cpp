@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "show_toolbox.h"
 
+#include "wrapping_tool_bar.h"
+
 #include "slide_canvas.h"
 #include "standard_actions.h"
 
@@ -104,16 +106,19 @@ QToolBar *ShowToolbox::toolBar()
         return m_toolBar;
     }
     auto *window = qobject_cast<QWidget *>(parent());
-    m_toolBar = new QToolBar(tr("Shapes"), window);
-    m_toolBar->setObjectName(QStringLiteral("shapeToolBar"));
+    // Wrapping strip: the shape commands stay visible at any width instead
+    // of sliding behind an extension chevron (see wrapping_tool_bar.h).
+    auto *bar = new Shell::WrappingToolBar(tr("Shapes"), window);
+    m_toolBar = bar;
+    bar->setObjectName(QStringLiteral("shapeToolBar"));
     for (QAction *action : m_insert.all()) {
-        m_toolBar->addAction(action);
+        bar->addStripAction(action);
     }
-    m_toolBar->addSeparator();
-    m_toolBar->addAction(m_style.bold);
-    m_toolBar->addAction(m_style.italic);
-    m_toolBar->addAction(m_style.fillColor);
-    m_toolBar->addAction(m_style.strokeColor);
+    bar->addStripSeparator();
+    for (QAction *action : {m_style.bold, m_style.italic, m_style.fillColor,
+                            m_style.strokeColor}) {
+        bar->addStripAction(action);
+    }
     return m_toolBar;
 }
 

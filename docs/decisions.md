@@ -5,6 +5,57 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-013: Toolbars wrap, and the suite ships the action icons its theme lacks
+
+**Context.** The formatting strip showed **Bold Italic Underline Text Color
+Fill Color Align Left Align Center Align Right** as words and ended in a "»"
+chevron: at the window's real width the last commands were not on screen at
+all. Two independent causes.
+
+First, the icons never resolved. The actions already asked for the right
+freedesktop names (`format-text-bold`, `format-justify-left`, …), but the
+desktop's QindaQt icon theme carries the shell family (`document-new`,
+`edit-undo`) and **not** the format/insert/zoom family, and its
+`index.theme` says `Inherits=hicolor` — not breeze, which has them. A
+missing name makes `QIcon::fromTheme()` return a null icon and Qt falls back
+to the action **text**, so every button became as wide as its label.
+QindaWrite's format actions had no resolving icon at all.
+
+Second, `QToolBar` does not wrap. Whatever does not fit goes behind the
+extension chevron — buttons that exist, are enabled, and are never seen.
+
+**Decision.**
+
+1. **`WrappingToolBar` + `FlowLayout` (office_shell).** Every command strip
+   in the suite — the shared main toolbar and QindaCalc's, QindaWrite's,
+   QindaShow's and QindaNote's own — hosts its items in a flow layout that
+   wraps onto further rows and grows the toolbar. Nothing is ever hidden for
+   want of width. `QToolBar::actions()` no longer reports strip contents
+   (they live on the buttons), so `stripActions()` is the contract, and the
+   UI tests assert against it.
+2. **Per-action button style.** Icon-only when the theme resolved an icon,
+   text otherwise — an icon-only button with a null icon is a blank square.
+   The full text is always the tooltip, and a long label can be shortened
+   for the strip alone through `QAction::setIconText()` (`QToolButton` labels
+   itself from `iconText()`), which is how the main toolbar stopped carrying
+   "Number format: #,##0.00" at full width.
+3. **The suite ships the 24 action icons it needs**, into
+   `hicolor/scalable/actions` — the freedesktop fallback every theme ends
+   at, so `fromTheme()` resolves them under any active theme and a theme
+   that *does* carry the name still wins. One neutral mid tone, because
+   hicolor has no light/dark variants; verified legible at 16 px on both a
+   light and a dark toolbar. **Never ship `hicolor/index.theme`** — that
+   file belongs to `x11-themes/hicolor-icon-theme` and installing one would
+   collide with it.
+
+**Consequences.** The fix for a missing icon is to add it here, not to reach
+into the desktop's theme. If the QindaQt theme later grows the format family
+it takes precedence automatically and nothing here needs changing. A new
+command strip should be a `WrappingToolBar`; a plain `QToolBar` is the
+defect shape. Regression coverage: `tst_calc_ui` and `tst_write_ui` squeeze
+their windows to a third of the width and assert every strip command still
+has a visible button inside the strip.
+
 ## D-012: A stub is a bug — every declared capability is implemented or not declared
 
 **Context.** A second audit pass asked what the suite *claims* to do and
