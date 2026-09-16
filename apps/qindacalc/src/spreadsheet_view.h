@@ -28,6 +28,14 @@ public:
     void setCursorCell(const CalcEng::CellAddr &addr, bool extendSelection = false);
     // Normalized anchor..cursor rectangle (selection for commands).
     [[nodiscard]] CalcEng::CellRange selectionRange() const;
+    // The cursor cell in VIEWPORT coordinates (grid position plus the header
+    // offset). AGENT-GUARD: cellRect() is in GRID coordinates. The grid is
+    // painted under p.translate(kHeaderWidth, kHeaderHeight), so inside that
+    // block cellRect() is already correct and adding the offset again pushes
+    // the drawing one header down and right. Use this accessor only outside
+    // the painter transform — scroll-into-view math and the inline editor's
+    // geometry — and never inside it.
+    [[nodiscard]] QRect cursorViewportRect() const;
     // Extends the selection to cover every used cell (Select All).
     void selectUsedRange();
 

@@ -17,6 +17,7 @@
 #include <QClipboard>
 #include <QComboBox>
 #include <QGuiApplication>
+#include <QImage>
 #include <QLineEdit>
 #include <QToolBar>
 #include <QtTest>
@@ -33,9 +34,29 @@ private slots:
     void cutClearsSourceInOneStep();
     void formattingPatchesStylesUndoably();
     void findBarSelectsMatchesWithWrap();
+    void cursorOutlineLandsOnTheCursorCell();
 };
 
 namespace ActionId = ::QindaOffice::Shell::ActionId;
+
+// Bounding box of every pixel painted exactly `colour`, or a null rect.
+static QRect pixelBoundsOf(const QImage &image, const QColor &colour)
+{
+    const QRgb want = colour.rgb();
+    int left = image.width(), top = image.height(), right = -1, bottom = -1;
+    for (int y = 0; y < image.height(); ++y) {
+        for (int x = 0; x < image.width(); ++x) {
+            if ((image.pixel(x, y) | 0xff000000u) != (want | 0xff000000u)) {
+                continue;
+            }
+            left = qMin(left, x);
+            top = qMin(top, y);
+            right = qMax(right, x);
+            bottom = qMax(bottom, y);
+        }
+    }
+    return right < 0 ? QRect() : QRect(QPoint(left, top), QPoint(right, bottom));
+}
 
 void CalcUiTest::toolbarsExposeNamedActions()
 {
@@ -209,6 +230,43 @@ void CalcUiTest::findBarSelectsMatchesWithWrap()
     QCOMPARE(view->cursorCell().row, 0);
     bar->findPrevious(); // backwards wraps to the end
     QCOMPARE(view->cursorCell().row, 9);
+}
+
+// The grid is painted inside p.translate(kHeaderWidth, kHeaderHeight), so a
+// rect that is ALSO .translated() by the header offset gets it twice. The
+// cursor outline did exactly that: the selection fill sat on the cursor cell
+// while its outline was drawn one header down and to the right.
+void CalcUiTest::cursorOutlineLandsOnTheCursorCell()
+{
+    CalcWindow window;
+    SpreadsheetView *view = window.spreadsheetView();
+    window.resize(900, 600);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    view->setCursorCell({0, 0}); // A1, as the name box reports it
+    QCoreApplication::processEvents();
+
+    QImage shot(view->viewport()->size(), QImage::Format_ARGB32);
+    shot.fill(Qt::transparent);
+    view->viewport()->render(&shot);
+
+    const QColor outline = view->palette().highlight().color().darker(140);
+    const QRect painted = pixelBoundsOf(shot, outline);
+    QVERIFY2(painted.isValid(), "the cursor outline was not painted at all");
+
+    // The outline is a 2px pen stroked on the cell rect, so its pixel bounds
+    // sit within one pen width of the cell's viewport rect.
+    const QRect expected = view->cursorViewportRect();
+    QVERIFY2(qAbs(painted.left() - expected.left()) <= 2
+                 && qAbs(painted.top() - expected.top()) <= 2,
+             qPrintable(QStringLiteral("outline at %1,%2 but cell A1 is at %3,%4")
+                            .arg(painted.left())
+                            .arg(painted.top())
+                            .arg(expected.left())
+                            .arg(expected.top())));
+    // And specifically NOT one header offset away, which is what the bug did.
+    QVERIFY(painted.left() < expected.left() + 40);
+    QVERIFY(painted.top() < expected.top() + 20);
 }
 
 int main(int argc, char *argv[])

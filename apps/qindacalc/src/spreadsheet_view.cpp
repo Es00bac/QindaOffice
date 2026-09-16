@@ -53,8 +53,9 @@ void SpreadsheetView::setCursorCell(const CalcEng::CellAddr &addr, bool extendSe
     if (!extendSelection) {
         m_anchor = next;
     }
-    // Scroll into view (QAbstractScrollArea has no ensureVisible).
-    const QRect rect = cellRect(next).translated(kHeaderWidth, kHeaderHeight);
+    // Scroll into view (QAbstractScrollArea has no ensureVisible). Viewport
+    // coordinates: this runs outside the painter transform.
+    const QRect rect = cursorViewportRect();
     QScrollBar *h = horizontalScrollBar();
     QScrollBar *v = verticalScrollBar();
     if (rect.left() < kHeaderWidth) {
@@ -127,6 +128,11 @@ int SpreadsheetView::colLeft(qint32 col) const
         x += sheet.columnWidth(c);
     }
     return int(x - horizontalScrollBar()->value());
+}
+
+QRect SpreadsheetView::cursorViewportRect() const
+{
+    return cellRect(m_cursor).translated(kHeaderWidth, kHeaderHeight);
 }
 
 QRect SpreadsheetView::cellRect(const CalcEng::CellAddr &addr) const
@@ -357,10 +363,15 @@ void SpreadsheetView::paintGrid(QPainter &p, const QRect &clip)
         ++row;
     }
 
-    // Cursor outline last.
+    // Cursor outline last. AGENT-GUARD: GRID coordinates — the painter is
+    // still inside p.translate(kHeaderWidth, kHeaderHeight) from the top of
+    // this block, so translating the rect here too applied the header offset
+    // TWICE and drew the outline a full header down and to the right of the
+    // cell it belongs to (the selection fill, painted in the loop above, sat
+    // in the right place, which is what made it look so odd).
     p.setPen(QPen(palette().highlight().color().darker(140), 2));
     p.setBrush(Qt::NoBrush);
-    p.drawRect(cellRect(m_cursor).translated(kHeaderWidth, kHeaderHeight));
+    p.drawRect(cellRect(m_cursor));
     p.restore();
 }
 
@@ -487,7 +498,8 @@ void SpreadsheetView::startEditor()
         return;
     }
     m_editing = true;
-    m_editor->setGeometry(cellRect(m_cursor).translated(kHeaderWidth, kHeaderHeight));
+    // The editor is a child widget, so it is positioned in viewport space.
+    m_editor->setGeometry(cursorViewportRect());
     m_editor->setText(inputTextAt(m_cursor));
     m_editor->selectAll();
     m_editor->show();
