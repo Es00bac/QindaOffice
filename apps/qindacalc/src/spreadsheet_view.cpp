@@ -92,13 +92,12 @@ CalcEng::CellRange SpreadsheetView::selectionRange() const
     return range;
 }
 
-void SpreadsheetView::selectUsedRange()
+CalcEng::CellRange SpreadsheetView::usedRange() const
 {
     const CalcEng::Sheet &sheet =
         m_document->workbook()->sheetAt(m_document->activeSheet());
     if (sheet.cells().isEmpty()) {
-        setCursorCell({0, 0});
-        return;
+        return {};
     }
     qint32 maxRow = 0;
     qint32 maxCol = 0;
@@ -106,8 +105,18 @@ void SpreadsheetView::selectUsedRange()
         maxRow = qMax(maxRow, qint32(it.key() & 0xffffffffu));
         maxCol = qMax(maxCol, qint32(it.key() >> 32));
     }
-    m_anchor = {0, 0};
-    setCursorCell({maxRow, maxCol}, /*extendSelection=*/true);
+    return {{0, 0}, {maxRow, maxCol}};
+}
+
+void SpreadsheetView::selectUsedRange()
+{
+    const CalcEng::CellRange used = usedRange();
+    if (!used.isValid()) {
+        setCursorCell({0, 0});
+        return;
+    }
+    m_anchor = used.topLeft;
+    setCursorCell(used.bottomRight, /*extendSelection=*/true);
 }
 
 int SpreadsheetView::rowTop(qint32 row) const
@@ -115,7 +124,7 @@ int SpreadsheetView::rowTop(qint32 row) const
     const Sheet &sheet = m_document->workbook()->sheetAt(m_document->activeSheet());
     qreal y = 0;
     for (qint32 r = 0; r < row; ++r) {
-        y += sheet.rowHeight(r);
+        y += rowHeightPx(r);
     }
     return int(y - verticalScrollBar()->value());
 }
@@ -125,9 +134,41 @@ int SpreadsheetView::colLeft(qint32 col) const
     const Sheet &sheet = m_document->workbook()->sheetAt(m_document->activeSheet());
     qreal x = 0;
     for (qint32 c = 0; c < col; ++c) {
-        x += sheet.columnWidth(c);
+        x += colWidthPx(c);
     }
     return int(x - horizontalScrollBar()->value());
+}
+
+QFont SpreadsheetView::scaledFont() const
+{
+    QFont scaled = font();
+    const qreal points = scaled.pointSizeF() > 0 ? scaled.pointSizeF() : 10.0;
+    scaled.setPointSizeF(qMax(4.0, points * m_zoom));
+    return scaled;
+}
+
+qreal SpreadsheetView::colWidthPx(qint32 col) const
+{
+    return m_document->workbook()->sheetAt(m_document->activeSheet()).columnWidth(col) * m_zoom;
+}
+
+qreal SpreadsheetView::rowHeightPx(qint32 row) const
+{
+    return m_document->workbook()->sheetAt(m_document->activeSheet()).rowHeight(row) * m_zoom;
+}
+
+void SpreadsheetView::setZoom(qreal zoom)
+{
+    const qreal next = qBound(0.5, zoom, 3.0);
+    if (qFuzzyCompare(next, m_zoom)) {
+        return;
+    }
+    m_zoom = next;
+    updateScrollBars();
+    if (m_editing) {
+        m_editor->setGeometry(cursorViewportRect());
+    }
+    viewport()->update();
 }
 
 QRect SpreadsheetView::cursorViewportRect() const
@@ -138,8 +179,8 @@ QRect SpreadsheetView::cursorViewportRect() const
 QRect SpreadsheetView::cellRect(const CalcEng::CellAddr &addr) const
 {
     const Sheet &sheet = m_document->workbook()->sheetAt(m_document->activeSheet());
-    return {colLeft(addr.col), rowTop(addr.row), int(sheet.columnWidth(addr.col)),
-            int(sheet.rowHeight(addr.row))};
+    return {colLeft(addr.col), rowTop(addr.row), int(colWidthPx(addr.col)),
+            int(rowHeightPx(addr.row))};
 }
 
 CalcEng::CellAddr SpreadsheetView::cellAtPos(const QPoint &pos) const
@@ -149,14 +190,14 @@ CalcEng::CellAddr SpreadsheetView::cellAtPos(const QPoint &pos) const
     const qreal y = pos.y() + verticalScrollBar()->value();
     qint32 col = 0;
     qreal acc = 0;
-    while (col < Sheet::kMaxCols - 1 && acc + sheet.columnWidth(col) < x) {
-        acc += sheet.columnWidth(col);
+    while (col < Sheet::kMaxCols - 1 && acc + colWidthPx(col) < x) {
+        acc += colWidthPx(col);
         ++col;
     }
     qint32 row = 0;
     acc = 0;
-    while (row < Sheet::kMaxRows - 1 && acc + sheet.rowHeight(row) < y) {
-        acc += sheet.rowHeight(row);
+    while (row < Sheet::kMaxRows - 1 && acc + rowHeightPx(row) < y) {
+        acc += rowHeightPx(row);
         ++row;
     }
     return {row, col};
@@ -175,11 +216,11 @@ void SpreadsheetView::updateScrollBars()
     }
     qreal height = 0;
     for (qint32 r = 0; r < maxRow; ++r) {
-        height += sheet.rowHeight(r);
+        height += rowHeightPx(r);
     }
     qreal width = 0;
     for (qint32 c = 0; c < maxCol; ++c) {
-        width += sheet.columnWidth(c);
+        width += colWidthPx(c);
     }
     verticalScrollBar()->setRange(0, int(qMax<qreal>(0, height - viewport()->height())));
     horizontalScrollBar()->setRange(0, int(qMax<qreal>(0, width - viewport()->width())));
@@ -201,7 +242,7 @@ void SpreadsheetView::paintHeaderBands(QPainter &p, const QRect &clip)
     p.drawText(corner, Qt::AlignCenter, QStringLiteral("•"));
 
     // AGENT-GUARD: the column band must walk the sheet's REAL column widths —
-    // the grid renders with sheet.columnWidth(); the band previously assumed
+    // the grid renders with colWidthPx(); the band previously assumed
     // a fixed 96 px, so header letters drifted out of alignment after any
     // xlsx import brought different widths in.
     p.save();
@@ -212,12 +253,12 @@ void SpreadsheetView::paintHeaderBands(QPainter &p, const QRect &clip)
         // Find the first column whose right edge is at/after the scroll pos.
         qint32 col = 0;
         qreal x = -scrollX;
-        while (col < Sheet::kMaxCols && x + sheet.columnWidth(col) <= 0) {
-            x += sheet.columnWidth(col);
+        while (col < Sheet::kMaxCols && x + colWidthPx(col) <= 0) {
+            x += colWidthPx(col);
             ++col;
         }
         while (x < clip.width() && col < Sheet::kMaxCols) {
-            const qreal w = sheet.columnWidth(col);
+            const qreal w = colWidthPx(col);
             const QRectF r(x, 0, w, kHeaderHeight);
             if (r.right() >= 0) {
                 p.fillRect(r, palette().button().color());
@@ -239,7 +280,7 @@ void SpreadsheetView::paintHeaderBands(QPainter &p, const QRect &clip)
     qint32 row = 0;
     qreal y = -verticalScrollBar()->value();
     while (y < clip.height()) {
-        const qreal h = sheet.rowHeight(row);
+        const qreal h = rowHeightPx(row);
         if (y + h > 0) {
             const QRect r(0, int(y), kHeaderWidth, int(h));
             p.fillRect(r, palette().button().color());
@@ -267,28 +308,30 @@ void SpreadsheetView::paintGrid(QPainter &p, const QRect &clip)
     // Visible row band.
     qint32 firstRow = 0;
     qreal y = -verticalScrollBar()->value();
-    while (firstRow < Sheet::kMaxRows && y + sheet.rowHeight(firstRow) < 0) {
-        y += sheet.rowHeight(firstRow);
+    while (firstRow < Sheet::kMaxRows && y + rowHeightPx(firstRow) < 0) {
+        y += rowHeightPx(firstRow);
         ++firstRow;
     }
-    const QFont baseFont = font();
+    // The cell font scales with the view, or zooming would only move the
+    // grid lines and leave the text at its original size.
+    const QFont baseFont = scaledFont();
     const QFont boldFont([this] {
-        QFont f = font();
+        QFont f = scaledFont();
         f.setBold(true);
         return f;
     }());
 
     for (qint32 row = firstRow; y < clip.height() - kHeaderHeight && row < Sheet::kMaxRows;) {
-        const qreal h = sheet.rowHeight(row);
+        const qreal h = rowHeightPx(row);
         qint32 x = -horizontalScrollBar()->value();
         qint32 firstCol = 0;
-        while (firstCol < Sheet::kMaxCols && x + sheet.columnWidth(firstCol) < 0) {
-            x += sheet.columnWidth(firstCol);
+        while (firstCol < Sheet::kMaxCols && x + colWidthPx(firstCol) < 0) {
+            x += colWidthPx(firstCol);
             ++firstCol;
         }
         for (qint32 col = firstCol; x < clip.width() - kHeaderWidth
                                     && col < Sheet::kMaxCols;) {
-            const qreal w = sheet.columnWidth(col);
+            const qreal w = colWidthPx(col);
             const QRectF cell(x, y, w, h);
             const CellAddr addr{row, col};
             const bool inSelection =

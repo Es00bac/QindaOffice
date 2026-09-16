@@ -9,6 +9,7 @@
 #include "value.h"
 #include "workbook.h"
 
+#include <QFont>
 #include <QAbstractScrollArea>
 
 class QLineEdit;
@@ -28,6 +29,14 @@ public:
     void setCursorCell(const CalcEng::CellAddr &addr, bool extendSelection = false);
     // Normalized anchor..cursor rectangle (selection for commands).
     [[nodiscard]] CalcEng::CellRange selectionRange() const;
+    // The populated block of the active sheet, or an invalid range when the
+    // sheet is empty. Shared by Select All and the print paginator.
+    [[nodiscard]] CalcEng::CellRange usedRange() const;
+    // View zoom (View > Zoom In/Out/Reset). Presentation state only: it
+    // scales the rendered geometry and the cell font, never the stored
+    // column widths or row heights, so zooming never dirties the document.
+    void setZoom(qreal zoom);
+    [[nodiscard]] qreal zoom() const { return m_zoom; }
     // The cursor cell in VIEWPORT coordinates (grid position plus the header
     // offset). AGENT-GUARD: cellRect() is in GRID coordinates. The grid is
     // painted under p.translate(kHeaderWidth, kHeaderHeight), so inside that
@@ -64,6 +73,12 @@ private:
     void cancelEditor();
     [[nodiscard]] QString inputTextAt(const CalcEng::CellAddr &addr) const;
     [[nodiscard]] QRect cellRect(const CalcEng::CellAddr &addr) const;
+    // AGENT-GUARD: every geometry and hit-test path goes through these two,
+    // never through Sheet::columnWidth()/rowHeight() directly — that is what
+    // keeps painting and clicking agreeing at any zoom.
+    [[nodiscard]] QFont scaledFont() const;
+    [[nodiscard]] qreal colWidthPx(qint32 col) const;
+    [[nodiscard]] qreal rowHeightPx(qint32 row) const;
     [[nodiscard]] CalcEng::CellAddr cellAtPos(const QPoint &pos) const;
     [[nodiscard]] int rowTop(qint32 row) const;
     [[nodiscard]] int colLeft(qint32 col) const;
@@ -75,6 +90,7 @@ private:
     QLineEdit *m_editor = nullptr;
     CalcEng::CellAddr m_anchor;
     CalcEng::CellAddr m_cursor;
+    qreal m_zoom = 1.0;
     bool m_editing = false;
 
     static constexpr int kHeaderWidth = 52;

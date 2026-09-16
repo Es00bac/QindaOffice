@@ -6,6 +6,7 @@
 // box and sheet tab bar (plan section 6.2 v1 scope).
 
 #include "document_window.h"
+#include "print_helper.h"
 
 #include "value.h"
 #include "parser.h"
@@ -50,6 +51,8 @@ private:
     // a new name over the current selection.
     void commitNameBox(const QString &text);
     void goToRange(const CalcEng::RangeRef &ref);
+    // Paginating renderer shared by Print and Print Preview.
+    [[nodiscard]] Shell::PrintRenderCallback printRenderCallback() const;
     // Save/Discard/Cancel consent before a template replaces the workbook.
     [[nodiscard]] bool confirmDiscardChanges();
     void insertChart();

@@ -9,6 +9,7 @@
 #include "document.h"
 #include "document_window.h"
 #include "notebook.h"
+#include "print_helper.h"
 
 class QToolButton;
 class QTreeWidget;
@@ -67,6 +68,10 @@ private:
     // notebook's QVectors reallocate on every append/load and a stale
     // pointer was use-after-free (and once wrote garbage-named page files).
     void setCurrentIds(const QString &sectionId, const QString &pageId);
+    // Paginating renderer shared by Print and Print Preview: one notebook
+    // page per sheet of paper, through the same pure renderer the screen
+    // agrees with.
+    [[nodiscard]] Shell::PrintRenderCallback printRenderCallback() const;
 
     NoteDocument *m_document;
     NotePageView *m_view;

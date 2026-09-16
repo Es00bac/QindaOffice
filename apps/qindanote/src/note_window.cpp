@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "note_window.h"
 
+#include "note_page_render.h"
 #include "note_page_view.h"
 
 #include "standard_actions.h"
 #include "wrapping_tool_bar.h"
 
 #include <QColorDialog>
+#include <QPainter>
+#include <QPrinter>
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -157,6 +160,45 @@ NoteWindow::NoteWindow()
     tools->addStripWidget(zoom);
     connect(zoom, &QComboBox::activated, this,
             [this, zoom](int index) { m_view->setZoom(zoom->itemData(index).toInt() / 100.0); });
+    // View > Zoom In/Out/Reset drive the same view state as the combo, and
+    // the combo follows so the two never disagree. All three actions were
+    // created disabled and never wired.
+    const auto syncZoomCombo = [this, zoom] {
+        const int percent = qRound(m_view->zoom() * 100.0);
+        const int index = zoom->findData(percent);
+        QSignalBlocker blocker(zoom);
+        if (index >= 0) {
+            zoom->setCurrentIndex(index);
+        } else {
+            zoom->setCurrentText(tr("%1%").arg(percent));
+        }
+    };
+    // Print and preview: created disabled and never wired.
+    Shell::StandardActions *printActions = standardActions();
+    printActions->filePrint->setEnabled(true);
+    connect(printActions->filePrint, &QAction::triggered, this,
+            [this] { Shell::PrintHelper::print(this, printRenderCallback()); });
+    printActions->filePrintPreview->setEnabled(true);
+    connect(printActions->filePrintPreview, &QAction::triggered, this,
+            [this] { Shell::PrintHelper::printPreview(this, printRenderCallback()); });
+
+    Shell::StandardActions *zoomActions = standardActions();
+    for (QAction *action : {zoomActions->viewZoomIn, zoomActions->viewZoomOut,
+                            zoomActions->viewZoomReset}) {
+        action->setEnabled(true);
+    }
+    connect(zoomActions->viewZoomIn, &QAction::triggered, this, [this, syncZoomCombo] {
+        m_view->setZoom(m_view->zoom() * 1.25);
+        syncZoomCombo();
+    });
+    connect(zoomActions->viewZoomOut, &QAction::triggered, this, [this, syncZoomCombo] {
+        m_view->setZoom(m_view->zoom() / 1.25);
+        syncZoomCombo();
+    });
+    connect(zoomActions->viewZoomReset, &QAction::triggered, this, [this, syncZoomCombo] {
+        m_view->setZoom(1.0);
+        syncZoomCombo();
+    });
     tools->addStripSeparator();
     // AGENT-GUARD: put the SHELL's Undo/Redo on the strip, do not clone them.
     // setDocumentHost() deleted the stub editor the base connections pointed
@@ -274,6 +316,51 @@ void NoteWindow::persistCurrentPage()
         // (the earlier release collected the error into a local and dropped it).
         statusBar()->showMessage(tr("Save failed: %1").arg(error), 8000);
     }
+}
+
+Shell::PrintRenderCallback NoteWindow::printRenderCallback() const
+{
+    // Snapshot the pages up front: the render runs inside the print dialog
+    // and must not read a notebook the user could still be editing. Pages
+    // that were never opened are read from disk first, so Print covers the
+    // whole notebook and not just the one page on screen.
+    QList<NotePage> pages;
+    Notebook *notebook = m_document->notebook();
+    for (const NoteSection &constSection : notebook->sections()) {
+        NoteSection *section = notebook->sectionById(constSection.id);
+        if (section == nullptr) {
+            continue;
+        }
+        for (NotePage &page : section->pages) {
+            if (!page.loaded && notebook->isOpen()) {
+                static_cast<void>(notebook->loadPage(*section, page, nullptr));
+            }
+            if (page.loaded) {
+                pages.append(page);
+            }
+        }
+    }
+    const QSizeF pageSize = m_view->pageRect().size() / m_view->zoom();
+    return [pages, pageSize](QPrinter *printer, QPainter *painter) {
+        if (pages.isEmpty()) {
+            return;
+        }
+        const QRectF sheet(0, 0, printer->width(), printer->height());
+        const qreal scale = qMin(sheet.width() / pageSize.width(),
+                                 sheet.height() / pageSize.height());
+        for (int i = 0; i < pages.size(); ++i) {
+            if (i > 0) {
+                printer->newPage();
+            }
+            painter->save();
+            painter->translate(sheet.center()
+                               - QPointF(pageSize.width() * scale / 2.0,
+                                         pageSize.height() * scale / 2.0));
+            painter->scale(scale, scale);
+            renderNotePage(painter, pages.at(i), pageSize);
+            painter->restore();
+        }
+    };
 }
 
 void NoteWindow::openNotebookPath(const QString &path)

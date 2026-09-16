@@ -565,4 +565,16 @@ void SlideCanvas::commitTextEdit(bool cancelled)
     }
 }
 
+void SlideCanvas::setZoom(qreal zoom)
+{
+    // Bounded like every other zoom in the suite; the transform replaces
+    // rather than accumulates so Reset is exact.
+    const qreal next = qBound(0.25, zoom, 4.0);
+    if (qFuzzyCompare(next, m_zoom)) {
+        return;
+    }
+    m_zoom = next;
+    setTransform(QTransform::fromScale(m_zoom, m_zoom));
+}
+
 } // namespace QindaOffice::Apps::Show

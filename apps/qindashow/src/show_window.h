@@ -11,6 +11,8 @@
 #include "document_window.h"
 #include "show_document.h"
 
+#include "print_helper.h"
+
 #ifndef QQO_SHOW_MODEL_ALIAS
 #define QQO_SHOW_MODEL_ALIAS
 namespace ShowModel = QindaOffice::Show;
@@ -72,6 +74,9 @@ private:
     void pushSlideListCommand(const QList<ShowModel::Slide> &before);
     void wireCanvasUndo();
     void wireShowEditingActions();
+    // Print/preview share one paginating renderer with the PDF export, so
+    // paper and PDF agree by construction (plan 5.2).
+    [[nodiscard]] Shell::PrintRenderCallback printRenderCallback() const;
 
     Ai::ModelCatalog *m_catalog = nullptr;
     Ai::AssistantPanel *m_panel = nullptr;

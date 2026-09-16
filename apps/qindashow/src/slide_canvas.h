@@ -56,6 +56,12 @@ private:
 class SlideCanvas final : public QGraphicsView {
     Q_OBJECT
 public:
+    // View zoom (View > Zoom In/Out/Reset). Presentation state only: the
+    // canvas transform scales, the slide model is untouched, so nothing here
+    // dirties the document.
+    void setZoom(qreal zoom);
+    [[nodiscard]] qreal zoom() const { return m_zoom; }
+
     explicit SlideCanvas(QWidget *parent = nullptr);
     ~SlideCanvas() override;
 
@@ -115,6 +121,7 @@ private:
 
     QGraphicsScene *m_scene;
     ShowModel::Slide *m_slide = nullptr;
+    qreal m_zoom = 1.0;
     QSizeF m_slideSize{720.0, 405.0};
     QGraphicsTextItem *m_textItem = nullptr;
     QString m_textShapeId;

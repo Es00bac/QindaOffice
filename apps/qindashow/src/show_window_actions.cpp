@@ -25,7 +25,10 @@
 #include "inline_action_flow.h"
 #include "show_ai.h"
 #include "slide_canvas.h"
+#include "slide_renderer.h"
 #include <QMessageBox>
+#include <QPainter>
+#include <QPrinter>
 #include <QScreen>
 #include <QStatusBar>
 #include <QWindow>
@@ -129,6 +132,36 @@ void ShowWindow::startShow()
         // on the second screen, ignoring Escape and clicks.
         connect(player, &QObject::destroyed, presenter, &QObject::deleteLater);
     }
+}
+
+Shell::PrintRenderCallback ShowWindow::printRenderCallback() const
+{
+    const ShowModel::Presentation *deck = m_document->presentation();
+    // The deck outlives the synchronous print call (PrintHelper runs the
+    // dialog and the render before returning), so capturing it is safe.
+    return [deck](QPrinter *printer, QPainter *painter) {
+        if (deck->slides.isEmpty()) {
+            return;
+        }
+        const QSizeF slide = deck->slideSize;
+        const QRectF page(0, 0, printer->width(), printer->height());
+        for (int i = 0; i < deck->slides.size(); ++i) {
+            if (i > 0) {
+                printer->newPage();
+            }
+            // Letterbox the slide into whatever paper the user chose rather
+            // than forcing the deck's own page size on their printer.
+            const qreal scale = qMin(page.width() / slide.width(),
+                                     page.height() / slide.height());
+            painter->save();
+            painter->translate(page.center()
+                               - QPointF(slide.width() * scale / 2.0,
+                                         slide.height() * scale / 2.0));
+            painter->scale(scale, scale);
+            ShowModel::renderSlide(painter, deck->slides.at(i), slide);
+            painter->restore();
+        }
+    };
 }
 
 void ShowWindow::exportPdf()
@@ -308,6 +341,26 @@ void ShowWindow::wireCanvasUndo()
 
 void ShowWindow::wireShowEditingActions()
 {
+    // Print, preview and zoom were created disabled and never wired, so all
+    // three sat greyed out in the menus forever.
+    m_actions.filePrint->setEnabled(true);
+    connect(m_actions.filePrint, &QAction::triggered, this,
+            [this] { Shell::PrintHelper::print(this, printRenderCallback()); });
+    m_actions.filePrintPreview->setEnabled(true);
+    connect(m_actions.filePrintPreview, &QAction::triggered, this,
+            [this] { Shell::PrintHelper::printPreview(this, printRenderCallback()); });
+
+    for (QAction *action : {m_actions.viewZoomIn, m_actions.viewZoomOut,
+                            m_actions.viewZoomReset}) {
+        action->setEnabled(true);
+    }
+    connect(m_actions.viewZoomIn, &QAction::triggered, this,
+            [this] { m_canvas->setZoom(m_canvas->zoom() * 1.25); });
+    connect(m_actions.viewZoomOut, &QAction::triggered, this,
+            [this] { m_canvas->setZoom(m_canvas->zoom() / 1.25); });
+    connect(m_actions.viewZoomReset, &QAction::triggered, this,
+            [this] { m_canvas->setZoom(1.0); });
+
     m_actions.editCopy->setEnabled(false);
     m_actions.editCut->setEnabled(false);
     connect(m_canvas, &SlideCanvas::selectionChanged, this, [this](bool hasSelection) {

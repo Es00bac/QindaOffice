@@ -24,6 +24,8 @@
 #include <QGuiApplication>
 #include <QMimeData>
 #include <QIcon>
+#include <QPainter>
+#include <QPrinter>
 #include <QLayout>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -31,6 +33,7 @@
 #include "calc_clipboard.h"
 #include "calc_find_bar.h"
 #include "calc_format_controller.h"
+#include "print_helper.h"
 #include "standard_actions.h"
 #include "wrapping_tool_bar.h"
 #include <QVBoxLayout>
@@ -206,6 +209,26 @@ void CalcWindow::wireEditingActions()
     connect(m_actions.editSelectAll, &QAction::triggered, m_view,
             &SpreadsheetView::selectUsedRange);
 
+    // Zoom: created disabled and never wired, so View > Zoom sat greyed out.
+    for (QAction *action : {m_actions.viewZoomIn, m_actions.viewZoomOut,
+                            m_actions.viewZoomReset}) {
+        action->setEnabled(true);
+    }
+    connect(m_actions.viewZoomIn, &QAction::triggered, this,
+            [this] { m_view->setZoom(m_view->zoom() * 1.25); });
+    connect(m_actions.viewZoomOut, &QAction::triggered, this,
+            [this] { m_view->setZoom(m_view->zoom() / 1.25); });
+    connect(m_actions.viewZoomReset, &QAction::triggered, this,
+            [this] { m_view->setZoom(1.0); });
+
+    // Print and preview share the grid renderer, so paper matches the sheet.
+    m_actions.filePrint->setEnabled(true);
+    connect(m_actions.filePrint, &QAction::triggered, this,
+            [this] { Shell::PrintHelper::print(this, printRenderCallback()); });
+    m_actions.filePrintPreview->setEnabled(true);
+    connect(m_actions.filePrintPreview, &QAction::triggered, this,
+            [this] { Shell::PrintHelper::printPreview(this, printRenderCallback()); });
+
     m_actions.editFind->setEnabled(true);
     m_actions.editFindNext->setEnabled(true);
     m_actions.editFindPrevious->setEnabled(true);
@@ -268,6 +291,61 @@ void CalcWindow::loadWorkbookPath(const QString &path)
     } else {
         statusBar()->showMessage(tr("Open failed: %1").arg(error), 8000);
     }
+}
+
+Shell::PrintRenderCallback CalcWindow::printRenderCallback() const
+{
+    // Snapshot what to print now; the render runs synchronously inside the
+    // print dialog, so the document cannot move under it.
+    const SpreadsheetDocument *doc = m_document;
+    const qint32 sheetIndex = m_document->activeSheet();
+    const CellRange used = m_view->usedRange();
+    return [doc, sheetIndex, used](QPrinter *printer, QPainter *painter) {
+        if (!used.isValid()) {
+            return;
+        }
+        const Sheet &sheet = doc->workbook()->sheetAt(sheetIndex);
+        const QRectF page(0, 0, printer->width(), printer->height());
+        // Paginate the used range by rows, fitting the columns to the page
+        // width. A row never splits across pages.
+        qreal totalWidth = 0;
+        for (qint32 col = used.topLeft.col; col <= used.bottomRight.col; ++col) {
+            totalWidth += sheet.columnWidth(col);
+        }
+        const qreal scale = totalWidth > 0
+            ? qMin<qreal>(1.0, page.width() / totalWidth)
+            : 1.0;
+        painter->save();
+        painter->scale(scale, scale);
+        const qreal pageHeight = page.height() / scale;
+        qreal y = 0;
+        for (qint32 row = used.topLeft.row; row <= used.bottomRight.row; ++row) {
+            const qreal h = sheet.rowHeight(row);
+            if (y > 0 && y + h > pageHeight) {
+                printer->newPage();
+                y = 0;
+            }
+            qreal x = 0;
+            for (qint32 col = used.topLeft.col; col <= used.bottomRight.col; ++col) {
+                const qreal w = sheet.columnWidth(col);
+                const QRectF cell(x, y, w, h);
+                painter->drawRect(cell);
+                const QString text = doc->displayTextAt(sheetIndex, {row, col});
+                if (!text.isEmpty()) {
+                    const CalcEng::Cell *data = sheet.cellAt({row, col});
+                    const Qt::Alignment align = Qt::AlignVCenter
+                        | ((data != nullptr
+                            && (isNumber(data->value) || isBool(data->value)))
+                               ? Qt::AlignRight
+                               : Qt::AlignLeft);
+                    painter->drawText(cell.adjusted(3, 0, -3, 0), int(align), text);
+                }
+                x += w;
+            }
+            y += h;
+        }
+        painter->restore();
+    };
 }
 
 void CalcWindow::goToRange(const CalcEng::RangeRef &ref)
