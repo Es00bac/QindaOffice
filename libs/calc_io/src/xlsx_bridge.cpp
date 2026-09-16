@@ -156,9 +156,12 @@ bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
         Sheet &sheet = out->addSheet(names.at(sheetIndex));
         QHash<QString, qint32> styleIds;
 
-        // Shared formulas: only the master cell carries text. Resolve each
-        // shared cell's master through its reference and shift the master
-        // AST by the cell's offset (plan section 7.2).
+        // Shared formulas: only the master cell carries text and the group's
+        // ref; dependents carry only the si group index. Record masters by si
+        // as they come up (row-major order puts masters first) and resolve
+        // dependents through the map, shifting the master AST by the cell's
+        // offset (plan section 7.2).
+        QHash<int, QXlsx::CellReference> sharedMasters;
         const QXlsx::CellRange dim = worksheet->dimension();
         for (int row = qMax(1, dim.firstRow()); row <= dim.lastRow(); ++row) {
             for (int col = qMax(1, dim.firstColumn()); col <= dim.lastColumn(); ++col) {
@@ -174,15 +177,27 @@ bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
                     if (!parsed.error.isEmpty() || !parsed.root) {
                         out->setCellValue(sheetIndex, addr,
                                           QStringLiteral("=") + text);
-                        continue;
+                    } else {
+                        // Volatility/dependency tracking happens in setCellInput;
+                        // formulas install via the shared installer.
+                        out->installFormula(sheetIndex, addr, parsed.root, text);
                     }
-                    // Volatility/dependency tracking happens in setCellInput;
-                    // formulas install via the shared installer.
-                    out->installFormula(sheetIndex, addr, parsed.root, text);
+                    if (formula.formulaType() == QXlsx::CellFormula::SharedType) {
+                        sharedMasters.insert(formula.sharedIndex(),
+                                             QXlsx::CellReference(row, col));
+                    }
                 } else if (formula.formulaType() == QXlsx::CellFormula::SharedType) {
-                    // Reconstruct from the master.
-                    const QXlsx::CellRange sharedRange = formula.reference();
-                    const QXlsx::CellReference master = sharedRange.topLeft();
+                    // Reconstruct from the master. AGENT-GUARD: dependents
+                    // carry no ref attribute — reference() is a default
+                    // (-1,-1) range here, so the master must come from the
+                    // si map; the ref path is only a fallback for masters
+                    // that hid themselves from the row-major scan.
+                    QXlsx::CellReference master;
+                    if (sharedMasters.contains(formula.sharedIndex())) {
+                        master = sharedMasters.value(formula.sharedIndex());
+                    } else {
+                        master = formula.reference().topLeft();
+                    }
                     std::shared_ptr<QXlsx::Cell> masterCell =
                         worksheet->cellAt(master.row(), master.column());
                     if (masterCell == nullptr) {
@@ -198,17 +213,34 @@ bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
                     }
                     const NodePtr shifted = shiftNode(parsed.root, row - master.row(),
                                                       col - master.column());
-                    out->installFormula(sheetIndex, addr, shifted, masterText);
+                    // Store the shifted text, not the master's (the formula
+                    // bar and the xlsx export read the stored text).
+                    out->installFormula(sheetIndex, addr, shifted,
+                                        nodeText(shifted));
                 } else {
                     out->setCellValue(sheetIndex, addr,
                                       valueFromCell(cell, date1904));
                 }
+                // Import every cell that carries a real format record; the
+                // dedup key must cover all imported attributes, not just the
+                // number-format string (bold-only and italic-only cells
+                // shared a key before and cross-contaminated styles).
                 const QXlsx::Format format = cell->format();
-                if (!format.numberFormat().isEmpty() || format.fontBold()
-                    || format.fontItalic()) {
-                    const QString key = format.numberFormat();
+                if (!format.isEmpty()) {
+                    const CellStyle imported = styleFromFormat(format);
+                    const QString key = imported.numberFormat + QLatin1Char('\x1f')
+                        + (imported.bold ? QLatin1String("B") : QString())
+                        + (imported.italic ? QLatin1String("I") : QString())
+                        + (imported.underline ? QLatin1String("U") : QString())
+                        + QString::number(imported.fontSize) + QLatin1Char('\x1f')
+                        + imported.fontFamily + QLatin1Char('\x1f')
+                        + (imported.fg.has_value()
+                               ? QString::number((*imported.fg).r * 65536
+                                                     + (*imported.fg).g * 256
+                                                     + (*imported.fg).b)
+                               : QString());
                     if (!styleIds.contains(key)) {
-                        styleIds.insert(key, out->addStyle(styleFromFormat(format)));
+                        styleIds.insert(key, out->addStyle(imported));
                     }
                     sheet.setStyleIdAt(addr, styleIds.value(key));
                 }
@@ -231,6 +263,11 @@ bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
                             {range.lastRow() - 1, range.lastColumn() - 1}});
         }
     }
+    // AGENT-GUARD: a final full recalc is mandatory. installFormula evaluates
+    // each cell as it loads, so a formula referencing a sheet that had not
+    // been read yet (Summary before Detail — the common layout) captured a
+    // stale 0/#REF! and no dependency edge could ever fix it afterwards.
+    out->recalcAll();
     return true;
 }
 

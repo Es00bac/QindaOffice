@@ -73,9 +73,12 @@ bool OfficeApplication::acquirePrimary(const QStringList &initialPaths, bool *ha
 
 void OfficeApplication::offerRecovery()
 {
-    if (m_journal == nullptr) {
-        return; // stores not built (windowless runs) - nothing to offer
-    }
+    // AGENT-GUARD: build the stores HERE, not lazily on the first window.
+    // runOfficeApp calls offerRecovery() before any window exists; with the
+    // old lazy-only construction m_journal was always null and crash
+    // recovery was silently never offered — the mandated default-on safety
+    // net wrote entries no launch ever surfaced.
+    ensureStores();
     const QStringList keys = m_journal->pendingKeys();
     for (const QString &key : keys) {
         const auto entry = m_journal->entry(key);
@@ -139,11 +142,23 @@ DocumentWindow *OfficeApplication::createWindow()
 void OfficeApplication::wireWindow(DocumentWindow *window)
 {
     m_windows.append(window);
+    // AGENT-GUARD: closed windows must be DESTROYED, not merely hidden.
+    // Without WA_DeleteOnClose every close left a zombie: reopen-activation
+    // raised hidden windows, pristine-window reuse loaded files into
+    // invisible windows, and the 32-window cap filled up with corpses.
+    window->setAttribute(Qt::WA_DeleteOnClose);
     window->setAppServices(this);
     connect(window, &DocumentWindow::newWindowRequested, this,
             [this] { static_cast<void>(newWindow()); });
     connect(window, &DocumentWindow::openPathsRequested, this,
             [this](const QStringList &paths) { openPaths(paths); });
+    // The closing path must be captured while the window object is alive;
+    // destroyed() hands out a bare QObject past the derived destructor.
+    connect(window, &DocumentWindow::closing, this, [this](DocumentWindow *closingWindow) {
+        m_lastClosingPath = closingWindow->document() != nullptr
+            ? closingWindow->document()->canonicalPath()
+            : QString();
+    });
     connect(window, &DocumentWindow::destroyed, this, &OfficeApplication::windowClosed);
 }
 
@@ -212,6 +227,12 @@ bool OfficeApplication::openPaths(const QStringList &paths, QString *diagnostic)
             }
         }
     }
+    // Keep the restore inventory in step with runtime opens (SC: it was
+    // only ever written from close handling, so a crash left nothing to
+    // restore even with the feature enabled).
+    if (allOpened) {
+        persistWindowInventory();
+    }
     return allOpened;
 }
 
@@ -241,14 +262,13 @@ int OfficeApplication::windowCount() const
 void OfficeApplication::windowClosed(QObject *object)
 {
     // The closing window's own path matters for the final-close rule
-    // (ADR-0110): when the last window closes, its path is preserved.
-    QString closedPath;
-    if (auto *window = qobject_cast<DocumentWindow *>(object);
-        window != nullptr && window->document() != nullptr) {
-        closedPath = window->document()->canonicalPath();
-    }
+    // (ADR-0110): when the last window closes, its path is preserved. The
+    // path was captured by the closing() signal — qobject_cast here is
+    // always null because destroyed() fires after ~DocumentWindow ran.
+    Q_UNUSED(object);
     pruneClosed();
-    updateInventoryOnClose(closedPath);
+    updateInventoryOnClose(m_lastClosingPath);
+    m_lastClosingPath.clear();
 }
 
 void OfficeApplication::pruneClosed()
@@ -299,6 +319,7 @@ void OfficeApplication::setRestorePreviousDocuments(bool enabled)
 
 void OfficeApplication::restoreFromInventory()
 {
+    ensureStores();
     if (m_inventory == nullptr || !m_inventory->enabled()) {
         return;
     }

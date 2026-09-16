@@ -60,6 +60,7 @@ private:
     void commitStroke();
     void rebuildGrid();
     void syncBlocks();
+    void persistTextBlocks();
     void syncBlocksGeometry();
     void pushUndoSnapshot();
     [[nodiscard]] QPointF toPagePos(const QPointF &widgetPos) const;
@@ -72,6 +73,8 @@ private:
     qreal m_zoom = 1.0;
     Ink::StrokeBuilder m_builder;
     bool m_inking = false;
+    bool m_syncingBlocks = false;
+    NoteTool m_toolBeforeEraser = NoteTool::Pen; // tool restored after eraser-end flips
     Ink::SpatialGrid m_grid{64.0};
     QVector<Ink::StrokeLayer> m_undoStack;
     QList<QTextEdit *> m_textBlocks;

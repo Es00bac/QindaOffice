@@ -78,28 +78,38 @@ public:
         connect(reply, &QNetworkReply::finished, this, [this, reply] {
             m_idleTimer.stop();
             m_parser.finish();
+            // Cancellation must surface as failed(Cancelled), not as a
+            // "successful" truncated answer (the earlier release had no
+            // cancelled branch, so Stop mid-stream enabled Insert/Replace
+            // on partial text).
+            if (m_cancelled) {
+                emitFailed({ChatError::Cancelled, QStringLiteral("cancelled"), false});
+                reply->deleteLater();
+                return;
+            }
             const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             if (status == 401) {
-                emit failed({ChatError::Auth, tr("API key rejected"), false});
+                emitFailed({ChatError::Auth, tr("API key rejected"), false});
             } else if (status == 429) {
-                emit failed({ChatError::RateLimited, tr("rate limited"), true});
+                emitFailed({ChatError::RateLimited, tr("rate limited"), true});
             } else if (status < 200 || status >= 300) {
-                emit failed({ChatError::Unknown, tr("HTTP %1").arg(status), status >= 500});
+                emitFailed({ChatError::Unknown, tr("HTTP %1").arg(status), status >= 500});
             } else if (m_stopReason == QLatin1String("max_tokens")) {
-                emit failed({ChatError::Unknown, tr("answer hit max_tokens"), true});
+                emitFailed({ChatError::Unknown, tr("answer hit max_tokens"), true});
             } else {
-                emit finished({m_text, m_usage});
+                emitFinished({m_text, m_usage});
             }
             reply->deleteLater();
         });
         connect(&m_idleTimer, &QTimer::timeout, this, [this, reply] {
-            emit failed({ChatError::Timeout, tr("stream idle for 60 s"), true});
+            emitFailed({ChatError::Timeout, tr("stream idle for 60 s"), true});
             reply->abort();
         });
     }
 
     void cancel() override
     {
+        m_cancelled = true;
         if (m_reply != nullptr) {
             m_reply->abort();
         }
@@ -107,6 +117,7 @@ public:
 
 private:
     QNetworkReply *m_reply = nullptr;
+    bool m_cancelled = false;
     QTimer m_idleTimer{this};
     QString m_text;
     QString m_stopReason;
@@ -135,7 +146,7 @@ private:
             m_usage.outputTokens += usage.value(QStringLiteral("output_tokens")).toInt();
         } else if (event == QLatin1String("error")) {
             const QJsonObject error = object.value(QStringLiteral("error")).toObject();
-            emit failed({ChatError::Unknown,
+            emitFailed({ChatError::Unknown,
                          error.value(QStringLiteral("message")).toString(), true});
         }
     }};

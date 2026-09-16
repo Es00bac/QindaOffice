@@ -38,6 +38,7 @@ inline const char kViewZoomReset[] = "viewZoomResetAction";
 inline const char kViewShowMenuBar[] = "viewShowMenuBarAction";
 inline const char kAiAssistant[] = "aiAssistantAction";
 inline const char kSettingsPreferences[] = "settingsPreferencesAction";
+inline const char kSettingsRestorePrevious[] = "settingsRestorePreviousAction";
 inline const char kHelpAbout[] = "helpAboutAction";
 inline const char kHelpAboutQt[] = "helpAboutQtAction";
 

@@ -21,8 +21,15 @@ bool exportDocumentPdf(QTextDocument *document, const QString &path, QString *er
         }
         return false;
     }
+    // AGENT-GUARD: the PDF page must match the DOCUMENT's page size — the
+    // earlier release hardcoded A4, so Letter-sized documents came out
+    // distorted (the two-axis scale in renderDocumentPages stretched x and
+    // y differently).
     QPdfWriter writer(path);
-    writer.setPageSize(QPageSize(QSizeF(210, 297), QPageSize::Millimeter)); // A4
+    const QSizeF docPage = document->pageSize();
+    const QPageSize size(QSize(docPage.width(), docPage.height()), QPageSize::Point);
+    writer.setPageSize(size);
+    writer.setPageMargins(QMarginsF(0, 0, 0, 0));
     writer.setResolution(96);
     writer.setCreator(QStringLiteral("QindaWrite"));
     writer.setTitle(QFileInfo(path).completeBaseName());
@@ -79,7 +86,12 @@ void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDoc
     // (the painter transform persists across newPage on QPdfWriter/QPrinter).
     const QSizeF page = document->pageSize();
     painter->save();
-    painter->scale(targetPixels.width() / page.width(), targetPixels.height() / page.height());
+    // AGENT-GUARD: a UNIFORM scale (width-derived). Two independent axes
+    // distorted every document whose aspect ratio differed from the target;
+    // height overflow is a page-setup concern, never a licence to stretch.
+    const qreal uniformScale =
+        page.width() > 0 ? targetPixels.width() / page.width() : 1.0;
+    painter->scale(uniformScale, uniformScale);
     const QAbstractTextDocumentLayout *layout = document->documentLayout();
     const int pages = qMax(1, int(std::ceil(layout->documentSize().height() / page.height())));
     for (int i = 0; i < pages; ++i) {

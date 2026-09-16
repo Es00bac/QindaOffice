@@ -10,9 +10,10 @@ void registerConditionalAggFunctions(QHash<QString, FunctionSpec> &r)
         return FunctionSpec{3, 255, false,
                             [average, countOnly, maxima](EvalContext &ctx,
                                                          const QVector<Arg> &args) -> Value {
+                                const auto *valueRangeView = std::get_if<RangeView>(&args.at(0));
+                                if (!valueRangeView) return Err::Value;
                                 QVector<Value> values;
-                                Value err =
-                                    flatRangeValues(ctx, std::get<RangeView>(args.at(0)), &values);
+                                Value err = flatRangeValues(ctx, *valueRangeView, &values);
                                 if (isErr(err)) return err;
                                 struct Pair {
                                     QVector<Value> cells;
@@ -20,9 +21,10 @@ void registerConditionalAggFunctions(QHash<QString, FunctionSpec> &r)
                                 };
                                 QVector<Pair> pairs;
                                 for (int i = 1; i + 1 < args.size(); i += 2) {
+                                    const auto *critRangeView = std::get_if<RangeView>(&args.at(i));
+                                    if (!critRangeView) return Err::Value;
                                     QVector<Value> cells;
-                                    err = flatRangeValues(ctx, std::get<RangeView>(args.at(i)),
-                                                          &cells);
+                                    err = flatRangeValues(ctx, *critRangeView, &cells);
                                     if (isErr(err)) return err;
                                     pairs.append({cells,
                                                   toText(scalarOrValue(args.at(i + 1)))});
@@ -44,6 +46,10 @@ void registerConditionalAggFunctions(QHash<QString, FunctionSpec> &r)
                                         ++count;
                                         continue;
                                     }
+                                    // Blank (and text) cells in the value
+                                    // range contribute nothing — counting a
+                                    // blank as 0 skewed MINIFS/AVERAGEIFS.
+                                    if (isBlank(values.at(i))) continue;
                                     const auto d = toNumber(values.at(i));
                                     if (!d.has_value()) continue;
                                     if (count == 0 || (maxima && *d > result)

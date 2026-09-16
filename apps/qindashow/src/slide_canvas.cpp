@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "slide_canvas.h"
 
+#include <algorithm>
 #include <functional>
 
 #include "slide_renderer.h"
@@ -125,7 +126,10 @@ SlideCanvas::SlideCanvas(QWidget *parent)
 
 void SlideCanvas::setSlide(ShowModel::Slide *slide, const QSizeF &slideSize)
 {
-    commitTextEdit(true); // never drop an in-flight edit
+    // AGENT-GUARD: COMMIT (cancelled=false) — the `true` argument here was
+    // the cancel path, so switching slides silently discarded a typed edit
+    // while the comment claimed the opposite.
+    commitTextEdit(false);
     // Selection survives rebuilds (setSlide re-runs after every undo via
     // the window's fullRefresh): remember shape ids, not item pointers.
     QStringList selectedIds;
@@ -332,16 +336,35 @@ void SlideCanvas::addImage(const QString &path, const QRectF &rect)
 
 void SlideCanvas::deleteSelected()
 {
-    ShapeItem *item = selectedItem();
-    if (item == nullptr || m_slide == nullptr) {
+    if (m_slide == nullptr) {
         return;
     }
-    const int index = shapeIndex(item->shapeId());
-    const ShowModel::Shape removed = *item->modelShape();
-    m_scene->removeItem(item);
-    delete item;
-    m_slide->shapes.removeAt(index);
-    emit shapeRemoved(index, removed);
+    // AGENT-GUARD: remove EVERY selected shape (highest model index first so
+    // the removals stay index-stable). The single-item version needed one
+    // keypress per shape in a rubber-band selection.
+    const QList<QGraphicsItem *> selected = m_scene->selectedItems();
+    QVector<QPair<int, ShowModel::Shape>> removed;
+    for (QGraphicsItem *graphicsItem : selected) {
+        auto *item = qgraphicsitem_cast<ShapeItem *>(graphicsItem);
+        if (item == nullptr) {
+            continue;
+        }
+        removed.append({shapeIndex(item->shapeId()), *item->modelShape()});
+        m_scene->removeItem(item);
+        delete item;
+    }
+    if (removed.isEmpty()) {
+        return;
+    }
+    std::sort(removed.begin(), removed.end(),
+              [](const auto &a, const auto &b) { return a.first > b.first; });
+    for (const auto &[index, shape] : removed) {
+        if (index < 0 || index >= m_slide->shapes.size()) {
+            continue;
+        }
+        m_slide->shapes.removeAt(index);
+        emit shapeRemoved(index, shape);
+    }
     emit slideEdited();
 }
 

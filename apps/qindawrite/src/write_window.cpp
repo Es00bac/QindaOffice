@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_window.h"
 
+#include <QMessageBox>
+#include <QRegularExpression>
+
 #include "find_replace_bar.h"
 #include "format_controller.h"
 #include "table_actions.h"
@@ -84,9 +87,15 @@ public:
     }
     void insertAtCursor(const QString &text) override
     {
+        // AGENT-GUARD: insert at the live caret — the earlier release moved
+        // to End first, so every AI "Insert" landed at document end.
         QTextCursor cursor = m_view->control()->textCursor();
-        cursor.movePosition(QTextCursor::End);
-        cursor.insertText(QStringLiteral("\n") + text);
+        cursor.beginEditBlock();
+        if (!cursor.atBlockStart()) {
+            cursor.insertText(QStringLiteral("\n"));
+        }
+        cursor.insertText(text);
+        cursor.endEditBlock();
         m_doc->setDirty(true);
     }
 
@@ -248,11 +257,14 @@ void WriteWindow::exportPdf()
 void WriteWindow::applyStyle(int styleId)
 {
     StyleCatalog catalog;
-    QTextCursor cursor(m_document->textDocument());
+    // AGENT-GUARD: style the view's live cursor, not a fresh cursor over the
+    // document — a document-constructed cursor has no selection, which made
+    // every style application land on the first paragraph.
+    QTextCursor cursor = m_view->control()->textCursor();
     cursor.beginEditBlock();
-    QTextBlock block = m_document->textDocument()->begin();
     const int start = qMin(cursor.selectionStart(), cursor.selectionEnd());
     const int end = qMax(cursor.selectionStart(), cursor.selectionEnd());
+    QTextBlock block = m_document->textDocument()->begin();
     while (block.isValid()) {
         if (block.position() >= start && block.position() <= end) {
             QTextCursor blockCursor(block);
@@ -270,6 +282,15 @@ void WriteWindow::applyStyle(int styleId)
 Shell::PrintRenderCallback WriteWindow::printRenderCallback() const
 {
     return [this](QPrinter *printer, QPainter *painter) {
+        // WYSIWYG: the paper follows the document's page size, matching the
+        // on-screen and PDF pagination (the earlier release printed onto the
+        // printer's default size and clipped or stretched Letter/A4 setups).
+        const QSizeF docPage = m_document->pageSize();
+        if (docPage.width() > 0 && docPage.height() > 0) {
+            printer->setPageSize(QPageSize(QSize(docPage.width(), docPage.height()),
+                                           QPageSize::Point));
+            printer->setPageMargins(QMarginsF(0, 0, 0, 0));
+        }
         renderDocumentPages(painter, QSizeF(printer->width(), printer->height()),
                             m_document->textDocument(),
                             [printer] { printer->newPage(); }, m_document->decoration());
@@ -302,9 +323,10 @@ void WriteWindow::addSpellingActions(QMenu *menu, const QPointF &docPos)
         menu->insertMenu(first, suggestMenu);
     }
     QAction *ignore = new QAction(tr("Ignore '%1'").arg(text), menu);
-    connect(ignore, &QAction::triggered, this, [text] {
-        // Session-scoped ignore in v1 (no custom dictionary management).
-        Q_UNUSED(text);
+    connect(ignore, &QAction::triggered, this, [this, text] {
+        // Session-scoped ignore (no custom dictionary management); the
+        // checker rehighlights so the squiggle drops immediately.
+        m_spell->ignoreWord(text);
     });
     if (first != nullptr) {
         menu->insertAction(first, ignore);
@@ -321,7 +343,34 @@ void WriteWindow::insertFileMenuActions(QMenu *fileMenu)
     }
     QMenu *submenu = fileMenu->addMenu(tr("New from &Template"));
     for (const Shell::TemplateEntry &entry : templates) {
-        submenu->addAction(entry.name, this, [this, path = entry.path] {
+        QAction *templateAction = submenu->addAction(entry.name);
+        // Sanitize the display name into a stable, valid objectName.
+        QString idPart;
+        for (const QChar c : entry.name) {
+            idPart.append(c.isLetterOrNumber() ? c : QLatin1Char('_'));
+        }
+        templateAction->setObjectName(QStringLiteral("writeTemplate_%1").arg(idPart));
+        connect(templateAction, &QAction::triggered, this, [this, path = entry.path] {
+            // Loading replaces the document: ask for consent when the
+            // current one has unsaved changes (same contract as closing).
+            if (m_document->isDirty()) {
+                const QMessageBox::StandardButton answer = QMessageBox::question(
+                    this, tr("Unsaved Changes"),
+                    tr("Loading the template discards unsaved changes to the "
+                       "current document. Continue?"),
+                    QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+                    QMessageBox::Cancel);
+                if (answer == QMessageBox::Cancel) {
+                    return;
+                }
+                if (answer == QMessageBox::Save) {
+                    // Reuse the window's save path; a cancelled save also
+                    // cancels the template load.
+                    if (!saveDocument()) {
+                        return;
+                    }
+                }
+            }
             QString error;
             // The view renders the document's shared QTextDocument, so a
             // load refreshes it directly; detach so saving never touches
@@ -329,6 +378,8 @@ void WriteWindow::insertFileMenuActions(QMenu *fileMenu)
             if (m_document->load(path, &error)) {
                 m_document->adoptPath(QString());
                 m_document->setDirty(true);
+            } else {
+                statusBar()->showMessage(tr("Template failed: %1").arg(error), 8000);
             }
         });
     }
@@ -346,6 +397,10 @@ void WriteWindow::insertApplicationMenus(QMenu *before)
     const QStringList names = catalog.names();
     for (int id = 0; id < names.size(); ++id) {
         QAction *action = styleMenu->addAction(names.at(id));
+        // AGENT-GUARD: every menu command needs a stable objectName — the
+        // desktop global menu resolves activations exclusively by it
+        // (unnamed actions were dead from the panel).
+        action->setObjectName(QStringLiteral("writeStyle%1").arg(id));
         connect(action, &QAction::triggered, this, [this, id] { applyStyle(id); });
     }
     formatMenu->addSeparator();
@@ -365,6 +420,7 @@ void WriteWindow::insertApplicationMenus(QMenu *before)
     menuBar()->insertMenu(before->menuAction(), aiMenu);
     for (const Ai::InlineAction &action : Ai::inlineActions()) {
         QAction *item = aiMenu->addAction(action.displayName);
+        item->setObjectName(QStringLiteral("writeAi%1").arg(action.id));
         connect(item, &QAction::triggered, this, [this, id = action.id] {
             m_inline->run(id, this);
         });
@@ -374,6 +430,7 @@ void WriteWindow::insertApplicationMenus(QMenu *before)
     pageMenu->setObjectName(QStringLiteral("pageMenu"));
     menuBar()->insertMenu(before->menuAction(), pageMenu);
     QAction *pageSetup = pageMenu->addAction(tr("&Page Setup…"));
+    pageSetup->setObjectName(QStringLiteral("writePageSetup"));
     connect(pageSetup, &QAction::triggered, this, [this] {
         QDialog dialog(this);
         auto *layout = new QFormLayout(&dialog);
@@ -405,6 +462,7 @@ void WriteWindow::insertApplicationMenus(QMenu *before)
         }
     });
     QAction *exportAction = pageMenu->addAction(tr("&Export PDF…"));
+    exportAction->setObjectName(QStringLiteral("writeExportPdf"));
     connect(exportAction, &QAction::triggered, this, &WriteWindow::exportPdf);
 }
 

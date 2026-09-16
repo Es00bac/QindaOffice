@@ -8,6 +8,7 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
+#include <QSaveFile>
 #include <QTextDocument>
 #include <QTextDocumentWriter>
 #include <QTemporaryDir>
@@ -16,6 +17,27 @@
 namespace QindaOffice::Apps::Write {
 
 namespace {
+
+// AGENT-GUARD: all direct saves go through this helper so a failed or
+// truncated write (ENOSPC, quota) is reported instead of silently saving
+// half a document and clearing the dirty flag.
+bool writeUtf8Atomically(const QString &path, const QByteArray &payload, QString *error)
+{
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        if (error != nullptr) {
+            *error = file.errorString();
+        }
+        return false;
+    }
+    if (file.write(payload) != payload.size() || !file.commit()) {
+        if (error != nullptr) {
+            *error = file.errorString();
+        }
+        return false;
+    }
+    return true;
+}
 
 QString extensionOf(const QString &path)
 {
@@ -82,8 +104,36 @@ bool saveViaHtml(const QString &path, QTextDocument *document, const QString &ta
     if (output.isEmpty()) {
         return false;
     }
-    QFile::remove(path);
-    return QFile::rename(output, path);
+    // AGENT-GUARD: copy through QSaveFile at the destination — the converted
+    // file lives in the QTemporaryDir (often tmpfs) while `path` is on the
+    // user's filesystem, so QFile::rename fails with EXDEV. The previous
+    // code removed the target first, destroying the user's file on that
+    // failure. QSaveFile also keeps the write atomic and never truncates
+    // the original when the conversion output is broken.
+    QSaveFile out(path);
+    if (!out.open(QIODevice::WriteOnly)) {
+        if (error != nullptr) {
+            *error = out.errorString();
+        }
+        return false;
+    }
+    QFile converted(output);
+    if (!converted.open(QIODevice::ReadOnly)) {
+        if (error != nullptr) {
+            *error = converted.errorString();
+        }
+        out.cancelWriting();
+        return false;
+    }
+    const QByteArray payload = converted.readAll();
+    if (payload.isEmpty() || out.write(payload) != payload.size() || !out.commit()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("converting to %1 produced no usable output").arg(targetExt);
+        }
+        out.cancelWriting();
+        return false;
+    }
+    return true;
 }
 
 } // namespace
@@ -150,37 +200,14 @@ bool saveDocument(const QString &path, QTextDocument *document, QString *error)
 {
     const QString ext = extensionOf(path);
     if (ext == QLatin1String("html") || ext == QLatin1String("htm")) {
-        QFile file(path);
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            if (error != nullptr) {
-                *error = file.errorString();
-            }
-            return false;
-        }
-        file.write(document->toHtml().toUtf8());
-        return true;
+        return writeUtf8Atomically(path, document->toHtml().toUtf8(), error);
     }
     if (ext == QLatin1String("md")) {
-        QFile file(path);
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            if (error != nullptr) {
-                *error = file.errorString();
-            }
-            return false;
-        }
-        file.write(document->toMarkdown(QTextDocument::MarkdownDialectGitHub).toUtf8());
-        return true;
+        return writeUtf8Atomically(
+            path, document->toMarkdown(QTextDocument::MarkdownDialectGitHub).toUtf8(), error);
     }
     if (ext == QLatin1String("txt")) {
-        QFile file(path);
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            if (error != nullptr) {
-                *error = file.errorString();
-            }
-            return false;
-        }
-        file.write(document->toPlainText().toUtf8());
-        return true;
+        return writeUtf8Atomically(path, document->toPlainText().toUtf8(), error);
     }
     if (ext == QLatin1String("odt")) {
         QTextDocumentWriter writer(path, "odf");

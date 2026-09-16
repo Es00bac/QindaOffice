@@ -22,11 +22,13 @@ ParagraphStyle make(int id, const QString &name, int headingLevel, int pointSize
     style.blockFormat.setHeadingLevel(0);
     style.blockFormat.setNonBreakableLines(false);
     style.blockFormat.setLeftMargin(0);
+    // Only Heading 1 / Title force a page break — applying "Heading 3"
+    // mid-flow previously started a new page at EVERY heading level.
+    style.blockFormat.setPageBreakPolicy(QTextFormat::PageBreak_Auto);
     if (headingLevel > 0) {
         style.blockFormat.setHeadingLevel(headingLevel);
-        style.blockFormat.setPageBreakPolicy(QTextFormat::PageBreak_AlwaysBefore);
         if (headingLevel == 1) {
-            style.blockFormat.setHeadingLevel(1);
+            style.blockFormat.setPageBreakPolicy(QTextFormat::PageBreak_AlwaysBefore);
         }
     }
     style.charFormat.setFontPointSize(pointSize);
@@ -73,12 +75,23 @@ QStringList StyleCatalog::names() const
 void StyleCatalog::apply(QTextCursor cursor, int id) const
 {
     const ParagraphStyle &style = m_styles.at(qBound(0, id, int(m_styles.size()) - 1));
+    // SET (not merge) the block format: each style fully owns the properties
+    // it cares about, and mergeBlockFormat kept the block's stale page-break
+    // policy / heading level (Heading -> Normal kept breaking pages).
     QTextBlockFormat block = style.blockFormat;
     block.setProperty(kStyleIdProperty, style.id);
-    cursor.mergeBlockFormat(block);
-    cursor.setBlockCharFormat(style.charFormat);
+    cursor.setBlockFormat(block);
+    // A style that does not set a family RESETS it instead of keeping the
+    // previous style's (Code -> Normal left monospace behind). Probe with
+    // hasProperty: reading fontFamily() asserts when the property is unset
+    // (Qt 6.11 asserts on the empty string-list property).
+    QTextCharFormat charFormat = style.charFormat;
+    if (!charFormat.hasProperty(QTextFormat::FontFamily)) {
+        charFormat.setFontFamily(QString());
+    }
+    cursor.setBlockCharFormat(charFormat);
     if (cursor.hasSelection()) {
-        cursor.mergeCharFormat(style.charFormat);
+        cursor.mergeCharFormat(charFormat);
     }
 }
 

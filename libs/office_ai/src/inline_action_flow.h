@@ -49,7 +49,7 @@ public:
     void run(const QString &actionId, QWidget *dialogParent);
 
 private:
-    void execute(const InlineAction &action);
+    void execute(const InlineAction &action, QWidget *dialogParent = nullptr);
     [[nodiscard]] static QString extractProposal(const QString &modelText);
 
     ModelCatalog *m_catalog;

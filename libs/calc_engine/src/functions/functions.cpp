@@ -88,6 +88,44 @@ Value sparseRangeValues(const EvalContext &ctx, const RangeView &view, QVector<V
     return Value();
 }
 
+namespace {
+
+// Builds a case-insensitive anchored regex from Excel's * ? wildcards,
+// escaping every other regex metacharacter and honouring the ~ escape
+// (~* and ~? are literal; ~~ is a literal tilde).
+QRegularExpression wildcardRegex(const QString &criteria)
+{
+    QString pattern;
+    for (int i = 0; i < criteria.size(); ++i) {
+        const QChar c = criteria.at(i);
+        if (c == QLatin1Char('~') && i + 1 < criteria.size()) {
+            const QChar next = criteria.at(++i);
+            pattern += QRegularExpression::escape(QString(next));
+            continue;
+        }
+        if (c == QLatin1Char('*')) {
+            pattern += QStringLiteral(".*");
+        } else if (c == QLatin1Char('?')) {
+            pattern += QLatin1Char('.');
+        } else {
+            pattern += QRegularExpression::escape(QString(c));
+        }
+    }
+    return QRegularExpression(QStringLiteral("^") + pattern + QStringLiteral("$"),
+                              QRegularExpression::CaseInsensitiveOption);
+}
+
+bool textMatchesWithWildcards(const QString &text, const QString &criteria)
+{
+    if (criteria.contains(QLatin1Char('*')) || criteria.contains(QLatin1Char('?'))
+        || criteria.contains(QLatin1Char('~'))) {
+        return wildcardRegex(criteria).match(text).hasMatch();
+    }
+    return QString::compare(text, criteria, Qt::CaseInsensitive) == 0;
+}
+
+} // namespace
+
 bool criteriaMatches(const Value &cell, const QString &rawCriteria)
 {
     const QString criteria = rawCriteria.trimmed();
@@ -114,10 +152,18 @@ bool criteriaMatches(const Value &cell, const QString &rawCriteria)
             if (numOk) {
                 const std::optional<double> cellNum = toNumber(cell);
                 if (!cellNum.has_value()) {
-                    return false;
+                    // Excel: "<>5" counts TEXT cells as not-equal; only
+                    // blanks fall outside every numeric comparison.
+                    return op.prefix == QLatin1String("<>") && !isBlank(cell);
                 }
                 const double diff = *cellNum - num;
                 return op.check(diff == 0 ? 0 : (diff < 0 ? -1 : 1));
+            }
+            // Wildcards apply after operators too ("=a*", "<>b?").
+            if (rest.contains(QLatin1Char('*')) || rest.contains(QLatin1Char('?'))
+                || rest.contains(QLatin1Char('~'))) {
+                const bool matched = textMatchesWithWildcards(toText(cell), rest);
+                return op.check(matched ? 0 : 1);
             }
             const int cmp = QString::compare(toText(cell), rest, Qt::CaseInsensitive);
             return op.check(cmp == 0 ? 0 : (cmp < 0 ? -1 : 1));
@@ -133,16 +179,19 @@ bool criteriaMatches(const Value &cell, const QString &rawCriteria)
         }
         return criteria;
     }();
-    if (criteria.contains(QLatin1Char('*')) || criteria.contains(QLatin1Char('?'))) {
-        QString pattern = criteria;
-        pattern.replace(QLatin1Char('*'), QStringLiteral(".*"));
-        pattern.replace(QLatin1Char('?'), QStringLiteral("."));
-        const QRegularExpression re(QStringLiteral("^") + pattern + QStringLiteral("$"),
-                                    QRegularExpression::CaseInsensitiveOption);
-        return re.match(toText(cell)).hasMatch();
+    if (criteria.contains(QLatin1Char('*')) || criteria.contains(QLatin1Char('?'))
+        || criteria.contains(QLatin1Char('~'))) {
+        return textMatchesWithWildcards(toText(cell), criteria);
     }
+    // Numeric criterion coerces numeric text ("5" matches 5).
     if (isText(cell) && isText(criterionValue)) {
-        return QString::compare(std::get<QString>(cell), std::get<QString>(criterionValue),
+        const QString cellText = std::get<QString>(cell);
+        bool cellNumOk = false;
+        const double cellNum = cellText.toDouble(&cellNumOk);
+        if (cellNumOk) {
+            return qFuzzyCompare(cellNum, std::get<double>(criterionValue));
+        }
+        return QString::compare(cellText, std::get<QString>(criterionValue),
                                 Qt::CaseInsensitive) == 0;
     }
     return compareValues(cell, criterionValue) == 0;
@@ -254,6 +303,7 @@ void registerMathFunctions(QHash<QString, FunctionSpec> &r)
                               const auto lo = scalarNumber(args.at(0));
                               const auto hi = scalarNumber(args.at(1));
                               if (!lo || !hi) return Err::Value;
+                              if (*lo > *hi) return Err::Num; // Qt bounded() requires a positive span
                               return double(QRandomGenerator::global()->bounded(
                                   qint64(std::ceil(*hi)) - qint64(std::floor(*lo)) + 1)
                                             + qint64(std::floor(*lo)));
@@ -397,9 +447,10 @@ void registerMathFunctions(QHash<QString, FunctionSpec> &r)
                           }});
     r.insert(QStringLiteral("ATAN2"),
              FunctionSpec{2, 2, false, [](EvalContext &, const QVector<Arg> &args) -> Value {
-                              const auto y = scalarNumber(args.at(0));
-                              const auto x = scalarNumber(args.at(1));
-                              if (!y || !x) return Err::Value;
+                              const auto x = scalarNumber(args.at(0));
+                              const auto y = scalarNumber(args.at(1));
+                              if (!x || !y) return Err::Value;
+                              if (*x == 0.0 && *y == 0.0) return Value(Err::Div0);
                               return std::atan2(*y, *x);
                           }});
 

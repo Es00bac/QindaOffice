@@ -5,6 +5,7 @@
 
 #include "workbook.h"
 
+#include <QAreaSeries>
 #include <QBarCategoryAxis>
 #include <QBarSeries>
 #include <QBarSet>
@@ -12,6 +13,7 @@
 #include <QChart>
 #include <QChartView>
 #include <QCheckBox>
+#include <QStackedBarSeries>
 #include <QComboBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -82,7 +84,11 @@ QChart *buildChart(const CalcEng::ChartSpec &spec, const CalcEng::Workbook &wb, 
     switch (spec.kind) {
     case CalcEng::ChartSpec::Kind::Bar:
     case CalcEng::ChartSpec::Kind::StackedBar: {
-        auto *series = new QBarSeries;
+        // StackedBar needs an actual QStackedBarSeries — a plain QBarSeries
+        // rendered clustered while the exported file said stacked.
+        QAbstractBarSeries *series = spec.kind == CalcEng::ChartSpec::Kind::StackedBar
+            ? static_cast<QAbstractBarSeries *>(new QStackedBarSeries)
+            : static_cast<QAbstractBarSeries *>(new QBarSeries);
         for (const auto &[name, values] : data.series) {
             auto *set = new QBarSet(name);
             for (double v : values) {
@@ -97,8 +103,7 @@ QChart *buildChart(const CalcEng::ChartSpec &spec, const CalcEng::Workbook &wb, 
         chart->setAxisX(axis, series);
         break;
     }
-    case CalcEng::ChartSpec::Kind::Line:
-    case CalcEng::ChartSpec::Kind::Area: {
+    case CalcEng::ChartSpec::Kind::Line: {
         for (const auto &[name, values] : data.series) {
             auto *line = new QLineSeries;
             line->setName(name);
@@ -106,6 +111,21 @@ QChart *buildChart(const CalcEng::ChartSpec &spec, const CalcEng::Workbook &wb, 
                 line->append(double(i), values.at(i));
             }
             chart->addSeries(line);
+        }
+        chart->createDefaultAxes();
+        break;
+    }
+    case CalcEng::ChartSpec::Kind::Area: {
+        // Area charts need QAreaSeries — the earlier release rendered Area
+        // as a plain line, disagreeing with the exported CT_AreaChart part.
+        for (const auto &[name, values] : data.series) {
+            auto *line = new QLineSeries;
+            for (int i = 0; i < values.size() && i < data.categories.size(); ++i) {
+                line->append(double(i), values.at(i));
+            }
+            auto *area = new QAreaSeries(line); // takes ownership of `line`
+            area->setName(name);
+            chart->addSeries(area);
         }
         chart->createDefaultAxes();
         break;

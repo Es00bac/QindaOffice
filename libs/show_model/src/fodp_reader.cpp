@@ -102,6 +102,39 @@ Presentation readFodp(const QByteArray &fodp, QString *error)
         presentation.slides.append(currentSlide);
         currentSlide = Slide{};
     };
+    // AGENT-GUARD: shapes arrive both framed (our earlier files) and as
+    // PAGE-LEVEL draw:rect / draw:ellipse / draw:custom-shape / draw:line
+    // elements (conforming ODF, as LibreOffice writes). Only reading the
+    // framed form made every .odp/.pptx import lose those shape kinds.
+    auto beginShapeFromAttrs = [&](const QXmlStreamAttributes &attrs) {
+        flushParagraph();
+        flushShape();
+        inShape = true;
+        currentShape = Shape{};
+        currentShape.id = attrs.value(QStringLiteral("draw:name")).toString();
+        currentShape.rect =
+            QRectF(lengthToPt(attrs.value(QStringLiteral("svg:x"))),
+                   lengthToPt(attrs.value(QStringLiteral("svg:y"))),
+                   lengthToPt(attrs.value(QStringLiteral("svg:width"))),
+                   lengthToPt(attrs.value(QStringLiteral("svg:height"))));
+        currentShape.buildStep =
+            attrs.value(QStringLiteral("qq:build-step")).toInt();
+        const QString shapeTransform = attrs.value(QStringLiteral("draw:transform")).toString();
+        if (shapeTransform.startsWith(QLatin1String("rotate ("))) {
+            const double raw = shapeTransform.mid(8, shapeTransform.indexOf(QLatin1Char(')')) - 8)
+                                   .toDouble();
+            currentShape.rotation = qFabs(raw) > 2.0 * M_PI + 0.01
+                ? raw // legacy degrees from the earlier release
+                : qRadiansToDegrees(raw);
+        }
+        const QString shapeStyle = attrs.value(QStringLiteral("draw:style-name")).toString();
+        if (styles.contains(shapeStyle)) {
+            const GraphicStyle style = styles.value(shapeStyle);
+            currentShape.fill = style.fill;
+            currentShape.stroke = style.stroke;
+            currentShape.strokeWidth = style.strokeWidth;
+        }
+    };
 
     while (!xml.atEnd()) {
         xml.readNext();
@@ -171,6 +204,49 @@ Presentation readFodp(const QByteArray &fodp, QString *error)
         }
 
         if (inSlide && xml.isStartElement() && ns == QLatin1String("draw")
+            && (name == QLatin1String("rect") || name == QLatin1String("ellipse"))) {
+            beginShapeFromAttrs(xml.attributes());
+            currentShape.kind = name == QLatin1String("rect") ? ShapeKind::Rectangle
+                                                              : ShapeKind::Ellipse;
+            if (xml.isEndElement()) {
+                flushShape(); // self-closing element has no further tokens
+            }
+            continue;
+        }
+        if (inSlide && xml.isStartElement() && ns == QLatin1String("draw")
+            && name == QLatin1String("custom-shape") && !inShape) {
+            beginShapeFromAttrs(xml.attributes());
+            // Kind resolves through enhanced-geometry below; self-closing
+            // (empty) shapes flush immediately.
+            if (xml.isEndElement()) {
+                flushShape();
+            }
+            continue;
+        }
+        if (inSlide && xml.isStartElement() && ns == QLatin1String("draw")
+            && name == QLatin1String("line") && !inShape) {
+            beginShapeFromAttrs(xml.attributes());
+            const auto attrs = xml.attributes();
+            currentShape.kind = attrs.hasAttribute(QStringLiteral("draw:marker-end"))
+                ? ShapeKind::Arrow
+                : ShapeKind::Line;
+            // draw:line endpoints are absolute page coordinates.
+            const QPointF from(lengthToPt(attrs.value(QStringLiteral("svg:x1"))),
+                               lengthToPt(attrs.value(QStringLiteral("svg:y1"))));
+            const QPointF to(lengthToPt(attrs.value(QStringLiteral("svg:x2"))),
+                             lengthToPt(attrs.value(QStringLiteral("svg:y2"))));
+            currentShape.rect = QRectF(from, to).normalized();
+            flushShape();
+            continue;
+        }
+        if (inSlide && xml.isEndElement() && ns == QLatin1String("draw")
+            && (name == QLatin1String("custom-shape") || name == QLatin1String("rect")
+                || name == QLatin1String("ellipse"))) {
+            flushParagraph();
+            flushShape();
+            continue;
+        }
+        if (inSlide && xml.isStartElement() && ns == QLatin1String("draw")
             && name == QLatin1String("frame")) {
             const auto attrs = xml.attributes();
             const QString styleName = attrs.value(QStringLiteral("draw:style-name")).toString();
@@ -192,8 +268,15 @@ Presentation readFodp(const QByteArray &fodp, QString *error)
                 attrs.value(QStringLiteral("qq:build-step")).toInt();
             const QString transform = attrs.value(QStringLiteral("draw:transform")).toString();
             if (transform.startsWith(QLatin1String("rotate ("))) {
-                currentShape.rotation =
+                // ODF rotate() is radians; files written by the earlier
+                // degrees-based release carry values in the ±360 range while
+                // conforming radians stay within ±2π — accept the legacy
+                // interpretation only for those out-of-range values.
+                const double raw =
                     transform.mid(8, transform.indexOf(QLatin1Char(')')) - 8).toDouble();
+                currentShape.rotation = qFabs(raw) > 2.0 * M_PI + 0.01
+                    ? raw // legacy degrees
+                    : qRadiansToDegrees(raw);
             }
             if (styles.contains(styleName)) {
                 const GraphicStyle style = styles.value(styleName);
@@ -218,7 +301,12 @@ Presentation readFodp(const QByteArray &fodp, QString *error)
         }
         if (inShape && xml.isStartElement()) {
             if (ns == QLatin1String("draw") && name == QLatin1String("text-box")) {
-                currentShape.kind = ShapeKind::TextBox;
+                // A text-box child only DEFINES a text-box shape; inside a
+                // resolved custom shape it is just that shape's text host.
+                if (currentShape.kind == ShapeKind::TextBox
+                    || currentShape.kind == ShapeKind::Image) {
+                    currentShape.kind = ShapeKind::TextBox;
+                }
             } else if (ns == QLatin1String("draw") && name == QLatin1String("custom-shape")) {
                 // geometry type resolves when enhanced-geometry appears
             } else if (ns == QLatin1String("draw") && name == QLatin1String("enhanced-geometry")) {
@@ -251,8 +339,14 @@ Presentation readFodp(const QByteArray &fodp, QString *error)
                     currentParagraph.listLevel = styleName.mid(8).toInt() - 1;
                 }
             } else if (ns == QLatin1String("text") && name == QLatin1String("span")) {
+                // AGENT-GUARD: snapshot the attributes BEFORE readNext().
+                // QXmlStreamReader::attributes() is only valid on start
+                // elements; after readNext() it returns an empty set, which
+                // silently stripped every text run's formatting on load
+                // (and the next save baked the loss in).
+                const QXmlStreamAttributes spanAttrs = xml.attributes();
                 xml.readNext(); // text node
-                currentParagraph.runs.append(readRun(xml.attributes(), xml.text().toString()));
+                currentParagraph.runs.append(readRun(spanAttrs, xml.text().toString()));
             }
             continue;
         }
@@ -263,6 +357,11 @@ Presentation readFodp(const QByteArray &fodp, QString *error)
         }
         if (inNotes && xml.isStartElement() && ns == QLatin1String("text")
             && name == QLatin1String("p")) {
+            // Multi-paragraph notes need a separator — concatenation ran
+            // LibreOffice paragraphs together on import.
+            if (!notesText.isEmpty()) {
+                notesText += QLatin1Char('\n');
+            }
             xml.readNext();
             notesText += xml.text().toString();
             continue;

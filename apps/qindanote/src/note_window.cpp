@@ -3,13 +3,17 @@
 
 #include "note_page_view.h"
 
+#include "standard_actions.h"
+
 #include <QColorDialog>
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QInputDialog>
+#include <QActionGroup>
 #include <QMenu>
 #include <QSpinBox>
 #include <QMenuBar>
+#include <QFileInfo>
 #include <QStatusBar>
 #include <QToolBar>
 #include <QTreeWidget>
@@ -36,10 +40,18 @@ bool NoteDocument::load(const QString &path, QString *error)
 
 bool NoteDocument::save(const QString &path, QString *error)
 {
+    // AGENT-GUARD: Save As must honour its argument for every notebook state.
+    // The earlier release ignored `path` whenever a notebook was already
+    // open, silently writing to the OLD directory and reporting the new one.
+    const QString target = path;
     if (m_notebook.directory().isEmpty()) {
-        if (!m_notebook.create(path, error)) {
+        if (!m_notebook.create(target, error)) {
             return false;
         }
+    } else if (QFileInfo(target).absolutePath() != QFileInfo(m_notebook.directory()).absolutePath()
+               && !m_notebook.copyStructure(target, error)) {
+        // Save As to a different directory: materialise the notebook there.
+        return false;
     }
     if (!m_notebook.save(error)) {
         return false;
@@ -72,10 +84,20 @@ NoteWindow::NoteWindow()
         {tr("Pen"), NoteTool::Pen},         {tr("Highlight"), NoteTool::Highlighter},
         {tr("Eraser"), NoteTool::Eraser},   {tr("Text"), NoteTool::Text},
     };
+    QActionGroup *toolGroup = new QActionGroup(this);
+    bool firstTool = true;
     for (const auto &[label, tool] : entries) {
         QAction *action = tools->addAction(label);
         action->setCheckable(true);
-        connect(action, &QAction::triggered, this, [this, tool] { m_view->setTool(tool); });
+        // Exclusive tool group: the earlier release let every tool appear
+        // checked simultaneously and showed none as the initial state.
+        toolGroup->addAction(action);
+        action->setChecked(firstTool);
+        firstTool = false;
+        connect(action, &QAction::triggered, this, [this, action, tool] {
+            m_view->setTool(tool);
+            action->setChecked(true);
+        });
     }
     tools->addSeparator();
 
@@ -108,10 +130,8 @@ NoteWindow::NoteWindow()
     background->addItem(tr("Grid"), QStringLiteral("grid"));
     background->addItem(tr("Dotted"), QStringLiteral("dotted"));
     tools->addWidget(background);
-    connect(background, &QComboBox::activated, this, [this](int index) {
-        QObject *box = sender();
-        m_view->setBackground(
-            qobject_cast<QComboBox *>(box)->itemData(index).toString());
+    connect(background, &QComboBox::activated, this, [this, background](int index) {
+        m_view->setBackground(background->itemData(index).toString());
     });
 
     auto *zoom = new QComboBox(tools);
@@ -122,12 +142,21 @@ NoteWindow::NoteWindow()
     zoom->setCurrentIndex(2);
     tools->addWidget(zoom);
     connect(zoom, &QComboBox::activated, this,
-            [this](int index) { m_view->setZoom(qobject_cast<QComboBox *>(sender())->itemData(index).toInt() / 100.0); });
+            [this, zoom](int index) { m_view->setZoom(zoom->itemData(index).toInt() / 100.0); });
     tools->addSeparator();
     QAction *undo = tools->addAction(tr("Undo"));
     connect(undo, &QAction::triggered, m_view, &NotePageView::undo);
     QAction *text = tools->addAction(tr("Add text"));
     connect(text, &QAction::triggered, m_view, &NotePageView::addTextBlock);
+
+    // AGENT-GUARD: rewire the shell's standard undo (Ctrl+Z) — setDocumentHost
+    // deleted the stub editor the base connection pointed at, so the
+    // accelerator fired into the void. Also give the toolbar Undo the
+    // standard action's identity so the global menu addresses it.
+    undo->setObjectName(QString::fromLatin1(Shell::ActionId::kEditUndo));
+    Shell::StandardActions *actions = standardActions();
+    actions->editUndo->setEnabled(true);
+    connect(actions->editUndo, &QAction::triggered, m_view, &NotePageView::undo);
 
     setDocumentHost(central, m_document);
     QToolBar *mainToolBar = addMainToolBar();
@@ -143,26 +172,43 @@ NoteWindow::NoteWindow()
                 if (item == nullptr) {
                     return;
                 }
-                NoteSection *section = static_cast<NoteSection *>(
-                    item->data(0, Qt::UserRole).value<void *>());
-                if (section != nullptr) {
+                // Resolve through ids: the notebook's containers mutate
+                // freely, raw pointers into them dangle.
+                const QString sectionId = item->data(0, Qt::UserRole).toString();
+                const QString pageId = item->data(0, Qt::UserRole + 1).toString();
+                if (pageId.isEmpty()) {
                     return; // section header
                 }
-                NotePage *page = static_cast<NotePage *>(
-                    item->data(0, Qt::UserRole + 1).value<void *>());
-                NoteSection *parentSection = static_cast<NoteSection *>(
-                    item->data(0, Qt::UserRole + 2).value<void *>());
-                if (page == nullptr) {
+                Notebook *notebook = m_document->notebook();
+                NoteSection *section = notebook->sectionById(sectionId);
+                NotePage *page = notebook->pageById(sectionId, pageId);
+                if (section == nullptr || page == nullptr) {
                     return;
                 }
                 persistCurrentPage();
                 QString error;
-                m_document->notebook()->loadPage(*parentSection, *page, &error);
-                m_currentSection = parentSection;
-                m_currentPage = page;
+                if (!notebook->loadPage(*section, *page, &error) && !error.isEmpty()) {
+                    // A page file that fails to load must not silently blank
+                    // the view and later overwrite the payload (the earlier
+                    // release dropped the error and painted an empty page).
+                    statusBar()->showMessage(tr("Page load failed: %1").arg(error), 8000);
+                    return;
+                }
+                setCurrentIds(sectionId, pageId);
                 m_view->setPage(page);
             });
     rebuildNavigator();
+
+    // The shell's loadPath (File ▸ Open, drag-drop, command line) only calls
+    // NoteDocument::load; there is no app hook — so watch contentChanged and
+    // rebuild here. Without this the navigator stayed empty and every input
+    // event was dropped: a notebook opened through the UI was unusable.
+    connect(m_document, &Core::Document::contentChanged, this, [this] {
+        m_currentSectionId.clear();
+        m_currentPageId.clear();
+        m_view->setPage(nullptr);
+        rebuildNavigator();
+    });
 
     // App menus (Page) need the fully constructed window - the base ctor's
     // hook dispatch only reaches the base no-op.
@@ -171,20 +217,35 @@ NoteWindow::NoteWindow()
 
 NoteWindow::~NoteWindow() = default;
 
+void NoteWindow::setCurrentIds(const QString &sectionId, const QString &pageId)
+{
+    m_currentSectionId = sectionId;
+    m_currentPageId = pageId;
+}
+
 void NoteWindow::persistCurrentPage()
 {
-    if (m_currentSection == nullptr || m_currentPage == nullptr) {
+    if (m_currentSectionId.isEmpty() || m_currentPageId.isEmpty()) {
+        return;
+    }
+    Notebook *notebook = m_document->notebook();
+    NoteSection *section = notebook->sectionById(m_currentSectionId);
+    NotePage *page = notebook->pageById(m_currentSectionId, m_currentPageId);
+    if (section == nullptr || page == nullptr) {
         return;
     }
     QString error;
-    m_document->notebook()->persistPage(*m_currentSection, *m_currentPage, &error);
+    if (!notebook->persistPage(*section, *page, &error)) {
+        // Fail visibly: a page write that fails must surface, not vanish
+        // (the earlier release collected the error into a local and dropped it).
+        statusBar()->showMessage(tr("Save failed: %1").arg(error), 8000);
+    }
 }
 
 void NoteWindow::openNotebookPath(const QString &path)
 {
     QString error;
     if (m_document->load(path, &error)) {
-        rebuildNavigator();
         statusBar()->showMessage(tr("Opened %1").arg(path), 5000);
     } else {
         statusBar()->showMessage(tr("Open failed: %1").arg(error), 8000);
@@ -193,21 +254,28 @@ void NoteWindow::openNotebookPath(const QString &path)
 
 void NoteWindow::rebuildNavigator()
 {
+    // AGENT-GUARD: items carry ids (UserRole: section id, UserRole+1: page
+    // id) resolved through Notebook::sectionById/pageById at activation time.
+    const QSignalBlocker blocker(m_navigator);
     m_navigator->clear();
     Notebook *notebook = m_document->notebook();
-    for (NoteSection &section : const_cast<QVector<NoteSection> &>(notebook->sections())) {
+    for (const NoteSection &section : notebook->sections()) {
         auto *sectionItem = new QTreeWidgetItem(m_navigator, {section.name});
-        sectionItem->setData(0, Qt::UserRole, QVariant::fromValue<void *>(&section));
-        for (NotePage &page : section.pages) {
+        sectionItem->setData(0, Qt::UserRole, section.id);
+        for (const NotePage &page : section.pages) {
             auto *pageItem = new QTreeWidgetItem(sectionItem, {page.title});
-            pageItem->setData(0, Qt::UserRole + 1, QVariant::fromValue<void *>(&page));
-            pageItem->setData(0, Qt::UserRole + 2, QVariant::fromValue<void *>(&section));
+            pageItem->setData(0, Qt::UserRole, section.id);
+            pageItem->setData(0, Qt::UserRole + 1, page.id);
         }
         sectionItem->setExpanded(true);
     }
-    if (m_navigator->topLevelItemCount() > 0
-        && m_navigator->topLevelItem(0)->childCount() > 0) {
-        m_navigator->setCurrentItem(m_navigator->topLevelItem(0)->child(0));
+    // Select the first page, never a section header.
+    for (int i = 0; i < m_navigator->topLevelItemCount(); ++i) {
+        QTreeWidgetItem *sectionItem = m_navigator->topLevelItem(i);
+        if (sectionItem->childCount() > 0) {
+            m_navigator->setCurrentItem(sectionItem->child(0));
+            return;
+        }
     }
 }
 
@@ -216,25 +284,35 @@ void NoteWindow::insertApplicationMenus(QMenu *before)
     auto *pageMenu = new QMenu(tr("&Page"), this);
     menuBar()->insertMenu(before->menuAction(), pageMenu);
     QAction *addPage = pageMenu->addAction(tr("&New Page"));
+    addPage->setObjectName(QStringLiteral("notePageNew"));
     connect(addPage, &QAction::triggered, this, [this] {
-        if (m_currentSection == nullptr) {
-            Notebook *notebook = m_document->notebook();
+        Notebook *notebook = m_document->notebook();
+        NoteSection *section = notebook->sectionById(m_currentSectionId);
+        if (section == nullptr) {
             if (notebook->sections().isEmpty()) {
-                m_currentSection = &notebook->addSection(QStringLiteral("Notes"));
+                section = &notebook->addSection(QStringLiteral("Notes"));
             } else {
-                m_currentSection =
-                    &const_cast<QVector<NoteSection> &>(notebook->sections()).first();
+                section = notebook->sectionById(notebook->sections().first().id);
             }
         }
-        NotePage &page = m_document->notebook()->addPage(*m_currentSection, QStringLiteral("Page"));
+        notebook->addPage(*section, tr("Page %1").arg(section->pages.size() + 1));
         persistCurrentPage();
-        rebuildNavigator();
-        Q_UNUSED(page);
         m_document->setDirty(true);
+        rebuildNavigator();
+        // Land the user on the page they just created (the rebuild always
+        // selects the first page; jump to the new one instead).
+        NotePage *created = section->pages.isEmpty() ? nullptr : &section->pages.last();
+        if (created != nullptr) {
+            setCurrentIds(section->id, created->id);
+            m_view->setPage(created);
+        }
     });
     QAction *background = pageMenu->addAction(tr("&Background…"));
+    background->setObjectName(QStringLiteral("notePageBackground"));
     connect(background, &QAction::triggered, this, [this] {
-        if (m_currentPage == nullptr) {
+        Notebook *notebook = m_document->notebook();
+        NotePage *page = notebook->pageById(m_currentSectionId, m_currentPageId);
+        if (page == nullptr) {
             return;
         }
         const QString choice = QInputDialog::getItem(
@@ -242,7 +320,7 @@ void NoteWindow::insertApplicationMenus(QMenu *before)
             {QStringLiteral("blank"), QStringLiteral("ruled"), QStringLiteral("grid"),
              QStringLiteral("dotted")});
         if (!choice.isEmpty()) {
-            m_currentPage->envelope.background = choice;
+            page->envelope.background = choice;
             m_view->update();
             m_document->setDirty(true);
             persistCurrentPage();

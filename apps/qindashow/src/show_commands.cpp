@@ -215,6 +215,43 @@ void ShapeStateCommand::undo()
     apply(m_before);
 }
 
+SlideStateCommand::SlideStateCommand(ShowModel::Presentation *deck, QString slideId,
+                                     ShowModel::Slide before, ShowModel::Slide after,
+                                     QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_deck(deck)
+    , m_slideId(std::move(slideId))
+    , m_before(std::move(before))
+    , m_after(std::move(after))
+{
+    setText(QObject::tr("Rewrite slide"));
+}
+
+void SlideStateCommand::apply(const ShowModel::Slide &state)
+{
+    // Locate the slide by id: the deck's list may have been reallocated by
+    // slide-list operations since the command was pushed. AGENT-GUARD: keep
+    // the original id stable — the state copy carries its own id, but the
+    // deck identifies the slide by the one it was pushed with.
+    ShowModel::Slide *slide = m_deck->findSlide(m_slideId);
+    if (slide == nullptr) {
+        return;
+    }
+    const QString id = slide->id;
+    *slide = state;
+    slide->id = id;
+}
+
+void SlideStateCommand::redo()
+{
+    apply(m_after);
+}
+
+void SlideStateCommand::undo()
+{
+    apply(m_before);
+}
+
 SlideListCommand::SlideListCommand(ShowModel::Presentation *deck, QList<ShowModel::Slide> before,
                                    QList<ShowModel::Slide> after, QUndoCommand *parent)
     : QUndoCommand(parent)

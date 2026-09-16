@@ -17,7 +17,9 @@ namespace {
 const char kRichMime[] = "application/x-qindacalc-cells";
 
 // Input text (formula or literal source) per cell; empty string for
-// blank cells so row/column geometry survives the round trip.
+// blank cells so row/column geometry survives the round trip. Carried only
+// in the rich in-app mime — external apps get DISPLAY text (the header
+// contract and D-006: pasting into an editor must not produce "=A1*2").
 QStringList rangeInputs(const SpreadsheetDocument *document, const CalcEng::CellRange &range)
 {
     QStringList rows;
@@ -25,6 +27,19 @@ QStringList rangeInputs(const SpreadsheetDocument *document, const CalcEng::Cell
         QStringList cells;
         for (qint32 col = range.topLeft.col; col <= range.bottomRight.col; ++col) {
             cells.append(document->inputTextAt({row, col}));
+        }
+        rows.append(cells.join(QLatin1Char('\t')));
+    }
+    return rows;
+}
+
+QStringList rangeDisplayText(const SpreadsheetDocument *document, const CalcEng::CellRange &range)
+{
+    QStringList rows;
+    for (qint32 row = range.topLeft.row; row <= range.bottomRight.row; ++row) {
+        QStringList cells;
+        for (qint32 col = range.topLeft.col; col <= range.bottomRight.col; ++col) {
+            cells.append(document->displayTextAt(document->activeSheet(), {row, col}));
         }
         rows.append(cells.join(QLatin1Char('\t')));
     }
@@ -45,7 +60,7 @@ void copyRangeToClipboard(SpreadsheetDocument *document, const CalcEng::CellRang
     }
     const QStringList rows = rangeInputs(document, range);
     auto *mime = new QMimeData;
-    mime->setText(rows.join(QLatin1Char('\n')));
+    mime->setText(rangeDisplayText(document, range).join(QLatin1Char('\n')));
     QJsonObject root;
     root.insert(QStringLiteral("v"), 1);
     QJsonArray jsonRows;
@@ -87,6 +102,12 @@ bool pasteClipboardAt(SpreadsheetDocument *document, const CalcEng::CellAddr &at
         // A trailing newline from external TSV must not paste a blank row.
         while (!rows.isEmpty() && rows.last().isEmpty()) {
             rows.removeLast();
+        }
+        // CRLF sources leave a trailing \r inside every row's last cell.
+        for (QString &row : rows) {
+            if (row.endsWith(QLatin1Char('\r'))) {
+                row.chop(1);
+            }
         }
     } else {
         return false;

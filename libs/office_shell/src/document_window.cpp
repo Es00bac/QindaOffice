@@ -142,6 +142,8 @@ void DocumentWindow::createMenus()
 
     QMenu *settingsMenu = menuBar()->addMenu(tr("&Settings"));
     m_restoreAction = settingsMenu->addAction(tr("Restore &Previous Documents"));
+    // Stable objectName: the dbusmenu activation identity (AGENTS.md rule 5).
+    m_restoreAction->setObjectName(QString::fromLatin1(ActionId::kSettingsRestorePrevious));
     m_restoreAction->setCheckable(true);
     m_restoreAction->setEnabled(false); // enabled by setAppServices
     settingsMenu->addSeparator();
@@ -347,16 +349,23 @@ void DocumentWindow::rebuildRecentMenu()
     }
     m_recentMenu->setEnabled(true);
     const QStringList paths = recent->paths();
+    // AGENT-GUARD: items are RECREATED on every open/save, so their
+    // objectNames must be stable across rebuilds for the desktop global
+    // menu to address them; encode the recent-list position.
+    int index = 0;
     for (const QString &path : paths) {
         QAction *item = m_recentMenu->addAction(QFileInfo(path).fileName());
+        item->setObjectName(QStringLiteral("fileRecentItem%1").arg(index));
         item->setToolTip(path);
         connect(item, &QAction::triggered, this, [this, path] {
             emit openPathsRequested({path});
         });
+        ++index;
     }
     if (!paths.isEmpty()) {
         m_recentMenu->addSeparator();
         QAction *clear = m_recentMenu->addAction(tr("Clear Menu"));
+        clear->setObjectName(QStringLiteral("fileRecentClear"));
         connect(clear, &QAction::triggered, this, [recent] { recent->clear(); });
     }
 }
@@ -398,6 +407,7 @@ void DocumentWindow::closeEvent(QCloseEvent *event)
             clearJournalEntry();
         }
     }
+    emit closing(this);
     QMainWindow::closeEvent(event);
 }
 

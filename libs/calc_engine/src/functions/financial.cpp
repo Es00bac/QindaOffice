@@ -284,9 +284,10 @@ void registerFinancialExtraFunctions(QHash<QString, FunctionSpec> &r)
              FunctionSpec{2, 2, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
                               const auto principal = scalarNumber(args.at(0));
                               if (!principal) return Err::Value;
+                              const auto *ratesView = std::get_if<RangeView>(&args.at(1));
+                              if (!ratesView) return Err::Value;
                               QVector<Value> rates;
-                              const Value err =
-                                  flatRangeValues(ctx, std::get<RangeView>(args.at(1)), &rates);
+                              const Value err = flatRangeValues(ctx, *ratesView, &rates);
                               if (isErr(err)) return err;
                               double value = *principal;
                               for (const Value &rate : rates) {

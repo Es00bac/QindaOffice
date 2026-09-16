@@ -21,16 +21,11 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
         for (const qint32 row : sheet.sizedRows()) {
             ss.rowHeights.insert(row, sheet.rowHeight(row));
         }
-        // Style ids ride along via the sheet's styleIdAt map; iterate the
-        // cells and read each (sparse, so only set ones are copied).
-        for (auto it = sheet.cells().constBegin(); it != sheet.cells().constEnd(); ++it) {
-            const CalcEng::CellAddr addr{qint32(it.key() & 0xffffffffu),
-                                         qint32(it.key() >> 32)};
-            const qint32 id = sheet.styleIdAt(addr);
-            if (id != 0) {
-                ss.styleIds.insert(it.key(), id);
-            }
-        }
+        // AGENT-GUARD: snapshot the sheet's FULL style map, not per-cell
+        // reads over cells() — restyleRange styles EMPTY cells too, and the
+        // per-cell iteration silently dropped them (undo/redo lost formatting
+        // on blank cells).
+        ss.styleIds = sheet.styleIds();
         ss.merges = sheet.merges();
         snap.sheets.append(ss);
     }

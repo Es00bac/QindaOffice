@@ -44,6 +44,12 @@ bool LibreOfficeConverter::probe(QString *diagnostic)
     QProcess check;
     check.start(QStringLiteral("soffice"),
                 {QStringLiteral("--headless"), QStringLiteral("--version")});
+    if (!check.waitForStarted(5000)) {
+        if (diagnostic != nullptr) {
+            *diagnostic = QStringLiteral("soffice could not be started");
+        }
+        return false;
+    }
     if (!check.waitForFinished(15000)) {
         check.kill();
         if (diagnostic != nullptr) {
@@ -110,12 +116,28 @@ void LibreOfficeConverter::runNext()
 
     auto *process = new QProcess(this);
     m_process = process;
-    connect(process, &QProcess::errorOccurred, this, [this, job](QProcess::ProcessError) {
-        finishCurrent(false, tr("soffice failed to start"));
-        Q_UNUSED(job);
-    });
+    // AGENT-GUARD: verify the SENDER is the current job's process before
+    // finishing. A crashed (or killed) job emits errorOccurred AND finished,
+    // and a killed job's signals arrive after the next job already started —
+    // without the guard one stale signal failed the next job (cascading the
+    // whole queue) or double-emitted jobFailed.
+    connect(process, &QProcess::errorOccurred, this,
+            [this, process, job](QProcess::ProcessError error) {
+                if (m_process != process) {
+                    return; // stale signal from a superseded process
+                }
+                // FailedToStart never emits finished() — finish here. Other
+                // error kinds (Crashed) are handled by the finished() handler
+                // with the full diagnostics.
+                if (error == QProcess::FailedToStart) {
+                    finishCurrent(false, tr("soffice failed to start for %1").arg(job.input));
+                }
+            });
     connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this, job](int exitCode, QProcess::ExitStatus status) {
+            [this, process, job](int exitCode, QProcess::ExitStatus status) {
+                if (m_process != process) {
+                    return; // stale signal from a superseded process
+                }
                 if (status != QProcess::NormalExit || exitCode != 0) {
                     finishCurrent(false, tr("soffice exited with code %1").arg(exitCode));
                     return;

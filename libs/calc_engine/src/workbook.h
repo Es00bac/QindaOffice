@@ -42,6 +42,11 @@ public:
     // Recalculates the transitive dependents of `edited` plus all volatile
     // cells in Kahn topological order; cells on a cycle get Err::Circular.
     void recalc(const QSet<CellKey> &edited);
+    // Re-evaluates every formula cell in topological order. Used after bulk
+    // loads (xlsx import) where installFormula's incremental recalc ran while
+    // later sheets were still missing, leaving forward cross-sheet references
+    // at their stale first-pass values.
+    void recalcAll();
 
     // Style table shared by the sheets.
     [[nodiscard]] qint32 addStyle(const CellStyle &style);

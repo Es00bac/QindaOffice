@@ -107,6 +107,9 @@ private:
     std::unique_ptr<Core::RecoveryJournal> m_journal;
     std::unique_ptr<Core::JsonSettings> m_settings;
     WindowFactory m_windowFactory;
+    // Path of the window currently going away, captured from closing()
+    // (destroyed() can no longer provide it — see wireWindow).
+    QString m_lastClosingPath;
 };
 
 } // namespace QindaOffice::Shell

@@ -121,6 +121,9 @@ void AssistantPanel::sendPrompt(const QString &prompt)
     m_input->clear();
 
     ChatRequest request;
+    // Multi-turn: replay the rolling history before the new prompt so the
+    // provider sees the conversation, not a context-free one-shot.
+    request.messages = m_history;
     request.messages.append({QStringLiteral("user"), prompt, {}});
     const int scope = m_contextScope->currentIndex();
     if (m_context != nullptr && scope > 0) {
@@ -138,6 +141,7 @@ void AssistantPanel::sendPrompt(const QString &prompt)
             request.messages.last().images.append(context.region);
         }
     }
+    m_history.append({QStringLiteral("user"), prompt, {}});
     runRequest(request);
 }
 
@@ -151,6 +155,13 @@ void AssistantPanel::runRequest(const ChatRequest &request)
             appendMessage(QStringLiteral("error"), tr("provider unavailable"));
             return;
         }
+        // AGENT-GUARD: per-turn reset. m_lastReply accumulated across turns
+        // (turn 2's copy returned turn1+partial-turn2) and a failed/cancelled
+        // turn left turn 1's buttons enabled acting on that corrupted text.
+        m_lastReply.clear();
+        m_insert->setEnabled(false);
+        m_replace->setEnabled(false);
+        m_copy->setEnabled(false);
         m_run = provider->start(request);
         m_stop->setEnabled(true);
         connect(m_run, &ChatRun::textDelta, this, [this](const QString &delta) {
@@ -162,6 +173,7 @@ void AssistantPanel::runRequest(const ChatRequest &request)
             m_run = nullptr;
             m_stop->setEnabled(false);
             m_lastReply = result.text;
+            m_history.append({QStringLiteral("assistant"), m_lastReply, {}});
             m_insert->setEnabled(!m_lastReply.isEmpty());
             m_replace->setEnabled(!m_lastReply.isEmpty());
             m_copy->setEnabled(!m_lastReply.isEmpty());
@@ -169,6 +181,7 @@ void AssistantPanel::runRequest(const ChatRequest &request)
         connect(m_run, &ChatRun::failed, this, [this](const ChatError &error) {
             m_run = nullptr;
             m_stop->setEnabled(false);
+            m_lastReply.clear();
             appendMessage(QStringLiteral("error"), error.message);
         });
     };

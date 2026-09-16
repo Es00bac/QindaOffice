@@ -33,6 +33,8 @@ public:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void showEvent(QShowEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
 
 private:
     void refresh();
@@ -45,6 +47,7 @@ private:
     QLabel *m_counter;
     QTextBrowser *m_notes;
     QElapsedTimer m_elapsed;
+    QScreen *m_targetScreen = nullptr;
 };
 
 } // namespace QindaOffice::Apps::Show

@@ -86,6 +86,10 @@ void ShowWindow::startShow()
     if (other != nullptr) {
         auto *presenter = new PresenterWindow(controller, other, this);
         presenter->showFullScreen();
+        // AGENT-GUARD: the presenter must not outlive the show. Without this
+        // coupling, closing the player left a fullscreen presenter stranded
+        // on the second screen, ignoring Escape and clicks.
+        connect(player, &QObject::destroyed, presenter, &QObject::deleteLater);
     }
 }
 
@@ -114,8 +118,11 @@ void ShowWindow::appendSlides(const QList<ShowModel::Slide> &slides)
         return;
     }
     ShowModel::Presentation *deck = m_document->presentation();
-    pushSlideListCommand(deck->slides);
+    // Mutate first, then push (see pushSlideListCommand callers in
+    // show_window.cpp — push runs redo()/fullRefresh() synchronously).
+    const QList<ShowModel::Slide> before = deck->slides;
     deck->slides.append(slides);
+    pushSlideListCommand(before);
     m_currentRow = deck->slides.size() - 1;
     m_document->setDirty(true);
     fullRefresh();
@@ -135,6 +142,9 @@ void ShowWindow::replaceCurrentSlideText(const QString &text)
             break;
         }
     }
+    // Snapshot for undo (SH: the AI rewrite must be undoable like every
+    // other mutation; it previously bypassed the stack entirely).
+    ShowModel::Slide before = slide;
     if (target == nullptr) {
         slide.title = text;
     } else {
@@ -144,6 +154,9 @@ void ShowWindow::replaceCurrentSlideText(const QString &text)
         ShowModel::TextParagraph paragraph;
         paragraph.runs = {run};
         target->paragraphs = {paragraph};
+    }
+    if (m_document->undoStack() != nullptr && before != slide) {
+        m_document->undoStack()->push(new SlideStateCommand(deck, slide.id, before, slide));
     }
     m_document->setDirty(true);
     fullRefresh();

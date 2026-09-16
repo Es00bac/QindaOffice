@@ -53,12 +53,18 @@ PageTextView::PageTextView(WriteDocument *document, QWidget *parent)
         viewport()->update();
     });
     connect(m_control, &QWidgetTextControl::visibilityRequest, this, [this](const QRectF &rect) {
-        const QPointF top = m_geometry.docToView(rect.topLeft(), viewport()->width());
+        // AGENT-GUARD: docToView returns CONTENT coordinates; the on-screen
+        // position is contentY - scrollValue. Over-/under-scrolling here left
+        // the caret hidden above the viewport forever.
+        const QPointF content = m_geometry.docToView(rect.topLeft(), viewport()->width());
+        const qreal contentBottom =
+            content.y() + m_geometry.docToView(rect.bottomLeft(), viewport()->width()).y()
+                - content.y();
         QScrollBar *bar = verticalScrollBar();
-        if (top.y() < 0) {
-            bar->setValue(bar->value() + int(top.y()) - 40);
-        } else if (top.y() > viewport()->height()) {
-            bar->setValue(bar->value() + int(top.y() - viewport()->height()) + 40);
+        if (content.y() < bar->value()) {
+            bar->setValue(qMax(0, int(content.y()) - 40));
+        } else if (contentBottom > bar->value() + viewport()->height()) {
+            bar->setValue(int(contentBottom) - viewport()->height() + 40);
         }
     });
     connect(m_control, &QWidgetTextControl::microFocusChanged, this, [this] {
@@ -69,12 +75,15 @@ PageTextView::PageTextView(WriteDocument *document, QWidget *parent)
         emit pageCountChanged(pageCount());
     });
 
-    const auto *layout = document->textDocument()->documentLayout();
-    connect(layout, &QAbstractTextDocumentLayout::documentSizeChanged, this,
-            [this](const QSizeF &) {
-                updateScrollBars();
-                emit pageCountChanged(pageCount());
-            });
+    // WR: the control's documentSizeChanged already relays the layout's;
+    // a second connection here doubled every scrollbar update.
+    // Sync page geometry whenever the document (re)configures its page —
+    // load() and the Page Setup dialog go through setupPaged().
+    connect(document, &WriteDocument::pageSetupChanged, this, [this] {
+        m_geometry.setPageSize(m_document->pageSize());
+        updateScrollBars();
+        viewport()->update();
+    });
     updateScrollBars();
 }
 
@@ -119,6 +128,10 @@ void PageTextView::resizeEvent(QResizeEvent *event)
 
 void PageTextView::paintPage(QPainter &painter, int index, const QRect &clip)
 {
+    // AGENT-GUARD: `clip` and the returned page rect are in CONTENT
+    // coordinates (scroll space). paintEvent translates the painter by the
+    // negative scroll offset first; callers must pass the dirty rect
+    // translated into content space (event->rect() + scroll offset).
     const QRectF page = m_geometry.pageRect(index, viewport()->width());
     if (!page.intersects(QRectF(clip))) {
         return;
@@ -154,19 +167,27 @@ void PageTextView::paintPage(QPainter &painter, int index, const QRect &clip)
 void PageTextView::paintEvent(QPaintEvent *event)
 {
     QPainter painter(viewport());
+    // Fill in widget space, then enter content space for the pages: the
+    // scrollbars carry real ranges, and without this translate the canvas
+    // never moved — everything below the first viewport was unreachable.
     painter.fillRect(viewport()->rect(), palette().window().color());
+    painter.translate(-QPointF(horizontalScrollBar()->value(), verticalScrollBar()->value()));
     const int pages = pageCount();
-    const qreal content =
-        m_document->textDocument()->documentLayout()->documentSize().height();
+    const QRect contentClip = event->rect().translated(horizontalScrollBar()->value(),
+                                                       verticalScrollBar()->value());
     for (int i = 0; i < pages; ++i) {
-        paintPage(painter, i, event->rect());
+        paintPage(painter, i, contentClip);
     }
-    Q_UNUSED(content);
 }
 
 QPointF PageTextView::offsetFor(const QPointF &viewPos) const
 {
-    const QPointF doc = m_geometry.viewToDoc(viewPos, viewport()->width());
+    // AGENT-GUARD: widget → document must pass through the scroll offset
+    // (content = widget + scroll). Missing this made every click below the
+    // first viewport land a viewport-height too early in the document.
+    const QPointF content = viewPos + QPointF(horizontalScrollBar()->value(),
+                                              verticalScrollBar()->value());
+    const QPointF doc = m_geometry.viewToDoc(content, viewport()->width());
     return doc - viewPos;
 }
 
@@ -223,7 +244,9 @@ QVariant PageTextView::inputMethodQuery(Qt::InputMethodQuery property) const
 {
     const QVariant value = m_control->inputMethodQuery(property, QVariant());
     if (property == Qt::ImCursorRectangle) {
-        return QVariant(m_geometry.docToView(value.toRectF(), viewport()->width()));
+        const QRectF contentRect = m_geometry.docToView(value.toRectF(), viewport()->width());
+        return QVariant(contentRect.translated(-horizontalScrollBar()->value(),
+                                               -verticalScrollBar()->value()));
     }
     return value;
 }

@@ -123,6 +123,14 @@ CalcWindow::CalcWindow()
         m_view->refreshAll();
         rebuildChartWindows();
     });
+    // CC: data edits changed what charts visualize — the floating windows
+    // previously only refreshed on structural changes and went stale.
+    connect(m_document, &SpreadsheetDocument::contentChanged, this, [this] {
+        if (m_chartWindows.isEmpty()) {
+            return;
+        }
+        rebuildChartWindows();
+    });
 
     // App menus (Insert/Sheet/Format) need the fully constructed window.
     finalizeAppMenuHooks();
@@ -205,17 +213,12 @@ void CalcWindow::createCalcActions()
     m_thousandsAction = new QAction(tr("Number format: #,##0.00"), this);
     m_thousandsAction->setObjectName(QStringLiteral("calcThousandsFormatAction"));
     connect(m_thousandsAction, &QAction::triggered, this, [this] {
-        // v1: applies to the cursor cell only.
-        Workbook *wb = m_document->workbook();
-        Sheet &sheet = wb->sheetAt(m_document->activeSheet());
+        // Route through restyleRange (undoable, journaled, contentChanged) —
+        // the direct mutation here bypassed Ctrl+Z and the recovery journal.
+        StylePatch patch;
+        patch.numberFormat = QStringLiteral("#,##0.00");
         const CellAddr addr = m_view->cursorCell();
-        CellStyle style = [wb, &sheet, addr] {
-            const qint32 id = sheet.styleIdAt(addr);
-            return id != 0 && wb->style(id) != nullptr ? *wb->style(id) : CellStyle{};
-        }();
-        style.numberFormat = QStringLiteral("#,##0.00");
-        sheet.setStyleIdAt(addr, wb->addStyle(style));
-        m_document->setDirty(true);
+        m_document->restyleRange({addr, addr}, patch, tr("Number format"));
         m_view->viewport()->update();
     });
 }
@@ -257,13 +260,10 @@ void CalcWindow::insertChart()
 #ifdef QQO_WITH_CHARTS
     Workbook *wb = m_document->workbook();
     const CalcEng::CellAddr cursor = m_view->cursorCell();
-    auto colName = [](int col) {
-        QString name;
-        for (++col; col > 0; col /= 26) {
-            name.prepend(QChar(QLatin1Char('A' + (col - 1) % 26)));
-        }
-        return name;
-    };
+    // Engine colName: the local lambda here mis-named columns that were
+    // multiples of 26 (col 25 -> "AZ" instead of "Z"), preselecting wrong
+    // ranges in the dialog.
+    const auto colName = [](qint32 col) { return CalcEng::colName(col); };
     const QString initial = QStringLiteral("%1%2:%3%4")
         .arg(colName(cursor.col), QString::number(cursor.row + 1),
              colName(cursor.col + 1), QString::number(cursor.row + 6));

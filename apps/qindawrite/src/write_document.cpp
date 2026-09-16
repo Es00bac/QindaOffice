@@ -31,6 +31,7 @@ void WriteDocument::setupPaged(const QSizeF &pageSize, qreal margin)
     m_text->setUseDesignMetrics(true);
     m_text->setDocumentMargin(margin);
     m_text->setPageSize(pageSize);
+    emit pageSetupChanged();
 }
 
 QSizeF WriteDocument::pageSize() const

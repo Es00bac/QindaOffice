@@ -27,11 +27,17 @@ SlidePlayer::SlidePlayer(PresentationController *controller, QScreen *screen, QW
     setAttribute(Qt::WA_OpaquePaintEvent);
     setCursor(Qt::BlankCursor);
     m_current = renderSlideFrame(controller->slide());
-    if (screen != nullptr && windowHandle() != nullptr) {
-        windowHandle()->setScreen(screen);
-    }
+    m_targetScreen = screen; // applied in showEvent (no handle in ctors)
     connect(controller, &PresentationController::stateChanged, this,
             [this] { beginTransition(); });
+}
+
+void SlidePlayer::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    if (m_targetScreen != nullptr && windowHandle() != nullptr) {
+        windowHandle()->setScreen(m_targetScreen);
+    }
 }
 
 QPixmap SlidePlayer::renderSlideFrame(int slideIndex) const

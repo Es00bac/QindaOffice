@@ -194,3 +194,43 @@ and skips with an explicit message where buses are unavailable.
 hanging — the same rule as the global-menu export. QQTerm carries the same
 `QDBusInterface` hand-off pattern and may need the same hardening if it ever
 runs against such a bus.
+
+## D-003: Office-wide bug-audit hardening (2026-09 audit batch)
+
+**Context.** A full-repo audit (~212 findings) exposed recurring defect
+patterns: cross-filesystem save (EXDEV after `QFile::remove` destroyed the
+target), undo commands pushed before their mutation, raw element pointers
+held into mutating containers, unchecked terminal signal emission, and
+atomic-write gaps.
+
+**Decision.** Five durable rules, now enforced in code with AGENT-GUARDs:
+
+1. **Convert-then-save goes through `QSaveFile` at the destination.** Never
+   `QFile::remove` + `QFile::rename` from a `QTemporaryDir` (tmpfs) onto the
+   user's filesystem — the rename fails with EXDEV after the original is
+   gone (`format_io.cpp`, `show_document.cpp`, `notebook.cpp`).
+2. **Undo commands are pushed AFTER the mutation.** `QUndoStack::push` runs
+   `redo()` synchronously; pushing before the mutation captured a stale
+   after-image (redo became a no-op that resurrected old state) and refreshed
+   observers against pre-mutation data (`show_window.cpp` slide-list ops,
+   drag reorder). Documents that own raw-typed commands clear the undo stack
+   whenever the backing model is replaced (`ShowDocument::load/loadRecovery`).
+3. **UI holds IDs, never element pointers.** `Notebook`'s vectors reallocate
+   on append/load; the navigator and window state carry section/page ids
+   resolved through `Notebook::sectionById/pageById` (`note_window.cpp`).
+   `SlideStateCommand` resolves its slide by id the same way.
+4. **Terminal provider signals go through `ChatRun::emitFinished/emitFailed`.**
+   The guards make the documented exactly-once contract (chat_types.h)
+   structural; bare `emit finished/failed` in providers is the defect shape
+   that double-freed the inline flow's state.
+5. **All direct document writes are atomic and error-checked.** HTML/MD/TXT
+   saves, fodp saves, notebook index+pages use `QSaveFile` with write/commit
+   checks; notebook pages are persisted before their index so a mid-save
+   crash never strands the index (violations of "fail honestly, stay
+   visible").
+
+**Consequences.** New apps/formats must reuse the same seams
+(`writeUtf8Atomically` in format_io, `writeJsonAtomically` in notebook,
+`pushSlideListCommand` after mutation). Calc import always finishes with
+`Workbook::recalcAll()`; volatile cells are registered inside
+`Workbook::installFormula` (after `updateCell`, which clears the flag).

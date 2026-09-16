@@ -75,8 +75,13 @@ qreal NotePageView::growHeight() const
         return m_minPageHeight;
     }
     qreal contentBottom = m_page->envelope.ink.bounds().bottom() + 80;
+    // Text block geometry is in WIDGET space (offset by the page origin,
+    // scaled by zoom); convert to page space before comparing against the
+    // page-space minimum height. AGENT-GUARD: do NOT call pageRect() here —
+    // pageRect() calls growHeight(); use the fixed 24px top offset instead.
     for (const QTextEdit *block : m_textBlocks) {
-        contentBottom = qMax(contentBottom, qreal(block->y() + block->height() + 40));
+        const qreal blockBottomPage = (block->y() - 24.0) / m_zoom + block->height() / m_zoom;
+        contentBottom = qMax(contentBottom, blockBottomPage + 40);
     }
     const int pages = qBound(1, int(std::ceil(contentBottom / m_minPageHeight)), int(kMaxPages));
     // The widget height of the page: page-space height times zoom.
@@ -123,10 +128,11 @@ void NotePageView::rebuildGrid()
 
 void NotePageView::syncBlocks()
 {
-    // Text blocks are stored in the envelope's blocksJson; v1 keeps one
-    // QTextEdit per block, positioned under the previous content.
+    // Text blocks are stored in the envelope's blocksJson; one QTextEdit per
+    // block, positioned under the previous content.
     const QJsonObject blocks = QJsonDocument::fromJson(m_page->envelope.blocksJson).object();
     const QJsonArray list = blocks.value(QStringLiteral("blocks")).toArray();
+    m_syncingBlocks = true;
     for (const QJsonValue &value : list) {
         const QJsonObject object = value.toObject();
         if (object.value(QStringLiteral("type")).toString() != QLatin1String("text")) {
@@ -136,9 +142,42 @@ void NotePageView::syncBlocks()
         edit->setPlainText(object.value(QStringLiteral("text")).toString());
         edit->setAcceptRichText(false);
         edit->show();
+        // AGENT-GUARD: every editor writes its content back to blocksJson on
+        // change — typed text must be persisted and must mark the page dirty.
+        // (The v1 code only ever read the JSON, so typed text was lost on the
+        // first addTextBlock/setPage/save.)
+        connect(edit, &QTextEdit::textChanged, this, [this] { persistTextBlocks(); });
         m_textBlocks.append(edit);
     }
+    m_syncingBlocks = false;
     syncBlocksGeometry();
+}
+
+void NotePageView::persistTextBlocks()
+{
+    if (m_page == nullptr || m_syncingBlocks) {
+        return;
+    }
+    QJsonObject root = QJsonDocument::fromJson(m_page->envelope.blocksJson).object();
+    QJsonArray blocks = root.value(QStringLiteral("blocks")).toArray();
+    // Write the live editor contents back over the text entries in order.
+    int editorIndex = 0;
+    for (int i = 0; i < blocks.size(); ++i) {
+        QJsonObject object = blocks.at(i).toObject();
+        if (object.value(QStringLiteral("type")).toString() != QLatin1String("text")) {
+            continue;
+        }
+        if (editorIndex >= m_textBlocks.size()) {
+            break;
+        }
+        object.insert(QStringLiteral("text"), m_textBlocks.at(editorIndex)->toPlainText());
+        blocks.replace(i, object);
+        ++editorIndex;
+    }
+    root.insert(QStringLiteral("blocks"), blocks);
+    m_page->envelope.blocksJson = QJsonDocument(root).toJson(QJsonDocument::Compact);
+    emit pageEdited();
+    update();
 }
 
 void NotePageView::addTextBlock()
@@ -146,6 +185,9 @@ void NotePageView::addTextBlock()
     if (m_page == nullptr) {
         return;
     }
+    // Persist the existing editors first: they are about to be destroyed and
+    // recreated from the JSON.
+    persistTextBlocks();
     QJsonObject root = QJsonDocument::fromJson(m_page->envelope.blocksJson).object();
     QJsonArray blocks = root.value(QStringLiteral("blocks")).toArray();
     blocks.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("text")},
@@ -164,11 +206,20 @@ void NotePageView::addTextBlock()
 
 void NotePageView::commitStroke()
 {
-    const Stroke stroke = m_builder.end();
+    Stroke stroke = m_builder.end();
     m_inking = false;
-    if (stroke.samples.size() < 2) {
+    if (stroke.samples.isEmpty()) {
         update();
         return;
+    }
+    if (stroke.samples.size() == 1) {
+        // A pen tap (dot) makes no movement; synthesize a tiny second sample
+        // so the stroke survives the renderer's and persistence's two-sample
+        // minimum instead of silently vanishing.
+        const StrokeSample only = stroke.samples.first();
+        const qreal jitter = qMax(0.5, stroke.width / 6.0);
+        stroke.samples.append({only.pos + QPointF(jitter, jitter), only.pressure, only.tiltX,
+                               only.tiltY});
     }
     pushUndoSnapshot();
     if (m_tool == NoteTool::Eraser) {
@@ -196,12 +247,29 @@ bool NotePageView::event(QEvent *event)
         auto *tablet = static_cast<QTabletEvent *>(event);
         // Palm rejection baseline: only pen input inks; touch/cursor events
         // (a resting palm registers as touch) never reach the stroke layer.
-        if (tablet->pointerType() != QPointingDevice::PointerType::Pen) {
+        // The stylus eraser end is a pen-class device: flip to the eraser
+        // tool instead of consuming it as palm.
+        if (tablet->pointerType() == QPointingDevice::PointerType::Eraser) {
+            if (event->type() == QEvent::TabletPress) {
+                m_toolBeforeEraser = m_tool;
+                m_tool = NoteTool::Eraser;
+            }
+        } else if (tablet->pointerType() != QPointingDevice::PointerType::Pen) {
             return true; // consumed and ignored
         }
         const QPointF pos = toPagePos(tablet->position());
         const StrokeSample sample{pos, tablet->pressure(), tablet->xTilt(), tablet->yTilt()};
         if (event->type() == QEvent::TabletPress) {
+            // AGENT-GUARD: the Text tool never inks — symmetric with the
+            // mouse fallback below (the tablet branch missed this and drew
+            // pen strokes while Text was selected). Strokes must also start
+            // inside the page; ink in the margin is invisible but persisted.
+            if (m_tool == NoteTool::Text || !pageRect().contains(tablet->position())) {
+                if (tablet->pointerType() == QPointingDevice::PointerType::Eraser) {
+                    m_tool = m_toolBeforeEraser;
+                }
+                return true;
+            }
             const bool highlight = m_tool == NoteTool::Highlighter;
             m_builder.begin(sample,
                             m_tool == NoteTool::Highlighter ? StrokeTool::Highlighter
@@ -210,11 +278,19 @@ bool NotePageView::event(QEvent *event)
                             highlight ? 6.0 : m_penWidth);
             m_inking = true;
         } else if (event->type() == QEvent::TabletMove && m_inking) {
+            // AGENT-GUARD: the in-progress stroke is rendered from
+            // m_builder.current() in paintEvent and must NEVER touch the
+            // committed layer during moves — an updateLast() here replaced
+            // the previous real stroke, destroying it on the first move of
+            // the next stroke.
             m_builder.add(sample);
-            m_page->envelope.ink.updateLast(m_builder.current());
             update();
         } else if (event->type() == QEvent::TabletRelease && m_inking) {
             commitStroke();
+        }
+        if (tablet->pointerType() == QPointingDevice::PointerType::Eraser
+            && event->type() == QEvent::TabletRelease) {
+            m_tool = m_toolBeforeEraser;
         }
         return true;
     }
@@ -232,8 +308,8 @@ bool NotePageView::event(QEvent *event)
         return true;
     }
     if (event->type() == QEvent::MouseMove && m_inking) {
+        // Same guard as the tablet path: preview stays out of the layer.
         m_builder.add({toPagePos(static_cast<QMouseEvent *>(event)->position()), 0.6});
-        m_page->envelope.ink.updateLast(m_builder.current());
         update();
         return true;
     }
@@ -261,16 +337,19 @@ void NotePageView::paintEvent(QPaintEvent *event)
         for (qreal y = page.top() + 32; y < page.bottom(); y += 28) {
             painter.drawLine(QPointF(page.left() + 24, y), QPointF(page.right() - 24, y));
         }
-    } else if (background == QLatin1String("grid") || background == QLatin1String("dotted")) {
-        const qreal step = background == QLatin1String("grid") ? 28 : 22;
-        for (qreal y = page.top() + 24; y < page.bottom(); y += step) {
-            for (qreal x = page.left() + 24; x < page.right(); x += step) {
-                if (background == QLatin1String("grid")) {
-                    painter.drawPoint(QPointF(x, y));
-                    painter.drawLine(QPointF(x, y), QPointF(qMin(x + step, page.right() - 24), y));
-                } else {
-                    painter.drawPoint(QPointF(x, y));
-                }
+    } else if (background == QLatin1String("grid")) {
+        // A real grid: horizontal AND vertical lines through each node
+        // (the earlier release drew only horizontals + points).
+        for (qreal y = page.top() + 24; y < page.bottom(); y += 28) {
+            painter.drawLine(QPointF(page.left() + 24, y), QPointF(page.right() - 24, y));
+        }
+        for (qreal x = page.left() + 24; x < page.right(); x += 28) {
+            painter.drawLine(QPointF(x, page.top() + 24), QPointF(x, page.bottom() - 24));
+        }
+    } else if (background == QLatin1String("dotted")) {
+        for (qreal y = page.top() + 24; y < page.bottom(); y += 22) {
+            for (qreal x = page.left() + 24; x < page.right(); x += 22) {
+                painter.drawPoint(QPointF(x, y));
             }
         }
     }
@@ -278,12 +357,14 @@ void NotePageView::paintEvent(QPaintEvent *event)
     if (m_page != nullptr) {
         painter.setClipRect(page);
         // The spatial grid indexes page coordinates; query in page space
-        // and render strokes through the zoom transform.
-        const QRect pageClip = QRectF(event->rect().x() / m_zoom, event->rect().y() / m_zoom,
-                                      event->rect().width() / m_zoom,
-                                      event->rect().height() / m_zoom)
-                                   .toAlignedRect();
-        const QVector<int> visible = m_grid.query(pageClip).values();
+        // and render strokes through the zoom transform. AGENT-GUARD: the
+        // widget→page transform subtracts the page origin BEFORE dividing
+        // by zoom (the earlier release skipped the subtraction, offsetting
+        // the query rect and leaving strokes unpainted at zoom ≠ 100 %).
+        const QRectF widgetClip = event->rect();
+        const QRectF pageClip = QRectF((widgetClip.topLeft() - page.topLeft()) / m_zoom,
+                                       widgetClip.size() / m_zoom);
+        const QVector<int> visible = m_grid.query(pageClip.toAlignedRect()).values();
         painter.save();
         painter.translate(page.topLeft());
         painter.scale(m_zoom, m_zoom);

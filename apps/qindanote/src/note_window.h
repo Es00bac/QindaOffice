@@ -56,12 +56,16 @@ protected:
 private:
     void rebuildNavigator();
     void persistCurrentPage();
+    // AGENT-GUARD: the window holds section/page IDS, never pointers — the
+    // notebook's QVectors reallocate on every append/load and a stale
+    // pointer was use-after-free (and once wrote garbage-named page files).
+    void setCurrentIds(const QString &sectionId, const QString &pageId);
 
     NoteDocument *m_document;
     NotePageView *m_view;
     QTreeWidget *m_navigator;
-    NoteSection *m_currentSection = nullptr;
-    NotePage *m_currentPage = nullptr;
+    QString m_currentSectionId;
+    QString m_currentPageId;
 };
 
 } // namespace QindaOffice::Apps::Notes

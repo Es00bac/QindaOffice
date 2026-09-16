@@ -41,6 +41,11 @@ bool PrintHelper::exportPdf(QWidget *parent, const QString &path,
     printer.setOutputFormat(QPrinter::PdfFormat);
     printer.setOutputFileName(path);
     QPainter painter(&printer);
+    // AGENT-GUARD: report honestly — an unwritable target previously
+    // returned true while the render went to an inactive painter.
+    if (!painter.isActive()) {
+        return false;
+    }
     render(&printer, &painter);
     return true;
 }

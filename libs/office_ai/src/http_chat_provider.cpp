@@ -81,32 +81,40 @@ public:
         m_idleTimer.start(60000);
         connect(reply, &QNetworkReply::readyRead, this, [this, reply] {
             m_idleTimer.start(60000);
-            m_parser.append(reply->readAll());
+            // Only stream 2xx bodies into the SSE parser: error payloads
+            // (JSON error objects) previously got drained here, so the
+            // finished handler's readAll() saw nothing and the user got
+            // "HTTP 400: " with the actual reason swallowed.
+            const int readyStatus =
+                reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (readyStatus == 0 || (readyStatus >= 200 && readyStatus < 300)) {
+                m_parser.append(reply->readAll());
+            }
         });
         connect(reply, &QNetworkReply::finished, this, [this, reply] {
             m_idleTimer.stop();
             m_parser.finish();
             if (m_cancelled) {
-                emit failed({ChatError::Cancelled, QStringLiteral("cancelled"), false});
+                emitFailed({ChatError::Cancelled, QStringLiteral("cancelled"), false});
                 reply->deleteLater();
                 return;
             }
             const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             if (status == 401 || status == 403) {
-                emit failed({ChatError::Auth, tr("API key rejected (HTTP %1)").arg(status), false});
+                emitFailed({ChatError::Auth, tr("API key rejected (HTTP %1)").arg(status), false});
             } else if (status == 429) {
-                emit failed({ChatError::RateLimited, tr("rate limited"), true});
+                emitFailed({ChatError::RateLimited, tr("rate limited"), true});
             } else if (status < 200 || status >= 300) {
-                emit failed({ChatError::Unknown,
+                emitFailed({ChatError::Unknown,
                              tr("HTTP %1: %2").arg(status).arg(QString::fromUtf8(reply->readAll())),
                              status >= 500});
             } else {
-                emit finished({m_text, m_usage});
+                emitFinished({m_text, m_usage});
             }
             reply->deleteLater();
         });
         connect(&m_idleTimer, &QTimer::timeout, this, [this, reply] {
-            emit failed({ChatError::Timeout, tr("stream idle for 60 s"), true});
+            emitFailed({ChatError::Timeout, tr("stream idle for 60 s"), true});
             reply->abort();
         });
     }

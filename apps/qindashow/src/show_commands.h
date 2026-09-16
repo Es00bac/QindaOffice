@@ -121,6 +121,25 @@ private:
     ShowModel::Shape m_after;
 };
 
+// Whole-slide state replace (AI rewrite of the current slide's title/text).
+// Follows the ShapeStateCommand pattern: the deck pointer plus the slide id
+// locate the slide at undo/redo time.
+class SlideStateCommand final : public QUndoCommand {
+public:
+    SlideStateCommand(ShowModel::Presentation *deck, QString slideId, ShowModel::Slide before,
+                      ShowModel::Slide after, QUndoCommand *parent = nullptr);
+    void redo() override;
+    void undo() override;
+
+private:
+    void apply(const ShowModel::Slide &state);
+
+    ShowModel::Presentation *m_deck;
+    QString m_slideId;
+    ShowModel::Slide m_before;
+    ShowModel::Slide m_after;
+};
+
 class SlideListCommand final : public QUndoCommand {
 public:
     SlideListCommand(ShowModel::Presentation *deck, QList<ShowModel::Slide> before,

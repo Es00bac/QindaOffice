@@ -41,6 +41,7 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void showEvent(QShowEvent *event) override;
 
 private:
     enum class Tool { None, Pen, Laser };
@@ -52,6 +53,7 @@ private:
     void paintInk(QPainter *painter);
 
     PresentationController *m_controller;
+    QScreen *m_targetScreen = nullptr; // applied in showEvent (no handle in ctors)
     QPixmap m_current;
     QPixmap m_previous;
     QPropertyAnimation *m_animation = nullptr;

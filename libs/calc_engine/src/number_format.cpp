@@ -55,6 +55,45 @@ QString formatDatePattern(const QString &pattern, const QDate &date, double seri
     QString out;
     int i = 0;
     bool afterHour = false;
+    // AGENT-NOTE: Excel treats an m token adjacent to an s token (either
+    // side) as minutes, so "mm:ss" formats the time of day, not month:second.
+    // A forward scan for the next letter token decides the context.
+    const auto nextLetterTokenIsSeconds = [&pattern](int from) {
+        for (int j = from; j < pattern.size(); ++j) {
+            const QChar ch = pattern.at(j);
+            if (ch == QLatin1Char('[') || ch == QLatin1Char('"')) {
+                // skip bracketed/quoted spans entirely
+                const QChar close = ch == QLatin1Char('[') ? QLatin1Char(']') : QLatin1Char('"');
+                const int end = pattern.indexOf(close, j + 1);
+                j = end < 0 ? pattern.size() - 1 : end;
+                continue;
+            }
+            if (ch.isLetter()) {
+                return ch.toLower() == QLatin1Char('s');
+            }
+        }
+        return false;
+    };
+    const auto prevLetterTokenWasSeconds = [&pattern](int before) {
+        for (int j = before - 1; j >= 0; --j) {
+            const QChar ch = pattern.at(j);
+            if (ch == QLatin1Char(']')) {
+                // skip backwards over the whole bracketed span
+                const int open = pattern.lastIndexOf(QLatin1Char('['), j - 1);
+                j = open < 0 ? 0 : open;
+                continue;
+            }
+            if (ch == QLatin1Char('"')) {
+                const int open = pattern.lastIndexOf(QLatin1Char('"'), j - 1);
+                j = open < 0 ? 0 : open;
+                continue;
+            }
+            if (ch.isLetter()) {
+                return ch.toLower() == QLatin1Char('s');
+            }
+        }
+        return false;
+    };
     while (i < pattern.size()) {
         const QChar c = pattern.at(i);
         // Bracketed duration units are single tokens, not letter runs.
@@ -78,8 +117,9 @@ QString formatDatePattern(const QString &pattern, const QDate &date, double seri
         }
         // AM/PM is a unit token, not a letter run.
         if (pattern.mid(i, 5).compare(QLatin1String("AM/PM"), Qt::CaseInsensitive) == 0) {
-            const int hour = int(serial * 24.0) % 24;
-            out += hour < 12 ? QStringLiteral("AM") : QStringLiteral("PM");
+            const int hour24 = qint64(serial * 24.0) % 24;
+            const int hour12 = hour24 == 0 ? 12 : (hour24 > 12 ? hour24 - 12 : hour24);
+            out += hour12 < 12 ? QStringLiteral("AM") : QStringLiteral("PM");
             i += 5;
             continue;
         }
@@ -95,25 +135,39 @@ QString formatDatePattern(const QString &pattern, const QDate &date, double seri
         }
         const QString token = pattern.mid(i, run);
         const QString lower = token.toLower();
+        // m reads as minutes when an hour token precedes it or a seconds
+        // token neighbours it (either side); otherwise it is the month.
+        const bool minuteContext = afterHour
+            || (lower.startsWith(QLatin1Char('m'))
+                && (nextLetterTokenIsSeconds(i + run) || prevLetterTokenWasSeconds(i)));
         if (lower == QLatin1String("yyyy")) out += padInt(date.year(), 4);
         else if (lower == QLatin1String("yy")) out += padInt(date.year() % 100, 2);
         else if (lower == QLatin1String("mmmm")) out += date.toString(QStringLiteral("MMMM"));
         else if (lower == QLatin1String("mmm")) out += date.toString(QStringLiteral("MMM"));
-        else if (lower == QLatin1String("mm") && !afterHour) out += padInt(date.month(), 2);
-        else if (lower == QLatin1String("m") && !afterHour) out += QString::number(date.month());
-        else if (lower == QLatin1String("mm") && afterHour) out += padInt(int(serial * 24.0 * 60.0) % 60, 2);
-        else if (lower == QLatin1String("m") && afterHour) out += QString::number(int(serial * 24.0 * 60.0) % 60);
+        else if (lower == QLatin1String("mm") && !minuteContext) out += padInt(date.month(), 2);
+        else if (lower == QLatin1String("m") && !minuteContext) out += QString::number(date.month());
+        else if (lower == QLatin1String("mm")) out += padInt(qint64(serial * 24.0 * 60.0) % 60, 2);
+        else if (lower == QLatin1String("m")) out += QString::number(qint64(serial * 24.0 * 60.0) % 60);
         else if (lower == QLatin1String("dddd")) out += date.toString(QStringLiteral("dddd"));
         else if (lower == QLatin1String("ddd")) out += date.toString(QStringLiteral("ddd"));
         else if (lower == QLatin1String("dd")) out += padInt(date.day(), 2);
         else if (lower == QLatin1String("d")) out += QString::number(date.day());
-        else if (lower == QLatin1String("hh")) out += padInt(int(serial * 24.0) % 24, 2);
-        else if (lower == QLatin1String("h")) out += QString::number(int(serial * 24.0) % 24);
-        else if (lower == QLatin1String("ss")) out += padInt(int(serial * 24.0 * 3600.0) % 60, 2);
-        else if (lower == QLatin1String("s")) out += QString::number(int(serial * 24.0 * 3600.0) % 60);
+        else if (lower == QLatin1String("hh")) {
+            const int hour24 = qint64(serial * 24.0) % 24;
+            const int hour12 = hour24 == 0 ? 12 : (hour24 > 12 ? hour24 - 12 : hour24);
+            out += padInt(hour12, 2);
+        }
+        else if (lower == QLatin1String("h")) {
+            const int hour24 = qint64(serial * 24.0) % 24;
+            const int hour12 = hour24 == 0 ? 12 : (hour24 > 12 ? hour24 - 12 : hour24);
+            out += QString::number(hour12);
+        }
+        else if (lower == QLatin1String("ss")) out += padInt(qint64(serial * 24.0 * 3600.0) % 60, 2);
+        else if (lower == QLatin1String("s")) out += QString::number(qint64(serial * 24.0 * 3600.0) % 60);
         else if (token.compare(QLatin1String("AM/PM"), Qt::CaseInsensitive) == 0) {
-            const int hour = int(serial * 24.0) % 24;
-            out += hour < 12 ? QStringLiteral("AM") : QStringLiteral("PM");
+            const int hour24 = qint64(serial * 24.0) % 24;
+            const int hour12 = hour24 == 0 ? 12 : (hour24 > 12 ? hour24 - 12 : hour24);
+            out += hour12 < 12 ? QStringLiteral("AM") : QStringLiteral("PM");
         } else if (lower.startsWith(QLatin1Char('[')) && lower.endsWith(QLatin1Char(']'))) {
             const QString inner = lower.mid(1, lower.size() - 2);
             if (inner == QLatin1String("h")) out += QString::number(qint64(serial * 24.0));
@@ -239,6 +293,26 @@ void NumberFormat::compile(const QString &code)
                     i = end < 0 ? raw.size() : end + 1;
                 } else if (c == QLatin1Char('_') || c == QLatin1Char('*')) {
                     i += 2; // spacing/fill tokens are dropped in v1
+                } else if ((c == QLatin1Char('+') || c == QLatin1Char('-'))
+                           && !(!digits.isEmpty()
+                                && (digits.endsWith(QLatin1Char('E'))
+                                    || digits.endsWith(QLatin1Char('e'))))) {
+                    // A bare sign is a displayed literal (Excel rule), except
+                    // right after E/e where it is the exponent sign. Parens
+                    // from accounting formats like "(0.00)" are literals too.
+                    if (digits.isEmpty()) {
+                        section.prefix += c;
+                    } else {
+                        section.suffix += c;
+                    }
+                    ++i;
+                } else if (c == QLatin1Char('(') || c == QLatin1Char(')')) {
+                    if (digits.isEmpty()) {
+                        section.prefix += c;
+                    } else {
+                        section.suffix += c;
+                    }
+                    ++i;
                 } else if (c.isSpace()
                            || (c.isLetter() && c != QLatin1Char('E')
                                && c != QLatin1Char('e'))) {
@@ -321,6 +395,10 @@ FormattedText NumberFormat::formatNumber(double number) const
         return out;
     }
     double value = number;
+    // For the negative section, use absolute value (Excel behavior)
+    if (number < 0 && sectionCount >= 2 && section == &m_sections.at(1)) {
+        value = std::abs(number);
+    }
     if (section->percent) {
         value *= 100.0;
     }
@@ -341,9 +419,6 @@ FormattedText NumberFormat::formatNumber(double number) const
         for (int i = end - 3; i > 0; i -= 3) {
             digits.insert(i, QLatin1Char(','));
         }
-    }
-    if (number < 0 && !digits.startsWith(QLatin1Char('-'))) {
-        digits.prepend(QLatin1Char('-'));
     }
     out.text = section->prefix + digits + (section->percent ? QStringLiteral("%") : QString())
                + section->suffix;

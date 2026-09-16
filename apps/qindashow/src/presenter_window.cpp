@@ -5,6 +5,7 @@
 #include "slide_renderer.h"
 
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QPainter>
 #include <QScreen>
@@ -22,9 +23,12 @@ PresenterWindow::PresenterWindow(PresentationController *controller, QScreen *sc
     , m_controller(controller)
 {
     setAttribute(Qt::WA_DeleteOnClose);
-    if (screen != nullptr && windowHandle() != nullptr) {
-        windowHandle()->setScreen(screen);
-    }
+    // AGENT-GUARD: windowHandle() is always null in a constructor — the
+    // handle exists only once the window is shown. Stash the screen and
+    // apply it in showEvent(); the ctor-time guard never fired, so the
+    // presenter (whose entire purpose is the second screen) opened on the
+    // player's screen instead.
+    m_targetScreen = screen;
     auto *layout = new QVBoxLayout(this);
     auto *top = new QHBoxLayout;
     m_next = new QLabel(this);
@@ -59,6 +63,25 @@ PresenterWindow::PresenterWindow(PresentationController *controller, QScreen *sc
     tickClock();
 }
 
+void PresenterWindow::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    if (m_targetScreen != nullptr && windowHandle() != nullptr) {
+        windowHandle()->setScreen(m_targetScreen);
+    }
+}
+
+void PresenterWindow::keyPressEvent(QKeyEvent *event)
+{
+    // Escape must end the presenter view; without this a fullscreen
+    // presenter stranded the second screen after the player closed.
+    if (event->key() == Qt::Key_Escape) {
+        close();
+        return;
+    }
+    QWidget::keyPressEvent(event);
+}
+
 void PresenterWindow::refresh()
 {
     const ShowModel::Presentation *deck = m_controller->deck();
@@ -77,9 +100,19 @@ void PresenterWindow::refresh()
 void PresenterWindow::tickClock()
 {
     const qint64 seconds = m_elapsed.elapsed() / 1000;
-    m_timer->setText(tr("%1:%2")
-                         .arg(seconds / 60, 2, 10, QLatin1Char('0'))
-                         .arg(seconds % 60, 2, 10, QLatin1Char('0')));
+    // Hours-elapsed talks run past 60 min previously showed "60:01".
+    const qint64 hours = seconds / 3600;
+    const qint64 remainder = seconds % 3600;
+    if (hours > 0) {
+        m_timer->setText(tr("%1:%2:%3")
+                             .arg(hours, 2, 10, QLatin1Char('0'))
+                             .arg(remainder / 60, 2, 10, QLatin1Char('0'))
+                             .arg(remainder % 60, 2, 10, QLatin1Char('0')));
+    } else {
+        m_timer->setText(tr("%1:%2")
+                             .arg(remainder / 60, 2, 10, QLatin1Char('0'))
+                             .arg(remainder % 60, 2, 10, QLatin1Char('0')));
+    }
     m_clock->setText(QTime::currentTime().toString(QStringLiteral("hh:mm")));
     update();
 }

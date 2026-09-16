@@ -83,7 +83,9 @@ void registerMathExtraFunctions(QHash<QString, FunctionSpec> &r)
                               QString digits = QString::number(value, base).toUpper();
                               if (args.size() > 2) {
                                   const auto minLength = scalarNumber(args.at(2));
-                                  if (!minLength) return Err::Value;
+                                  if (!minLength || *minLength < 0 || *minLength > 255) {
+                                      return Err::Value; // Excel caps min_length at 255
+                                  }
                                   while (digits.size() < int(*minLength)) {
                                       digits.prepend(QLatin1Char('0'));
                                   }

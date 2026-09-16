@@ -49,6 +49,11 @@ bool SpreadsheetDocument::load(const QString &path, QString *error)
         return false;
     }
     m_workbook = std::move(fresh);
+    // AGENT-GUARD: clamp the active-sheet index — the previous workbook may
+    // have had more sheets than the loaded one, and every accessor indexes
+    // m_sheets.at(m_activeSheet) (an out-of-range value aborts the process
+    // in the structureChanged handler before the UI can react).
+    m_activeSheet = 0;
     // A loaded document starts with empty history (like every editor).
     m_undoStack.clear();
     setCanonicalPath(path);
@@ -167,6 +172,8 @@ void SpreadsheetDocument::pasteCells(const CalcEng::CellAddr &at, const QStringL
         return;
     }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
+    CalcEng::Sheet &sheet = m_workbook.sheetAt(m_activeSheet);
+    QSet<CalcEng::CellKey> cleared;
     qint32 row = at.row;
     for (const QString &line : rows) {
         qint32 col = at.col;
@@ -176,10 +183,19 @@ void SpreadsheetDocument::pasteCells(const CalcEng::CellAddr &at, const QStringL
                 // setCellInput parses formulas ('=' prefix), numbers,
                 // booleans and dates, falling back to text.
                 m_workbook.setCellInput(m_activeSheet, {row, col}, input);
+            } else if (sheet.clearCell({row, col})) {
+                // An empty source cell clears the target (Excel semantics):
+                // paste over existing data must be idempotent with the copy.
+                const CalcEng::CellKey key(m_activeSheet, row, col);
+                m_workbook.dependencies().updateCell(key, {});
+                cleared.insert(key);
             }
             ++col;
         }
         ++row;
+    }
+    if (!cleared.isEmpty()) {
+        m_workbook.recalc(cleared);
     }
     pushUndo(before, tr("Paste"));
     setDirty(true);

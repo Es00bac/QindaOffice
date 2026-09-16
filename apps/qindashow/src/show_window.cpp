@@ -154,10 +154,22 @@ ShowWindow::ShowWindow()
             }
         }
         if (reordered.size() == deck->slides.size()) {
-            pushSlideListCommand(deck->slides);
+            // AGENT-GUARD: mutate first, then push. QUndoStack::push runs
+            // redo() synchronously → indexChanged → fullRefresh(); pushing
+            // before the mutation refreshed against the OLD list (visually
+            // reverting the drag), then swapping the model left sorter and
+            // deck permanently desynced — clicks/deletes hit the wrong
+            // slide and canvas edits landed on a detached slide buffer.
+            const QList<ShowModel::Slide> before = deck->slides;
             deck->slides = reordered;
+            pushSlideListCommand(before);
             m_document->setDirty(true);
             m_document->notifyContentChanged();
+        } else {
+            // Duplicate/empty slide ids (imported decks): rebuilding the
+            // sorter from the deck is the only consistent recovery; a
+            // partial reorder would drop slides.
+            rebuildSorter();
         }
         m_sortSyncing = false;
     });
@@ -368,9 +380,15 @@ void ShowWindow::pushSlideListCommand(const QList<ShowModel::Slide> &before)
 void ShowWindow::newDeck()
 {
     ShowModel::Presentation *deck = m_document->presentation();
-    pushSlideListCommand(deck->slides);
+    // AGENT-GUARD: mutate first, then push. QUndoStack::push runs redo()
+    // synchronously, which fires indexChanged → fullRefresh(); the refresh
+    // must observe the NEW state, and the command's after-image must be the
+    // new list (pushing before the mutation captured the old list twice,
+    // which made redo a silent no-op that resurrected stale undo state).
+    const QList<ShowModel::Slide> before = deck->slides;
     deck->slides.clear();
     deck->addSlide(tr("Slide 1")).layout = QStringLiteral("title");
+    pushSlideListCommand(before);
     m_currentRow = 0;
     m_document->setDirty(true);
     fullRefresh();
@@ -381,9 +399,10 @@ void ShowWindow::addSlide()
     ShowModel::Presentation *deck = m_document->presentation();
     const QString layout = m_layout->currentText().isEmpty() ? QStringLiteral("title+content")
                                                              : m_layout->currentText();
-    pushSlideListCommand(deck->slides);
+    const QList<ShowModel::Slide> before = deck->slides;
     deck->slides.append(makeSlide(tr("Slide %1").arg(deck->slides.size() + 1), layout,
                                   deck->slideSize));
+    pushSlideListCommand(before);
     m_currentRow = deck->slides.size() - 1;
     m_document->setDirty(true);
     fullRefresh();
@@ -395,13 +414,14 @@ void ShowWindow::duplicateSlide()
     if (m_currentRow < 0 || m_currentRow >= deck->slides.size()) {
         return;
     }
-    pushSlideListCommand(deck->slides);
+    const QList<ShowModel::Slide> before = deck->slides;
     ShowModel::Slide copy = deck->slides.at(m_currentRow);
     copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     for (ShowModel::Shape &shape : copy.shapes) {
         shape.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     }
     deck->slides.insert(m_currentRow + 1, copy);
+    pushSlideListCommand(before);
     m_currentRow += 1;
     m_document->setDirty(true);
     fullRefresh();
@@ -413,8 +433,9 @@ void ShowWindow::deleteSlide()
     if (m_currentRow < 0 || m_currentRow >= deck->slides.size()) {
         return;
     }
-    pushSlideListCommand(deck->slides);
+    const QList<ShowModel::Slide> before = deck->slides;
     deck->slides.removeAt(m_currentRow);
+    pushSlideListCommand(before);
     if (m_currentRow >= deck->slides.size()) {
         m_currentRow = deck->slides.size() - 1;
     }

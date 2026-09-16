@@ -45,6 +45,12 @@ public:
         return {m_header, m_footer, m_margin};
     }
 
+signals:
+    // Emitted by setupPaged (ctor, load, Page Setup dialog) so the view can
+    // re-derive its page geometry — without this, a document loaded with a
+    // non-default page size kept rendering (and clipping at) the old size.
+    void pageSetupChanged();
+
 private:
     std::unique_ptr<QTextDocument> m_text;
     qreal m_margin = 96;

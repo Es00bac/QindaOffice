@@ -24,6 +24,11 @@ SpreadsheetView::SpreadsheetView(SpreadsheetDocument *document, QWidget *parent)
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     viewport()->setAutoFillBackground(false);
     m_editor->hide();
+    // AGENT-GUARD: intercept Return/Tab ON the editor — the QLineEdit has
+    // focus while editing, so the view's keyPressEvent never saw them; Return
+    // committed via editingFinished without moving and Tab walked focus away
+    // (the spreadsheet's core commit-and-advance convention was dead).
+    m_editor->installEventFilter(this);
     connect(m_editor, &QLineEdit::editingFinished, this, [this] {
         if (m_editing) {
             commitEditor(false);
@@ -189,20 +194,36 @@ void SpreadsheetView::paintHeaderBands(QPainter &p, const QRect &clip)
     p.setPen(palette().buttonText().color());
     p.drawText(corner, Qt::AlignCenter, QStringLiteral("•"));
 
+    // AGENT-GUARD: the column band must walk the sheet's REAL column widths —
+    // the grid renders with sheet.columnWidth(); the band previously assumed
+    // a fixed 96 px, so header letters drifted out of alignment after any
+    // xlsx import brought different widths in.
     p.save();
     p.translate(kHeaderWidth, 0);
-    for (qint32 c = horizontalScrollBar()->value() / 96, x = -horizontalScrollBar()->value();
-         x < clip.width(); ++c, x += 96) {
-        const QRect r(x, 0, 96, kHeaderHeight);
-        if (r.right() < 0) {
-            continue;
+    {
+        const Sheet &sheet = m_document->workbook()->sheetAt(m_document->activeSheet());
+        const qint32 scrollX = horizontalScrollBar()->value();
+        // Find the first column whose right edge is at/after the scroll pos.
+        qint32 col = 0;
+        qreal x = -scrollX;
+        while (col < Sheet::kMaxCols && x + sheet.columnWidth(col) <= 0) {
+            x += sheet.columnWidth(col);
+            ++col;
         }
-        p.fillRect(r, palette().button().color());
-        p.setPen(palette().buttonText().color());
-        p.drawText(r.adjusted(0, 0, -1, -1), Qt::AlignCenter, colName(c));
-        p.setPen(palette().dark().color());
-        p.drawLine(r.bottomLeft(), r.bottomRight());
-        p.drawLine(r.topRight(), r.bottomRight());
+        while (x < clip.width() && col < Sheet::kMaxCols) {
+            const qreal w = sheet.columnWidth(col);
+            const QRectF r(x, 0, w, kHeaderHeight);
+            if (r.right() >= 0) {
+                p.fillRect(r, palette().button().color());
+                p.setPen(palette().buttonText().color());
+                p.drawText(r.adjusted(0, 0, -1, -1), Qt::AlignCenter, colName(col));
+                p.setPen(palette().dark().color());
+                p.drawLine(r.bottomLeft(), r.bottomRight());
+                p.drawLine(r.topRight(), r.bottomRight());
+            }
+            x += w;
+            ++col;
+        }
     }
     p.restore();
 
@@ -275,19 +296,56 @@ void SpreadsheetView::paintGrid(QPainter &p, const QRect &clip)
                                           : palette().highlight().color().lighter(160));
             }
             const Cell *cellData = sheet.cellAt(addr);
+            // Render imported style attributes: bg fill, font family/size/
+            // style, fg colour and alignment. The formatting toolbar set
+            // these while the grid rendered only bold — users believed the
+            // formatting applied when it was invisible.
+            const CellStyle *style = cellData != nullptr
+                ? wb.style(sheet.styleIdAt(addr))
+                : nullptr;
+            if (style != nullptr && style->bg.has_value() && !inSelection) {
+                p.fillRect(cell, QColor((*style->bg).r, (*style->bg).g, (*style->bg).b));
+            }
             if (cellData != nullptr && !isBlank(cellData->value)) {
-                const CellStyle *style = wb.style(sheet.styleIdAt(addr));
                 const QString text =
                     NumberFormat(style != nullptr && !style->numberFormat.isEmpty()
                                      ? style->numberFormat
                                      : QStringLiteral("General"))
                         .format(cellData->value)
                         .text;
-                p.setFont(style != nullptr && style->bold ? boldFont : baseFont);
-                p.setPen(inSelection && isCursor ? palette().highlightedText().color()
-                                                 : palette().text().color());
-                p.drawText(cell.adjusted(4, 0, -4, 0),
-                           Qt::AlignVCenter | Qt::AlignRight, text);
+                if (style != nullptr && (style->bold || style->italic || style->underline
+                                         || style->fontSize > 0 || !style->fontFamily.isEmpty())) {
+                    QFont cellFont = baseFont;
+                    if (!style->fontFamily.isEmpty()) {
+                        cellFont.setFamily(style->fontFamily);
+                    }
+                    if (style->fontSize > 0) {
+                        cellFont.setPointSizeF(style->fontSize);
+                    }
+                    cellFont.setBold(style->bold);
+                    cellFont.setItalic(style->italic);
+                    cellFont.setUnderline(style->underline);
+                    p.setFont(cellFont);
+                } else {
+                    p.setFont(style != nullptr && style->bold ? boldFont : baseFont);
+                }
+                if (inSelection && isCursor) {
+                    p.setPen(palette().highlightedText().color());
+                } else if (style != nullptr && style->fg.has_value()) {
+                    p.setPen(QColor((*style->fg).r, (*style->fg).g, (*style->fg).b));
+                } else {
+                    p.setPen(palette().text().color());
+                }
+                // Explicit alignment wins; otherwise numbers right, text left.
+                Qt::Alignment alignment = Qt::AlignVCenter;
+                if (style != nullptr && style->alignment != 0) {
+                    alignment |= style->alignment == 1 ? Qt::AlignHCenter : Qt::AlignRight;
+                } else {
+                    alignment |= isNumber(cellData->value) || isBool(cellData->value)
+                        ? Qt::AlignRight
+                        : Qt::AlignLeft;
+                }
+                p.drawText(cell.adjusted(4, 0, -4, 0), alignment, text);
             }
             p.setPen(palette().mid().color());
             p.drawLine(cell.bottomLeft(), cell.bottomRight());
@@ -334,6 +392,32 @@ void SpreadsheetView::mouseMoveEvent(QMouseEvent *event)
         return;
     }
     QAbstractScrollArea::mouseMoveEvent(event);
+}
+
+bool SpreadsheetView::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_editor && m_editing && event->type() == QEvent::KeyPress) {
+        auto *key = static_cast<QKeyEvent *>(event);
+        switch (key->key()) {
+        case Qt::Key_Return:
+        case Qt::Key_Enter:
+            commitEditor(!(key->modifiers() & Qt::ShiftModifier));
+            key->accept();
+            return true;
+        case Qt::Key_Tab:
+            // Commit and advance right (Shift+Tab: left).
+            commitEditor(false);
+            {
+                const int step = key->modifiers() & Qt::ShiftModifier ? -1 : 1;
+                setCursorCell({m_cursor.row, m_cursor.col + step}, false);
+            }
+            key->accept();
+            return true;
+        default:
+            break;
+        }
+    }
+    return QAbstractScrollArea::eventFilter(watched, event);
 }
 
 void SpreadsheetView::keyPressEvent(QKeyEvent *event)

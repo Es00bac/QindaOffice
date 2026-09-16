@@ -118,7 +118,28 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
                             }};
     };
     r.insert(QStringLiteral("MEDIAN"), medianLike(true));
-    r.insert(QStringLiteral("MODE"), medianLike(false));
+    // MODE returns the most frequently occurring value; #N/A when no value
+    // repeats (Excel rule). numberAgg flattens both ranges and scalars.
+    r.insert(QStringLiteral("MODE"),
+             FunctionSpec{1, 255, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+                              return numberAgg(ctx, args,
+                                               [](const QVector<double> &ns) -> Value {
+                                                   if (ns.isEmpty()) return Err::NA;
+                                                   QHash<double, int> freq;
+                                                   for (double x : ns) ++freq[x];
+                                                   int bestCount = 0;
+                                                   double best = 0;
+                                                   for (auto it = freq.constBegin();
+                                                        it != freq.constEnd(); ++it) {
+                                                       if (it.value() > bestCount) {
+                                                           bestCount = it.value();
+                                                           best = it.key();
+                                                       }
+                                                   }
+                                                   if (bestCount < 2) return Err::NA;
+                                                   return best;
+                                               });
+                          }});
     const auto dev = [](bool sample, bool variance) {
         return FunctionSpec{1, 255, false,
                             [sample, variance](EvalContext &ctx,
@@ -180,14 +201,16 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
     const auto ifAgg = [](std::function<double(double, double)> fold, bool average) {
         return FunctionSpec{2, 3, false,
                             [fold, average](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+                                const auto *rangeView = std::get_if<RangeView>(&args.at(0));
+                                if (!rangeView) return Err::Value;
                                 QVector<Value> values;
-                                const Value err = flatRangeValues(
-                                    ctx, std::get<RangeView>(args.at(0)), &values);
+                                const Value err = flatRangeValues(ctx, *rangeView, &values);
                                 if (isErr(err)) return err;
                                 QVector<Value> sums;
                                 if (args.size() > 2) {
-                                    const Value err2 = flatRangeValues(
-                                        ctx, std::get<RangeView>(args.at(2)), &sums);
+                                    const auto *sumRangeView = std::get_if<RangeView>(&args.at(2));
+                                    if (!sumRangeView) return Err::Value;
+                                    const Value err2 = flatRangeValues(ctx, *sumRangeView, &sums);
                                     if (isErr(err2)) return err2;
                                 }
                                 const QString criteria =
@@ -198,9 +221,15 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
                                     if (!criteriaMatches(values.at(i), criteria)) {
                                         continue;
                                     }
-                                    const Value &source =
-                                        sums.isEmpty() ? values.at(i)
-                                                       : sums.at(qMin(i, sums.size() - 1));
+                                    // Without a sum_range the criteria
+                                    // cell itself is summed; a shorter
+                                    // sum_range extends with blanks (Excel
+                                    // semantics) — the old qMin clamp
+                                    // re-summed its last cell.
+                                    const Value source = sums.isEmpty()
+                                        ? values.at(i)
+                                        : (i < sums.size() ? sums.at(i)
+                                                           : Value(std::monostate{}));
                                     const auto d = toNumber(source);
                                     if (d.has_value()) {
                                         sum = fold(sum, *d);
@@ -217,9 +246,11 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
     r.insert(QStringLiteral("AVERAGEIF"), ifAgg([](double a, double b) { return a + b; }, true));
     r.insert(QStringLiteral("COUNTIF"),
              FunctionSpec{2, 2, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+                              const auto *rangeView = std::get_if<RangeView>(&args.at(0));
+                              if (!rangeView) return Err::Value;
                               QVector<Value> values;
                               const Value err =
-                                  sparseRangeValues(ctx, std::get<RangeView>(args.at(0)), &values);
+                                  sparseRangeValues(ctx, *rangeView, &values);
                               if (isErr(err)) return err;
                               const QString criteria = toText(scalarOrValue(args.at(1)));
                               double count = 0;
@@ -233,9 +264,10 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
         return FunctionSpec{1, 255, false,
                             [average, extrema, maxima](EvalContext &ctx,
                                                        const QVector<Arg> &args) -> Value {
+                                const auto *rangeView = std::get_if<RangeView>(&args.at(0));
+                                if (!rangeView) return Err::Value;
                                 QVector<Value> values;
-                                const Value err = sparseRangeValues(
-                                    ctx, std::get<RangeView>(args.at(0)), &values);
+                                const Value err = sparseRangeValues(ctx, *rangeView, &values);
                                 if (isErr(err)) return err;
                                 double result = 0;
                                 bool any = false;
@@ -266,9 +298,10 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
     const auto devA = [](bool variance) {
         return FunctionSpec{1, 255, false,
                             [variance](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+                                const auto *rangeView = std::get_if<RangeView>(&args.at(0));
+                                if (!rangeView) return Err::Value;
                                 QVector<Value> values;
-                                const Value err = sparseRangeValues(
-                                    ctx, std::get<RangeView>(args.at(0)), &values);
+                                const Value err = sparseRangeValues(ctx, *rangeView, &values);
                                 if (isErr(err)) return err;
                                 if (values.size() < 2) return Err::Div0;
                                 QVector<double> nums;
@@ -305,9 +338,10 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
     r.insert(QStringLiteral("PERCENTILE"),
              FunctionSpec{2, 2, false, [percentile](EvalContext &ctx,
                                                     const QVector<Arg> &args) -> Value {
+                              const auto *rangeView = std::get_if<RangeView>(&args.at(0));
+                              if (!rangeView) return Err::Value;
                               QVector<Value> values;
-                              const Value err = sparseRangeValues(
-                                  ctx, std::get<RangeView>(args.at(0)), &values);
+                              const Value err = sparseRangeValues(ctx, *rangeView, &values);
                               if (isErr(err)) return err;
                               const auto k = scalarNumber(args.at(1));
                               if (!k) return Err::Value;
@@ -323,9 +357,10 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
     r.insert(QStringLiteral("QUARTILE"),
              FunctionSpec{2, 2, false, [percentile](EvalContext &ctx,
                                                     const QVector<Arg> &args) -> Value {
+                              const auto *rangeView = std::get_if<RangeView>(&args.at(0));
+                              if (!rangeView) return Err::Value;
                               QVector<Value> values;
-                              const Value err = sparseRangeValues(
-                                  ctx, std::get<RangeView>(args.at(0)), &values);
+                              const Value err = sparseRangeValues(ctx, *rangeView, &values);
                               if (isErr(err)) return err;
                               const auto q = scalarNumber(args.at(1));
                               if (!q) return Err::Value;
@@ -341,9 +376,10 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
                           }});
     r.insert(QStringLiteral("RANK"),
              FunctionSpec{2, 3, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+                              const auto *rangeView = std::get_if<RangeView>(&args.at(1));
+                              if (!rangeView) return Err::Value;
                               QVector<Value> values;
-                              const Value err = sparseRangeValues(
-                                  ctx, std::get<RangeView>(args.at(1)), &values);
+                              const Value err = sparseRangeValues(ctx, *rangeView, &values);
                               if (isErr(err)) return err;
                               const auto x = scalarNumber(args.at(0));
                               if (!x) return Err::Value;
@@ -407,9 +443,10 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
                           }});
     r.insert(QStringLiteral("TRIMMEAN"),
              FunctionSpec{2, 2, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+                              const auto *rangeView = std::get_if<RangeView>(&args.at(0));
+                              if (!rangeView) return Err::Value;
                               QVector<Value> values;
-                              const Value err = sparseRangeValues(
-                                  ctx, std::get<RangeView>(args.at(0)), &values);
+                              const Value err = sparseRangeValues(ctx, *rangeView, &values);
                               if (isErr(err)) return err;
                               const auto p = scalarNumber(args.at(1));
                               if (!p) return Err::Value;

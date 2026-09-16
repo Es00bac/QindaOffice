@@ -163,9 +163,14 @@ void registerTextFunctions(QHash<QString, FunctionSpec> &r)
                               const QString s = toText(scalarOrValue(args.at(0)));
                               const auto n = scalarNumber(args.at(1));
                               if (!n || *n < 0) return Err::Value;
+                              // Enforce Excel's 32767-char ceiling BEFORE
+                              // building: REPT("a", 2e9) previously allocated
+                              // multi-gigabyte strings and hung the sheet.
+                              if (double(s.size()) * *n > 32767.0) {
+                                  return Err::Value;
+                              }
                               QString out;
                               for (int i = 0; i < int(*n); ++i) out += s;
-                              if (out.size() > 32767) return Err::Value;
                               return out;
                           }});
     r.insert(QStringLiteral("EXACT"),

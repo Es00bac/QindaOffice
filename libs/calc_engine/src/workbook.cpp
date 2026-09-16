@@ -131,7 +131,14 @@ void Workbook::installFormula(qint32 sheet, const CellAddr &addr, const NodePtr 
     cell.isVolatile = containsVolatileCall(ast);
     const CellKey key(sheet, addr.row, addr.col);
     EvalContext ctx{this, sheet, addr};
+    // AGENT-GUARD: addVolatile must come after updateCell — updateCell calls
+    // removeCell, which clears the volatile registration. Missing this made
+    // TODAY()/NOW()/RAND() go stale on every edit (they were only re-registered
+    // by the app's undo path).
     m_dependencies.updateCell(key, collectTargets(ast, ctx));
+    if (cell.isVolatile) {
+        m_dependencies.addVolatile(key);
+    }
     recalc({key});
 }
 
@@ -157,6 +164,20 @@ void Workbook::recalc(const QSet<CellKey> &edited)
             cell->value = Err::Circular;
         }
     }
+}
+
+void Workbook::recalcAll()
+{
+    QSet<CellKey> all;
+    for (qint32 s = 0; s < qint32(m_sheets.size()); ++s) {
+        const Sheet &sheet = *m_sheets.at(size_t(s));
+        for (const auto &[key, cell] : sheet.cells().asKeyValueRange()) {
+            if (cell.ast) {
+                all.insert(CellKey(s, key >> 32, key & 0xffffffffu));
+            }
+        }
+    }
+    recalc(all);
 }
 
 qint32 Workbook::addStyle(const CellStyle &style)

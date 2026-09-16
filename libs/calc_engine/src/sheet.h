@@ -38,6 +38,9 @@ public:
 
     [[nodiscard]] qint32 styleIdAt(const CellAddr &addr) const;
     void setStyleIdAt(const CellAddr &addr, qint32 id);
+    // The full sparse style map (undo snapshots must cover styles set on
+    // EMPTY cells — cells() only holds cells with content or formulas).
+    [[nodiscard]] const QHash<quint64, qint32> &styleIds() const { return m_styleIds; }
 
 private:
     QString m_name;

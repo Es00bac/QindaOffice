@@ -24,12 +24,15 @@ public:
     [[nodiscard]] bool isActive() const;
     [[nodiscard]] bool isMisspelled(const QString &word) const;
     [[nodiscard]] QStringList suggestions(const QString &word) const;
+    // Session-scoped ignore: the word stops squiggling for this session.
+    void ignoreWord(const QString &word);
 
 protected:
     void highlightBlock(const QString &text) override;
 
 private:
     std::unique_ptr<Sonnet::Speller> m_speller;
+    QSet<QString> m_ignoredWords;
 };
 
 } // namespace QindaOffice::Apps::Write

@@ -28,7 +28,7 @@ void registerLookupFunctions(QHash<QString, FunctionSpec> &r)
     FunctionSpec columnSpec{
         0, 1, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
         if (args.isEmpty()) {
-            return 1.0;
+            return double(ctx.here.col + 1);
         }
         const auto *view = std::get_if<RangeView>(&args.at(0));
         if (view) return double(view->range.topLeft.col + 1);
@@ -182,15 +182,26 @@ void registerLookupFunctions(QHash<QString, FunctionSpec> &r)
                                   }
                               }
                               int found = -1;
-                              for (int i = searchFrom; i >= 0 && i < keys.size(); i += step) {
-                                  const int cmp = compareValues(keys.at(i), needle);
-                                  if (cmp == 0) {
-                                      found = i;
-                                      break;
+                              if (matchMode == -1) {
+                                  // For match_mode -1: find the *largest* value <= needle (last such)
+                                  // Need to scan all and keep the last matching position
+                                  for (int i = searchFrom; i >= 0 && i < keys.size(); i += step) {
+                                      const int cmp = compareValues(keys.at(i), needle);
+                                      if (cmp <= 0) {
+                                          found = i;  // keep last match
+                                      } else if (cmp > 0) {
+                                          // Since we're searching in order (searchFrom=0, step=1 for ascending),
+                                          // once we hit a value > needle, no later values will match
+                                          break;
+                                      }
                                   }
-                                  if (matchMode == -1 && cmp <= 0) {
-                                      found = i;
-                                      break;
+                              } else {
+                                  for (int i = searchFrom; i >= 0 && i < keys.size(); i += step) {
+                                      const int cmp = compareValues(keys.at(i), needle);
+                                      if (cmp == 0) {
+                                          found = i;
+                                          break;
+                                      }
                                   }
                               }
                               if (found < 0) {

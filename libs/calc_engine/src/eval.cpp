@@ -7,10 +7,19 @@ namespace QindaOffice::Calc {
 
 namespace {
 
-Value scalarFromArg(const Arg &arg)
+Value scalarFromArg(const EvalContext &ctx, const Arg &arg)
 {
-    if (std::holds_alternative<RangeView>(arg)) {
-        return Err::Value;
+    const auto *view = std::get_if<RangeView>(&arg);
+    if (view != nullptr) {
+        // A range-valued function result (OFFSET/INDIRECT) in scalar
+        // position dereferences to the top-left cell (legacy Excel implicit
+        // intersection). The earlier release mapped every such result to
+        // #VALUE!, making both functions dead on arrival.
+        if (!view->isValid()) {
+            return Err::Ref;
+        }
+        return ctx.host->cellValue(view->sheet, view->range.topLeft.row,
+                                   view->range.topLeft.col);
     }
     return std::get<Value>(arg);
 }
@@ -51,6 +60,39 @@ bool refView(const NodePtr &node, const EvalContext &ctx, RangeView *view)
 }
 
 } // namespace
+
+// Builds the argument vector for a call, preserving reference-position args.
+QVector<Arg> buildCallArgs(const NodePtr &node, const FunctionSpec &spec, EvalContext &ctx)
+{
+    QVector<Arg> args;
+    args.reserve(node->args.size());
+    for (const NodePtr &argNode : node->args) {
+        RangeView view;
+        if (spec.preserveRefArgs && refView(argNode, ctx, &view)) {
+            args.append(view);
+        } else {
+            args.append(evalArg(argNode, ctx));
+        }
+    }
+    return args;
+}
+
+// Evaluates a call node, keeping a range result AS a range (argument
+// position): SUM(OFFSET(A1,0,0,5,1)) must receive the range, not a scalar.
+Arg evalCallArg(const NodePtr &node, EvalContext &ctx)
+{
+    const QHash<QString, FunctionSpec> &registry = functionRegistry();
+    const auto it = registry.constFind(node->text.toUpper());
+    if (it == registry.constEnd()) {
+        return Err::Name;
+    }
+    const FunctionSpec &spec = it.value();
+    if (node->args.size() < spec.minArgs || node->args.size() > spec.maxArgs) {
+        return Err::Value;
+    }
+    const QVector<Arg> args = buildCallArgs(node, spec, ctx);
+    return spec.fn(ctx, args);
+}
 
 Arg evalArg(const NodePtr &node, EvalContext &ctx)
 {
@@ -94,6 +136,9 @@ Arg evalArg(const NodePtr &node, EvalContext &ctx)
             return evalNode(node, ctx);
         }
         return Err::Value;
+    }
+    if (node->kind == Node::Kind::Call) {
+        return evalCallArg(node, ctx);
     }
     return evalNode(node, ctx);
 }
@@ -186,17 +231,8 @@ Value evalNode(const NodePtr &node, EvalContext &ctx)
         if (node->args.size() < spec.minArgs || node->args.size() > spec.maxArgs) {
             return Err::Value;
         }
-        QVector<Arg> args;
-        args.reserve(node->args.size());
-        for (const NodePtr &argNode : node->args) {
-            RangeView view;
-            if (spec.preserveRefArgs && refView(argNode, ctx, &view)) {
-                args.append(view);
-            } else {
-                args.append(evalArg(argNode, ctx));
-            }
-        }
-        return scalarFromArg(spec.fn(ctx, args));
+        const QVector<Arg> args = buildCallArgs(node, spec, ctx);
+        return scalarFromArg(ctx, spec.fn(ctx, args));
     }
     }
     return Err::Value;

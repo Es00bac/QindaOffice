@@ -88,6 +88,12 @@ signals:
     // Raised by Open/drops/recent-menu; OfficeApplication applies canonical
     // uniqueness, pristine reuse and window creation.
     void openPathsRequested(const QStringList &paths);
+    // Emitted from an ACCEPTED closeEvent, while the object is still fully
+    // alive. AGENT-GUARD: path bookkeeping must connect here, not to
+    // destroyed() — after ~DocumentWindow began, qobject_cast<DocumentWindow*>
+    // on the destroyed QObject is null and document() is gone. Consumers:
+    // OfficeApplication (final-close path preservation, inventory update).
+    void closing(DocumentWindow *window);
 
 protected:
     void showEvent(QShowEvent *event) override;

@@ -9,11 +9,14 @@ namespace {
 
 Value pairs(EvalContext &ctx, const QVector<Arg> &args, QVector<double> *xs, QVector<double> *ys)
 {
+    const auto *xView = std::get_if<RangeView>(&args.at(0));
+    const auto *yView = std::get_if<RangeView>(&args.at(1));
+    if (!xView || !yView) return Err::Value;
     QVector<Value> xv;
     QVector<Value> yv;
-    Value err = flatRangeValues(ctx, std::get<RangeView>(args.at(0)), &xv);
+    Value err = flatRangeValues(ctx, *xView, &xv);
     if (isErr(err)) return err;
-    err = flatRangeValues(ctx, std::get<RangeView>(args.at(1)), &yv);
+    err = flatRangeValues(ctx, *yView, &yv);
     if (isErr(err)) return err;
     const int n = qMin(xv.size(), yv.size());
     for (int i = 0; i < n; ++i) {

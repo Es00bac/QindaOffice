@@ -73,8 +73,76 @@ void writeText(QXmlStreamWriter &xml, const QList<TextParagraph> &paragraphs)
     }
 }
 
+// AGENT-GUARD: ODF only allows draw:image / draw:text-box / draw:object ...
+// INSIDE draw:frame. draw:line and draw:custom-shape are PAGE-LEVEL shapes —
+// writing them inside a frame is invalid ODF and LibreOffice silently drops
+// them both ways (they were written framed here and only read framed, so
+// .odp/.pptx conversion lost every rect/ellipse/line/arrow).
 void writeShape(QXmlStreamWriter &xml, const Shape &shape)
 {
+    const QString transform =
+        shape.rotation != 0
+            ? QStringLiteral("rotate (%1)").arg(qDegreesToRadians(shape.rotation), 0, 'g', 10)
+            : QString();
+    const QString buildStep = shape.buildStep > 0
+        ? QString::number(shape.buildStep)
+        : QString();
+
+    if (shape.kind == ShapeKind::Line || shape.kind == ShapeKind::Arrow) {
+        // Page-level draw:line with absolute endpoint coordinates.
+        xml.writeStartElement(QStringLiteral("draw:line"));
+        xml.writeAttribute(QStringLiteral("draw:name"), shape.id);
+        if (!transform.isEmpty()) {
+            xml.writeAttribute(QStringLiteral("draw:transform"), transform);
+        }
+        if (!buildStep.isEmpty()) {
+            xml.writeAttribute(QStringLiteral("qq:build-step"), buildStep);
+        }
+        xml.writeAttribute(QStringLiteral("svg:x1"),
+                           QString::number(ptToCm(shape.rect.x()), 'f', 5));
+        xml.writeAttribute(QStringLiteral("svg:y1"),
+                           QString::number(ptToCm(shape.rect.y()), 'f', 5));
+        xml.writeAttribute(QStringLiteral("svg:x2"),
+                           QString::number(ptToCm(shape.rect.right()), 'f', 5));
+        xml.writeAttribute(QStringLiteral("svg:y2"),
+                           QString::number(ptToCm(shape.rect.bottom()), 'f', 5));
+        if (shape.kind == ShapeKind::Arrow) {
+            xml.writeAttribute(QStringLiteral("draw:marker-end"), QStringLiteral("Arrow"));
+        }
+        xml.writeEndElement(); // draw:line
+        return;
+    }
+
+    if (shape.kind == ShapeKind::Rectangle || shape.kind == ShapeKind::Ellipse) {
+        // Page-level draw:custom-shape (svg:viewBox mirrors the geometry in
+        // 1/100 mm, matching LibreOffice's convention).
+        xml.writeStartElement(QStringLiteral("draw:custom-shape"));
+        xml.writeAttribute(QStringLiteral("draw:name"), shape.id);
+        xml.writeAttribute(QStringLiteral("svg:x"), QString::number(ptToCm(shape.rect.x()), 'f', 5));
+        xml.writeAttribute(QStringLiteral("svg:y"), QString::number(ptToCm(shape.rect.y()), 'f', 5));
+        xml.writeAttribute(QStringLiteral("svg:width"),
+                           QString::number(ptToCm(shape.rect.width()), 'f', 5));
+        xml.writeAttribute(QStringLiteral("svg:height"),
+                           QString::number(ptToCm(shape.rect.height()), 'f', 5));
+        if (!transform.isEmpty()) {
+            xml.writeAttribute(QStringLiteral("draw:transform"), transform);
+        }
+        if (!buildStep.isEmpty()) {
+            xml.writeAttribute(QStringLiteral("qq:build-step"), buildStep);
+        }
+        xml.writeStartElement(QStringLiteral("draw:enhanced-geometry"));
+        xml.writeAttribute(QStringLiteral("draw:type"), shapeGeometry(shape.kind));
+        xml.writeAttribute(QStringLiteral("svg:viewBox"),
+                           QStringLiteral("0 0 %1 %2")
+                               .arg(qRound(ptToCm(shape.rect.width()) * 1000.0))
+                               .arg(qRound(ptToCm(shape.rect.height()) * 1000.0)));
+        xml.writeEndElement(); // enhanced-geometry
+        writeText(xml, shape.paragraphs);
+        xml.writeEndElement(); // draw:custom-shape
+        return;
+    }
+
+    // Images and text boxes keep draw:frame (conforming container).
     xml.writeStartElement(QStringLiteral("draw:frame"));
     xml.writeAttribute(QStringLiteral("draw:name"), shape.id);
     xml.writeAttribute(QStringLiteral("svg:x"), QString::number(ptToCm(shape.rect.x()), 'f', 5));
@@ -83,54 +151,21 @@ void writeShape(QXmlStreamWriter &xml, const Shape &shape)
                        QString::number(ptToCm(shape.rect.width()), 'f', 5));
     xml.writeAttribute(QStringLiteral("svg:height"),
                        QString::number(ptToCm(shape.rect.height()), 'f', 5));
-    if (shape.rotation != 0) {
-        xml.writeAttribute(QStringLiteral("draw:transform"),
-                           QStringLiteral("rotate (%1)").arg(shape.rotation));
+    if (!transform.isEmpty()) {
+        xml.writeAttribute(QStringLiteral("draw:transform"), transform);
     }
-    // qq: extension namespace (builds etc.).
-    if (shape.buildStep > 0) {
-        xml.writeAttribute(QStringLiteral("qq:build-step"), QString::number(shape.buildStep));
+    if (!buildStep.isEmpty()) {
+        xml.writeAttribute(QStringLiteral("qq:build-step"), buildStep);
     }
-
-    switch (shape.kind) {
-    case ShapeKind::Image: {
+    if (shape.kind == ShapeKind::Image) {
         xml.writeStartElement(QStringLiteral("draw:image"));
         xml.writeTextElement(QStringLiteral("office:binary-data"),
                              QString::fromLatin1(shape.imagePng.toBase64()));
         xml.writeEndElement(); // draw:image
-        break;
-    }
-    case ShapeKind::Rectangle:
-    case ShapeKind::Ellipse: {
-        xml.writeStartElement(QStringLiteral("draw:custom-shape"));
-        xml.writeStartElement(QStringLiteral("draw:enhanced-geometry"));
-        xml.writeAttribute(QStringLiteral("draw:type"), shapeGeometry(shape.kind));
-        xml.writeEndElement(); // enhanced-geometry
-        writeText(xml, shape.paragraphs);
-        xml.writeEndElement(); // draw:custom-shape
-        break;
-    }
-    case ShapeKind::Line:
-    case ShapeKind::Arrow: {
-        xml.writeStartElement(QStringLiteral("draw:line"));
-        xml.writeAttribute(QStringLiteral("svg:x1"), QStringLiteral("0"));
-        xml.writeAttribute(QStringLiteral("svg:y1"), QStringLiteral("0"));
-        xml.writeAttribute(QStringLiteral("svg:x2"),
-                           QString::number(ptToCm(shape.rect.width()), 'f', 5));
-        xml.writeAttribute(QStringLiteral("svg:y2"),
-                           QString::number(ptToCm(shape.rect.height()), 'f', 5));
-        if (shape.kind == ShapeKind::Arrow) {
-            xml.writeAttribute(QStringLiteral("draw:marker-end"), QStringLiteral("Arrowhead"));
-        }
-        xml.writeEndElement(); // draw:line
-        break;
-    }
-    case ShapeKind::TextBox: {
+    } else { // TextBox
         xml.writeStartElement(QStringLiteral("draw:text-box"));
         writeText(xml, shape.paragraphs);
         xml.writeEndElement(); // draw:text-box
-        break;
-    }
     }
     xml.writeEndElement(); // draw:frame
 }

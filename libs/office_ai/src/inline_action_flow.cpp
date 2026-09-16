@@ -5,6 +5,8 @@
 #include "secret_store.h"
 
 #include <QDialogButtonBox>
+#include <QMessageBox>
+#include <QPointer>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -63,7 +65,10 @@ ProposalDialog::ProposalDialog(const QString &original, const QString &proposal,
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(regenerate, &QPushButton::clicked, this, [this] {
         emit regenerateRequested();
-        accept();
+        // AGENT-GUARD: Regenerate must NOT close as Accepted — the caller
+        // applies the proposal on Accepted, which replaced the selection
+        // with exactly the text the user asked to regenerate.
+        done(QDialog::Rejected);
     });
     connect(apply, &QPushButton::clicked, this, [this] {
         done(QDialog::Accepted);
@@ -82,8 +87,7 @@ InlineActionFlow::InlineActionFlow(ModelCatalog *catalog, DocumentContextProvide
 QString InlineActionFlow::extractProposal(const QString &modelText)
 {
     // Structured output v1: prefer a fenced block when present (plan 5.3).
-    static const QRegularExpression fence(
-        QStringLiteral("```(?:\\w*)\\n([\\s\\S]*?)```"), QRegularExpression::DontCaptureOption);
+    static const QRegularExpression fence(QStringLiteral("```(?:\\w*)\\n([\\s\\S]*?)```"));
     auto it = fence.globalMatch(modelText);
     QStringList blocks;
     while (it.hasNext()) {
@@ -101,15 +105,17 @@ void InlineActionFlow::run(const QString &actionId, QWidget *dialogParent)
     for (const InlineAction &action : inlineActions()) {
         if (action.id == actionId) {
             m_pending = action;
-            execute(action);
-            Q_UNUSED(dialogParent);
+            execute(action, dialogParent);
             return;
         }
     }
 }
 
-void InlineActionFlow::execute(const InlineAction &action)
+void InlineActionFlow::execute(const InlineAction &action, QWidget *dialogParent)
 {
+    if (dialogParent == nullptr) {
+        dialogParent = qobject_cast<QWidget *>(parent());
+    }
     if (m_context == nullptr || m_applier == nullptr) {
         return;
     }
@@ -136,7 +142,7 @@ void InlineActionFlow::execute(const InlineAction &action)
         }
     }
     auto *store = new SecretStore(this);
-    store->retrieve(config.secretKey, [this, action, request, modelId, store, context](const QString &secret) {
+    store->retrieve(config.secretKey, [this, action, request, modelId, store, context, dialogParent](const QString &secret) {
         store->deleteLater();
         ChatProvider *provider = m_catalog->createProvider(modelId, secret, this);
         if (provider == nullptr) {
@@ -146,22 +152,36 @@ void InlineActionFlow::execute(const InlineAction &action)
         auto *state = new QString;
         connect(run, &ChatRun::textDelta, this, [state](const QString &delta) { *state += delta; });
         connect(run, &ChatRun::finished, this,
-                [this, action, context, state](const ChatResult &result) {
+                [this, action, context, state, dialogParent](const ChatResult &result) {
                     Q_UNUSED(result);
                     const QString proposal = extractProposal(*state);
                     delete state;
                     if (proposal.isEmpty()) {
                         return;
                     }
-                    auto *dialog = new ProposalDialog(context.selection, proposal);
+                    // AGENT-GUARD: the dialog must be parented — a parentless
+                    // dialog outlived this flow, and the running exec()
+                    // nested loop then dereferenced a destroyed `this`
+                    // through the applier call below (use-after-free).
+                    auto *dialog = new ProposalDialog(context.selection, proposal, dialogParent);
                     connect(dialog, &ProposalDialog::regenerateRequested, this,
-                            [this, action] { execute(action); });
-                    if (dialog->exec() == QDialog::Accepted) {
+                            [this, action, dialogParent] { execute(action, dialogParent); });
+                    const QPointer<ProposalDialog> dialogGuard(dialog);
+                    if (dialog->exec() == QDialog::Accepted && dialogGuard != nullptr) {
                         m_applier->replaceSelection(proposal);
                     }
                     delete dialog;
                 });
-        connect(run, &ChatRun::failed, this, [state](const ChatError &) { delete state; });
+        // Surface failures: several failure modes previously looked exactly
+        // like "the button did nothing".
+        connect(run, &ChatRun::failed, this,
+                [state, dialogParent](const ChatError &error) {
+                    delete state;
+                    if (dialogParent != nullptr) {
+                        QMessageBox::warning(dialogParent, QObject::tr("AI action failed"),
+                                             error.message);
+                    }
+                });
     });
 }
 

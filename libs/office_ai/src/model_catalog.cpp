@@ -74,7 +74,16 @@ bool ModelCatalog::load(QString *error)
         }
         return false;
     }
-    const QJsonObject root = QJsonDocument::fromJson(file.readAll()).object();
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    // Fail honestly: a corrupt file previously parsed to an empty root and
+    // load() returned true, leaving a silently empty provider picker.
+    if (!document.isObject()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("%1 is not valid JSON").arg(m_path);
+        }
+        return false;
+    }
+    const QJsonObject root = document.object();
     m_providers.clear();
     for (const QJsonValue &value : root.value(QStringLiteral("providers")).toArray()) {
         const QJsonObject object = value.toObject();

@@ -113,7 +113,13 @@ public:
             // Prompt is an argument (<= 200 KB); skills dir must be an
             // empty scratch dir so tool use cannot roam (plan 5.3).
             if (prompt.size() > 200 * 1024) {
-                emit failed({ChatError::Unknown, tr("kimi prompt exceeds 200 KB"), false});
+                // AGENT-GUARD: defer — consumers connect to failed() only
+                // after start() returns; a constructor-time emission vanished
+                // into the void and permanently jammed the assistant panel.
+                QMetaObject::invokeMethod(
+                    this,
+                    [this] { emitFailed({ChatError::Unknown, tr("kimi prompt exceeds 200 KB"), false}); },
+                    Qt::QueuedConnection);
                 return;
             }
             m_args << prompt << QStringLiteral("--skills-dir") << m_scratch->path();
@@ -157,20 +163,27 @@ public:
                     handleLines();
                     handleProcessFinished(exitCode, status);
                 });
+        connect(process, &QProcess::errorOccurred, this, [this, process](QProcess::ProcessError err) {
+            if (err == QProcess::FailedToStart) {
+                // Queued for symmetry with the guard above; errorOccurred can
+                // fire synchronously from start() on some platforms.
+                QMetaObject::invokeMethod(
+                    this,
+                    [this] { emitFailed({ChatError::Unavailable, tr("%1 could not start").arg(binaryFor(m_kind)), false}); },
+                    Qt::QueuedConnection);
+            }
+        });
         process->start(binaryFor(m_kind), m_args);
-        if (!process->waitForStarted(10000)) {
-            emit failed({ChatError::Unavailable,
-                         tr("%1 could not start").arg(binaryFor(m_kind)), false});
-            return;
-        }
         if (m_kind != CliKind::Kimi) {
-            process->write(prompt.toUtf8());
-            process->closeWriteChannel();
+            connect(process, &QProcess::started, this, [this, prompt, process] {
+                process->write(prompt.toUtf8());
+                process->closeWriteChannel();
+            });
         }
         m_killTimer.setSingleShot(true);
         m_killTimer.start(300000); // 5 min overall budget for CLI runs
         connect(&m_killTimer, &QTimer::timeout, this, [this] {
-            emit failed({ChatError::Timeout, tr("CLI run timed out"), true});
+            emitFailed({ChatError::Timeout, tr("CLI run timed out"), true});
             killGroup(SIGKILL);
         });
     }
@@ -290,26 +303,26 @@ private:
     {
         m_killTimer.stop();
         if (m_cancelled) {
-            emit failed({ChatError::Cancelled, QStringLiteral("cancelled"), false});
+            emitFailed({ChatError::Cancelled, QStringLiteral("cancelled"), false});
             return;
         }
         if (status != QProcess::NormalExit) {
-            emit failed({ChatError::Unknown,
+            emitFailed({ChatError::Unknown,
                          tr("process crashed: %1").arg(QString::fromUtf8(m_stderrTail)), true});
             return;
         }
         if (!m_resultError.isEmpty()) {
-            emit failed({ChatError::Unknown, m_resultError, true});
+            emitFailed({ChatError::Unknown, m_resultError, true});
             return;
         }
         switch (m_kind) {
         case CliKind::Claude:
             if (!m_resultText.isEmpty()) {
-                emit finished({m_resultText, {}});
+                emitFinished({m_resultText, {}});
             } else if (!m_assistantText.isEmpty()) {
-                emit finished({m_assistantText, {}});
+                emitFinished({m_assistantText, {}});
             } else {
-                emit failed({ChatError::Unknown, tr("no answer produced"), true});
+                emitFailed({ChatError::Unknown, tr("no answer produced"), true});
             }
             break;
         case CliKind::Codex: {
@@ -322,18 +335,25 @@ private:
             if (text.isEmpty()) {
                 text = m_text;
             }
-            emit finished({text, {}});
+            if (exitCode != 0 && text.isEmpty()) {
+                emitFailed({ChatError::Unknown,
+                             tr("codex exited with %1: %2")
+                                 .arg(exitCode)
+                                 .arg(QString::fromUtf8(m_stderrTail)),
+                             true});
+            } else {
+                emitFinished({text, {}});
+            }
             break;
         }
         case CliKind::Kimi:
             if (!m_text.isEmpty()) {
-                emit finished({m_text, {}});
+                emitFinished({m_text, {}});
             } else {
-                emit failed({ChatError::Unknown, tr("no answer produced"), true});
+                emitFailed({ChatError::Unknown, tr("no answer produced"), true});
             }
             break;
         }
-        Q_UNUSED(exitCode);
     }
 
     CliKind m_kind;

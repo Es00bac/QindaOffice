@@ -20,8 +20,11 @@ void drawArrowHead(QPainter *painter, const QPointF &tip, const QPointF &from)
         return;
     }
     const qreal angle = line.angle();
-    const QPointF left = tip - QLineF::fromPolar(12, angle + 150).p2() + tip - tip;
-    const QPointF right = tip - QLineF::fromPolar(12, angle - 150).p2();
+    // AGENT-GUARD: barbs trail the tip — polar points at angle ± 150° land
+    // BEHIND the direction of travel. The earlier `tip - fromPolar(...)`
+    // negated the direction vector and drew every arrow backwards.
+    const QPointF left = tip + QLineF::fromPolar(12, angle + 150).p2();
+    const QPointF right = tip + QLineF::fromPolar(12, angle - 150).p2();
     painter->drawPolygon({tip, left, right});
 }
 
@@ -66,7 +69,10 @@ void paintShape(QPainter *painter, const Shape &shape)
     }
     case ShapeKind::Image: {
         QImage image;
-        image.loadFromData(shape.imagePng, "PNG");
+        // Auto-detect the format: the canvas stores raw file bytes for any
+        // picked image, and forcing "PNG" rendered every JPEG as a dashed
+        // placeholder on canvas, in the player and in the PDF.
+        image.loadFromData(shape.imagePng);
         if (!image.isNull()) {
             painter->drawImage(shape.rect, image);
         } else {

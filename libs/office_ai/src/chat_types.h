@@ -59,6 +59,19 @@ signals:
     void textDelta(const QString &delta);
     void finished(const QindaOffice::Ai::ChatResult &result);
     void failed(const QindaOffice::Ai::ChatError &error);
+
+protected:
+    // AGENT-GUARD: every terminal outcome MUST go through these guards, never
+    // a bare `emit finished/failed`. Providers previously emitted failed()
+    // and then triggered a second terminal signal through the abort()/kill()
+    // cascade (timeout → abort → finished handler), and InlineActionFlow's
+    // delete-state-on-failed turned the double emission into a double free.
+    // Monotonic: the first terminal emission wins; later ones are dropped.
+    bool emitFinished(const ChatResult &result);
+    bool emitFailed(const ChatError &error);
+
+private:
+    bool m_terminalEmitted = false;
 };
 
 class ChatProvider : public QObject {

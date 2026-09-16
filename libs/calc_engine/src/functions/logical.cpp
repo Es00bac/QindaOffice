@@ -119,7 +119,7 @@ void registerInfoFunctions(QHash<QString, FunctionSpec> &r)
     r.insert(QStringLiteral("ISNONTEXT"), isFn([](const Value &v) { return !isText(v); }));
     r.insert(QStringLiteral("ISLOGICAL"), isFn([](const Value &v) { return isBool(v); }));
     r.insert(QStringLiteral("ISERROR"),
-             isFn([](const Value &v) { return isErr(v) && std::get<Err>(v) != Err::NA; }));
+             isFn([](const Value &v) { return isErr(v); }));
     r.insert(QStringLiteral("ISERR"),
              isFn([](const Value &v) { return isErr(v) && std::get<Err>(v) != Err::NA; }));
     r.insert(QStringLiteral("ISNA"),

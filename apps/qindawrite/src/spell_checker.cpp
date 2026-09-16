@@ -24,7 +24,15 @@ bool SpellChecker::isActive() const
 
 bool SpellChecker::isMisspelled(const QString &word) const
 {
-    return m_speller->isValid() && m_speller->isMisspelled(word);
+    return m_speller->isValid() && !m_ignoredWords.contains(word.toLower())
+        && m_speller->isMisspelled(word);
+}
+
+void SpellChecker::ignoreWord(const QString &word)
+{
+    m_ignoredWords.insert(word.toLower());
+    // Re-run the highlighter so existing squiggles drop immediately.
+    rehighlight();
 }
 
 QStringList SpellChecker::suggestions(const QString &word) const
@@ -45,7 +53,7 @@ void SpellChecker::highlightBlock(const QString &text)
     auto it = kWords.globalMatch(text);
     while (it.hasNext()) {
         const QRegularExpressionMatch match = it.next();
-        if (m_speller->isMisspelled(match.captured())) {
+        if (isMisspelled(match.captured())) {
             QTextCharFormat format;
             format.setUnderlineStyle(QTextCharFormat::SpellCheckUnderline);
             format.setUnderlineColor(Qt::red);

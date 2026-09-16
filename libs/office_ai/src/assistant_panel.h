@@ -52,6 +52,9 @@ private:
     QToolButton *m_copy;
     ChatRun *m_run = nullptr;
     QString m_lastReply;
+    // Rolling conversation history (user/assistant pairs) sent with every
+    // request — without it each turn started a context-free conversation.
+    QList<ChatMessage> m_history;
 };
 
 } // namespace QindaOffice::Ai

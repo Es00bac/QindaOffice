@@ -76,9 +76,9 @@ void registerDateFunctions(QHash<QString, FunctionSpec> &r)
                                 case 'y': return double(date.year());
                                 case 'm': return double(date.month());
                                 case 'd': return double(date.day());
-                                case 'h': return double(int(*serial * 24.0) % 24);
-                                case 'n': return double(int(*serial * 24.0 * 60.0) % 60);
-                                case 's': return double(int(*serial * 24.0 * 3600.0) % 60);
+                                case 'h': return double(qint64(*serial * 24.0) % 24);
+                                case 'n': return double(qint64(*serial * 24.0 * 60.0) % 60);
+                                case 's': return double(qint64(*serial * 24.0 * 3600.0) % 60);
                                 }
                                 return Err::Value;
                             }};
@@ -101,7 +101,13 @@ void registerDateFunctions(QHash<QString, FunctionSpec> &r)
                               const int day = dateFromSerial(*serial).dayOfWeek(); // 1=Mon
                               if (type == 1) return double(day % 7 + 1);   // 1=Sun..7=Sat
                               if (type == 2) return double(day);           // 1=Mon..7=Sun
-                              return double((day + 1) % 7);                // 0=Mon..6=Sun
+                              if (type == 3) return double((day + 6) % 7); // 0=Mon..6=Sun
+                              // Types 11-17 are 1-based weekday numbers with different start days
+                              if (type >= 11 && type <= 17) {
+                                  const int startDow = type - 10; // 11=Mon..17=Sun
+                                  return double((day - startDow + 7) % 7 + 1);
+                              }
+                              return Err::Value;
                           }});
     r.insert(QStringLiteral("WEEKNUM"),
              FunctionSpec{1, 2, false, [](EvalContext &, const QVector<Arg> &args) -> Value {
@@ -116,7 +122,14 @@ void registerDateFunctions(QHash<QString, FunctionSpec> &r)
                               if (type == 21) {
                                   return Value(double(isoWeekNumber(date)));
                               }
-                              const int startDow = type == 1 ? 7 : 1; // 1: weeks start Sunday
+                              int startDow;
+                              if (type == 1) {
+                                  startDow = 7; // Sunday
+                              } else if (type >= 11 && type <= 17) {
+                                  startDow = type - 10; // 11=Mon(1), ..., 17=Sun(7)
+                              } else {
+                                  startDow = 1; // Monday (type 2 and default)
+                              }
                               const QDate jan1(date.year(), 1, 1);
                               const int offset = (jan1.dayOfWeek() - startDow + 7) % 7;
                               const int week = (jan1.daysTo(date) + offset) / 7 + 1;
@@ -227,11 +240,16 @@ void registerDateExtraFunctions(QHash<QString, FunctionSpec> &r)
                               int d1 = start.day();
                               int d2 = end.day();
                               if (!euMethod) {
-                                  if (d1 == 31 || (start.month() == 2
-                                                   && start.daysInMonth() == 28 && d1 == 28)) {
+                                  // US/NASD method: last day of Feb -> 30
+                                  if (d1 == 31 || (start.month() == 2 && d1 == start.daysInMonth())) {
                                       d1 = 30;
                                   }
                                   if (d2 == 31 && d1 >= 30) {
+                                      d2 = 30;
+                                  }
+                                  // If both dates are last day of Feb, d2=30
+                                  if (start.month() == 2 && d1 == start.daysInMonth()
+                                      && end.month() == 2 && d2 == end.daysInMonth()) {
                                       d2 = 30;
                                   }
                               } else {
@@ -261,13 +279,20 @@ void registerDateExtraFunctions(QHash<QString, FunctionSpec> &r)
                               }
                               QDate start = dateFromSerial(*s);
                               QDate end = dateFromSerial(*e);
+                              // Excel swaps reversed dates and returns positive fraction
+                              if (start > end) {
+                                  std::swap(start, end);
+                              }
                               if (basis == 0 || basis == 4) {
                                   // 30/360 US (basis 0) or 30E/360 (4).
                                   int d1 = start.day();
                                   int d2 = end.day();
                                   if (basis == 0) {
+                                      // US method: last day of Feb -> 30
                                       if (d1 == 31) d1 = 30;
+                                      if (start.month() == 2 && d1 == start.daysInMonth()) d1 = 30;
                                       if (d2 == 31 && d1 == 30) d2 = 30;
+                                      if (end.month() == 2 && d2 == end.daysInMonth() && d1 == 30) d2 = 30;
                                   } else {
                                       d1 = qMin(d1, 30);
                                       d2 = qMin(d2, 30);

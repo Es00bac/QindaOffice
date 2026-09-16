@@ -9,8 +9,10 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
+#include <QSaveFile>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <QUndoStack>
 
 namespace QindaOffice::Apps::Show {
 
@@ -106,6 +108,13 @@ bool ShowDocument::load(const QString &path, QString *error)
         QFile::remove(fodp);
     }
     m_presentation = incoming;
+    // AGENT-GUARD: the undo stack must be cleared before the presentation is
+    // ever replaced on load. Shape commands hold raw Slide* into the deck's
+    // slide list; a stale command would dereference freed/detached buffers.
+    // (Reachable via File ▸ New from Template on an already-edited window.)
+    if (undoStack() != nullptr) {
+        undoStack()->clear();
+    }
     setCanonicalPath(path);
     refreshByteRevision();
     setDirty(false);
@@ -125,14 +134,21 @@ bool ShowDocument::save(const QString &path, QString *error)
             }
             return false;
         }
-        QFile file(path);
+        // QSaveFile: a failed or truncated write (ENOSPC, quota) must not be
+        // reported as a successful save with the dirty flag cleared.
+        QSaveFile file(path);
         if (!file.open(QIODevice::WriteOnly)) {
             if (error != nullptr) {
                 *error = tr("Could not open %1: %2").arg(path, file.errorString());
             }
             return false;
         }
-        file.write(bytes);
+        if (file.write(bytes) != bytes.size() || !file.commit()) {
+            if (error != nullptr) {
+                *error = file.errorString();
+            }
+            return false;
+        }
     } else {
         // Write the native intermediate, convert, move the result into
         // place. The intermediate is created inside the converter
@@ -163,11 +179,32 @@ bool ShowDocument::save(const QString &path, QString *error)
         if (converted.isEmpty()) {
             return false;
         }
-        QFile::remove(path);
-        if (!QFile::rename(converted, path)) {
+        // AGENT-GUARD: copy through QSaveFile at the destination — the
+        // converted file lives in the QTemporaryDir (often tmpfs) while the
+        // target is on the user's filesystem, so QFile::rename fails with
+        // EXDEV. The old remove-then-rename destroyed the user's existing
+        // file whenever that rename failed.
+        QSaveFile out(path);
+        if (!out.open(QIODevice::WriteOnly)) {
+            if (error != nullptr) {
+                *error = out.errorString();
+            }
+            return false;
+        }
+        QFile convertedFile(converted);
+        if (!convertedFile.open(QIODevice::ReadOnly)) {
+            if (error != nullptr) {
+                *error = convertedFile.errorString();
+            }
+            out.cancelWriting();
+            return false;
+        }
+        const QByteArray payload = convertedFile.readAll();
+        if (payload.isEmpty() || out.write(payload) != payload.size() || !out.commit()) {
             if (error != nullptr) {
                 *error = tr("Could not move the converted file into place.");
             }
+            out.cancelWriting();
             return false;
         }
     }
@@ -194,6 +231,11 @@ bool ShowDocument::loadRecovery(const QByteArray &snapshot, QString *error)
     m_presentation = ShowModel::readFodp(snapshot, error);
     if (error != nullptr && !error->isEmpty()) {
         return false;
+    }
+    // Same raw-Slide* hazard as load(): drop commands that reference the
+    // pre-recovery deck.
+    if (undoStack() != nullptr) {
+        undoStack()->clear();
     }
     setDirty(true);
     emit loaded();

@@ -36,12 +36,24 @@ public:
     [[nodiscard]] bool create(const QString &path, QString *error = nullptr);
     [[nodiscard]] bool load(const QString &path, QString *error = nullptr);
     [[nodiscard]] bool save(QString *error = nullptr) const;
+    // Save As support: writes the full structure into `targetPath` and, only
+    // on success, repoints the notebook there. The notebook keeps its old
+    // location when the copy fails.
+    [[nodiscard]] bool copyStructure(const QString &targetPath, QString *error = nullptr);
 
     NoteSection &addSection(const QString &name);
     NotePage &addPage(NoteSection &section, const QString &title);
     [[nodiscard]] bool persistPage(const NoteSection &section, const NotePage &page,
                                    QString *error = nullptr) const;
     [[nodiscard]] bool loadPage(NoteSection &section, NotePage &page, QString *error) const;
+
+    // Stable-id lookups. AGENT-GUARD: the UI must hold ids, never NotePage*/
+    // NoteSection* — the underlying QVectors reallocate on every append/load,
+    // and a stale pointer read freed memory (and once wrote garbage-named
+    // page files).
+    [[nodiscard]] NoteSection *sectionById(const QString &id);
+    [[nodiscard]] NotePage *pageById(const QString &sectionId, const QString &pageId);
+    [[nodiscard]] NoteSection *sectionOf(const QString &pageId);
 
     static QString newId();
 

@@ -48,6 +48,7 @@ StandardActions createStandardActions(QObject *parent)
     const QKeySequence ctrlW(QKeySequence::Close);
     const QKeySequence ctrlS(QKeySequence::Save);
     const QKeySequence ctrlShiftS(QKeySequence::SaveAs);
+    const QKeySequence ctrlShiftP(QStringLiteral("Ctrl+Shift+P")); // print preview
     const QKeySequence ctrlP(QKeySequence::Print);
     const QKeySequence ctrlQ(QKeySequence::Quit);
     const QKeySequence ctrlF(QKeySequence::Find);
@@ -64,8 +65,10 @@ StandardActions createStandardActions(QObject *parent)
     a.fileSave = make(parent, kFileSave, QObject::tr("&Save"), ctrlS, "document-save");
     a.fileSaveAs = make(parent, kFileSaveAs, QObject::tr("Save &As…"), ctrlShiftS, "document-save-as");
     a.filePrint = make(parent, kFilePrint, QObject::tr("&Print…"), ctrlP, "document-print");
+    // AGENT-GUARD: print preview needs its OWN shortcut — sharing Save As's
+    // Ctrl+Shift+S made the overload ambiguous and disabled both actions.
     a.filePrintPreview =
-        make(parent, kFilePrintPreview, QObject::tr("Print Pre&view…"), ctrlShiftS);
+        make(parent, kFilePrintPreview, QObject::tr("Print Pre&view…"), ctrlShiftP);
     a.fileQuit = make(parent, kFileQuit, QObject::tr("&Quit"), ctrlQ, "application-exit");
 
     a.editUndo = make(parent, kEditUndo, QObject::tr("&Undo"), QKeySequence::Undo, "edit-undo");

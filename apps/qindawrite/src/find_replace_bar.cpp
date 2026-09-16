@@ -133,7 +133,10 @@ bool FindReplaceBar::findIn(bool backward)
     if (control->find(needle, flags)) {
         return true;
     }
-    // Wrap around once, then report honestly.
+    // Wrap around once, then report honestly. The user's caret is only
+    // moved when the wrap actually finds something (the earlier release
+    // jumped it to document start on any failed search).
+    const QTextCursor restore = control->textCursor();
     QTextCursor cursor = control->textCursor();
     cursor.movePosition(backward ? QTextCursor::End : QTextCursor::Start);
     control->setTextCursor(cursor);
@@ -141,6 +144,7 @@ bool FindReplaceBar::findIn(bool backward)
         emit message(tr("Search wrapped around the document"));
         return true;
     }
+    control->setTextCursor(restore);
     emit message(tr("Not found: %1").arg(needle));
     return false;
 }
@@ -174,17 +178,19 @@ void FindReplaceBar::replaceAll()
         flags |= QTextDocument::FindWholeWords;
     }
     int count = 0;
-    QTextCursor cursor(doc);
-    cursor.beginEditBlock();
-    while (true) {
-        cursor = doc->find(needle, cursor, flags);
-        if (cursor.isNull()) {
-            break;
-        }
+    // AGENT-GUARD: the block cursor must stay VALID — doc->find() returning a
+    // null cursor ended the loop and endEditBlock() ran on the null cursor,
+    // a Qt no-op that left the document's editBlock counter stuck at 1 and
+    // permanently broke undo grouping after the first Replace All.
+    QTextCursor blockCursor(doc);
+    blockCursor.beginEditBlock();
+    QTextCursor cursor = doc->find(needle, QTextCursor(doc), flags);
+    while (!cursor.isNull()) {
         cursor.insertText(m_replaceEdit->text());
         ++count;
+        cursor = doc->find(needle, cursor, flags);
     }
-    cursor.endEditBlock();
+    blockCursor.endEditBlock();
     if (count > 0) {
         m_document->setDirty(true);
     }

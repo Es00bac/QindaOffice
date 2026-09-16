@@ -19,10 +19,12 @@ QString readMeta(const QString &html, const QString &name)
         return QString();
     }
     QString value = match.captured(1);
+    // AGENT-GUARD: &amp; decodes LAST — decoding it first double-unescaped
+    // nested entities (&amp;lt; became "<" instead of "&lt;").
     value.replace(QStringLiteral("&quot;"), QStringLiteral("\""));
-    value.replace(QStringLiteral("&amp;"), QStringLiteral("&"));
     value.replace(QStringLiteral("&lt;"), QStringLiteral("<"));
     value.replace(QStringLiteral("&gt;"), QStringLiteral(">"));
+    value.replace(QStringLiteral("&amp;"), QStringLiteral("&"));
     return value;
 }
 
