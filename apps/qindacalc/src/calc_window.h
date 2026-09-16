@@ -8,6 +8,7 @@
 #include "document_window.h"
 
 #include "value.h"
+#include "parser.h"
 
 class QLineEdit;
 class QTabBar;
@@ -38,14 +39,24 @@ protected:
     void insertApplicationMenus(QMenu *before) override;
     void insertFileMenuActions(QMenu *fileMenu) override;
     QString filterString() const override;
+    QString saveFilterString() const override;
 
 private:
     void rebuildSheetTabs();
     void createCalcActions();
     void wireEditingActions();
     void commitInput(const CalcEng::CellAddr &addr, const QString &input);
+    // Name-box entry: navigate to a reference or an existing name, or define
+    // a new name over the current selection.
+    void commitNameBox(const QString &text);
+    void goToRange(const CalcEng::RangeRef &ref);
+    // Save/Discard/Cancel consent before a template replaces the workbook.
+    [[nodiscard]] bool confirmDiscardChanges();
     void insertChart();
     void rebuildChartWindows();
+    // Re-renders the chart inside each already-open chart window. Used for
+    // data edits, which must not destroy and re-create the windows.
+    void refreshChartWindows();
 
     SpreadsheetDocument *m_document;
     SpreadsheetView *m_view;

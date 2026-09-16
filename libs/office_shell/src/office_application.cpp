@@ -95,16 +95,36 @@ void OfficeApplication::offerRecovery()
         // AGENT-NOTE: QMessageBox has no Restore standard button (only
         // RestoreDefaults); role-explicit custom buttons keep the label.
         QPushButton *restore = box.addButton(tr("&Restore"), QMessageBox::AcceptRole);
-        box.addButton(tr("&Discard"), QMessageBox::DestructiveRole);
+        QPushButton *discard = box.addButton(tr("&Discard"), QMessageBox::DestructiveRole);
+        // AGENT-GUARD: the journal entry is cleared ONLY by an explicit
+        // Discard. Neither button carries RejectRole, so Escape/close leaves
+        // clickedButton() null — the old `else` branch treated that as
+        // Discard and destroyed the user's unsaved work on a keystroke that
+        // universally means "not now". Anything short of Discard keeps the
+        // entry and re-offers it next launch (plan section 2.7: cleared on
+        // save or discard, never on dismissal).
         box.setDefaultButton(restore);
+        box.setEscapeButton(QMessageBox::NoButton);
         box.exec();
-        if (box.clickedButton() == restore) {
-            DocumentWindow *window = createWindow();
-            present(window);
-            static_cast<void>(
-                window->restoreFromJournal(entry->path, entry->untitled, entry->payload, key));
-        } else {
+        if (box.clickedButton() == discard) {
             m_journal->clear(key);
+            continue;
+        }
+        if (box.clickedButton() != restore) {
+            continue; // dismissed: keep the entry for the next launch
+        }
+        if (m_windows.size() >= kMaxWindows) {
+            emit diagnosticReported(
+                tr("Window limit reached: %1 documents are already open in this process.")
+                    .arg(kMaxWindows));
+            break; // remaining entries stay on disk
+        }
+        DocumentWindow *window = createWindow();
+        present(window);
+        if (!window->restoreFromJournal(entry->path, entry->untitled, entry->payload, key)) {
+            // The engine refused the snapshot; do not strand an empty window
+            // and do not clear the entry (the user saw the reason).
+            window->close();
         }
     }
 }
@@ -283,6 +303,14 @@ void OfficeApplication::updateInventoryOnClose(const QString &closedPath)
     if (m_inventory == nullptr) {
         return;
     }
+    // AGENT-GUARD: bounded persistence, default OFF (AGENTS.md rule 7). The
+    // inventory used to be rewritten on every open and close regardless of
+    // the policy, so a user who never enabled "Restore Previous Documents"
+    // still had the path of every document they opened written into
+    // $XDG_STATE_HOME. With the policy off we persist nothing at all.
+    if (!m_inventory->enabled()) {
+        return;
+    }
     Core::RestoreInventory::Snapshot snapshot;
     for (DocumentWindow *window : windows()) {
         if (window->document() != nullptr
@@ -315,6 +343,15 @@ void OfficeApplication::setRestorePreviousDocuments(bool enabled)
     m_inventory->setEnabled(enabled);
     m_settings->setValue(QStringLiteral("restorePrevious"), enabled);
     m_settings->save(nullptr);
+    if (enabled) {
+        // Seed the inventory from the windows that are already open — while
+        // the policy was off nothing was written, so without this the first
+        // launch after enabling would restore an empty set.
+        persistWindowInventory();
+    } else {
+        m_inventory->setSnapshot({});
+        static_cast<void>(m_inventory->persist(nullptr));
+    }
 }
 
 void OfficeApplication::restoreFromInventory()

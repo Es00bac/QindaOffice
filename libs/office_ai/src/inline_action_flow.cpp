@@ -135,12 +135,11 @@ void InlineActionFlow::execute(const InlineAction &action, QWidget *dialogParent
         return;
     }
     const QString modelId = ids.first();
-    ProviderConfig config;
-    for (const ProviderConfig &candidate : m_catalog->providers()) {
-        if (modelId == candidate.id) {
-            config = candidate;
-        }
-    }
+    // AGENT-GUARD: resolve through configFor(). Matching only `candidate.id`
+    // never hit — modelIds() returns "<id>/<model>" — so config stayed
+    // default-constructed and the provider's API key was never fetched:
+    // every inline AI action against a key-based endpoint failed on auth.
+    const ProviderConfig config = m_catalog->configFor(modelId).value_or(ProviderConfig{});
     auto *store = new SecretStore(this);
     store->retrieve(config.secretKey, [this, action, request, modelId, store, context, dialogParent](const QString &secret) {
         store->deleteLater();

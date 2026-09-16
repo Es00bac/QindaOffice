@@ -10,13 +10,27 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPalette>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QTextBrowser>
+#include <QTextCursor>
 #include <QToolButton>
 #include <QVBoxLayout>
 
 namespace QindaOffice::Ai {
+
+namespace {
+// The three roles this panel renders. appendMessage() keys its palette role
+// off these exact strings; ChatMessage::role stays on the wire vocabulary
+// ("user"/"assistant") and is not the same namespace.
+const QLatin1String kRoleYou("you");
+const QLatin1String kRoleAssistant("assistant");
+const QLatin1String kRoleError("error");
+// Rolling history bound: 10 turns of context, so a long-lived panel cannot
+// grow the request until the provider rejects it.
+constexpr int kMaxHistoryMessages = 20;
+} // namespace
 
 AssistantPanel::AssistantPanel(ModelCatalog *catalog, DocumentContextProvider *context,
                                EditApplier *applier, QWidget *parent)
@@ -105,11 +119,22 @@ QString AssistantPanel::currentModelId() const
 
 void AssistantPanel::appendMessage(const QString &role, const QString &text)
 {
-    const QString colour = role == QLatin1String("user") ? QStringLiteral("#884400")
-                                                         : QStringLiteral("#004488");
+    // AGENT-GUARD: role colours come from the live widget palette, never from
+    // hex literals (ADR-0115 / AGENTS.md rule 3). The previous #884400 /
+    // #004488 pair was unreadable on a dark platform palette, and it keyed on
+    // a role string ("user") this panel never passes — every message, the
+    // user's own prompt included, rendered in the assistant colour.
+    const QPalette palette = m_conversation->palette();
+    QPalette::ColorRole colourRole = QPalette::LinkVisited; // assistant
+    if (role == kRoleYou) {
+        colourRole = QPalette::Link;
+    } else if (role == kRoleError) {
+        colourRole = QPalette::Text;
+    }
+    const QString body =
+        text.toHtmlEscaped().replace(QLatin1Char('\n'), QStringLiteral("<br>"));
     m_conversation->append(QStringLiteral("<b style='color:%1'>%2</b><br>%3")
-                               .arg(colour, role, text.toHtmlEscaped().replace(QLatin1Char('\n'),
-                                                                               QStringLiteral("<br>"))));
+                               .arg(palette.color(colourRole).name(), role, body));
 }
 
 void AssistantPanel::sendPrompt(const QString &prompt)
@@ -117,7 +142,7 @@ void AssistantPanel::sendPrompt(const QString &prompt)
     if (m_run != nullptr) {
         return; // one conversation turn at a time
     }
-    appendMessage(QStringLiteral("you"), prompt);
+    appendMessage(kRoleYou, prompt);
     m_input->clear();
 
     ChatRequest request;
@@ -142,6 +167,7 @@ void AssistantPanel::sendPrompt(const QString &prompt)
         }
     }
     m_history.append({QStringLiteral("user"), prompt, {}});
+    trimHistory();
     runRequest(request);
 }
 
@@ -152,7 +178,7 @@ void AssistantPanel::runRequest(const ChatRequest &request)
     auto startWith = [this, modelId, request](const QString &secret) {
         ChatProvider *provider = m_catalog->createProvider(modelId, secret, this);
         if (provider == nullptr) {
-            appendMessage(QStringLiteral("error"), tr("provider unavailable"));
+            appendMessage(kRoleError, tr("provider unavailable"));
             return;
         }
         // AGENT-GUARD: per-turn reset. m_lastReply accumulated across turns
@@ -162,9 +188,15 @@ void AssistantPanel::runRequest(const ChatRequest &request)
         m_insert->setEnabled(false);
         m_replace->setEnabled(false);
         m_copy->setEnabled(false);
+        // Label the turn before any token arrives: the deltas below insert
+        // at the end of the view, so without this header the reply ran into
+        // the user's own prompt line with nothing separating them.
+        appendMessage(kRoleAssistant, QString());
+        m_streamed = false;
         m_run = provider->start(request);
         m_stop->setEnabled(true);
         connect(m_run, &ChatRun::textDelta, this, [this](const QString &delta) {
+            m_streamed = true;
             m_lastReply += delta;
             m_conversation->moveCursor(QTextCursor::End);
             m_conversation->insertPlainText(delta);
@@ -173,7 +205,17 @@ void AssistantPanel::runRequest(const ChatRequest &request)
             m_run = nullptr;
             m_stop->setEnabled(false);
             m_lastReply = result.text;
+            // AGENT-GUARD: a provider that answers in one shot (no textDelta
+            // at all — ModelSpec::caps.streaming is false for it) still has
+            // to be shown. The view previously only ever grew from deltas,
+            // so such a reply was invisible while Insert/Copy silently held
+            // text the user never saw.
+            if (!m_streamed && !m_lastReply.isEmpty()) {
+                m_conversation->moveCursor(QTextCursor::End);
+                m_conversation->insertPlainText(m_lastReply);
+            }
             m_history.append({QStringLiteral("assistant"), m_lastReply, {}});
+            trimHistory();
             m_insert->setEnabled(!m_lastReply.isEmpty());
             m_replace->setEnabled(!m_lastReply.isEmpty());
             m_copy->setEnabled(!m_lastReply.isEmpty());
@@ -182,23 +224,18 @@ void AssistantPanel::runRequest(const ChatRequest &request)
             m_run = nullptr;
             m_stop->setEnabled(false);
             m_lastReply.clear();
-            appendMessage(QStringLiteral("error"), error.message);
+            appendMessage(kRoleError, error.message);
         });
     };
-    ProviderConfig config;
-    for (const ProviderConfig &candidate : m_catalog->providers()) {
-        if (modelId == candidate.id || modelId == candidate.id + QStringLiteral("/") + candidate.model) {
-            config = candidate;
-        }
-    }
-    if (config.secretKey.isEmpty()) {
+    const auto config = m_catalog->configFor(modelId);
+    if (!config.has_value() || config->secretKey.isEmpty()) {
         startWith(QString());
         return;
     }
     // Resolve through the keychain-backed store (async but near-instant on
     // the session bus; a empty secret surfaces as an auth error later).
     auto *store = new SecretStore(this);
-    store->retrieve(config.secretKey, [this, store, startWith](const QString &value) {
+    store->retrieve(config->secretKey, [this, store, startWith](const QString &value) {
         startWith(value);
         store->deleteLater();
     });
@@ -208,6 +245,13 @@ void AssistantPanel::stop()
 {
     if (m_run != nullptr) {
         m_run->cancel();
+    }
+}
+
+void AssistantPanel::trimHistory()
+{
+    while (m_history.size() > kMaxHistoryMessages) {
+        m_history.removeFirst();
     }
 }
 

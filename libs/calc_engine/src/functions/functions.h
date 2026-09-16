@@ -39,6 +39,8 @@ public:
     [[nodiscard]] virtual qint32 sheetIndex(const QString &name) const = 0;
     [[nodiscard]] virtual QString sheetName(qint32 index) const = 0;
     [[nodiscard]] virtual qint32 sheetCount() const = 0;
+    // Named cell/range lookup; nullopt when the name is unknown.
+    [[nodiscard]] virtual std::optional<RangeRef> namedRange(const QString &name) const = 0;
 };
 
 struct EvalContext {

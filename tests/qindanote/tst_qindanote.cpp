@@ -25,6 +25,9 @@ private slots:
     void penPresentationFlowsIntoStrokes();
     void backgroundChoiceEditsEnvelope();
     void zoomScalesPageNotTheDocument();
+    void savingNeverBlanksPagesThatWereNeverOpened();
+    void redoReplaysAnUndoneStroke();
+    void recoverySnapshotRoundTripsTheNotebook();
 };
 
 void QindaNoteTest::notebookSurvivesReopen()
@@ -200,6 +203,115 @@ void QindaNoteTest::zoomScalesPageNotTheDocument()
     const QPointF sample200 = inkAt(2.0);
     QVERIFY(qAbs(sample100.x() - sample200.x()) < 2.0);
     QVERIFY(qAbs(sample100.y() - sample200.y()) < 2.0);
+}
+
+// AGENT-GUARD regression: pages load lazily, so an unopened page's envelope
+// is EMPTY in memory. save() used to write every page unconditionally —
+// opening a notebook, viewing one page and pressing Ctrl+S replaced every
+// other page's file with a blank envelope.
+void QindaNoteTest::savingNeverBlanksPagesThatWereNeverOpened()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + QStringLiteral("/Notes");
+    QString error;
+    {
+        NoteDocument doc;
+        QVERIFY2(doc.save(path, &error), qPrintable(error));
+        Notebook *book = doc.notebook();
+        NoteSection *section = book->sectionById(book->sections().first().id);
+        QVERIFY(section != nullptr);
+        NotePage &second = book->addPage(*section, QStringLiteral("Second"));
+        Ink::Stroke stroke;
+        stroke.samples = {{QPointF(10, 10), 0.5, 0, 0}, {QPointF(40, 40), 0.5, 0, 0}};
+        second.envelope.ink.appendStroke(stroke);
+        QVERIFY2(doc.save(path, &error), qPrintable(error));
+    }
+    // Reopen, touch only the FIRST page, save.
+    {
+        NoteDocument doc;
+        QVERIFY2(doc.load(path, &error), qPrintable(error));
+        Notebook *book = doc.notebook();
+        NoteSection *section = book->sectionById(book->sections().first().id);
+        QVERIFY(section != nullptr);
+        QCOMPARE(section->pages.size(), 2);
+        QVERIFY(!section->pages.at(1).loaded); // never opened
+        QVERIFY(book->loadPage(*section, section->pages[0], &error));
+        QVERIFY2(doc.save(path, &error), qPrintable(error));
+    }
+    // The untouched page still has its stroke.
+    {
+        NoteDocument doc;
+        QVERIFY2(doc.load(path, &error), qPrintable(error));
+        Notebook *book = doc.notebook();
+        NoteSection *section = book->sectionById(book->sections().first().id);
+        QVERIFY(book->loadPage(*section, section->pages[1], &error));
+        QCOMPARE(section->pages.at(1).envelope.ink.strokes().size(), 1);
+    }
+}
+
+// The view had an undo stack and no inverse, so Edit > Redo was dead.
+void QindaNoteTest::redoReplaysAnUndoneStroke()
+{
+    NotePage page;
+    page.loaded = true;
+    NotePageView view;
+    view.setPage(&page);
+    QSignalSpy redoSpy(&view, &NotePageView::redoAvailable);
+    Ink::Stroke stroke;
+    stroke.samples = {{QPointF(5, 5), 0.5, 0, 0}, {QPointF(30, 30), 0.5, 0, 0}};
+    page.envelope.ink.appendStroke(stroke);
+
+    view.undo(); // nothing pushed yet: no-op, and no redo appears
+    QCOMPARE(page.envelope.ink.strokes().size(), 1);
+
+    const QPoint widgetPt = view.pageRect().topLeft().toPoint() + QPoint(60, 60);
+    QTest::mousePress(&view, Qt::LeftButton, {}, widgetPt);
+    QTest::mouseMove(&view, widgetPt + QPoint(40, 0));
+    QTest::mouseRelease(&view, Qt::LeftButton, {}, widgetPt + QPoint(40, 0));
+    QCOMPARE(page.envelope.ink.strokes().size(), 2);
+
+    view.undo();
+    QCOMPARE(page.envelope.ink.strokes().size(), 1);
+    QVERIFY(!redoSpy.isEmpty());
+    QVERIFY(redoSpy.last().first().toBool()); // redo became available
+    view.redo();
+    QCOMPARE(page.envelope.ink.strokes().size(), 2);
+    // A fresh edit ends the redo branch.
+    QTest::mousePress(&view, Qt::LeftButton, {}, widgetPt);
+    QTest::mouseMove(&view, widgetPt + QPoint(0, 40));
+    QTest::mouseRelease(&view, Qt::LeftButton, {}, widgetPt + QPoint(0, 40));
+    view.redo();
+    QCOMPARE(page.envelope.ink.strokes().size(), 3); // redo did nothing
+}
+
+// recoverySnapshot() returned {} for notebooks, so a crash lost every
+// unsaved page and the shell offered a Recover prompt that always failed.
+void QindaNoteTest::recoverySnapshotRoundTripsTheNotebook()
+{
+    NoteDocument doc; // untitled: everything lives in memory
+    Notebook *book = doc.notebook();
+    NoteSection &section = book->addSection(QStringLiteral("Ideas"));
+    NotePage &page = book->addPage(section, QStringLiteral("Sketch"));
+    Ink::Stroke stroke;
+    stroke.samples = {{QPointF(3, 4), 0.7, 0, 0}, {QPointF(9, 12), 0.7, 0, 0}};
+    page.envelope.ink.appendStroke(stroke);
+    page.envelope.background = QStringLiteral("grid");
+
+    const QByteArray payload = doc.recoverySnapshot();
+    QVERIFY(!payload.isEmpty());
+
+    NoteDocument restored;
+    QString error;
+    QVERIFY2(restored.loadRecovery(payload, &error), qPrintable(error));
+    Notebook *back = restored.notebook();
+    QCOMPARE(back->sections().size(), 1);
+    QCOMPARE(back->sections().first().name, QStringLiteral("Ideas"));
+    const NotePage &recovered = back->sections().first().pages.first();
+    QCOMPARE(recovered.title, QStringLiteral("Sketch"));
+    QCOMPARE(recovered.envelope.background, QStringLiteral("grid"));
+    QCOMPARE(recovered.envelope.ink.strokes().size(), 1);
+    QVERIFY(restored.isDirty());
 }
 
 #include "tst_qindanote.moc"

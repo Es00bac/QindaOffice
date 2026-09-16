@@ -6,56 +6,22 @@
 #include "libre_office_converter.h"
 
 #include <QDir>
-#include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
 #include <QTemporaryDir>
-#include <QTimer>
 #include <QUndoStack>
 
 namespace QindaOffice::Apps::Show {
 
 namespace {
 
-// Blocks on the async converter; returns the converted output path or {}
-// with `error` set. Intermediates land in a per-document converter
-// directory next to the input; an input that lives inside that directory
-// is removed after conversion (it is ours), a user file is never touched.
+// Conversion goes through Core::convertBlocking (office_core); see the note
+// in format_io.cpp. Intermediates inside the private converter directory are
+// cleaned up there, a user file never is.
 QString convertAndWait(const QString &input, const QString &targetExt, QString *error)
 {
-    Core::LibreOfficeConverter converter;
-    const QString outDir =
-        QFileInfo(input).absolutePath() + QStringLiteral("/.qindashow-lo");
-    QDir().mkpath(outDir);
-    QEventLoop loop;
-    QString result;
-    QString failure;
-    QObject::connect(&converter, &Core::LibreOfficeConverter::jobFinished, &loop,
-                     [&loop, &result](int, const QString &output) {
-                         result = output;
-                         loop.quit();
-                     });
-    QObject::connect(&converter, &Core::LibreOfficeConverter::jobFailed, &loop,
-                     [&loop, &failure](int, const QString &message) {
-                         failure = message;
-                         loop.quit();
-                     });
-    const int id = converter.convert(input, targetExt, outDir, error);
-    if (id == 0) {
-        return {};
-    }
-    QTimer::singleShot(130000, &loop, [&loop] { loop.quit(); });
-    loop.exec();
-    if (result.isEmpty() && failure.isEmpty() && error != nullptr) {
-        *error = QStringLiteral("conversion timed out");
-    } else if (!failure.isEmpty() && error != nullptr) {
-        *error = failure;
-    }
-    if (input.startsWith(outDir)) {
-        QFile::remove(input);
-    }
-    return result;
+    return Core::convertBlocking(input, targetExt, QStringLiteral(".qindashow-lo"), error);
 }
 
 QString suffixOf(const QString &path)

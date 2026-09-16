@@ -80,14 +80,24 @@ NoteWindow::NoteWindow()
     layout->addWidget(m_view, 4);
 
     auto *tools = new QToolBar(tr("Note tools"), this);
-    const QList<std::pair<QString, NoteTool>> entries = {
-        {tr("Pen"), NoteTool::Pen},         {tr("Highlight"), NoteTool::Highlighter},
-        {tr("Eraser"), NoteTool::Eraser},   {tr("Text"), NoteTool::Text},
+    // AGENT-GUARD: a QToolBar without an objectName is skipped (with a
+    // runtime warning) by QMainWindow::saveState/restoreState, and the
+    // platform theme keys toolbars by it — same contract as the shell's
+    // "mainToolBar".
+    tools->setObjectName(QStringLiteral("noteToolsToolBar"));
+    const QList<std::tuple<QString, QLatin1String, NoteTool>> entries = {
+        {tr("Pen"), QLatin1String("notePenTool"), NoteTool::Pen},
+        {tr("Highlight"), QLatin1String("noteHighlighterTool"), NoteTool::Highlighter},
+        {tr("Eraser"), QLatin1String("noteEraserTool"), NoteTool::Eraser},
+        {tr("Text"), QLatin1String("noteTextTool"), NoteTool::Text},
     };
     QActionGroup *toolGroup = new QActionGroup(this);
     bool firstTool = true;
-    for (const auto &[label, tool] : entries) {
+    for (const auto &[label, id, tool] : entries) {
         QAction *action = tools->addAction(label);
+        // Stable objectName: the dbusmenu/global-menu activation identity
+        // (AGENTS.md rule 5) — unnamed actions are unreachable from the panel.
+        action->setObjectName(id);
         action->setCheckable(true);
         // Exclusive tool group: the earlier release let every tool appear
         // checked simultaneously and showed none as the initial state.
@@ -115,6 +125,7 @@ NoteWindow::NoteWindow()
             [this](int value) { m_view->setPenWidth(value); });
 
     QAction *colorAction = tools->addAction(tr("Pen color"));
+    colorAction->setObjectName(QStringLiteral("notePenColorAction"));
     connect(colorAction, &QAction::triggered, this, [this] {
         const QColor picked =
             QColorDialog::getColor(m_view->penColor(), this, tr("Pen Color"));
@@ -144,19 +155,28 @@ NoteWindow::NoteWindow()
     connect(zoom, &QComboBox::activated, this,
             [this, zoom](int index) { m_view->setZoom(zoom->itemData(index).toInt() / 100.0); });
     tools->addSeparator();
-    QAction *undo = tools->addAction(tr("Undo"));
-    connect(undo, &QAction::triggered, m_view, &NotePageView::undo);
-    QAction *text = tools->addAction(tr("Add text"));
-    connect(text, &QAction::triggered, m_view, &NotePageView::addTextBlock);
-
-    // AGENT-GUARD: rewire the shell's standard undo (Ctrl+Z) — setDocumentHost
-    // deleted the stub editor the base connection pointed at, so the
-    // accelerator fired into the void. Also give the toolbar Undo the
-    // standard action's identity so the global menu addresses it.
-    undo->setObjectName(QString::fromLatin1(Shell::ActionId::kEditUndo));
+    // AGENT-GUARD: put the SHELL's Undo/Redo on the strip, do not clone them.
+    // setDocumentHost() deleted the stub editor the base connections pointed
+    // at, so Ctrl+Z fired into the void and the strip carried a second,
+    // separate "Undo" action that was given the same objectName as the menu
+    // one — two actions answering to `editUndoAction` in one window, which is
+    // exactly the identity collision rule 5 forbids. One action per command:
+    // the strip, the Edit menu and the exported global menu now share it.
     Shell::StandardActions *actions = standardActions();
-    actions->editUndo->setEnabled(true);
+    tools->addAction(actions->editUndo);
+    tools->addAction(actions->editRedo);
     connect(actions->editUndo, &QAction::triggered, m_view, &NotePageView::undo);
+    connect(actions->editRedo, &QAction::triggered, m_view, &NotePageView::redo);
+    // Both commands follow the view's real history depth. Undo used to be
+    // force-enabled with nothing to undo, and Redo was never wired at all.
+    actions->editUndo->setEnabled(false);
+    actions->editRedo->setEnabled(false);
+    connect(m_view, &NotePageView::undoAvailable, actions->editUndo, &QAction::setEnabled);
+    connect(m_view, &NotePageView::redoAvailable, actions->editRedo, &QAction::setEnabled);
+
+    QAction *text = tools->addAction(tr("Add text"));
+    text->setObjectName(QStringLiteral("noteAddTextAction"));
+    connect(text, &QAction::triggered, m_view, &NotePageView::addTextBlock);
 
     setDocumentHost(central, m_document);
     QToolBar *mainToolBar = addMainToolBar();
@@ -186,13 +206,18 @@ NoteWindow::NoteWindow()
                     return;
                 }
                 persistCurrentPage();
-                QString error;
-                if (!notebook->loadPage(*section, *page, &error) && !error.isEmpty()) {
-                    // A page file that fails to load must not silently blank
-                    // the view and later overwrite the payload (the earlier
-                    // release dropped the error and painted an empty page).
-                    statusBar()->showMessage(tr("Page load failed: %1").arg(error), 8000);
-                    return;
+                // AGENT-GUARD: read from disk ONLY for a page that has not
+                // been loaded yet. Re-reading a loaded page threw away edits
+                // that had not reached disk, and an untitled notebook has no
+                // disk copy at all — its pages live only in memory.
+                if (!page->loaded) {
+                    QString error;
+                    if (!notebook->loadPage(*section, *page, &error)) {
+                        // A page file that fails to load must not silently
+                        // blank the view and later overwrite the payload.
+                        statusBar()->showMessage(tr("Page load failed: %1").arg(error), 8000);
+                        return;
+                    }
                 }
                 setCurrentIds(sectionId, pageId);
                 m_view->setPage(page);
@@ -232,6 +257,11 @@ void NoteWindow::persistCurrentPage()
     NoteSection *section = notebook->sectionById(m_currentSectionId);
     NotePage *page = notebook->pageById(m_currentSectionId, m_currentPageId);
     if (section == nullptr || page == nullptr) {
+        return;
+    }
+    if (!notebook->isOpen()) {
+        // Untitled: nothing to write to yet. The edit is already in memory
+        // and covered by the recovery journal until the first real save.
         return;
     }
     QString error;

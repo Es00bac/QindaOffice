@@ -110,6 +110,22 @@ Arg evalArg(const NodePtr &node, EvalContext &ctx)
         }
         return view;
     }
+    if (node->kind == Node::Kind::Name) {
+        // A named range in argument position carries as a RangeView.
+        const auto target = ctx.host->namedRange(node->text.toUpper());
+        if (!target.has_value()) {
+            return Err::Name;
+        }
+        const RangeView view = viewFromRef(*target, ctx);
+        if (!view.isValid()) {
+            return Err::Ref;
+        }
+        if (target->isSingleCell()) {
+            return ctx.host->cellValue(view.sheet, view.range.topLeft.row,
+                                       view.range.topLeft.col);
+        }
+        return view;
+    }
     if (node->kind == Node::Kind::Binary
         && (node->op == Op::Range || node->op == Op::Union)) {
         // ':' and ',' in argument position build/extend ranges. Operands
@@ -158,8 +174,20 @@ Value evalNode(const NodePtr &node, EvalContext &ctx)
     case Node::Kind::Error:
         return node->error;
     case Node::Kind::Name: {
-        // Named ranges: v1 supports simple cell/range names.
-        return Err::Name;
+        // Named ranges resolve through the host (Workbook::namedRange).
+        const auto target = ctx.host->namedRange(node->text.toUpper());
+        if (!target.has_value()) {
+            return Err::Name;
+        }
+        if (target->isSingleCell()) {
+            const RangeView view = viewFromRef(*target, ctx);
+            if (!view.isValid()) {
+                return Err::Ref;
+            }
+            return ctx.host->cellValue(view.sheet, view.range.topLeft.row,
+                                       view.range.topLeft.col);
+        }
+        return Err::Value; // range in scalar position
     }
     case Node::Kind::Ref: {
         if (!node->ref.isSingleCell()) {
@@ -254,6 +282,19 @@ QVector<DepTarget> collectTargets(const NodePtr &node, const EvalContext &ctx)
             const qint32 sheet = resolveSheet(n->ref, ctx, &ok);
             if (ok) {
                 out.append({sheet, n->ref.range});
+            }
+            break;
+        }
+        case Node::Kind::Name: {
+            // Named ranges index their resolved target so edits inside the
+            // range propagate to formulas using the name.
+            const auto target = ctx.host->namedRange(n->text.toUpper());
+            if (target.has_value()) {
+                bool ok = false;
+                const qint32 sheet = resolveSheet(*target, ctx, &ok);
+                if (ok) {
+                    out.append({sheet, target->range});
+                }
             }
             break;
         }

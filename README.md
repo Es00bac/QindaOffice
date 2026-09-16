@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # QindaQt Office
 
 The office suite for the [QindaQt](https://github.com/Es00bac/QindaQt)

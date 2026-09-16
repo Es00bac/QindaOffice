@@ -92,6 +92,8 @@ void NotePageView::setPage(NotePage *page)
 {
     m_page = page;
     m_undoStack.clear();
+    m_redoStack.clear();
+    notifyHistoryAvailability();
     qDeleteAll(m_textBlocks);
     m_textBlocks.clear();
     if (m_page != nullptr) {
@@ -105,9 +107,18 @@ void NotePageView::setPage(NotePage *page)
 void NotePageView::pushUndoSnapshot()
 {
     m_undoStack.append(m_page->envelope.ink);
-    if (m_undoStack.size() > 100) {
+    if (m_undoStack.size() > kMaxHistory) {
         m_undoStack.removeFirst();
     }
+    // A new edit ends the old redo branch (standard editor semantics).
+    m_redoStack.clear();
+    notifyHistoryAvailability();
+}
+
+void NotePageView::notifyHistoryAvailability()
+{
+    emit undoAvailable(m_page != nullptr && !m_undoStack.isEmpty());
+    emit redoAvailable(m_page != nullptr && !m_redoStack.isEmpty());
 }
 
 void NotePageView::undo()
@@ -115,7 +126,29 @@ void NotePageView::undo()
     if (m_page == nullptr || m_undoStack.isEmpty()) {
         return;
     }
+    // The state being left behind is what redo must come back to.
+    m_redoStack.append(m_page->envelope.ink);
+    if (m_redoStack.size() > kMaxHistory) {
+        m_redoStack.removeFirst();
+    }
     m_page->envelope.ink = m_undoStack.takeLast();
+    notifyHistoryAvailability();
+    rebuildGrid();
+    update();
+    emit pageEdited();
+}
+
+void NotePageView::redo()
+{
+    if (m_page == nullptr || m_redoStack.isEmpty()) {
+        return;
+    }
+    m_undoStack.append(m_page->envelope.ink);
+    if (m_undoStack.size() > kMaxHistory) {
+        m_undoStack.removeFirst();
+    }
+    m_page->envelope.ink = m_redoStack.takeLast();
+    notifyHistoryAvailability();
     rebuildGrid();
     update();
     emit pageEdited();

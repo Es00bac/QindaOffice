@@ -46,10 +46,15 @@ public:
 
 public slots:
     void undo();
+    void redo();
     void addTextBlock();
 
 signals:
     void pageEdited();
+    // Availability of the two history commands, so the window's Edit ▸ Undo
+    // and Edit ▸ Redo read the real state instead of guessing.
+    void undoAvailable(bool available);
+    void redoAvailable(bool available);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -63,6 +68,8 @@ private:
     void persistTextBlocks();
     void syncBlocksGeometry();
     void pushUndoSnapshot();
+    // Emits undoAvailable/redoAvailable for the current stack depths.
+    void notifyHistoryAvailability();
     [[nodiscard]] QPointF toPagePos(const QPointF &widgetPos) const;
     [[nodiscard]] qreal growHeight() const;
 
@@ -76,7 +83,13 @@ private:
     bool m_syncingBlocks = false;
     NoteTool m_toolBeforeEraser = NoteTool::Pen; // tool restored after eraser-end flips
     Ink::SpatialGrid m_grid{64.0};
+    // AGENT-GUARD: undo and redo are two halves of ONE history. Every new
+    // edit clears m_redoStack — a redo stack that survives a fresh edit
+    // replays strokes onto a page that has moved on. The view had an undo
+    // stack and no inverse at all, so Edit ▸ Redo sat permanently disabled.
     QVector<Ink::StrokeLayer> m_undoStack;
+    QVector<Ink::StrokeLayer> m_redoStack;
+    static constexpr int kMaxHistory = 100;
     QList<QTextEdit *> m_textBlocks;
     qreal m_pageWidth = 760;
     qreal m_minPageHeight = 1004; // ~A4 ratio at the fixed width

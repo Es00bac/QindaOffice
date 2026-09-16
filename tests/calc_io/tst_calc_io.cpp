@@ -28,6 +28,7 @@ private slots:
     void largeSheetStaysResponsive();
     void chartExportWritesChartPart();
     void chartRangeParsing();
+    void namedRangesRoundTrip();
 
 };
 
@@ -228,6 +229,41 @@ void CalcIoTest::largeSheetStaysResponsive()
              qPrintable(QStringLiteral("100k-cell round trip took %1 ms").arg(timer.elapsed())));
     // Reading preserved the grid shape.
     QVERIFY(back.sheetAt(0).cellAt({123, 45}) != nullptr);
+}
+
+// Named ranges are part of the document, so they have to survive the file.
+// The engine resolved names but nothing ever defined or persisted one, so
+// every "=TOTAL" in an imported workbook evaluated to #NAME?.
+void CalcIoTest::namedRangesRoundTrip()
+{
+    Workbook wb;
+    Sheet &sheet = wb.addSheet(QStringLiteral("Data"));
+    for (int row = 0; row < 4; ++row) {
+        wb.setCellInput(0, {row, 0}, QString::number(row + 1));
+    }
+    Q_UNUSED(sheet);
+    RangeRef target;
+    target.sheet = QStringLiteral("Data");
+    target.range = {{0, 0}, {3, 0}};
+    target.absRow0 = target.absCol0 = target.absRow1 = target.absCol1 = true;
+    wb.defineName(QStringLiteral("TOTALS"), target);
+    wb.setCellInput(0, {5, 0}, QStringLiteral("=SUM(TOTALS)"));
+    QCOMPARE(toText(wb.cellValue(0, 5, 0)), QStringLiteral("10"));
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + QStringLiteral("/names.xlsx");
+    QString error;
+    QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+
+    Workbook back;
+    QVERIFY2(IO::readXlsxFile(path, &back, &error), qPrintable(error));
+    const auto name = back.namedRange(QStringLiteral("TOTALS"));
+    QVERIFY(name.has_value());
+    QCOMPARE(name->sheet, QStringLiteral("Data"));
+    QCOMPARE(name->range.bottomRight.row, 3);
+    // And the formula that uses it still evaluates against the real cells.
+    QCOMPARE(toText(back.cellValue(0, 5, 0)), QStringLiteral("10"));
 }
 
 int main(int argc, char *argv[])

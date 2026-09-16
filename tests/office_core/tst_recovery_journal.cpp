@@ -16,6 +16,7 @@ private slots:
     void clearRemovesEntry();
     void debounceCoalescesAndCapturesLatest();
     void oversizedPayloadIsSkippedNotTruncated();
+    void emptySnapshotIsNotARecoveryPoint();
 };
 
 void RecoveryJournalTest::pathKeysAreStableAndDistinct()
@@ -89,6 +90,26 @@ void RecoveryJournalTest::oversizedPayloadIsSkippedNotTruncated()
     const QByteArray huge(RecoveryJournal::kMaxTextPayload + 1, 'x');
     journal.writeNow(key, QStringLiteral("/big.txt"), false, huge);
     QVERIFY(journal.pendingKeys().isEmpty()); // skipped entirely
+}
+
+// Engines whose recoverySnapshot() is still a stub return {}. Writing those
+// envelopes produced a "Recover unsaved changes to X?" prompt whose restore
+// always failed, and the failed restore never cleared the entry — so the
+// prompt came back on every launch, forever.
+void RecoveryJournalTest::emptySnapshotIsNotARecoveryPoint()
+{
+    QTemporaryDir dir;
+    RecoveryJournal journal(dir.path());
+    const QString key = RecoveryJournal::keyForPath(QStringLiteral("/stub.xlsx"));
+    journal.writeNow(key, QStringLiteral("/stub.xlsx"), false, QByteArray());
+    QVERIFY(journal.pendingKeys().isEmpty());
+
+    // An empty snapshot also retires an entry a previous non-empty write left
+    // behind, so a stub engine cannot keep a stale prompt alive.
+    journal.writeNow(key, QStringLiteral("/stub.xlsx"), false, QByteArray("real"));
+    QCOMPARE(journal.pendingKeys(), QStringList{key});
+    journal.writeNow(key, QStringLiteral("/stub.xlsx"), false, QByteArray());
+    QVERIFY(journal.pendingKeys().isEmpty());
 }
 
 int main(int argc, char *argv[])

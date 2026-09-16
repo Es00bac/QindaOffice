@@ -16,6 +16,14 @@ struct NotePage {
     QString id;
     QString title;
     Ink::PageEnvelope envelope;
+    // AGENT-GUARD: pages load LAZILY — load() reads only the index, so an
+    // unopened page's envelope is empty in memory. Everything that writes a
+    // page must consult this flag: save() used to write every page
+    // unconditionally, so saving a notebook after viewing one page
+    // overwrote every other page's file with a blank envelope.
+    // True for pages created in memory (addPage) and pages read back by
+    // loadPage(); false for index entries whose file has not been read.
+    bool loaded = false;
 };
 
 struct NoteSection {
@@ -32,6 +40,10 @@ public:
     // Empty until create()/load() succeeds (QDir::path() of a
     // default-constructed QDir is ".", which must not count).
     [[nodiscard]] QString directory() const { return m_open ? m_dir.path() : QString(); }
+    // An untitled notebook has no directory; every path-touching operation
+    // must refuse rather than fall back to QDir()'s "." (which scattered
+    // sections/<id>/pages/<id>.json into the process's working directory).
+    [[nodiscard]] bool isOpen() const { return m_open; }
 
     [[nodiscard]] bool create(const QString &path, QString *error = nullptr);
     [[nodiscard]] bool load(const QString &path, QString *error = nullptr);
@@ -46,6 +58,13 @@ public:
     [[nodiscard]] bool persistPage(const NoteSection &section, const NotePage &page,
                                    QString *error = nullptr) const;
     [[nodiscard]] bool loadPage(NoteSection &section, NotePage &page, QString *error) const;
+
+    // Crash-recovery payload (plan section 2.7): the whole in-memory
+    // notebook — index plus the envelopes of every page that is loaded —
+    // and the source directory so unloaded pages come back from disk on
+    // restore instead of being resurrected blank.
+    [[nodiscard]] QByteArray toRecoveryJson() const;
+    [[nodiscard]] bool fromRecoveryJson(const QByteArray &json, QString *error = nullptr);
 
     // Stable-id lookups. AGENT-GUARD: the UI must hold ids, never NotePage*/
     // NoteSection* — the underlying QVectors reallocate on every append/load,

@@ -187,4 +187,47 @@ void LibreOfficeConverter::finishCurrent(bool ok, const QString &message)
     runNext(); // next queued job, if any
 }
 
+QString convertBlocking(const QString &inputPath, const QString &targetExtension,
+                        const QString &scratchDirName, QString *error)
+{
+    LibreOfficeConverter converter;
+    const QString outDir =
+        QFileInfo(inputPath).absolutePath() + QLatin1Char('/') + scratchDirName;
+    QDir().mkpath(outDir);
+    QEventLoop loop;
+    QString result;
+    QString failure;
+    QObject::connect(&converter, &LibreOfficeConverter::jobFinished, &loop,
+                     [&loop, &result](int, const QString &output) {
+                         result = output;
+                         loop.quit();
+                     });
+    QObject::connect(&converter, &LibreOfficeConverter::jobFailed, &loop,
+                     [&loop, &failure](int, const QString &message) {
+                         failure = message;
+                         loop.quit();
+                     });
+    const int id = converter.convert(inputPath, targetExtension, outDir, error);
+    if (id == 0) {
+        return {};
+    }
+    // A conversion that never answers must not hang the window. The guard
+    // sits just past the converter's own per-job timeout.
+    QTimer::singleShot(LibreOfficeConverter::kJobTimeoutMs + 10000, &loop,
+                       [&loop] { loop.quit(); });
+    loop.exec();
+    if (result.isEmpty() && failure.isEmpty() && error != nullptr) {
+        *error = QStringLiteral("conversion timed out");
+    } else if (!failure.isEmpty() && error != nullptr) {
+        *error = failure;
+    }
+    // AGENT-GUARD: only intermediates we produced (inside the private
+    // converter directory) may be removed — on the load path `inputPath` is
+    // the user's own document.
+    if (inputPath.startsWith(outDir)) {
+        QFile::remove(inputPath);
+    }
+    return result;
+}
+
 } // namespace QindaOffice::Core

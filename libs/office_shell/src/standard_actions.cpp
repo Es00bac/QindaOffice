@@ -45,12 +45,20 @@ StandardActions createStandardActions(QObject *parent)
     StandardActions a;
     const QKeySequence ctrlN(QKeySequence::New);
     const QKeySequence ctrlO(QKeySequence::Open);
-    const QKeySequence ctrlW(QKeySequence::Close);
+    // AGENT-GUARD: Ctrl+W and Ctrl+Q are LITERAL, never QKeySequence::Close /
+    // ::Quit. Those standard keys resolve through the platform theme's
+    // keyboard scheme, and the qindaqt platform theme (ADR-0115) delegates
+    // KeyboardScheme to Qt's generic Unix theme -> X11 scheme, where Close
+    // is Ctrl+F4 and Quit is the "Exit" media key. Both chords are mandated
+    // by AGENTS.md rule 1 ("Ctrl+W and Ctrl+Q close the current window
+    // only") and were simply unbound on the desktop. Mirrors the first-party
+    // text editor (container-wm editor_window_actions.cpp).
+    const QKeySequence ctrlW(QStringLiteral("Ctrl+W"));
     const QKeySequence ctrlS(QKeySequence::Save);
     const QKeySequence ctrlShiftS(QKeySequence::SaveAs);
     const QKeySequence ctrlShiftP(QStringLiteral("Ctrl+Shift+P")); // print preview
     const QKeySequence ctrlP(QKeySequence::Print);
-    const QKeySequence ctrlQ(QKeySequence::Quit);
+    const QKeySequence ctrlQ(QStringLiteral("Ctrl+Q"));
     const QKeySequence ctrlF(QKeySequence::Find);
     const QKeySequence ctrlH(QKeySequence::Replace);
     const QKeySequence f3(QKeySequence::FindNext);

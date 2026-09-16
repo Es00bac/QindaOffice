@@ -37,6 +37,8 @@ public slots:
 private:
     void appendMessage(const QString &role, const QString &text);
     void runRequest(const ChatRequest &request);
+    // Bounds the rolling history so the request cannot grow without limit.
+    void trimHistory();
 
     ModelCatalog *m_catalog;
     DocumentContextProvider *m_context;
@@ -51,6 +53,9 @@ private:
     QToolButton *m_replace;
     QToolButton *m_copy;
     ChatRun *m_run = nullptr;
+    // True once the running turn has produced at least one textDelta; a
+    // non-streaming provider's finished() text is rendered instead.
+    bool m_streamed = false;
     QString m_lastReply;
     // Rolling conversation history (user/assistant pairs) sent with every
     // request — without it each turn started a context-free conversation.

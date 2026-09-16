@@ -32,6 +32,19 @@
 
 namespace QindaOffice::Apps::Show {
 
+namespace {
+// Turns a display name into a stable, valid objectName suffix.
+QString sanitizedId(const QString &name)
+{
+    QString out;
+    out.reserve(name.size());
+    for (const QChar c : name) {
+        out.append(c.isLetterOrNumber() ? c : QLatin1Char('_'));
+    }
+    return out;
+}
+} // namespace
+
 void ShowWindow::openTemplateAsUntitled(const QString &path)
 {
     QString error;
@@ -54,10 +67,35 @@ void ShowWindow::insertFileMenuActions(QMenu *fileMenu)
     }
     QMenu *submenu = fileMenu->addMenu(tr("New from &Template"));
     for (const Shell::TemplateEntry &entry : templates) {
-        submenu->addAction(entry.name, this, [this, path = entry.path] {
+        QAction *item = submenu->addAction(entry.name);
+        // AGENT-GUARD: stable objectName or the desktop global menu cannot
+        // address the command at all (AGENTS.md rule 5).
+        item->setObjectName(QStringLiteral("showTemplate_%1").arg(sanitizedId(entry.name)));
+        connect(item, &QAction::triggered, this, [this, path = entry.path] {
+            // A template replaces the deck: consent first when dirty.
+            if (!confirmDiscardChanges()) {
+                return;
+            }
             openTemplateAsUntitled(path);
         });
     }
+}
+
+bool ShowWindow::confirmDiscardChanges()
+{
+    if (!m_document->isDirty()) {
+        return true;
+    }
+    const QMessageBox::StandardButton answer = QMessageBox::question(
+        this, tr("Unsaved Changes"),
+        tr("Loading the template discards unsaved changes to the current "
+           "presentation. Continue?"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Cancel);
+    if (answer == QMessageBox::Cancel) {
+        return false;
+    }
+    return answer != QMessageBox::Save || saveDocument();
 }
 
 void ShowWindow::startShow()
@@ -171,21 +209,26 @@ void ShowWindow::insertApplicationMenus(QMenu *before)
     slideMenu->addSeparator();
     slideMenu->addAction(m_startShowAction);
     slideMenu->addSeparator();
-    slideMenu->addAction(tr("Export PDF..."), this, [this] { exportPdf(); });
+    QAction *exportPdfAction = slideMenu->addAction(tr("Export PDF..."));
+    exportPdfAction->setObjectName(QStringLiteral("showExportPdf"));
+    connect(exportPdfAction, &QAction::triggered, this, [this] { exportPdf(); });
+    slideMenu->setObjectName(QStringLiteral("showSlideMenu"));
     menuBar()->insertMenu(before->menuAction(), slideMenu);
 
     // AI actions go into the shell's AI menu next to the panel toggle.
     before->addSeparator();
     for (const Ai::InlineAction &action : Ai::inlineActions()) {
         QAction *item = before->addAction(action.displayName);
+        item->setObjectName(QStringLiteral("showAi%1").arg(action.id));
         connect(item, &QAction::triggered, this, [this, id = action.id] {
             m_inline->run(id, this);
         });
     }
     before->addSeparator();
-    before->addAction(tr("Generate deck from outline…"), this, [this] {
-        generateDeckFromOutline(this, m_catalog, this);
-    });
+    QAction *generate = before->addAction(tr("Generate deck from outline…"));
+    generate->setObjectName(QStringLiteral("showGenerateDeck"));
+    connect(generate, &QAction::triggered, this,
+            [this] { generateDeckFromOutline(this, m_catalog, this); });
 
     // The insert commands are persistent toolbox actions shared with the
     // shapes toolbar (action discipline, AGENTS.md rule 5).
@@ -195,9 +238,10 @@ void ShowWindow::insertApplicationMenus(QMenu *before)
         insertMenu->addAction(action);
     }
     insertMenu->addSeparator();
-    insertMenu->addAction(tr("Appear on click"), this, [this] {
-        m_canvas->toggleBuildSelected();
-    });
+    QAction *appearOnClick = insertMenu->addAction(tr("Appear on click"));
+    appearOnClick->setObjectName(QStringLiteral("showAppearOnClick"));
+    connect(appearOnClick, &QAction::triggered, this,
+            [this] { m_canvas->toggleBuildSelected(); });
     menuBar()->insertMenu(before->menuAction(), insertMenu);
 
     QMenu *shapeMenu = new QMenu(tr("S&hape"), this);
@@ -208,8 +252,13 @@ void ShowWindow::insertApplicationMenus(QMenu *before)
     }
 
     QMenu *arrangeMenu = new QMenu(tr("Arrange"), this);
-    arrangeMenu->addAction(tr("Bring forward"), this, [this] { m_canvas->raiseSelected(); });
-    arrangeMenu->addAction(tr("Send backward"), this, [this] { m_canvas->lowerSelected(); });
+    arrangeMenu->setObjectName(QStringLiteral("showArrangeMenu"));
+    QAction *forward = arrangeMenu->addAction(tr("Bring forward"));
+    forward->setObjectName(QStringLiteral("showArrangeForward"));
+    connect(forward, &QAction::triggered, this, [this] { m_canvas->raiseSelected(); });
+    QAction *backward = arrangeMenu->addAction(tr("Send backward"));
+    backward->setObjectName(QStringLiteral("showArrangeBackward"));
+    connect(backward, &QAction::triggered, this, [this] { m_canvas->lowerSelected(); });
     menuBar()->insertMenu(before->menuAction(), arrangeMenu);
 }
 

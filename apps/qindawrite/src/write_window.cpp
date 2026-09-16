@@ -416,10 +416,15 @@ void WriteWindow::insertApplicationMenus(QMenu *before)
     menuBar()->insertMenu(before->menuAction(), insertMenu);
     m_format->populateInsertMenu(insertMenu);
 
-    auto *aiMenu = new QMenu(tr("&AI"), this);
-    menuBar()->insertMenu(before->menuAction(), aiMenu);
+    // AGENT-GUARD: the inline AI commands belong in the SHELL's AI menu
+    // (`before`), never in a second menu of the same title. Inserting a new
+    // "&AI" menu here put two identically named menus in the menu bar (and
+    // in the exported global menu), with Assistant… in one and the inline
+    // actions in the other. QindaShow is the correct shape: one AI menu,
+    // Assistant… first, then the inline actions.
+    before->addSeparator();
     for (const Ai::InlineAction &action : Ai::inlineActions()) {
-        QAction *item = aiMenu->addAction(action.displayName);
+        QAction *item = before->addAction(action.displayName);
         item->setObjectName(QStringLiteral("writeAi%1").arg(action.id));
         connect(item, &QAction::triggered, this, [this, id = action.id] {
             m_inline->run(id, this);

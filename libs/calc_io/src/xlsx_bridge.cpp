@@ -11,6 +11,9 @@
 #include <xlsxformat.h>
 #include <xlsxworkbook.h>
 #include <xlsxworksheet.h>
+#include <xlsxzipreader_p.h>
+
+#include <QXmlStreamReader>
 
 namespace QindaOffice::Calc::IO {
 
@@ -124,6 +127,48 @@ Value valueFromCell(const std::shared_ptr<QXlsx::Cell> &cell, bool date1904)
                 + v.toDateTime().time().msecsSinceStartOfDay() / 86400000.0 + (date1904 ? 1462.0 : 0.0);
         }
         return Value(std::monostate{});
+    }
+}
+
+
+// AGENT-NOTE: QXlsx parses <definedName> into WorkbookPrivate::definedNamesList
+// but exposes no public reader for it (AbstractOOXmlFile::d_ptr is protected),
+// so the names are read straight out of xl/workbook.xml. ZipReader is QXlsx's
+// own zip front end; it is a private header but a self-contained class, and
+// the library is vendored and built here (third_party is ours to include).
+// Writing goes the public way, through Workbook::defineName().
+void readDefinedNames(const QString &path, Workbook *out)
+{
+    QXlsx::ZipReader zip(path);
+    if (!zip.exists()) {
+        return;
+    }
+    const QByteArray xml = zip.fileData(QStringLiteral("xl/workbook.xml"));
+    if (xml.isEmpty()) {
+        return;
+    }
+    QXmlStreamReader reader(xml);
+    while (!reader.atEnd()) {
+        if (reader.readNext() != QXmlStreamReader::StartElement
+            || reader.name() != QLatin1String("definedName")) {
+            continue;
+        }
+        const QString name = reader.attributes().value(QLatin1String("name")).toString();
+        const QString formula = reader.readElementText();
+        if (name.isEmpty() || formula.isEmpty()) {
+            continue;
+        }
+        // Print areas and similar built-ins are spelled _xlnm.*; they are
+        // not user names and the engine has nothing to do with them.
+        if (name.startsWith(QLatin1String("_xlnm"), Qt::CaseInsensitive)) {
+            continue;
+        }
+        // The engine's own reference parser understands the xlsx spelling
+        // (sheet qualifier, $ anchors, quoted sheet names).
+        ParseResult parsed = parseFormula(formula);
+        if (parsed.root && parsed.root->kind == Node::Kind::Ref) {
+            out->defineName(name, parsed.root->ref);
+        }
     }
 }
 
@@ -280,6 +325,12 @@ bool readXlsxFile(const QString &path, Workbook *out, QString *error)
         }
         return false;
     }
+    // AGENT-GUARD: names BEFORE cells. installFormula() resolves a name to
+    // its dependency targets at install time, so a name defined afterwards
+    // leaves every formula that uses it evaluated against nothing (#NAME? at
+    // best) and missing from the recalc index. readXlsx only appends sheets,
+    // so seeding the name table first is safe.
+    readDefinedNames(path, out);
     return readXlsx(doc, out, error);
 }
 
@@ -376,6 +427,12 @@ std::unique_ptr<QXlsx::Document> writeXlsx(const Workbook &wb, QString *error)
         }
         qxChart->setChartType(type);
         qxChart->setChartTitle(chart.title);
+    }
+    // Named ranges: the canonical text form is already the xlsx spelling
+    // ("Sheet1!$A$1:$A$5"), so the workbook's own defineName takes it as is.
+    const QHash<QString, RangeRef> &names = wb.namedRanges();
+    for (auto it = names.constBegin(); it != names.constEnd(); ++it) {
+        static_cast<void>(doc->workbook()->defineName(it.key(), rangeRefText(it.value())));
     }
     return doc;
 }

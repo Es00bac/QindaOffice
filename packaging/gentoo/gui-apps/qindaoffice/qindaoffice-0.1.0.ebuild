@@ -18,7 +18,7 @@ EGIT_COMMIT=""
 LICENSE="GPL-3+"
 SLOT="0"
 KEYWORDS="~amd64"
-IUSE="+libreoffice"
+IUSE="+charts +libreoffice"
 
 # gui-wm/qindaqt-desktop owns the QindaQt global-menu static archives and
 # headers office_shell links (no CMake package configs are installed for
@@ -31,6 +31,7 @@ RDEPEND="
 	>=kde-frameworks/sonnet-6.0:6=
 	dev-libs/qtkeychain
 	app-text/poppler[qt6]
+	charts? ( >=dev-qt/qtcharts-6.11:6= )
 	libreoffice? ( app-office/libreoffice )
 "
 DEPEND="${RDEPEND}"
@@ -39,8 +40,13 @@ BDEPEND="
 "
 
 src_configure() {
+	# AGENT-CONTRACT: the charts USE flag is the only thing that may set
+	# QQO_WITH_CHARTS; the option defaults OFF in CMakeLists.txt, so without
+	# this the Insert > Chart command shipped permanently disabled even
+	# though dev-qt/qtcharts was installed.
 	local mycmakeargs=(
 		-DBUILD_TESTING=OFF
+		-DQQO_WITH_CHARTS=$(usex charts ON OFF)
 	)
 	cmake_src_configure
 }

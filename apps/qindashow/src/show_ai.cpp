@@ -146,12 +146,11 @@ void generateDeckFromOutline(ShowWindow *window, Ai::ModelCatalog *catalog, QWid
         return;
     }
     const QString modelId = ids.first();
-    Ai::ProviderConfig config;
-    for (const Ai::ProviderConfig &candidate : catalog->providers()) {
-        if (modelId == candidate.id) {
-            config = candidate;
-        }
-    }
+    // AGENT-GUARD: see InlineActionFlow — modelIds() hands out "<id>/<model>",
+    // so comparing against candidate.id alone left secretKey empty and the
+    // generation request went out unauthenticated.
+    const Ai::ProviderConfig config =
+        catalog->configFor(modelId).value_or(Ai::ProviderConfig{});
     auto *store = new Ai::SecretStore(catalog);
     store->retrieve(config.secretKey,
                     [window, catalog, request, modelId, dialogParent](const QString &secret) {

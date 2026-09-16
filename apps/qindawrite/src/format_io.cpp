@@ -5,14 +5,12 @@
 
 #include <QCoreApplication>
 #include <QDir>
-#include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
 #include <QTextDocument>
 #include <QTextDocumentWriter>
 #include <QTemporaryDir>
-#include <QTimer>
 
 namespace QindaOffice::Apps::Write {
 
@@ -44,46 +42,12 @@ QString extensionOf(const QString &path)
     return QFileInfo(path).suffix().toLower();
 }
 
-// Blocks until the async converter finishes one job (nested loop; the
-// conversion is a local subprocess and the UI stays responsive).
+// Conversion goes through Core::convertBlocking (office_core): this file and
+// show_document.cpp each carried a byte-identical private copy of the nested
+// event loop, timeout and intermediate-cleanup rules.
 QString convertAndWait(const QString &input, const QString &targetExt, QString *error)
 {
-    Core::LibreOfficeConverter converter;
-    const QString outDir =
-        QFileInfo(input).absolutePath() + QStringLiteral("/.qindawrite-lo");
-    QDir().mkpath(outDir);
-    QEventLoop loop;
-    QString result;
-    QString failure;
-    QObject::connect(&converter, &Core::LibreOfficeConverter::jobFinished, &loop,
-                     [&loop, &result](int, const QString &output) {
-                         result = output;
-                         loop.quit();
-                     });
-    QObject::connect(&converter, &Core::LibreOfficeConverter::jobFailed, &loop,
-                     [&loop, &failure](int, const QString &message) {
-                         failure = message;
-                         loop.quit();
-                     });
-    const int id = converter.convert(input, targetExt, outDir, error);
-    if (id == 0) {
-        return {};
-    }
-    // A conversion that never answers must not hang the editor.
-    QTimer::singleShot(130000, &loop, [&loop] { loop.quit(); });
-    loop.exec();
-    if (result.isEmpty() && failure.isEmpty() && error != nullptr) {
-        *error = QStringLiteral("conversion timed out");
-    } else if (!failure.isEmpty() && error != nullptr) {
-        *error = failure;
-    }
-    // AGENT-GUARD: only intermediates we produced (inside the private
-    // converter directory) may be removed - `input` is the user's document
-    // on the load path.
-    if (input.startsWith(outDir)) {
-        QFile::remove(input);
-    }
-    return result;
+    return Core::convertBlocking(input, targetExt, QStringLiteral(".qindawrite-lo"), error);
 }
 
 bool saveViaHtml(const QString &path, QTextDocument *document, const QString &targetExt,

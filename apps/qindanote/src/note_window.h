@@ -26,13 +26,20 @@ public:
     bool load(const QString &path, QString *error = nullptr) override;
     bool save(const QString &path, QString *error = nullptr) override;
     [[nodiscard]] QStringList mimeTypes() const override;
-    [[nodiscard]] QByteArray recoverySnapshot() const override { return {}; }
-    bool loadRecovery(const QByteArray &, QString *error = nullptr) override
+    [[nodiscard]] QByteArray recoverySnapshot() const override
     {
-        if (error != nullptr) {
-            *error = tr("Recovery snapshots are not wired for notebooks yet.");
+        return m_notebook.toRecoveryJson();
+    }
+    bool loadRecovery(const QByteArray &snapshot, QString *error = nullptr) override
+    {
+        if (!m_notebook.fromRecoveryJson(snapshot, error)) {
+            return false;
         }
-        return false;
+        setCanonicalPath(m_notebook.directory());
+        refreshByteRevision();
+        setDirty(true); // recovered content is unsaved by definition
+        emit contentChanged();
+        return true;
     }
 
 private:

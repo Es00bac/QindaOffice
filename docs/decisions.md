@@ -1,9 +1,110 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Decisions (ADR-lite)
 
 Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
+
+## D-012: A stub is a bug — every declared capability is implemented or not declared
+
+**Context.** A second audit pass asked what the suite *claims* to do and
+compared it with what it does. Five capabilities were declared and not
+delivered, which is indistinguishable from a defect at the UI:
+`recoverySnapshot()` returned `{}` in QindaCalc and QindaNote (the mandated
+default-on crash safety net was a no-op for half the suite); QindaNote had
+an undo stack with no inverse, so Edit ▸ Redo could never enable;
+`QindaCalc.desktop` declared `ods`/`xls` while `load()` rejected everything
+but xlsx/csv; and the engine resolved named ranges that nothing could ever
+create or persist.
+
+The same pass found the shape of bug those stubs hide. `Notebook::save()`
+wrote **every** page, but pages load lazily — so opening a notebook, viewing
+one page and pressing Ctrl+S replaced every other page's file with an empty
+envelope. The lazy-load model had no "is this loaded?" bit, so no caller
+could tell content from absence.
+
+**Decision.**
+
+1. **Lazy content carries a loaded flag.** `NotePage::loaded` is the single
+   source of truth: `save()` and `copyStructure()` never write an unloaded
+   page (Save As materialises them from the source first), the navigator
+   never re-reads a page that is already in memory, and the recovery payload
+   records which envelopes it actually holds. Anything that loads content on
+   demand must carry the same bit.
+2. **Recovery payloads are the document's own serialization, not a file
+   format.** QindaCalc's is the undo layer's `WorkbookSnapshot` in JSON
+   (`calc_recovery.cpp`) — deliberately not an in-memory xlsx, because QXlsx
+   has no chart read path and the round trip would drop every chart. Values
+   are typed (`n`/`t`/`b`/`e`), never display text, or the text cell `007`
+   comes back as the number 7. QindaNote's is the notebook index plus the
+   loaded envelopes plus the source directory.
+3. **A declared MIME type is a promise.** QindaCalc opens and saves foreign
+   spreadsheet formats through the headless LibreOffice bridge, so its
+   `.desktop` list, `mimeTypes()` and the file-dialog filters agree. The
+   blocking converter glue moved to `Core::convertBlocking()`; QindaWrite
+   and QindaShow each carried a byte-identical private copy.
+4. **Named ranges round-trip.** The Name Box defines a name over the
+   selection (and navigates to a reference or an existing name), names are
+   pinned absolute on the defining sheet — a name is an address, not a
+   relative offset — and they travel through xlsx both ways. Import reads
+   them **before** the cells: `installFormula()` resolves a name to its
+   dependency targets at install time, so a name defined afterwards leaves
+   every formula that uses it unindexed and evaluated against nothing.
+5. **A file we cannot parse is moved aside, never overwritten.**
+   `Core::JsonSettings` and `Ai::ModelCatalog` rename an unreadable file to
+   `<path>.corrupt` and continue from defaults. Refusing to write leaves the
+   app permanently stuck; overwriting destroys the user's data; quarantining
+   does neither.
+
+**Consequences.** The four apps now either do the thing or do not offer it.
+`Notebook::persistPage()` refuses without a directory (it used to write
+`sections/…` into the process's working directory for untitled notebooks)
+and writes atomically like every other document path. The regression tests
+that matter — a notebook save that must not blank untouched pages, a
+recovery payload that must survive typed values and styles on empty cells,
+an xlsx that must carry its names — live in `tst_qindanote`,
+`tst_calc_window` and `tst_calc_io`.
+
+## D-011: Command availability is a property of the document host, not of the stub engine
+
+**Context.** A second audit pass ran the four real windows offscreen and
+dumped every window-scoped `QAction` with its enabled state, objectName and
+shortcut. Three shell-level defects showed up in all four apps at once, none
+of them visible from the test suite (which drove documents directly and
+never asked whether the commands that reach them were reachable):
+
+1. `createStandardActions()` creates Save/Save As disabled ("no engine
+   yet"), and the only code that re-enabled them was
+   `DocumentWindow::setDocument()`'s `PlainTextDocument` branch. All four
+   apps install their engine through `setDocumentHost()` instead — so
+   **File ▸ Save, File ▸ Save As, the toolbar Save button and Ctrl+S were
+   dead in QindaWrite, QindaCalc, QindaShow and QindaNote**, while
+   `saveDocument()` itself worked (the close-consent dialog reached it).
+2. Close Window and Quit were bound with `QKeySequence::Close` / `::Quit`.
+   Those resolve through the platform theme's keyboard scheme, and the
+   qindaqt platform theme (ADR-0115) delegates `KeyboardScheme` to Qt's
+   generic Unix theme → X11 scheme, where they are **Ctrl+F4** and the
+   **"Exit" media key**. AGENTS.md rule 1 names Ctrl+W and Ctrl+Q.
+3. Menu commands built with the `addAction(text, receiver, functor)`
+   overload carry no objectName, which is the dbusmenu activation identity
+   (rule 5) — those entries were unreachable from the panel menu.
+
+**Decision.** (a) `setDocumentHost()` enables Save/Save As: a window that
+owns a document can save, and command availability belongs to the host, not
+to the stub engine's branch. (b) Ctrl+W and Ctrl+Q are literal
+`QKeySequence`s in `standard_actions.cpp`, mirroring the first-party text
+editor; the shortcut assertions in `tst_standard_actions` were pinning the
+defect and now assert the mandated chords. (c) Every menu command in the
+suite carries a stable objectName — `ActionId` for suite-standard commands,
+an app-scoped literal (`calcTemplate_*`, `showAi*`, `notePenTool`, …) for
+app commands, matching QindaWrite's existing pattern. The QindaNote tool
+strip also gained the toolbar objectName `QMainWindow::saveState()` needs.
+
+**Consequences.** Offscreen action-state dumps are the cheap way to catch
+this class: a command can be perfectly wired and still be unreachable.
+`tst_document_window` now installs a non-`PlainTextDocument` engine through
+`setDocumentHost()` and asserts both the Save enablement and the two chords,
+so neither can regress silently.
 
 ## D-006: QindaCalc undo is snapshot-based; clipboard carries a rich JSON format
 
@@ -195,7 +296,7 @@ hanging — the same rule as the global-menu export. QQTerm carries the same
 `QDBusInterface` hand-off pattern and may need the same hardening if it ever
 runs against such a bus.
 
-## D-003: Office-wide bug-audit hardening (2026-09 audit batch)
+## D-010: Office-wide bug-audit hardening (2026-09 audit batch)
 
 **Context.** A full-repo audit (~212 findings) exposed recurring defect
 patterns: cross-filesystem save (EXDEV after `QFile::remove` destroyed the

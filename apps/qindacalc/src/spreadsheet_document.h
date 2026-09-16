@@ -51,6 +51,15 @@ public:
     void restyleRange(const CalcEng::CellRange &range, const StylePatch &patch,
                       const QString &undoText);
     void insertSheet(const QString &name);
+    // Chart insert is a document mutation like any other: snapshot, push,
+    // dirty, notify. It used to append straight into Workbook::charts, so a
+    // chart could not be undone and never reached the recovery journal.
+    void addChart(const CalcEng::ChartSpec &spec);
+    // Defines (or redefines) a named range over `target`, undoably. An
+    // unqualified target is pinned to the active sheet first: a name is an
+    // absolute address, so it must not follow whichever sheet the formula
+    // using it happens to live on.
+    void defineName(const QString &name, const CalcEng::RangeRef &target);
     void setActiveSheet(qint32 index) { m_activeSheet = index; }
     [[nodiscard]] qint32 activeSheet() const { return m_activeSheet; }
 
@@ -73,6 +82,10 @@ signals:
     // Sheet list/count changed (undo of sheet insert, sheet insert);
     // windows rebuild their tab bars on this.
     void structureChanged();
+    // A save that completed but could not carry everything (CSV holds one
+    // sheet). The window surfaces it; silence here would be data loss the
+    // user never heard about.
+    void saveWarning(const QString &message);
 
 private:
     void pushUndo(const WorkbookSnapshot &before, const QString &text);

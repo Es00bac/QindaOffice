@@ -61,3 +61,13 @@ if(BUILD_TESTING)
 endif()
 
 install(FILES data/mime/qindaoffice.xml DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)
+
+# AGENT-GUARD: the four application icons MUST be installed into the hicolor
+# theme. Every .desktop file carries `Icon=org.qindaqt.<App>` (shell rule 2)
+# and the SVGs have always lived under data/icons/, but nothing installed
+# them — so the panel launcher, the task switcher and the window containers
+# had no icon to resolve for any app in the suite. Named by the desktop id so
+# QIcon::fromTheme() and the freedesktop icon lookup both find them.
+install(DIRECTORY data/icons/hicolor
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/icons
+    FILES_MATCHING PATTERN "*.svg")

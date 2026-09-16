@@ -1,19 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- QindaNote: a spiral notebook with its bookmark still in, pleased about
+     the squiggle someone just left on it. Suite icon family: chunky ink
+     outline, flat fills, dot eyes + arc smile + blush, one signature prop,
+     a few degrees off square. No tile, no gradients. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1d2130"/>
-      <stop offset="1" stop-color="#101319"/>
-    </linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#4fb7c4"/>
-      <stop offset="1" stop-color="#5a8bd6"/>
-    </linearGradient>
-  </defs>
-  <rect x="2" y="2" width="60" height="60" rx="12" fill="url(#bg)"/>
-  <rect x="2" y="2" width="60" height="60" rx="12" fill="none" stroke="#3a4254" stroke-width="1.5"/>
-  <rect x="14" y="10" width="36" height="44" rx="3" fill="#f2f0ea"/>
-  <path d="M22 10 V54" stroke="#d8d4c8" stroke-width="1.4"/>
-  <path d="M30 22 C34 16, 40 18, 38 24 C36 30, 28 30, 30 38 C31 43, 38 42, 40 46" fill="none" stroke="url(#accent)" stroke-width="2.6" stroke-linecap="round"/>
-  <circle cx="45" cy="18" r="2.2" fill="#ddc06b"/>
+  <g transform="rotate(3 32 33)" fill="none" stroke="#3a3347" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="12" y="11" width="40" height="44" rx="5" fill="#b9a2f0"/>
+    <rect x="24" y="15" width="24" height="36" rx="3" fill="#fffaf0"/>
+    <path d="M28 23.5 Q31 20 34 23.5 T40 23.5" stroke="#8a6fd6" stroke-width="2.2"/>
+    <path d="M41 6 H47 V20.5 L44 17.6 L41 20.5 Z" fill="#ff8fa3"/>
+    <circle cx="28" cy="37" r="2.3" fill="#ff8fa3" opacity="0.5" stroke="none"/>
+    <circle cx="44" cy="37" r="2.3" fill="#ff8fa3" opacity="0.5" stroke="none"/>
+    <circle cx="32" cy="32" r="2.1" fill="#3a3347" stroke="none"/>
+    <circle cx="40" cy="32" r="2.1" fill="#3a3347" stroke="none"/>
+    <path d="M33.6 38 Q36 40.8 38.4 38" stroke-width="1.9"/>
+    <path d="M15 20 H27 M15 29 H27 M15 38 H27 M15 47 H27" stroke-width="3"/>
+  </g>
 </svg>

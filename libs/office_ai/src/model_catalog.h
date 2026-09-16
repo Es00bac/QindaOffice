@@ -30,6 +30,12 @@ public:
     [[nodiscard]] QList<ProviderConfig> providers() const { return m_providers; }
     [[nodiscard]] QStringList modelIds() const;
     [[nodiscard]] std::optional<ModelSpec> specFor(const QString &modelId) const;
+    // AGENT-CONTRACT: the only supported way to map a model id back to its
+    // provider row. modelIds() hands out "<id>/<model>", so a caller that
+    // compares against ProviderConfig::id alone never matches and silently
+    // ends up with a default-constructed config (empty secretKey -> the API
+    // key is never fetched -> the request goes out unauthenticated).
+    [[nodiscard]] std::optional<ProviderConfig> configFor(const QString &modelId) const;
 
     // Builds a ready provider for the model id; the secret is resolved
     // synchronously from `secret` when the kind needs one (empty -> caller

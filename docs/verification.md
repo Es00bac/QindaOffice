@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Verification
 
 ## Build gates (every milestone)
@@ -146,3 +146,78 @@ presenter-view-on-second-screen, reduced-motion, packaging).
       the previous session's paths reopen at launch.
 - [ ] Second launch (`qindawrite file`) from a terminal while one instance
       runs: paths hand off over D-Bus; `--new-instance` bypasses.
+
+### M16 shell-reachability audit
+
+Automated by `tst_document_window`, `tst_calc_window`, `tst_recovery_journal`
+and `tst_office_ai`.
+
+Rationale: the milestone suites drive documents directly, so a command can
+be fully wired and still be unreachable from the UI. This pass dumps every
+window-scoped `QAction` of the four real windows under
+`QT_QPA_PLATFORM=offscreen` (enabled state, objectName, shortcut) and
+asserts the reachability contract. See D-011.
+
+- A document installed through `setDocumentHost()` enables Save and Save
+  As; before this pass they were disabled in all four apps, so File ▸ Save,
+  the toolbar Save button and Ctrl+S did nothing.
+- Close Window is `Ctrl+W` and Quit is `Ctrl+Q` (AGENTS.md rule 1), asserted
+  as literal chords — `QKeySequence::Close`/`::Quit` resolve to Ctrl+F4 and
+  the "Exit" media key under the keyboard scheme the qindaqt platform theme
+  yields.
+- Every menu action in QindaWrite/QindaCalc/QindaShow/QindaNote carries a
+  non-empty objectName (rule 5); the QindaNote tool strip has the toolbar
+  objectName `QMainWindow::saveState()` requires.
+- QindaWrite has exactly one `&AI` menu (the inline actions live in the
+  shell's AI menu next to Assistant…, as in QindaShow).
+- An empty `recoverySnapshot()` is not written as a journal entry, so the
+  stub engines (QindaCalc, QindaNote) cannot produce a Recover prompt whose
+  restore always fails.
+- `ModelCatalog::configFor()` resolves every id `modelIds()` hands out, and
+  a corrupt `providers.json` is kept and reported instead of being replaced
+  by the seed.
+- QindaCalc: undo back to the saved position clears the dirty mark (dirty
+  follows the `QUndoStack` clean index); chart insert is one undo command.
+
+### M17 capability completeness
+
+Automated by `tst_qindanote`, `tst_calc_window`, `tst_calc_io` and
+`tst_office_ai`. Rationale in D-012: a declared capability that is a stub is
+a defect, and the stubs were hiding a data-loss bug. Live-LibreOffice cases
+skip with a message where `soffice` is unavailable.
+
+- QindaNote: saving a notebook after opening ONE page leaves every other
+  page's file intact (`save()` writes only loaded pages; Save As
+  materialises unloaded ones from the source first).
+- QindaNote: Edit ▸ Redo replays an undone stroke, follows the view's real
+  history depth, and a fresh edit ends the redo branch.
+- QindaNote: `recoverySnapshot()` round-trips sections, page titles, ink and
+  page background; an untitled notebook recovers entirely from memory, a
+  saved one re-attaches to its directory so unopened pages stay on disk.
+- QindaCalc: `recoverySnapshot()` round-trips formulas (re-parsed and
+  recomputed), typed values (the text `007` stays text), styles set on EMPTY
+  cells, extra sheets, named ranges and chart specs.
+- QindaCalc: an `.ods` saves and reopens through the LibreOffice bridge with
+  its formula recomputed; `mimeTypes()` matches the `.desktop` MimeType list.
+- calc_io: a named range survives the xlsx round trip, and `=SUM(NAME)` still
+  evaluates after import (names are read before the cells, so the dependency
+  index sees them).
+- office_ai: `configFor()` resolves every id `modelIds()` hands out; a
+  corrupt `providers.json` is moved to `.corrupt` and the picker still works.
+
+### M16 manual checklist (live desktop)
+
+- [ ] `Ctrl+S` saves in each of the four apps; `Ctrl+W` closes the window
+      and `Ctrl+Q` closes the current window only.
+- [ ] Panel global menu: activate *New from Template*, *Export PDF*,
+      *Bring forward* and the AI inline actions from the panel — each
+      resolves by objectName instead of being inert.
+- [ ] Launcher and task switcher show the suite icons (the hicolor SVGs are
+      installed by `make install` / the ebuild) — four mascots, one family.
+- [ ] QindaCalc: type a name into the Name Box with a range selected — it
+      defines the name; typing it again jumps back to that range; Ctrl+Z
+      removes the definition.
+- [ ] QindaNote: open a multi-page notebook, view one page, Ctrl+S, reopen —
+      the pages you never opened still have their ink.
+- [ ] QindaCalc with a chart open: type into cells — the chart re-renders
+      in place; its window does not disappear, move or jump to the front.

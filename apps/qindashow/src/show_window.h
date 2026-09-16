@@ -61,6 +61,8 @@ protected:
 
 private:
     void openTemplateAsUntitled(const QString &path);
+    // Save/Discard/Cancel consent before a template replaces the deck.
+    [[nodiscard]] bool confirmDiscardChanges();
 
 private:
     void rebuildSorter();

@@ -13,10 +13,35 @@
 
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QStandardPaths>
 #include <QMessageBox>
 #include <QStatusBar>
 
 namespace QindaOffice::Shell {
+
+namespace {
+
+// "OpenDocument Text (*.odt);;HTML (*.html)" -> "odt" for the given single
+// filter. Empty when the filter matches anything (e.g. "All files (*)").
+QString suffixFromFilter(const QString &filter)
+{
+    const int open = filter.indexOf(QLatin1Char('('));
+    const int close = filter.indexOf(QLatin1Char(')'), open + 1);
+    if (open < 0 || close < 0) {
+        return {};
+    }
+    const QString first = filter.mid(open + 1, close - open - 1)
+                              .split(QLatin1Char(' '), Qt::SkipEmptyParts)
+                              .value(0);
+    const int dot = first.lastIndexOf(QLatin1Char('.'));
+    if (dot < 0) {
+        return {};
+    }
+    const QString suffix = first.mid(dot + 1);
+    return suffix == QLatin1String("*") ? QString() : suffix;
+}
+
+} // namespace
 
 bool DocumentWindow::isPristineUntitled() const
 {
@@ -96,10 +121,29 @@ bool DocumentWindow::saveDocumentAs()
     if (m_document == nullptr) {
         return false;
     }
-    const QString path =
-        QFileDialog::getSaveFileName(this, tr("Save As"), QString(), saveFilterString());
+    // Start on the document's own file (or on its title under Documents for
+    // an untitled one): the empty `dir` argument made every Save As open in
+    // the process's working directory with no name filled in.
+    const QString current = m_document->canonicalPath();
+    const QString startPath = !current.isEmpty()
+        ? current
+        : QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+            + QLatin1Char('/') + m_document->displayTitle();
+    QString selectedFilter;
+    QString path = QFileDialog::getSaveFileName(this, tr("Save As"), startPath,
+                                                saveFilterString(), &selectedFilter);
     if (path.isEmpty()) {
         return false; // cancelled
+    }
+    // AGENT-GUARD: complete the extension ourselves. Qt only applies a
+    // default suffix to its own dialog, so a name typed without one was
+    // saved extension-less — and every engine here dispatches on the
+    // suffix, so the file could not be reopened afterwards.
+    if (QFileInfo(path).suffix().isEmpty()) {
+        const QString suffix = suffixFromFilter(selectedFilter);
+        if (!suffix.isEmpty()) {
+            path += QLatin1Char('.') + suffix;
+        }
     }
     if (m_services != nullptr
         && m_services->isPathOpenInAnotherWindow(path, this)) {

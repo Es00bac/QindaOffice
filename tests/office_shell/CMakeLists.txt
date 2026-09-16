@@ -20,6 +20,7 @@ add_executable(tst_calc_window tst_calc_window.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_clipboard.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_find_bar.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_format_controller.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_recovery.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_undo.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_window.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/chart_dialog.cpp
@@ -40,6 +41,7 @@ add_executable(tst_calc_ui tst_calc_ui.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_clipboard.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_find_bar.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_format_controller.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_recovery.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_undo.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_window.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/chart_dialog.cpp

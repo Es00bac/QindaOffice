@@ -73,11 +73,15 @@ void StandardActionsTest::standardShortcuts()
     StandardActions a = createStandardActions(this);
     QCOMPARE(a.fileNew->shortcut(), QKeySequence(QKeySequence::New));
     QCOMPARE(a.fileOpen->shortcut(), QKeySequence(QKeySequence::Open));
-    QCOMPARE(a.fileCloseWindow->shortcut(), QKeySequence(QKeySequence::Close));
+    // AGENT-GUARD: assert the LITERAL chords rule 1 mandates, not the
+    // QKeySequence::Close/::Quit standard keys. Under the keyboard scheme the
+    // qindaqt platform theme actually yields (X11), those resolve to Ctrl+F4
+    // and the "Exit" media key — the assertion used to pin that defect.
+    QCOMPARE(a.fileCloseWindow->shortcut(), QKeySequence(QStringLiteral("Ctrl+W")));
     QCOMPARE(a.fileSave->shortcut(), QKeySequence(QKeySequence::Save));
     QCOMPARE(a.fileSaveAs->shortcut(), QKeySequence(QKeySequence::SaveAs));
     QCOMPARE(a.filePrint->shortcut(), QKeySequence(QKeySequence::Print));
-    QCOMPARE(a.fileQuit->shortcut(), QKeySequence(QKeySequence::Quit));
+    QCOMPARE(a.fileQuit->shortcut(), QKeySequence(QStringLiteral("Ctrl+Q")));
     QCOMPARE(a.editFind->shortcut(), QKeySequence(QKeySequence::Find));
     QCOMPARE(a.editReplace->shortcut(), QKeySequence(QKeySequence::Replace));
     QCOMPARE(a.editFindNext->shortcut(), QKeySequence(QKeySequence::FindNext));

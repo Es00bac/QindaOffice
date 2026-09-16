@@ -17,6 +17,7 @@
 #include <QSignalSpy>
 #include <QTextBrowser>
 #include <QToolButton>
+#include <QFile>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -32,6 +33,8 @@ private slots:
     void openAiProviderCancelAborts();
     void cliProviderReplaysClaudeJson();
     void catalogSeedsAndCreatesProviders();
+    void catalogResolvesTheIdsItHandsOut();
+    void catalogKeepsAnUnreadableFileInsteadOfSeedingOverIt();
     void assistantPanelSendsAndStreams();
     void inlineActionExtractsFencedBlocks();
 };
@@ -197,6 +200,51 @@ void OfficeAiTest::catalogSeedsAndCreatesProviders()
     QVERIFY(spec.has_value());
     QVERIFY(spec->offMachine);
     QVERIFY(spec->caps.vision);
+}
+
+// AGENT-GUARD: modelIds() hands out "<id>/<model>". Every consumer resolves
+// the provider row through configFor(); the open-coded lookups that compared
+// against ProviderConfig::id alone never matched, so secretKey stayed empty
+// and inline AI requests went out with no API key at all.
+void OfficeAiTest::catalogResolvesTheIdsItHandsOut()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    ModelCatalog catalog(dir.path() + QStringLiteral("/providers.json"));
+    const QStringList ids = catalog.modelIds();
+    QVERIFY(!ids.isEmpty());
+    for (const QString &id : ids) {
+        const auto config = catalog.configFor(id);
+        QVERIFY2(config.has_value(), qPrintable(id));
+        QVERIFY(catalog.specFor(id).has_value());
+    }
+    // The key-bearing seeds really do carry their secret id through.
+    const auto moonshot = catalog.configFor(QStringLiteral("moonshot/moonshot-v1-8k"));
+    QVERIFY(moonshot.has_value());
+    QCOMPARE(moonshot->secretKey, QStringLiteral("moonshot-api-key"));
+    QVERIFY(!catalog.configFor(QStringLiteral("no-such-model")).has_value());
+}
+
+// A corrupt providers.json is moved aside, never silently replaced by the
+// seed — that overwrite destroyed hand-configured endpoints and secret ids.
+void OfficeAiTest::catalogKeepsAnUnreadableFileInsteadOfSeedingOverIt()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + QStringLiteral("/providers.json");
+    const QByteArray broken("{ \"providers\": [ {\"id\": \"mine\" ");
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write(broken);
+    file.close();
+
+    ModelCatalog catalog(path);
+    // The user's bytes survive, under the quarantine name...
+    QFile aside(path + QStringLiteral(".corrupt"));
+    QVERIFY(aside.open(QIODevice::ReadOnly));
+    QCOMPARE(aside.readAll(), broken);
+    // ...and the app is usable again instead of stuck with an empty picker.
+    QVERIFY(!catalog.providers().isEmpty());
 }
 
 void OfficeAiTest::assistantPanelSendsAndStreams()

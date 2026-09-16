@@ -13,8 +13,10 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QRegularExpression>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QStatusBar>
 #include <QTabBar>
 #include <QVBoxLayout>
@@ -22,6 +24,7 @@
 #include <QGuiApplication>
 #include <QMimeData>
 #include <QIcon>
+#include <QLayout>
 #include <QToolBar>
 #include <QVBoxLayout>
 
@@ -36,6 +39,31 @@ namespace CalcEng = QindaOffice::Calc;
 namespace QindaOffice::Apps::QindaCalc {
 
 using namespace CalcEng;
+
+namespace {
+// A name the workbook can hold: identifier-shaped and not something the
+// engine would read as a reference (or the name would shadow a real cell).
+bool isDefinableName(const QString &text)
+{
+    static const QRegularExpression shape(QStringLiteral("^[A-Za-z_][A-Za-z0-9_.]*$"));
+    if (!shape.match(text).hasMatch() || text.size() > 255) {
+        return false;
+    }
+    const ParseResult parsed = parseFormula(text);
+    return !(parsed.root && parsed.root->kind == Node::Kind::Ref);
+}
+
+// Turns a template display name into a stable, valid objectName suffix.
+QString sanitizedId(const QString &name)
+{
+    QString out;
+    out.reserve(name.size());
+    for (const QChar c : name) {
+        out.append(c.isLetterOrNumber() ? c : QLatin1Char('_'));
+    }
+    return out;
+}
+} // namespace
 
 CalcWindow::CalcWindow()
     : m_document(new SpreadsheetDocument)
@@ -84,15 +112,11 @@ CalcWindow::CalcWindow()
         }
     });
     connect(m_nameBox, &QLineEdit::returnPressed, this, [this] {
-        if (m_syncingBar) {
-            return;
-        }
-        // Name box navigation: type a reference to jump.
-        ParseResult parsed = parseFormula(m_nameBox->text());
-        if (parsed.root && parsed.root->kind == Node::Kind::Ref && parsed.root->ref.isSingleCell()) {
-            m_view->setCursorCell(parsed.root->ref.range.topLeft);
+        if (!m_syncingBar) {
+            commitNameBox(m_nameBox->text().trimmed());
         }
     });
+    m_nameBox->setToolTip(tr("Go to a cell or named range, or name the selection"));
     connect(m_tabs, &QTabBar::currentChanged, this, [this](int index) {
         if (index >= 0) {
             m_document->setActiveSheet(index);
@@ -117,19 +141,24 @@ CalcWindow::CalcWindow()
     wireEditingActions();
     connect(m_findBar, &CalcFindBar::message, this,
             [this](const QString &text) { statusBar()->showMessage(text, 5000); });
+    // A lossy-but-successful save (CSV keeps one sheet) has to be visible.
+    connect(m_document, &SpreadsheetDocument::saveWarning, this,
+            [this](const QString &text) { statusBar()->showMessage(text, 12000); });
     // Undo of a sheet insert/delete (or a load) changes the sheet list.
     connect(m_document, &SpreadsheetDocument::structureChanged, this, [this] {
         rebuildSheetTabs();
         m_view->refreshAll();
         rebuildChartWindows();
     });
-    // CC: data edits changed what charts visualize — the floating windows
-    // previously only refreshed on structural changes and went stale.
+    // Data edits change what charts visualize, so the open chart windows
+    // must re-render — but only their CONTENTS. AGENT-GUARD: never call
+    // rebuildChartWindows() from contentChanged. It deletes and re-creates
+    // the floating windows, so every committed cell edit made each chart
+    // window blink out and come back at its computed default position,
+    // discarding wherever the user had moved or resized it (and re-raising
+    // it over the grid they were typing in).
     connect(m_document, &SpreadsheetDocument::contentChanged, this, [this] {
-        if (m_chartWindows.isEmpty()) {
-            return;
-        }
-        rebuildChartWindows();
+        refreshChartWindows();
     });
 
     // App menus (Insert/Sheet/Format) need the fully constructed window.
@@ -236,6 +265,58 @@ void CalcWindow::loadWorkbookPath(const QString &path)
     }
 }
 
+void CalcWindow::goToRange(const CalcEng::RangeRef &ref)
+{
+    // A qualified reference switches sheets first; the tab bar's
+    // currentChanged handler repaints and re-anchors the view.
+    if (!ref.sheet.isEmpty()) {
+        const qint32 sheet = m_document->workbook()->sheetIndex(ref.sheet);
+        if (sheet >= 0 && sheet != m_document->activeSheet()) {
+            m_tabs->setCurrentIndex(int(sheet));
+        }
+    }
+    m_view->setCursorCell(ref.range.topLeft);
+    if (ref.range.topLeft != ref.range.bottomRight) {
+        m_view->setCursorCell(ref.range.bottomRight, /*extendSelection=*/true);
+    }
+}
+
+void CalcWindow::commitNameBox(const QString &text)
+{
+    if (text.isEmpty()) {
+        return;
+    }
+    // Name-box semantics, as in every other spreadsheet: a reference or an
+    // existing name navigates; anything else that is a legal name defines
+    // one over the current selection. The box used to accept single-cell
+    // references only and silently swallow everything else, which left
+    // named ranges with no way to be created at all.
+    const ParseResult parsed = parseFormula(text);
+    if (parsed.root && parsed.root->kind == Node::Kind::Ref) {
+        goToRange(parsed.root->ref);
+        return;
+    }
+    const auto existing = m_document->workbook()->namedRange(text.toUpper());
+    if (existing.has_value()) {
+        goToRange(*existing);
+        statusBar()->showMessage(tr("%1 = %2").arg(text.toUpper(),
+                                                   rangeRefText(*existing)), 5000);
+        return;
+    }
+    if (!isDefinableName(text)) {
+        statusBar()->showMessage(
+            tr("“%1” is not a cell reference or a usable name.").arg(text), 8000);
+        m_view->setFocus();
+        return;
+    }
+    RangeRef target;
+    target.range = m_view->selectionRange();
+    m_document->defineName(text, target);
+    statusBar()->showMessage(tr("Named %1 as “%2”")
+                                 .arg(rangeRefText(target), text.toUpper()), 5000);
+    m_view->setFocus();
+}
+
 void CalcWindow::commitInput(const CellAddr &addr, const QString &input)
 {
     m_document->applyInput(addr, input);
@@ -275,9 +356,11 @@ void CalcWindow::insertChart()
     spec.sheet = m_document->activeSheet();
     spec.anchorRow = cursor.row;
     spec.anchorCol = cursor.col;
-    wb->charts.append(spec);
-    m_document->setDirty(true);
-    rebuildChartWindows();
+    // Route through the document: snapshot + undo command + dirty + notify.
+    // Appending into Workbook::charts directly left chart insertion outside
+    // Ctrl+Z and outside the recovery journal. structureChanged() rebuilds
+    // the chart windows, so there is nothing to do here afterwards.
+    m_document->addChart(spec);
 #endif
 }
 
@@ -288,7 +371,12 @@ void CalcWindow::rebuildChartWindows()
     m_chartWindows.clear();
     const Workbook *wb = m_document->workbook();
     for (const CalcEng::ChartSpec &spec : wb->charts) {
-        auto *floating = new QWidget(this, Qt::Tool | Qt::WindowStaysOnTopHint);
+        // AGENT-GUARD (ADR-0117): a chart window is an ordinary Tool window.
+        // Size and position are set BEFORE show() and never touched after —
+        // the desktop's window containers own grouped geometry afterwards.
+        // No WindowStaysOnTopHint: forcing stacking fights the compositor
+        // and is not honoured on Wayland anyway.
+        auto *floating = new QWidget(this, Qt::Tool);
         floating->setWindowTitle(spec.title.isEmpty() ? tr("Chart") : spec.title);
         auto *layout = new QVBoxLayout(floating);
         layout->setContentsMargins(0, 0, 0, 0);
@@ -301,6 +389,35 @@ void CalcWindow::rebuildChartWindows()
 #endif
 }
 
+void CalcWindow::refreshChartWindows()
+{
+#ifdef QQO_WITH_CHARTS
+    const Workbook *wb = m_document->workbook();
+    if (m_chartWindows.size() != wb->charts.size()) {
+        // The chart list itself changed under us; a full rebuild is the only
+        // consistent answer (structureChanged normally gets here first).
+        rebuildChartWindows();
+        return;
+    }
+    for (int i = 0; i < m_chartWindows.size(); ++i) {
+        QWidget *floating = m_chartWindows.at(i);
+        if (floating == nullptr || floating->layout() == nullptr) {
+            continue;
+        }
+        // Swap only the chart widget: the window keeps its identity, its
+        // geometry and its place in whatever container the user put it in.
+        QLayout *layout = floating->layout();
+        while (QLayoutItem *item = layout->takeAt(0)) {
+            delete item->widget();
+            delete item;
+        }
+        const CalcEng::ChartSpec &spec = wb->charts.at(i);
+        floating->setWindowTitle(spec.title.isEmpty() ? tr("Chart") : spec.title);
+        layout->addWidget(chartWidgetFor(spec, *wb, floating));
+    }
+#endif
+}
+
 void CalcWindow::insertFileMenuActions(QMenu *fileMenu)
 {
     const QList<Shell::TemplateEntry> templates = Shell::templatesFor(QStringLiteral("QindaCalc"));
@@ -309,17 +426,49 @@ void CalcWindow::insertFileMenuActions(QMenu *fileMenu)
     }
     QMenu *submenu = fileMenu->addMenu(tr("New from &Template"));
     for (const Shell::TemplateEntry &entry : templates) {
-        submenu->addAction(entry.name, this, [this, path = entry.path] {
-            QString error;
-            if (m_document->load(path, &error)) {
-                m_document->adoptPath(QString());
-                m_document->setDirty(true);
-                rebuildSheetTabs();
-                m_view->refreshAll();
-                rebuildChartWindows();
+        QAction *item = submenu->addAction(entry.name);
+        // AGENT-GUARD: every menu command needs a stable objectName — the
+        // desktop global menu resolves activations exclusively by it, so an
+        // unnamed action is dead from the panel (AGENTS.md rule 5).
+        item->setObjectName(QStringLiteral("calcTemplate_%1").arg(sanitizedId(entry.name)));
+        connect(item, &QAction::triggered, this, [this, path = entry.path] {
+            // Loading a template replaces the workbook: ask first when the
+            // current one has unsaved changes (same contract as closing).
+            if (!confirmDiscardChanges()) {
+                return;
             }
+            QString error;
+            if (!m_document->load(path, &error)) {
+                // Fail honestly: the old code swallowed the error, so a
+                // broken template looked exactly like a no-op click.
+                statusBar()->showMessage(tr("Template failed: %1").arg(error), 8000);
+                return;
+            }
+            m_document->adoptPath(QString());
+            m_document->setDirty(true);
+            rebuildSheetTabs();
+            m_view->refreshAll();
+            rebuildChartWindows();
         });
     }
+}
+
+bool CalcWindow::confirmDiscardChanges()
+{
+    if (!m_document->isDirty()) {
+        return true;
+    }
+    const QMessageBox::StandardButton answer = QMessageBox::question(
+        this, tr("Unsaved Changes"),
+        tr("Loading the template discards unsaved changes to the current "
+           "workbook. Continue?"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Cancel);
+    if (answer == QMessageBox::Cancel) {
+        return false;
+    }
+    // A cancelled or failed save also cancels the template load.
+    return answer != QMessageBox::Save || saveDocument();
 }
 
 void CalcWindow::insertApplicationMenus(QMenu *before)
@@ -341,7 +490,17 @@ void CalcWindow::insertApplicationMenus(QMenu *before)
 
 QString CalcWindow::filterString() const
 {
-    return tr("Spreadsheets (*.xlsx);;CSV (*.csv);;All files (*)");
+    // Mirrors SpreadsheetDocument::mimeTypes() and the .desktop MimeType
+    // list: ods/xls open through the LibreOffice bridge.
+    return tr("Spreadsheets (*.xlsx *.ods *.xls *.xlsm);;CSV (*.csv *.tsv);;"
+              "All files (*)");
+}
+
+QString CalcWindow::saveFilterString() const
+{
+    // xlsx first: it is the native format, so Save As defaults to a
+    // round-trip that keeps formulas, styles, names and charts.
+    return tr("Excel Workbook (*.xlsx);;OpenDocument Spreadsheet (*.ods);;CSV (*.csv)");
 }
 
 } // namespace QindaOffice::Apps::QindaCalc

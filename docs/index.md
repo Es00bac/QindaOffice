@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # QindaQt Office documentation
 
 One page per library and application lands with its milestone; this index

@@ -20,6 +20,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QStandardPaths>
 #include <QStatusBar>
 #include <QTextEdit>
 #include <QToolBar>
@@ -58,8 +59,15 @@ void DocumentWindow::createActions()
 
     connect(m_actions.fileNew, &QAction::triggered, this, &DocumentWindow::newWindowRequested);
     connect(m_actions.fileOpen, &QAction::triggered, this, [this] {
+        // Open next to the current document (or in Documents) rather than in
+        // whatever directory the process happened to be launched from.
+        const QString current =
+            m_document != nullptr ? m_document->canonicalPath() : QString();
+        const QString startDir = current.isEmpty()
+            ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+            : QFileInfo(current).absolutePath();
         const QStringList paths =
-            QFileDialog::getOpenFileNames(this, tr("Open"), QString(), filterString());
+            QFileDialog::getOpenFileNames(this, tr("Open"), startDir, filterString());
         if (!paths.isEmpty()) {
             emit openPathsRequested(paths);
         }
@@ -229,6 +237,15 @@ void DocumentWindow::setDocumentHost(QWidget *widget, Core::Document *document)
                 [this] { scheduleJournalSnapshot(); });
     }
     setCentralWidget(widget);
+    // AGENT-GUARD: a real document host CAN save, so Save/Save As must leave
+    // the createStandardActions() "no engine yet" disabled state here. Only
+    // setDocument()'s PlainTextDocument branch used to enable them, and all
+    // four apps install their engine through setDocumentHost() instead — so
+    // File > Save, File > Save As, the toolbar Save button and Ctrl+S were
+    // dead in every app while saveDocument() itself worked fine (the close
+    // consent dialog's Save button reached it).
+    m_actions.fileSave->setEnabled(m_document != nullptr);
+    m_actions.fileSaveAs->setEnabled(m_document != nullptr);
     syncTitle();
 }
 

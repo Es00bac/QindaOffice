@@ -7,6 +7,8 @@ add_executable(qindacalc
     src/calc_find_bar.h
     src/calc_format_controller.cpp
     src/calc_format_controller.h
+    src/calc_recovery.cpp
+    src/calc_recovery.h
     src/calc_undo.cpp
     src/calc_undo.h
     src/calc_window.cpp

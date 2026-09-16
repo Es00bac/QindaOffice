@@ -64,4 +64,19 @@ private:
     bool m_probed = false;
 };
 
+// Blocking one-shot conversion for document load/save paths (the three apps
+// each grew a byte-identical private copy of this; it belongs next to the
+// converter). Runs a nested event loop — the conversion is a local
+// subprocess, so the UI stays responsive — bounded by a hard timeout so a
+// wedged soffice can never hang the window.
+//
+// `scratchDirName` is the private intermediate directory created beside the
+// input (".qindacalc-lo" and friends). Files INSIDE it are removed
+// afterwards; the user's own document is never touched.
+//
+// Returns the converted file's path, or {} with `error` set.
+[[nodiscard]] QString convertBlocking(const QString &inputPath,
+                                      const QString &targetExtension,
+                                      const QString &scratchDirName, QString *error);
+
 } // namespace QindaOffice::Core

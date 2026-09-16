@@ -149,6 +149,12 @@ void GlobalMenuExport::observeMenuTree()
     // property flips made right before a menu opens; QAction::changed covers
     // enable/checked/text changes made programmatically. Coalesced into one
     // snapshot per event-loop pass.
+    //
+    // AGENT-GUARD: Qt::UniqueConnection, because this runs again on every
+    // refresh(). Menus and actions created AFTER start() — the Open Recent
+    // items are destroyed and rebuilt on every open and save — were never
+    // observed, so their changes reached the panel only by accident and the
+    // exported tree drifted out of step with the window's own menu bar.
     QList<QMenu *> menus;
     for (QAction *titleAction : m_menuBar->actions()) {
         if (titleAction->menu() != nullptr) {
@@ -156,11 +162,13 @@ void GlobalMenuExport::observeMenuTree()
         }
     }
     for (QMenu *menu : menus) {
-        connect(menu, &QMenu::aboutToShow, this, &GlobalMenuExport::scheduleRefresh);
+        connect(menu, &QMenu::aboutToShow, this, &GlobalMenuExport::scheduleRefresh,
+                Qt::UniqueConnection);
     }
     const QList<QAction *> actions = m_menuBar->findChildren<QAction *>();
     for (QAction *action : actions) {
-        connect(action, &QAction::changed, this, &GlobalMenuExport::scheduleRefresh);
+        connect(action, &QAction::changed, this, &GlobalMenuExport::scheduleRefresh,
+                Qt::UniqueConnection);
     }
 }
 
@@ -174,6 +182,8 @@ void GlobalMenuExport::refresh()
     if (m_exporter == nullptr || m_server == nullptr) {
         return;
     }
+    // Pick up menus/actions added since the last pass before snapshotting.
+    observeMenuTree();
     const auto result = m_exporter->refresh();
     switch (result.outcome) {
     case QindaQt::Shell::GlobalMenu::Exporter::ExportOutcome::Published: {

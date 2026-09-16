@@ -98,6 +98,16 @@ void RecoveryJournal::writeNow(const QString &key, const QString &path, bool unt
                              << (path.isEmpty() ? key : path);
         return;
     }
+    // AGENT-GUARD: an EMPTY snapshot is not a recovery point. Engines whose
+    // recoverySnapshot() is still a stub (QindaCalc, QindaNote) return {},
+    // and writing those envelopes made every launch offer "Recover unsaved
+    // changes to X?" for an entry whose restore always fails — and the
+    // failed restore never cleared it, so the prompt returned forever.
+    // Drop any stale file for the key so the nag cannot survive a stub.
+    if (payload.isEmpty()) {
+        QFile::remove(fileFor(key));
+        return;
+    }
     QJsonObject envelope;
     envelope.insert(QStringLiteral("version"), 1);
     envelope.insert(QStringLiteral("key"), key);

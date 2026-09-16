@@ -5,6 +5,7 @@
 #include "cli_provider.h"
 #include "http_chat_provider.h"
 
+#include <QDebug>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -16,14 +17,36 @@ ModelCatalog::ModelCatalog(QString path, QObject *parent)
     , m_path(std::move(path))
 {
     QString error;
-    if (!load(&error)) {
-        QFile file(m_path);
-        if (file.open(QIODevice::WriteOnly)) {
-            file.write(seedDocument());
-            file.close();
-            load(nullptr);
-        }
+    if (load(&error)) {
+        return;
     }
+    // AGENT-GUARD: never seed ON TOP of an existing file. load() also fails
+    // for a corrupt or unreadable providers.json, and the old unconditional
+    // seed wrote over it — one JSON typo silently destroyed the user's
+    // endpoints, models and secret-key ids. Move the bad file aside (same
+    // contract as Core::JsonSettings) and seed a fresh one, so nothing is
+    // lost and the picker is not left permanently empty.
+    if (QFile::exists(m_path)) {
+        const QString aside = m_path + QStringLiteral(".corrupt");
+        QFile::remove(aside); // only ever an older quarantine of this file
+        if (!QFile::rename(m_path, aside)) {
+            qWarning().noquote() << "AI model catalog:" << m_path << "is unusable ("
+                                 << error << ") and could not be moved aside; "
+                                            "refusing to overwrite it";
+            return;
+        }
+        qWarning().noquote() << "AI model catalog:" << m_path << "was unusable (" << error
+                             << "); moved to" << aside << "and re-seeded";
+    }
+    QFile file(m_path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        qWarning().noquote() << "AI model catalog: cannot seed" << m_path
+                             << file.errorString();
+        return;
+    }
+    file.write(seedDocument());
+    file.close();
+    static_cast<void>(load(nullptr));
 }
 
 QByteArray ModelCatalog::seedDocument()
@@ -132,6 +155,16 @@ QStringList ModelCatalog::modelIds() const
         ids.append(config.id + QStringLiteral("/") + config.model);
     }
     return ids;
+}
+
+std::optional<ProviderConfig> ModelCatalog::configFor(const QString &modelId) const
+{
+    for (const ProviderConfig &config : m_providers) {
+        if (modelId == config.id || modelId == config.id + QStringLiteral("/") + config.model) {
+            return config;
+        }
+    }
+    return std::nullopt;
 }
 
 std::optional<ModelSpec> ModelCatalog::specFor(const QString &modelId) const
