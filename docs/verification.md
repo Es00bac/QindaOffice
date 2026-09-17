@@ -205,6 +205,68 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M21 the next tier, and the suite's launcher
+
+Automated by `tst_calc_rules`, `tst_calc_rules_ui`, `tst_write_review`,
+`tst_show_design`, `tst_note_blocks`, `tst_launcher` and the pristine-window
+cases now in all four app suites. Rationale in D-018b (open reuse), D-019
+(Calc rules), D-020 (Write document features), D-021 (Show design layer),
+D-022 (Note blocks) and D-023 (the launcher).
+
+**Opening.** A freshly created window of every app is pristine, so File ▸
+Open replaces its blank document instead of opening beside it; the window
+the Open came FROM is preferred; a window that has been typed into is never
+displaced.
+
+**QindaCalc.** A blank cell satisfies no comparison and an empty input is
+never refused. Two conditional formats compose field by field. A refused
+value emits `inputRejected` rather than vanishing. A filtered row leaves
+the grid entirely (the row below moves up into its place) and the header
+row is never hidden. Comments survive undo AND the recovery payload. All
+four rule kinds follow an inserted row.
+
+**QindaWrite.** Footnote markers number by document order and renumber when
+one is inserted in the middle; a note prints on its marker's page; an
+orphaned note is pruned. The contents lists headings with the page numbers
+the view paints, never lists itself, and Update replaces the table in
+place. A tracked insertion is rejectable and a tracked deletion is
+acceptable, exactly inverse. The ruler's markers describe the cursor's
+paragraph. Enter after a heading starts body text, and a Heading 1 at the
+very start does not push a blank page ahead of itself.
+
+**QindaShow.** A master really paints the background and supplies defaults
+only to runs that never chose. A half-played animation draws something that
+is neither the background nor the final fill. Snapping takes a candidate
+inside the threshold and nothing outside it, and does nothing when off. A
+group survives the fodp round trip. A multi-shape gesture is one undo step.
+
+**QindaNote.** Three kinds of block stack without overlapping, each as tall
+as its kind needs. A checklist item's text and tick reach the envelope. An
+image block carries its bytes, not a path.
+
+**Launcher.** Four distinct apps with distinct binaries and desktop ids;
+every suffix routes to the app that opens it and a suffix-less path to
+QindaNote; recents merge the four lists, skip files that are gone, and
+survive a `recent.json` that is not JSON without rewriting it; each card
+carries an accessible name and description.
+
+### M21 manual checklist (live desktop)
+
+- [ ] `gtk-launch org.qindaqt.QindaOffice` opens the launcher with four
+      mascots; clicking a card starts that app, and closing the launcher
+      leaves it running.
+- [ ] QindaCalc: colour a range by rule, put a list validation on a column
+      and try to type something else, filter a header row, hover a
+      commented cell.
+- [ ] QindaWrite: insert two footnotes and check the numbers on the page
+      and in the PDF; build a contents list and re-paginate; record a few
+      changes and accept half of them; drag the ruler's indent markers.
+- [ ] QindaShow: give the deck a master, animate a bullet and play it,
+      drag a shape near the slide centre and watch the guide, group two
+      shapes and move them.
+- [ ] QindaNote: add a checklist and an image, then print — the page prints
+      what the screen showed, in the same places.
+
 ### M20 office-suite completeness
 
 Automated by `tst_preferences`, `tst_calc_structure`, `tst_calc_ui`,

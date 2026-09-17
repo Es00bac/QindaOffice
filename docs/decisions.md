@@ -5,6 +5,206 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-023: The suite has a front door
+
+**Context.** Four apps and no way in. The desktop launcher listed them
+individually, so "open the thing I was working on" meant remembering which
+app owned it, starting that app, and finding the file in its own recent
+list. Nothing showed the suite as one thing.
+
+**Decision.** `qindaoffice` — a launcher, not a document window, so
+ADR-0110's one-document-per-window rule does not apply to it, but
+everything else does: an ordinary top-level window, the desktop identity
+pinned before it maps (rule 2), stock widgets and palette colours only
+(rule 3).
+
+It shows one painted card per app (mascot, name, what it is for) and the
+suite's recent documents merged from the four apps' own lists. It READS
+that state and never writes it: recents live in each app's config dir
+(rule 7, bounded persistence per app, never shared), so the launcher walks
+four files rather than introducing a shared one — a shared list is exactly
+the cross-app store that rule exists to prevent. A file it cannot parse is
+skipped, never rewritten, because it belongs to another app.
+
+Apps start DETACHED (`QProcess::startDetached`): the launcher is a front
+door, and closing it must not take the documents with it. A card for an app
+whose binary is missing says so instead of looking clickable and doing
+nothing, and a launch that fails says so in the status line — a launcher
+that silently does nothing is the worst possible front door.
+
+`AppCard` is painted rather than assembled from labels so the whole card is
+one hover and one click target and the mascot can be as large as it
+deserves. Painted widgets have no accessible identity for free, so each
+card sets its name and description explicitly.
+
+**Consequences.** The launcher links `office_core` only (for the per-app
+config paths) and never `office_shell`: it hosts no document, so pulling in
+the document frame — and the desktop's global-menu archives with it — would
+be dependency for its own sake. `appIdForPath` is the one place the suite
+decides which app owns a suffix; it mirrors what each app's own `load()`
+dispatches on, and the two must not drift.
+
+## D-022: A note page has three kinds of block, and one layout
+
+**Context.** A note page carried typed text only, stacked at a fixed 100 px
+per index, and the on-screen layout and the print layout each computed that
+stride for themselves. Adding checklists and images — blocks of different
+heights — made that duplication untenable: a layout computed twice is a
+layout that drifts, and the symptom is typed text printing somewhere the
+user never saw it.
+
+**Decision.** `note_blocks.h` decides where every block sits. The view
+positions widgets through it and the pure page renderer prints through it;
+neither computes geometry of its own. Checklist items are a checkbox plus
+an editable label that write back to the envelope on every change — the
+contract the text blocks already had. Images carry their BYTES, base64 in
+the page envelope, because a notebook page is one self-contained JSON file
+and a path reference breaks the moment the notebook moves; they are painted
+rather than hosted in a widget so they sit under the ink, and their height
+is bounded so one photograph cannot push everything else off the page.
+
+**Consequences.** A new block kind is a case in `layoutBlocks` plus a case
+in each of the two painters; nothing else needs to know. An unknown kind
+from a newer version is skipped rather than renumbering everything after it.
+
+## D-021: QindaShow's design layer is model state
+
+**Context.** M20 left QindaShow with one build effect ("appear"), no
+masters, no snapping and no grouping — the four things that separate a
+slide someone arranged from a slide someone typed into.
+
+**Decision.** All four are fields on the model, not scene constructs, so
+all four survive save and reload (through the fodp writer's qq: extension
+namespace) and undo like any other edit.
+
+* **Masters** carry the background and the default type. The RENDERER
+  applies them, so the editor canvas, the sorter thumbnails, the presenter
+  view, the player and the PDF all show the same deck. Only runs that never
+  chose for themselves inherit, so a deliberately red word stays red.
+* **Animations** are a per-shape kind and duration the renderer applies at
+  a progress value. The player tells a build advance from a slide change
+  and animates the arriving shapes rather than cross-fading two whole
+  frames — blending frames for a revealed bullet flashes everything else on
+  the slide. Reduced motion still means the shape is simply there.
+* **Snapping** works in slide points, not pixels, so the threshold means
+  the same at every zoom. Only the shape the pointer has hold of snaps: the
+  rest of a multi-selection follow it exactly, or a group gets pulled apart.
+* **Grouping** is a shape field. Selecting one member selects the group.
+
+**AGENT-GUARD.** `rebuildItems()` clears the scene, and
+`QGraphicsScene::clear()` fires `selectionChanged` WHILE the items are being
+destroyed — any listener that walks the item list then touches half-dead
+objects (two SIGSEGVs found by test). The rebuild blocks the scene's signals
+and emits one honest notification afterwards; a pure z-order change reorders
+the model and re-applies z values instead of rebuilding at all; and moving a
+shape's rect calls `prepareGeometryChange()` first, because the scene indexes
+items by bounding rect.
+
+**Consequences.** A gesture that touches several shapes now brackets itself
+(`compoundEditStarted`/`Finished`) and the window folds everything between
+into ONE `SlideStateCommand`. Anything that moves more than one shape must
+use that bracket, or it is one undo step per shape again.
+
+## D-020: QindaWrite's document-scale features, and two defects they found
+
+**Context.** Footnotes, a table of contents and tracked changes are the
+three things a word processor is expected to do that Qt's QTextDocument has
+no concept of at all.
+
+**Decision.**
+
+* **Footnotes** are two halves: a superscript MARKER carrying an id in the
+  body, and the note text beside the document keyed by that id. Numbering is
+  never stored — it is the marker's position in document order, recomputed
+  on every read, which is what makes inserting a note in the middle
+  renumber the rest. The notes print in the page's bottom margin band
+  through `drawPageDecoration`, which the screen view, the print path and
+  the PDF exporter all already call. Documented bound: the band is the
+  bottom margin, so a page shows about six short notes before the rest are
+  elided — a growing band needs per-page re-layout, which a single
+  QTextDocument flow cannot express.
+* **The table of contents** reads the document's own heading styles and
+  takes page numbers from the SAME `PageGeometry` the view paints with,
+  which is the only thing that makes printed page numbers worth printing.
+  Generated blocks carry `kTocBlockProperty` so Update replaces exactly the
+  previous table, and the table never lists itself.
+* **Tracked changes** are built from a char-format property per run.
+  Insertions are marked after the fact from `contentsChange`; deletions
+  cannot be (the text is already gone), so while recording the delete
+  gestures are intercepted on the view and turned into strikethrough marks
+  that stay until the change is resolved. Accept and reject are exact
+  inverses.
+* **The ruler** draws the page band at the view's own zoom and scroll
+  offset and carries the three indent markers, which write into the cursor
+  block's format. It numbers centimetres from the TEXT COLUMN: numbering
+  from the paper edge reads one margin out.
+
+**Two defects these surfaced.** Enter at the end of a heading kept writing
+in heading style, because Qt carries the block format forward — so
+everything after a heading was a heading, which is also why the contents
+listed body paragraphs. And Heading 1 forces a page break before it, so a
+document whose first paragraph is a Heading 1 opened with a blank page 1
+and every page number in it was one out; the break is now suppressed for
+the first block only.
+
+**Consequences.** Anything that walks fragments and rewrites them must do
+it from the END backwards — replacing a run changes every later position,
+so a forward pass edits at stale offsets. Both the footnote renumberer and
+the revision resolver say so at the loop.
+
+## D-019: QindaCalc's rules live in the engine
+
+**Context.** Conditional formatting, data validation, the autofilter and
+cell comments are the four things a spreadsheet says about a RANGE rather
+than about one cell's value. All four could have lived in the app.
+
+**Decision.** They live in `calc_engine` (`sheet_rules.h`) for the same
+reason the structural edits do: the grid, the printer and the
+crash-recovery payload have to evaluate them identically, and all four have
+to survive undo and move with the rows and columns they cover.
+
+* Conditional formats layer rule by rule, later rules winning field by
+  field, so "highlight the row" and "make negatives red" compose. They sit
+  over the cell's own style but under the selection, so a formatted block
+  never hides the cursor. A blank cell satisfies no comparison — treating
+  it as zero paints every empty cell of a "less than 10" rule.
+* Validation is enforced in `SpreadsheetDocument::applyInput`, the one path
+  every UI edit takes, so the in-cell editor, the formula bar, paste and the
+  AI apply are all covered. A refused value SAYS why; clearing a cell is
+  never refused, or a mistyped value cannot be taken back.
+* The autofilter hides a row by giving it no band at all: painting, the
+  header, hit-testing and scroll-into-view walk the same list, so a hidden
+  row is uniformly absent rather than painted blank.
+* Comments draw the usual corner triangle and show as a tooltip from the
+  VIEWPORT — tooltips never reach the scroll area itself.
+
+**Consequences.** `structure.cpp` moves all four with the rows and columns
+they cover, and `calc_undo`/`calc_recovery` carry them: a rule the payload
+does not carry is a rule the user loses on recovery, silently. A new rule
+kind has to be added in all three places or it is a defect.
+
+## D-018b: Open replaces the blank document you opened from
+
+**Context.** ADR-0110 already said a pristine untitled window may absorb an
+opened path, and `OfficeApplication` implemented it — but it never worked
+the way it read. QindaWrite's fresh window was never pristine, because
+`WriteDocument` marked itself dirty from `QTextDocument::contentsChange`,
+which also fires for FORMAT-only edits, and the spell checker is a
+`QSyntaxHighlighter` whose first pass runs while the window is still being
+built. And the reuse picked whichever blank window came first in the list,
+not the one the user pressed Open in.
+
+**Decision.** Dirty follows `QTextDocument`'s own modified flag — which is
+what "the user edited this" means — while `contentChanged` still fires for
+the recovery journal, but only when characters actually moved.
+`openPaths()` takes the requesting window and prefers it when it is
+pristine. A window that has been typed into is not pristine, so its content
+is never displaced: that open goes to a new window.
+
+**Consequences.** All four app suites assert that a freshly created window
+is pristine. Anything that dirties a document during window construction
+breaks pristine reuse silently, which is exactly how it broke.
+
 ## D-018: QindaWrite gains the typography a word processor is reached for
 
 **Context.** The Format menu covered bold/italic/underline/strikethrough,

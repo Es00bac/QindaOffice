@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=QindaQt Office
+GenericName=Office Suite
+Comment=Open a document, or start a new one in any of the four QindaQt Office apps
+Exec=qindaoffice
+Icon=org.qindaqt.QindaOffice
+Terminal=false
+Categories=Qt;Office;
+Keywords=office;write;calc;show;note;documents;
+StartupNotify=true
+StartupWMClass=qindaoffice

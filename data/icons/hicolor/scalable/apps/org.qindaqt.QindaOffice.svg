@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- QindaOffice: the suite's own front door — a little folder holding the
+     four apps, wearing the family face. Suite icon family: chunky ink
+     outline, flat fills, dot eyes + arc smile + blush, one signature prop,
+     a few degrees off square. No tile, no gradients — the colour block
+     carries the icon at panel sizes. The four card colours are the four
+     apps' own accents (write blue, calc green, show orange, note violet),
+     so the stack reads as "all of them" at a glance. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g fill="none" stroke="#3a3347" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">
+    <!-- The four app cards fanned out behind the folder. -->
+    <g transform="rotate(-3 32 30)">
+      <rect x="13" y="9" width="15" height="19" rx="2.6" fill="#6ea8fe" transform="rotate(-9 20.5 18.5)"/>
+      <rect x="24" y="7" width="15" height="19" rx="2.6" fill="#7fd6a8" transform="rotate(-3 31.5 16.5)"/>
+      <rect x="35" y="8" width="15" height="19" rx="2.6" fill="#ffd97d" transform="rotate(4 42.5 17.5)"/>
+      <rect x="44" y="11" width="13" height="18" rx="2.6" fill="#b9a2f0" transform="rotate(10 50.5 20)"/>
+    </g>
+    <!-- The folder itself, a few degrees off square. -->
+    <g transform="rotate(-4 32 40)">
+      <path d="M7 25.5 A4.5 4.5 0 0 1 11.5 21 H24 L28.5 26.5 H52.5 A4.5 4.5 0 0 1 57 31 V52.5 A4.5 4.5 0 0 1 52.5 57 H11.5 A4.5 4.5 0 0 1 7 52.5 Z" fill="#fffaf0"/>
+      <!-- The face. -->
+      <circle cx="19" cy="45" r="3" fill="#ff8fa3" opacity="0.5" stroke="none"/>
+      <circle cx="45" cy="45" r="3" fill="#ff8fa3" opacity="0.5" stroke="none"/>
+      <circle cx="25" cy="40" r="2.2" fill="#3a3347" stroke="none"/>
+      <circle cx="39" cy="40" r="2.2" fill="#3a3347" stroke="none"/>
+      <path d="M27 46.4 Q32 50.4 37 46.4" stroke-width="1.9"/>
+    </g>
+  </g>
+</svg>

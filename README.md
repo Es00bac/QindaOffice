@@ -11,15 +11,16 @@ so the desktop's window containers group them into tabs and splits:
 | **QindaCalc** | `qindacalc` | Spreadsheet (M2/M3) |
 | **QindaShow** | `qindashow` | Presentation editor + player (M8/M9) |
 | **QindaNote** | `qindanote` | Notes with pen input (M7) |
+| **QindaOffice** | `qindaoffice` | The suite's launcher: a card per app and the recent documents of all four |
 
 Every app carries an AI assistant panel and inline AI actions (M6) that run
 through your existing Claude / Codex / Kimi CLI subscriptions or any
 OpenAI-/Anthropic-compatible HTTP endpoint, including local models.
 
-**Status: M0.** The repository skeleton builds and tests green; the four
-apps launch as real QindaQt windows with the shipping menu structure and
-per-window global-menu export. Document engines land milestone by milestone
-(see `docs/` and the plan referenced in `AGENTS.md`).
+**Status: M21.** All four apps are working office applications with their
+document engines, editing depth and settings; the launcher is the suite's
+front door. See `docs/index.md` for what each part does today, and
+`docs/decisions.md` for the durable choices behind it.
 
 ## Building
 
@@ -38,8 +39,8 @@ emerged (used by M10).
 ## Installing
 
 `packaging/gentoo/` holds the ebuild for the `qindaqt` overlay
-(`gui-apps/qindaoffice`); it installs the four binaries, the desktop files,
-icons, and the shared-mime-info package. See `docs/verification.md` for the
+(`gui-apps/qindaoffice`); it installs the four apps plus the launcher, the
+desktop files, icons, and the shared-mime-info package. See `docs/verification.md` for the
 on-desktop checklist (containers, panel menu, single instance).
 
 ## License
