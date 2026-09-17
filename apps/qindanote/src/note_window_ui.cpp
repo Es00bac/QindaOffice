@@ -173,7 +173,7 @@ void NoteWindow::replaceAcrossNotebook()
     // are live QTextEdits that write themselves back into blocksJson, so a
     // rewrite underneath them would be overwritten by the next keystroke —
     // and the view would still show the pre-replace text.
-    persistCurrentPage();
+    flushPersist();
     const QString sectionId = m_currentSectionId;
     const QString pageId = m_currentPageId;
     m_view->setPage(nullptr);
@@ -313,9 +313,31 @@ void NoteWindow::updatePageStatus()
                 index = i + 1;
             }
         }
-        info = tr("%1 — page %2 of %3").arg(section->name).arg(index).arg(section->pages.size());
+        // The active tool and its width ride the status field: on a pen
+        // surface the toolbar is often hidden, and "which pen, how thick"
+        // is the one thing you cannot tell from the page.
+        QString tool;
+        switch (m_view->tool()) {
+        case NoteTool::Pen:
+            tool = tr("Pen %1").arg(m_view->penWidth());
+            break;
+        case NoteTool::Highlighter:
+            tool = tr("Highlighter %1").arg(m_view->highlighterWidth());
+            break;
+        case NoteTool::Eraser:
+            tool = tr("Eraser %1").arg(m_view->eraserRadius());
+            break;
+        case NoteTool::Text:
+            tool = tr("Text");
+            break;
+        }
+        info = tr("%1 — page %2 of %3 · %4 · Zoom %5 %")
+                   .arg(section->name)
+                   .arg(index)
+                   .arg(section->pages.size())
+                   .arg(tool)
+                   .arg(qRound(m_view->zoom() * 100));
     }
-    info += tr("   Zoom: %1%").arg(qRound(m_view->zoom() * 100));
     setStatusInfo(info);
 }
 
@@ -329,7 +351,7 @@ void NoteWindow::exportPdf()
     if (path.isEmpty()) {
         return;
     }
-    persistCurrentPage();
+    flushPersist();
     // The SAME paginating callback Print and Print Preview use, so paper,
     // preview and PDF cannot drift apart (plan 5.2).
     if (Shell::PrintHelper::exportPdf(this, path, printRenderCallback())) {
@@ -360,7 +382,15 @@ void NoteWindow::wireAssistant()
 
 void NoteWindow::applyPreferences()
 {
-    m_view->setZoom(Shell::Preferences::instance().defaultZoomPercent() / 100.0);
+    const Shell::Preferences &prefs = Shell::Preferences::instance();
+    m_view->setZoom(prefs.defaultZoomPercent() / 100.0);
+    // The Notes page's pen behaviour (D-014: every key is read by exactly
+    // this code).
+    m_view->setPressureEnabled(prefs.notePressureEnabled());
+    const QString smoothing = prefs.noteSmoothing();
+    m_view->setStrokeSmoothing(smoothing == QLatin1String("off") ? 0.0
+                               : smoothing == QLatin1String("strong") ? 0.5
+                                                                      : 0.25);
     updatePageStatus();
 }
 

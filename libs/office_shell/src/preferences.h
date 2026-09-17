@@ -70,6 +70,14 @@ public:
     [[nodiscard]] bool spellCheckEnabled() const;
     void setSpellCheckEnabled(bool on);
 
+    // QindaNote's pen behaviour (M22; the Notes preferences page writes
+    // them, NoteWindow::applyPreferences reads them into the page view).
+    [[nodiscard]] bool notePressureEnabled() const;
+    void setNotePressureEnabled(bool on);
+    // "off" | "light" (default) | "strong" — anything else reads as light.
+    [[nodiscard]] QString noteSmoothing() const;
+    void setNoteSmoothing(const QString &mode);
+
 signals:
     // One signal for the whole store: consumers re-read what they care
     // about. Keeping it coarse means a new key cannot forget its signal.

@@ -7,12 +7,23 @@
 
 #include "stroke_model.h"
 
+#include <QSet>
+
 class QPainter;
 
 namespace QindaOffice::Ink {
 
-// Paints one stroke; clips to `clip` when non-empty.
+// Paints one stroke as a filled, antialiased outline; clips to `clip` when
+// non-empty. The highlighter fills at a fixed alpha as ONE path, so its
+// joints cannot double-paint into blobs.
 void renderStroke(QPainter *painter, const Stroke &stroke, const QRectF &clip = {});
+
+// Paints a layer in document order within two passes — highlighters first,
+// then pen strokes — so highlighting over ink keeps the pen readable, on
+// screen and in print. `visible` (indices, e.g. from SpatialGrid::query)
+// restricts what is drawn; nullptr draws everything.
+void renderStrokes(QPainter *painter, const QVector<Stroke> &strokes,
+                   const QSet<int> *visible = nullptr);
 
 struct PageEnvelope {
     QString id;

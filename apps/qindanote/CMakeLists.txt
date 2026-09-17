@@ -7,8 +7,15 @@ add_executable(qindanote
     src/note_page_render.h
     src/note_blocks.cpp
     src/note_blocks.h
+    src/note_ink_actions.cpp
+    src/note_ink_actions.h
     src/note_page_blocks.cpp
+    src/note_page_history.cpp
+    src/note_page_history.h
+    src/note_page_input.cpp
     src/note_page_view.cpp
+    src/note_preferences_page.cpp
+    src/note_preferences_page.h
     src/note_structure.cpp
     src/note_structure.h
     src/note_page_view.h

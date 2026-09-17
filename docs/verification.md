@@ -56,6 +56,40 @@ Added per milestone in the milestone commit (formula tables, xlsx
 round-trips, fodp→pptx conversion, provider smoke tests, pen-input checks,
 presenter-view-on-second-screen, reduced-motion, packaging).
 
+### M22 pen gates (automated: `tst_stroke_edit`, `tst_note_input`, `tst_note_ui`)
+
+- office_ink: a pen outline follows its pressure width with round caps;
+  the highlighter outline ignores pressure (constant width, flat caps);
+  the stroke-mode eraser removes whole strokes and reports misses (no
+  phantom undo step); the partial eraser splits a stroke at the gap and
+  drops fragments under two samples; a pen stroke crossing a highlighter
+  reads as the pen colour (highlighter under ink, one translucent fill).
+- App: the eraser acts DURING the drag (stroke gone before release); one
+  undo step per eraser gesture and none for an empty swipe; a held barrel
+  MiddleButton borrows the eraser and reverts on release; a 20-sample
+  stroke repaints only segment-sized rects (never the whole page); the
+  page stays white under a dark palette (D-004 pin); P/H/E switch tools
+  and type into a focused find field instead of switching; three quick
+  edits coalesce into one debounced page write; the strip is icon-only
+  for the shipped glyphs and keeps every command visible squeezed to a
+  third of the window width.
+
+Manual (QindaQt desktop, tablet):
+
+- [ ] Pressure looks right (thin at a light touch, swelling under
+      pressure); Settings ▸ Preferences ▸ Notes ▸ "Pen pressure changes
+      width" off → uniform width; smoothing Off/Light/Strong felt.
+- [ ] No lag at 5 000 strokes; a palm resting on the screen does nothing.
+- [ ] Highlighter sits under pen ink; the eraser ring cursor tracks
+      radius × zoom; the stylus eraser end and the barrel button erase
+      while held and revert on release.
+- [ ] Dark theme: the page is white, ink readable; strip icons legible at
+      16 px on light and dark toolbars.
+- [ ] Single-letter shortcuts switch tools; with the navigator TREE
+      focused a letter switches tools instead of keyboard-searching (the
+      tree does not take ShortcutOverride — accepted, D-026); Esc returns
+      to Pen; Ctrl+wheel and the zoom combo agree.
+
 ### M11 UI completeness (automated: `tst_write_ui`)
 
 - Main + formatting toolbars exist with persistent named actions

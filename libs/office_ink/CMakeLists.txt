@@ -11,6 +11,10 @@ add_library(office_ink STATIC
     src/spatial_grid.h
     src/stroke_builder.cpp
     src/stroke_builder.h
+    src/stroke_edit.cpp
+    src/stroke_edit.h
+    src/stroke_geometry.cpp
+    src/stroke_geometry.h
     src/stroke_model.cpp
     src/stroke_model.h
 )

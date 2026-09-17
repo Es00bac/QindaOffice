@@ -41,10 +41,19 @@ void paintBackground(QPainter *painter, const QString &background, const QRectF 
 // AGENT-CONTRACT: the layout comes from note_blocks.h, the SAME function
 // the screen view positions its widgets with. Computing it twice is how
 // printed text ends up somewhere the user never saw it.
-void paintBlocks(QPainter *painter, const QByteArray &blocksJson, const QRectF &page)
+//
+// Render order (AGENT-GUARD: identical to NotePageView::paintEvent, so the
+// printer and the screen cannot drift): background → image blocks →
+// text/checklist blocks → highlighter strokes → pen strokes. Ink sits
+// above typed text: annotating notes is the point.
+void paintBlocks(QPainter *painter, const QByteArray &blocksJson, const QRectF &page,
+                 PageBlock::Kind only)
 {
     painter->setPen(QColor(0x20, 0x20, 0x28));
     for (const PageBlock &block : layoutBlocks(blocksJson, page.width())) {
+        if (block.kind != only) {
+            continue;
+        }
         const QRectF box = block.rect.translated(page.topLeft());
         switch (block.kind) {
         case PageBlock::Kind::Text:
@@ -89,11 +98,11 @@ void renderNotePage(QPainter *painter, const NotePage &page, const QSizeF &pageS
     paintBackground(painter, page.envelope.background, rect);
     painter->save();
     painter->setClipRect(rect);
-    for (const Ink::Stroke &stroke : page.envelope.ink.strokes()) {
-        Ink::renderStroke(painter, stroke);
-    }
+    paintBlocks(painter, page.envelope.blocksJson, rect, PageBlock::Kind::Image);
+    paintBlocks(painter, page.envelope.blocksJson, rect, PageBlock::Kind::Text);
+    paintBlocks(painter, page.envelope.blocksJson, rect, PageBlock::Kind::Check);
+    Ink::renderStrokes(painter, page.envelope.ink.strokes());
     painter->restore();
-    paintBlocks(painter, page.envelope.blocksJson, rect);
 }
 
 } // namespace QindaOffice::Apps::Notes

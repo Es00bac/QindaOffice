@@ -2,6 +2,7 @@
 #include "note_window.h"
 
 #include "note_find_bar.h"
+#include "note_ink_actions.h"
 #include "note_page_render.h"
 #include "note_page_view.h"
 #include "note_structure.h"
@@ -25,6 +26,7 @@
 #include <QStandardPaths>
 #include <QScrollArea>
 #include <QStatusBar>
+#include <QTimer>
 #include <QToolBar>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -114,16 +116,30 @@ NoteWindow::NoteWindow()
     m_findBar->hide();
     stack->addWidget(m_findBar, 0);
 
+    // The Ink commands exist before the strip and the menus: both hang off
+    // the same actions (rule 5: one command = one action).
+    m_inkActions = new NoteInkActions(this, m_view);
     Shell::WrappingToolBar *tools = buildToolStrip();
     setDocumentHost(central, m_document);
     Shell::WrappingToolBar *mainToolBar = addMainToolBar();
     Q_UNUSED(mainToolBar);
-    addToolBar(Qt::LeftToolBarArea, tools);
+    addToolBar(Qt::TopToolBarArea, tools);
 
+    // Per-keystroke page writes are debounced (defect T10: every keystroke
+    // and every stroke rewrote the whole page JSON, base64 images and
+    // all). The recovery journal covers the window in between; flushPersist()
+    // forces the write at the points where it must not lag (page switch,
+    // export, replace sweep, close).
+    m_persistTimer = new QTimer(this);
+    m_persistTimer->setSingleShot(true);
+    m_persistTimer->setInterval(500);
+    connect(m_persistTimer, &QTimer::timeout, this, &NoteWindow::persistCurrentPage);
     connect(m_view, &NotePageView::pageEdited, this, [this] {
         m_document->setDirty(true);
-        persistCurrentPage();
+        m_persistTimer->start();
     });
+    connect(m_view, &NotePageView::presentationChanged, this,
+            [this] { updatePageStatus(); });
     connect(m_navigator, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *item, QTreeWidgetItem *) {
                 if (item == nullptr) {
@@ -142,7 +158,9 @@ NoteWindow::NoteWindow()
                 if (section == nullptr || page == nullptr) {
                     return;
                 }
-                persistCurrentPage();
+                // The outgoing page's debounced write must land before the
+                // ids move on, or its last 500 ms of edits never reach disk.
+                flushPersist();
                 // AGENT-GUARD: read from disk ONLY for a page that has not
                 // been loaded yet. Re-reading a loaded page threw away edits
                 // that had not reached disk, and an untitled notebook has no
@@ -185,7 +203,20 @@ NoteWindow::NoteWindow()
     finalizeAppMenuHooks();
 }
 
-NoteWindow::~NoteWindow() = default;
+NoteWindow::~NoteWindow()
+{
+    // A debounced write that never fired would silently drop the last half
+    // second of edits; land it while the notebook is still fully alive.
+    flushPersist();
+}
+
+void NoteWindow::flushPersist()
+{
+    if (m_persistTimer != nullptr && m_persistTimer->isActive()) {
+        m_persistTimer->stop();
+        persistCurrentPage();
+    }
+}
 
 void NoteWindow::setCurrentIds(const QString &sectionId, const QString &pageId)
 {
@@ -332,6 +363,13 @@ void NoteWindow::rebuildNavigator()
 
 void NoteWindow::insertApplicationMenus(QMenu *before)
 {
+    // &Ink before &Page (plan section 3.2's menu row); both before the AI
+    // anchor the shell hands us.
+    auto *inkMenu = new QMenu(tr("&Ink"), this);
+    inkMenu->setObjectName(QStringLiteral("noteInkMenu"));
+    menuBar()->insertMenu(before->menuAction(), inkMenu);
+    m_inkActions->populateInkMenu(inkMenu);
+
     auto *pageMenu = new QMenu(tr("&Page"), this);
     pageMenu->setObjectName(QStringLiteral("notePageMenu"));
     menuBar()->insertMenu(before->menuAction(), pageMenu);

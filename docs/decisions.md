@@ -5,6 +5,64 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-026: Ink is filled geometry, the eraser is live, and pen state is window-independent
+
+**Context.** QindaNote's M22 pen overhaul (`docs/plans/qindanote-ux-overhaul.md`).
+Ink was drawn segment by segment with `drawLine`: no antialiasing anywhere,
+the highlighter's width multiplier was dead code overwritten inside the
+loop, and a translucent stroke double-painted every joint into blobs. The
+eraser did nothing until pen-up, pushed an undo snapshot even when it
+erased nothing, and scanned the whole layer per sample. Colour needed a
+modal dialog, the tool strip was a column of text buttons down the left,
+every keystroke rewrote the page JSON, and pen state was forgotten on
+restart. The page also followed `palette().base()`, so a dark theme hid
+the default black pen (the exact bug D-004 pinned out of QindaWrite).
+
+**Decision.**
+
+- Strokes are **filled outline paths** (`office_ink/stroke_geometry`):
+  midpoint-quadratic smoothed centreline, walked at ≤ 2 page-unit steps and
+  offset by ±width/2 — `widthAt()` pressure width for Pen, constant
+  `stroke.width` for Highlighter; round caps for Pen, flat for Highlighter.
+  `renderStroke` fills one path with antialiasing set inside the function,
+  so every caller gets smooth ink. The highlighter fills at alpha 90 as ONE
+  path (no joint blobs), and `renderStrokes` paints in two passes —
+  highlighters first, then pens — so highlighting over ink keeps the pen
+  readable. Screen and print use the same render order (background →
+  images → blocks → highlighter → pen); the page itself is pinned white
+  per D-004.
+- The eraser is **live**: `Ink::eraseAt` runs on every press/move sample
+  against spatial-grid candidates (whole-stroke mode, or partial mode that
+  drops samples and splits at gaps). One undo command per gesture, pushed
+  at release only when something actually changed. Repaints are narrowed
+  to the touched rect, inking repaints only the fresh segment.
+- The page history is **one QUndoStack** (`note_page_history`) replacing
+  the two hand-rolled snapshot vectors; M22 wires `InkCommand` only, M23
+  adds blocks/background commands to the same stack.
+- Tools, colours, widths and eraser options are **one action set** shared
+  by the `&Ink` menu and the strip's two popup buttons (rule 5: the strip
+  never clones a menu action). The strip moved to the top area and is
+  icon-only through shipped `draw-*` glyphs (D-013); Undo/Redo left it
+  (they are on the main toolbar).
+- Per-tool state is **state, not preference** (`tools.json` in the app's
+  state dir): last tool, colours, widths, eraser mode/size change every
+  few seconds and no dialog should claim them. Preferences gains exactly
+  two note keys — `note/pressure`, `note/smoothing` — both read by the
+  view (D-014). Position smoothing itself is a render-time EMA in
+  `StrokeBuilder`; stored samples are never rewritten.
+- Page writes are debounced (500 ms) with a synchronous flush at page
+  switch, export, the replace sweep and close; the recovery journal
+  already covers the window in between.
+
+**Consequences.** An M21 notebook opens unchanged and saves byte-identical
+until edited (no format keys were touched). The stylus barrel button
+borrows the eraser for one gesture (MiddleButton; RightButton becomes the
+M24 lasso). Single-letter tool shortcuts (P/H/E/T) work because text
+editors accept `ShortcutOverride` for printable keys; the navigator tree
+does not, so a letter with the tree focused switches tools instead of
+keyboard-searching — accepted and documented in `docs/verification.md`.
+D-009's zoom-as-view-transform stands unchanged.
+
 ## D-025: The package ships runtime files only
 
 **Context.** `make install` exported the suite's insides: seven static

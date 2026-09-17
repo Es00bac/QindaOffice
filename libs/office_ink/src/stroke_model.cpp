@@ -7,6 +7,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include <algorithm>
+#include <functional>
+
 namespace QindaOffice::Ink {
 
 namespace {
@@ -79,6 +82,28 @@ bool StrokeLayer::removeAt(const QPointF &pos, qreal tolerance)
 void StrokeLayer::clear()
 {
     m_strokes.clear();
+}
+
+void StrokeLayer::removeIndices(const QVector<int> &indices)
+{
+    QVector<int> sorted = indices;
+    std::sort(sorted.begin(), sorted.end(), std::greater<int>());
+    for (const int index : sorted) {
+        if (index >= 0 && index < m_strokes.size()) {
+            m_strokes.remove(index);
+        }
+    }
+}
+
+void StrokeLayer::replaceStroke(int index, const QVector<Stroke> &fragments)
+{
+    if (index < 0 || index >= m_strokes.size()) {
+        return;
+    }
+    m_strokes.remove(index);
+    for (int i = fragments.size() - 1; i >= 0; --i) {
+        m_strokes.insert(index, fragments.at(i));
+    }
 }
 
 QRectF StrokeLayer::bounds() const

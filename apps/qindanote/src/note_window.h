@@ -12,6 +12,7 @@
 #include "print_helper.h"
 
 class QScrollArea;
+class QTimer;
 class QToolButton;
 class QTreeWidget;
 
@@ -28,6 +29,7 @@ namespace QindaOffice::Apps::Notes {
 
 class NotePageView;
 class NoteFindBar;
+class NoteInkActions;
 class NoteStructureActions;
 
 class NoteDocument final : public Core::Document {
@@ -84,11 +86,12 @@ public:
 
 protected:
     void insertApplicationMenus(QMenu *before) override;
+    void addPreferencePages(Shell::PreferencesDialog *dialog) override;
     void applyPreferences() override;
     QString filterString() const override;
 
 private:
-    // The left tool strip (note_tool_strip.cpp).
+    // The top tool strip (note_tool_strip.cpp).
     [[nodiscard]] Shell::WrappingToolBar *buildToolStrip();
     // Status bar, navigator context menu, edit commands and the AI dock
     // (note_window_ui.cpp).
@@ -102,6 +105,11 @@ private:
     void replaceAcrossNotebook();
     void rebuildNavigator();
     void persistCurrentPage();
+    // Writes the current page NOW when the debounce timer has one pending
+    // (page switch, export, replace sweep, close). M22 debounces the
+    // per-keystroke page writes (500 ms) — every keystroke rewriting the
+    // page JSON, base64 images and all, was defect T10.
+    void flushPersist();
     // AGENT-GUARD: the window holds section/page IDS, never pointers — the
     // notebook's QVectors reallocate on every append/load and a stale
     // pointer was use-after-free (and once wrote garbage-named page files).
@@ -118,8 +126,10 @@ private:
     NotePageView *m_view;
     QTreeWidget *m_navigator;
     NoteFindBar *m_findBar = nullptr;
+    NoteInkActions *m_inkActions = nullptr;
     NoteStructureActions *m_structure = nullptr;
     class QScrollArea *m_scroll = nullptr;
+    QTimer *m_persistTimer = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;
     Ai::AssistantPanel *m_panel = nullptr;
     QString m_currentSectionId;

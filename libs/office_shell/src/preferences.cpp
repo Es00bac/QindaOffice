@@ -19,6 +19,8 @@ constexpr QLatin1StringView kAutoSaveMinutes("files.autoSaveMinutes");
 constexpr QLatin1StringView kFontFamily("document.fontFamily");
 constexpr QLatin1StringView kFontSize("document.fontSize");
 constexpr QLatin1StringView kSpellCheck("write.spellCheck");
+constexpr QLatin1StringView kNotePressure("note/pressure");
+constexpr QLatin1StringView kNoteSmoothing("note/smoothing");
 
 } // namespace
 
@@ -123,6 +125,33 @@ bool Preferences::spellCheckEnabled() const
 void Preferences::setSpellCheckEnabled(bool on)
 {
     put(kSpellCheck, on);
+}
+
+bool Preferences::notePressureEnabled() const
+{
+    return m_settings->value(kNotePressure, true).toBool();
+}
+
+void Preferences::setNotePressureEnabled(bool on)
+{
+    put(kNotePressure, on);
+}
+
+QString Preferences::noteSmoothing() const
+{
+    const QString stored =
+        m_settings->value(kNoteSmoothing, QStringLiteral("light")).toString();
+    return (stored == QLatin1String("off") || stored == QLatin1String("strong"))
+        ? stored
+        : QStringLiteral("light");
+}
+
+void Preferences::setNoteSmoothing(const QString &mode)
+{
+    put(kNoteSmoothing,
+        (mode == QLatin1String("off") || mode == QLatin1String("strong"))
+            ? mode
+            : QStringLiteral("light"));
 }
 
 } // namespace QindaOffice::Shell

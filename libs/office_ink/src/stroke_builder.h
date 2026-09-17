@@ -26,11 +26,16 @@ public:
     qreal minDistance = 1.5;    // px between kept samples
     qreal maxJump = 24.0;       // px; jumps beyond get an interpolated point
     qreal pressureSmoothing = 0.35; // low-pass factor for new samples
+    // Exponential moving average on the POSITION, applied before the
+    // min-distance test (Preferences note/smoothing: 0 off, 0.25 light,
+    // 0.5 strong). Smooths the wobble of a fast hand; 0 keeps raw input.
+    qreal positionSmoothing = 0.0;
 
 private:
     Stroke m_stroke;
     bool m_active = false;
     qreal m_lastPressure = 0.5;
+    QPointF m_lastPos;
 };
 
 } // namespace QindaOffice::Ink

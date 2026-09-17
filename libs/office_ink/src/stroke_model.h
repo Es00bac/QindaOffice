@@ -42,6 +42,12 @@ public:
     bool removeAt(const QPointF &pos, qreal tolerance);
     [[nodiscard]] const Stroke *strokeAt(const QPointF &pos, qreal tolerance) const;
     void clear();
+    // Indexed surgery for stroke_edit (erase/split now, selection ops in
+    // M24): indices follow strokes(). removeIndices keeps the survivors'
+    // order; replaceStroke puts the fragments in the removed stroke's slot
+    // (empty = plain removal), so z-order never shuffles under the eraser.
+    void removeIndices(const QVector<int> &indices);
+    void replaceStroke(int index, const QVector<Stroke> &fragments);
 
     [[nodiscard]] QRectF bounds() const;
     [[nodiscard]] QByteArray toJson() const;
