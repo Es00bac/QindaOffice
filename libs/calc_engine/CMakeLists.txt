@@ -55,6 +55,3 @@ target_link_libraries(calc_engine PUBLIC Qt6::Core)
 
 qqo_set_strict_warnings(calc_engine)
 
-install(TARGETS calc_engine ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(DIRECTORY src/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/qindaoffice/calc_engine
-    FILES_MATCHING PATTERN "*.h")

@@ -19,7 +19,7 @@ IUSE="+charts +libreoffice"
 # immutable snapshot rather than a download. The operator produces the
 # archive from the exact reviewed commit with the tree's own script:
 #
-#     tools/make-dist.sh 0.1.0_p20260917-r1 /var/cache/distfiles
+#     tools/make-dist.sh 0.1.0_p20260917-r2 /var/cache/distfiles
 #
 # That script refuses to run on a dirty tree and vendors the QXlsx
 # submodule INTO the tarball, which is what makes the build work under

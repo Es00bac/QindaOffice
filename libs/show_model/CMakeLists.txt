@@ -28,6 +28,3 @@ target_link_libraries(show_model PUBLIC Qt6::Core Qt6::Gui KF6::Archive)
 
 qqo_set_strict_warnings(show_model)
 
-install(TARGETS show_model ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(DIRECTORY src/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/qindaoffice/show_model
-    FILES_MATCHING PATTERN "*.h")

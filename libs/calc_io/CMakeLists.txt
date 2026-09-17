@@ -22,6 +22,3 @@ target_link_libraries(calc_io
 
 qqo_set_strict_warnings(calc_io)
 
-install(TARGETS calc_io ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(DIRECTORY src/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/qindaoffice/calc_io
-    FILES_MATCHING PATTERN "*.h")

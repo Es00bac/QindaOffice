@@ -25,6 +25,3 @@ target_link_libraries(office_ink PUBLIC Qt6::Core Qt6::Gui)
 
 qqo_set_strict_warnings(office_ink)
 
-install(TARGETS office_ink ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(DIRECTORY src/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/qindaoffice/office_ink
-    FILES_MATCHING PATTERN "*.h")

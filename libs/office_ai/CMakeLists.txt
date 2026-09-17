@@ -45,6 +45,3 @@ target_link_libraries(office_ai
 
 qqo_set_strict_warnings(office_ai)
 
-install(TARGETS office_ai ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(DIRECTORY src/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/qindaoffice/office_ai
-    FILES_MATCHING PATTERN "*.h")

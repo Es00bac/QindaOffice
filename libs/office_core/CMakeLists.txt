@@ -35,6 +35,3 @@ target_link_libraries(office_core PUBLIC Qt6::Core Qt6::Gui)
 
 qqo_set_strict_warnings(office_core)
 
-install(TARGETS office_core ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(DIRECTORY src/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/qindaoffice/office_core
-    FILES_MATCHING PATTERN "*.h")

@@ -272,6 +272,22 @@ network access at all — Portage's default `FEATURES` include
 - [ ] `packaging/gentoo/gui-apps/qindaoffice/` and the `qindaqt` overlay
       hold the SAME ebuild. The in-repo copy is the source; a drift means
       the overlay is packaging something the tree does not describe.
+- [ ] The install image contains **no** `.a`, `.so*`, `.h` or `.cmake`
+      files (D-025). Check against an eclass-like configure, not the dev
+      preset — `cmake.eclass` forces `BUILD_SHARED_LIBS=ON`, so a build
+      that is static locally can still ship a shared library under
+      Portage:
+
+      ```
+      cmake -S . -B /tmp/ic -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib64
+      cmake --build /tmp/ic && DESTDIR=/tmp/img cmake --install /tmp/ic
+      find /tmp/img \( -name '*.a' -o -name '*.so*' -o -name '*.h' \
+                     -o -name '*.cmake' \) | wc -l     # must be 0
+      ```
+- [ ] `ldd` on the installed `qindacalc` names no `libQXlsxQt6`: the
+      vendored copy must be linked in, not planted in `/usr/lib64`.
 
 ### M21 manual checklist (live desktop)
 

@@ -86,6 +86,3 @@ target_link_libraries(office_shell
 
 qqo_set_strict_warnings(office_shell)
 
-install(TARGETS office_shell ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(DIRECTORY src/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/qindaoffice/office_shell
-    FILES_MATCHING PATTERN "*.h")

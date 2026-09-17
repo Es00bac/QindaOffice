@@ -34,7 +34,18 @@ endif()
 # xlsx reader/writer for calc_io (M3). Vendored code is exempt from the
 # source-shape rules; built as a static library here so a broken submodule
 # is caught at M0 instead of at M3. Nothing links it until calc_io lands.
-add_subdirectory(third_party/QXlsx/QXlsx)
+#
+# AGENT-GUARD: BUILD_SHARED_LIBS is forced OFF for the vendored copy, as a
+# NORMAL variable so it shadows the cache. Gentoo's cmake.eclass sets
+# `BUILD_SHARED_LIBS ON CACHE BOOL ""` for every package it builds, which
+# silently turned this into /usr/lib64/libQXlsxQt6.so.1 — a vendored
+# library installed under the same SONAME a system-wide QXlsx would use,
+# ready to collide with one. Static, it links into calc_io and installs
+# nothing. EXCLUDE_FROM_ALL drops its install() rules too; QXlsx has no
+# option to disable them, and its headers and CMake package config are of
+# no use to anyone once it is a private implementation detail.
+set(BUILD_SHARED_LIBS OFF)
+add_subdirectory(third_party/QXlsx/QXlsx EXCLUDE_FROM_ALL)
 
 # Strict warnings are opt-in (QQO_STRICT_WARNINGS=ON in the dev preset) and are
 # applied per first-party target via qqo_set_strict_warnings(); vendored

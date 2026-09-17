@@ -5,6 +5,38 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-025: The package ships runtime files only
+
+**Context.** `make install` exported the suite's insides: seven static
+archives in `/usr/lib64`, every first-party header under
+`/usr/include/qindaoffice/`, and — worse — the vendored QXlsx as
+`/usr/lib64/libQXlsxQt6.so.1` with its headers and CMake package config.
+Nothing consumes any of it. The libraries are the apps' own implementation,
+split up for testing, not a public API; there is no second consumer in the
+overlay or anywhere else, and the headers carry no stability promise.
+
+The QXlsx half was an active hazard rather than mere clutter. The vendored
+copy is built static by default, but Gentoo's `cmake.eclass` sets
+`BUILD_SHARED_LIBS ON CACHE BOOL ""` for every package it builds, so under
+Portage — and only under Portage — it became a shared library installed
+under the same SONAME a system-wide QXlsx would use, ready to collide with
+a real `dev-libs/qxlsx` on any machine that later installed one.
+
+**Decision.** The libraries drop their `install()` rules entirely. The
+vendored QXlsx is pinned static with a NORMAL `BUILD_SHARED_LIBS` variable
+— normal shadows cache, so the eclass cannot override it — and added with
+`EXCLUDE_FROM_ALL`, which keeps its own unconditional `install()` rules out
+of the image; QXlsx offers no option to disable them.
+
+**Consequences.** The image is five binaries, five desktop files, the
+hicolor icons, the mime package and the templates: nothing a user cannot
+run. QXlsx links into `calc_io` instead of being loaded at runtime, so the
+apps no longer depend on a library the suite itself planted in
+`/usr/lib64`. The libraries are still ordinary CMake targets, so the tests
+link them exactly as before; anyone who genuinely needs them builds the
+tree. Re-exporting them later means restoring a real versioned API, not
+just the `install()` lines — which is the right bar for making them public.
+
 ## D-024: The package is a snapshot tarball, not a git checkout
 
 **Context.** The ebuild used `git-r3` against
