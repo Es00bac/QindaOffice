@@ -18,6 +18,10 @@ add_executable(qindashow
     src/show_arrange.cpp
     src/show_arrange.h
     src/show_arrange_menus.cpp
+    src/show_design_actions.cpp
+    src/show_design_actions.h
+    src/show_master_dialog.cpp
+    src/show_master_dialog.h
     src/show_commands.cpp
     src/show_commands.h
     src/show_toolbox.cpp
@@ -29,6 +33,7 @@ add_executable(qindashow
     src/slide_canvas.cpp
     src/slide_canvas_input.cpp
     src/slide_canvas_order.cpp
+    src/slide_canvas_snap.cpp
     src/slide_canvas.h
     src/slide_player.cpp
     src/slide_player.h

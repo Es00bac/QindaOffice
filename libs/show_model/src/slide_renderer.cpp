@@ -28,6 +28,53 @@ void drawArrowHead(QPainter *painter, const QPointF &tip, const QPointF &from)
     painter->drawPolygon({tip, left, right});
 }
 
+// Applies the shape's arrival animation at `progress` (0 = not yet there,
+// 1 = fully arrived). Returns false when the shape should not be drawn at
+// all yet. The transform is left on the painter for the caller's save/
+// restore pair to undo.
+bool applyBuildAnimation(QPainter *painter, const Shape &shape, const QSizeF &slideSize,
+                         qreal progress)
+{
+    if (shape.animation == ShapeAnimation::Appear) {
+        // "Appear" is instantaneous by definition: it is either there or
+        // it is not.
+        return progress > 0.0;
+    }
+    if (progress <= 0.0) {
+        return false;
+    }
+    const qreal eased = 1.0 - (1.0 - progress) * (1.0 - progress); // out-quad
+    const QPointF centre = shape.rect.normalized().center();
+    switch (shape.animation) {
+    case ShapeAnimation::Fade:
+        painter->setOpacity(painter->opacity() * eased);
+        break;
+    case ShapeAnimation::Zoom: {
+        painter->setOpacity(painter->opacity() * eased);
+        const qreal scale = 0.6 + 0.4 * eased;
+        painter->translate(centre);
+        painter->scale(scale, scale);
+        painter->translate(-centre);
+        break;
+    }
+    case ShapeAnimation::FlyInLeft:
+        painter->translate(-slideSize.width() * (1.0 - eased), 0);
+        break;
+    case ShapeAnimation::FlyInRight:
+        painter->translate(slideSize.width() * (1.0 - eased), 0);
+        break;
+    case ShapeAnimation::FlyInTop:
+        painter->translate(0, -slideSize.height() * (1.0 - eased));
+        break;
+    case ShapeAnimation::FlyInBottom:
+        painter->translate(0, slideSize.height() * (1.0 - eased));
+        break;
+    case ShapeAnimation::Appear:
+        break;
+    }
+    return true;
+}
+
 void paintShape(QPainter *painter, const Shape &shape)
 {
     painter->save();
@@ -126,38 +173,74 @@ void paintShape(QPainter *painter, const Shape &shape)
 
 } // namespace
 
-void renderShape(QPainter *painter, const Shape &shape)
+Shape withMasterDefaults(const Shape &shape, const SlideMaster *master)
+{
+    if (master == nullptr) {
+        return shape;
+    }
+    Shape styled = shape;
+    for (TextParagraph &paragraph : styled.paragraphs) {
+        for (TextRun &run : paragraph.runs) {
+            // Only runs that never chose for themselves inherit, so a
+            // deliberately red word stays red when the master changes.
+            if (run.color == QColor(Qt::black)) {
+                run.color = master->bodyColor;
+            }
+            if (run.fontFamily.isEmpty() && !master->fontFamily.isEmpty()) {
+                run.fontFamily = master->fontFamily;
+            }
+        }
+    }
+    return styled;
+}
+
+void renderShape(QPainter *painter, const Shape &shape, const SlideMaster *master)
 {
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
-    paintShape(painter, shape);
+    paintShape(painter, withMasterDefaults(shape, master));
     painter->restore();
 }
 
-void renderSlide(QPainter *painter, const Slide &slide, const QSizeF &slideSize, int buildStep)
+void renderSlide(QPainter *painter, const Slide &slide, const QSizeF &slideSize, int buildStep,
+                 const SlideMaster *master, qreal buildProgress)
 {
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
-    painter->fillRect(QRectF(QPointF(0, 0), slideSize), Qt::white);
+    // The master owns the background; without one a slide is white paper.
+    painter->fillRect(QRectF(QPointF(0, 0), slideSize),
+                      master != nullptr && master->background.isValid() ? master->background
+                                                                        : QColor(Qt::white));
     for (const Shape &shape : slide.shapes) {
         if (shape.buildStep > buildStep) {
             continue; // appears on a later click
         }
-        paintShape(painter, shape);
+        // The master supplies defaults for runs that never chose their own,
+        // so restyling a deck is one edit rather than one per text box.
+        const Shape styled = withMasterDefaults(shape, master);
+        const bool arriving = shape.buildStep > 0 && shape.buildStep == buildStep;
+        painter->save();
+        const bool draw = !arriving
+            || applyBuildAnimation(painter, shape, slideSize, qBound(0.0, buildProgress, 1.0));
+        if (draw) {
+            paintShape(painter, styled);
+        }
+        painter->restore();
     }
     painter->restore();
 }
 
 QPixmap renderSlideToPixmap(const Slide &slide, const QSizeF &slideSize, const QSize &pixels,
-                             int buildStep)
+                             int buildStep, const SlideMaster *master)
 {
     QPixmap pixmap(pixels);
-    pixmap.fill(Qt::white);
+    pixmap.fill(master != nullptr && master->background.isValid() ? master->background
+                                                                 : QColor(Qt::white));
     QPainter painter(&pixmap);
     const qreal scaleX = pixels.width() / slideSize.width();
     const qreal scaleY = pixels.height() / slideSize.height();
     painter.scale(scaleX, scaleY);
-    renderSlide(&painter, slide, slideSize, buildStep);
+    renderSlide(&painter, slide, slideSize, buildStep, master);
     return pixmap;
 }
 

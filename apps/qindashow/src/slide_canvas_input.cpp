@@ -47,6 +47,29 @@ void SlideCanvas::mousePressEvent(QMouseEvent *event)
         }
     }
     QGraphicsView::mousePressEvent(event);
+    // Grouped shapes select as one, and the pointer's own shape is the one
+    // that snaps; note both before the drag starts.
+    if (event->button() == Qt::LeftButton) {
+        if (ShapeItem *item = selectedItem()) {
+            m_draggingShapeId = item->shapeId();
+            if (m_slide != nullptr) {
+                const ShowModel::Shape *shape = item->modelShape();
+                if (shape != nullptr && !shape->groupId.isEmpty()) {
+                    for (const QString &id : m_slide->shapeIdsInGroup(shape->groupId)) {
+                        if (ShapeItem *member = itemFor(id)) {
+                            member->setSelected(true);
+                        }
+                    }
+                }
+            }
+        }
+        if (selectedShapeIds().size() > 1) {
+            // A multi-shape drag is ONE action: the window snapshots here
+            // and pushes a single command on release.
+            m_compound = true;
+            emit compoundEditStarted();
+        }
+    }
 }
 
 void SlideCanvas::mouseMoveEvent(QMouseEvent *event)
@@ -56,7 +79,8 @@ void SlideCanvas::mouseMoveEvent(QMouseEvent *event)
         QRectF rect = m_resizeOrigRect;
         rect.setBottomRight(rect.bottomRight() + delta);
         if (rect.width() >= 20 && rect.height() >= 14) {
-            m_resizing->modelShape()->rect = rect.normalized();
+            m_resizing->prepareGeometryChangeForRect();
+            m_resizing->modelShape()->rect = snapRect(m_resizing->shapeId(), rect.normalized());
             m_resizing->update();
         }
         event->accept();
@@ -76,6 +100,12 @@ void SlideCanvas::mouseReleaseEvent(QMouseEvent *event)
         return;
     }
     QGraphicsView::mouseReleaseEvent(event);
+    m_draggingShapeId.clear();
+    clearGuides();
+    if (m_compound) {
+        m_compound = false;
+        emit compoundEditFinished();
+    }
 }
 
 void SlideCanvas::mouseDoubleClickEvent(QMouseEvent *event)

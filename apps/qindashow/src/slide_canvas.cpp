@@ -73,7 +73,7 @@ void ShapeItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
     if (shape == nullptr) {
         return;
     }
-    ShowModel::renderShape(painter, *shape);
+    ShowModel::renderShape(painter, *shape, m_canvas->master());
     if (isSelected()) {
         painter->save();
         QPen pen(QColor(61, 123, 204));
@@ -99,7 +99,13 @@ QVariant ShapeItem::itemChange(GraphicsItemChange change, const QVariant &value)
     if (change == ItemPositionHasChanged && !pos().isNull()) {
         if (ShowModel::Shape *shape = modelShape()) {
             const QRectF oldRect = shape->rect;
-            shape->rect.translate(pos());
+            // Snap only the item the pointer is actually dragging: snapping
+            // every selected item independently would pull a group apart.
+            const QRectF proposed = shape->rect.translated(pos());
+            const bool primary = m_canvas->selectedShapeIds().size() <= 1
+                || m_canvas->draggingShapeId() == shape->id;
+            prepareGeometryChange();
+            shape->rect = primary ? m_canvas->snapRect(shape->id, proposed) : proposed;
             setPos(QPointF());
             emit m_canvas->shapeGeometryEdited(shape->id, oldRect, shape->rect);
             emit m_canvas->slideEdited();
@@ -122,6 +128,16 @@ SlideCanvas::SlideCanvas(QWidget *parent)
     setFrameShape(QFrame::NoFrame);
     connect(m_scene, &QGraphicsScene::selectionChanged, this,
             [this] { emit selectionChanged(selectedItem() != nullptr); });
+}
+
+void SlideCanvas::setMaster(const ShowModel::SlideMaster *master)
+{
+    m_hasMaster = master != nullptr;
+    m_master = master != nullptr ? *master : ShowModel::SlideMaster{};
+    if (scene() != nullptr) {
+        scene()->update();
+    }
+    viewport()->update();
 }
 
 void SlideCanvas::setSlide(ShowModel::Slide *slide, const QSizeF &slideSize)
@@ -478,7 +494,8 @@ void SlideCanvas::drawBackground(QPainter *painter, const QRectF &rect)
     // A drop shadow and a hairline frame are what make the page read as a
     // sheet; without them a white slide on a light theme has no edges.
     painter->fillRect(page.translated(4, 4), QColor(0, 0, 0, 60));
-    painter->fillRect(page, Qt::white);
+    painter->fillRect(page, m_hasMaster && m_master.background.isValid() ? m_master.background
+                                                                        : QColor(Qt::white));
     QPen frame(QColor(120, 120, 120));
     frame.setCosmetic(true);
     painter->setPen(frame);

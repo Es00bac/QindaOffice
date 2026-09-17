@@ -132,6 +132,9 @@ void DocumentWindow::createMenus()
     editMenu->addAction(m_actions.editFindPrevious);
 
     QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
+    // Named so an app can append its own view-scale toggles (QindaShow's
+    // Snap to Guides) instead of inventing a second View menu.
+    viewMenu->setObjectName(QStringLiteral("viewMenu"));
     viewMenu->addAction(m_actions.viewZoomIn);
     viewMenu->addAction(m_actions.viewZoomOut);
     viewMenu->addAction(m_actions.viewZoomReset);

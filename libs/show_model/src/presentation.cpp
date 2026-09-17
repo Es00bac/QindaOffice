@@ -44,4 +44,33 @@ Slide *Presentation::findSlide(const QString &slideId)
     return nullptr;
 }
 
+QList<QString> Slide::shapeIdsInGroup(const QString &groupId) const
+{
+    QList<QString> ids;
+    if (groupId.isEmpty()) {
+        return ids;
+    }
+    for (const Shape &shape : shapes) {
+        if (shape.groupId == groupId) {
+            ids.append(shape.id);
+        }
+    }
+    return ids;
+}
+
+const SlideMaster *Presentation::findMaster(const QString &id) const
+{
+    for (const SlideMaster &master : masters) {
+        if (master.id == id) {
+            return &master;
+        }
+    }
+    return nullptr;
+}
+
+const SlideMaster *Presentation::masterFor(const Slide &slide) const
+{
+    return slide.master.isEmpty() ? nullptr : findMaster(slide.master);
+}
+
 } // namespace QindaOffice::Show

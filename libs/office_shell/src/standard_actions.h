@@ -164,6 +164,11 @@ inline const char kShowDistributeH[] = "showDistributeHorizontallyAction";
 inline const char kShowDistributeV[] = "showDistributeVerticallyAction";
 inline const char kShowSlideMoveUp[] = "showSlideMoveUpAction";
 inline const char kShowSlideMoveDown[] = "showSlideMoveDownAction";
+inline const char kShowGroup[] = "showGroupAction";
+inline const char kShowUngroup[] = "showUngroupAction";
+inline const char kShowSnapToGuides[] = "showSnapToGuidesAction";
+inline const char kShowMasters[] = "showMastersAction";
+inline const char kShowApplyMaster[] = "showApplyMasterAction";
 } // namespace ActionId
 
 // One bundle per document window so the action discipline (every command is

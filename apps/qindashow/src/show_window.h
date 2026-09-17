@@ -32,6 +32,7 @@ namespace QindaOffice::Apps::Show {
 
 class SlideCanvas;
 class ShowArrangeActions;
+class ShowDesignActions;
 class ShowFindBar;
 
 class ShowToolbox;
@@ -59,6 +60,7 @@ public:
     // everything that needs to move the user to a slide goes through here.
     void selectSlideRow(int row);
     [[nodiscard]] ShowArrangeActions *arrangeActions() const { return m_arrange; }
+    [[nodiscard]] ShowDesignActions *designActions() const { return m_design; }
     void appendSlides(const QList<ShowModel::Slide> &slides);
     void replaceCurrentSlideText(const QString &text);
 
@@ -80,6 +82,11 @@ private:
     void syncMetaWidgets();
     void pushSlideListCommand(const QList<ShowModel::Slide> &before);
     void wireCanvasUndo();
+    // True while a multi-shape gesture is in flight; the per-shape undo
+    // commands are suppressed and ONE SlideStateCommand is pushed at the
+    // end (a six-shape drag is one action to the user).
+    bool m_compoundEdit = false;
+    ShowModel::Slide m_compoundBefore;
     void wireShowEditingActions();
     // Canvas context menu and the "Slide n of m" status field.
     void wireCanvasInteraction();
@@ -99,6 +106,7 @@ private:
     SlideCanvas *m_canvas;
     ShowToolbox *m_toolbox = nullptr;
     ShowArrangeActions *m_arrange = nullptr;
+    ShowDesignActions *m_design = nullptr;
     QListWidget *m_sorter;
     QPlainTextEdit *m_notes;
     QComboBox *m_transition;

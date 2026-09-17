@@ -87,6 +87,20 @@ void writeShape(QXmlStreamWriter &xml, const Shape &shape)
     const QString buildStep = shape.buildStep > 0
         ? QString::number(shape.buildStep)
         : QString();
+    // Animation, duration and group ride the qq: extension namespace, the
+    // same way the build step does — ODF has no home for any of them and a
+    // field the native format drops is a field the user loses on reopen.
+    const auto writeShapeExtras = [&xml, &shape] {
+        if (shape.animation != ShapeAnimation::Appear) {
+            xml.writeAttribute(QStringLiteral("qq:animation"),
+                               QString::number(int(shape.animation)));
+            xml.writeAttribute(QStringLiteral("qq:animation-ms"),
+                               QString::number(shape.animationMs));
+        }
+        if (!shape.groupId.isEmpty()) {
+            xml.writeAttribute(QStringLiteral("qq:group"), shape.groupId);
+        }
+    };
 
     if (shape.kind == ShapeKind::Line || shape.kind == ShapeKind::Arrow) {
         // Page-level draw:line with absolute endpoint coordinates.
@@ -98,6 +112,7 @@ void writeShape(QXmlStreamWriter &xml, const Shape &shape)
         if (!buildStep.isEmpty()) {
             xml.writeAttribute(QStringLiteral("qq:build-step"), buildStep);
         }
+        writeShapeExtras();
         xml.writeAttribute(QStringLiteral("svg:x1"),
                            QString::number(ptToCm(shape.rect.x()), 'f', 5));
         xml.writeAttribute(QStringLiteral("svg:y1"),
@@ -130,6 +145,7 @@ void writeShape(QXmlStreamWriter &xml, const Shape &shape)
         if (!buildStep.isEmpty()) {
             xml.writeAttribute(QStringLiteral("qq:build-step"), buildStep);
         }
+        writeShapeExtras();
         xml.writeStartElement(QStringLiteral("draw:enhanced-geometry"));
         xml.writeAttribute(QStringLiteral("draw:type"), shapeGeometry(shape.kind));
         xml.writeAttribute(QStringLiteral("svg:viewBox"),
@@ -157,6 +173,7 @@ void writeShape(QXmlStreamWriter &xml, const Shape &shape)
     if (!buildStep.isEmpty()) {
         xml.writeAttribute(QStringLiteral("qq:build-step"), buildStep);
     }
+    writeShapeExtras();
     if (shape.kind == ShapeKind::Image) {
         xml.writeStartElement(QStringLiteral("draw:image"));
         xml.writeTextElement(QStringLiteral("office:binary-data"),
@@ -255,6 +272,20 @@ QByteArray writeFodp(const Presentation &presentation, QString *error)
     xml.writeAttribute(QStringLiteral("style:name"), QStringLiteral("Default"));
     xml.writeAttribute(QStringLiteral("style:page-layout-name"), QStringLiteral("Default"));
     xml.writeEndElement(); // master-page
+    // The deck's own masters. ODF master pages carry no colour scheme we
+    // can map onto, so the values ride qq: and a foreign reader simply sees
+    // extra master pages it ignores.
+    for (const SlideMaster &master : presentation.masters) {
+        xml.writeStartElement(QStringLiteral("style:master-page"));
+        xml.writeAttribute(QStringLiteral("style:name"), master.id);
+        xml.writeAttribute(QStringLiteral("style:page-layout-name"), QStringLiteral("Default"));
+        xml.writeAttribute(QStringLiteral("qq:master-name"), master.name);
+        xml.writeAttribute(QStringLiteral("qq:background"), master.background.name());
+        xml.writeAttribute(QStringLiteral("qq:title-color"), master.titleColor.name());
+        xml.writeAttribute(QStringLiteral("qq:body-color"), master.bodyColor.name());
+        xml.writeAttribute(QStringLiteral("qq:font"), master.fontFamily);
+        xml.writeEndElement(); // master-page
+    }
     xml.writeEndElement(); // master-styles
 
     xml.writeStartElement(QStringLiteral("office:body"));
@@ -262,7 +293,8 @@ QByteArray writeFodp(const Presentation &presentation, QString *error)
     for (const Slide &slide : presentation.slides) {
         xml.writeStartElement(QStringLiteral("draw:page"));
         xml.writeAttribute(QStringLiteral("draw:name"), slide.id);
-        xml.writeAttribute(QStringLiteral("draw:master-page-name"), QStringLiteral("Default"));
+        xml.writeAttribute(QStringLiteral("draw:master-page-name"),
+                           slide.master.isEmpty() ? QStringLiteral("Default") : slide.master);
         xml.writeAttribute(QStringLiteral("draw:style-name"),
                            QStringLiteral("trans-%1").arg(slide.id));
         // qq: extension namespace for app metadata (title, layout, notes

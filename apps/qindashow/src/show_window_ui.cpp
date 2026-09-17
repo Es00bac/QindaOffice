@@ -6,6 +6,7 @@
 #include "show_window.h"
 
 #include "show_arrange.h"
+#include "show_design_actions.h"
 #include "show_commands.h"
 #include "show_document.h"
 #include "slide_canvas.h"
@@ -55,6 +56,7 @@ void ShowWindow::wireCanvasInteraction()
         QMenu menu(this);
         menu.setObjectName(QStringLiteral("showCanvasContextMenu"));
         m_arrange->populateContextMenu(&menu);
+        m_design->populateContextMenu(&menu);
         menu.exec(m_canvas->mapToGlobal(pos));
     });
     connect(m_canvas, &SlideCanvas::selectionChanged, this,

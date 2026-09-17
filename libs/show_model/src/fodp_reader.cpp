@@ -25,6 +25,20 @@ qreal lengthToPt(QStringView value)
     return value.toDouble(); // bare numbers read as pt
 }
 
+// Reads the qq: extension attributes ODF has no home for. A field the
+// reader skips is a field the user loses on reopen, so this is paired with
+// writeShapeExtras in fodp_writer.cpp.
+void readShapeExtras(Shape &shape, const QXmlStreamAttributes &attrs)
+{
+    if (attrs.hasAttribute(QStringLiteral("qq:animation"))) {
+        const int animation = attrs.value(QStringLiteral("qq:animation")).toInt();
+        shape.animation = ShapeAnimation(qBound(0, animation, int(ShapeAnimation::Zoom)));
+        const int ms = attrs.value(QStringLiteral("qq:animation-ms")).toInt();
+        shape.animationMs = ms > 0 ? qBound(50, ms, 5000) : 350;
+    }
+    shape.groupId = attrs.value(QStringLiteral("qq:group")).toString();
+}
+
 struct GraphicStyle {
     QColor fill;
     QColor stroke;
@@ -119,6 +133,7 @@ Presentation readFodp(const QByteArray &fodp, QString *error)
                    lengthToPt(attrs.value(QStringLiteral("svg:height"))));
         currentShape.buildStep =
             attrs.value(QStringLiteral("qq:build-step")).toInt();
+        readShapeExtras(currentShape, attrs);
         const QString shapeTransform = attrs.value(QStringLiteral("draw:transform")).toString();
         if (shapeTransform.startsWith(QLatin1String("rotate ("))) {
             const double raw = shapeTransform.mid(8, shapeTransform.indexOf(QLatin1Char(')')) - 8)
@@ -183,6 +198,29 @@ Presentation readFodp(const QByteArray &fodp, QString *error)
             }
         }
 
+        if (xml.isStartElement() && ns == QLatin1String("style")
+            && name == QLatin1String("master-page")) {
+            const auto attrs = xml.attributes();
+            const QString id = attrs.value(QStringLiteral("style:name")).toString();
+            // "Default" is the placeholder every fodp carries; it is not one
+            // of the deck's own masters.
+            if (!id.isEmpty() && id != QLatin1String("Default")
+                && attrs.hasAttribute(QStringLiteral("qq:background"))) {
+                SlideMaster master;
+                master.id = id;
+                master.name = attrs.value(QStringLiteral("qq:master-name")).toString();
+                master.background =
+                    QColor(attrs.value(QStringLiteral("qq:background")).toString());
+                master.titleColor =
+                    QColor(attrs.value(QStringLiteral("qq:title-color")).toString());
+                master.bodyColor =
+                    QColor(attrs.value(QStringLiteral("qq:body-color")).toString());
+                master.fontFamily = attrs.value(QStringLiteral("qq:font")).toString();
+                presentation.masters.append(master);
+            }
+            continue;
+        }
+
         if (xml.isStartElement() && ns == QLatin1String("draw") && name == QLatin1String("page")) {
             inSlide = true;
             currentSlide = Slide{};
@@ -190,6 +228,12 @@ Presentation readFodp(const QByteArray &fodp, QString *error)
             currentSlide.id = attrs.value(QStringLiteral("draw:name")).toString();
             currentSlide.title = attrs.value(QStringLiteral("qq:title")).toString();
             currentSlide.layout = attrs.value(QStringLiteral("qq:layout")).toString();
+            const QString masterName =
+                attrs.value(QStringLiteral("draw:master-page-name")).toString();
+            // "Default" is the ODF placeholder the writer always emits for a
+            // slide with no master of its own.
+            currentSlide.master =
+                masterName == QLatin1String("Default") ? QString() : masterName;
             const QString styleName = attrs.value(QStringLiteral("draw:style-name")).toString();
             if (styleName.startsWith(QLatin1String("trans-"))) {
                 currentSlide.transition = pageTransitions.value(styleName, QStringLiteral("cut"));
@@ -266,6 +310,7 @@ Presentation readFodp(const QByteArray &fodp, QString *error)
                        lengthToPt(attrs.value(QStringLiteral("svg:height"))));
             currentShape.buildStep =
                 attrs.value(QStringLiteral("qq:build-step")).toInt();
+            readShapeExtras(currentShape, attrs);
             const QString transform = attrs.value(QStringLiteral("draw:transform")).toString();
             if (transform.startsWith(QLatin1String("rotate ("))) {
                 // ODF rotate() is radians; files written by the earlier

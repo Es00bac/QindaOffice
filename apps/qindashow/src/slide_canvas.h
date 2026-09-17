@@ -73,6 +73,13 @@ public:
     ~SlideCanvas() override;
 
     void setSlide(ShowModel::Slide *slide, const QSizeF &slideSize);
+    // The master the current slide renders with. A COPY, not a pointer: the
+    // deck's master list reallocates whenever a master is added or removed.
+    void setMaster(const ShowModel::SlideMaster *master);
+    [[nodiscard]] const ShowModel::SlideMaster *master() const
+    {
+        return m_hasMaster ? &m_master : nullptr;
+    }
     [[nodiscard]] ShowModel::Slide *slide() const { return m_slide; }
     [[nodiscard]] QSizeF slideSize() const { return m_slideSize; }
     [[nodiscard]] ShapeItem *selectedItem() const;
@@ -87,6 +94,22 @@ public:
     // Z-order to the extremes; raiseSelected()/lowerSelected() move one step.
     void bringSelectedToFront();
     void sendSelectedToBack();
+    // Grouping: shapes in a group select, move and resize as one.
+    void groupSelected();
+    void ungroupSelected();
+    [[nodiscard]] bool selectionIsGrouped() const;
+    // Snapping to the slide's centre and edges and to other shapes; the
+    // guides are drawn while a drag is live.
+    void setSnapEnabled(bool enabled);
+    [[nodiscard]] bool snapEnabled() const { return m_snap; }
+    // Applies snapping to a proposed rect for `shapeId` and records the
+    // guides to draw. AGENT-CONTRACT: called from ShapeItem::itemChange, so
+    // it must not touch the scene's item list.
+    [[nodiscard]] QRectF snapRect(const QString &shapeId, const QRectF &proposed);
+    void clearGuides();
+    // The shape the pointer has hold of during a drag, or empty. Only that
+    // one snaps; the rest of a multi-selection follow it exactly.
+    [[nodiscard]] QString draggingShapeId() const { return m_draggingShapeId; }
     [[nodiscard]] ShapeItem *itemFor(const QString &shapeId) const;
 
     // Model-mutating operations; each emits the matching *_Edited signal
@@ -121,6 +144,12 @@ signals:
                      const ShowModel::Shape &after);
     void selectionChanged(bool hasSelection);
     void slideEdited(); // any of the above; window marks dirty + journals
+    // A gesture that will touch SEVERAL shapes is starting/finishing (a
+    // group or multi-selection drag). The window snapshots the slide on
+    // the first and pushes ONE undo command on the second, so dragging six
+    // shapes is one Ctrl+Z rather than six.
+    void compoundEditStarted();
+    void compoundEditFinished();
 
 protected:
     // The slide PAGE. AGENT-GUARD: nothing else paints it — the scene holds
@@ -128,6 +157,7 @@ protected:
     // existed an empty slide rendered as an empty dark-grey view and the
     // editor gave no clue where the slide's edges were.
     void drawBackground(QPainter *painter, const QRectF &rect) override;
+    void drawForeground(QPainter *painter, const QRectF &rect) override;
     void resizeEvent(QResizeEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
@@ -161,6 +191,14 @@ private:
     ShapeItem *m_resizing = nullptr;
     QRectF m_resizeOrigRect;
     QPointF m_resizeStart;
+    ShowModel::SlideMaster m_master;
+    bool m_hasMaster = false;
+    bool m_snap = true;
+    QString m_draggingShapeId;
+    // Guides to draw for the live drag, in scene coordinates.
+    QList<QLineF> m_guides;
+    // True between compoundEditStarted and compoundEditFinished.
+    bool m_compound = false;
 };
 
 } // namespace QindaOffice::Apps::Show

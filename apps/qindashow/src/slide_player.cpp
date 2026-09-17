@@ -42,6 +42,26 @@ void SlidePlayer::showEvent(QShowEvent *event)
 
 QPixmap SlidePlayer::renderSlideFrame(int slideIndex) const
 {
+    return renderSlideFrame(slideIndex, m_controller->build(), 1.0);
+}
+
+int SlidePlayer::buildDurationMs(int slideIndex, int buildStep) const
+{
+    const ShowModel::Presentation *deck = m_controller->deck();
+    if (deck == nullptr || slideIndex < 0 || slideIndex >= deck->slides.size()) {
+        return 0;
+    }
+    int longest = 0;
+    for (const ShowModel::Shape &shape : deck->slides.at(slideIndex).shapes) {
+        if (shape.buildStep == buildStep && shape.animation != ShowModel::ShapeAnimation::Appear) {
+            longest = qMax(longest, shape.animationMs);
+        }
+    }
+    return longest;
+}
+
+QPixmap SlidePlayer::renderSlideFrame(int slideIndex, int buildStep, qreal buildProgress) const
+{
     const ShowModel::Presentation *deck = m_controller->deck();
     QPixmap pixmap(size().isValid() ? size() : QSize(960, 540));
     pixmap.fill(Qt::black);
@@ -55,13 +75,55 @@ QPixmap SlidePlayer::renderSlideFrame(int slideIndex) const
     painter.translate((width() - slide.width() * scale) / 2.0,
                       (height() - slide.height() * scale) / 2.0);
     painter.scale(scale, scale);
-    ShowModel::renderSlide(&painter, deck->slides.at(slideIndex), slide,
-                           m_controller->build());
+    ShowModel::renderSlide(&painter, deck->slides.at(slideIndex), slide, buildStep,
+                           deck->masterFor(deck->slides.at(slideIndex)), buildProgress);
     return pixmap;
+}
+
+void SlidePlayer::setBuildProgress(qreal progress)
+{
+    m_buildProgress = qBound<qreal>(0.0, progress, 1.0);
+    m_current = renderSlideFrame(m_controller->slide(), m_controller->build(), m_buildProgress);
+    update();
+}
+
+void SlidePlayer::beginBuildAnimation()
+{
+    const int duration = buildDurationMs(m_controller->slide(), m_controller->build());
+    m_lastSlide = m_controller->slide();
+    m_lastBuild = m_controller->build();
+    delete m_buildAnimation;
+    m_buildAnimation = nullptr;
+    if (m_reducedMotion || duration <= 0) {
+        // Reduced motion (or "Appear") means the shape is simply there.
+        m_buildProgress = 1.0;
+        m_current = renderSlideFrame(m_controller->slide());
+        update();
+        return;
+    }
+    m_buildProgress = 0.0;
+    m_current = renderSlideFrame(m_controller->slide(), m_controller->build(), 0.0);
+    m_buildAnimation = new QPropertyAnimation(this, "buildProgress", this);
+    m_buildAnimation->setDuration(duration);
+    m_buildAnimation->setStartValue(0.0);
+    m_buildAnimation->setEndValue(1.0);
+    m_buildAnimation->setEasingCurve(QEasingCurve::OutCubic);
+    m_buildAnimation->start();
+    update();
 }
 
 void SlidePlayer::beginTransition()
 {
+    // A build step is not a slide change: blending two whole frames for a
+    // revealed bullet would flash everything else on the slide.
+    if (m_controller->slide() == m_lastSlide && m_controller->build() > m_lastBuild) {
+        m_strokes = m_inkBySlide.value(m_controller->slide());
+        beginBuildAnimation();
+        return;
+    }
+    m_lastSlide = m_controller->slide();
+    m_lastBuild = m_controller->build();
+    m_buildProgress = 1.0;
     m_strokes = m_inkBySlide.value(m_controller->slide());
     m_activeStroke.clear();
     m_laserVisible = false;

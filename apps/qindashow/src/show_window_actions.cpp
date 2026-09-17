@@ -7,6 +7,7 @@
 #include "show_window.h"
 
 #include "show_arrange.h"
+#include "show_design_actions.h"
 
 #include "pdf_export.h"
 #include "show_clipboard.h"
@@ -249,6 +250,12 @@ void ShowWindow::insertApplicationMenus(QMenu *before)
     slideMenu->addSeparator();
     m_arrange->populateSlideMenu(slideMenu);
     slideMenu->addSeparator();
+    m_design->populateSlideMenu(slideMenu);
+    if (auto *viewMenu = findChild<QMenu *>(QStringLiteral("viewMenu"))) {
+        viewMenu->addSeparator();
+        m_design->populateViewMenu(viewMenu);
+    }
+    slideMenu->addSeparator();
     slideMenu->addAction(m_startShowAction);
     slideMenu->addSeparator();
     QAction *exportPdfAction = slideMenu->addAction(tr("Export PDF..."));
@@ -292,6 +299,7 @@ void ShowWindow::insertApplicationMenus(QMenu *before)
     for (QAction *action : m_toolbox->styleActions().styleActions()) {
         shapeMenu->addAction(action);
     }
+    m_design->populateShapeMenu(shapeMenu);
 
     QMenu *arrangeMenu = new QMenu(tr("Arrange"), this);
     arrangeMenu->setObjectName(QStringLiteral("showArrangeMenu"));
@@ -301,6 +309,28 @@ void ShowWindow::insertApplicationMenus(QMenu *before)
 
 void ShowWindow::wireCanvasUndo()
 {
+    // A gesture that touches several shapes brackets itself; everything
+    // inside becomes one command instead of one per shape.
+    connect(m_canvas, &SlideCanvas::compoundEditStarted, this, [this] {
+        if (m_canvas->slide() != nullptr) {
+            m_compoundBefore = *m_canvas->slide();
+            m_compoundEdit = true;
+        }
+    });
+    connect(m_canvas, &SlideCanvas::compoundEditFinished, this, [this] {
+        if (!m_compoundEdit || m_canvas->slide() == nullptr) {
+            m_compoundEdit = false;
+            return;
+        }
+        m_compoundEdit = false;
+        ShowModel::Slide *slide = m_canvas->slide();
+        if (*slide == m_compoundBefore) {
+            return;
+        }
+        m_document->undoStack()->push(
+            new SlideStateCommand(m_document->presentation(), slide->id, m_compoundBefore,
+                                  *slide));
+    });
     connect(m_canvas, &SlideCanvas::shapeInserted, this, [this](const QString &shapeId) {
         ShowModel::Shape *shape = m_canvas->slide()->findShape(shapeId);
         if (shape != nullptr) {
@@ -315,6 +345,9 @@ void ShowWindow::wireCanvasUndo()
             });
     connect(m_canvas, &SlideCanvas::shapeGeometryEdited, this,
             [this](const QString &shapeId, const QRectF &oldRect, const QRectF &newRect) {
+                if (m_compoundEdit) {
+                    return; // folded into the compound command
+                }
                 m_document->undoStack()->push(
                     new GeometryCommand(m_canvas->slide(), shapeId, oldRect, newRect));
             });

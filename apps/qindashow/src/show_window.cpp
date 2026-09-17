@@ -9,6 +9,7 @@
 #include "presenter_window.h"
 #include "show_ai.h"
 #include "show_arrange.h"
+#include "show_design_actions.h"
 #include "show_find_bar.h"
 #include "show_commands.h"
 #include "show_toolbox.h"
@@ -300,9 +301,10 @@ ShowWindow::ShowWindow()
     // runs insertApplicationMenus, which dereferences m_toolbox).
     m_toolbox = new ShowToolbox(m_canvas, this);
     m_arrange = new ShowArrangeActions(this);
+    m_design = new ShowDesignActions(this);
     addToolBarBreak(Qt::TopToolBarArea);
     addToolBar(Qt::TopToolBarArea, m_toolbox->toolBar());
-    m_toolbox->appendStripActions(m_arrange->stripActions());
+    m_toolbox->appendStripActions(m_arrange->stripActions() + m_design->stripActions());
 
     // The base ctor ran createMenus() before this subclass existed, so the
     // app-menu hooks only dispatched the base no-ops then; run them now
@@ -360,8 +362,8 @@ void ShowWindow::rebuildSorter()
     ShowModel::Presentation *deck = m_document->presentation();
     m_sorter->clear();
     for (const ShowModel::Slide &slide : deck->slides) {
-        const QPixmap thumbnail = ShowModel::renderSlideToPixmap(slide, deck->slideSize,
-                                                            QSize(160, 90));
+        const QPixmap thumbnail = ShowModel::renderSlideToPixmap(
+            slide, deck->slideSize, QSize(160, 90), 1000, deck->masterFor(slide));
         // AGENT-GUARD: register the SAME pixmap for the Selected mode. A
         // QIcon built from one pixmap renders the selected state tinted with
         // the highlight colour, so the current slide's thumbnail showed a
@@ -385,11 +387,17 @@ void ShowWindow::switchSlide(int row)
         return;
     }
     m_currentRow = row;
+    // The master first: setSlide rebuilds the items, and each of them paints
+    // through the master's defaults.
+    m_canvas->setMaster(deck->masterFor(deck->slides.at(row)));
     m_canvas->setSlide(&deck->slides[row], deck->slideSize);
     syncMetaWidgets();
     updateSlideStatus();
     if (m_arrange != nullptr) {
         m_arrange->syncFromSelection();
+    }
+    if (m_design != nullptr) {
+        m_design->syncFromSelection();
     }
 }
 
