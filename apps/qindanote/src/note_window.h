@@ -15,6 +15,10 @@ class QScrollArea;
 class QToolButton;
 class QTreeWidget;
 
+namespace QindaOffice::Shell {
+class WrappingToolBar;
+}
+
 namespace QindaOffice::Ai {
 class AssistantPanel;
 class ModelCatalog;
@@ -84,6 +88,8 @@ protected:
     QString filterString() const override;
 
 private:
+    // The left tool strip (note_tool_strip.cpp).
+    [[nodiscard]] Shell::WrappingToolBar *buildToolStrip();
     // Status bar, navigator context menu, edit commands and the AI dock
     // (note_window_ui.cpp).
     void wireNavigatorInteraction();

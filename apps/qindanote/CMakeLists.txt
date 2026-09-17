@@ -12,6 +12,7 @@ add_executable(qindanote
     src/note_structure.cpp
     src/note_structure.h
     src/note_page_view.h
+    src/note_tool_strip.cpp
     src/note_window.cpp
     src/note_window_ui.cpp
     src/note_window.h
