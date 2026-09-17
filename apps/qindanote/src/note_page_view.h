@@ -8,12 +8,15 @@
 // cursor input is ignored - that IS the palm-rejection baseline), text
 // blocks, and bounded snapshot undo.
 
+#include "note_blocks.h"
 #include "notebook.h"
 #include "spatial_grid.h"
 #include "stroke_builder.h"
 
+#include <QHash>
 #include <QWidget>
 
+class QJsonObject;
 class QTextEdit;
 
 namespace QindaOffice::Apps::Notes {
@@ -51,7 +54,11 @@ public:
 public slots:
     void undo();
     void redo();
+    // Content blocks (note_page_blocks.cpp). Every one lands at the bottom
+    // of the page's block stack and is persisted into the envelope.
     void addTextBlock();
+    void addCheckItem();
+    void addImageBlock(const QByteArray &imageData);
 
 signals:
     void pageEdited();
@@ -68,9 +75,11 @@ protected:
 private:
     void commitStroke();
     void rebuildGrid();
-    void syncBlocks();
+    void rebuildBlockWidgets();
     void persistTextBlocks();
     void syncBlocksGeometry();
+    void appendBlock(const QJsonObject &block);
+    void paintImageBlocks(QPainter *painter, const QRectF &page) const;
     void pushUndoSnapshot();
     // Emits undoAvailable/redoAvailable for the current stack depths.
     void notifyHistoryAvailability();
@@ -94,7 +103,10 @@ private:
     QVector<Ink::StrokeLayer> m_undoStack;
     QVector<Ink::StrokeLayer> m_redoStack;
     static constexpr int kMaxHistory = 100;
-    QList<QTextEdit *> m_textBlocks;
+    // Editable blocks only: images are painted, so they have no widget.
+    QList<QWidget *> m_blockWidgets;
+    QHash<QWidget *, int> m_blockIndexForWidget;
+    QList<PageBlock> m_blocks;
     qreal m_pageWidth = 760;
     qreal m_minPageHeight = 1004; // ~A4 ratio at the fixed width
     static constexpr qreal kMaxPages = 64;

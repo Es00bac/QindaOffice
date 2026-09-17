@@ -19,7 +19,10 @@
 #include <QMenu>
 #include <QSpinBox>
 #include <QMenuBar>
+#include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
+#include <QStandardPaths>
 #include <QScrollArea>
 #include <QStatusBar>
 #include <QToolBar>
@@ -269,6 +272,36 @@ NoteWindow::NoteWindow()
     tools->addStripAction(text);
     text->setObjectName(QStringLiteral("noteAddTextAction"));
     connect(text, &QAction::triggered, m_view, &NotePageView::addTextBlock);
+
+    auto *checklist = new QAction(tr("Add checklist item"), this);
+    checklist->setObjectName(QStringLiteral("noteAddCheckAction"));
+    checklist->setIconText(tr("Checklist"));
+    tools->addStripAction(checklist);
+    connect(checklist, &QAction::triggered, m_view, &NotePageView::addCheckItem);
+
+    auto *image = new QAction(tr("Add image"), this);
+    image->setObjectName(QStringLiteral("noteAddImageAction"));
+    image->setIconText(tr("Image"));
+    tools->addStripAction(image);
+    connect(image, &QAction::triggered, this, [this] {
+        const QString path = QFileDialog::getOpenFileName(
+            this, tr("Insert Image"),
+            QStandardPaths::writableLocation(QStandardPaths::PicturesLocation),
+            tr("Images (*.png *.jpg *.jpeg *.webp *.bmp *.gif);;All files (*)"));
+        if (path.isEmpty()) {
+            return;
+        }
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly)) {
+            statusBar()->showMessage(tr("Could not read %1").arg(path), 8000);
+            return;
+        }
+        // The file's own bytes, verbatim: a notebook page is one
+        // self-contained JSON file, so a path reference would break the
+        // moment the notebook moved.
+        m_view->addImageBlock(file.readAll());
+        m_document->setDirty(true);
+    });
 
     setDocumentHost(central, m_document);
     Shell::WrappingToolBar *mainToolBar = addMainToolBar();

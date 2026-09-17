@@ -5,6 +5,9 @@ add_executable(qindanote
     src/note_find_bar.h
     src/note_page_render.cpp
     src/note_page_render.h
+    src/note_blocks.cpp
+    src/note_blocks.h
+    src/note_page_blocks.cpp
     src/note_page_view.cpp
     src/note_structure.cpp
     src/note_structure.h

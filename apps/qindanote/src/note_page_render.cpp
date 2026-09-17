@@ -2,6 +2,9 @@
 #include "note_page_render.h"
 
 #include "ink_persistence.h"
+#include "note_blocks.h"
+
+#include <QImage>
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -11,14 +14,6 @@
 namespace QindaOffice::Apps::Notes {
 
 namespace {
-
-// AGENT-GUARD: these must stay in step with NotePageView::syncBlocksGeometry()
-// — the on-screen block layout derives from the block index too, and print
-// would otherwise put typed text somewhere the user never saw it.
-constexpr qreal kBlockLeft = 40;
-constexpr qreal kBlockTop = 40;
-constexpr qreal kBlockStride = 100;
-constexpr qreal kBlockHeight = 90;
 
 void paintBackground(QPainter *painter, const QString &background, const QRectF &page)
 {
@@ -43,24 +38,45 @@ void paintBackground(QPainter *painter, const QString &background, const QRectF 
     }
 }
 
-void paintTextBlocks(QPainter *painter, const QByteArray &blocksJson, const QRectF &page)
+// AGENT-CONTRACT: the layout comes from note_blocks.h, the SAME function
+// the screen view positions its widgets with. Computing it twice is how
+// printed text ends up somewhere the user never saw it.
+void paintBlocks(QPainter *painter, const QByteArray &blocksJson, const QRectF &page)
 {
-    const QJsonArray list = QJsonDocument::fromJson(blocksJson)
-                                .object()
-                                .value(QStringLiteral("blocks"))
-                                .toArray();
     painter->setPen(QColor(0x20, 0x20, 0x28));
-    int index = 0;
-    for (const QJsonValue &value : list) {
-        const QJsonObject object = value.toObject();
-        if (object.value(QStringLiteral("type")).toString() != QLatin1String("text")) {
-            continue;
+    for (const PageBlock &block : layoutBlocks(blocksJson, page.width())) {
+        const QRectF box = block.rect.translated(page.topLeft());
+        switch (block.kind) {
+        case PageBlock::Kind::Text:
+            painter->drawText(box, Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop, block.text);
+            break;
+        case PageBlock::Kind::Check: {
+            // A printed checklist needs a real box and a real tick: a bare
+            // "[x]" prefix reads as text, not as a checked item.
+            const qreal side = qMin<qreal>(14, box.height() - 4);
+            const QRectF tick(box.left(), box.center().y() - side / 2, side, side);
+            painter->drawRect(tick);
+            if (block.checked) {
+                painter->drawLine(tick.topLeft() + QPointF(2, side / 2),
+                                  tick.bottomLeft() + QPointF(side / 2, -2));
+                painter->drawLine(tick.bottomLeft() + QPointF(side / 2, -2),
+                                  tick.topRight() + QPointF(-2, 2));
+            }
+            painter->drawText(box.adjusted(side + 8, 0, 0, 0),
+                              Qt::AlignLeft | Qt::AlignVCenter, block.text);
+            break;
         }
-        const QRectF box(page.left() + kBlockLeft, page.top() + kBlockTop + index * kBlockStride,
-                         page.width() - 2 * kBlockLeft, kBlockHeight);
-        painter->drawText(box, Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop,
-                          object.value(QStringLiteral("text")).toString());
-        ++index;
+        case PageBlock::Kind::Image: {
+            QImage image;
+            if (!block.imageData.isEmpty() && image.loadFromData(block.imageData)
+                && !image.isNull()) {
+                painter->drawImage(box, image);
+            } else {
+                painter->drawRect(box);
+            }
+            break;
+        }
+        }
     }
 }
 
@@ -77,7 +93,7 @@ void renderNotePage(QPainter *painter, const NotePage &page, const QSizeF &pageS
         Ink::renderStroke(painter, stroke);
     }
     painter->restore();
-    paintTextBlocks(painter, page.envelope.blocksJson, rect);
+    paintBlocks(painter, page.envelope.blocksJson, rect);
 }
 
 } // namespace QindaOffice::Apps::Notes

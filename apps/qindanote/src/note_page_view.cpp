@@ -91,13 +91,11 @@ qreal NotePageView::growHeight() const
         return m_minPageHeight;
     }
     qreal contentBottom = m_page->envelope.ink.bounds().bottom() + 80;
-    // Text block geometry is in WIDGET space (offset by the page origin,
-    // scaled by zoom); convert to page space before comparing against the
-    // page-space minimum height. AGENT-GUARD: do NOT call pageRect() here —
-    // pageRect() calls growHeight(); use the fixed 24px top offset instead.
-    for (const QTextEdit *block : m_textBlocks) {
-        const qreal blockBottomPage = (block->y() - 24.0) / m_zoom + block->height() / m_zoom;
-        contentBottom = qMax(contentBottom, blockBottomPage + 40);
+    // The block layout is already in PAGE space (note_blocks.h), which is
+    // the space this comparison is in. AGENT-GUARD: do NOT call pageRect()
+    // here — pageRect() calls growHeight().
+    for (const PageBlock &block : m_blocks) {
+        contentBottom = qMax(contentBottom, block.rect.bottom() + 40);
     }
     const int pages = qBound(1, int(std::ceil(contentBottom / m_minPageHeight)), int(kMaxPages));
     // The widget height of the page: page-space height times zoom.
@@ -110,12 +108,10 @@ void NotePageView::setPage(NotePage *page)
     m_undoStack.clear();
     m_redoStack.clear();
     notifyHistoryAvailability();
-    qDeleteAll(m_textBlocks);
-    m_textBlocks.clear();
     if (m_page != nullptr) {
         rebuildGrid();
-        syncBlocks();
     }
+    rebuildBlockWidgets();
     // A page that has already grown past one sheet must make the widget
     // that tall again, or the scroll area cannot reach the bottom of it.
     updatePageMetrics();
@@ -177,83 +173,8 @@ void NotePageView::rebuildGrid()
     m_grid.rebuild(m_page != nullptr ? m_page->envelope.ink.strokes() : QVector<Stroke>{});
 }
 
-void NotePageView::syncBlocks()
-{
-    // Text blocks are stored in the envelope's blocksJson; one QTextEdit per
-    // block, positioned under the previous content.
-    const QJsonObject blocks = QJsonDocument::fromJson(m_page->envelope.blocksJson).object();
-    const QJsonArray list = blocks.value(QStringLiteral("blocks")).toArray();
-    m_syncingBlocks = true;
-    for (const QJsonValue &value : list) {
-        const QJsonObject object = value.toObject();
-        if (object.value(QStringLiteral("type")).toString() != QLatin1String("text")) {
-            continue;
-        }
-        auto *edit = new QTextEdit(this);
-        edit->setPlainText(object.value(QStringLiteral("text")).toString());
-        edit->setAcceptRichText(false);
-        edit->show();
-        // AGENT-GUARD: every editor writes its content back to blocksJson on
-        // change — typed text must be persisted and must mark the page dirty.
-        // (The v1 code only ever read the JSON, so typed text was lost on the
-        // first addTextBlock/setPage/save.)
-        connect(edit, &QTextEdit::textChanged, this, [this] { persistTextBlocks(); });
-        m_textBlocks.append(edit);
-    }
-    m_syncingBlocks = false;
-    syncBlocksGeometry();
-}
 
-void NotePageView::persistTextBlocks()
-{
-    if (m_page == nullptr || m_syncingBlocks) {
-        return;
-    }
-    QJsonObject root = QJsonDocument::fromJson(m_page->envelope.blocksJson).object();
-    QJsonArray blocks = root.value(QStringLiteral("blocks")).toArray();
-    // Write the live editor contents back over the text entries in order.
-    int editorIndex = 0;
-    for (int i = 0; i < blocks.size(); ++i) {
-        QJsonObject object = blocks.at(i).toObject();
-        if (object.value(QStringLiteral("type")).toString() != QLatin1String("text")) {
-            continue;
-        }
-        if (editorIndex >= m_textBlocks.size()) {
-            break;
-        }
-        object.insert(QStringLiteral("text"), m_textBlocks.at(editorIndex)->toPlainText());
-        blocks.replace(i, object);
-        ++editorIndex;
-    }
-    root.insert(QStringLiteral("blocks"), blocks);
-    m_page->envelope.blocksJson = QJsonDocument(root).toJson(QJsonDocument::Compact);
-    emit pageEdited();
-    update();
-}
 
-void NotePageView::addTextBlock()
-{
-    if (m_page == nullptr) {
-        return;
-    }
-    // Persist the existing editors first: they are about to be destroyed and
-    // recreated from the JSON.
-    persistTextBlocks();
-    QJsonObject root = QJsonDocument::fromJson(m_page->envelope.blocksJson).object();
-    QJsonArray blocks = root.value(QStringLiteral("blocks")).toArray();
-    blocks.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("text")},
-                              {QStringLiteral("text"), QString()}});
-    root.insert(QStringLiteral("blocks"), blocks);
-    m_page->envelope.blocksJson = QJsonDocument(root).toJson(QJsonDocument::Compact);
-    qDeleteAll(m_textBlocks);
-    m_textBlocks.clear();
-    syncBlocks();
-    if (!m_textBlocks.isEmpty()) {
-        m_textBlocks.last()->setFocus();
-    }
-    emit pageEdited();
-    update();
-}
 
 void NotePageView::commitStroke()
 {
@@ -427,6 +348,8 @@ void NotePageView::paintEvent(QPaintEvent *event)
         }
         painter.restore();
         painter.setClipping(false);
+        // Images sit UNDER the ink: annotating a photograph is the point.
+        paintImageBlocks(&painter, page);
     }
 }
 
@@ -436,19 +359,5 @@ void NotePageView::resizeEvent(QResizeEvent *event)
     syncBlocksGeometry();
 }
 
-void NotePageView::syncBlocksGeometry()
-{
-    // Positions derive from the block index in PAGE coordinates, so zoom
-    // repositions every block consistently (fonts intentionally stay
-    // unscaled - the text tool is for typed notes, not slides).
-    const QRectF page = pageRect();
-    int index = 0;
-    for (QTextEdit *block : m_textBlocks) {
-        const qreal yPage = 40 + index * 100;
-        block->move(int(page.x() + 40 * m_zoom), int(page.y() + (yPage - 24) * m_zoom));
-        block->resize(int(page.width() - 80 * m_zoom), int(90 * m_zoom));
-        ++index;
-    }
-}
 
 } // namespace QindaOffice::Apps::Notes
