@@ -7,6 +7,7 @@
 
 #include <QApplication>
 #include <QSignalSpy>
+#include <QFileInfo>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -26,7 +27,41 @@ private slots:
     void duplicatePathActivatesExistingWindow();
     void pristineUntitledWindowAbsorbsFirstOpen();
     void openedPathEntersRecentFiles();
+    void openFromAPristineWindowReusesThatWindow();
 };
+
+void OfficeApplicationTest::openFromAPristineWindowReusesThatWindow()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString first = dir.path() + QStringLiteral("/first.txt");
+    const QString second = dir.path() + QStringLiteral("/second.txt");
+    for (const QString &path : {first, second}) {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("hello\n");
+    }
+
+    OfficeApplication office;
+    DocumentWindow *older = office.newWindow();
+    DocumentWindow *opener = office.newWindow();
+    QVERIFY(older != nullptr && opener != nullptr);
+    QVERIFY(older->isPristineUntitled() && opener->isPristineUntitled());
+
+    // Opening FROM `opener` must land in `opener`, not in whichever blank
+    // window happens to come first in the list.
+    QVERIFY(office.openPaths({first}, nullptr, opener));
+    QCOMPARE(office.windowCount(), 2);
+    QCOMPARE(opener->document()->canonicalPath(), QFileInfo(first).canonicalFilePath());
+    QVERIFY(older->isPristineUntitled());
+
+    // The same window is no longer pristine, so a second open goes to the
+    // other blank window rather than displacing the document just opened.
+    QVERIFY(office.openPaths({second}, nullptr, opener));
+    QCOMPARE(office.windowCount(), 2);
+    QCOMPARE(opener->document()->canonicalPath(), QFileInfo(first).canonicalFilePath());
+    QCOMPARE(older->document()->canonicalPath(), QFileInfo(second).canonicalFilePath());
+}
 
 void OfficeApplicationTest::newWindowOpensOrdinaryWindows()
 {

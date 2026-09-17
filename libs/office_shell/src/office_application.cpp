@@ -171,7 +171,9 @@ void OfficeApplication::wireWindow(DocumentWindow *window)
     connect(window, &DocumentWindow::newWindowRequested, this,
             [this] { static_cast<void>(newWindow()); });
     connect(window, &DocumentWindow::openPathsRequested, this,
-            [this](const QStringList &paths) { openPaths(paths); });
+            [this, window](const QStringList &paths) {
+                static_cast<void>(openPaths(paths, nullptr, window));
+            });
     // The closing path must be captured while the window object is alive;
     // destroyed() hands out a bare QObject past the derived destructor.
     connect(window, &DocumentWindow::closing, this, [this](DocumentWindow *closingWindow) {
@@ -193,7 +195,8 @@ QString OfficeApplication::canonical(const QString &path) const
     return QFileInfo(path).canonicalFilePath();
 }
 
-bool OfficeApplication::openPaths(const QStringList &paths, QString *diagnostic)
+bool OfficeApplication::openPaths(const QStringList &paths, QString *diagnostic,
+                                  DocumentWindow *requestingWindow)
 {
     // A bare second launch hands off an empty path list; mirroring the
     // first-party terminal's default-request semantics it opens a fresh
@@ -223,12 +226,21 @@ bool OfficeApplication::openPaths(const QStringList &paths, QString *diagnostic)
         }
         {
             // A pristine untitled window may absorb the first opened path
-            // instead of spawning yet another window.
+            // instead of spawning yet another window. The window the user
+            // opened FROM wins: opening a document from a blank window has
+            // to replace that blank document, not open beside it. A window
+            // that has been typed into is no longer pristine, so its
+            // content is never displaced.
             DocumentWindow *target = nullptr;
+            if (requestingWindow != nullptr && requestingWindow->isPristineUntitled()) {
+                target = requestingWindow;
+            }
             for (DocumentWindow *window : windows()) {
+                if (target != nullptr) {
+                    break;
+                }
                 if (window->isPristineUntitled()) {
                     target = window;
-                    break;
                 }
             }
             if (target == nullptr) {

@@ -58,7 +58,16 @@ public:
     void offerRecovery();
 
     [[nodiscard]] DocumentWindow *newWindow(const QString &path = {});
-    [[nodiscard]] bool openPaths(const QStringList &paths, QString *diagnostic = nullptr);
+    // `requestingWindow` is the window the Open came from, when there is
+    // one (File ▸ Open, a drop, a recent-menu pick). AGENT-CONTRACT: a
+    // pristine untitled REQUESTING window absorbs the first path, so
+    // opening from a blank document replaces that blank document instead
+    // of leaving it behind — ADR-0110's pristine reuse, aimed at the window
+    // the user is actually looking at rather than whichever blank window
+    // happens to be first in the list. Null (D-Bus hand-off, CLI paths,
+    // restore) falls back to any pristine window.
+    [[nodiscard]] bool openPaths(const QStringList &paths, QString *diagnostic = nullptr,
+                                 DocumentWindow *requestingWindow = nullptr);
     [[nodiscard]] QList<DocumentWindow *> windows() const;
     [[nodiscard]] int windowCount() const;
 

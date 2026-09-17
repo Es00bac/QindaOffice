@@ -19,10 +19,24 @@ WriteDocument::WriteDocument()
     // step - Undo looked enabled on a pristine document and triggering it
     // reset the page size. Page geometry is setup, not user content.
     m_text->clearUndoRedoStacks();
-    connect(m_text.get(), &QTextDocument::contentsChange, this, [this] {
-        setDirty(true);
-        emit contentChanged();
-    });
+    m_text->setModified(false);
+    // AGENT-GUARD: dirty follows QTextDocument's OWN modified flag, not
+    // contentsChange. contentsChange also fires for FORMAT-only edits, and
+    // the spell checker is a QSyntaxHighlighter whose first pass runs while
+    // the window is still being built — so every freshly created QindaWrite
+    // window was born dirty. A dirty untitled window is not pristine, so
+    // File ▸ Open never reused it and always spawned a second window,
+    // leaving the blank one behind (ADR-0110 pristine reuse).
+    connect(m_text.get(), &QTextDocument::modificationChanged, this,
+            [this](bool modified) { setDirty(modified); });
+    // The recovery journal still wants every real content edit; a
+    // format-only pass reports zero characters added and removed.
+    connect(m_text.get(), &QTextDocument::contentsChange, this,
+            [this](int, int charsRemoved, int charsAdded) {
+                if (charsRemoved != 0 || charsAdded != 0) {
+                    emit contentChanged();
+                }
+            });
 }
 
 void WriteDocument::setupPaged(const QSizeF &pageSize, qreal margin)
@@ -66,6 +80,9 @@ bool WriteDocument::load(const QString &path, QString *error)
     }
     setCanonicalPath(path);
     refreshByteRevision();
+    // Both flags: ours drives the title and close consent, QTextDocument's
+    // drives the signal that sets ours.
+    m_text->setModified(false);
     setDirty(false);
     emit contentChanged();
     return true;
@@ -97,6 +114,7 @@ bool WriteDocument::save(const QString &path, QString *error)
     }
     setCanonicalPath(path);
     refreshByteRevision();
+    m_text->setModified(false);
     setDirty(false);
     return true;
 }
@@ -117,6 +135,7 @@ void WriteDocument::setHeaderFooter(const QString &header, const QString &footer
     }
     m_header = header;
     m_footer = footer;
+    m_text->setModified(true);
     setDirty(true);
     emit contentChanged();
 }
@@ -130,6 +149,7 @@ bool WriteDocument::loadRecovery(const QByteArray &snapshot, QString *error)
 {
     Q_UNUSED(error);
     m_text->setHtml(QString::fromUtf8(snapshot));
+    m_text->setModified(true);
     setDirty(true);
     emit contentChanged();
     return true;
