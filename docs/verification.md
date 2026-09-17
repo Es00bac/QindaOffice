@@ -250,6 +250,29 @@ QindaNote; recents merge the four lists, skip files that are gone, and
 survive a `recent.json` that is not JSON without rewriting it; each card
 carries an accessible name and description.
 
+### M21 packaging gate (Gentoo)
+
+The ebuild is the only supported install path, and it must build with no
+network access at all — Portage's default `FEATURES` include
+`network-sandbox`. Verify before tagging a snapshot:
+
+- [ ] `tools/make-dist.sh <version> <distdir>` exits non-zero on a dirty
+      tree. A tarball that matches no commit is a tarball nobody can
+      reproduce.
+- [ ] The tarball contains `third_party/QXlsx/QXlsx/CMakeLists.txt`. The
+      submodule must be VENDORED, not referenced: `src_unpack` cannot fetch
+      it under `network-sandbox`.
+- [ ] `ebuild <ebuild> clean unpack` leaves the tree at `${WORKDIR}/${P}`
+      and its `.dist-commit` names the commit the archive was cut from.
+- [ ] `emerge -1 gui-apps/qindaoffice` runs with **no** `MAKEOPTS` or `-j`
+      override; Portage's configured job and load limits are the limits.
+- [ ] After merge, all five binaries exist (`qindawrite`, `qindacalc`,
+      `qindashow`, `qindanote`, `qindaoffice`), and the five desktop files
+      and the hicolor SVGs are installed.
+- [ ] `packaging/gentoo/gui-apps/qindaoffice/` and the `qindaqt` overlay
+      hold the SAME ebuild. The in-repo copy is the source; a drift means
+      the overlay is packaging something the tree does not describe.
+
 ### M21 manual checklist (live desktop)
 
 - [ ] `gtk-launch org.qindaqt.QindaOffice` opens the launcher with four

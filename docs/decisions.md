@@ -5,6 +5,34 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-024: The package is a snapshot tarball, not a git checkout
+
+**Context.** The ebuild used `git-r3` against
+`file:///home/cabewse/work_SPaC3/QindaOffice` with an empty `EGIT_COMMIT`
+— a path that exists on one machine, pinning nothing. Worse, the tree it
+cloned carries QXlsx as a git submodule, and Portage's default `FEATURES`
+include `network-sandbox`: `src_unpack` cannot reach `https://` at all, so
+the submodule could never be fetched. The package was unbuildable anywhere
+but its author's desktop, and not reproducible even there.
+
+**Decision.** `SRC_URI="${P}.tar.xz"` with `RESTRICT="fetch"`, the shape
+the rest of the `qindaqt` overlay already uses for unpublished snapshots.
+`tools/make-dist.sh` cuts the archive from a commit: it refuses a dirty
+tree, exports the tracked tree at `HEAD`, exports QXlsx **into**
+`third_party/QXlsx`, and writes `.dist-commit`. `pkg_nofetch` prints that
+command, so an operator who has only the ebuild can still produce the
+distfile.
+
+**Consequences.** The build needs no network and no submodule support, so
+it works under stock sandbox settings. Every installed tree names the
+commit it came from. The cost is a manual step per snapshot — the archive
+has to be cut and manifested before the version can be merged — which is
+the right trade while the repository is unpublished, and disappears the
+day it is hosted (the `SRC_URI` becomes a URL and nothing else changes).
+The in-repo `packaging/gentoo/` copy is the source of truth; the overlay
+copy must match it, and `docs/verification.md`'s M21 packaging gate checks
+that they have not drifted.
+
 ## D-023: The suite has a front door
 
 **Context.** Four apps and no way in. The desktop launcher listed them

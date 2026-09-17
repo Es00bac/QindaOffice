@@ -43,6 +43,25 @@ emerged (used by M10).
 desktop files, icons, and the shared-mime-info package. See `docs/verification.md` for the
 on-desktop checklist (containers, panel menu, single instance).
 
+The repository is not published yet, so the ebuild takes a local snapshot
+tarball rather than a download: `SRC_URI="${P}.tar.xz"` with
+`RESTRICT="fetch"`. Cut that tarball from the reviewed commit with the
+tree's own script and drop it in `DISTDIR`:
+
+```
+tools/make-dist.sh 0.1.0_p20260917 /var/cache/distfiles
+ebuild .../qindaoffice-0.1.0_p20260917.ebuild manifest
+emerge -1 gui-apps/qindaoffice
+```
+
+`make-dist.sh` refuses to run on a dirty tree and vendors
+`third_party/QXlsx` **into** the tarball — without that, `src_unpack`
+would have to fetch the submodule over https, which Portage's default
+`FEATURES=network-sandbox` forbids. It also writes a `.dist-commit` file
+naming the commit the archive was cut from, so an unpacked or installed
+tree can always be traced back. Do not add `MAKEOPTS` or `-j` overrides to
+the `emerge`: Portage's own configuration is the job limit.
+
 ## License
 
 GPL-3.0-or-later, matching the QindaQt desktop. Vendored `third_party/QXlsx`
