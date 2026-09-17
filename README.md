@@ -49,8 +49,8 @@ tarball rather than a download: `SRC_URI="${PF}.tar.xz"` with
 tree's own script and drop it in `DISTDIR`:
 
 ```
-tools/make-dist.sh 0.1.0_p20260917-r2 /var/cache/distfiles
-ebuild .../qindaoffice-0.1.0_p20260917-r2.ebuild manifest
+tools/make-dist.sh 0.1.0_p20260917-r3 /var/cache/distfiles
+ebuild .../qindaoffice-0.1.0_p20260917-r3.ebuild manifest
 emerge -1 gui-apps/qindaoffice
 ```
 

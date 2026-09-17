@@ -48,6 +48,28 @@ git -C third_party/QXlsx archive HEAD | tar -x -C "$staging/$name/third_party/QX
 # Record what this tarball is, so an installed tree can be traced back.
 git rev-parse HEAD > "$staging/$name/.dist-commit"
 
+# AGENT-GUARD: every one of these flags is load-bearing for the byte-for-byte
+# promise above, and a plain `tar -cJf` breaks it. The Manifest pins ONE hash,
+# so a second machine cutting the same commit must produce the same bytes or
+# Portage rejects its archive — which is what pkg_nofetch tells an operator to
+# go and do. Verified: this laptop and the desktop produce identical archives;
+# a plain tar differed in both size and hash.
+#
+#   --sort=name + LC_ALL=C  readdir order is filesystem-dependent
+#   --mtime=@<commit>       .dist-commit and the staging dirs are created NOW
+#   --owner/--group/--numeric-owner   uid, gid and user names get embedded
+#   --pax-option            drops atime/ctime, and keeps the PaxHeaders names
+#                           from carrying the staging path
+#   xz -T1                  multi-threaded xz splits the stream into blocks,
+#                           so the output depends on the CPU count
+commit_epoch=$(git log -1 --pretty=%ct HEAD)
+
 mkdir -p "$outdir"
-tar -C "$staging" -cJf "$outdir/$name.tar.xz" "$name"
+LC_ALL=C tar -C "$staging" \
+    --sort=name \
+    --mtime="@$commit_epoch" \
+    --owner=0 --group=0 --numeric-owner \
+    --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime \
+    -cf - "$name" \
+    | xz -T1 -9 > "$outdir/$name.tar.xz"
 echo "$outdir/$name.tar.xz"

@@ -288,6 +288,20 @@ network access at all — Portage's default `FEATURES` include
       ```
 - [ ] `ldd` on the installed `qindacalc` names no `libQXlsxQt6`: the
       vendored copy must be linked in, not planted in `/usr/lib64`.
+- [ ] Two machines cutting the SAME commit produce byte-identical
+      archives. The Manifest pins one hash and `pkg_nofetch` tells the
+      operator to run `make-dist.sh`, so a non-reproducible tarball means
+      the second machine's own archive is rejected as a Manifest
+      mismatch:
+
+      ```
+      sha512sum <distdir>/qindaoffice-<pvr>.tar.xz          # on each host
+      grep SHA512 .../gui-apps/qindaoffice/Manifest
+      ```
+
+      A plain `tar -cJf` does NOT satisfy this — readdir order, the
+      creation times of `.dist-commit` and the staging directories, the
+      embedded uid/gid, and multi-threaded xz all vary per machine.
 
 ### M21 manual checklist (live desktop)
 
