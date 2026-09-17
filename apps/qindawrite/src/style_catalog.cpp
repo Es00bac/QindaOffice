@@ -80,6 +80,13 @@ void StyleCatalog::apply(QTextCursor cursor, int id) const
     // policy / heading level (Heading -> Normal kept breaking pages).
     QTextBlockFormat block = style.blockFormat;
     block.setProperty(kStyleIdProperty, style.id);
+    // AGENT-GUARD: never force a page break BEFORE the first block. Heading 1
+    // starts a chapter on a fresh page, but a document whose first paragraph
+    // is a Heading 1 then opens with a blank page 1 — and every page number
+    // in it, including the table of contents', is one out.
+    if (cursor.block().position() == 0) {
+        block.setPageBreakPolicy(QTextFormat::PageBreak_Auto);
+    }
     cursor.setBlockFormat(block);
     // A style that does not set a family RESETS it instead of keeping the
     // previous style's (Code -> Normal left monospace behind). Probe with

@@ -38,6 +38,10 @@ signals:
     // The control's standard menu is built; apps (spelling suggestions)
     // may augment it before it shows. docPos is the document-space click.
     void contextMenuBuilt(QMenu *menu, const QPointF &docPos);
+    // A double-click landed at `position` in the document. QindaWrite uses
+    // it to open the note behind a footnote marker; when nothing handles it
+    // the control's own word selection has already run.
+    void doubleClicked(int position);
 
 protected:
     void paintEvent(QPaintEvent *event) override;

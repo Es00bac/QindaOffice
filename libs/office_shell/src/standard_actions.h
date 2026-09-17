@@ -81,6 +81,15 @@ inline const char kInsertSymbol[] = "insertSymbolAction";
 inline const char kInsertHorizontalRule[] = "insertHorizontalRuleAction";
 inline const char kInsertHyperlink[] = "insertHyperlinkAction";
 inline const char kToolsWordCount[] = "toolsWordCountAction";
+inline const char kInsertFootnote[] = "insertFootnoteAction";
+inline const char kInsertToc[] = "insertTocAction";
+inline const char kUpdateToc[] = "updateTocAction";
+inline const char kReviewTrackChanges[] = "reviewTrackChangesAction";
+inline const char kReviewAcceptChange[] = "reviewAcceptChangeAction";
+inline const char kReviewRejectChange[] = "reviewRejectChangeAction";
+inline const char kReviewAcceptAll[] = "reviewAcceptAllAction";
+inline const char kReviewRejectAll[] = "reviewRejectAllAction";
+inline const char kReviewNextChange[] = "reviewNextChangeAction";
 
 // QindaWrite table commands (M14).
 inline const char kTableInsertRowAbove[] = "tableInsertRowAboveAction";

@@ -3,6 +3,7 @@
 
 #include "format_io.h"
 #include "page_geometry.h"
+#include "write_footnotes.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -48,6 +49,42 @@ void WriteDocument::setupPaged(const QSizeF &pageSize, qreal margin)
     emit pageSetupChanged();
 }
 
+PageDecoration WriteDocument::decoration() const
+{
+    PageDecoration out;
+    out.header = m_header;
+    out.footer = m_footer;
+    out.margin = m_margin;
+    if (!m_footnotes.isEmpty()) {
+        // The page lookup uses the document's OWN page size, which is the
+        // same size PageGeometry paints with — zoom does not affect which
+        // page a position falls on.
+        PageGeometry geometry;
+        geometry.setPageSize(m_text->pageSize());
+        out.footnotes = footnotesByPage(m_text.get(), geometry, m_footnotes);
+    }
+    return out;
+}
+
+void WriteDocument::setFootnotes(QHash<QString, QString> notes)
+{
+    m_footnotes = std::move(notes);
+}
+
+void WriteDocument::setFootnoteText(const QString &id, const QString &text)
+{
+    if (id.isEmpty()) {
+        return;
+    }
+    if (text.isEmpty()) {
+        m_footnotes.remove(id);
+    } else {
+        m_footnotes.insert(id, text);
+    }
+    m_text->setModified(true);
+    emit contentChanged();
+}
+
 QSizeF WriteDocument::pageSize() const
 {
     return m_text->pageSize();
@@ -76,6 +113,7 @@ bool WriteDocument::load(const QString &path, QString *error)
             }
             m_header = setup.header;
             m_footer = setup.footer;
+            m_footnotes = setup.footnotes;
         }
     }
     setCanonicalPath(path);
@@ -106,6 +144,7 @@ bool WriteDocument::save(const QString &path, QString *error)
             setup.margin = m_margin;
             setup.header = m_header;
             setup.footer = m_footer;
+            setup.footnotes = m_footnotes;
             html = injectPageSetupMeta(html, setup);
             if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 file.write(html.toUtf8());

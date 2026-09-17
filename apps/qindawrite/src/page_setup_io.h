@@ -8,8 +8,10 @@
 // documented limitation). {page}/{pages} tokens in header/footer text
 // expand at render time so screen, print and PDF always agree.
 
+#include <QHash>
 #include <QSizeF>
 #include <QString>
+#include <QStringList>
 
 namespace QindaOffice::Apps::Write {
 
@@ -20,6 +22,11 @@ struct PageDecoration {
     QString header;
     QString footer;
     qreal margin = 96;
+    // Footnote lines to print at the foot of each 1-based page, already
+    // numbered (write_footnotes.h). Carried here because the screen view,
+    // the print path and the PDF exporter all already hand this struct to
+    // drawPageDecoration — one place to render means all three agree.
+    QHash<int, QStringList> footnotes;
 };
 
 struct PageSetup {
@@ -28,6 +35,11 @@ struct PageSetup {
     bool hasCustomPageSize = false;
     QString header;
     QString footer;
+    // Footnote texts keyed by the id their marker carries. The MARKERS
+    // travel in the HTML body as ordinary superscript runs; without this
+    // meta their notes would not, so a saved document would reopen with
+    // numbers pointing at nothing.
+    QHash<QString, QString> footnotes;
 };
 
 // Reads the three qindawrite-* metas from raw HTML; tolerant of absence

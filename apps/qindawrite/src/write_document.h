@@ -40,10 +40,20 @@ public:
     void setHeaderFooter(const QString &header, const QString &footer);
     [[nodiscard]] QString headerText() const { return m_header; }
     [[nodiscard]] QString footerText() const { return m_footer; }
-    [[nodiscard]] PageDecoration decoration() const
+    // Footnotes (write_footnotes.h): the note TEXTS, keyed by the id their
+    // marker carries in the body. Numbering is never stored — it is the
+    // marker's position in document order.
+    [[nodiscard]] const QHash<QString, QString> &footnotes() const { return m_footnotes; }
+    void setFootnotes(QHash<QString, QString> notes);
+    void setFootnoteText(const QString &id, const QString &text);
+    [[nodiscard]] QString footnoteText(const QString &id) const
     {
-        return {m_header, m_footer, m_margin};
+        return m_footnotes.value(id);
     }
+
+    // Header, footer AND the per-page footnote lines. The screen view, the
+    // print path and the PDF exporter all render from this one struct.
+    [[nodiscard]] PageDecoration decoration() const;
 
 signals:
     // Emitted by setupPaged (ctor, load, Page Setup dialog) so the view can
@@ -56,6 +66,7 @@ private:
     qreal m_margin = 96;
     QString m_header;
     QString m_footer;
+    QHash<QString, QString> m_footnotes;
 };
 
 } // namespace QindaOffice::Apps::Write

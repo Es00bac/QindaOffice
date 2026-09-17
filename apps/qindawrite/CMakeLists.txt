@@ -25,6 +25,16 @@ add_executable(qindawrite
     src/write_actions.h
     src/write_document.cpp
     src/write_document.h
+    src/write_revisions.cpp
+    src/write_revisions.h
+    src/write_review_actions.cpp
+    src/write_review_actions.h
+    src/write_footnotes.cpp
+    src/write_footnotes.h
+    src/write_toc.cpp
+    src/write_toc.h
+    src/write_ruler.cpp
+    src/write_ruler.h
     src/write_window.cpp
     src/write_window_ui.cpp
     src/write_typography.cpp

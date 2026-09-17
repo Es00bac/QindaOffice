@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_window.h"
 
+#include "write_review_actions.h"
+#include "write_revisions.h"
+#include "write_ruler.h"
 #include "write_typography.h"
 
 #include <QMessageBox>
@@ -124,6 +127,10 @@ WriteWindow::WriteWindow()
     stack->setSpacing(0);
     m_findBar = new FindReplaceBar(m_view, m_document, central);
     m_findBar->hide();
+    // The ruler sits directly above the page, inside the document host, so
+    // it scrolls and zooms with the paper it measures.
+    m_ruler = new WriteRuler(m_view, m_document, central);
+    stack->addWidget(m_ruler, 0);
     stack->addWidget(m_view, 1);
     stack->addWidget(m_findBar, 0);
     setDocumentHost(central, m_document);
@@ -133,11 +140,19 @@ WriteWindow::WriteWindow()
     m_format = new FormatController(m_view, m_document, this);
     m_tables = new TableController(m_view, m_document, this);
     m_typography = new WriteTypography(m_view, m_document, this);
+    m_revisions = new WriteRevisions(m_view, m_document, this);
+    m_review = new WriteReviewActions(m_view, m_document, m_revisions, this);
+    connect(m_review, &WriteReviewActions::message, this,
+            [this](const QString &text) { statusBar()->showMessage(text, 6000); });
+    // Double-clicking a footnote marker opens its note; anything else falls
+    // through to the control's own word selection.
+    connect(m_view, &PageTextView::doubleClicked, this,
+            [this](int position) { static_cast<void>(m_review->editFootnoteAt(position)); });
     Shell::WrappingToolBar *mainToolBar = addMainToolBar();
     Q_UNUSED(mainToolBar);
     addToolBarBreak(Qt::TopToolBarArea);
     QToolBar *formatToolBar = m_format->toolBar();
-    m_format->appendStripActions(m_typography->stripActions());
+    m_format->appendStripActions(m_typography->stripActions() + m_review->stripActions());
     m_tables->appendToToolBar(formatToolBar);
     addToolBar(Qt::TopToolBarArea, formatToolBar);
     connect(m_typography, &WriteTypography::countsChanged, this,
@@ -432,6 +447,13 @@ void WriteWindow::insertApplicationMenus(QMenu *before)
     m_format->populateInsertMenu(insertMenu);
     insertMenu->addSeparator();
     m_typography->populateInsertMenu(insertMenu);
+    insertMenu->addSeparator();
+    m_review->populateInsertMenu(insertMenu);
+
+    auto *reviewMenu = new QMenu(tr("&Review"), this);
+    reviewMenu->setObjectName(QStringLiteral("writeReviewMenu"));
+    menuBar()->insertMenu(before->menuAction(), reviewMenu);
+    m_review->populateReviewMenu(reviewMenu);
 
     auto *toolsMenu = new QMenu(tr("T&ools"), this);
     toolsMenu->setObjectName(QStringLiteral("writeToolsMenu"));

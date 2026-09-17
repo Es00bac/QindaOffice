@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "page_setup_io.h"
 
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QRegularExpression>
 
 namespace QindaOffice::Apps::Write {
@@ -54,6 +56,13 @@ PageSetup pageSetupFromHtml(const QString &html)
     }
     setup.header = readMeta(html, QStringLiteral("qindawrite-header"));
     setup.footer = readMeta(html, QStringLiteral("qindawrite-footer"));
+    const QString notes = readMeta(html, QStringLiteral("qindawrite-footnotes"));
+    if (!notes.isEmpty()) {
+        const QJsonObject object = QJsonDocument::fromJson(notes.toUtf8()).object();
+        for (const QString &id : object.keys()) {
+            setup.footnotes.insert(id, object.value(id).toString());
+        }
+    }
     return setup;
 }
 
@@ -75,6 +84,15 @@ QString injectPageSetupMeta(const QString &html, const PageSetup &setup)
     if (!setup.footer.isEmpty()) {
         meta += QStringLiteral("<meta name=\"qindawrite-footer\" content=\"%1\">")
                     .arg(escapeMeta(setup.footer));
+    }
+    if (!setup.footnotes.isEmpty()) {
+        QJsonObject object;
+        for (const auto &[id, text] : setup.footnotes.asKeyValueRange()) {
+            object.insert(id, text);
+        }
+        meta += QStringLiteral("<meta name=\"qindawrite-footnotes\" content=\"%1\">")
+                    .arg(escapeMeta(QString::fromUtf8(
+                        QJsonDocument(object).toJson(QJsonDocument::Compact))));
     }
     QString out = html;
     out.insert(head, meta);

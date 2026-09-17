@@ -33,6 +33,9 @@ class PageTextView;
 class SpellChecker;
 class TableController;
 class WriteDocument;
+class WriteReviewActions;
+class WriteRevisions;
+class WriteRuler;
 class WriteTypography;
 
 class WriteWindow final : public Shell::DocumentWindow {
@@ -47,6 +50,9 @@ public:
     [[nodiscard]] TableController *tableController() const { return m_tables; }
     [[nodiscard]] FindReplaceBar *findReplaceBar() const { return m_findBar; }
     [[nodiscard]] WriteTypography *typography() const { return m_typography; }
+    [[nodiscard]] WriteRuler *ruler() const { return m_ruler; }
+    [[nodiscard]] WriteRevisions *revisions() const { return m_revisions; }
+    [[nodiscard]] WriteReviewActions *reviewActions() const { return m_review; }
 
     void exportPdf();
 
@@ -73,6 +79,9 @@ private:
     TableController *m_tables;
     FindReplaceBar *m_findBar;
     WriteTypography *m_typography = nullptr;
+    WriteRuler *m_ruler = nullptr;
+    WriteRevisions *m_revisions = nullptr;
+    WriteReviewActions *m_review = nullptr;
     SpellChecker *m_spell = nullptr;
     QCheckBox *m_spellCheckBox = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;

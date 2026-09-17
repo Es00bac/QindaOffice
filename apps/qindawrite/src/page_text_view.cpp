@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "page_text_view.h"
 
+#include "style_catalog.h"
+
 #include "pdf_exporter.h"
 #include "write_document.h"
 
@@ -154,7 +156,8 @@ void PageTextView::paintPage(QPainter &painter, int index, const QRect &clip)
 
     // Header/footer live in the margin bands (same source as print/PDF).
     const PageDecoration decoration = m_document->decoration();
-    if (!decoration.header.isEmpty() || !decoration.footer.isEmpty()) {
+    if (!decoration.header.isEmpty() || !decoration.footer.isEmpty()
+        || !decoration.footnotes.isEmpty()) {
         painter.save();
         painter.translate(page.topLeft());
         painter.scale(m_geometry.zoom(), m_geometry.zoom());
@@ -220,12 +223,33 @@ void PageTextView::mouseReleaseEvent(QMouseEvent *event)
 void PageTextView::mouseDoubleClickEvent(QMouseEvent *event)
 {
     sendMouse(event);
+    // After the control has placed the cursor, so listeners can read the
+    // position it settled on.
+    emit doubleClicked(m_control->textCursor().position());
 }
 
 void PageTextView::keyPressEvent(QKeyEvent *event)
 {
+    const bool newParagraph = (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
+        && (event->modifiers() & Qt::ShiftModifier) == Qt::NoModifier;
+    const int styleBefore =
+        newParagraph ? classifyBlockStyle(m_control->textCursor().block()) : StyleCatalog::Normal;
     m_control->processEvent(event);
     event->accept();
+    if (!newParagraph) {
+        return;
+    }
+    // AGENT-NOTE: Enter at the end of a heading starts BODY text, not
+    // another heading. Qt carries the block format forward, so without this
+    // everything typed after a heading stayed a heading — which is also why
+    // the table of contents listed body paragraphs as entries.
+    const bool wasHeading = styleBefore >= StyleCatalog::Title
+        && styleBefore <= StyleCatalog::Heading6;
+    if (!wasHeading || !m_control->textCursor().block().text().isEmpty()) {
+        return;
+    }
+    StyleCatalog catalog;
+    catalog.apply(m_control->textCursor(), StyleCatalog::Normal);
 }
 
 void PageTextView::keyReleaseEvent(QKeyEvent *event)
