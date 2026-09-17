@@ -26,6 +26,9 @@ add_executable(qindawrite
     src/write_document.cpp
     src/write_document.h
     src/write_window.cpp
+    src/write_window_ui.cpp
+    src/write_typography.cpp
+    src/write_typography.h
     src/write_window.h
 )
 target_link_libraries(qindawrite PRIVATE office_shell office_ai Qt6::WidgetsPrivate KF6::SonnetCore)

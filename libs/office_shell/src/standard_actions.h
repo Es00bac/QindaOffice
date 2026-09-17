@@ -36,6 +36,8 @@ inline const char kViewZoomIn[] = "viewZoomInAction";
 inline const char kViewZoomOut[] = "viewZoomOutAction";
 inline const char kViewZoomReset[] = "viewZoomResetAction";
 inline const char kViewShowMenuBar[] = "viewShowMenuBarAction";
+inline const char kViewShowToolBars[] = "viewShowToolBarsAction";
+inline const char kViewShowStatusBar[] = "viewShowStatusBarAction";
 inline const char kAiAssistant[] = "aiAssistantAction";
 inline const char kSettingsPreferences[] = "settingsPreferencesAction";
 inline const char kSettingsRestorePrevious[] = "settingsRestorePreviousAction";
@@ -58,6 +60,14 @@ inline const char kFormatListBullet[] = "formatListBulletAction";
 inline const char kFormatListNumbered[] = "formatListNumberedAction";
 inline const char kFormatIndentMore[] = "formatIndentMoreAction";
 inline const char kFormatIndentLess[] = "formatIndentLessAction";
+inline const char kFormatHighlight[] = "formatHighlightAction";
+inline const char kFormatSuperscript[] = "formatSuperscriptAction";
+inline const char kFormatSubscript[] = "formatSubscriptAction";
+inline const char kFormatGrowFont[] = "formatGrowFontAction";
+inline const char kFormatShrinkFont[] = "formatShrinkFontAction";
+inline const char kFormatLineSpacingSingle[] = "formatLineSpacingSingleAction";
+inline const char kFormatLineSpacingOneHalf[] = "formatLineSpacingOneHalfAction";
+inline const char kFormatLineSpacingDouble[] = "formatLineSpacingDoubleAction";
 
 // Document-building commands (QindaWrite inserts; app-specific inserts
 // keep their own stable ids below).
@@ -65,6 +75,12 @@ inline const char kInsertTable[] = "insertTableAction";
 inline const char kInsertImage[] = "insertImageAction";
 inline const char kInsertColumns[] = "insertColumnsAction";
 inline const char kInsertPageBreak[] = "insertPageBreakAction";
+inline const char kInsertDate[] = "insertDateAction";
+inline const char kInsertTime[] = "insertTimeAction";
+inline const char kInsertSymbol[] = "insertSymbolAction";
+inline const char kInsertHorizontalRule[] = "insertHorizontalRuleAction";
+inline const char kInsertHyperlink[] = "insertHyperlinkAction";
+inline const char kToolsWordCount[] = "toolsWordCountAction";
 
 // QindaWrite table commands (M14).
 inline const char kTableInsertRowAbove[] = "tableInsertRowAboveAction";
@@ -79,6 +95,31 @@ inline const char kTableSplitCell[] = "tableSplitCellAction";
 // QindaCalc commands.
 inline const char kInsertChart[] = "insertChartAction";
 inline const char kInsertSheet[] = "insertSheetAction";
+inline const char kCalcInsertRows[] = "calcInsertRowsAction";
+inline const char kCalcInsertColumns[] = "calcInsertColumnsAction";
+inline const char kCalcDeleteRows[] = "calcDeleteRowsAction";
+inline const char kCalcDeleteColumns[] = "calcDeleteColumnsAction";
+inline const char kCalcClearContents[] = "calcClearContentsAction";
+inline const char kCalcRowHeight[] = "calcRowHeightAction";
+inline const char kCalcColumnWidth[] = "calcColumnWidthAction";
+inline const char kCalcOptimalWidth[] = "calcOptimalWidthAction";
+inline const char kCalcMergeCells[] = "calcMergeCellsAction";
+inline const char kCalcUnmergeCells[] = "calcUnmergeCellsAction";
+inline const char kCalcWrapText[] = "calcWrapTextAction";
+inline const char kCalcBordersAll[] = "calcBordersAllAction";
+inline const char kCalcBordersOutline[] = "calcBordersOutlineAction";
+inline const char kCalcBordersNone[] = "calcBordersNoneAction";
+inline const char kCalcSortAscending[] = "calcSortAscendingAction";
+inline const char kCalcSortDescending[] = "calcSortDescendingAction";
+inline const char kCalcFillDown[] = "calcFillDownAction";
+inline const char kCalcFillRight[] = "calcFillRightAction";
+inline const char kCalcAutoSum[] = "calcAutoSumAction";
+inline const char kCalcFreezePanes[] = "calcFreezePanesAction";
+inline const char kCalcSheetRename[] = "calcSheetRenameAction";
+inline const char kCalcSheetDelete[] = "calcSheetDeleteAction";
+inline const char kCalcSheetDuplicate[] = "calcSheetDuplicateAction";
+inline const char kCalcSheetMoveLeft[] = "calcSheetMoveLeftAction";
+inline const char kCalcSheetMoveRight[] = "calcSheetMoveRightAction";
 
 // QindaShow commands.
 inline const char kShowFillColor[] = "showFillColorAction";
@@ -93,6 +134,22 @@ inline const char kSlideNew[] = "slideNewAction";
 inline const char kSlideDuplicate[] = "slideDuplicateAction";
 inline const char kSlideDelete[] = "slideDeleteAction";
 inline const char kSlideStartShow[] = "slideStartShowAction";
+inline const char kShowBringToFront[] = "showBringToFrontAction";
+inline const char kShowBringForward[] = "showBringForwardAction";
+inline const char kShowSendBackward[] = "showSendBackwardAction";
+inline const char kShowSendToBack[] = "showSendToBackAction";
+inline const char kShowDuplicateShape[] = "showDuplicateShapeAction";
+inline const char kShowDeleteShape[] = "showDeleteShapeAction";
+inline const char kShowAlignLeft[] = "showAlignLeftAction";
+inline const char kShowAlignHCenter[] = "showAlignHCenterAction";
+inline const char kShowAlignRight[] = "showAlignRightAction";
+inline const char kShowAlignTop[] = "showAlignTopAction";
+inline const char kShowAlignVCenter[] = "showAlignVCenterAction";
+inline const char kShowAlignBottom[] = "showAlignBottomAction";
+inline const char kShowDistributeH[] = "showDistributeHorizontallyAction";
+inline const char kShowDistributeV[] = "showDistributeVerticallyAction";
+inline const char kShowSlideMoveUp[] = "showSlideMoveUpAction";
+inline const char kShowSlideMoveDown[] = "showSlideMoveDownAction";
 } // namespace ActionId
 
 // One bundle per document window so the action discipline (every command is
@@ -124,6 +181,8 @@ struct StandardActions {
     QAction *viewZoomOut = nullptr;
     QAction *viewZoomReset = nullptr;
     QAction *viewShowMenuBar = nullptr;
+    QAction *viewShowToolBars = nullptr;
+    QAction *viewShowStatusBar = nullptr;
 
     QAction *aiAssistant = nullptr;
     QAction *settingsPreferences = nullptr;

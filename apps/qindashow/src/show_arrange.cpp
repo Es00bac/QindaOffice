@@ -1,0 +1,283 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "show_arrange.h"
+
+#include "show_commands.h"
+#include "show_document.h"
+#include "show_window.h"
+#include "slide_canvas.h"
+
+#include "standard_actions.h"
+
+#include <QIcon>
+#include <QMenu>
+#include <QUndoStack>
+#include <QUuid>
+
+#include <algorithm>
+
+namespace QindaOffice::Apps::Show {
+
+namespace {
+
+QAction *make(QObject *parent, const char *id, const QString &text,
+              const QKeySequence &shortcut = {}, const char *iconName = nullptr)
+{
+    auto *action = new QAction(text, parent);
+    action->setObjectName(QString::fromLatin1(id));
+    if (iconName != nullptr) {
+        action->setIcon(QIcon::fromTheme(QString::fromLatin1(iconName)));
+    }
+    if (!shortcut.isEmpty()) {
+        action->setShortcut(shortcut);
+    }
+    return action;
+}
+
+} // namespace
+
+ShowArrangeActions::ShowArrangeActions(ShowWindow *window)
+    : QObject(window)
+    , m_window(window)
+{
+    createActions();
+    connect(window->canvas(), &SlideCanvas::selectionChanged, this,
+            [this](bool) { syncFromSelection(); });
+    syncFromSelection();
+}
+
+void ShowArrangeActions::createActions()
+{
+    using namespace Shell::ActionId;
+    m_bringToFront = make(this, kShowBringToFront, tr("Bring to &Front"),
+                          QKeySequence(QStringLiteral("Ctrl+Shift+]")), "object-order-front");
+    m_bringForward = make(this, kShowBringForward, tr("Bring F&orward"),
+                          QKeySequence(QStringLiteral("Ctrl+]")), "object-order-raise");
+    m_sendBackward = make(this, kShowSendBackward, tr("Send &Backward"),
+                          QKeySequence(QStringLiteral("Ctrl+[")), "object-order-lower");
+    m_sendToBack = make(this, kShowSendToBack, tr("Send to &Back"),
+                        QKeySequence(QStringLiteral("Ctrl+Shift+[")), "object-order-back");
+    m_duplicate = make(this, kShowDuplicateShape, tr("&Duplicate"),
+                       QKeySequence(QStringLiteral("Ctrl+D")), "edit-duplicate");
+    m_deleteShape = make(this, kShowDeleteShape, tr("De&lete Shape"), {}, "edit-delete");
+    m_alignLeft = make(this, kShowAlignLeft, tr("Align &Left"), {}, "align-horizontal-left");
+    m_alignHCenter =
+        make(this, kShowAlignHCenter, tr("Align &Center"), {}, "align-horizontal-center");
+    m_alignRight = make(this, kShowAlignRight, tr("Align &Right"), {}, "align-horizontal-right");
+    m_alignTop = make(this, kShowAlignTop, tr("Align &Top"), {}, "align-vertical-top");
+    m_alignVCenter =
+        make(this, kShowAlignVCenter, tr("Align &Middle"), {}, "align-vertical-center");
+    m_alignBottom = make(this, kShowAlignBottom, tr("Align &Bottom"), {}, "align-vertical-bottom");
+    m_distributeH = make(this, kShowDistributeH, tr("Distribute &Horizontally"), {},
+                         "distribute-horizontal-center");
+    m_distributeV = make(this, kShowDistributeV, tr("Distribute &Vertically"), {},
+                         "distribute-vertical-center");
+    m_slideMoveUp = make(this, kShowSlideMoveUp, tr("Move Slide &Up"),
+                         QKeySequence(QStringLiteral("Ctrl+Shift+Up")), "go-up");
+    m_slideMoveDown = make(this, kShowSlideMoveDown, tr("Move Slide &Down"),
+                           QKeySequence(QStringLiteral("Ctrl+Shift+Down")), "go-down");
+
+    SlideCanvas *canvas = m_window->canvas();
+    connect(m_bringToFront, &QAction::triggered, canvas, &SlideCanvas::bringSelectedToFront);
+    connect(m_bringForward, &QAction::triggered, canvas, &SlideCanvas::raiseSelected);
+    connect(m_sendBackward, &QAction::triggered, canvas, &SlideCanvas::lowerSelected);
+    connect(m_sendToBack, &QAction::triggered, canvas, &SlideCanvas::sendSelectedToBack);
+    connect(m_duplicate, &QAction::triggered, this, &ShowArrangeActions::duplicateSelected);
+    connect(m_deleteShape, &QAction::triggered, canvas, &SlideCanvas::deleteSelected);
+    connect(m_alignLeft, &QAction::triggered, this, [this] { applyAlign(Align::Left); });
+    connect(m_alignHCenter, &QAction::triggered, this, [this] { applyAlign(Align::HCenter); });
+    connect(m_alignRight, &QAction::triggered, this, [this] { applyAlign(Align::Right); });
+    connect(m_alignTop, &QAction::triggered, this, [this] { applyAlign(Align::Top); });
+    connect(m_alignVCenter, &QAction::triggered, this, [this] { applyAlign(Align::VCenter); });
+    connect(m_alignBottom, &QAction::triggered, this, [this] { applyAlign(Align::Bottom); });
+    connect(m_distributeH, &QAction::triggered, this, [this] { distribute(true); });
+    connect(m_distributeV, &QAction::triggered, this, [this] { distribute(false); });
+    connect(m_slideMoveUp, &QAction::triggered, this, [this] { moveSlide(-1); });
+    connect(m_slideMoveDown, &QAction::triggered, this, [this] { moveSlide(1); });
+}
+
+void ShowArrangeActions::syncFromSelection()
+{
+    SlideCanvas *canvas = m_window->canvas();
+    const int selected = canvas->slide() != nullptr ? canvas->selectedShapeIds().size() : 0;
+    for (QAction *action : {m_bringToFront, m_bringForward, m_sendBackward, m_sendToBack,
+                            m_duplicate, m_deleteShape, m_alignLeft, m_alignHCenter,
+                            m_alignRight, m_alignTop, m_alignVCenter, m_alignBottom}) {
+        action->setEnabled(selected > 0);
+    }
+    // Distributing fewer than three shapes is a no-op: the outer two define
+    // the span and there is nothing in between to space out.
+    m_distributeH->setEnabled(selected >= 3);
+    m_distributeV->setEnabled(selected >= 3);
+    const int row = m_window->currentSlideRow();
+    const int count = m_window->showDocument()->presentation()->slides.size();
+    m_slideMoveUp->setEnabled(row > 0);
+    m_slideMoveDown->setEnabled(row >= 0 && row + 1 < count);
+}
+
+void ShowArrangeActions::asOneSlideEdit(const QString &text, const std::function<void()> &mutate)
+{
+    SlideCanvas *canvas = m_window->canvas();
+    ShowModel::Slide *slide = canvas->slide();
+    if (slide == nullptr) {
+        return;
+    }
+    const ShowModel::Slide before = *slide;
+    mutate();
+    if (*slide == before) {
+        return;
+    }
+    auto *command = new SlideStateCommand(m_window->showDocument()->presentation(), slide->id,
+                                          before, *slide);
+    command->setText(text);
+    m_window->showDocument()->undoStack()->push(command);
+}
+
+void ShowArrangeActions::applyAlign(Align align)
+{
+    SlideCanvas *canvas = m_window->canvas();
+    ShowModel::Slide *slide = canvas->slide();
+    const QStringList ids = canvas->selectedShapeIds();
+    if (slide == nullptr || ids.isEmpty()) {
+        return;
+    }
+    // One shape aligns to the SLIDE; several align to each other. That is
+    // what makes "align center" useful in both situations without a mode.
+    QRectF frame;
+    if (ids.size() == 1) {
+        frame = QRectF(QPointF(0, 0), canvas->slideSize());
+    } else {
+        for (const QString &id : ids) {
+            if (const ShowModel::Shape *shape = slide->findShape(id)) {
+                frame = frame.isNull() ? shape->rect.normalized()
+                                       : frame.united(shape->rect.normalized());
+            }
+        }
+    }
+    QHash<QString, QRectF> rects;
+    for (const QString &id : ids) {
+        const ShowModel::Shape *shape = slide->findShape(id);
+        if (shape == nullptr) {
+            continue;
+        }
+        QRectF rect = shape->rect.normalized();
+        switch (align) {
+        case Align::Left:
+            rect.moveLeft(frame.left());
+            break;
+        case Align::HCenter:
+            rect.moveLeft(frame.center().x() - rect.width() / 2.0);
+            break;
+        case Align::Right:
+            rect.moveRight(frame.right());
+            break;
+        case Align::Top:
+            rect.moveTop(frame.top());
+            break;
+        case Align::VCenter:
+            rect.moveTop(frame.center().y() - rect.height() / 2.0);
+            break;
+        case Align::Bottom:
+            rect.moveBottom(frame.bottom());
+            break;
+        }
+        rects.insert(id, rect);
+    }
+    asOneSlideEdit(tr("Align"), [canvas, rects] { canvas->setShapeRects(rects); });
+}
+
+void ShowArrangeActions::distribute(bool horizontal)
+{
+    SlideCanvas *canvas = m_window->canvas();
+    ShowModel::Slide *slide = canvas->slide();
+    QStringList ids = canvas->selectedShapeIds();
+    if (slide == nullptr || ids.size() < 3) {
+        return;
+    }
+    // Sort by current centre, so the shapes keep their visual order and only
+    // the gaps between them change.
+    std::sort(ids.begin(), ids.end(), [slide, horizontal](const QString &a, const QString &b) {
+        const ShowModel::Shape *sa = slide->findShape(a);
+        const ShowModel::Shape *sb = slide->findShape(b);
+        if (sa == nullptr || sb == nullptr) {
+            return false;
+        }
+        return horizontal ? sa->rect.center().x() < sb->rect.center().x()
+                          : sa->rect.center().y() < sb->rect.center().y();
+    });
+    const ShowModel::Shape *first = slide->findShape(ids.first());
+    const ShowModel::Shape *last = slide->findShape(ids.last());
+    if (first == nullptr || last == nullptr) {
+        return;
+    }
+    const qreal start = horizontal ? first->rect.normalized().center().x()
+                                   : first->rect.normalized().center().y();
+    const qreal end = horizontal ? last->rect.normalized().center().x()
+                                 : last->rect.normalized().center().y();
+    const qreal step = (end - start) / qreal(ids.size() - 1);
+    QHash<QString, QRectF> rects;
+    for (int i = 1; i < ids.size() - 1; ++i) {
+        const ShowModel::Shape *shape = slide->findShape(ids.at(i));
+        if (shape == nullptr) {
+            continue;
+        }
+        QRectF rect = shape->rect.normalized();
+        const qreal target = start + step * qreal(i);
+        if (horizontal) {
+            rect.moveLeft(target - rect.width() / 2.0);
+        } else {
+            rect.moveTop(target - rect.height() / 2.0);
+        }
+        rects.insert(ids.at(i), rect);
+    }
+    asOneSlideEdit(tr("Distribute"), [canvas, rects] { canvas->setShapeRects(rects); });
+}
+
+void ShowArrangeActions::duplicateSelected()
+{
+    SlideCanvas *canvas = m_window->canvas();
+    ShowModel::Slide *slide = canvas->slide();
+    const QStringList ids = canvas->selectedShapeIds();
+    if (slide == nullptr || ids.isEmpty()) {
+        return;
+    }
+    asOneSlideEdit(tr("Duplicate shape"), [canvas, slide, ids] {
+        QStringList created;
+        for (const QString &id : ids) {
+            const ShowModel::Shape *source = slide->findShape(id);
+            if (source == nullptr) {
+                continue;
+            }
+            ShowModel::Shape copy = *source;
+            copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+            // Offset so the copy is visibly a second object, the same
+            // +12 pt the shape clipboard uses.
+            copy.rect.translate(12, 12);
+            slide->shapes.append(copy);
+            created.append(copy.id);
+        }
+        canvas->setSlide(slide, canvas->slideSize());
+        for (const QString &id : created) {
+            if (ShapeItem *item = canvas->itemFor(id)) {
+                item->setSelected(true);
+            }
+        }
+    });
+}
+
+void ShowArrangeActions::moveSlide(int delta)
+{
+    ShowModel::Presentation *deck = m_window->showDocument()->presentation();
+    const int row = m_window->currentSlideRow();
+    const int target = row + delta;
+    if (row < 0 || target < 0 || target >= deck->slides.size()) {
+        return;
+    }
+    const QList<ShowModel::Slide> before = deck->slides;
+    deck->slides.move(row, target);
+    auto *command = new SlideListCommand(deck, before, deck->slides);
+    command->setText(tr("Move slide"));
+    m_window->showDocument()->undoStack()->push(command);
+    m_window->selectSlideRow(target);
+}
+
+} // namespace QindaOffice::Apps::Show

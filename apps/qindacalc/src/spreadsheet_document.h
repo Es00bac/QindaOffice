@@ -56,6 +56,29 @@ public:
     void restyleRange(const CalcEng::CellRange &range, const StylePatch &patch,
                       const QString &undoText);
     void insertSheet(const QString &name);
+
+    // Structural edits (calc_structure_ops.cpp). Each is ONE undo step and
+    // goes through calc_engine's structure.h, so formulas, named ranges,
+    // merges, geometry and charts all follow the move — a plain cell shuffle
+    // here would leave every formula pointing at the wrong data.
+    void insertRows(qint32 at, qint32 count);
+    void removeRows(qint32 at, qint32 count);
+    void insertColumns(qint32 at, qint32 count);
+    void removeColumns(qint32 at, qint32 count);
+    void sortRange(const CalcEng::CellRange &range, qint32 keyColumn, bool ascending,
+                   bool headerRow);
+    void mergeCells(const CalcEng::CellRange &range);
+    void unmergeCells(const CalcEng::CellAddr &anchor);
+    void setColumnWidths(const QList<qint32> &columns, qreal px);
+    void setRowHeights(const QList<qint32> &rows, qreal px);
+    // Copies the range's first row (right) or first column (down) over the
+    // rest of it, shifting relative references like a real fill does.
+    void fillRange(const CalcEng::CellRange &range, bool down);
+    // Sheet-list edits; renaming and moving keep formulas working.
+    void removeSheet(qint32 index);
+    void renameSheet(qint32 index, const QString &name);
+    void moveSheet(qint32 from, qint32 to);
+    void duplicateSheet(qint32 index, const QString &name);
     // Chart insert is a document mutation like any other: snapshot, push,
     // dirty, notify. It used to append straight into Workbook::charts, so a
     // chart could not be undone and never reached the recovery journal.
@@ -112,6 +135,10 @@ struct StylePatch {
     std::optional<qreal> fontSize;
     std::optional<std::optional<CalcEng::Rgb>> fg;
     std::optional<std::optional<CalcEng::Rgb>> bg;
+    std::optional<bool> wrap;
+    // Border bit field (bit0 left, bit1 right, bit2 top, bit3 bottom), as
+    // CellStyle stores it. Set to 0 to clear every edge.
+    std::optional<int> borders;
 };
 
 } // namespace QindaOffice::Apps::QindaCalc

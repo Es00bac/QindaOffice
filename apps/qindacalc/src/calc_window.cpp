@@ -33,6 +33,7 @@
 #include "calc_clipboard.h"
 #include "calc_find_bar.h"
 #include "calc_format_controller.h"
+#include "calc_structure_actions.h"
 #include "print_helper.h"
 #include "standard_actions.h"
 #include "wrapping_tool_bar.h"
@@ -124,13 +125,17 @@ CalcWindow::CalcWindow()
         mainToolBar->addStripAction(m_insertChartAction);
     }
     mainToolBar->addStripAction(m_insertSheetAction);
-    mainToolBar->addStripAction(m_thousandsAction);
 
     m_format = new CalcFormatController(m_document, m_view, this);
+    m_structure = new CalcStructureActions(this, m_document, m_view);
     addToolBarBreak(Qt::TopToolBarArea);
     addToolBar(Qt::TopToolBarArea, m_format->toolBar());
+    m_format->appendStripActions(m_structure->stripActions());
 
     wireEditingActions();
+    wireGridInteraction();
+    wireSheetTabs();
+    wireAssistant();
     connect(m_findBar, &CalcFindBar::message, this,
             [this](const QString &text) { statusBar()->showMessage(text, 5000); });
     // A lossy-but-successful save (CSV keeps one sheet) has to be visible.
@@ -393,7 +398,11 @@ void CalcWindow::insertFileMenuActions(QMenu *fileMenu)
     if (templates.isEmpty()) {
         return;
     }
-    QMenu *submenu = fileMenu->addMenu(tr("New from &Template"));
+    // AGENT-GUARD: insert before the shell's File-menu anchor. addMenu()
+    // appends, which landed "New from Template" BELOW Quit.
+    auto *submenu = new QMenu(tr("New from &Template"), this);
+    submenu->setObjectName(QStringLiteral("fileTemplateMenu"));
+    fileMenu->insertMenu(fileMenuAnchor(), submenu);
     for (const Shell::TemplateEntry &entry : templates) {
         QAction *item = submenu->addAction(entry.name);
         // AGENT-GUARD: every menu command needs a stable objectName — the
@@ -425,19 +434,34 @@ void CalcWindow::insertFileMenuActions(QMenu *fileMenu)
 
 void CalcWindow::insertApplicationMenus(QMenu *before)
 {
-#ifdef QQO_WITH_CHARTS
     auto *insertMenu = new QMenu(tr("&Insert"), this);
+    insertMenu->setObjectName(QStringLiteral("calcInsertMenu"));
     menuBar()->insertMenu(before->menuAction(), insertMenu);
+    m_structure->populateInsertMenu(insertMenu);
+#ifdef QQO_WITH_CHARTS
+    insertMenu->addSeparator();
     insertMenu->addAction(m_insertChartAction);
 #endif
-    auto *sheetMenu = new QMenu(tr("&Sheet"), this);
-    menuBar()->insertMenu(before->menuAction(), sheetMenu);
-    sheetMenu->addAction(m_insertSheetAction);
+
     auto *formatMenu = new QMenu(tr("F&ormat"), this);
+    formatMenu->setObjectName(QStringLiteral("calcFormatMenu"));
     menuBar()->insertMenu(before->menuAction(), formatMenu);
     m_format->populateFormatMenu(formatMenu);
     formatMenu->addSeparator();
     formatMenu->addAction(m_thousandsAction);
+    formatMenu->addSeparator();
+    m_structure->populateFormatMenu(formatMenu);
+
+    auto *dataMenu = new QMenu(tr("&Data"), this);
+    dataMenu->setObjectName(QStringLiteral("calcDataMenu"));
+    menuBar()->insertMenu(before->menuAction(), dataMenu);
+    m_structure->populateDataMenu(dataMenu);
+
+    auto *sheetMenu = new QMenu(tr("&Sheet"), this);
+    sheetMenu->setObjectName(QStringLiteral("calcSheetMenu"));
+    menuBar()->insertMenu(before->menuAction(), sheetMenu);
+    sheetMenu->addAction(m_insertSheetAction);
+    m_structure->populateSheetMenu(sheetMenu);
 }
 
 QString CalcWindow::filterString() const

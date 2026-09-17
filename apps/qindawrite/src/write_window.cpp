@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_window.h"
 
+#include "write_typography.h"
+
 #include <QMessageBox>
 #include <QRegularExpression>
 
@@ -130,12 +132,19 @@ WriteWindow::WriteWindow()
     // below the shell's main toolbar and reuses the same actions in menus.
     m_format = new FormatController(m_view, m_document, this);
     m_tables = new TableController(m_view, m_document, this);
+    m_typography = new WriteTypography(m_view, m_document, this);
     Shell::WrappingToolBar *mainToolBar = addMainToolBar();
     Q_UNUSED(mainToolBar);
     addToolBarBreak(Qt::TopToolBarArea);
     QToolBar *formatToolBar = m_format->toolBar();
+    m_format->appendStripActions(m_typography->stripActions());
     m_tables->appendToToolBar(formatToolBar);
     addToolBar(Qt::TopToolBarArea, formatToolBar);
+    connect(m_typography, &WriteTypography::countsChanged, this,
+            &WriteWindow::updateWriteStatus);
+    connect(m_view, &PageTextView::pageCountChanged, this,
+            [this](int) { updateWriteStatus(); });
+    updateWriteStatus();
 
     wireEditingActions();
 
@@ -341,7 +350,11 @@ void WriteWindow::insertFileMenuActions(QMenu *fileMenu)
     if (templates.isEmpty()) {
         return;
     }
-    QMenu *submenu = fileMenu->addMenu(tr("New from &Template"));
+    // AGENT-GUARD: insert before the shell's File-menu anchor. addMenu()
+    // appends, which landed "New from Template" BELOW Quit.
+    auto *submenu = new QMenu(tr("New from &Template"), this);
+    submenu->setObjectName(QStringLiteral("fileTemplateMenu"));
+    fileMenu->insertMenu(fileMenuAnchor(), submenu);
     for (const Shell::TemplateEntry &entry : templates) {
         QAction *templateAction = submenu->addAction(entry.name);
         // Sanitize the display name into a stable, valid objectName.
@@ -405,6 +418,8 @@ void WriteWindow::insertApplicationMenus(QMenu *before)
     }
     formatMenu->addSeparator();
     m_format->populateFormatMenu(formatMenu);
+    formatMenu->addSeparator();
+    m_typography->populateFormatMenu(formatMenu);
 
     auto *tableMenu = new QMenu(tr("&Table"), this);
     tableMenu->setObjectName(QStringLiteral("tableMenu"));
@@ -415,6 +430,13 @@ void WriteWindow::insertApplicationMenus(QMenu *before)
     insertMenu->setObjectName(QStringLiteral("insertMenu"));
     menuBar()->insertMenu(before->menuAction(), insertMenu);
     m_format->populateInsertMenu(insertMenu);
+    insertMenu->addSeparator();
+    m_typography->populateInsertMenu(insertMenu);
+
+    auto *toolsMenu = new QMenu(tr("T&ools"), this);
+    toolsMenu->setObjectName(QStringLiteral("writeToolsMenu"));
+    menuBar()->insertMenu(before->menuAction(), toolsMenu);
+    toolsMenu->addAction(m_typography->wordCountAction());
 
     // AGENT-GUARD: the inline AI commands belong in the SHELL's AI menu
     // (`before`), never in a second menu of the same title. Inserting a new

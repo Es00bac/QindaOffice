@@ -33,6 +33,7 @@ DocumentWindow::DocumentWindow(QWidget *parent)
 {
     createActions();
     createMenus();
+    createChrome();
 
     m_editor = new QTextEdit(this);
     setCentralWidget(m_editor);
@@ -101,7 +102,10 @@ void DocumentWindow::createMenus()
     fileMenu->addAction(m_actions.fileNew);
     fileMenu->addAction(m_actions.fileOpen);
     m_recentMenu = fileMenu->addMenu(tr("Open &Recent"));
-    fileMenu->addSeparator();
+    // AGENT-GUARD: app File-menu entries are inserted before this separator
+    // (DocumentWindow::fileMenuAnchor). Appending to the menu instead is
+    // what put "New from Template" underneath Quit in three of four apps.
+    m_fileMenuAnchor = fileMenu->addSeparator();
     fileMenu->addAction(m_actions.fileCloseWindow);
     fileMenu->addSeparator();
     fileMenu->addAction(m_actions.fileSave);
@@ -132,6 +136,8 @@ void DocumentWindow::createMenus()
     viewMenu->addAction(m_actions.viewZoomOut);
     viewMenu->addAction(m_actions.viewZoomReset);
     viewMenu->addSeparator();
+    viewMenu->addAction(m_actions.viewShowToolBars);
+    viewMenu->addAction(m_actions.viewShowStatusBar);
     viewMenu->addAction(m_actions.viewShowMenuBar);
 
     // App-specific menus (Format/Insert/Table/Data/Slide/Page) slot in
@@ -190,6 +196,10 @@ void DocumentWindow::finalizeAppMenuHooks()
     if (auto *aiMenu = findChild<QMenu *>(QStringLiteral("aiMenu"))) {
         insertApplicationMenus(aiMenu);
     }
+    // The subclass exists now, so the virtual hook finally reaches it: this
+    // is the first point at which a stored document font or default zoom can
+    // be pushed into the app's own view.
+    applyPreferences();
 }
 
 WrappingToolBar *DocumentWindow::addMainToolBar()

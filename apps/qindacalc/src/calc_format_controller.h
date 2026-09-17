@@ -43,6 +43,10 @@ public:
     [[nodiscard]] QToolBar *toolBar();
     // Reuses the persistent actions so menus and toolbar stay in sync.
     void populateFormatMenu(QMenu *menu);
+    // Appends commands owned elsewhere (the structural ones: AutoSum, sort,
+    // merge, borders) to the same wrapping strip, so they are reachable
+    // without opening a menu. Creates the toolbar if it does not exist yet.
+    void appendStripActions(const QList<QAction *> &actions);
 
 private:
     void applyPatch(const StylePatch &patch, const QString &undoText);

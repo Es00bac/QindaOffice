@@ -8,6 +8,7 @@
 #include "presentation_controller.h"
 #include "presenter_window.h"
 #include "show_ai.h"
+#include "show_arrange.h"
 #include "show_find_bar.h"
 #include "show_commands.h"
 #include "show_toolbox.h"
@@ -298,8 +299,10 @@ ShowWindow::ShowWindow()
     // reuse its persistent insert/style actions (AGENT-GUARD: the hook
     // runs insertApplicationMenus, which dereferences m_toolbox).
     m_toolbox = new ShowToolbox(m_canvas, this);
+    m_arrange = new ShowArrangeActions(this);
     addToolBarBreak(Qt::TopToolBarArea);
     addToolBar(Qt::TopToolBarArea, m_toolbox->toolBar());
+    m_toolbox->appendStripActions(m_arrange->stripActions());
 
     // The base ctor ran createMenus() before this subclass existed, so the
     // app-menu hooks only dispatched the base no-ops then; run them now
@@ -308,6 +311,7 @@ ShowWindow::ShowWindow()
 
     wireCanvasUndo();
     wireShowEditingActions();
+    wireCanvasInteraction();
     connect(m_document, &ShowDocument::loaded, this, [this] { fullRefresh(); });
     connect(m_canvas, &SlideCanvas::slideEdited, this, [this] {
         m_document->setDirty(true);
@@ -340,6 +344,14 @@ void ShowWindow::fullRefresh()
         m_canvas->setSlide(nullptr, m_document->presentation()->slideSize);
         m_currentRow = -1;
     }
+    updateSlideStatus();
+}
+
+void ShowWindow::selectSlideRow(int row)
+{
+    if (row >= 0 && row < m_sorter->count()) {
+        m_sorter->setCurrentRow(row);
+    }
 }
 
 void ShowWindow::rebuildSorter()
@@ -350,7 +362,15 @@ void ShowWindow::rebuildSorter()
     for (const ShowModel::Slide &slide : deck->slides) {
         const QPixmap thumbnail = ShowModel::renderSlideToPixmap(slide, deck->slideSize,
                                                             QSize(160, 90));
-        auto *item = new QListWidgetItem(QIcon(thumbnail), slide.title);
+        // AGENT-GUARD: register the SAME pixmap for the Selected mode. A
+        // QIcon built from one pixmap renders the selected state tinted with
+        // the highlight colour, so the current slide's thumbnail showed a
+        // flat blue rectangle instead of the slide.
+        QIcon icon;
+        icon.addPixmap(thumbnail, QIcon::Normal);
+        icon.addPixmap(thumbnail, QIcon::Selected);
+        icon.addPixmap(thumbnail, QIcon::Active);
+        auto *item = new QListWidgetItem(icon, slide.title);
         item->setData(Qt::UserRole, slide.id);
         item->setFlags(item->flags() | Qt::ItemIsDragEnabled);
         m_sorter->addItem(item);
@@ -367,6 +387,10 @@ void ShowWindow::switchSlide(int row)
     m_currentRow = row;
     m_canvas->setSlide(&deck->slides[row], deck->slideSize);
     syncMetaWidgets();
+    updateSlideStatus();
+    if (m_arrange != nullptr) {
+        m_arrange->syncFromSelection();
+    }
 }
 
 void ShowWindow::syncMetaWidgets()
@@ -407,7 +431,11 @@ void ShowWindow::newDeck()
     // which made redo a silent no-op that resurrected stale undo state).
     const QList<ShowModel::Slide> before = deck->slides;
     deck->slides.clear();
-    deck->addSlide(tr("Slide 1")).layout = QStringLiteral("title");
+    // makeSlide, not addSlide: a new deck must open with the layout's
+    // placeholder text boxes on it. addSlide() appends a slide with NO
+    // shapes, so File > New used to land the user on a blank white page
+    // with nothing to click and no clue what to do next.
+    deck->slides.append(makeSlide(tr("Slide 1"), QStringLiteral("title"), deck->slideSize));
     pushSlideListCommand(before);
     m_currentRow = 0;
     m_document->setDirty(true);

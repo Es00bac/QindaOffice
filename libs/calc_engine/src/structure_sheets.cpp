@@ -1,0 +1,265 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Sheet-list operations and range sorting (structure.h). Split from
+// structure.cpp to keep both files inside the line budget; the two share
+// the same contract — mutate in place, then reindex and recalculate.
+
+#include "structure.h"
+
+#include "chart_spec.h"
+#include "sheet.h"
+#include "workbook.h"
+
+#include <algorithm>
+
+namespace QindaOffice::Calc {
+namespace {
+
+// Rewrites the sheet qualifier of every reference: `from` becomes `to`, or,
+// when `to` is empty, the reference dies (#REF!) because its sheet is gone.
+[[nodiscard]] NodePtr requalify(const NodePtr &node, const QString &from, const QString &to)
+{
+    if (!node) {
+        return node;
+    }
+    switch (node->kind) {
+    case Node::Kind::Number:
+    case Node::Kind::Text:
+    case Node::Kind::Bool:
+    case Node::Kind::Error:
+    case Node::Kind::Name:
+        return node;
+    case Node::Kind::Ref: {
+        if (node->ref.sheet.compare(from, Qt::CaseInsensitive) != 0) {
+            return node;
+        }
+        if (to.isEmpty()) {
+            return Node::makeError(Err::Ref);
+        }
+        RangeRef ref = node->ref;
+        ref.sheet = to;
+        return Node::makeRef(ref);
+    }
+    case Node::Kind::Unary:
+        return Node::makeUnary(node->op, requalify(node->left, from, to));
+    case Node::Kind::Binary:
+        return Node::makeBinary(node->op, requalify(node->left, from, to),
+                                requalify(node->right, from, to));
+    case Node::Kind::Call: {
+        QVector<NodePtr> args;
+        args.reserve(node->args.size());
+        for (const NodePtr &arg : node->args) {
+            args.append(requalify(arg, from, to));
+        }
+        return Node::makeCall(node->text, std::move(args));
+    }
+    }
+    return node;
+}
+
+void requalifyWorkbook(Workbook &book, const QString &from, const QString &to)
+{
+    for (qint32 s = 0; s < book.sheetCount(); ++s) {
+        Sheet &sheet = book.sheetAt(s);
+        QHash<quint64, Cell> cells = sheet.cells();
+        bool touched = false;
+        for (auto it = cells.begin(); it != cells.end(); ++it) {
+            if (!it.value().ast) {
+                continue;
+            }
+            const NodePtr adjusted = requalify(it.value().ast, from, to);
+            if (adjusted == it.value().ast) {
+                continue;
+            }
+            it.value().ast = adjusted;
+            it.value().formula = nodeText(adjusted);
+            touched = true;
+        }
+        if (touched) {
+            sheet.replaceContents(std::move(cells), sheet.styleIds(), sheet.columnWidths(),
+                                  sheet.rowHeights(), sheet.merges());
+        }
+    }
+    const QHash<QString, RangeRef> names = book.namedRanges();
+    for (const auto &[name, target] : names.asKeyValueRange()) {
+        if (target.sheet.compare(from, Qt::CaseInsensitive) != 0) {
+            continue;
+        }
+        if (to.isEmpty()) {
+            book.removeName(name);
+            continue;
+        }
+        RangeRef ref = target;
+        ref.sheet = to;
+        book.defineName(name, ref);
+    }
+}
+
+} // namespace
+
+bool removeSheet(Workbook &book, qint32 index)
+{
+    if (index < 0 || index >= book.sheetCount() || book.sheetCount() <= 1) {
+        return false;
+    }
+    const QString gone = book.sheetName(index);
+    // Formulas are requalified while the sheet still exists, so every
+    // reference to it can be found by name before the indices shift.
+    requalifyWorkbook(book, gone, QString());
+    QList<ChartSpec> charts;
+    for (ChartSpec spec : std::as_const(book.charts)) {
+        if (spec.sheet == index) {
+            continue;
+        }
+        if (spec.sheet > index) {
+            --spec.sheet;
+        }
+        charts.append(spec);
+    }
+    book.charts = charts;
+    if (!book.removeSheetAt(index)) {
+        return false;
+    }
+    book.reindexAll();
+    return true;
+}
+
+bool renameSheet(Workbook &book, qint32 index, const QString &newName)
+{
+    if (index < 0 || index >= book.sheetCount()) {
+        return false;
+    }
+    const QString oldName = book.sheetName(index);
+    if (oldName == newName) {
+        return true;
+    }
+    if (!book.renameSheetAt(index, newName)) {
+        return false;
+    }
+    // AGENT-GUARD: references address sheets by NAME, so a rename that does
+    // not rewrite them turns every cross-sheet formula into #NAME?.
+    requalifyWorkbook(book, oldName, newName);
+    book.reindexAll();
+    return true;
+}
+
+bool moveSheet(Workbook &book, qint32 from, qint32 to)
+{
+    if (!book.moveSheetTo(from, to)) {
+        return false;
+    }
+    // Charts store a sheet INDEX; remap the ones the move displaced.
+    const auto remap = [from, to](qint32 sheet) {
+        if (sheet == from) {
+            return to;
+        }
+        if (from < to && sheet > from && sheet <= to) {
+            return sheet - 1;
+        }
+        if (from > to && sheet >= to && sheet < from) {
+            return sheet + 1;
+        }
+        return sheet;
+    };
+    QList<ChartSpec> charts;
+    charts.reserve(book.charts.size());
+    for (ChartSpec spec : std::as_const(book.charts)) {
+        spec.sheet = remap(spec.sheet);
+        charts.append(spec);
+    }
+    book.charts = charts;
+    book.reindexAll();
+    return true;
+}
+
+void sortRange(Workbook &book, qint32 sheet, const CellRange &range, qint32 keyColumn,
+               bool ascending, bool headerRow)
+{
+    if (sheet < 0 || sheet >= book.sheetCount() || !range.isValid()) {
+        return;
+    }
+    if (keyColumn < range.topLeft.col || keyColumn > range.bottomRight.col) {
+        return;
+    }
+    const qint32 first = range.topLeft.row + (headerRow ? 1 : 0);
+    if (first >= range.bottomRight.row) {
+        return; // nothing to reorder
+    }
+    Sheet &target = book.sheetAt(sheet);
+
+    QVector<qint32> order;
+    order.reserve(range.bottomRight.row - first + 1);
+    for (qint32 r = first; r <= range.bottomRight.row; ++r) {
+        order.append(r);
+    }
+    const auto keyAt = [&](qint32 row) {
+        const Cell *cell = target.cellAt({row, keyColumn});
+        return cell != nullptr ? cell->value : Value(std::monostate{});
+    };
+    // std::stable_sort so equal keys keep their original order, which is
+    // what makes a second sort on another column behave as a tie-break.
+    std::stable_sort(order.begin(), order.end(), [&](qint32 a, qint32 b) {
+        const Value va = keyAt(a);
+        const Value vb = keyAt(b);
+        // Blanks sort last in BOTH directions: a descending sort that
+        // floated the empty tail to the top would bury the data.
+        const bool ba = isBlank(va);
+        const bool bb = isBlank(vb);
+        if (ba != bb) {
+            return !ba;
+        }
+        if (ba) {
+            return false;
+        }
+        const int cmp = compareValues(va, vb);
+        return ascending ? cmp < 0 : cmp > 0;
+    });
+
+    QHash<quint64, Cell> cells = target.cells();
+    QHash<quint64, qint32> styles = target.styleIds();
+    // Lift the block out first: source and destination rows overlap, so
+    // writing in place would read cells that have already been overwritten.
+    QHash<quint64, Cell> moved;
+    QHash<quint64, qint32> movedStyles;
+    for (int i = 0; i < order.size(); ++i) {
+        const qint32 source = order.at(i);
+        const qint32 destination = first + i;
+        const qint32 delta = destination - source;
+        for (qint32 c = range.topLeft.col; c <= range.bottomRight.col; ++c) {
+            const CellAddr from{source, c};
+            const CellAddr to{destination, c};
+            const auto cell = cells.constFind(from.key());
+            if (cell != cells.constEnd()) {
+                Cell copy = cell.value();
+                if (copy.ast && delta != 0) {
+                    // A formula that travels keeps meaning the same thing
+                    // relative to its new row (absolute axes stay put).
+                    copy.ast = shiftNode(copy.ast, delta, 0);
+                    copy.formula = nodeText(copy.ast);
+                }
+                moved.insert(to.key(), copy);
+            }
+            const auto style = styles.constFind(from.key());
+            if (style != styles.constEnd()) {
+                movedStyles.insert(to.key(), style.value());
+            }
+        }
+    }
+    for (qint32 r = first; r <= range.bottomRight.row; ++r) {
+        for (qint32 c = range.topLeft.col; c <= range.bottomRight.col; ++c) {
+            const quint64 key = CellAddr{r, c}.key();
+            cells.remove(key);
+            styles.remove(key);
+        }
+    }
+    for (const auto &[key, cell] : moved.asKeyValueRange()) {
+        cells.insert(key, cell);
+    }
+    for (const auto &[key, id] : movedStyles.asKeyValueRange()) {
+        styles.insert(key, id);
+    }
+    target.replaceContents(std::move(cells), std::move(styles), target.columnWidths(),
+                           target.rowHeights(), target.merges());
+    book.reindexAll();
+}
+
+} // namespace QindaOffice::Calc

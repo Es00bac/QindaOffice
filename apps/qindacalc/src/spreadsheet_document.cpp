@@ -346,6 +346,12 @@ void SpreadsheetDocument::restyleRange(const CalcEng::CellRange &range,
             if (patch.bg) {
                 style.bg = *patch.bg;
             }
+            if (patch.wrap) {
+                style.wrap = *patch.wrap;
+            }
+            if (patch.borders) {
+                style.borders = *patch.borders;
+            }
             const qint32 id = m_workbook.addStyle(style);
             sheet.setStyleIdAt(addr, id);
         }

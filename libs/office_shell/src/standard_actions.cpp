@@ -15,6 +15,7 @@ QList<QAction *> StandardActions::all() const
             editUndo,      editRedo,       editCut,         editCopy,   editPaste,
             editSelectAll, editFind,       editReplace,     editFindNext, editFindPrevious,
             viewZoomIn,    viewZoomOut,    viewZoomReset,   viewShowMenuBar,
+            viewShowToolBars, viewShowStatusBar,
             aiAssistant,   settingsPreferences, helpAbout,  helpAboutQt};
 }
 
@@ -99,6 +100,12 @@ StandardActions createStandardActions(QObject *parent)
     a.viewShowMenuBar = make(parent, kViewShowMenuBar, QObject::tr("Show Menu &Bar"));
     a.viewShowMenuBar->setCheckable(true);
     a.viewShowMenuBar->setChecked(true);
+    a.viewShowToolBars = make(parent, kViewShowToolBars, QObject::tr("Show &Toolbars"));
+    a.viewShowToolBars->setCheckable(true);
+    a.viewShowToolBars->setChecked(true);
+    a.viewShowStatusBar = make(parent, kViewShowStatusBar, QObject::tr("Show &Status Bar"));
+    a.viewShowStatusBar->setCheckable(true);
+    a.viewShowStatusBar->setChecked(true);
 
     a.aiAssistant = make(parent, kAiAssistant, QObject::tr("Assistant…"));
 
@@ -110,7 +117,9 @@ StandardActions createStandardActions(QObject *parent)
 
     // M0 skeleton honesty: no document engine yet, so these stay disabled
     // until their owning milestones land (AGENT-NOTE: M1 save/open, M4/M5
-    // print, M6 AI, M10 preferences wiring).
+    // print, M6 AI). Preferences is shell behavior with no engine behind
+    // it, so it ships enabled (D-014) — it used to be created disabled and
+    // never enabled, which made it a dead entry in all four apps.
     const QList<QAction *> notYet = {a.fileSave,  a.fileSaveAs,      a.filePrint,
                                      a.filePrintPreview,
                                      a.editUndo,  a.editRedo,        a.editCut,
@@ -118,7 +127,7 @@ StandardActions createStandardActions(QObject *parent)
                                      a.editFind,  a.editReplace,     a.editFindNext,
                                      a.editFindPrevious,
                                      a.viewZoomIn, a.viewZoomOut,    a.viewZoomReset,
-                                     a.aiAssistant, a.settingsPreferences};
+                                     a.aiAssistant};
     for (QAction *action : notYet) {
         action->setEnabled(false);
     }

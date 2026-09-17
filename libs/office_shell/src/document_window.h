@@ -6,8 +6,10 @@
 #include <QMainWindow>
 #include <QPointer>
 
+class QLabel;
 class QMenu;
 class QTextEdit;
+class QTimer;
 class QToolBar;
 
 namespace QindaOffice::Core {
@@ -18,6 +20,7 @@ namespace QindaOffice::Shell {
 
 class AppServices;
 class GlobalMenuExport;
+class PreferencesDialog;
 class WrappingToolBar;
 
 // One document = one ordinary top-level window (ADR-0110): no tab strip, no
@@ -36,6 +39,21 @@ public:
     ~DocumentWindow() override;
 
     [[nodiscard]] QAction *action(const QString &objectName) const;
+
+    // The permanent right-hand status-bar field. Every app fills it with
+    // what its document is doing right now — word and character counts,
+    // the aggregates of the selected cells, "Slide 3 of 12", the current
+    // page. It is a PERMANENT widget, so a transient showMessage() on the
+    // left never hides it, and the status bar exists from construction so
+    // the first message cannot make the window's contents jump.
+    void setStatusInfo(const QString &text);
+    [[nodiscard]] QString statusInfo() const;
+
+    // Insertion point for app entries in the File menu ("New from
+    // Template…"). AGENT-GUARD: app entries must be inserted BEFORE this
+    // separator. Appending to the menu instead put them under Quit, which
+    // is where all three apps that use the hook had ended up.
+    [[nodiscard]] QAction *fileMenuAnchor() const { return m_fileMenuAnchor; }
     void insertFileMenuActionsDeferred();
     [[nodiscard]] StandardActions *standardActions() { return &m_actions; }
 
@@ -79,6 +97,10 @@ public:
     [[nodiscard]] bool restoreFromJournal(const QString &path, bool untitled,
                                           const QByteArray &payload, const QString &journalKey);
 
+    // Settings ▸ Preferences…: builds the shell pages, lets the subclass
+    // add its own through addPreferencePages(), and re-applies on OK.
+    void showPreferences();
+
     // Save paths shared by actions and close consent. false means "not
     // saved" (cancelled or failed) - callers must not treat it as success.
     [[nodiscard]] bool saveDocument();
@@ -112,8 +134,18 @@ protected:
     // Template…). Default inserts nothing; reach the menu through
     // insertFileMenuActionsDeferred() in the subclass ctor (the shell
     // creates menus before the subclass exists, same two-phase pattern as
-    // insertApplicationMenus + the named aiMenu anchor).
+    // insertApplicationMenus + the named aiMenu anchor). Insert before
+    // fileMenuAnchor(), never append.
     virtual void insertFileMenuActions(QMenu *fileMenu);
+
+    // Subclass hook: add app pages to the Preferences dialog (spell check,
+    // grid options, AI defaults). Default adds none.
+    virtual void addPreferencePages(PreferencesDialog *dialog);
+    // Subclass hook: re-read Preferences into the live view (document font,
+    // default zoom). Called once the subclass exists (finalizeAppMenuHooks)
+    // and again whenever the store changes — including from another window
+    // of the same app. Default does nothing.
+    virtual void applyPreferences();
 
 protected:
     StandardActions m_actions;
@@ -121,6 +153,12 @@ protected:
 private:
     void createActions();
     void createMenus();
+    // Status bar, View chrome toggles, Preferences and the auto-save timer
+    // (document_window_chrome.cpp).
+    void createChrome();
+    void applyChromePreferences();
+    void restartAutoSaveTimer();
+    void autoSaveTick();
     void startMenuExport();
     void applyMenuBarVisibility(bool exported);
 
@@ -145,6 +183,10 @@ private:
     QTextEdit *m_editor = nullptr;
     QMenu *m_recentMenu = nullptr;
     QAction *m_restoreAction = nullptr;
+    QAction *m_fileMenuAnchor = nullptr;
+    QLabel *m_statusInfo = nullptr;
+    QTimer *m_autoSaveTimer = nullptr;
+    bool m_applyingChromePrefs = false;
     QString m_journalKey;
     bool m_loading = false;
 };

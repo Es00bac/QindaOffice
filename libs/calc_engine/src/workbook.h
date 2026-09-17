@@ -29,6 +29,24 @@ public:
     [[nodiscard]] Sheet &sheetAt(qint32 index);
     [[nodiscard]] const Sheet &sheetAt(qint32 index) const;
 
+    // Sheet-list mutation (structure.cpp wraps these with the formula and
+    // chart fixups a user-visible Delete/Rename/Move Sheet also needs).
+    // AGENT-GUARD: removing or moving a sheet shifts every sheet INDEX, and
+    // the dependency graph is keyed by index — call reindexAll() after.
+    bool removeSheetAt(qint32 index);
+    bool renameSheetAt(qint32 index, const QString &name);
+    bool moveSheetTo(qint32 from, qint32 to);
+    // Inserts a new sheet at `index` (clamped); returns it.
+    Sheet &insertSheet(qint32 index, const QString &name);
+    // Rebuilds the name -> index map after a direct sheet-vector mutation.
+    void rebuildSheetIndex();
+
+    // Rebuilds the whole dependency index from the stored ASTs and
+    // re-evaluates every formula once. Used after a structural edit
+    // (rows/columns/sheets), where per-cell incremental updates would be
+    // both wrong (positions and sheet indices moved) and quadratic.
+    void reindexAll();
+
     // Parses and installs cell input; returns false when the input is a
     // formula that failed to parse (it is stored as text instead).
     bool setCellInput(qint32 sheet, const CellAddr &addr, const QString &input);
@@ -59,6 +77,8 @@ public:
     [[nodiscard]] std::optional<RangeRef> namedRange(const QString &name) const;
     // Full table (snapshot/undo seam; defineName stays the mutation path).
     [[nodiscard]] const QHash<QString, RangeRef> &namedRanges() const { return m_names; }
+    // Drops a name (structural edits delete names whose range is gone).
+    bool removeName(const QString &name);
 
     // EvalHost implementation.
     [[nodiscard]] Value cellValue(qint32 sheet, qint32 row, qint32 col) const override;

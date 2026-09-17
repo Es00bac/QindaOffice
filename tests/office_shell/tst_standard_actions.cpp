@@ -101,12 +101,18 @@ void StandardActionsTest::enginelessCommandsStartDisabled()
                                        a.editFind,     a.editReplace, a.editFindNext,
                                        a.editFindPrevious,
                                        a.viewZoomIn,   a.viewZoomOut, a.viewZoomReset,
-                                       a.aiAssistant,  a.settingsPreferences};
+                                       a.aiAssistant};
     for (QAction *action : disabled) {
         QVERIFY2(!action->isEnabled(), qPrintable(action->objectName()));
     }
-    QVERIFY(a.viewShowMenuBar->isCheckable());
-    QVERIFY(a.viewShowMenuBar->isChecked());
+    // Preferences is shell behavior, not an engine command: it ships
+    // enabled (D-014). This assertion used to pin the opposite, which is
+    // why the dead menu entry survived every audit.
+    QVERIFY(a.settingsPreferences->isEnabled());
+    for (QAction *toggle : {a.viewShowMenuBar, a.viewShowToolBars, a.viewShowStatusBar}) {
+        QVERIFY2(toggle->isCheckable(), qPrintable(toggle->objectName()));
+        QVERIFY2(toggle->isChecked(), qPrintable(toggle->objectName()));
+    }
 }
 
 int main(int argc, char *argv[])

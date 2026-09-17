@@ -6,13 +6,16 @@ add_executable(qindanote
     src/note_page_render.cpp
     src/note_page_render.h
     src/note_page_view.cpp
+    src/note_structure.cpp
+    src/note_structure.h
     src/note_page_view.h
     src/note_window.cpp
+    src/note_window_ui.cpp
     src/note_window.h
     src/notebook.cpp
     src/notebook.h
 )
-target_link_libraries(qindanote PRIVATE office_shell office_ink)
+target_link_libraries(qindanote PRIVATE office_shell office_ai office_ink)
 target_compile_definitions(qindanote PRIVATE
     QQO_DESKTOP_ID="org.qindaqt.QindaNote"
     QT_NO_CAST_FROM_ASCII

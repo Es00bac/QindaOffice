@@ -55,6 +55,15 @@ public:
 
     NoteSection &addSection(const QString &name);
     NotePage &addPage(NoteSection &section, const QString &title);
+    // Structure edits (note_structure.cpp drives them from the UI).
+    // removePage/removeSection delete the page files too: leaving orphans
+    // behind would resurrect the pages on the next load.
+    bool removePage(const QString &sectionId, const QString &pageId);
+    bool removeSection(const QString &sectionId);
+    bool renamePage(const QString &sectionId, const QString &pageId, const QString &title);
+    bool renameSection(const QString &sectionId, const QString &name);
+    // Moves a page within its section; `delta` is -1 (up) or +1 (down).
+    bool movePage(const QString &sectionId, const QString &pageId, int delta);
     [[nodiscard]] bool persistPage(const NoteSection &section, const NotePage &page,
                                    QString *error = nullptr) const;
     [[nodiscard]] bool loadPage(NoteSection &section, NotePage &page, QString *error) const;

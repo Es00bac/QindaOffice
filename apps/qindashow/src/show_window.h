@@ -31,6 +31,7 @@ class ModelCatalog;
 namespace QindaOffice::Apps::Show {
 
 class SlideCanvas;
+class ShowArrangeActions;
 class ShowFindBar;
 
 class ShowToolbox;
@@ -54,12 +55,17 @@ public:
 
     // AI seams (show_ai.cpp).
     [[nodiscard]] int currentSlideRow() const { return m_currentRow; }
+    // Selects a slide by deck position; the sorter owns slide selection, so
+    // everything that needs to move the user to a slide goes through here.
+    void selectSlideRow(int row);
+    [[nodiscard]] ShowArrangeActions *arrangeActions() const { return m_arrange; }
     void appendSlides(const QList<ShowModel::Slide> &slides);
     void replaceCurrentSlideText(const QString &text);
 
 protected:
     void insertApplicationMenus(QMenu *before) override;
     void insertFileMenuActions(QMenu *fileMenu) override;
+    void applyPreferences() override;
     QString filterString() const override;
 
 private:
@@ -75,6 +81,12 @@ private:
     void pushSlideListCommand(const QList<ShowModel::Slide> &before);
     void wireCanvasUndo();
     void wireShowEditingActions();
+    // Canvas context menu and the "Slide n of m" status field.
+    void wireCanvasInteraction();
+    void updateSlideStatus();
+    // Edit > Replace across the whole deck (titles, shape runs, notes) as
+    // one undo step. Was a permanently disabled menu entry.
+    void replaceAcrossDeck();
     // Print/preview share one paginating renderer with the PDF export, so
     // paper and PDF agree by construction (plan 5.2).
     [[nodiscard]] Shell::PrintRenderCallback printRenderCallback() const;
@@ -86,6 +98,7 @@ private:
     ShowDocument *m_document;
     SlideCanvas *m_canvas;
     ShowToolbox *m_toolbox = nullptr;
+    ShowArrangeActions *m_arrange = nullptr;
     QListWidget *m_sorter;
     QPlainTextEdit *m_notes;
     QComboBox *m_transition;

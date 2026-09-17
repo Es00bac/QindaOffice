@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "show_document.h"
 
+#include <QUuid>
+
 #include "fodp_reader.h"
 #include "fodp_writer.h"
 #include "libre_office_converter.h"
@@ -34,9 +36,28 @@ QString suffixOf(const QString &path)
 ShowDocument::ShowDocument(QObject *parent)
     : Core::Document(parent)
 {
-    // A pristine deck is one title slide so the canvas is never empty.
+    // A pristine deck is one title slide so the canvas is never empty — and
+    // it carries the title placeholder, so the first thing the user sees is
+    // something to type into rather than an empty white page.
     ShowModel::Slide &slide = m_presentation.addSlide(tr("Slide 1"));
     slide.layout = QStringLiteral("title");
+    ShowModel::Shape title;
+    title.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    title.kind = ShowModel::ShapeKind::TextBox;
+    title.rect = QRectF(m_presentation.slideSize.width() * 0.1,
+                        m_presentation.slideSize.height() * 0.36,
+                        m_presentation.slideSize.width() * 0.8,
+                        m_presentation.slideSize.height() * 0.2);
+    title.strokeWidth = 0;
+    ShowModel::TextRun run;
+    run.text = tr("Click to add a title");
+    run.pointSize = 40;
+    run.color = QColor(120, 120, 120);
+    ShowModel::TextParagraph paragraph;
+    paragraph.alignment = int(Qt::AlignHCenter);
+    paragraph.runs.append(run);
+    title.paragraphs.append(paragraph);
+    slide.shapes.append(title);
 }
 
 bool ShowDocument::load(const QString &path, QString *error)

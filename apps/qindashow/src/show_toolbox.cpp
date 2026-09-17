@@ -122,6 +122,18 @@ QToolBar *ShowToolbox::toolBar()
     return m_toolBar;
 }
 
+void ShowToolbox::appendStripActions(const QList<QAction *> &actions)
+{
+    auto *bar = qobject_cast<Shell::WrappingToolBar *>(toolBar());
+    if (bar == nullptr) {
+        return;
+    }
+    bar->addStripSeparator();
+    for (QAction *action : actions) {
+        bar->addStripAction(action);
+    }
+}
+
 void ShowToolbox::pickColor(bool fill)
 {
     const ShowModel::Shape *shape =

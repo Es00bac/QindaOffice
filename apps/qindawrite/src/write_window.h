@@ -17,6 +17,8 @@
 
 #include <QTextCharFormat>
 
+class QCheckBox;
+
 namespace QindaOffice::Apps::Write {
 
 namespace QindaOffice::Ai {
@@ -31,6 +33,7 @@ class PageTextView;
 class SpellChecker;
 class TableController;
 class WriteDocument;
+class WriteTypography;
 
 class WriteWindow final : public Shell::DocumentWindow {
     Q_OBJECT
@@ -43,17 +46,22 @@ public:
     [[nodiscard]] FormatController *formatController() const { return m_format; }
     [[nodiscard]] TableController *tableController() const { return m_tables; }
     [[nodiscard]] FindReplaceBar *findReplaceBar() const { return m_findBar; }
+    [[nodiscard]] WriteTypography *typography() const { return m_typography; }
 
     void exportPdf();
 
 protected:
     void insertApplicationMenus(QMenu *before) override;
     void insertFileMenuActions(QMenu *fileMenu) override;
+    void addPreferencePages(Shell::PreferencesDialog *dialog) override;
+    void applyPreferences() override;
     QString filterString() const override;
     QString saveFilterString() const override;
 
 private:
     void wireEditingActions();
+    // "12 words · page 2 of 5" in the permanent status field.
+    void updateWriteStatus();
     void applyStyle(int styleId);
 
     void addSpellingActions(QMenu *menu, const QPointF &docPos);
@@ -64,7 +72,9 @@ private:
     FormatController *m_format;
     TableController *m_tables;
     FindReplaceBar *m_findBar;
+    WriteTypography *m_typography = nullptr;
     SpellChecker *m_spell = nullptr;
+    QCheckBox *m_spellCheckBox = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;
     Ai::AssistantPanel *m_panel = nullptr;
     Ai::InlineActionFlow *m_inline = nullptr;

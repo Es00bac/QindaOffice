@@ -17,8 +17,24 @@ using namespace QindaOffice::Ink;
 NotePageView::NotePageView(QWidget *parent)
     : QWidget(parent)
 {
-    setMinimumSize(int(m_pageWidth) + 48, int(m_minPageHeight) + 48);
+    // AGENT-GUARD: the page is sized through updatePageMetrics(), which the
+    // window's QScrollArea scrolls. Setting the page size as the widget's
+    // hard minimum (which is what used to happen) made the whole QindaNote
+    // window refuse to be shorter than a full A4 page plus chrome — about
+    // 1100 px — so it could not fit on a laptop screen at all.
     setAttribute(Qt::WA_AcceptTouchEvents, false); // pens only: palm baseline
+    updatePageMetrics();
+}
+
+void NotePageView::updatePageMetrics()
+{
+    // The widget is exactly as big as the (zoomed, grown) page plus its
+    // margin; the scroll area around it supplies the scrollbars.
+    const qreal height = qMax(m_minPageHeight * m_zoom, growHeight());
+    const QSize wanted(int(m_pageWidth * m_zoom) + 48, int(height) + 48);
+    setMinimumSize(wanted);
+    resize(wanted);
+    updateGeometry();
 }
 
 QRectF NotePageView::pageRect() const
@@ -47,7 +63,7 @@ void NotePageView::setZoom(qreal zoom)
         return;
     }
     m_zoom = next;
-    updateGeometry();
+    updatePageMetrics();
     syncBlocksGeometry();
     update();
 }
@@ -100,7 +116,9 @@ void NotePageView::setPage(NotePage *page)
         rebuildGrid();
         syncBlocks();
     }
-    updateGeometry();
+    // A page that has already grown past one sheet must make the widget
+    // that tall again, or the scroll area cannot reach the bottom of it.
+    updatePageMetrics();
     update();
 }
 

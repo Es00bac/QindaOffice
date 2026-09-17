@@ -15,6 +15,11 @@ class QLineEdit;
 class QTabBar;
 class QToolBar;
 
+namespace QindaOffice::Ai {
+class AssistantPanel;
+class ModelCatalog;
+}
+
 namespace CalcEng = QindaOffice::Calc;
 namespace QindaOffice::Apps::QindaCalc {
 
@@ -22,6 +27,7 @@ class SpreadsheetDocument;
 class SpreadsheetView;
 class CalcFindBar;
 class CalcFormatController;
+class CalcStructureActions;
 
 class CalcWindow final : public Shell::DocumentWindow {
     Q_OBJECT
@@ -33,16 +39,24 @@ public:
     [[nodiscard]] SpreadsheetView *spreadsheetView() const { return m_view; }
     [[nodiscard]] CalcFindBar *findBar() const { return m_findBar; }
     [[nodiscard]] CalcFormatController *formatController() const { return m_format; }
+    [[nodiscard]] CalcStructureActions *structureActions() const { return m_structure; }
 
     void loadWorkbookPath(const QString &path);
 
 protected:
     void insertApplicationMenus(QMenu *before) override;
     void insertFileMenuActions(QMenu *fileMenu) override;
+    void applyPreferences() override;
     QString filterString() const override;
     QString saveFilterString() const override;
 
 private:
+    // Status bar, grid context menu, sheet-tab interaction and the AI dock
+    // (calc_window_ui.cpp).
+    void wireGridInteraction();
+    void wireSheetTabs();
+    void wireAssistant();
+    void updateSelectionStatus();
     void rebuildSheetTabs();
     void createCalcActions();
     void wireEditingActions();
@@ -68,6 +82,9 @@ private:
     QTabBar *m_tabs;
     CalcFindBar *m_findBar = nullptr;
     CalcFormatController *m_format = nullptr;
+    CalcStructureActions *m_structure = nullptr;
+    Ai::ModelCatalog *m_catalog = nullptr;
+    Ai::AssistantPanel *m_panel = nullptr;
     QAction *m_insertChartAction = nullptr;
     QAction *m_insertSheetAction = nullptr;
     QAction *m_thousandsAction = nullptr;

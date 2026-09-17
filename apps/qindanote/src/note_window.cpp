@@ -4,6 +4,7 @@
 #include "note_find_bar.h"
 #include "note_page_render.h"
 #include "note_page_view.h"
+#include "note_structure.h"
 
 #include "standard_actions.h"
 #include "wrapping_tool_bar.h"
@@ -19,6 +20,7 @@
 #include <QSpinBox>
 #include <QMenuBar>
 #include <QFileInfo>
+#include <QScrollArea>
 #include <QStatusBar>
 #include <QToolBar>
 #include <QTreeWidget>
@@ -28,7 +30,12 @@ namespace QindaOffice::Apps::Notes {
 
 NoteDocument::NoteDocument()
 {
-    // A pristine untitled notebook: lazily created on first save.
+    // A pristine untitled notebook: lazily created on first save, but NOT
+    // empty. An empty notebook showed an empty navigator and a page surface
+    // bound to nothing, so a fresh QindaNote window could not be written in
+    // at all until the user found Page ▸ New Page.
+    NoteSection &section = m_notebook.addSection(tr("Notes"));
+    m_notebook.addPage(section, tr("Page 1"));
 }
 
 bool NoteDocument::load(const QString &path, QString *error)
@@ -88,7 +95,17 @@ NoteWindow::NoteWindow()
     auto *layout = new QHBoxLayout(row);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->addWidget(m_navigator, 1);
-    layout->addWidget(m_view, 4);
+    // AGENT-GUARD: the page lives in a scroll area. The page widget is as
+    // tall as a full sheet (and taller once it grows, or when zoomed in);
+    // putting it straight in the layout made that height the WINDOW's
+    // minimum, so QindaNote could not be resized below ~1100 px.
+    m_scroll = new QScrollArea(row);
+    m_scroll->setObjectName(QStringLiteral("notePageScroll"));
+    m_scroll->setWidget(m_view);
+    m_scroll->setWidgetResizable(false);
+    m_scroll->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+    m_scroll->setFrameShape(QFrame::NoFrame);
+    layout->addWidget(m_scroll, 4);
     stack->addWidget(row, 1);
     m_findBar = new NoteFindBar(m_document, central);
     m_findBar->hide();
@@ -297,7 +314,15 @@ NoteWindow::NoteWindow()
                 setCurrentIds(sectionId, pageId);
                 m_view->setPage(page);
             });
+    m_structure = new NoteStructureActions(this);
+    tools->addStripSeparator();
+    for (QAction *action : m_structure->stripActions()) {
+        tools->addStripAction(action);
+    }
     rebuildNavigator();
+    wireNavigatorInteraction();
+    wireEditActions();
+    wireAssistant();
 
     // The shell's loadPath (File ▸ Open, drag-drop, command line) only calls
     // NoteDocument::load; there is no app hook — so watch contentChanged and
@@ -425,76 +450,51 @@ void NoteWindow::rebuildNavigator()
 {
     // AGENT-GUARD: items carry ids (UserRole: section id, UserRole+1: page
     // id) resolved through Notebook::sectionById/pageById at activation time.
-    const QSignalBlocker blocker(m_navigator);
-    m_navigator->clear();
-    Notebook *notebook = m_document->notebook();
-    for (const NoteSection &section : notebook->sections()) {
-        auto *sectionItem = new QTreeWidgetItem(m_navigator, {section.name});
-        sectionItem->setData(0, Qt::UserRole, section.id);
-        for (const NotePage &page : section.pages) {
-            auto *pageItem = new QTreeWidgetItem(sectionItem, {page.title});
-            pageItem->setData(0, Qt::UserRole, section.id);
-            pageItem->setData(0, Qt::UserRole + 1, page.id);
+    QTreeWidgetItem *firstPage = nullptr;
+    {
+        // The blocker covers the TEARDOWN and rebuild only: clear() fires
+        // currentItemChanged for every item it destroys, and the handler
+        // would try to persist pages that no longer exist.
+        const QSignalBlocker blocker(m_navigator);
+        m_navigator->clear();
+        Notebook *notebook = m_document->notebook();
+        for (const NoteSection &section : notebook->sections()) {
+            auto *sectionItem = new QTreeWidgetItem(m_navigator, {section.name});
+            sectionItem->setData(0, Qt::UserRole, section.id);
+            for (const NotePage &page : section.pages) {
+                auto *pageItem = new QTreeWidgetItem(sectionItem, {page.title});
+                pageItem->setData(0, Qt::UserRole, section.id);
+                pageItem->setData(0, Qt::UserRole + 1, page.id);
+            }
+            sectionItem->setExpanded(true);
         }
-        sectionItem->setExpanded(true);
+        // The first page, never a section header.
+        for (int i = 0; i < m_navigator->topLevelItemCount() && firstPage == nullptr; ++i) {
+            QTreeWidgetItem *sectionItem = m_navigator->topLevelItem(i);
+            if (sectionItem->childCount() > 0) {
+                firstPage = sectionItem->child(0);
+            }
+        }
     }
-    // Select the first page, never a section header.
-    for (int i = 0; i < m_navigator->topLevelItemCount(); ++i) {
-        QTreeWidgetItem *sectionItem = m_navigator->topLevelItem(i);
-        if (sectionItem->childCount() > 0) {
-            m_navigator->setCurrentItem(sectionItem->child(0));
-            return;
-        }
+    // AGENT-GUARD: select OUTSIDE the blocker. The selection used to happen
+    // inside it, so currentItemChanged never fired for it — the navigator
+    // showed a highlighted first page that was never actually opened, and
+    // the page surface stayed bound to nothing until the user clicked.
+    if (firstPage != nullptr) {
+        m_navigator->setCurrentItem(firstPage);
     }
 }
 
 void NoteWindow::insertApplicationMenus(QMenu *before)
 {
     auto *pageMenu = new QMenu(tr("&Page"), this);
+    pageMenu->setObjectName(QStringLiteral("notePageMenu"));
     menuBar()->insertMenu(before->menuAction(), pageMenu);
-    QAction *addPage = pageMenu->addAction(tr("&New Page"));
-    addPage->setObjectName(QStringLiteral("notePageNew"));
-    connect(addPage, &QAction::triggered, this, [this] {
-        Notebook *notebook = m_document->notebook();
-        NoteSection *section = notebook->sectionById(m_currentSectionId);
-        if (section == nullptr) {
-            if (notebook->sections().isEmpty()) {
-                section = &notebook->addSection(QStringLiteral("Notes"));
-            } else {
-                section = notebook->sectionById(notebook->sections().first().id);
-            }
-        }
-        notebook->addPage(*section, tr("Page %1").arg(section->pages.size() + 1));
-        persistCurrentPage();
-        m_document->setDirty(true);
-        rebuildNavigator();
-        // Land the user on the page they just created (the rebuild always
-        // selects the first page; jump to the new one instead).
-        NotePage *created = section->pages.isEmpty() ? nullptr : &section->pages.last();
-        if (created != nullptr) {
-            setCurrentIds(section->id, created->id);
-            m_view->setPage(created);
-        }
-    });
-    QAction *background = pageMenu->addAction(tr("&Background…"));
-    background->setObjectName(QStringLiteral("notePageBackground"));
-    connect(background, &QAction::triggered, this, [this] {
-        Notebook *notebook = m_document->notebook();
-        NotePage *page = notebook->pageById(m_currentSectionId, m_currentPageId);
-        if (page == nullptr) {
-            return;
-        }
-        const QString choice = QInputDialog::getItem(
-            this, tr("Background"), tr("Pattern"),
-            {QStringLiteral("blank"), QStringLiteral("ruled"), QStringLiteral("grid"),
-             QStringLiteral("dotted")});
-        if (!choice.isEmpty()) {
-            page->envelope.background = choice;
-            m_view->update();
-            m_document->setDirty(true);
-            persistCurrentPage();
-        }
-    });
+    m_structure->populatePageMenu(pageMenu);
+    pageMenu->addSeparator();
+    QAction *exportAction = pageMenu->addAction(tr("&Export PDF…"));
+    exportAction->setObjectName(QStringLiteral("noteExportPdf"));
+    connect(exportAction, &QAction::triggered, this, &NoteWindow::exportPdf);
 }
 
 QString NoteWindow::filterString() const

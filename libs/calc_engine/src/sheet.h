@@ -35,6 +35,22 @@ public:
     [[nodiscard]] const QList<CellRange> &merges() const { return m_merges; }
     void addMerge(const CellRange &range) { m_merges.append(range); }
     void clearMerges() { m_merges.clear(); }
+    // Drops the merge whose top-left is `anchor`; returns false when there
+    // is none (Format > Unmerge on a cell that is not merged).
+    bool removeMergeAt(const CellAddr &anchor);
+    // The merge covering `addr`, or nullptr. Painting and hit-testing both
+    // go through this so a merged block reads and clicks as one cell.
+    [[nodiscard]] const CellRange *mergeCovering(const CellAddr &addr) const;
+
+    // Explicit geometry, for the structural-edit rewrite (structure.cpp).
+    [[nodiscard]] const QHash<qint32, qreal> &columnWidths() const { return m_colWidths; }
+    [[nodiscard]] const QHash<qint32, qreal> &rowHeights() const { return m_rowHeights; }
+    // Replaces the sparse maps wholesale. AGENT-GUARD: only structure.cpp
+    // calls this — inserting or removing a row moves every map at once and
+    // a partial rewrite would leave styles pointing at the wrong cells.
+    void replaceContents(QHash<quint64, Cell> cells, QHash<quint64, qint32> styleIds,
+                         QHash<qint32, qreal> colWidths, QHash<qint32, qreal> rowHeights,
+                         QList<CellRange> merges);
 
     [[nodiscard]] qint32 styleIdAt(const CellAddr &addr) const;
     void setStyleIdAt(const CellAddr &addr, qint32 id);

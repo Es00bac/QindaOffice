@@ -58,18 +58,28 @@ void SpreadsheetView::setCursorCell(const CalcEng::CellAddr &addr, bool extendSe
     const QRect rect = cursorViewportRect();
     QScrollBar *h = horizontalScrollBar();
     QScrollBar *v = verticalScrollBar();
-    if (rect.left() < kHeaderWidth) {
-        h->setValue(h->value() + rect.left() - kHeaderWidth);
-    } else if (rect.right() > viewport()->width()) {
-        h->setValue(h->value() + rect.right() - viewport()->width());
+    // The frozen band is painted over the scrolling one, so "visible" starts
+    // after it — scrolling a cell to just below the header would hide it
+    // underneath the frozen rows.
+    const int leftEdge = kHeaderWidth + int(frozenWidthPx());
+    const int topEdge = kHeaderHeight + int(frozenHeightPx());
+    if (m_cursor.col >= m_frozen.col) {
+        if (rect.left() < leftEdge) {
+            h->setValue(h->value() + rect.left() - leftEdge);
+        } else if (rect.right() > viewport()->width()) {
+            h->setValue(h->value() + rect.right() - viewport()->width());
+        }
     }
-    if (rect.top() < kHeaderHeight) {
-        v->setValue(v->value() + rect.top() - kHeaderHeight);
-    } else if (rect.bottom() > viewport()->height()) {
-        v->setValue(v->value() + rect.bottom() - viewport()->height());
+    if (m_cursor.row >= m_frozen.row) {
+        if (rect.top() < topEdge) {
+            v->setValue(v->value() + rect.top() - topEdge);
+        } else if (rect.bottom() > viewport()->height()) {
+            v->setValue(v->value() + rect.bottom() - viewport()->height());
+        }
     }
     viewport()->update();
     emit cursorChanged(m_cursor, inputTextAt(next), displayTextAt(m_document->activeSheet(), next));
+    emitSelectionChanged();
 }
 
 QString SpreadsheetView::inputTextAt(const CalcEng::CellAddr &addr) const
@@ -108,6 +118,35 @@ CalcEng::CellRange SpreadsheetView::usedRange() const
     return {{0, 0}, {maxRow, maxCol}};
 }
 
+void SpreadsheetView::emitSelectionChanged()
+{
+    emit selectionChanged(selectionRange());
+}
+
+void SpreadsheetView::selectColumn(qint32 col, bool extendSelection)
+{
+    const CalcEng::CellRange used = usedRange();
+    const qint32 lastRow = used.isValid() ? used.bottomRight.row : 0;
+    if (!extendSelection) {
+        m_anchor = {0, col};
+    } else {
+        m_anchor = {0, m_anchor.col};
+    }
+    setCursorCell({lastRow, col}, /*extendSelection=*/true);
+}
+
+void SpreadsheetView::selectRow(qint32 row, bool extendSelection)
+{
+    const CalcEng::CellRange used = usedRange();
+    const qint32 lastCol = used.isValid() ? used.bottomRight.col : 0;
+    if (!extendSelection) {
+        m_anchor = {row, 0};
+    } else {
+        m_anchor = {m_anchor.row, 0};
+    }
+    setCursorCell({row, lastCol}, /*extendSelection=*/true);
+}
+
 void SpreadsheetView::selectUsedRange()
 {
     const CalcEng::CellRange used = usedRange();
@@ -119,24 +158,114 @@ void SpreadsheetView::selectUsedRange()
     setCursorCell(used.bottomRight, /*extendSelection=*/true);
 }
 
+qreal SpreadsheetView::frozenHeightPx() const
+{
+    qreal y = 0;
+    for (qint32 r = 0; r < m_frozen.row; ++r) {
+        y += rowHeightPx(r);
+    }
+    return y;
+}
+
+qreal SpreadsheetView::frozenWidthPx() const
+{
+    qreal x = 0;
+    for (qint32 c = 0; c < m_frozen.col; ++c) {
+        x += colWidthPx(c);
+    }
+    return x;
+}
+
 int SpreadsheetView::rowTop(qint32 row) const
 {
-    const Sheet &sheet = m_document->workbook()->sheetAt(m_document->activeSheet());
     qreal y = 0;
     for (qint32 r = 0; r < row; ++r) {
         y += rowHeightPx(r);
     }
-    return int(y - verticalScrollBar()->value());
+    // A frozen row sits at its own offset; everything below the split moves
+    // with the scroll bar, whose value counts only the scrollable band.
+    return int(row < m_frozen.row ? y : y - verticalScrollBar()->value());
 }
 
 int SpreadsheetView::colLeft(qint32 col) const
 {
-    const Sheet &sheet = m_document->workbook()->sheetAt(m_document->activeSheet());
     qreal x = 0;
     for (qint32 c = 0; c < col; ++c) {
         x += colWidthPx(c);
     }
-    return int(x - horizontalScrollBar()->value());
+    return int(col < m_frozen.col ? x : x - horizontalScrollBar()->value());
+}
+
+QVector<SpreadsheetView::Band> SpreadsheetView::visibleRowBands() const
+{
+    QVector<Band> bands;
+    const qreal viewportHeight = viewport()->height() - kHeaderHeight;
+    qreal y = 0;
+    for (qint32 r = 0; r < m_frozen.row && y < viewportHeight; ++r) {
+        const qreal h = rowHeightPx(r);
+        bands.append({r, y, h});
+        y += h;
+    }
+    const qreal split = y;
+    // Walk forward to the first scrolling row that reaches past the split.
+    const qreal scroll = verticalScrollBar()->value();
+    qint32 row = m_frozen.row;
+    qreal top = split;
+    while (row < Sheet::kMaxRows - 1 && top + rowHeightPx(row) <= split + scroll) {
+        top += rowHeightPx(row);
+        ++row;
+    }
+    qreal pos = top - scroll;
+    while (pos < viewportHeight && row < Sheet::kMaxRows) {
+        const qreal h = rowHeightPx(row);
+        bands.append({row, pos, h});
+        pos += h;
+        ++row;
+    }
+    return bands;
+}
+
+QVector<SpreadsheetView::Band> SpreadsheetView::visibleColumnBands() const
+{
+    QVector<Band> bands;
+    const qreal viewportWidth = viewport()->width() - kHeaderWidth;
+    qreal x = 0;
+    for (qint32 c = 0; c < m_frozen.col && x < viewportWidth; ++c) {
+        const qreal w = colWidthPx(c);
+        bands.append({c, x, w});
+        x += w;
+    }
+    const qreal split = x;
+    const qreal scroll = horizontalScrollBar()->value();
+    qint32 col = m_frozen.col;
+    qreal left = split;
+    while (col < Sheet::kMaxCols - 1 && left + colWidthPx(col) <= split + scroll) {
+        left += colWidthPx(col);
+        ++col;
+    }
+    qreal pos = left - scroll;
+    while (pos < viewportWidth && col < Sheet::kMaxCols) {
+        const qreal w = colWidthPx(col);
+        bands.append({col, pos, w});
+        pos += w;
+        ++col;
+    }
+    return bands;
+}
+
+void SpreadsheetView::setFrozen(qint32 row, qint32 col)
+{
+    const CalcEng::CellAddr next{qMax(qint32(0), row), qMax(qint32(0), col)};
+    if (next == m_frozen) {
+        return;
+    }
+    m_frozen = next;
+    // The frozen band eats viewport space, so the scroll range changes with
+    // it; without this the sheet's last rows became unreachable.
+    horizontalScrollBar()->setValue(0);
+    verticalScrollBar()->setValue(0);
+    updateScrollBars();
+    viewport()->update();
 }
 
 QFont SpreadsheetView::scaledFont() const
@@ -185,22 +314,27 @@ QRect SpreadsheetView::cellRect(const CalcEng::CellAddr &addr) const
 
 CalcEng::CellAddr SpreadsheetView::cellAtPos(const QPoint &pos) const
 {
-    const Sheet &sheet = m_document->workbook()->sheetAt(m_document->activeSheet());
-    const qreal x = pos.x() + horizontalScrollBar()->value();
-    const qreal y = pos.y() + verticalScrollBar()->value();
-    qint32 col = 0;
-    qreal acc = 0;
-    while (col < Sheet::kMaxCols - 1 && acc + colWidthPx(col) < x) {
-        acc += colWidthPx(col);
-        ++col;
+    // AGENT-GUARD: hit-testing walks the SAME band lists painting does. It
+    // used to re-derive positions from the scroll value alone, which stops
+    // being true the moment a pane is frozen (clicks in the frozen band
+    // landed on whatever had scrolled underneath it).
+    const QVector<Band> rows = visibleRowBands();
+    const QVector<Band> cols = visibleColumnBands();
+    qint32 row = rows.isEmpty() ? 0 : rows.last().index;
+    for (const Band &band : rows) {
+        if (pos.y() < band.pos + band.size) {
+            row = band.index;
+            break;
+        }
     }
-    qint32 row = 0;
-    acc = 0;
-    while (row < Sheet::kMaxRows - 1 && acc + rowHeightPx(row) < y) {
-        acc += rowHeightPx(row);
-        ++row;
+    qint32 col = cols.isEmpty() ? 0 : cols.last().index;
+    for (const Band &band : cols) {
+        if (pos.x() < band.pos + band.size) {
+            col = band.index;
+            break;
+        }
     }
-    return {row, col};
+    return {qMax(qint32(0), row), qMax(qint32(0), col)};
 }
 
 void SpreadsheetView::updateScrollBars()
@@ -222,8 +356,14 @@ void SpreadsheetView::updateScrollBars()
     for (qint32 c = 0; c < maxCol; ++c) {
         width += colWidthPx(c);
     }
-    verticalScrollBar()->setRange(0, int(qMax<qreal>(0, height - viewport()->height())));
-    horizontalScrollBar()->setRange(0, int(qMax<qreal>(0, width - viewport()->width())));
+    // The frozen band is always on screen, so it belongs to neither the
+    // scrollable content nor the space available to it.
+    const qreal frozenH = frozenHeightPx();
+    const qreal frozenW = frozenWidthPx();
+    const qreal visibleH = qMax<qreal>(0, viewport()->height() - kHeaderHeight - frozenH);
+    const qreal visibleW = qMax<qreal>(0, viewport()->width() - kHeaderWidth - frozenW);
+    verticalScrollBar()->setRange(0, int(qMax<qreal>(0, (height - frozenH) - visibleH)));
+    horizontalScrollBar()->setRange(0, int(qMax<qreal>(0, (width - frozenW) - visibleW)));
     verticalScrollBar()->setSingleStep(kDefaultRowPx);
     horizontalScrollBar()->setSingleStep(96);
 }
@@ -236,115 +376,6 @@ void SpreadsheetView::resizeEvent(QResizeEvent *event)
 
 
 
-
-void SpreadsheetView::mousePressEvent(QMouseEvent *event)
-{
-    if (event->position().x() < kHeaderWidth || event->position().y() < kHeaderHeight) {
-        QAbstractScrollArea::mousePressEvent(event);
-        return;
-    }
-    cancelEditor();
-    setCursorCell(cellAtPos(event->position().toPoint() - QPoint(kHeaderWidth, kHeaderHeight)),
-                  event->modifiers() & Qt::ShiftModifier);
-}
-
-void SpreadsheetView::mouseMoveEvent(QMouseEvent *event)
-{
-    if (event->buttons() & Qt::LeftButton
-        && event->position().x() >= kHeaderWidth && event->position().y() >= kHeaderHeight) {
-        setCursorCell(
-            cellAtPos(event->position().toPoint() - QPoint(kHeaderWidth, kHeaderHeight)), true);
-        return;
-    }
-    QAbstractScrollArea::mouseMoveEvent(event);
-}
-
-bool SpreadsheetView::eventFilter(QObject *watched, QEvent *event)
-{
-    if (watched == m_editor && m_editing && event->type() == QEvent::KeyPress) {
-        auto *key = static_cast<QKeyEvent *>(event);
-        switch (key->key()) {
-        case Qt::Key_Return:
-        case Qt::Key_Enter:
-            commitEditor(!(key->modifiers() & Qt::ShiftModifier));
-            key->accept();
-            return true;
-        case Qt::Key_Tab:
-            // Commit and advance right (Shift+Tab: left).
-            commitEditor(false);
-            {
-                const int step = key->modifiers() & Qt::ShiftModifier ? -1 : 1;
-                setCursorCell({m_cursor.row, m_cursor.col + step}, false);
-            }
-            key->accept();
-            return true;
-        default:
-            break;
-        }
-    }
-    return QAbstractScrollArea::eventFilter(watched, event);
-}
-
-void SpreadsheetView::keyPressEvent(QKeyEvent *event)
-{
-    if (m_editing) {
-        if (event->key() == Qt::Key_Escape) {
-            cancelEditor();
-            event->accept();
-            return;
-        }
-        if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
-            commitEditor(!(event->modifiers() & Qt::ShiftModifier));
-            event->accept();
-            return;
-        }
-        QAbstractScrollArea::keyPressEvent(event);
-        return;
-    }
-    const bool extend = event->modifiers() & Qt::ShiftModifier;
-    switch (event->key()) {
-    case Qt::Key_Left:
-        setCursorCell({m_cursor.row, m_cursor.col - 1}, extend);
-        return;
-    case Qt::Key_Right:
-    case Qt::Key_Tab:
-        setCursorCell({m_cursor.row, m_cursor.col + 1}, extend);
-        return;
-    case Qt::Key_Up:
-        setCursorCell({m_cursor.row - 1, m_cursor.col}, extend);
-        return;
-    case Qt::Key_Down:
-    case Qt::Key_Return:
-    case Qt::Key_Enter:
-        setCursorCell({m_cursor.row + 1, m_cursor.col}, extend);
-        return;
-    case Qt::Key_PageDown:
-        setCursorCell({m_cursor.row + 20, m_cursor.col}, extend);
-        return;
-    case Qt::Key_PageUp:
-        setCursorCell({m_cursor.row - 20, m_cursor.col}, extend);
-        return;
-    case Qt::Key_Home:
-        setCursorCell(event->modifiers() & Qt::ControlModifier ? CalcEng::CellAddr{0, 0}
-                                                               : CalcEng::CellAddr{m_cursor.row, 0},
-                      extend);
-        return;
-    case Qt::Key_F2:
-        startEditor();
-        return;
-    default:
-        break;
-    }
-    // Printable input starts the editor prefilled.
-    const QString text = event->text();
-    if (!text.isEmpty() && text.at(0).isPrint() && !(event->modifiers() & Qt::ControlModifier)
-        && !(event->modifiers() & Qt::AltModifier)) {
-        startEditor();
-        m_editor->setText(text);
-        return;
-    }
-    QAbstractScrollArea::keyPressEvent(event);
-}
 
 void SpreadsheetView::startEditor()
 {

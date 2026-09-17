@@ -43,8 +43,22 @@ QStringList SpellChecker::suggestions(const QString &word) const
     return m_speller->suggest(word);
 }
 
+void SpellChecker::setEnabled(bool enabled)
+{
+    if (m_enabled == enabled) {
+        return;
+    }
+    m_enabled = enabled;
+    // Re-run the pass so turning it off actually clears the underlines
+    // instead of leaving the last ones frozen on screen.
+    rehighlight();
+}
+
 void SpellChecker::highlightBlock(const QString &text)
 {
+    if (!m_enabled) {
+        return;
+    }
     if (!m_speller->isValid()) {
         return;
     }

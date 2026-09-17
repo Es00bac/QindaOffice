@@ -21,6 +21,7 @@
 #include <QImage>
 #include <QLineEdit>
 #include <QToolBar>
+#include <QScrollBar>
 #include <QToolButton>
 #include <QUndoStack>
 #include <QtTest>
@@ -40,6 +41,16 @@ private slots:
     void cursorOutlineLandsOnTheCursorCell();
     void formatStripWrapsInsteadOfHidingCommands();
     void replaceEditsInputsAndUndoesInOneStep();
+    // D-015 structural commands and grid interaction.
+    void gridStartsOnA1WithATrueStatusLine();
+    void deleteKeyClearsTheSelection();
+    void headerClickSelectsTheWholeColumn();
+    void insertAndDeleteRowsAreOneUndoStepEach();
+    void sortAscendingKeepsTheHeaderRow();
+    void autoSumTotalsTheRunAbove();
+    void mergeAndUnmergeFollowTheCursor();
+    void sheetRenameKeepsCrossSheetFormulasWorking();
+    void freezePanesKeepsTheFirstRowVisible();
 };
 
 namespace ActionId = ::QindaOffice::Shell::ActionId;
@@ -367,6 +378,168 @@ void CalcUiTest::replaceEditsInputsAndUndoesInOneStep()
     // Find-only mode keeps the replace row out of the way.
     window.action(QString::fromLatin1(ActionId::kEditFind))->trigger();
     QVERIFY(!replaceEdit->isVisible());
+}
+
+void CalcUiTest::gridStartsOnA1WithATrueStatusLine()
+{
+    CalcWindow window;
+    window.show();
+    // A default-constructed CellAddr is {-1,-1}; starting there made every
+    // selection-derived readout describe a cell that does not exist.
+    QCOMPARE(window.spreadsheetView()->cursorCell().row, 0);
+    QCOMPARE(window.spreadsheetView()->cursorCell().col, 0);
+    QVERIFY(window.statusInfo().startsWith(QStringLiteral("A1")));
+    QVERIFY(!window.statusInfo().contains(QStringLiteral("Count")));
+
+    window.spreadsheetDocument()->applyInput({0, 0}, QStringLiteral("2"));
+    window.spreadsheetDocument()->applyInput({1, 0}, QStringLiteral("3"));
+    window.spreadsheetView()->setCursorCell({0, 0});
+    window.spreadsheetView()->setCursorCell({1, 0}, /*extendSelection=*/true);
+    const QString info = window.statusInfo();
+    QVERIFY2(info.contains(QStringLiteral("A1:A2")), qPrintable(info));
+    QVERIFY2(info.contains(QStringLiteral("Sum: 5")), qPrintable(info));
+    QVERIFY2(info.contains(QStringLiteral("Count: 2")), qPrintable(info));
+}
+
+void CalcUiTest::deleteKeyClearsTheSelection()
+{
+    CalcWindow window;
+    window.show();
+    SpreadsheetDocument *doc = window.spreadsheetDocument();
+    doc->applyInput({0, 0}, QStringLiteral("keep me"));
+    window.spreadsheetView()->setCursorCell({0, 0});
+    // Delete used to do nothing at all: Cut was the only way to empty a cell.
+    QTest::keyClick(window.spreadsheetView(), Qt::Key_Delete);
+    QVERIFY(doc->inputTextAt({0, 0}).isEmpty());
+    doc->undoStack()->undo();
+    QCOMPARE(doc->inputTextAt({0, 0}), QStringLiteral("keep me"));
+}
+
+void CalcUiTest::headerClickSelectsTheWholeColumn()
+{
+    CalcWindow window;
+    window.show();
+    SpreadsheetDocument *doc = window.spreadsheetDocument();
+    doc->applyInput({0, 1}, QStringLiteral("1"));
+    doc->applyInput({4, 1}, QStringLiteral("2"));
+    window.spreadsheetView()->selectColumn(1, false);
+    const QindaOffice::Calc::CellRange range = window.spreadsheetView()->selectionRange();
+    QCOMPARE(range.topLeft.col, 1);
+    QCOMPARE(range.bottomRight.col, 1);
+    QCOMPARE(range.topLeft.row, 0);
+    // Bounded by the USED range, never by Sheet::kMaxRows: a literal
+    // million-row selection would hang every range command.
+    QCOMPARE(range.bottomRight.row, 4);
+}
+
+void CalcUiTest::insertAndDeleteRowsAreOneUndoStepEach()
+{
+    CalcWindow window;
+    window.show();
+    SpreadsheetDocument *doc = window.spreadsheetDocument();
+    doc->applyInput({0, 0}, QStringLiteral("10"));
+    doc->applyInput({1, 0}, QStringLiteral("=A1*2"));
+    const int before = doc->undoStack()->count();
+
+    window.spreadsheetView()->setCursorCell({0, 0});
+    window.action(QString::fromLatin1(ActionId::kCalcInsertRows))->trigger();
+    QCOMPARE(doc->undoStack()->count(), before + 1);
+    QCOMPARE(doc->inputTextAt({1, 0}), QStringLiteral("10"));
+    QCOMPARE(doc->inputTextAt({2, 0}), QStringLiteral("=A2*2"));
+    QCOMPARE(doc->displayTextAt({2, 0}), QStringLiteral("20"));
+
+    doc->undoStack()->undo();
+    QCOMPARE(doc->inputTextAt({0, 0}), QStringLiteral("10"));
+    QCOMPARE(doc->inputTextAt({1, 0}), QStringLiteral("=A1*2"));
+
+    window.action(QString::fromLatin1(ActionId::kCalcDeleteRows))->trigger();
+    QCOMPARE(doc->inputTextAt({0, 0}), QStringLiteral("=#REF!*2"));
+}
+
+void CalcUiTest::sortAscendingKeepsTheHeaderRow()
+{
+    CalcWindow window;
+    window.show();
+    SpreadsheetDocument *doc = window.spreadsheetDocument();
+    doc->applyInput({0, 0}, QStringLiteral("Score"));
+    doc->applyInput({1, 0}, QStringLiteral("30"));
+    doc->applyInput({2, 0}, QStringLiteral("10"));
+    doc->applyInput({3, 0}, QStringLiteral("20"));
+    window.spreadsheetView()->setCursorCell({1, 0});
+
+    window.action(QString::fromLatin1(ActionId::kCalcSortAscending))->trigger();
+
+    QCOMPARE(doc->displayTextAt({0, 0}), QStringLiteral("Score"));
+    QCOMPARE(doc->displayTextAt({1, 0}), QStringLiteral("10"));
+    QCOMPARE(doc->displayTextAt({3, 0}), QStringLiteral("30"));
+}
+
+void CalcUiTest::autoSumTotalsTheRunAbove()
+{
+    CalcWindow window;
+    window.show();
+    SpreadsheetDocument *doc = window.spreadsheetDocument();
+    doc->applyInput({0, 0}, QStringLiteral("1"));
+    doc->applyInput({1, 0}, QStringLiteral("2"));
+    doc->applyInput({2, 0}, QStringLiteral("4"));
+    window.spreadsheetView()->setCursorCell({3, 0});
+
+    window.action(QString::fromLatin1(ActionId::kCalcAutoSum))->trigger();
+
+    QCOMPARE(doc->inputTextAt({3, 0}), QStringLiteral("=SUM(A1:A3)"));
+    QCOMPARE(doc->displayTextAt({3, 0}), QStringLiteral("7"));
+}
+
+void CalcUiTest::mergeAndUnmergeFollowTheCursor()
+{
+    CalcWindow window;
+    window.show();
+    SpreadsheetDocument *doc = window.spreadsheetDocument();
+    window.spreadsheetView()->setCursorCell({0, 0});
+    window.spreadsheetView()->setCursorCell({1, 2}, /*extendSelection=*/true);
+    window.action(QString::fromLatin1(ActionId::kCalcMergeCells))->trigger();
+    QCOMPARE(doc->workbook()->sheetAt(0).merges().size(), 1);
+
+    window.spreadsheetView()->setCursorCell({1, 1});
+    // Unmerge works from any cell the merge covers, not only its corner.
+    window.action(QString::fromLatin1(ActionId::kCalcUnmergeCells))->trigger();
+    QCOMPARE(doc->workbook()->sheetAt(0).merges().size(), 0);
+}
+
+void CalcUiTest::sheetRenameKeepsCrossSheetFormulasWorking()
+{
+    CalcWindow window;
+    window.show();
+    SpreadsheetDocument *doc = window.spreadsheetDocument();
+    doc->applyInput({0, 0}, QStringLiteral("7"));
+    doc->insertSheet(QStringLiteral("Report"));
+    doc->setActiveSheet(1);
+    doc->applyInput({0, 0}, QStringLiteral("=Sheet1!A1+1"));
+    QCOMPARE(doc->displayTextAt(1, {0, 0}), QStringLiteral("8"));
+
+    doc->renameSheet(0, QStringLiteral("Data"));
+
+    QCOMPARE(doc->workbook()->sheetName(0), QStringLiteral("Data"));
+    QCOMPARE(doc->inputTextAt({0, 0}), QStringLiteral("=Data!A1+1"));
+    QCOMPARE(doc->displayTextAt(1, {0, 0}), QStringLiteral("8"));
+}
+
+void CalcUiTest::freezePanesKeepsTheFirstRowVisible()
+{
+    CalcWindow window;
+    window.resize(600, 400);
+    window.show();
+    SpreadsheetView *view = window.spreadsheetView();
+    view->setCursorCell({1, 0});
+    window.action(QString::fromLatin1(ActionId::kCalcFreezePanes))->trigger();
+    QCOMPARE(view->frozen().row, 1);
+
+    // Scrolling far down must leave row 1 where it is, and a click on it
+    // must still land on row 1 — painting and hit-testing share the bands.
+    view->verticalScrollBar()->setValue(view->verticalScrollBar()->maximum());
+    view->setCursorCell({0, 0});
+    QCOMPARE(view->cursorCell().row, 0);
+    QVERIFY(view->cursorViewportRect().top() < 40);
 }
 
 int main(int argc, char *argv[])

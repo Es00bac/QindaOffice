@@ -5,6 +5,221 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-018: QindaWrite gains the typography a word processor is reached for
+
+**Context.** The Format menu covered bold/italic/underline/strikethrough,
+one colour, alignment, lists and indent; Insert covered page break, table,
+image and columns. That leaves out what people actually open a word
+processor to do: highlight a passage, set a footnote marker in superscript,
+change line spacing, drop today's date into a letter, turn a URL into a
+link. There was no word count anywhere — the one number a word processor is
+asked for most — and the font-size combo showed an EMPTY box on a pristine
+document, because a fresh char format carries no explicit point size and the
+sync wrote `QString()` for that case.
+
+**Decision.** `WriteTypography` (a controller beside `FormatController`,
+same action discipline) owns highlight colour, superscript/subscript,
+grow/shrink font, line spacing (single / 1.5 / double, as
+`ProportionalHeight` so it means what it says elsewhere), and Insert ▸
+Hyperlink / Special Character / Horizontal Rule / Date / Time. The
+horizontal rule is a block with `BlockTrailingHorizontalRulerWidth`, not a
+drawn line, so it survives the HTML round trip like the rest of the
+document; a hyperlink resets the char format afterwards (clearing the
+foreground rather than setting black, so the page stays readable under a
+dark theme) instead of letting link styling bleed into the next keystroke.
+
+Word and character counts live in the permanent status field and follow the
+selection when there is one; Tools ▸ Word Count… shows the full breakdown.
+Both size combos (QindaWrite's and QindaCalc's) now fall back to the
+effective font rather than going blank — a blank size box reads as "no
+size", which is not a state the user can act on.
+
+**Consequences.** Format/Insert commands belong in one of the two
+controllers, never inline in `write_window.cpp`; the window is at its line
+budget. `SpellChecker::setEnabled()` exists so the Preferences ▸ Writing page
+is a real setting and not a checkbox over nothing.
+
+## D-017: A notebook you cannot organise, and a page view that owned the window's height
+
+**Context.** QindaNote's Page menu held two entries — New Page and
+Background… — so a notebook could grow but never be tidied: no second
+section, no rename, no delete, no reordering. Three defects sat underneath
+that. `NotePageView` set the full page size as its `minimumSize`, so the
+whole window could not be made shorter than roughly 1100 px and did not fit
+on a laptop screen. A pristine `NoteDocument` had no section and no page at
+all, so a fresh window showed an empty navigator and a page surface bound to
+nothing. And `rebuildNavigator()` selected the first page INSIDE a
+`QSignalBlocker`, so `currentItemChanged` never fired for it — the navigator
+showed a highlighted page that had never actually been opened.
+
+**Decision.**
+
+1. **The page lives in a `QScrollArea`.** `NotePageView::updatePageMetrics()`
+   resizes the widget to the zoomed, grown page; the scroll area supplies
+   the scrollbars. Zoom and page growth are reachable instead of clipped,
+   and the window's minimum is the window's own.
+2. **A pristine notebook carries one section and one page**, so the first
+   window is writable immediately. `Notebook::create()` seeds only when the
+   notebook is really empty — seeding unconditionally on the first save gave
+   that notebook a second, duplicate "Notes" section.
+3. **Select outside the blocker.** The blocker covers the teardown and
+   rebuild (clear() fires `currentItemChanged` for every item it destroys);
+   the selection happens after it, through the normal open path.
+4. **`NoteStructureActions`** owns new page/section, rename, delete, move
+   up/down and the background picker, reached from the Page menu and the
+   navigator's context menu. `Notebook` gained the matching structure edits;
+   `removePage`/`removeSection` delete the page FILES too, because an index
+   entry removed without its file leaves an orphan the next load resurrects.
+   Deletions are not undoable (the notebook has no structural history), so
+   each one asks first and names what it will remove.
+5. **The declared-but-dead commands are implemented**: Edit ▸ Cut/Copy/Paste/
+   Select All follow the focused text block, Edit ▸ Replace sweeps the whole
+   notebook (reading unopened pages from disk first, and detaching the open
+   page so its live editors cannot write the old text back), the AI
+   Assistant docks like every other app's, and Page ▸ Export PDF goes
+   through the same paginating callback Print uses.
+
+**Consequences.** Anything that changes the notebook's structure goes
+through `NoteStructureActions` and ends with `refreshNavigator()` +
+`selectPageById()`, which is what keeps the navigator, the status field and
+the command enablement agreeing.
+
+## D-016: QindaShow drew no slide, and Arrange held two commands
+
+**Context.** The editor canvas is a `QGraphicsView` with one item per
+SHAPE — and no item for the slide itself. Nothing painted the page, so an
+empty slide rendered as a flat dark-grey view with no page edges anywhere in
+it; a new deck opened on exactly that, because `newDeck()` used
+`Presentation::addSlide()` (no shapes) while `addSlide()` used `makeSlide()`
+(layout placeholders). The sorter's thumbnails were built from a single
+pixmap, so Qt rendered the SELECTED one tinted with the highlight colour —
+the current slide showed as a flat blue rectangle. Arrange held "Bring
+forward" and "Send backward", built as anonymous lambdas with no
+objectName, so they were unreachable from the panel's global menu.
+
+**Decision.**
+
+1. **`SlideCanvas::drawBackground()` paints the page** — shadow, white
+   sheet, hairline frame — and `fitScale()` scales the whole slide into the
+   viewport, with the user's zoom multiplying it. Zoom 100% means "the whole
+   slide, as large as it goes", which is what a slide editor is expected to
+   show.
+2. **A pristine deck carries the layout's placeholders** ("Click to add a
+   title"), so the first thing the user sees is something to type into.
+3. **Thumbnails register the same pixmap for Normal, Active and Selected.**
+4. **`ShowArrangeActions`** owns front/forward/backward/back, duplicate,
+   delete, align (six), distribute (two) and move-slide up/down. One shape
+   aligns to the SLIDE, several align to each other, so "align centre" is
+   useful in both situations without a mode. Multi-shape geometry is pushed
+   as ONE `SlideStateCommand`: aligning six shapes is one action to the user
+   and must be one Ctrl+Z.
+5. **Deck-wide Replace** (Edit ▸ Replace, previously a dead entry) rewrites
+   titles, shape runs and notes in one `SlideListCommand`.
+
+**AGENT-GUARD (two crash shapes found by test).** `rebuildItems()` clears
+the scene, and `QGraphicsScene::clear()` fires `selectionChanged` WHILE the
+items are being destroyed — any listener that walks the item list then
+touches half-dead objects. The rebuild now blocks the scene's signals and
+emits one honest `selectionChanged` afterwards, and a pure z-order change
+reorders the model and re-applies z values instead of rebuilding at all.
+Changing a shape's rect calls `prepareGeometryChange()` first: the scene
+indexes items by bounding rect, and moving the model behind its back leaves
+stale entries that hit-testing follows.
+
+## D-015: QindaCalc could not insert a row
+
+**Context.** An audit of what the spreadsheet could actually do found the
+whole Insert menu was "Chart…", the whole Sheet menu was "Insert Sheet",
+there was no Data menu, and the grid had no context menu. There was no way
+to insert or delete a row or column, sort, merge, put a border on a cell,
+widen a column, freeze a header, fill a formula down, total a column, or
+rename, reorder or delete a sheet. Clicking a row or column header did
+nothing at all (the press fell through to `QAbstractScrollArea`), **the
+Delete key did not clear a cell** — Cut was the only way to empty one — and
+nothing anywhere reported the sum of the selection, which is a
+spreadsheet's most-read number. The cursor started at a
+default-constructed `CellAddr`, which is `{-1,-1}` and not a cell at all.
+
+**Decision.**
+
+1. **Structural edits live in the engine** (`calc_engine/structure.h`),
+   because moving a cell is only half the job. `applyStructureEdit()` moves
+   cells, styles, merges and explicit geometry, then rewrites EVERY formula
+   in the workbook — including ones on other sheets that name this one — so
+   references follow; a reference that falls inside a removed band becomes
+   `#REF!` rather than silently re-pointing at whatever slid into its place.
+   Named ranges and chart anchors follow too. `Workbook::reindexAll()`
+   rebuilds the dependency index afterwards: it is keyed by sheet INDEX and
+   cell position, both of which the edit moves.
+2. **Sheet operations rewrite references by name.** Rename requalifies every
+   formula (a rename that does not would turn each cross-sheet formula into
+   `#NAME?`); delete turns references to the removed sheet into `#REF!` and
+   leaves every other sheet working; the last sheet cannot be removed.
+3. **Sort moves rows with their formulas**, shifting relative references by
+   the row delta, blanks last in both directions, `std::stable_sort` so a
+   second sort on another column acts as a tie-break.
+4. **The view owns no document mutation.** Header clicks select whole rows
+   and columns (bounded by the USED range — a literal 1,048,576-row
+   selection would hang every range command and mint a style per cell),
+   boundary drags resize with live feedback and report the final size for
+   ONE undo step, double-clicking a boundary autofits, Delete emits
+   `clearRequested`, and right-click emits `contextMenuRequested`.
+5. **Freeze panes is a band problem, not a scroll-offset problem.**
+   `visibleRowBands()`/`visibleColumnBands()` are the single source of
+   position for painting, the header bands and hit-testing. Deriving a
+   position from the scroll value alone stops being true the moment a pane
+   is frozen.
+
+**Consequences.** New spreadsheet commands belong in
+`CalcStructureActions`; new document mutations follow the existing
+snapshot-push-dirty-notify shape in `calc_structure_ops.cpp`. A latent
+engine bug surfaced on the way: `Workbook::recalcAll()` read the packed cell
+key with row and column swapped, so every formula cell off the diagonal was
+marked dirty at an address holding no cell and was skipped — exactly the
+stale cross-sheet reference the function exists to fix.
+
+## D-014: The suite has settings, a status bar, and no dead menu entries
+
+**Context.** Settings ▸ Preferences… was created disabled by
+`createStandardActions()` and never enabled, so all four apps shipped a dead
+menu entry and the suite had no settings UI at all. No window created a
+status bar until something called `showMessage()`, at which point the bar
+appeared and pushed the document area up under the user's cursor. Three of
+the four apps added "New from Template" with `QMenu::addMenu()`, which
+appends — so it sat BELOW Quit. QindaCalc and QindaNote offered an AI menu
+whose only entry was a permanently disabled Assistant….
+
+**Decision.**
+
+1. **`Shell::Preferences`** — one atomic JSON store per app under
+   `$XDG_CONFIG_HOME/qindaoffice/<app>/preferences.json`, written through on
+   every change and announcing one coarse `changed()` so every window of the
+   app re-applies. **Every key is read by something**: adding one means
+   wiring it in the same change (D-012).
+2. **`Shell::PreferencesDialog`** with shell pages (chrome, default zoom,
+   auto-save, document font) plus `addPage()` so an app adds its own —
+   which is what keeps `office_shell` from having to know about `office_ai`
+   or any engine.
+3. **Auto-save never opens a dialog.** It runs on a timer the user is not
+   watching, so every case that would ask a question — no path yet, the file
+   changed on disk — is skipped and left to the explicit Save. Crash
+   recovery still covers what auto-save declines to write. Default off.
+4. **The status bar is created eagerly** with a permanent right-hand field
+   (`setStatusInfo`), so a transient message can never displace it and the
+   first message can never resize the document. Every app fills it: word and
+   character counts, cell aggregates, "Slide 3 of 12", the current page.
+5. **View ▸ Show Toolbars / Show Status Bar** are persistent named actions
+   backed by the store. **`DocumentWindow::fileMenuAnchor()`** is the
+   insertion point for app File-menu entries; appending is the defect shape.
+6. **Every app's Assistant is wired.** A declared capability is implemented
+   or not offered.
+
+**Consequences.** `applyPreferences()` and `addPreferencePages()` are the
+two app hooks; both run after the subclass exists (`finalizeAppMenuHooks`),
+never from the base constructor. Window chrome that the store controls must
+be applied in `applyChromePreferences()`, which is guarded against chasing
+its own toggles.
+
 ## D-013: Toolbars wrap, and the suite ships the action icons its theme lacks
 
 **Context.** The formatting strip showed **Bold Italic Underline Text Color

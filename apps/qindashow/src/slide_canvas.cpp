@@ -141,6 +141,7 @@ void SlideCanvas::setSlide(ShowModel::Slide *slide, const QSizeF &slideSize)
     m_slide = slide;
     m_slideSize = slideSize;
     rebuildItems();
+    applyViewTransform();
     for (const QString &id : selectedIds) {
         if (ShapeItem *item = itemFor(id)) item->setSelected(true);
     }
@@ -157,17 +158,25 @@ SlideCanvas::~SlideCanvas()
 
 void SlideCanvas::rebuildItems()
 {
-    m_scene->clear();
-    m_textItem = nullptr;
-    m_resizing = nullptr;
-    if (m_slide == nullptr) {
-        return;
+    {
+        // AGENT-GUARD: block the scene's selectionChanged across the rebuild.
+        // clear() destroys every item and fires selectionChanged WHILE they
+        // are being destroyed; any listener that walks the item list then
+        // touches half-dead objects (SIGSEGV, found by test). One honest
+        // notification is emitted below, once the scene is consistent again.
+        const QSignalBlocker blocker(m_scene);
+        m_scene->clear();
+        m_textItem = nullptr;
+        m_resizing = nullptr;
+        if (m_slide != nullptr) {
+            m_scene->setSceneRect(QRectF(QPointF(0, 0), m_slideSize));
+            for (ShowModel::Shape &shape : m_slide->shapes) {
+                m_scene->addItem(new ShapeItem(shape.id, this));
+            }
+            applyZOrder();
+        }
     }
-    m_scene->setSceneRect(QRectF(QPointF(0, 0), m_slideSize));
-    for (ShowModel::Shape &shape : m_slide->shapes) {
-        m_scene->addItem(new ShapeItem(shape.id, this));
-    }
-    applyZOrder();
+    emit selectionChanged(selectedItem() != nullptr);
 }
 
 void SlideCanvas::applyZOrder()
@@ -433,7 +442,49 @@ void SlideCanvas::setZoom(qreal zoom)
         return;
     }
     m_zoom = next;
-    setTransform(QTransform::fromScale(m_zoom, m_zoom));
+    applyViewTransform();
+}
+
+qreal SlideCanvas::fitScale() const
+{
+    const QSize available = viewport()->size();
+    if (m_slideSize.isEmpty() || available.width() <= 0 || available.height() <= 0) {
+        return 1.0;
+    }
+    // 24 px of breathing room so the page reads as a sheet on a desk
+    // rather than as the window background.
+    const qreal sx = (available.width() - 24.0) / m_slideSize.width();
+    const qreal sy = (available.height() - 24.0) / m_slideSize.height();
+    return qMax(0.05, qMin(sx, sy));
+}
+
+void SlideCanvas::applyViewTransform()
+{
+    const qreal scale = fitScale() * m_zoom;
+    setTransform(QTransform::fromScale(scale, scale));
+}
+
+void SlideCanvas::resizeEvent(QResizeEvent *event)
+{
+    QGraphicsView::resizeEvent(event);
+    applyViewTransform();
+}
+
+void SlideCanvas::drawBackground(QPainter *painter, const QRectF &rect)
+{
+    painter->save();
+    painter->fillRect(rect, backgroundBrush());
+    const QRectF page(QPointF(0, 0), m_slideSize);
+    // A drop shadow and a hairline frame are what make the page read as a
+    // sheet; without them a white slide on a light theme has no edges.
+    painter->fillRect(page.translated(4, 4), QColor(0, 0, 0, 60));
+    painter->fillRect(page, Qt::white);
+    QPen frame(QColor(120, 120, 120));
+    frame.setCosmetic(true);
+    painter->setPen(frame);
+    painter->setBrush(Qt::NoBrush);
+    painter->drawRect(page);
+    painter->restore();
 }
 
 } // namespace QindaOffice::Apps::Show

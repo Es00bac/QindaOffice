@@ -205,6 +205,65 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M20 office-suite completeness
+
+Automated by `tst_preferences`, `tst_calc_structure`, `tst_calc_ui`,
+`tst_write_ui`, `tst_write_typography`, `tst_show_ui` and `tst_qindanote`. Rationale in D-014
+(settings, status bar, dead entries), D-015 (QindaCalc structure), D-016
+(QindaShow canvas and arrange), D-017 (QindaNote structure and layout) and
+D-018 (QindaWrite typography).
+
+**Shell.** Settings ▸ Preferences… is enabled and opens a dialog whose OK
+writes through and whose Cancel does not; the `Preferences` store bounds
+what it reads back and survives a reopen. Every window has a status bar from
+construction with a PERMANENT right-hand field a transient `showMessage()`
+cannot displace. View ▸ Show Toolbars / Show Status Bar apply and persist.
+The File menu ends with Quit however many app entries were inserted.
+Auto-save is off by default and, when on, skips (with a status message)
+rather than putting a dialog on screen for a document with no path or a file
+changed on disk.
+
+**calc_engine.** Inserting rows moves cells AND rewrites every formula that
+points at them — including cross-sheet ones that name the edited sheet — and
+a straddling range grows with the insert; deleting turns a reference into
+the gap into `#REF!` while a straddling range shrinks; styles on EMPTY
+cells, explicit geometry, merges, named ranges and chart anchors all follow.
+Renaming a sheet requalifies every reference to it; deleting one breaks only
+its own references and leaves the rest working after the index rebuild; the
+last sheet cannot be deleted. Sort moves rows with their formulas (relative
+references shift by the row delta), keeps the header row and sinks blanks in
+both directions. `recalcAll()` refreshes cells off the diagonal (it used to
+read the packed key transposed and skip them).
+
+**QindaCalc.** The grid starts on A1, not on a default-constructed
+`{-1,-1}`; the status field reads the address, Sum, Average and Count of the
+selection. Delete clears the selection in one undo step. A header click
+selects the whole row or column bounded by the used range. Insert/Delete
+Rows are one undo step each and the dependents re-evaluate. Sort Ascending
+keeps a text header on top. AutoSum totals the contiguous run above the
+cursor. Merge works from the selection and Unmerge from any cell the merge
+covers. A sheet rename keeps cross-sheet formulas working. With a pane
+frozen, row 1 stays visible after scrolling to the bottom and still
+hit-tests as row 1 — painting and clicking walk the same band lists.
+
+**QindaWrite.** The font-size combo is never blank. Superscript reaches the
+selection's char format; line spacing writes `ProportionalHeight` and the
+menu's check mark re-reads it from the document. The word count follows the
+document and narrows to the selection, and appears in the status field.
+Insert Date puts text in and Insert Horizontal Rule leaves a block carrying
+`BlockTrailingHorizontalRulerWidth` (so it survives the HTML round trip).
+
+**QindaShow.** The canvas paints a white page (an empty slide used to render
+as a flat dark-grey view). Align Centre with one shape selected centres it
+on the SLIDE and is one undo step. Bring to Front is one command whatever
+the distance. Move Slide Up reorders the deck and follows the selection.
+A deck-wide Replace is one undo step however many slides it touched.
+
+**QindaNote.** A fresh window opens on a real, writable page and says so in
+the status field. The page view no longer forces the window tall — a 900x500
+window stays 900x500. Deleting a page removes its file as well as its index
+entry. Move Page reorders within the section and refuses past either end.
+
 ### M19 the rest of the standard commands
 
 Automated by `tst_calc_ui`, `tst_show_ui` and `tst_qindanote`. Print,
@@ -241,6 +300,25 @@ behind an extension chevron is a command the user never sees.
 - Every strip command carries a non-empty objectName.
 - The cursor outline is painted on the cursor cell, not one header offset
   down and to the right of it.
+
+### M20 manual checklist (live desktop)
+
+- [ ] Settings ▸ Preferences…: set a document font and a default zoom; a
+      newly opened window of the same app uses both. Turn off Show Toolbars
+      and open a second window — its toolbars are off too.
+- [ ] Turn auto-save on at 1 minute, edit a saved document and wait: the
+      status bar reports the auto-save and the window title loses its dirty
+      mark, with no dialog at any point.
+- [ ] QindaCalc: right-click the grid and the sheet tab; drag a column
+      boundary and double-click it; freeze at B2 and scroll — the first row
+      and column stay put; select a numeric block and read Sum/Average/Count.
+- [ ] QindaShow: the slide is a white page centred in the canvas at any
+      window size, and the current slide's thumbnail shows the slide (not a
+      blue rectangle).
+- [ ] QindaNote: shrink the window to half the screen height — the page
+      scrolls instead of the window refusing to shrink.
+- [ ] Panel global menu: activate the new commands by objectName (Insert
+      Rows, Sort Ascending, Bring to Front, New Section, Word Count).
 
 ### M16 manual checklist (live desktop)
 

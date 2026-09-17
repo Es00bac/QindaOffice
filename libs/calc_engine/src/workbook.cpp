@@ -29,6 +29,91 @@ Sheet &Workbook::addSheet(const QString &name)
     return ref;
 }
 
+Sheet &Workbook::insertSheet(qint32 index, const QString &name)
+{
+    const qint32 at = qBound(qint32(0), index, qint32(m_sheets.size()));
+    auto sheet = std::make_unique<Sheet>(name);
+    Sheet &ref = *sheet;
+    m_sheets.insert(m_sheets.begin() + at, std::move(sheet));
+    rebuildSheetIndex();
+    return ref;
+}
+
+bool Workbook::removeSheetAt(qint32 index)
+{
+    // A workbook always has a sheet: removing the last one would leave the
+    // view with nothing to show and every address unresolvable.
+    if (index < 0 || index >= qint32(m_sheets.size()) || m_sheets.size() <= 1) {
+        return false;
+    }
+    m_sheets.erase(m_sheets.begin() + index);
+    rebuildSheetIndex();
+    return true;
+}
+
+bool Workbook::renameSheetAt(qint32 index, const QString &name)
+{
+    if (index < 0 || index >= qint32(m_sheets.size()) || name.isEmpty()) {
+        return false;
+    }
+    const qint32 clash = sheetIndex(name);
+    if (clash >= 0 && clash != index) {
+        return false; // sheet names are the addressing identity; keep unique
+    }
+    m_sheets.at(size_t(index))->setName(name);
+    rebuildSheetIndex();
+    return true;
+}
+
+bool Workbook::moveSheetTo(qint32 from, qint32 to)
+{
+    const qint32 count = qint32(m_sheets.size());
+    if (from < 0 || from >= count || to < 0 || to >= count || from == to) {
+        return false;
+    }
+    auto moved = std::move(m_sheets.at(size_t(from)));
+    m_sheets.erase(m_sheets.begin() + from);
+    m_sheets.insert(m_sheets.begin() + to, std::move(moved));
+    rebuildSheetIndex();
+    return true;
+}
+
+void Workbook::rebuildSheetIndex()
+{
+    m_sheetIndex.clear();
+    for (size_t i = 0; i < m_sheets.size(); ++i) {
+        m_sheetIndex.insert(m_sheets.at(i)->name(), qint32(i));
+    }
+}
+
+bool Workbook::removeName(const QString &name)
+{
+    return m_names.remove(name.toUpper()) > 0;
+}
+
+void Workbook::reindexAll()
+{
+    m_dependencies.clear();
+    QSet<CellKey> all;
+    for (qint32 s = 0; s < qint32(m_sheets.size()); ++s) {
+        Sheet &sheet = *m_sheets.at(size_t(s));
+        for (const auto &[packed, cell] : sheet.cells().asKeyValueRange()) {
+            if (!cell.ast) {
+                continue;
+            }
+            const CellAddr addr{qint32(packed & 0xffffffffu), qint32(packed >> 32)};
+            const CellKey key(s, addr.row, addr.col);
+            EvalContext ctx{this, s, addr};
+            m_dependencies.updateCell(key, collectTargets(cell.ast, ctx));
+            if (cell.isVolatile) {
+                m_dependencies.addVolatile(key);
+            }
+            all.insert(key);
+        }
+    }
+    recalc(all);
+}
+
 Sheet &Workbook::sheetAt(qint32 index)
 {
     return *m_sheets.at(size_t(index));
@@ -173,7 +258,13 @@ void Workbook::recalcAll()
         const Sheet &sheet = *m_sheets.at(size_t(s));
         for (const auto &[key, cell] : sheet.cells().asKeyValueRange()) {
             if (cell.ast) {
-                all.insert(CellKey(s, key >> 32, key & 0xffffffffu));
+                // AGENT-GUARD: CellAddr::key() packs COL in the high dword
+                // and ROW in the low one. This used to read them the other
+                // way round, so every formula cell off the diagonal was
+                // marked dirty at a transposed address that holds no cell —
+                // recalcAll() then skipped it, which is exactly the stale
+                // forward cross-sheet reference it exists to fix.
+                all.insert(CellKey(s, qint32(key & 0xffffffffu), qint32(key >> 32)));
             }
         }
     }

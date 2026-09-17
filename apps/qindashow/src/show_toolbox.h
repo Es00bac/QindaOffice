@@ -44,6 +44,9 @@ public:
     [[nodiscard]] const ShowStyleActions &styleActions() const { return m_style; }
     [[nodiscard]] const ShowInsertActions &insertActions() const { return m_insert; }
     [[nodiscard]] QToolBar *toolBar();
+    // Appends commands owned elsewhere (arrange/align) to the same wrapping
+    // strip, so they are reachable without opening a menu.
+    void appendStripActions(const QList<QAction *> &actions);
 
 signals:
     // The image insert needs a file dialog at the window level; the

@@ -13,6 +13,7 @@ qqo_add_shell_test(tst_standard_actions)
 qqo_add_shell_test(tst_template_loader)
 qqo_add_shell_test(tst_desktop_settings)
 qqo_add_shell_test(tst_document_window)
+qqo_add_shell_test(tst_preferences)
 qqo_add_shell_test(tst_office_application)
 qqo_add_shell_test(tst_single_instance)
 
@@ -21,15 +22,20 @@ add_executable(tst_calc_window tst_calc_window.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_find_bar.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_format_controller.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_recovery.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_structure_actions.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_structure_menus.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_structure_ops.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_undo.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_window.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_window_commands.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_window_ui.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/chart_dialog.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_document.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_view.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_view_input.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_view_paint.cpp
 )
-target_link_libraries(tst_calc_window PRIVATE office_shell calc_io Qt6::Test)
+target_link_libraries(tst_calc_window PRIVATE office_shell office_ai calc_io Qt6::Test)
 if(QQO_WITH_CHARTS)
     target_link_libraries(tst_calc_window PRIVATE Qt6::Charts)
     target_compile_definitions(tst_calc_window PRIVATE QQO_WITH_CHARTS)
@@ -44,15 +50,20 @@ add_executable(tst_calc_ui tst_calc_ui.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_find_bar.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_format_controller.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_recovery.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_structure_actions.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_structure_menus.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_structure_ops.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_undo.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_window.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_window_commands.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/calc_window_ui.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/chart_dialog.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_document.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_view.cpp
+    ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_view_input.cpp
     ${PROJECT_SOURCE_DIR}/apps/qindacalc/src/spreadsheet_view_paint.cpp
 )
-target_link_libraries(tst_calc_ui PRIVATE office_shell calc_io Qt6::Test)
+target_link_libraries(tst_calc_ui PRIVATE office_shell office_ai calc_io Qt6::Test)
 if(QQO_WITH_CHARTS)
     target_link_libraries(tst_calc_ui PRIVATE Qt6::Charts)
     target_compile_definitions(tst_calc_ui PRIVATE QQO_WITH_CHARTS)

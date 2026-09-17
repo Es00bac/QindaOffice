@@ -11,13 +11,20 @@
 #include "notebook.h"
 #include "print_helper.h"
 
+class QScrollArea;
 class QToolButton;
 class QTreeWidget;
+
+namespace QindaOffice::Ai {
+class AssistantPanel;
+class ModelCatalog;
+}
 
 namespace QindaOffice::Apps::Notes {
 
 class NotePageView;
 class NoteFindBar;
+class NoteStructureActions;
 
 class NoteDocument final : public Core::Document {
     Q_OBJECT
@@ -58,11 +65,35 @@ public:
     [[nodiscard]] NotePageView *pageView() const { return m_view; }
     void openNotebookPath(const QString &path);
 
+    // Seams for NoteStructureActions (note_structure.cpp). The window owns
+    // "which page is open"; the structure commands ask rather than keep
+    // their own copy, because the notebook's vectors reallocate freely and
+    // a second copy would go stale (AGENT-GUARD, see setCurrentIds).
+    [[nodiscard]] const QString &currentSectionId() const { return m_currentSectionId; }
+    [[nodiscard]] const QString &currentPageId() const { return m_currentPageId; }
+    [[nodiscard]] NotePage *currentPage() const;
+    void refreshNavigator();
+    void selectPageById(const QString &sectionId, const QString &pageId);
+    // Detaches the view from the current page before the page is destroyed.
+    void clearCurrentPage();
+    [[nodiscard]] NoteStructureActions *structureActions() const { return m_structure; }
+
 protected:
     void insertApplicationMenus(QMenu *before) override;
+    void applyPreferences() override;
     QString filterString() const override;
 
 private:
+    // Status bar, navigator context menu, edit commands and the AI dock
+    // (note_window_ui.cpp).
+    void wireNavigatorInteraction();
+    void wireEditActions();
+    void wireAssistant();
+    void updatePageStatus();
+    void exportPdf();
+    // Edit ▸ Replace across the whole notebook (page titles and typed text
+    // blocks) — pages that were never opened are read from disk first.
+    void replaceAcrossNotebook();
     void rebuildNavigator();
     void persistCurrentPage();
     // AGENT-GUARD: the window holds section/page IDS, never pointers — the
@@ -81,6 +112,10 @@ private:
     NotePageView *m_view;
     QTreeWidget *m_navigator;
     NoteFindBar *m_findBar = nullptr;
+    NoteStructureActions *m_structure = nullptr;
+    class QScrollArea *m_scroll = nullptr;
+    Ai::ModelCatalog *m_catalog = nullptr;
+    Ai::AssistantPanel *m_panel = nullptr;
     QString m_currentSectionId;
     QString m_currentPageId;
 };

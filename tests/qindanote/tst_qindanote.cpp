@@ -32,7 +32,96 @@ private slots:
     void redoReplaysAnUndoneStroke();
     void recoverySnapshotRoundTripsTheNotebook();
     void findSelectsThePageHoldingTheText();
+    // D-017 structure and layout.
+    void freshWindowOpensOnAWritablePage();
+    void pageViewDoesNotForceTheWindowTall();
+    void newSectionLandsOnItsFirstPage();
+    void deletingAPageRemovesItsFile();
+    void movePageReordersTheSection();
 };
+
+void QindaNoteTest::freshWindowOpensOnAWritablePage()
+{
+    NoteWindow window;
+    window.show();
+    // A pristine notebook used to be completely empty, so the navigator had
+    // nothing in it and the page surface was bound to no page at all.
+    QCOMPARE(window.noteDocument()->notebook()->sections().size(), 1);
+    QVERIFY(window.currentPage() != nullptr);
+    QVERIFY(window.pageView()->page() != nullptr);
+    QVERIFY2(window.statusInfo().contains(QStringLiteral("page 1 of 1")),
+             qPrintable(window.statusInfo()));
+}
+
+void QindaNoteTest::pageViewDoesNotForceTheWindowTall()
+{
+    NoteWindow window;
+    window.resize(900, 500);
+    window.show();
+    // The page widget is a full sheet tall; hosting it directly made that
+    // the WINDOW's minimum height, so QindaNote could not fit on a laptop.
+    QVERIFY2(window.minimumSizeHint().height() < 700,
+             qPrintable(QString::number(window.minimumSizeHint().height())));
+    QVERIFY2(window.height() < 700, qPrintable(QString::number(window.height())));
+}
+
+void QindaNoteTest::newSectionLandsOnItsFirstPage()
+{
+    NoteWindow window;
+    window.show();
+    Notebook *notebook = window.noteDocument()->notebook();
+    NoteSection &section = notebook->addSection(QStringLiteral("Research"));
+    const QString sectionId = section.id;
+    const QString pageId = notebook->addPage(section, QStringLiteral("Sources")).id;
+    window.refreshNavigator();
+    window.selectPageById(sectionId, pageId);
+    QCOMPARE(window.currentSectionId(), sectionId);
+    QCOMPARE(window.currentPageId(), pageId);
+    QVERIFY2(window.statusInfo().startsWith(QStringLiteral("Research")),
+             qPrintable(window.statusInfo()));
+}
+
+void QindaNoteTest::deletingAPageRemovesItsFile()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + QStringLiteral("/Work");
+    NoteDocument doc;
+    Notebook *notebook = doc.notebook();
+    auto &sections = const_cast<QVector<NoteSection> &>(notebook->sections());
+    NoteSection &section = sections.first();
+    const QString sectionId = section.id;
+    const QString extra = notebook->addPage(section, QStringLiteral("Scratch")).id;
+    QVERIFY2(doc.save(path), "save notebook");
+    const QString file =
+        path + QStringLiteral("/sections/%1/pages/%2.json").arg(sectionId, extra);
+    QVERIFY2(QFile::exists(file), qPrintable(file));
+
+    QVERIFY(notebook->removePage(sectionId, extra));
+
+    // An index entry removed without its file leaves an orphan the next
+    // load would resurrect.
+    QVERIFY(!QFile::exists(file));
+    QCOMPARE(notebook->sectionById(sectionId)->pages.size(), 1);
+}
+
+void QindaNoteTest::movePageReordersTheSection()
+{
+    NoteDocument doc;
+    Notebook *notebook = doc.notebook();
+    auto &sections = const_cast<QVector<NoteSection> &>(notebook->sections());
+    NoteSection &section = sections.first();
+    const QString first = section.pages.first().id;
+    const QString second = notebook->addPage(section, QStringLiteral("Second")).id;
+
+    QVERIFY(notebook->movePage(section.id, second, -1));
+
+    QCOMPARE(notebook->sectionById(section.id)->pages.first().id, second);
+    QCOMPARE(notebook->sectionById(section.id)->pages.last().id, first);
+    // Past the end is refused rather than clamped: a silent no-op that
+    // reports success would make Move Up look broken at the top.
+    QVERIFY(!notebook->movePage(section.id, second, -1));
+}
 
 void QindaNoteTest::notebookSurvivesReopen()
 {
@@ -309,9 +398,11 @@ void QindaNoteTest::recoverySnapshotRoundTripsTheNotebook()
     QString error;
     QVERIFY2(restored.loadRecovery(payload, &error), qPrintable(error));
     Notebook *back = restored.notebook();
-    QCOMPARE(back->sections().size(), 1);
-    QCOMPARE(back->sections().first().name, QStringLiteral("Ideas"));
-    const NotePage &recovered = back->sections().first().pages.first();
+    // A pristine document already carries the default "Notes" section, so
+    // the round trip must hold BOTH it and the one the test added.
+    QCOMPARE(back->sections().size(), 2);
+    QCOMPARE(back->sections().last().name, QStringLiteral("Ideas"));
+    const NotePage &recovered = back->sections().last().pages.first();
     QCOMPARE(recovered.title, QStringLiteral("Sketch"));
     QCOMPARE(recovered.envelope.background, QStringLiteral("grid"));
     QCOMPARE(recovered.envelope.ink.strokes().size(), 1);

@@ -9,19 +9,25 @@ add_executable(qindacalc
     src/calc_format_controller.h
     src/calc_recovery.cpp
     src/calc_recovery.h
+    src/calc_structure_actions.cpp
+    src/calc_structure_actions.h
+    src/calc_structure_menus.cpp
+    src/calc_structure_ops.cpp
     src/calc_undo.cpp
     src/calc_undo.h
     src/calc_window.cpp
     src/calc_window_commands.cpp
+    src/calc_window_ui.cpp
     src/chart_dialog.cpp
     src/calc_window.h
     src/spreadsheet_document.cpp
     src/spreadsheet_document.h
     src/spreadsheet_view.cpp
+    src/spreadsheet_view_input.cpp
     src/spreadsheet_view_paint.cpp
     src/spreadsheet_view.h
 )
-target_link_libraries(qindacalc PRIVATE office_shell calc_io)
+target_link_libraries(qindacalc PRIVATE office_shell office_ai calc_io)
 if(QQO_WITH_CHARTS)
     target_link_libraries(qindacalc PRIVATE Qt6::Charts)
     target_compile_definitions(qindacalc PRIVATE QQO_WITH_CHARTS)

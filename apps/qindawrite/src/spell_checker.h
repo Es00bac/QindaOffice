@@ -22,6 +22,10 @@ public:
     ~SpellChecker() override;
 
     [[nodiscard]] bool isActive() const;
+    // Preferences ▸ Writing ▸ "Check spelling as you type". Disabling stops
+    // the underline pass and re-highlights so existing squiggles clear.
+    void setEnabled(bool enabled);
+    [[nodiscard]] bool isEnabled() const { return m_enabled; }
     [[nodiscard]] bool isMisspelled(const QString &word) const;
     [[nodiscard]] QStringList suggestions(const QString &word) const;
     // Session-scoped ignore: the word stops squiggling for this session.
@@ -33,6 +37,7 @@ protected:
 private:
     std::unique_ptr<Sonnet::Speller> m_speller;
     QSet<QString> m_ignoredWords;
+    bool m_enabled = true;
 };
 
 } // namespace QindaOffice::Apps::Write

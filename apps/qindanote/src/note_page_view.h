@@ -43,6 +43,10 @@ public:
     // The page rect in widget coordinates (zoom-aware); public for the
     // window's layout math and tests.
     [[nodiscard]] QRectF pageRect() const;
+    // Resizes the widget to the (zoomed, grown) page. The window hosts the
+    // view in a QScrollArea, so this is what makes zoom and page growth
+    // reachable instead of clipped.
+    void updatePageMetrics();
 
 public slots:
     void undo();

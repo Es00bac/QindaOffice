@@ -35,6 +35,9 @@ public:
     // Reuses the persistent actions so menus and toolbar stay in sync.
     void populateFormatMenu(QMenu *menu);
     void populateInsertMenu(QMenu *menu);
+    // Appends commands owned elsewhere (the typography set) to the same
+    // wrapping strip, so they are reachable without opening a menu.
+    void appendStripActions(const QList<QAction *> &actions);
 
     // The actual insertions, separated from their dialogs so tests (and
     // future scripting) can drive them without modal UI.

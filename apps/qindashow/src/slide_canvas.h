@@ -44,6 +44,9 @@ public:
 
     [[nodiscard]] ShowModel::Shape *modelShape() const;
     [[nodiscard]] QString shapeId() const { return m_shapeId; }
+    // The item's bounding rect is read from the model, so the scene must be
+    // told BEFORE the model's rect changes underneath it.
+    void prepareGeometryChangeForRect() { prepareGeometryChange(); }
 
 protected:
     QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
@@ -73,6 +76,17 @@ public:
     [[nodiscard]] ShowModel::Slide *slide() const { return m_slide; }
     [[nodiscard]] QSizeF slideSize() const { return m_slideSize; }
     [[nodiscard]] ShapeItem *selectedItem() const;
+    // Every selected shape, in deck (z) order. Align and distribute need the
+    // whole selection, not just the first item.
+    [[nodiscard]] QStringList selectedShapeIds() const;
+    // Applies new rects to several shapes in one go (align/distribute/
+    // duplicate-offset). Reports only slideEdited(): the caller wraps the
+    // whole operation in ONE SlideStateCommand, because lining six shapes up
+    // is one action to the user and must be one Ctrl+Z.
+    void setShapeRects(const QHash<QString, QRectF> &rects);
+    // Z-order to the extremes; raiseSelected()/lowerSelected() move one step.
+    void bringSelectedToFront();
+    void sendSelectedToBack();
     [[nodiscard]] ShapeItem *itemFor(const QString &shapeId) const;
 
     // Model-mutating operations; each emits the matching *_Edited signal
@@ -109,6 +123,12 @@ signals:
     void slideEdited(); // any of the above; window marks dirty + journals
 
 protected:
+    // The slide PAGE. AGENT-GUARD: nothing else paints it — the scene holds
+    // one item per shape and no item for the slide itself, so before this
+    // existed an empty slide rendered as an empty dark-grey view and the
+    // editor gave no clue where the slide's edges were.
+    void drawBackground(QPainter *painter, const QRectF &rect) override;
+    void resizeEvent(QResizeEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
@@ -116,6 +136,13 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
 
 private:
+    // Scale that makes the whole page fit the viewport; the user's zoom
+    // multiplies it, so zoom 100% means "the whole slide, as large as it
+    // goes" rather than "720 pt at one pixel per point".
+    [[nodiscard]] qreal fitScale() const;
+    void applyViewTransform();
+    // Rewrites the model's shape order and re-applies item z values.
+    void reorderTo(const QStringList &order);
     void rebuildItems();
     void applyZOrder();
     int shapeIndex(const QString &shapeId) const;

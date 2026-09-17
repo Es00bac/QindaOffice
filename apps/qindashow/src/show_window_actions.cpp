@@ -6,6 +6,8 @@
 
 #include "show_window.h"
 
+#include "show_arrange.h"
+
 #include "pdf_export.h"
 #include "show_clipboard.h"
 #include "show_commands.h"
@@ -69,7 +71,11 @@ void ShowWindow::insertFileMenuActions(QMenu *fileMenu)
     if (templates.isEmpty()) {
         return;
     }
-    QMenu *submenu = fileMenu->addMenu(tr("New from &Template"));
+    // AGENT-GUARD: insert before the shell's File-menu anchor. addMenu()
+    // appends, which landed "New from Template" BELOW Quit.
+    auto *submenu = new QMenu(tr("New from &Template"), this);
+    submenu->setObjectName(QStringLiteral("fileTemplateMenu"));
+    fileMenu->insertMenu(fileMenuAnchor(), submenu);
     for (const Shell::TemplateEntry &entry : templates) {
         QAction *item = submenu->addAction(entry.name);
         // AGENT-GUARD: stable objectName or the desktop global menu cannot
@@ -241,6 +247,8 @@ void ShowWindow::insertApplicationMenus(QMenu *before)
     slideMenu->addAction(m_duplicateSlideAction);
     slideMenu->addAction(m_deleteSlideAction);
     slideMenu->addSeparator();
+    m_arrange->populateSlideMenu(slideMenu);
+    slideMenu->addSeparator();
     slideMenu->addAction(m_startShowAction);
     slideMenu->addSeparator();
     QAction *exportPdfAction = slideMenu->addAction(tr("Export PDF..."));
@@ -287,12 +295,7 @@ void ShowWindow::insertApplicationMenus(QMenu *before)
 
     QMenu *arrangeMenu = new QMenu(tr("Arrange"), this);
     arrangeMenu->setObjectName(QStringLiteral("showArrangeMenu"));
-    QAction *forward = arrangeMenu->addAction(tr("Bring forward"));
-    forward->setObjectName(QStringLiteral("showArrangeForward"));
-    connect(forward, &QAction::triggered, this, [this] { m_canvas->raiseSelected(); });
-    QAction *backward = arrangeMenu->addAction(tr("Send backward"));
-    backward->setObjectName(QStringLiteral("showArrangeBackward"));
-    connect(backward, &QAction::triggered, this, [this] { m_canvas->lowerSelected(); });
+    m_arrange->populateArrangeMenu(arrangeMenu);
     menuBar()->insertMenu(before->menuAction(), arrangeMenu);
 }
 

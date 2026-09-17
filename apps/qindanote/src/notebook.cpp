@@ -69,8 +69,14 @@ bool Notebook::create(const QString &path, QString *error)
     m_dir = dir;
     m_open = true;
     m_name = QFileInfo(path).fileName();
-    NoteSection &section = addSection(QStringLiteral("Notes"));
-    addPage(section, QStringLiteral("First page"));
+    // AGENT-GUARD: only seed when the notebook really is empty. An untitled
+    // notebook already carries one section and page (so a fresh window is
+    // writable straight away), and seeding unconditionally on the first save
+    // gave that notebook a second, duplicate "Notes" section.
+    if (m_sections.isEmpty()) {
+        NoteSection &section = addSection(QStringLiteral("Notes"));
+        addPage(section, QStringLiteral("First page"));
+    }
     return save(error);
 }
 
@@ -415,6 +421,94 @@ bool Notebook::fromRecoveryJson(const QByteArray &json, QString *error)
         && QFile::exists(QDir(dir).filePath(QStringLiteral("notebook.json")));
     m_dir = m_open ? QDir(dir) : QDir();
     return true;
+}
+
+bool Notebook::removePage(const QString &sectionId, const QString &pageId)
+{
+    for (NoteSection &section : m_sections) {
+        if (section.id != sectionId) {
+            continue;
+        }
+        for (int i = 0; i < section.pages.size(); ++i) {
+            if (section.pages.at(i).id != pageId) {
+                continue;
+            }
+            if (m_open) {
+                // AGENT-GUARD: drop the file too. An index entry removed
+                // without its page file leaves an orphan that the next
+                // save()/load() pair can resurrect.
+                m_dir.remove(QStringLiteral("sections/%1/pages/%2.json")
+                                 .arg(sectionId, pageId));
+            }
+            section.pages.removeAt(i);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Notebook::removeSection(const QString &sectionId)
+{
+    for (int i = 0; i < m_sections.size(); ++i) {
+        if (m_sections.at(i).id != sectionId) {
+            continue;
+        }
+        if (m_open) {
+            QDir sectionDir(m_dir.filePath(QStringLiteral("sections/%1").arg(sectionId)));
+            if (sectionDir.exists()) {
+                sectionDir.removeRecursively();
+            }
+        }
+        m_sections.removeAt(i);
+        return true;
+    }
+    return false;
+}
+
+bool Notebook::renamePage(const QString &sectionId, const QString &pageId, const QString &title)
+{
+    if (title.isEmpty()) {
+        return false;
+    }
+    NotePage *page = pageById(sectionId, pageId);
+    if (page == nullptr) {
+        return false;
+    }
+    page->title = title;
+    return true;
+}
+
+bool Notebook::renameSection(const QString &sectionId, const QString &name)
+{
+    if (name.isEmpty()) {
+        return false;
+    }
+    NoteSection *section = sectionById(sectionId);
+    if (section == nullptr) {
+        return false;
+    }
+    section->name = name;
+    return true;
+}
+
+bool Notebook::movePage(const QString &sectionId, const QString &pageId, int delta)
+{
+    NoteSection *section = sectionById(sectionId);
+    if (section == nullptr || delta == 0) {
+        return false;
+    }
+    for (int i = 0; i < section->pages.size(); ++i) {
+        if (section->pages.at(i).id != pageId) {
+            continue;
+        }
+        const int target = i + delta;
+        if (target < 0 || target >= section->pages.size()) {
+            return false;
+        }
+        section->pages.move(i, target);
+        return true;
+    }
+    return false;
 }
 
 } // namespace QindaOffice::Apps::Notes

@@ -11,6 +11,8 @@
 #include "src/slide_canvas.h"
 
 #include "shape_json.h"
+#include "src/show_commands.h"
+#include "src/show_document.h"
 #include "standard_actions.h"
 
 #include <QClipboard>
@@ -41,6 +43,12 @@ private slots:
     void insertActionsLandShapes();
     void editingActionsFollowSelection();
     void findSelectsTheMatchingSlide();
+    // D-016 canvas and arrange.
+    void canvasPaintsTheSlidePage();
+    void alignCentersSelectionAgainstTheSlide();
+    void bringToFrontIsOneStep();
+    void moveSlideReordersTheDeck();
+    void replaceSweepsTheWholeDeckInOneStep();
 };
 
 namespace ActionId = ::QindaOffice::Shell::ActionId;
@@ -228,6 +236,125 @@ void ShowUiTest::findSelectsTheMatchingSlide()
     QCOMPARE(window.currentSlideRow(), 1); // "Budget review"
     next->click();
     QCOMPARE(window.currentSlideRow(), 2); // matched in the speaker notes
+}
+
+void ShowUiTest::canvasPaintsTheSlidePage()
+{
+    ShowWindow window;
+    window.resize(1000, 700);
+    window.show();
+    SlideCanvas *canvas = window.canvas();
+    const QImage shot = canvas->grab().toImage();
+    // The scene holds one item per SHAPE and none for the slide itself, so
+    // without drawBackground() an empty slide rendered as a flat dark-grey
+    // view with no page anywhere in it.
+    int whitePixels = 0;
+    for (int y = 0; y < shot.height(); y += 4) {
+        for (int x = 0; x < shot.width(); x += 4) {
+            if (QColor(shot.pixel(x, y)).lightness() > 240) {
+                ++whitePixels;
+            }
+        }
+    }
+    QVERIFY2(whitePixels > 100, qPrintable(QString::number(whitePixels)));
+}
+
+void ShowUiTest::alignCentersSelectionAgainstTheSlide()
+{
+    ShowWindow window;
+    window.show();
+    SlideCanvas *canvas = window.canvas();
+    ShowApp::ShapeItem *item =
+        canvas->addShape(QindaOffice::Show::ShapeKind::Rectangle, QRectF(10, 10, 100, 50));
+    QVERIFY(item != nullptr);
+    item->setSelected(true);
+    const int before = window.showDocument()->undoStack()->count();
+
+    window.action(QString::fromLatin1(ActionId::kShowAlignHCenter))->trigger();
+
+    // A single shape aligns to the SLIDE, so its centre lands on the middle.
+    const QindaOffice::Show::Shape *shape = item->modelShape();
+    QVERIFY(shape != nullptr);
+    QCOMPARE(qRound(shape->rect.center().x()), qRound(canvas->slideSize().width() / 2));
+    QCOMPARE(window.showDocument()->undoStack()->count(), before + 1);
+    window.showDocument()->undoStack()->undo();
+    QCOMPARE(qRound(canvas->slide()->shapes.last().rect.left()), 10);
+}
+
+void ShowUiTest::bringToFrontIsOneStep()
+{
+    ShowWindow window;
+    window.show();
+    SlideCanvas *canvas = window.canvas();
+    const QString firstId =
+        canvas->addShape(QindaOffice::Show::ShapeKind::Rectangle, QRectF(10, 10, 40, 40))
+            ->shapeId();
+    const QString secondId =
+        canvas->addShape(QindaOffice::Show::ShapeKind::Ellipse, QRectF(60, 10, 40, 40))
+            ->shapeId();
+    const QString thirdId =
+        canvas->addShape(QindaOffice::Show::ShapeKind::Ellipse, QRectF(110, 10, 40, 40))
+            ->shapeId();
+    // addShape selects what it just inserted, so clear that before selecting
+    // the one this case is about.
+    for (const QString &id : {secondId, thirdId}) {
+        canvas->itemFor(id)->setSelected(false);
+    }
+    canvas->itemFor(firstId)->setSelected(true);
+
+    window.action(QString::fromLatin1(ActionId::kShowBringToFront))->trigger();
+
+    // One command, whatever the distance: "Bring forward" repeated would be
+    // as many undo steps as there were shapes in front.
+    QCOMPARE(canvas->slide()->shapes.last().id, firstId);
+}
+
+void ShowUiTest::moveSlideReordersTheDeck()
+{
+    ShowWindow window;
+    window.show();
+    window.addSlide();
+    QindaOffice::Show::Presentation *deck = window.showDocument()->presentation();
+    QCOMPARE(deck->slides.size(), 2);
+    const QString secondId = deck->slides.at(1).id;
+    QCOMPARE(window.currentSlideRow(), 1);
+
+    window.action(QString::fromLatin1(ActionId::kShowSlideMoveUp))->trigger();
+
+    QCOMPARE(deck->slides.first().id, secondId);
+    QCOMPARE(window.currentSlideRow(), 0);
+    window.showDocument()->undoStack()->undo();
+    QCOMPARE(window.showDocument()->presentation()->slides.at(1).id, secondId);
+}
+
+void ShowUiTest::replaceSweepsTheWholeDeckInOneStep()
+{
+    ShowWindow window;
+    window.show();
+    QindaOffice::Show::Presentation *deck = window.showDocument()->presentation();
+    deck->slides.first().title = QStringLiteral("Draft plan");
+    deck->slides.first().notes = QStringLiteral("draft only");
+    window.addSlide();
+    window.showDocument()->presentation()->slides.last().title = QStringLiteral("Draft two");
+    const int before = window.showDocument()->undoStack()->count();
+
+    // Drive the sweep directly: the action itself opens two modal prompts.
+    int hits = 0;
+    const QList<QindaOffice::Show::Slide> snapshot = deck->slides;
+    for (QindaOffice::Show::Slide &slide : deck->slides) {
+        hits += slide.title.count(QStringLiteral("Draft"));
+        slide.title.replace(QStringLiteral("Draft"), QStringLiteral("Final"));
+        hits += slide.notes.count(QStringLiteral("draft"));
+        slide.notes.replace(QStringLiteral("draft"), QStringLiteral("final"));
+    }
+    window.showDocument()->undoStack()->push(
+        new ShowApp::SlideListCommand(deck, snapshot, deck->slides));
+
+    QCOMPARE(hits, 3);
+    QCOMPARE(window.showDocument()->undoStack()->count(), before + 1);
+    window.showDocument()->undoStack()->undo();
+    QCOMPARE(window.showDocument()->presentation()->slides.first().title,
+             QStringLiteral("Draft plan"));
 }
 
 int main(int argc, char *argv[])

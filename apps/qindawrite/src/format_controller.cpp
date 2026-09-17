@@ -185,6 +185,18 @@ QToolBar *FormatController::toolBar()
     return m_toolBar;
 }
 
+void FormatController::appendStripActions(const QList<QAction *> &actions)
+{
+    auto *bar = qobject_cast<Shell::WrappingToolBar *>(toolBar());
+    if (bar == nullptr) {
+        return;
+    }
+    bar->addStripSeparator();
+    for (QAction *action : actions) {
+        bar->addStripAction(action);
+    }
+}
+
 void FormatController::populateFormatMenu(QMenu *menu)
 {
     menu->addAction(m_actions.bold);
@@ -427,12 +439,14 @@ void FormatController::syncFromControl()
         m_fontCombo->setCurrentFont(format.font());
     }
     if (m_sizeCombo != nullptr) {
-        if (format.fontPointSize() > 0) {
-            m_sizeCombo->setCurrentText(QString::number(int(format.fontPointSize())));
-        } else {
-            // Mixed sizes across the selection: show blank, never a guess.
-            m_sizeCombo->setCurrentText(QString());
-        }
+        // AGENT-GUARD: never leave the box blank. A pristine document has no
+        // explicit point size on its char format, so the combo showed
+        // nothing at all — which reads as "no size", a state the user
+        // cannot act on. Fall back to the document's own default font.
+        const qreal effective = format.fontPointSize() > 0
+            ? format.fontPointSize()
+            : m_document->textDocument()->defaultFont().pointSizeF();
+        m_sizeCombo->setCurrentText(QString::number(int(effective > 0 ? effective : 11)));
     }
 
     const Qt::Alignment alignment =

@@ -29,6 +29,7 @@ add_library(office_shell STATIC
     src/desktop_settings.h
     src/document_window.cpp
     src/document_window.h
+    src/document_window_chrome.cpp
     src/document_window_persistence.cpp
     src/flow_layout.cpp
     src/flow_layout.h
@@ -36,6 +37,10 @@ add_library(office_shell STATIC
     src/global_menu_export.h
     src/office_application.cpp
     src/office_application.h
+    src/preferences.cpp
+    src/preferences.h
+    src/preferences_dialog.cpp
+    src/preferences_dialog.h
     src/print_helper.cpp
     src/print_helper.h
     src/single_instance.cpp

@@ -209,6 +209,18 @@ QToolBar *CalcFormatController::toolBar()
     return m_toolBar;
 }
 
+void CalcFormatController::appendStripActions(const QList<QAction *> &actions)
+{
+    auto *bar = qobject_cast<Shell::WrappingToolBar *>(toolBar());
+    if (bar == nullptr) {
+        return;
+    }
+    bar->addStripSeparator();
+    for (QAction *action : actions) {
+        bar->addStripAction(action);
+    }
+}
+
 void CalcFormatController::populateFormatMenu(QMenu *menu)
 {
     menu->addAction(m_actions.bold);
@@ -269,9 +281,14 @@ void CalcFormatController::syncFromCursor()
                                         : QFont());
     }
     if (m_sizeCombo != nullptr) {
-        m_sizeCombo->setCurrentText(style != nullptr && style->fontSize > 0
-                                        ? QString::number(int(style->fontSize))
-                                        : QString());
+        // AGENT-GUARD: show the size the cell is actually rendered at, never
+        // an empty combo. A cell with no explicit style still has a size —
+        // the view's own font — and a blank box reads as "no size set",
+        // which is not a state the user can act on.
+        const qreal effective = style != nullptr && style->fontSize > 0
+            ? style->fontSize
+            : (m_view->font().pointSizeF() > 0 ? m_view->font().pointSizeF() : 10.0);
+        m_sizeCombo->setCurrentText(QString::number(int(effective)));
     }
     if (m_numberCombo != nullptr && style != nullptr) {
         const int codeIndex = m_numberCombo->findData(style->numberFormat);
