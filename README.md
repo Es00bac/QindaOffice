@@ -44,15 +44,20 @@ desktop files, icons, and the shared-mime-info package. See `docs/verification.m
 on-desktop checklist (containers, panel menu, single instance).
 
 The repository is not published yet, so the ebuild takes a local snapshot
-tarball rather than a download: `SRC_URI="${P}.tar.xz"` with
+tarball rather than a download: `SRC_URI="${PF}.tar.xz"` with
 `RESTRICT="fetch"`. Cut that tarball from the reviewed commit with the
 tree's own script and drop it in `DISTDIR`:
 
 ```
-tools/make-dist.sh 0.1.0_p20260917 /var/cache/distfiles
-ebuild .../qindaoffice-0.1.0_p20260917.ebuild manifest
+tools/make-dist.sh 0.1.0_p20260917-r1 /var/cache/distfiles
+ebuild .../qindaoffice-0.1.0_p20260917-r1.ebuild manifest
 emerge -1 gui-apps/qindaoffice
 ```
+
+The version passed to `make-dist.sh` is the ebuild's `PVR`, not its `PV`:
+a re-cut on the same day is a new revision with different contents, and
+naming the archive after `${P}` would give two of them the same distfile
+name.
 
 `make-dist.sh` refuses to run on a dirty tree and vendors
 `third_party/QXlsx` **into** the tarball — without that, `src_unpack`

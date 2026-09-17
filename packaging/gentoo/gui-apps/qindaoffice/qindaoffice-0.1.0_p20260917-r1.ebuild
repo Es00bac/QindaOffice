@@ -7,8 +7,8 @@ inherit cmake xdg
 
 DESCRIPTION="QindaQt Office - word processor, spreadsheet, presentations and notes for the QindaQt desktop"
 HOMEPAGE="https://github.com/Es00bac/QindaQt"
-SRC_URI="${P}.tar.xz"
-S="${WORKDIR}/${P}"
+SRC_URI="${PF}.tar.xz"
+S="${WORKDIR}/${PF}"
 
 LICENSE="GPL-3+"
 SLOT="0"
@@ -19,12 +19,16 @@ IUSE="+charts +libreoffice"
 # immutable snapshot rather than a download. The operator produces the
 # archive from the exact reviewed commit with the tree's own script:
 #
-#     tools/make-dist.sh 0.1.0_p20260917 /var/cache/distfiles
+#     tools/make-dist.sh 0.1.0_p20260917-r1 /var/cache/distfiles
 #
 # That script refuses to run on a dirty tree and vendors the QXlsx
 # submodule INTO the tarball, which is what makes the build work under
 # FEATURES=network-sandbox: src_unpack fetches nothing. The archive also
 # carries a .dist-commit file naming the commit it was cut from.
+#
+# The archive is named after PF, not P: a re-cut on the same day is a new
+# revision with DIFFERENT contents, and ${P}.tar.xz would hand two of them
+# the same distfile name and the same Manifest line.
 RESTRICT="fetch"
 
 # gui-wm/qindaqt-desktop owns the QindaQt global-menu static archives and
@@ -53,7 +57,7 @@ pkg_nofetch() {
 	einfo "QindaOffice is not published to a remote yet. Produce the archive"
 	einfo "from the reviewed commit in a QindaOffice checkout:"
 	einfo ""
-	einfo "    tools/make-dist.sh ${PV} \"${DISTDIR}\""
+	einfo "    tools/make-dist.sh ${PVR} \"${DISTDIR}\""
 	einfo ""
 	einfo "then re-run emerge. The script vendors third_party/QXlsx into the"
 	einfo "tarball so the build needs no network."
