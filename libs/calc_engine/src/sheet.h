@@ -2,6 +2,11 @@
 #pragma once
 
 #include "cell.h"
+#include "sheet_rules.h"
+
+#include <QSet>
+
+#include <functional>
 
 namespace QindaOffice::Calc {
 
@@ -52,6 +57,39 @@ public:
                          QHash<qint32, qreal> colWidths, QHash<qint32, qreal> rowHeights,
                          QList<CellRange> merges);
 
+    // --- Rules (sheet_rules.h). Not cell content: they address cells by
+    // range, so structure.cpp moves them with the rows and columns they
+    // cover, and calc_undo snapshots them like everything else.
+    [[nodiscard]] const QList<CondFormatRule> &condFormats() const { return m_condFormats; }
+    void setCondFormats(QList<CondFormatRule> rules) { m_condFormats = std::move(rules); }
+    // The merged formatting of every rule matching `addr` with `value`, in
+    // rule order (later rules win). Painting and printing both go through
+    // this, so paper and screen cannot disagree.
+    [[nodiscard]] CondFormat condFormatFor(const CellAddr &addr, const Value &value) const;
+
+    [[nodiscard]] const QList<ValidationRule> &validations() const { return m_validations; }
+    void setValidations(QList<ValidationRule> rules) { m_validations = std::move(rules); }
+    // The first rule covering `addr`, or nullptr. One cell obeys one rule:
+    // stacking contradictory rules is a trap with no good resolution.
+    [[nodiscard]] const ValidationRule *validationAt(const CellAddr &addr) const;
+
+    [[nodiscard]] const AutoFilter &autoFilter() const { return m_filter; }
+    void setAutoFilter(AutoFilter filter) { m_filter = std::move(filter); }
+    // Rows the active filter hides. Empty when no filter is active, so the
+    // view can treat "no filter" and "filter matching everything" alike.
+    [[nodiscard]] QSet<qint32> filteredOutRows() const;
+    // The distinct display values in `column` of the filter's body, sorted,
+    // for the filter dropdown. `display` renders one cell the way the grid
+    // does (the caller owns number formatting).
+    [[nodiscard]] QStringList filterValuesFor(
+        qint32 column, const std::function<QString(const CellAddr &)> &display) const;
+
+    [[nodiscard]] const QHash<quint64, CellComment> &comments() const { return m_comments; }
+    void setComments(QHash<quint64, CellComment> comments) { m_comments = std::move(comments); }
+    [[nodiscard]] const CellComment *commentAt(const CellAddr &addr) const;
+    void setCommentAt(const CellAddr &addr, const CellComment &comment);
+    bool clearCommentAt(const CellAddr &addr);
+
     [[nodiscard]] qint32 styleIdAt(const CellAddr &addr) const;
     void setStyleIdAt(const CellAddr &addr, qint32 id);
     // The full sparse style map (undo snapshots must cover styles set on
@@ -65,6 +103,10 @@ private:
     QHash<qint32, qreal> m_rowHeights;
     QHash<quint64, qint32> m_styleIds;
     QList<CellRange> m_merges;
+    QList<CondFormatRule> m_condFormats;
+    QList<ValidationRule> m_validations;
+    AutoFilter m_filter;
+    QHash<quint64, CellComment> m_comments;
 };
 
 } // namespace QindaOffice::Calc

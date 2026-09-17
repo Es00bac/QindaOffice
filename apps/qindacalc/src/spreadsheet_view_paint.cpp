@@ -141,8 +141,19 @@ void SpreadsheetView::paintGrid(QPainter &p, const QRect &clip)
             // Styles live on EMPTY cells too (fill, borders), so read the
             // style whether or not the cell has content.
             const CellStyle *style = styleId != 0 ? wb.style(styleId) : nullptr;
-            if (style != nullptr && style->bg.has_value() && !inSelection) {
-                p.fillRect(cell, QColor((*style->bg).r, (*style->bg).g, (*style->bg).b));
+            // Conditional formatting layers OVER the cell's own style and
+            // under the selection: a rule that hid the selection would make
+            // the cursor invisible on a formatted block.
+            const CondFormat conditional = sheet.condFormats().isEmpty()
+                ? CondFormat{}
+                : sheet.condFormatFor(addr, cellData != nullptr ? cellData->value : Value());
+            if (!inSelection) {
+                if (conditional.background) {
+                    p.fillRect(cell, QColor(conditional.background->r, conditional.background->g,
+                                            conditional.background->b));
+                } else if (style != nullptr && style->bg.has_value()) {
+                    p.fillRect(cell, QColor((*style->bg).r, (*style->bg).g, (*style->bg).b));
+                }
             }
             if (cellData != nullptr && !isBlank(cellData->value)) {
                 const QString text =
@@ -163,9 +174,18 @@ void SpreadsheetView::paintGrid(QPainter &p, const QRect &clip)
                     cellFont.setItalic(style->italic);
                     cellFont.setUnderline(style->underline);
                 }
+                if (conditional.bold) {
+                    cellFont.setBold(*conditional.bold);
+                }
+                if (conditional.italic) {
+                    cellFont.setItalic(*conditional.italic);
+                }
                 p.setFont(cellFont);
                 if (inSelection && isCursor) {
                     p.setPen(palette().highlightedText().color());
+                } else if (conditional.foreground) {
+                    p.setPen(QColor(conditional.foreground->r, conditional.foreground->g,
+                                    conditional.foreground->b));
                 } else if (style != nullptr && style->fg.has_value()) {
                     p.setPen(QColor((*style->fg).r, (*style->fg).g, (*style->fg).b));
                 } else {
@@ -188,6 +208,36 @@ void SpreadsheetView::paintGrid(QPainter &p, const QRect &clip)
                         | int(Qt::TextWordWrap);
                 }
                 p.drawText(cell.adjusted(4, 1, -4, -1), flags, text);
+            }
+            // A comment marker: the small corner triangle every spreadsheet
+            // uses. The text itself is a tooltip (see the view's input TU).
+            if (sheet.commentAt(addr) != nullptr) {
+                const QPolygonF marker({cell.topRight() + QPointF(-7, 1),
+                                        cell.topRight() + QPointF(-1, 1),
+                                        cell.topRight() + QPointF(-1, 7)});
+                p.setPen(Qt::NoPen);
+                p.setBrush(QColor(0xc0, 0x39, 0x2b));
+                p.drawPolygon(marker);
+                p.setBrush(Qt::NoBrush);
+            }
+            // Filter dropdown: drawn on the header row of an active filter,
+            // so the control lives exactly where the user expects to click.
+            const AutoFilter &filter = sheet.autoFilter();
+            if (filter.active && filter.range.isValid()
+                && addr.row == filter.range.topLeft.row
+                && addr.col >= filter.range.topLeft.col
+                && addr.col <= filter.range.bottomRight.col) {
+                const QRectF button(cell.right() - kFilterButtonPx, cell.top() + 2,
+                                    kFilterButtonPx - 2, cell.height() - 4);
+                p.setPen(palette().mid().color());
+                p.setBrush(filter.allowed.contains(addr.col) ? palette().highlight().color()
+                                                             : palette().button().color());
+                p.drawRect(button);
+                p.setPen(palette().buttonText().color());
+                const QPointF centre = button.center();
+                p.drawPolygon(QPolygonF({centre + QPointF(-3, -1.5), centre + QPointF(3, -1.5),
+                                         centre + QPointF(0, 2.5)}));
+                p.setBrush(Qt::NoBrush);
             }
             p.setPen(palette().mid().color());
             p.drawLine(cell.bottomLeft(), cell.bottomRight());

@@ -19,8 +19,10 @@
 #include <QFontMetricsF>
 #include <QKeyEvent>
 #include <QLineEdit>
+#include <QHelpEvent>
 #include <QMouseEvent>
 #include <QScrollBar>
+#include <QToolTip>
 
 namespace CalcEng = QindaOffice::Calc;
 namespace QindaOffice::Apps::QindaCalc {
@@ -79,6 +81,60 @@ qreal SpreadsheetView::autofitColumnWidth(qint32 col) const
     return qBound(kAutofitMin, widest + 12.0, kAutofitMax);
 }
 
+qint32 SpreadsheetView::filterButtonAt(const QPoint &gridPos) const
+{
+    const Sheet &sheet = m_document->workbook()->sheetAt(m_document->activeSheet());
+    const AutoFilter &filter = sheet.autoFilter();
+    if (!filter.active || !filter.range.isValid()) {
+        return -1;
+    }
+    for (const Band &rowBand : visibleRowBands()) {
+        if (rowBand.index != filter.range.topLeft.row) {
+            continue;
+        }
+        if (gridPos.y() < rowBand.pos || gridPos.y() > rowBand.pos + rowBand.size) {
+            return -1;
+        }
+        for (const Band &colBand : visibleColumnBands()) {
+            if (colBand.index < filter.range.topLeft.col
+                || colBand.index > filter.range.bottomRight.col) {
+                continue;
+            }
+            const qreal right = colBand.pos + colBand.size;
+            if (gridPos.x() >= right - kFilterButtonPx && gridPos.x() <= right) {
+                return colBand.index;
+            }
+        }
+        return -1;
+    }
+    return -1;
+}
+
+bool SpreadsheetView::viewportEvent(QEvent *event)
+{
+    if (event->type() == QEvent::ToolTip) {
+        auto *help = static_cast<QHelpEvent *>(event);
+        const QPoint pos = help->pos();
+        if (pos.x() >= kHeaderWidth && pos.y() >= kHeaderHeight) {
+            const CellAddr addr = cellAtPos(pos - QPoint(kHeaderWidth, kHeaderHeight));
+            const Sheet &sheet = m_document->workbook()->sheetAt(m_document->activeSheet());
+            if (const CellComment *comment = sheet.commentAt(addr)) {
+                QToolTip::showText(help->globalPos(),
+                                   comment->author.isEmpty()
+                                       ? comment->text
+                                       : QStringLiteral("%1:\n%2").arg(comment->author,
+                                                                       comment->text),
+                                   viewport());
+                return true;
+            }
+        }
+        QToolTip::hideText();
+        event->ignore();
+        return true;
+    }
+    return QAbstractScrollArea::viewportEvent(event);
+}
+
 void SpreadsheetView::mousePressEvent(QMouseEvent *event)
 {
     const QPoint pos = event->position().toPoint();
@@ -119,6 +175,15 @@ void SpreadsheetView::mousePressEvent(QMouseEvent *event)
         return;
     }
     cancelEditor();
+    // The filter dropdown sits inside a header cell, so it has to be tested
+    // before the cell under it takes the click.
+    if (event->button() == Qt::LeftButton) {
+        const qint32 filterColumn = filterButtonAt(pos - QPoint(kHeaderWidth, kHeaderHeight));
+        if (filterColumn >= 0) {
+            emit filterButtonClicked(filterColumn, event->globalPosition().toPoint());
+            return;
+        }
+    }
     const CellAddr hit = cellAtPos(pos - QPoint(kHeaderWidth, kHeaderHeight));
     // A right-click inside the current selection keeps it: acting on a
     // multi-cell selection is the whole point of the context menu.

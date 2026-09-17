@@ -6,6 +6,7 @@
 #include "workbook.h"
 
 #include <algorithm>
+#include <optional>
 
 namespace QindaOffice::Calc {
 namespace {
@@ -285,25 +286,73 @@ void moveSheetContents(Sheet &sheet, const StructureEdit &edit)
     colWidths = rows ? sheet.columnWidths() : moveGeometry(sheet.columnWidths());
     rowHeights = rows ? moveGeometry(sheet.rowHeights()) : sheet.rowHeights();
 
-    QList<CellRange> merges;
-    for (CellRange merge : sheet.merges()) {
-        qint32 lo = rows ? merge.topLeft.row : merge.topLeft.col;
-        qint32 hi = rows ? merge.bottomRight.row : merge.bottomRight.col;
+    // A range that survives the edit, or nullopt when the whole span went.
+    const auto movedRange = [&band, rows](CellRange range) -> std::optional<CellRange> {
+        qint32 lo = rows ? range.topLeft.row : range.topLeft.col;
+        qint32 hi = rows ? range.bottomRight.row : range.bottomRight.col;
         if (!movedSpan(lo, hi, band)) {
-            continue;
+            return std::nullopt;
         }
         if (rows) {
-            merge.topLeft.row = lo;
-            merge.bottomRight.row = hi;
+            range.topLeft.row = lo;
+            range.bottomRight.row = hi;
         } else {
-            merge.topLeft.col = lo;
-            merge.bottomRight.col = hi;
+            range.topLeft.col = lo;
+            range.bottomRight.col = hi;
         }
-        merges.append(merge);
+        return range;
+    };
+
+    QList<CellRange> merges;
+    for (const CellRange &merge : sheet.merges()) {
+        if (const auto moved = movedRange(merge)) {
+            merges.append(*moved);
+        }
+    }
+
+    // AGENT-GUARD: the sheet's RULES address cells by range too. A rule left
+    // un-moved paints, validates or filters the wrong cells after an insert
+    // — the same class of defect as a formula that does not follow.
+    QList<CondFormatRule> condFormats;
+    for (CondFormatRule rule : sheet.condFormats()) {
+        if (const auto moved = movedRange(rule.range)) {
+            rule.range = *moved;
+            condFormats.append(rule);
+        }
+    }
+    QList<ValidationRule> validations;
+    for (ValidationRule rule : sheet.validations()) {
+        if (const auto moved = movedRange(rule.range)) {
+            rule.range = *moved;
+            validations.append(rule);
+        }
+    }
+    AutoFilter filter = sheet.autoFilter();
+    if (filter.range.isValid()) {
+        if (const auto moved = movedRange(filter.range)) {
+            filter.range = *moved;
+        } else {
+            filter = AutoFilter{};
+        }
+    }
+    QHash<quint64, CellComment> comments;
+    comments.reserve(sheet.comments().size());
+    for (const auto &[packed, comment] : sheet.comments().asKeyValueRange()) {
+        CellAddr addr{qint32(packed & 0xffffffffu), qint32(packed >> 32)};
+        const qint32 moved = movedIndex(rows ? addr.row : addr.col, band);
+        if (moved < 0) {
+            continue;
+        }
+        (rows ? addr.row : addr.col) = moved;
+        comments.insert(addr.key(), comment);
     }
 
     sheet.replaceContents(std::move(cells), std::move(styles), std::move(colWidths),
                           std::move(rowHeights), std::move(merges));
+    sheet.setCondFormats(std::move(condFormats));
+    sheet.setValidations(std::move(validations));
+    sheet.setAutoFilter(std::move(filter));
+    sheet.setComments(std::move(comments));
 }
 
 } // namespace

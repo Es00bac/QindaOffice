@@ -9,6 +9,13 @@ add_executable(qindacalc
     src/calc_format_controller.h
     src/calc_recovery.cpp
     src/calc_recovery.h
+    src/calc_recovery_rules.cpp
+    src/calc_rule_dialogs.cpp
+    src/calc_rule_dialogs.h
+    src/calc_rules_actions.cpp
+    src/calc_rules_actions.h
+    src/calc_rules_ops.cpp
+    src/calc_recovery_rules.h
     src/calc_structure_actions.cpp
     src/calc_structure_actions.h
     src/calc_structure_menus.cpp

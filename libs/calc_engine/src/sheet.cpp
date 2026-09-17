@@ -97,4 +97,102 @@ void Sheet::replaceContents(QHash<quint64, Cell> cells, QHash<quint64, qint32> s
     m_merges = std::move(merges);
 }
 
+CondFormat Sheet::condFormatFor(const CellAddr &addr, const Value &value) const
+{
+    CondFormat merged;
+    for (const CondFormatRule &rule : m_condFormats) {
+        if (!rule.range.contains(addr) || !condRuleMatches(rule, value)) {
+            continue;
+        }
+        // Later rules win field by field, so a "highlight the row" rule and
+        // a "make negatives red" rule compose instead of cancelling.
+        if (rule.format.background) {
+            merged.background = rule.format.background;
+        }
+        if (rule.format.foreground) {
+            merged.foreground = rule.format.foreground;
+        }
+        if (rule.format.bold) {
+            merged.bold = rule.format.bold;
+        }
+        if (rule.format.italic) {
+            merged.italic = rule.format.italic;
+        }
+    }
+    return merged;
+}
+
+const ValidationRule *Sheet::validationAt(const CellAddr &addr) const
+{
+    for (const ValidationRule &rule : m_validations) {
+        if (rule.range.contains(addr)) {
+            return &rule;
+        }
+    }
+    return nullptr;
+}
+
+QSet<qint32> Sheet::filteredOutRows() const
+{
+    QSet<qint32> hidden;
+    if (!m_filter.active || !m_filter.range.isValid() || m_filter.allowed.isEmpty()) {
+        return hidden;
+    }
+    // The first row is the header and is never hidden — hiding it would
+    // take the filter's own dropdowns off the screen.
+    for (qint32 row = m_filter.range.topLeft.row + 1; row <= m_filter.range.bottomRight.row;
+         ++row) {
+        for (const auto &[column, allowed] : m_filter.allowed.asKeyValueRange()) {
+            if (column < m_filter.range.topLeft.col || column > m_filter.range.bottomRight.col) {
+                continue;
+            }
+            const Cell *cell = cellAt({row, column});
+            const QString text = cell != nullptr ? toText(cell->value) : QString();
+            if (!allowed.contains(text)) {
+                hidden.insert(row);
+                break;
+            }
+        }
+    }
+    return hidden;
+}
+
+QStringList Sheet::filterValuesFor(qint32 column,
+                                   const std::function<QString(const CellAddr &)> &display) const
+{
+    QStringList values;
+    if (!m_filter.range.isValid()) {
+        return values;
+    }
+    for (qint32 row = m_filter.range.topLeft.row + 1; row <= m_filter.range.bottomRight.row;
+         ++row) {
+        const QString text = display ? display({row, column}) : QString();
+        if (!values.contains(text)) {
+            values.append(text);
+        }
+    }
+    values.sort(Qt::CaseInsensitive);
+    return values;
+}
+
+const CellComment *Sheet::commentAt(const CellAddr &addr) const
+{
+    const auto it = m_comments.constFind(addr.key());
+    return it != m_comments.constEnd() ? &it.value() : nullptr;
+}
+
+void Sheet::setCommentAt(const CellAddr &addr, const CellComment &comment)
+{
+    if (comment.text.isEmpty()) {
+        m_comments.remove(addr.key());
+        return;
+    }
+    m_comments.insert(addr.key(), comment);
+}
+
+bool Sheet::clearCommentAt(const CellAddr &addr)
+{
+    return m_comments.remove(addr.key()) > 0;
+}
+
 } // namespace QindaOffice::Calc

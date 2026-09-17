@@ -11,6 +11,7 @@
 
 #include "calc_window.h"
 
+#include "calc_rules_actions.h"
 #include "calc_structure_actions.h"
 #include "spreadsheet_document.h"
 #include "spreadsheet_view.h"
@@ -157,8 +158,18 @@ void CalcWindow::wireGridInteraction()
         QMenu menu(this);
         menu.setObjectName(QStringLiteral("calcGridContextMenu"));
         m_structure->populateContextMenu(&menu);
+        menu.addSeparator();
+        m_rules->populateContextMenu(&menu);
         menu.exec(pos);
     });
+    // A value a validation rule refused must SAY so: dropping the keystroke
+    // silently looks like the app lost it.
+    connect(m_document, &SpreadsheetDocument::inputRejected, this,
+            [this](const CellAddr &addr, const QString &reason) {
+                statusBar()->showMessage(
+                    tr("%1 only accepts %2").arg(addrText(addr), reason), 8000);
+                m_view->refreshAll();
+            });
     updateSelectionStatus();
 }
 

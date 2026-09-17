@@ -61,6 +61,9 @@ public:
     // while the rest scrolls. {0,0} means nothing is frozen.
     void setFrozen(qint32 row, qint32 col);
     [[nodiscard]] CalcEng::CellAddr frozen() const { return m_frozen; }
+    // Test seam: the grid-space top of a row, which is what collapses to
+    // the row above it when a filter hides it.
+    [[nodiscard]] int rowTopForTest(qint32 row) const { return rowTop(row); }
 
 signals:
     void cursorChanged(const CalcEng::CellAddr &addr, const QString &formulaText,
@@ -79,6 +82,9 @@ signals:
     // A header drag finished: the window applies it as one undo step.
     void columnWidthChanged(qint32 col, qreal px);
     void rowHeightChanged(qint32 row, qreal px);
+    // The autofilter dropdown in a header cell was clicked; the window pops
+    // the value list. The view owns no dialogs.
+    void filterButtonClicked(qint32 column, const QPoint &globalPos);
 
 public slots:
     void commitFormulaBar(const QString &text);
@@ -93,6 +99,9 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
+    // Cell-comment tooltips. AGENT-NOTE: tooltips arrive at the VIEWPORT,
+    // not at the scroll area, so QWidget::event() never sees them.
+    bool viewportEvent(QEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
 
 private:
@@ -123,6 +132,9 @@ private:
     [[nodiscard]] QFont scaledFont() const;
     [[nodiscard]] qreal colWidthPx(qint32 col) const;
     [[nodiscard]] qreal rowHeightPx(qint32 row) const;
+    // 0 for a row the active filter hides, so every geometry walk collapses
+    // it without a special case at each call site.
+    [[nodiscard]] qreal visibleRowHeightPx(qint32 row, const QSet<qint32> &hidden) const;
     [[nodiscard]] CalcEng::CellAddr cellAtPos(const QPoint &pos) const;
     [[nodiscard]] int rowTop(qint32 row) const;
     [[nodiscard]] int colLeft(qint32 col) const;
@@ -131,6 +143,8 @@ private:
     // resize cursor and the drag agree.
     [[nodiscard]] qint32 columnBoundaryAt(int x) const;
     [[nodiscard]] qint32 rowBoundaryAt(int y) const;
+    // The filter dropdown under a GRID-coordinate point, or -1.
+    [[nodiscard]] qint32 filterButtonAt(const QPoint &gridPos) const;
     void emitSelectionChanged();
     void paintHeaderBands(QPainter &p, const QRect &clip);
     void paintGrid(QPainter &p, const QRect &clip);
@@ -157,6 +171,9 @@ private:
     int m_resizeOrigin = 0;
 
     static constexpr int kGripPx = 4; // boundary grab band in the headers
+    // Width of the autofilter dropdown drawn inside a header cell; the
+    // painter and the click hit-test share it.
+    static constexpr int kFilterButtonPx = 16;
     static constexpr int kHeaderWidth = 52;
     static constexpr int kHeaderHeight = 24;
     static constexpr int kDefaultRowPx = 20;

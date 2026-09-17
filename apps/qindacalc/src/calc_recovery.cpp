@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "calc_recovery.h"
 
+#include "calc_recovery_rules.h"
+
 #include "eval.h"
 #include "parser.h"
 
@@ -232,6 +234,10 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
                                      merge.bottomRight.row, merge.bottomRight.col});
         }
         out.insert(QStringLiteral("merges"), merges);
+        out.insert(QStringLiteral("condFormats"), condFormatsToJson(sheet.condFormats));
+        out.insert(QStringLiteral("validations"), validationsToJson(sheet.validations));
+        out.insert(QStringLiteral("filter"), autoFilterToJson(sheet.filter));
+        out.insert(QStringLiteral("comments"), commentsToJson(sheet.comments));
         sheets.append(out);
     }
     root.insert(QStringLiteral("sheets"), sheets);
@@ -319,6 +325,12 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
                     {quad.at(2).toInt(), quad.at(3).toInt()}});
             }
         }
+        sheet.condFormats =
+            condFormatsFromJson(object.value(QStringLiteral("condFormats")).toObject());
+        sheet.validations =
+            validationsFromJson(object.value(QStringLiteral("validations")).toObject());
+        sheet.filter = autoFilterFromJson(object.value(QStringLiteral("filter")).toObject());
+        sheet.comments = commentsFromJson(object.value(QStringLiteral("comments")).toArray());
         snapshot.sheets.append(sheet);
     }
     snapshot.activeSheet = qBound(0, snapshot.activeSheet, snapshot.sheets.size() - 1);

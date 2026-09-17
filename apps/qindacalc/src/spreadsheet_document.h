@@ -13,6 +13,7 @@
 // spreadsheet (see calc_undo.h for the snapshot design).
 
 #include "document.h"
+#include "sheet_rules.h"
 #include "workbook.h"
 
 #include <QUndoStack>
@@ -79,6 +80,13 @@ public:
     void renameSheet(qint32 index, const QString &name);
     void moveSheet(qint32 from, qint32 to);
     void duplicateSheet(qint32 index, const QString &name);
+
+    // Per-sheet rules (calc_rules_ops.cpp). Each is ONE undo step and lands
+    // in the recovery payload like everything else.
+    void setCondFormats(const QList<CalcEng::CondFormatRule> &rules);
+    void setValidations(const QList<CalcEng::ValidationRule> &rules);
+    void setAutoFilter(const CalcEng::AutoFilter &filter);
+    void setComment(const CalcEng::CellAddr &addr, const CalcEng::CellComment &comment);
     // Chart insert is a document mutation like any other: snapshot, push,
     // dirty, notify. It used to append straight into Workbook::charts, so a
     // chart could not be undone and never reached the recovery journal.
@@ -107,6 +115,9 @@ public:
     }
 
 signals:
+    // A typed value a data-validation rule refused. The window surfaces it;
+    // silently dropping the input would look like the app lost a keystroke.
+    void inputRejected(const CalcEng::CellAddr &addr, const QString &reason);
     // Sheet list/count changed (undo of sheet insert, sheet insert);
     // windows rebuild their tab bars on this.
     void structureChanged();

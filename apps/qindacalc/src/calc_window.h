@@ -28,6 +28,7 @@ class SpreadsheetView;
 class CalcFindBar;
 class CalcFormatController;
 class CalcStructureActions;
+class CalcRuleActions;
 
 class CalcWindow final : public Shell::DocumentWindow {
     Q_OBJECT
@@ -40,6 +41,7 @@ public:
     [[nodiscard]] CalcFindBar *findBar() const { return m_findBar; }
     [[nodiscard]] CalcFormatController *formatController() const { return m_format; }
     [[nodiscard]] CalcStructureActions *structureActions() const { return m_structure; }
+    [[nodiscard]] CalcRuleActions *ruleActions() const { return m_rules; }
 
     void loadWorkbookPath(const QString &path);
 
@@ -83,6 +85,7 @@ private:
     CalcFindBar *m_findBar = nullptr;
     CalcFormatController *m_format = nullptr;
     CalcStructureActions *m_structure = nullptr;
+    CalcRuleActions *m_rules = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;
     Ai::AssistantPanel *m_panel = nullptr;
     QAction *m_insertChartAction = nullptr;

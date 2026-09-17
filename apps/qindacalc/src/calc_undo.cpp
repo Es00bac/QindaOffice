@@ -27,6 +27,10 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
         // on blank cells).
         ss.styleIds = sheet.styleIds();
         ss.merges = sheet.merges();
+        ss.condFormats = sheet.condFormats();
+        ss.validations = sheet.validations();
+        ss.filter = sheet.autoFilter();
+        ss.comments = sheet.comments();
         snap.sheets.append(ss);
     }
     // The style table is indexed by position; copy through the public
@@ -70,6 +74,10 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
         for (const CalcEng::CellRange &merge : ss.merges) {
             sheet.addMerge(merge);
         }
+        sheet.setCondFormats(ss.condFormats);
+        sheet.setValidations(ss.validations);
+        sheet.setAutoFilter(ss.filter);
+        sheet.setComments(ss.comments);
     }
     for (const CalcEng::CellStyle &style : snapshot.styles) {
         fresh.addStyle(style);

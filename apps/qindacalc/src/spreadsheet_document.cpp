@@ -221,6 +221,15 @@ bool SpreadsheetDocument::loadRecovery(const QByteArray &snapshot, QString *erro
 
 void SpreadsheetDocument::applyInput(const CalcEng::CellAddr &addr, const QString &input)
 {
+    // AGENT-GUARD: validation is enforced HERE, on the one path every UI
+    // edit takes (in-cell editor, formula bar, paste of a single cell, AI
+    // apply). Checking it in the view would leave the other paths open.
+    if (const CalcEng::ValidationRule *rule =
+            m_workbook.sheetAt(m_activeSheet).validationAt(addr);
+        rule != nullptr && !CalcEng::validationAccepts(*rule, input)) {
+        emit inputRejected(addr, CalcEng::validationDescription(*rule));
+        return;
+    }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     m_workbook.setCellInput(m_activeSheet, addr, input);
     pushUndo(before, tr("Set cell"));

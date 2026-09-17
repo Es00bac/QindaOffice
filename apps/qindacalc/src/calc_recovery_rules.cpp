@@ -1,0 +1,206 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Crash-recovery serialization for the per-sheet RULES: conditional
+// formats, data validation, the autofilter and cell comments. Split from
+// calc_recovery.cpp to keep both files inside the line budget.
+//
+// AGENT-CONTRACT (D-012): the journal payload is the document's own state.
+// A rule the payload does not carry is a rule the user loses on recovery,
+// silently — which is worse than not offering the feature.
+
+#include "calc_recovery_rules.h"
+
+#include <QJsonArray>
+#include <QJsonObject>
+
+namespace QindaOffice::Apps::QindaCalc {
+
+namespace {
+
+QJsonArray rangeToJson(const CalcEng::CellRange &range)
+{
+    return QJsonArray{range.topLeft.row, range.topLeft.col, range.bottomRight.row,
+                      range.bottomRight.col};
+}
+
+CalcEng::CellRange rangeFromJson(const QJsonArray &quad)
+{
+    if (quad.size() != 4) {
+        return {};
+    }
+    return {{quad.at(0).toInt(), quad.at(1).toInt()},
+            {quad.at(2).toInt(), quad.at(3).toInt()}};
+}
+
+QJsonValue rgbToJson(const std::optional<CalcEng::Rgb> &rgb)
+{
+    if (!rgb.has_value()) {
+        return QJsonValue(QJsonValue::Null);
+    }
+    return QJsonArray{rgb->r, rgb->g, rgb->b};
+}
+
+std::optional<CalcEng::Rgb> rgbFromJson(const QJsonValue &value)
+{
+    const QJsonArray triple = value.toArray();
+    if (triple.size() != 3) {
+        return std::nullopt;
+    }
+    return CalcEng::Rgb{quint8(triple.at(0).toInt()), quint8(triple.at(1).toInt()),
+                        quint8(triple.at(2).toInt())};
+}
+
+QJsonValue boolToJson(const std::optional<bool> &flag)
+{
+    return flag.has_value() ? QJsonValue(*flag) : QJsonValue(QJsonValue::Null);
+}
+
+std::optional<bool> boolFromJson(const QJsonValue &value)
+{
+    return value.isBool() ? std::optional<bool>(value.toBool()) : std::nullopt;
+}
+
+} // namespace
+
+QJsonObject condFormatsToJson(const QList<CalcEng::CondFormatRule> &rules)
+{
+    QJsonArray array;
+    for (const CalcEng::CondFormatRule &rule : rules) {
+        array.append(QJsonObject{
+            {QStringLiteral("range"), rangeToJson(rule.range)},
+            {QStringLiteral("op"), int(rule.op)},
+            {QStringLiteral("first"), rule.first},
+            {QStringLiteral("second"), rule.second},
+            {QStringLiteral("text"), rule.text},
+            {QStringLiteral("bg"), rgbToJson(rule.format.background)},
+            {QStringLiteral("fg"), rgbToJson(rule.format.foreground)},
+            {QStringLiteral("bold"), boolToJson(rule.format.bold)},
+            {QStringLiteral("italic"), boolToJson(rule.format.italic)},
+        });
+    }
+    return QJsonObject{{QStringLiteral("rules"), array}};
+}
+
+QList<CalcEng::CondFormatRule> condFormatsFromJson(const QJsonObject &object)
+{
+    QList<CalcEng::CondFormatRule> rules;
+    for (const QJsonValue &entry : object.value(QStringLiteral("rules")).toArray()) {
+        const QJsonObject item = entry.toObject();
+        CalcEng::CondFormatRule rule;
+        rule.range = rangeFromJson(item.value(QStringLiteral("range")).toArray());
+        // Bound the stored enum: a corrupt payload must not index past the
+        // switch in condRuleMatches.
+        const int op = item.value(QStringLiteral("op")).toInt();
+        rule.op = CalcEng::CondFormatRule::Op(
+            qBound(0, op, int(CalcEng::CondFormatRule::Op::NotEmpty)));
+        rule.first = item.value(QStringLiteral("first")).toDouble();
+        rule.second = item.value(QStringLiteral("second")).toDouble();
+        rule.text = item.value(QStringLiteral("text")).toString();
+        rule.format.background = rgbFromJson(item.value(QStringLiteral("bg")));
+        rule.format.foreground = rgbFromJson(item.value(QStringLiteral("fg")));
+        rule.format.bold = boolFromJson(item.value(QStringLiteral("bold")));
+        rule.format.italic = boolFromJson(item.value(QStringLiteral("italic")));
+        if (rule.range.isValid()) {
+            rules.append(rule);
+        }
+    }
+    return rules;
+}
+
+QJsonObject validationsToJson(const QList<CalcEng::ValidationRule> &rules)
+{
+    QJsonArray array;
+    for (const CalcEng::ValidationRule &rule : rules) {
+        array.append(QJsonObject{
+            {QStringLiteral("range"), rangeToJson(rule.range)},
+            {QStringLiteral("kind"), int(rule.kind)},
+            {QStringLiteral("min"), rule.min},
+            {QStringLiteral("max"), rule.max},
+            {QStringLiteral("list"), QJsonArray::fromStringList(rule.list)},
+            {QStringLiteral("message"), rule.message},
+        });
+    }
+    return QJsonObject{{QStringLiteral("rules"), array}};
+}
+
+QList<CalcEng::ValidationRule> validationsFromJson(const QJsonObject &object)
+{
+    QList<CalcEng::ValidationRule> rules;
+    for (const QJsonValue &entry : object.value(QStringLiteral("rules")).toArray()) {
+        const QJsonObject item = entry.toObject();
+        CalcEng::ValidationRule rule;
+        rule.range = rangeFromJson(item.value(QStringLiteral("range")).toArray());
+        const int kind = item.value(QStringLiteral("kind")).toInt();
+        rule.kind = CalcEng::ValidationRule::Kind(
+            qBound(0, kind, int(CalcEng::ValidationRule::Kind::NotEmpty)));
+        rule.min = item.value(QStringLiteral("min")).toDouble();
+        rule.max = item.value(QStringLiteral("max")).toDouble();
+        for (const QJsonValue &listed : item.value(QStringLiteral("list")).toArray()) {
+            rule.list.append(listed.toString());
+        }
+        rule.message = item.value(QStringLiteral("message")).toString();
+        if (rule.range.isValid()) {
+            rules.append(rule);
+        }
+    }
+    return rules;
+}
+
+QJsonObject autoFilterToJson(const CalcEng::AutoFilter &filter)
+{
+    QJsonArray columns;
+    for (const auto &[column, allowed] : filter.allowed.asKeyValueRange()) {
+        columns.append(QJsonObject{{QStringLiteral("col"), column},
+                                   {QStringLiteral("allowed"),
+                                    QJsonArray::fromStringList(allowed)}});
+    }
+    return QJsonObject{{QStringLiteral("range"), rangeToJson(filter.range)},
+                       {QStringLiteral("active"), filter.active},
+                       {QStringLiteral("columns"), columns}};
+}
+
+CalcEng::AutoFilter autoFilterFromJson(const QJsonObject &object)
+{
+    CalcEng::AutoFilter filter;
+    filter.range = rangeFromJson(object.value(QStringLiteral("range")).toArray());
+    filter.active = object.value(QStringLiteral("active")).toBool();
+    for (const QJsonValue &entry : object.value(QStringLiteral("columns")).toArray()) {
+        const QJsonObject item = entry.toObject();
+        QStringList allowed;
+        for (const QJsonValue &value : item.value(QStringLiteral("allowed")).toArray()) {
+            allowed.append(value.toString());
+        }
+        filter.allowed.insert(item.value(QStringLiteral("col")).toInt(), allowed);
+    }
+    return filter;
+}
+
+QJsonArray commentsToJson(const QHash<quint64, CalcEng::CellComment> &comments)
+{
+    QJsonArray array;
+    for (const auto &[packed, comment] : comments.asKeyValueRange()) {
+        array.append(QJsonObject{{QStringLiteral("row"), int(packed & 0xffffffffu)},
+                                 {QStringLiteral("col"), int(packed >> 32)},
+                                 {QStringLiteral("author"), comment.author},
+                                 {QStringLiteral("text"), comment.text}});
+    }
+    return array;
+}
+
+QHash<quint64, CalcEng::CellComment> commentsFromJson(const QJsonArray &array)
+{
+    QHash<quint64, CalcEng::CellComment> comments;
+    for (const QJsonValue &entry : array) {
+        const QJsonObject item = entry.toObject();
+        const CalcEng::CellAddr addr{item.value(QStringLiteral("row")).toInt(),
+                                     item.value(QStringLiteral("col")).toInt()};
+        if (!addr.isValid()) {
+            continue;
+        }
+        comments.insert(addr.key(),
+                        CalcEng::CellComment{item.value(QStringLiteral("author")).toString(),
+                                             item.value(QStringLiteral("text")).toString()});
+    }
+    return comments;
+}
+
+} // namespace QindaOffice::Apps::QindaCalc

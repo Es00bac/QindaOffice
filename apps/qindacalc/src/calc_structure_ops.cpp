@@ -257,6 +257,10 @@ void SpreadsheetDocument::duplicateSheet(qint32 index, const QString &name)
     CalcEng::Sheet &copy = m_workbook.insertSheet(index + 1, name);
     copy.replaceContents(source.cells(), source.styleIds(), source.columnWidths(),
                          source.rowHeights(), source.merges());
+    copy.setCondFormats(source.condFormats());
+    copy.setValidations(source.validations());
+    copy.setAutoFilter(source.autoFilter());
+    copy.setComments(source.comments());
     // The copied formulas' unqualified references now mean the NEW sheet,
     // which is what a duplicate should do; the index still has to be rebuilt
     // because a sheet was inserted in the middle of the list.

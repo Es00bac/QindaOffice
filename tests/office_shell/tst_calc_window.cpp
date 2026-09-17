@@ -26,6 +26,7 @@ private slots:
     void saveCommandsAreLiveOnceTheEngineIsInstalled();
     void recoverySnapshotRoundTripsTheWholeWorkbook();
     void odsGoesThroughTheLibreOfficeBridge();
+    void freshWindowIsPristineSoOpenCanReuseIt();
 };
 
 void CalcWindowTest::constructAndEdit()
@@ -167,6 +168,21 @@ void CalcWindowTest::odsGoesThroughTheLibreOfficeBridge()
     QVERIFY(back.mimeTypes().contains(
         QStringLiteral("application/vnd.oasis.opendocument.spreadsheet")));
 }
+
+void CalcWindowTest::freshWindowIsPristineSoOpenCanReuseIt()
+{
+    CalcWindow window;
+    // AGENT-CONTRACT (ADR-0110): a freshly created, untouched window is
+    // PRISTINE, which is what lets File > Open replace its blank document
+    // instead of opening a second window and leaving the blank one behind.
+    // Anything that dirties a document during window construction — a
+    // syntax highlighter's first pass, a default-font apply — breaks that
+    // silently, which is exactly how it broke in QindaWrite.
+    QVERIFY(window.document() != nullptr);
+    QVERIFY2(!window.document()->isDirty(), "a fresh window must not be dirty");
+    QVERIFY(window.isPristineUntitled());
+}
+
 
 int main(int argc, char *argv[])
 {

@@ -34,6 +34,8 @@ add_library(calc_engine STATIC
     src/parser.h
     src/sheet.cpp
     src/sheet.h
+    src/sheet_rules.cpp
+    src/sheet_rules.h
     src/structure.cpp
     src/structure.h
     src/structure_sheets.cpp

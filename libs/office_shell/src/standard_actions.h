@@ -120,6 +120,11 @@ inline const char kCalcSheetDelete[] = "calcSheetDeleteAction";
 inline const char kCalcSheetDuplicate[] = "calcSheetDuplicateAction";
 inline const char kCalcSheetMoveLeft[] = "calcSheetMoveLeftAction";
 inline const char kCalcSheetMoveRight[] = "calcSheetMoveRightAction";
+inline const char kCalcCondFormat[] = "calcCondFormatAction";
+inline const char kCalcValidation[] = "calcValidationAction";
+inline const char kCalcAutoFilter[] = "calcAutoFilterAction";
+inline const char kCalcComment[] = "calcCommentAction";
+inline const char kCalcDeleteComment[] = "calcDeleteCommentAction";
 
 // QindaShow commands.
 inline const char kShowFillColor[] = "showFillColorAction";

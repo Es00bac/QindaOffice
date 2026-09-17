@@ -23,6 +23,9 @@ SpreadsheetView::SpreadsheetView(SpreadsheetDocument *document, QWidget *parent)
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     viewport()->setAutoFillBackground(false);
+    // Cell comments are shown as tooltips; without this the viewport never
+    // receives QEvent::ToolTip at all.
+    viewport()->setMouseTracking(true);
     m_editor->hide();
     // AGENT-GUARD: intercept Return/Tab ON the editor — the QLineEdit has
     // focus while editing, so the view's keyPressEvent never saw them; Return
@@ -178,9 +181,11 @@ qreal SpreadsheetView::frozenWidthPx() const
 
 int SpreadsheetView::rowTop(qint32 row) const
 {
+    const QSet<qint32> hidden =
+        m_document->workbook()->sheetAt(m_document->activeSheet()).filteredOutRows();
     qreal y = 0;
     for (qint32 r = 0; r < row; ++r) {
-        y += rowHeightPx(r);
+        y += visibleRowHeightPx(r, hidden);
     }
     // A frozen row sits at its own offset; everything below the split moves
     // with the scroll bar, whose value counts only the scrollable band.
@@ -200,8 +205,18 @@ QVector<SpreadsheetView::Band> SpreadsheetView::visibleRowBands() const
 {
     QVector<Band> bands;
     const qreal viewportHeight = viewport()->height() - kHeaderHeight;
+    // AGENT-GUARD: a filtered-out row has NO band. Everything that walks
+    // rows — painting, the header band, hit-testing, scroll-into-view —
+    // goes through this list, so a hidden row is uniformly absent rather
+    // than "painted blank", which is what keeps clicks landing on the row
+    // the user can actually see.
+    const QSet<qint32> hidden =
+        m_document->workbook()->sheetAt(m_document->activeSheet()).filteredOutRows();
     qreal y = 0;
     for (qint32 r = 0; r < m_frozen.row && y < viewportHeight; ++r) {
+        if (hidden.contains(r)) {
+            continue;
+        }
         const qreal h = rowHeightPx(r);
         bands.append({r, y, h});
         y += h;
@@ -211,18 +226,25 @@ QVector<SpreadsheetView::Band> SpreadsheetView::visibleRowBands() const
     const qreal scroll = verticalScrollBar()->value();
     qint32 row = m_frozen.row;
     qreal top = split;
-    while (row < Sheet::kMaxRows - 1 && top + rowHeightPx(row) <= split + scroll) {
-        top += rowHeightPx(row);
+    while (row < Sheet::kMaxRows - 1 && top + visibleRowHeightPx(row, hidden) <= split + scroll) {
+        top += visibleRowHeightPx(row, hidden);
         ++row;
     }
     qreal pos = top - scroll;
     while (pos < viewportHeight && row < Sheet::kMaxRows) {
-        const qreal h = rowHeightPx(row);
-        bands.append({row, pos, h});
+        const qreal h = visibleRowHeightPx(row, hidden);
+        if (h > 0) {
+            bands.append({row, pos, h});
+        }
         pos += h;
         ++row;
     }
     return bands;
+}
+
+qreal SpreadsheetView::visibleRowHeightPx(qint32 row, const QSet<qint32> &hidden) const
+{
+    return hidden.contains(row) ? 0.0 : rowHeightPx(row);
 }
 
 QVector<SpreadsheetView::Band> SpreadsheetView::visibleColumnBands() const

@@ -25,6 +25,14 @@ struct SheetSnapshot {
     QHash<qint32, qreal> rowHeights;
     QHash<quint64, qint32> styleIds;
     QList<CalcEng::CellRange> merges;
+    // AGENT-GUARD: the sheet's RULES are part of its state. Leaving them out
+    // of the snapshot means Ctrl+Z after adding a conditional format does
+    // nothing, and the crash-recovery payload (which is this snapshot in
+    // JSON) silently drops every rule the document had.
+    QList<CalcEng::CondFormatRule> condFormats;
+    QList<CalcEng::ValidationRule> validations;
+    CalcEng::AutoFilter filter;
+    QHash<quint64, CalcEng::CellComment> comments;
 };
 
 struct WorkbookSnapshot {

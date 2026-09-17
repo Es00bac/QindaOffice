@@ -33,6 +33,7 @@
 #include "calc_clipboard.h"
 #include "calc_find_bar.h"
 #include "calc_format_controller.h"
+#include "calc_rules_actions.h"
 #include "calc_structure_actions.h"
 #include "print_helper.h"
 #include "standard_actions.h"
@@ -128,9 +129,10 @@ CalcWindow::CalcWindow()
 
     m_format = new CalcFormatController(m_document, m_view, this);
     m_structure = new CalcStructureActions(this, m_document, m_view);
+    m_rules = new CalcRuleActions(this, m_document, m_view);
     addToolBarBreak(Qt::TopToolBarArea);
     addToolBar(Qt::TopToolBarArea, m_format->toolBar());
-    m_format->appendStripActions(m_structure->stripActions());
+    m_format->appendStripActions(m_structure->stripActions() + m_rules->stripActions());
 
     wireEditingActions();
     wireGridInteraction();
@@ -438,6 +440,8 @@ void CalcWindow::insertApplicationMenus(QMenu *before)
     insertMenu->setObjectName(QStringLiteral("calcInsertMenu"));
     menuBar()->insertMenu(before->menuAction(), insertMenu);
     m_structure->populateInsertMenu(insertMenu);
+    insertMenu->addSeparator();
+    insertMenu->addAction(action(QString::fromLatin1(Shell::ActionId::kCalcComment)));
 #ifdef QQO_WITH_CHARTS
     insertMenu->addSeparator();
     insertMenu->addAction(m_insertChartAction);
@@ -451,11 +455,15 @@ void CalcWindow::insertApplicationMenus(QMenu *before)
     formatMenu->addAction(m_thousandsAction);
     formatMenu->addSeparator();
     m_structure->populateFormatMenu(formatMenu);
+    formatMenu->addSeparator();
+    m_rules->populateFormatMenu(formatMenu);
 
     auto *dataMenu = new QMenu(tr("&Data"), this);
     dataMenu->setObjectName(QStringLiteral("calcDataMenu"));
     menuBar()->insertMenu(before->menuAction(), dataMenu);
     m_structure->populateDataMenu(dataMenu);
+    dataMenu->addSeparator();
+    m_rules->populateDataMenu(dataMenu);
 
     auto *sheetMenu = new QMenu(tr("&Sheet"), this);
     sheetMenu->setObjectName(QStringLiteral("calcSheetMenu"));
