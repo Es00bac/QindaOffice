@@ -4,6 +4,7 @@
 #include "xlsx_package.h"
 
 #include <QElapsedTimer>
+#include <QLoggingCategory>
 #include <QTemporaryDir>
 
 #include "eval.h"
@@ -23,6 +24,43 @@
 namespace QindaOffice::Calc::IO {
 
 namespace {
+
+// AGENT-NOTE: QXlsx's worksheet reader calls qWarning("no count") for every
+// <mergeCells> element that omits the optional `count` attribute — which is
+// normal (Open XML SDK writers omit it) and printed eleven times for one
+// real workbook, so it was the only thing a user saw on the console when
+// opening a file. The vendored library stays pristine: third_party/QXlsx is
+// upstream at a pinned commit, and a local commit there would not survive a
+// fresh `git submodule update`. So the importer silences exactly that one
+// message for the duration of its own read and forwards everything else.
+class QXlsxNoiseFilter {
+public:
+    QXlsxNoiseFilter() { s_previous = qInstallMessageHandler(&handle); }
+    ~QXlsxNoiseFilter() { qInstallMessageHandler(s_previous); }
+    QXlsxNoiseFilter(const QXlsxNoiseFilter &) = delete;
+    QXlsxNoiseFilter &operator=(const QXlsxNoiseFilter &) = delete;
+
+private:
+    static void handle(QtMsgType type, const QMessageLogContext &context, const QString &message)
+    {
+        if (type == QtWarningMsg && message == QLatin1String("no count")) {
+            return;
+        }
+        if (s_previous != nullptr) {
+            s_previous(type, context, message);
+            return;
+        }
+        // AGENT-GUARD: never re-emit through qWarning() here — this handler
+        // IS the installed one, so that would recurse forever. Format the
+        // line the way the default handler does and write it out.
+        const QByteArray line = qFormatLogMessage(type, context, message).toLocal8Bit();
+        fprintf(stderr, "%s\n", line.constData());
+    }
+
+    static QtMessageHandler s_previous;
+};
+
+QtMessageHandler QXlsxNoiseFilter::s_previous = nullptr;
 
 // QXlsx measures column widths in character units (~7 px + 5 padding per
 // the plan) and row heights in points.
@@ -355,6 +393,7 @@ bool readXlsxFile(const QString &path, Workbook *out, QString *error)
     if (source.isEmpty()) {
         return false;
     }
+    const QXlsxNoiseFilter quiet;
     QXlsx::Document doc(source);
     if (!doc.load()) {
         if (error != nullptr) {
