@@ -45,11 +45,18 @@ the host and never owns state. QindaNote is the first app on it.
   suite's own endpoint) disappears; the suite's export is the only one.
 
 **Paper stays paper (D-004 kept).** The page is pinned white with dark ink
-under every theme; the chrome follows the desktop's tokens through
-`ThemeBridge.qml` when the `QindaTK.QindaQt` bridge is installed and the
-`sloom-dark` preset otherwise, at the `comfortable` density
-(`Preferences.themePreset` / `Preferences.density`). `NoteInputTest::
-pageIsPaperUnderTheDarkPreset` reads the pixels.
+under every theme. The chrome follows the desktop: nothing publishes QST
+tokens *into* a process for it, so — like the desktop's own standalone
+apps — `DesktopAppearance` reads `appearance.theme` from
+`org.qindaqt.Settings1`, loads that theme from the installed catalog and
+publishes it on the `QindaQt.Tokens` singleton before the first window;
+`ThemeBridge.qml` (`QindaTK.QindaQt`) derives the toolkit's roles from it.
+An unknown theme id is refused, never mapped to a neighbour. Off the
+desktop, or when the bridge is missing, the window applies the
+`Preferences.themePreset` (`sloom-dark`) at `Preferences.density`, and one
+log line says which palette it is on. `OfficeWindowTest::
+desktopThemeWinsOverThePreset` and `NoteInputTest::pageIsPaperUnderTheDarkPreset`
+cover both halves.
 
 **Printing without a QApplication.** `QPrintDialog`/`QPrintPreviewDialog`
 are Widgets-only. `PrintJob` renders the app's callback into a PDF; the

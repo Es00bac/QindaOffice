@@ -76,6 +76,7 @@ target_compile_definitions(qindanote PRIVATE
     QT_NO_CAST_FROM_ASCII
 )
 qqo_set_strict_warnings(qindanote)
+qqo_desktop_runtime(qindanote)
 install(TARGETS qindanote RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES ${PROJECT_SOURCE_DIR}/data/org.qindaqt.QindaNote.desktop
     DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)

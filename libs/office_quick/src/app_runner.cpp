@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "app_runner.h"
 
+#include "desktop_appearance.h"
+
 #include "document_host.h"
 #include "office_application.h"
 
@@ -56,6 +58,12 @@ int runOfficeApp(int &argc, char *argv[], const QString &desktopId, const QUrl &
     // (system Qt import path, or a local install prefix during development).
     engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_ROOT));
 #endif
+    // The desktop's theme, published before any window derives its
+    // palette; without a desktop the windows keep the Preferences preset.
+    QString appearanceError;
+    if (!DesktopAppearance::publishDesktopTheme(engine, &appearanceError)) {
+        qInfo("QindaOffice: desktop theme not published (%s)", qPrintable(appearanceError));
+    }
 
     OfficeApplication office;
     office.setHostFactory(hostFactory);

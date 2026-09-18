@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "desktop_appearance.h"
 #include "document_host.h"
 #include "standard_actions.h"
 
@@ -99,6 +100,41 @@ OfficeWindow {
         host.actions()->trigger(QString::fromLatin1(ActionId::kViewShowMenuBar));
         QTRY_VERIFY(!host.localMenuVisible());
         QTRY_VERIFY(!menuBar->isVisible());
+        delete window;
+    }
+
+    // Off the desktop the window is on the Preferences preset; a published
+    // desktop theme (here: one installed theme by id, the seam
+    // app_runner's desktop lookup ends in) wins over it.
+    void desktopThemeWinsOverThePreset()
+    {
+        QQmlApplicationEngine engine;
+        engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_ROOT));
+        DocumentHost host;
+        QQmlComponent component(&engine);
+        component.setData(R"qml(
+import QtQuick
+import QindaTK as Tk
+import QindaOffice.Shell
+OfficeWindow { width: 400; height: 300; readonly property string themeName: Tk.Theme.name
+    Rectangle { objectName: "content" } }
+)qml", QUrl(QStringLiteral("inline.qml")));
+        QVERIFY2(!component.isError(), qPrintable(component.errorString()));
+        QObject *window = component.createWithInitialProperties(
+            {{QStringLiteral("host"), QVariant::fromValue(&host)}});
+        QVERIFY2(window != nullptr, qPrintable(component.errorString()));
+        QCOMPARE(window->property("tokensApplied").toBool(), false);
+        const QString preset = window->property("themeName").toString();
+        QVERIFY(!preset.isEmpty());
+
+        QString error;
+        QVERIFY2(DesktopAppearance::publishTheme(engine, QStringLiteral("qinda-dark"), false, &error),
+                 qPrintable(error));
+        QTRY_VERIFY(window->property("tokensApplied").toBool());
+        QCOMPARE(window->property("themeName").toString(), QStringLiteral("qinda-dark"));
+        // An unknown theme id is refused, never mapped to another theme.
+        QVERIFY(!DesktopAppearance::publishTheme(engine, QStringLiteral("no-such-theme"), false, &error));
+        QVERIFY(error.contains(QStringLiteral("no-such-theme")));
         delete window;
     }
 };

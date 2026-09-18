@@ -276,10 +276,19 @@ QtQuick tests run under `QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software`
 - [x] `tests/office_ai`: `assistantControllerSendsAndStreams` over the mock
       SSE server (no Widgets).
 - [x] The three Widgets apps still build and pass behind `QQO_WIDGETS_APPS=ON`.
-- [ ] On the QindaQt desktop from the build tree: the panel menu works end
-      to end (`busctl --user call … com.canonical.dbusmenu Event isvu -- <id>
-      clicked s "" 0` on a QindaNote command acts), pen with pressure and
-      tilt on a tablet, palm ignored, dark theme paper white.
+- [x] **Verified 2026-09-17 on the live QindaQt session (desktop host):**
+      QindaNote from the build tree exports
+      `/org/qindaqt/QindaOffice/QindaNote/Menu/1` on the session bus with
+      all 8 menus (98 items, radio states correct); `busctl --user call
+      org.qindaqt.QindaNote <path> com.canonical.dbusmenu Event isvu -- <id>
+      clicked s "" 0` toggles Show Navigator (toggle-state 1→0), New Page
+      enables Move Page Up, and Quit on a pristine window exits the process
+      (V5 fixed end to end). The desktop reports `appearance.theme =
+      qinda-dusk`; `DesktopAppearance` publishes it (log line
+      "QindaQt tokens applied").
+- [ ] Manual, needs a tablet at the desk: pen with pressure and tilt, palm
+      ignored, barrel button erases; paper white under the dark theme
+      (offscreen: `NoteInputTest::pageIsPaperUnderTheDarkPreset`).
 
 Fixtures: `tests/qml_fixtures/qindanote_{1280,520}.txt` are structural
 dumps (named items and visibility, no text or geometry);

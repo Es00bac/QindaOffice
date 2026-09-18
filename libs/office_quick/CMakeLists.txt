@@ -9,15 +9,33 @@ find_library(QINDAQT_MENU_PROTOCOL_LIB NAMES qindaqt_global_menu_protocol)
 find_library(QINDAQT_MENU_EXPORTER_LIB NAMES qindaqt_global_menu_exporter)
 find_library(QINDAQT_MENU_DBUSMENU_LIB NAMES qindaqt_global_menu_dbusmenu)
 find_path(QINDAQT_MENU_INCLUDE_DIR qindaqt/shell/global_menu/protocol/menu_tree.h)
+# The desktop's theme catalog and token facade (desktop_appearance.cpp):
+# two static archives plus the QindaQt.Tokens module's backing library,
+# which lives in the QML tree, not on the loader path — hence the RPATH
+# helper below for every executable that links office_quick.
+find_library(QINDAQT_DESIGN_TOKENS_LIB NAMES qindaqt_design_tokens)
+find_library(QINDAQT_THEMES_LIB NAMES qindaqt_themes)
+find_library(QINDAQT_TOKENS_QML_LIB NAMES qindaqt_tokens_qml
+    PATHS /usr/lib64/qt6/qml/QindaQt/Tokens /usr/lib/qt6/qml/QindaQt/Tokens)
 
 foreach(dependency IN ITEMS
         QINDAQT_MENU_PROTOCOL_LIB QINDAQT_MENU_EXPORTER_LIB
-        QINDAQT_MENU_DBUSMENU_LIB QINDAQT_MENU_INCLUDE_DIR)
+        QINDAQT_MENU_DBUSMENU_LIB QINDAQT_MENU_INCLUDE_DIR
+        QINDAQT_DESIGN_TOKENS_LIB QINDAQT_THEMES_LIB QINDAQT_TOKENS_QML_LIB)
     if(NOT ${dependency})
         message(FATAL_ERROR "office_quick requires the QindaQt desktop libraries (${dependency}). "
                             "Install gui-wm/qindaqt-desktop first.")
     endif()
 endforeach()
+
+get_filename_component(QINDAQT_TOKENS_QML_RPATH "${QINDAQT_TOKENS_QML_LIB}" DIRECTORY)
+# Every executable over office_quick (apps and tests) finds the Tokens
+# backing library at run time through this.
+function(qqo_desktop_runtime target)
+    set_target_properties(${target} PROPERTIES
+        BUILD_RPATH "${QINDAQT_TOKENS_QML_RPATH}"
+        INSTALL_RPATH "${QINDAQT_TOKENS_QML_RPATH}")
+endfunction()
 
 qt_add_library(office_quick STATIC)
 
@@ -57,6 +75,7 @@ qt_add_qml_module(office_quick
         src/desktop_settings.cpp src/desktop_settings.h
         src/document_host.cpp src/document_host.h
         src/document_host_persistence.cpp
+        src/desktop_appearance.cpp src/desktop_appearance.h
         src/global_menu_export.cpp src/global_menu_export.h
         src/menu_source.cpp src/menu_source.h
         src/menu_tree.cpp src/menu_tree.h
@@ -120,6 +139,9 @@ target_link_libraries(office_quick
         ${QINDAQT_MENU_DBUSMENU_LIB}
         ${QINDAQT_MENU_EXPORTER_LIB}
         ${QINDAQT_MENU_PROTOCOL_LIB}
+        ${QINDAQT_TOKENS_QML_LIB}
+        ${QINDAQT_DESIGN_TOKENS_LIB}
+        ${QINDAQT_THEMES_LIB}
 )
 
 qqo_set_strict_warnings(office_quick)
