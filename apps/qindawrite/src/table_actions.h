@@ -2,46 +2,48 @@
 #pragma once
 
 // QindaWrite table operations (M14): row/column insert+delete, cell
-// merge+split as persistent named actions (action discipline, AGENTS.md
-// rule 5), shared between the Table menu and the formatting toolbar's
-// table section. Every operation works on the QTextTable under the
-// cursor and no-ops (disabled action) outside one.
+// merge+split as persistent entries (rule 5), shared between the Table
+// menu and the format strip's table section. Every operation works on the
+// QTextTable under the cursor and no-ops (disabled entry) outside one.
 
-#include <QAction>
+#include "action_model.h"
+
 #include <QList>
+#include <QObject>
 
-class QObject;
-class QMenu;
-class QToolBar;
 class QTextTable;
 class QTextTableCell;
 
+namespace QindaOffice::Quick {
+struct MenuNode;
+}
+
 namespace QindaOffice::Apps::Write {
 
-class PageTextView;
+class PageTextControl;
 class WriteDocument;
 
 struct TableActions {
-    QAction *insertRowAbove = nullptr;
-    QAction *insertRowBelow = nullptr;
-    QAction *insertColumnLeft = nullptr;
-    QAction *insertColumnRight = nullptr;
-    QAction *deleteRow = nullptr;
-    QAction *deleteColumn = nullptr;
-    QAction *mergeCells = nullptr;
-    QAction *splitCell = nullptr;
-    [[nodiscard]] QList<QAction *> all() const;
+    Quick::ActionEntry *insertRowAbove = nullptr;
+    Quick::ActionEntry *insertRowBelow = nullptr;
+    Quick::ActionEntry *insertColumnLeft = nullptr;
+    Quick::ActionEntry *insertColumnRight = nullptr;
+    Quick::ActionEntry *deleteRow = nullptr;
+    Quick::ActionEntry *deleteColumn = nullptr;
+    Quick::ActionEntry *mergeCells = nullptr;
+    Quick::ActionEntry *splitCell = nullptr;
+    [[nodiscard]] QList<Quick::ActionEntry *> all() const;
 };
 
 class TableController final : public QObject {
     Q_OBJECT
 public:
-    TableController(PageTextView *view, WriteDocument *document, QObject *parent);
+    TableController(PageTextControl *control, WriteDocument *document, Quick::ActionModel *model,
+                    QObject *parent);
 
     [[nodiscard]] const TableActions &actions() const { return m_actions; }
-    void populateTableMenu(QMenu *menu);
-    // Adds the table section after the toolbar's insert buttons.
-    void appendToToolBar(QToolBar *toolBar);
+    [[nodiscard]] QList<Quick::MenuNode> tableMenuItems() const;
+    [[nodiscard]] QStringList stripIds() const;
 
 private:
     void insertRows(int count, bool above);
@@ -53,7 +55,7 @@ private:
     void syncFromCursor();
     void keepCursorInTable(QTextTable *table, const QTextTableCell &was);
 
-    PageTextView *m_view;
+    PageTextControl *m_control;
     WriteDocument *m_document;
     TableActions m_actions;
 };

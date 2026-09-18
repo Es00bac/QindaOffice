@@ -1,0 +1,114 @@
+QQuickRootItem#WriteWindow
+  MenuBarFromModel#officeMenuBar
+  QQuickControl#ApplicationWindowContentControl
+    QQuickContentItem#ApplicationWindow
+      QQuickItem#appContent
+        DockHost#writeDock
+          DockZone#dockZone_bottom [hidden]
+          DockZone#dockZone_center [hidden]
+          DockZone#dockZone_left [hidden]
+          DockZone#dockZone_right [hidden]
+          DockZone#dockZone_top [hidden]
+          QQuickItem#dockCanvas
+            Flex#dockZone_overlay [hidden]
+            WritePage#writeViewport
+              Scroll#viewportScroll
+                QQuickItem#viewportSurface
+                  QQuickItem#viewportContent
+                    PageTextItem#writePage
+            WriteRuler#writeRuler
+              QQuickCanvasItem#rulerMarker_indent-first
+              QQuickCanvasItem#rulerMarker_indent-left
+              QQuickCanvasItem#rulerMarker_indent-right
+              QQuickMouseArea#rulerMarkerArea
+              QQuickRectangle#rulerActiveBand
+              QQuickRectangle#rulerBand
+          QQuickItem#dockPanelContent_assistant [hidden]
+            AssistantPanel#assistantPanel [hidden]
+              Badge#assistantOffMachine [hidden]
+              Button#assistantCopy [hidden]
+              Button#assistantInsert [hidden]
+              Button#assistantReplace [hidden]
+              Button#assistantSend [hidden]
+              ComboBox#assistantModel [hidden]
+              IconButton#assistantClear [hidden]
+              IconButton#assistantStop [hidden]
+              Scroll#assistantTranscript [hidden]
+                Caption#emptyText [hidden]
+                Label#assistantConversation [hidden]
+                Overline#emptyTitle [hidden]
+              Segmented#assistantScope [hidden]
+                QQuickAbstractButton#segment_0 [hidden]
+                QQuickAbstractButton#segment_1 [hidden]
+                QQuickAbstractButton#segment_2 [hidden]
+              TextField#assistantPrompt [hidden]
+                IconButton#fieldClear [hidden]
+  QQuickItem#appFooter
+    Flex#appFindBar
+      FindBar#findBar [hidden]
+        CheckBox#findCase [hidden]
+        Flex#replaceRow [hidden]
+          Button#replaceAll [hidden]
+          Button#replaceOne [hidden]
+          TextField#replaceField [hidden]
+            IconButton#fieldClear [hidden]
+        IconButton#findClose [hidden]
+        IconButton#findNext [hidden]
+        IconButton#findPrevious [hidden]
+        TextField#findField [hidden]
+          IconButton#fieldClear [hidden]
+    Flex#appStatusBar
+      OfficeStatusBar#officeStatusBar
+        StatusField#statusInfo
+        StatusField#statusMessage [hidden]
+  QQuickItem#appHeader
+    Flex#appToolBars
+      ToolBarFromModel#formatBar
+        ColorButton#highlightButton
+          QQuickRectangle#colorButtonSwatch
+        ColorButton#textColorButton
+          QQuickRectangle#colorButtonSwatch
+        ComboBox#fontFamilyCombo
+        ComboBox#fontSizeCombo
+        IconButton#toolButton_formatAlignCenterAction
+        IconButton#toolButton_formatAlignJustifyAction
+        IconButton#toolButton_formatAlignLeftAction
+        IconButton#toolButton_formatAlignRightAction
+        IconButton#toolButton_formatBoldAction
+        IconButton#toolButton_formatGrowFontAction
+        IconButton#toolButton_formatIndentLessAction
+        IconButton#toolButton_formatIndentMoreAction
+        IconButton#toolButton_formatItalicAction
+        IconButton#toolButton_formatListBulletAction
+        IconButton#toolButton_formatListNumberedAction
+        IconButton#toolButton_formatShrinkFontAction
+        IconButton#toolButton_formatStrikeOutAction
+        IconButton#toolButton_formatSubscriptAction
+        IconButton#toolButton_formatSuperscriptAction
+        IconButton#toolButton_formatUnderlineAction
+        IconButton#toolButton_insertColumnsAction
+        IconButton#toolButton_insertFootnoteAction
+        IconButton#toolButton_insertImageAction
+        IconButton#toolButton_insertTableAction
+        IconButton#toolButton_reviewTrackChangesAction
+        IconButton#toolButton_tableDeleteColumnAction
+        IconButton#toolButton_tableDeleteRowAction
+        IconButton#toolButton_tableInsertColumnLeftAction
+        IconButton#toolButton_tableInsertColumnRightAction
+        IconButton#toolButton_tableInsertRowAboveAction
+        IconButton#toolButton_tableInsertRowBelowAction
+        IconButton#toolButton_tableMergeCellsAction
+        IconButton#toolButton_tableSplitCellAction
+      ToolBarFromModel#mainBar
+        IconButton#toolButton_editCopyAction
+        IconButton#toolButton_editCutAction
+        IconButton#toolButton_editFindAction
+        IconButton#toolButton_editPasteAction
+        IconButton#toolButton_editRedoAction
+        IconButton#toolButton_editUndoAction
+        IconButton#toolButton_fileNewAction
+        IconButton#toolButton_fileOpenAction
+        IconButton#toolButton_filePrintAction
+        IconButton#toolButton_fileSaveAction
+        IconButton#toolButton_viewZoomInAction
+        IconButton#toolButton_viewZoomOutAction

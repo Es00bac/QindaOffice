@@ -1,24 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// M4 acceptance (plan section 8): a 3-page document paginates identically
-// on screen and in the exported PDF (per-page text verified through
-// poppler); typing reaches the document; zoom changes geometry without
-// relayout; named styles classify after an HTML round trip.
+// M4 acceptance over the QtQuick item (plan section 8): a 3-page document
+// paginates identically on screen and in the exported PDF (per-page text
+// verified through poppler); typing reaches the document; zoom is the
+// viewport's transform (no relayout); named styles classify after an
+// HTML round trip; the item exposes accessible text.
+
+#include "write_test_support.h"
 
 #include "qindawrite/src/page_geometry.h"
-#include "qindawrite/src/page_text_view.h"
 #include "qindawrite/src/pdf_exporter.h"
 #include "qindawrite/src/style_catalog.h"
-#include "qindawrite/src/write_document.h"
-#include "qindawrite/src/write_window.h"
 
 #include <QAccessible>
-#include <QApplication>
 #include <QTemporaryDir>
-#include <QTextCursor>
-#include <QtTest>
+#include <QTextBlock>
 
 #include <poppler-qt6.h>
 
+using namespace WriteTest;
 using namespace QindaOffice::Apps::Write;
 
 class WriteViewTest : public QObject {
@@ -29,16 +28,14 @@ private slots:
     void zoomTransformsGeometryOnly();
     void stylesSurviveHtmlRoundTrip();
     void geometryRoundTripsInsidePages();
-    void pageViewExposesAccessibleText();
+    void pageItemExposesAccessibleText();
     void headerFooterAppearInExportedPdf();
-
 };
 
-static WriteDocument *threePageDocument(QObject *parent, QStringList *markers)
+static QString threePageHtml(QStringList *markers)
 {
-    auto *doc = new WriteDocument;
-    doc->setParent(parent);
-    QTextCursor cursor(doc->textDocument());
+    WriteDocument doc;
+    QTextCursor cursor(doc.textDocument());
     QTextBlockFormat pageBreak;
     pageBreak.setPageBreakPolicy(QTextFormat::PageBreak_AlwaysBefore);
     *markers = {QStringLiteral("alpha marker"), QStringLiteral("bravo marker"),
@@ -49,27 +46,23 @@ static WriteDocument *threePageDocument(QObject *parent, QStringList *markers)
         }
         cursor.insertText(markers->at(i));
     }
-    return doc;
+    return doc.textDocument()->toHtml();
 }
 
 void WriteViewTest::screenMatchesPdfPagination()
 {
     QStringList markers;
-    WriteDocument *doc = threePageDocument(this, &markers);
-    WriteWindow window;
-    // Show the real window offscreen so the view computes with a mapped
-    // viewport, then compare its page count with the PDF.
-    window.writeDocument()->textDocument()->setHtml(doc->textDocument()->toHtml());
-    window.show();
-    QVERIFY(QTest::qWaitForWindowExposed(&window));
-    QCOMPARE(window.pageView()->pageCount(), 3);
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    scene.doc->textDocument()->setHtml(threePageHtml(&markers));
+    QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+    QTRY_COMPARE(scene.page->pageCount(), 3);
 
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     const QString path = dir.path() + QStringLiteral("/m4.pdf");
     QString error;
-    QVERIFY2(exportDocumentPdf(window.writeDocument()->textDocument(), path, &error),
-             qPrintable(error));
+    QVERIFY2(exportDocumentPdf(scene.doc->textDocument(), path, &error), qPrintable(error));
 
     std::unique_ptr<Poppler::Document> pdf(Poppler::Document::load(path));
     QVERIFY(pdf != nullptr);
@@ -79,49 +72,49 @@ void WriteViewTest::screenMatchesPdfPagination()
         QVERIFY(pdfPage != nullptr);
         const QString text = pdfPage->text(QRectF());
         QVERIFY2(text.contains(markers.at(page)),
-                 qPrintable(QStringLiteral("page %1 lacks its marker; text: %2")
-                                .arg(page)
-                                .arg(text)));
+                 qPrintable(QStringLiteral("page %1 lacks its marker; text: %2").arg(page).arg(text)));
     }
 }
 
 void WriteViewTest::typingReachesDocument()
 {
-    WriteWindow window;
-    window.show();
-    QVERIFY(QTest::qWaitForWindowExposed(&window));
-    PageTextView *view = window.pageView();
-    view->setFocus();
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+    scene.page->forceActiveFocus();
+    QTRY_VERIFY(scene.page->hasActiveFocus());
     for (const QChar c : QStringLiteral("hello m4")) {
-        QTest::keyClick(view, c.toLatin1());
+        QTest::keyClick(scene.window, c.toLatin1());
     }
-    QCOMPARE(window.writeDocument()->textDocument()->toPlainText(),
-             QStringLiteral("hello m4"));
+    QCOMPARE(scene.doc->textDocument()->toPlainText(), QStringLiteral("hello m4"));
 }
 
 void WriteViewTest::zoomTransformsGeometryOnly()
 {
-    WriteWindow window;
-    window.show();
-    QVERIFY(QTest::qWaitForWindowExposed(&window));
-    PageTextView *view = window.pageView();
-    const QRectF before = view->geometry()->pageRect(0, view->viewport()->width());
-    view->setZoom(2.0);
-    const QRectF after = view->geometry()->pageRect(0, view->viewport()->width());
-    QVERIFY(qFuzzyCompare(after.height(), before.height() * 2.0));
-    // No relayout: the document's layout size must not change with zoom.
-    QCOMPARE(view->pageCount(), 1);
-    QVERIFY(view->geometry()->zoom() > 1.5);
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+    QQuickItem *viewport = scene.viewport();
+    QVERIFY(viewport != nullptr);
+    const qreal widthBefore = scene.page->width();
+    QVERIFY(viewport->setProperty("zoom", 2.0));
+    QCOMPARE(viewport->property("zoom").toReal(), 2.0);
+    // No relayout: the item keeps its document-unit size and page count;
+    // the viewport's content host carries the scale (D-009).
+    QCOMPARE(scene.page->width(), widthBefore);
+    QCOMPARE(scene.page->pageCount(), 1);
+    auto *content = viewport->property("contentItem").value<QQuickItem *>();
+    QVERIFY(content != nullptr);
+    QCOMPARE(content->scale(), 2.0);
+    QTRY_COMPARE(scene.page->viewZoom(), 2.0);
 }
 
 void WriteViewTest::stylesSurviveHtmlRoundTrip()
 {
-    auto *doc = new WriteDocument;
-    doc->setParent(this);
-    QTextCursor cursor(doc->textDocument());
+    WriteDocument doc;
+    QTextCursor cursor(doc.textDocument());
     StyleCatalog catalog;
-
-    QTextBlock block = doc->textDocument()->begin();
+    QTextBlock block = doc.textDocument()->begin();
     for (int id = StyleCatalog::Title; id <= StyleCatalog::Code; ++id) {
         QTextCursor blockCursor(block);
         catalog.apply(blockCursor, id);
@@ -129,15 +122,14 @@ void WriteViewTest::stylesSurviveHtmlRoundTrip()
         if (!block.isValid()) {
             cursor.movePosition(QTextCursor::End);
             cursor.insertBlock();
-            block = doc->textDocument()->lastBlock();
+            block = doc.textDocument()->lastBlock();
         }
     }
     // Every styled block classifies back to its id after setHtml (the
     // property does not survive Qt's writer; the resolver re-derives it).
-    doc->textDocument()->setHtml(doc->textDocument()->toHtml());
-    block = doc->textDocument()->begin();
-    for (int id = StyleCatalog::Title; id <= StyleCatalog::Code && block.isValid();
-         ++id, block = block.next()) {
+    doc.textDocument()->setHtml(doc.textDocument()->toHtml());
+    block = doc.textDocument()->begin();
+    for (int id = StyleCatalog::Title; id <= StyleCatalog::Code && block.isValid(); ++id, block = block.next()) {
         QCOMPARE(classifyBlockStyle(block), id);
     }
 }
@@ -149,24 +141,20 @@ void WriteViewTest::geometryRoundTripsInsidePages()
     for (const QPointF docPoint : {QPointF(100, 50), QPointF(400, 1123 + 30), QPointF(0, 0)}) {
         const QPointF view = geometry.docToView(docPoint, 1200);
         const QPointF back = geometry.viewToDoc(view, 1200);
-        QVERIFY2(std::abs(back.x() - docPoint.x()) < 1.5
-                     && std::abs(back.y() - docPoint.y()) < 1.5,
-                 qPrintable(QStringLiteral("%1 -> %2 -> %3")
-                                .arg(docPoint.x())
-                                .arg(docPoint.y())
-                                .arg(back.y())));
+        QVERIFY2(std::abs(back.x() - docPoint.x()) < 1.5 && std::abs(back.y() - docPoint.y()) < 1.5,
+                 qPrintable(QStringLiteral("%1 -> %2 -> %3").arg(docPoint.x()).arg(docPoint.y()).arg(back.y())));
     }
     QCOMPARE(geometry.pageCount(1123 * 2.5), 3);
     QVERIFY(geometry.scrollRange(1123 * 2.5, 800) > 0);
 }
 
-void WriteViewTest::pageViewExposesAccessibleText()
+void WriteViewTest::pageItemExposesAccessibleText()
 {
-    WriteWindow window;
-    PageTextView *view = window.pageView();
-    view->writeDocument()->textDocument()->setPlainText(QStringLiteral("Hello QindaWrite"));
-    const QString plain = view->writeDocument()->textDocument()->toPlainText();
-    QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(view);
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    scene.doc->textDocument()->setPlainText(QStringLiteral("Hello QindaWrite"));
+    const QString plain = scene.doc->textDocument()->toPlainText();
+    QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(scene.page);
     QVERIFY(iface != nullptr);
     QCOMPARE(iface->role(), QAccessible::Document);
     auto *textIface = iface->textInterface();
@@ -183,37 +171,26 @@ void WriteViewTest::pageViewExposesAccessibleText()
     textIface->selection(0, &selStart, &selEnd);
     QCOMPARE(selStart, 0);
     QCOMPARE(selEnd, 5);
+    QVERIFY(iface->editableTextInterface() != nullptr);
     // Qt's accessibility cache owns interfaces returned by
     // queryAccessibleInterface; do not delete or re-register them.
-    Q_UNUSED(iface);
-}
-
-int main(int argc, char *argv[])
-{
-    qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
-    QApplication::setDesktopFileName(QStringLiteral("org.qindaqt.QindaWrite"));
-    WriteViewTest test;
-    return QTest::qExec(&test, argc, argv);
 }
 
 void WriteViewTest::headerFooterAppearInExportedPdf()
 {
-    WriteWindow window;
-    window.writeDocument()->textDocument()->setHtml(
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    scene.doc->textDocument()->setHtml(
         QStringLiteral("<p>body one</p><p style=\"page-break-before:always\">body two</p>"));
-    window.writeDocument()->setHeaderFooter(QStringLiteral("Acme Report"),
-                                            QStringLiteral("Page {page} of {pages}"));
-    window.show();
-    QVERIFY(QTest::qWaitForWindowExposed(&window));
-    QCOMPARE(window.pageView()->pageCount(), 2);
+    scene.doc->setHeaderFooter(QStringLiteral("Acme Report"), QStringLiteral("Page {page} of {pages}"));
+    QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+    QTRY_COMPARE(scene.page->pageCount(), 2);
 
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     const QString path = dir.path() + QStringLiteral("/hf.pdf");
     QString error;
-    QVERIFY2(exportDocumentPdf(window.writeDocument()->textDocument(), path, &error,
-                               window.writeDocument()->decoration()),
+    QVERIFY2(exportDocumentPdf(scene.doc->textDocument(), path, &error, scene.doc->decoration()),
              qPrintable(error));
 
     std::unique_ptr<Poppler::Document> pdf(Poppler::Document::load(path));
@@ -223,11 +200,12 @@ void WriteViewTest::headerFooterAppearInExportedPdf()
         std::unique_ptr<Poppler::Page> pdfPage(pdf->page(page));
         QVERIFY(pdfPage != nullptr);
         const QString text = pdfPage->text(QRectF());
-        QVERIFY2(text.contains(QStringLiteral("Acme Report")),
-                 qPrintable(QStringLiteral("header on page %1").arg(page)));
+        QVERIFY2(text.contains(QStringLiteral("Acme Report")), qPrintable(QStringLiteral("header on page %1").arg(page)));
         QVERIFY2(text.contains(QStringLiteral("Page %1 of 2").arg(page + 1)),
                  qPrintable(QStringLiteral("footer on page %1: %2").arg(page).arg(text)));
     }
 }
+
+WRITE_TEST_MAIN(WriteViewTest)
 
 #include "tst_write_view.moc"

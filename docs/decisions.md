@@ -5,6 +5,47 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-029: QindaWrite on QtQuick, with its own editing control
+
+**Date:** 2026-09-17 · **Status:** accepted (M29) · **Plan:**
+`docs/plans/qindatk-conversion.md` §5.1, A7
+
+**Decision.** QindaWrite is the third app on `office_quick` (D-027). The
+plan named `QQuickTextControl` as the editing engine behind the page
+item; Qt builds that class with `Q_AUTOTEST_EXPORT`, so its symbols are
+not in `libQt6Quick` and nothing outside Qt can link it, and
+`QWidgetTextControl` needs a `QApplication`. `PageTextControl`
+(`apps/qindawrite/src/page_text_control.h`) is therefore the suite's own:
+the subset of that API QindaWrite uses, over the `QTextDocument` alone —
+one cursor, a pinned char format for the next keystroke, the standard key
+bindings through `QKeySequence::StandardKey`, mouse selection (drag,
+double-click word, triple-click paragraph, Shift-extend), the clipboard as
+HTML + text, input-method preedit on the block layout, find, and a paint
+call that draws text, selection and caret in document coordinates with
+the paper palette pinned (D-004). Documented gaps against the Widgets
+control: no link activation on click, no drag-and-drop of selections.
+
+`PageTextItem` is a `QQuickPaintedItem` that paints every page (paper,
+text through the control, the header/footer/footnote bands through the
+same painter print and PDF use) in DOCUMENT units, stacked with
+`PageGeometry`'s gaps; the `Tk.Viewport` around it is the only zoom
+(D-009), so the TOC's and footnotes' page mapping, the print paginator
+and the item cannot disagree. Accessibility is a `QAccessibleQuickItem`
+subclass with the text and editable-text interfaces (`Qt6::QuickPrivate`,
+version-locked like the rest of the suite).
+
+The controllers (`FormatController`, `WriteTypography`, `TableController`,
+`WriteReviewActions`, `WriteRevisions`) keep their logic and lose their
+widgets: their commands are `ActionEntry`s, their dialogs are request
+signals `WriteHost` relays to the window (`TableDialog`, `SymbolDialog`,
+`HyperlinkDialog`, `FootnoteDialog`, `PageSetupDialog`, the toolkit's
+colour dialog, `Ai.ProposalDialog`). The ruler is `Tk.Ruler` (A7:
+`markers`, `band`, `activeBand`, `markerMoved`) plus a 30-line binding
+file; the context menu leads with spelling suggestions carried by seven
+reusable entries whose text and visibility the host sets per request.
+**Known limitation:** the shared `FindBar` has no "whole words" toggle
+(the Widgets bar had one); case sensitivity remains.
+
 ## D-028: QindaCalc on QtQuick, and real-world Excel workbooks open
 
 **Date:** 2026-09-17 · **Status:** accepted (M28) · **Plan:**

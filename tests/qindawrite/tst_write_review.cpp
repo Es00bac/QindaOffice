@@ -8,29 +8,24 @@
 // with, accepting and rejecting a change have to be exact inverses, and the
 // ruler's markers have to describe the paragraph the cursor is actually in.
 
+#include "write_test_support.h"
+
 #include "qindawrite/src/page_geometry.h"
-#include "qindawrite/src/page_text_view.h"
 #include "qindawrite/src/style_catalog.h"
-#include "qindawrite/src/write_document.h"
 #include "qindawrite/src/write_footnotes.h"
 #include "qindawrite/src/write_review_actions.h"
 #include "qindawrite/src/write_revisions.h"
-#include "qindawrite/src/write_ruler.h"
 #include "qindawrite/src/write_toc.h"
-#include "qindawrite/src/write_window.h"
 
 #include "standard_actions.h"
 
-#include <QtWidgets/private/qwidgettextcontrol_p.h>
-
-#include <QApplication>
 #include <QTextBlock>
 #include <QTextCursor>
 #include <QTextDocument>
-#include <QtTest>
 
+using namespace WriteTest;
 using namespace QindaOffice::Apps::Write;
-namespace ActionId = ::QindaOffice::Shell::ActionId;
+namespace ActionId = ::QindaOffice::Quick::ActionId;
 
 class WriteReviewTest : public QObject {
     Q_OBJECT
@@ -44,6 +39,7 @@ private slots:
     void acceptAndRejectAreExactInverses();
     void rulerMarkersFollowTheCursorParagraph();
     void enterAfterAHeadingStartsBodyText();
+    void footnoteDialogRoundTrip();
 };
 
 namespace {
@@ -205,10 +201,10 @@ void WriteReviewTest::updatingTheTableReplacesItInPlace()
 
 void WriteReviewTest::trackedInsertionIsMarkedAndRejectable()
 {
-    WriteWindow window;
-    window.show();
-    WriteRevisions *revisions = window.revisions();
-    QWidgetTextControl *control = window.pageView()->control();
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    WriteRevisions *revisions = scene.host.revisions();
+    PageTextControl *control = scene.control();
     control->textCursor().insertText(QStringLiteral("original"));
     QCOMPARE(revisions->changeCount(), 0);
 
@@ -219,22 +215,21 @@ void WriteReviewTest::trackedInsertionIsMarkedAndRejectable()
     control->textCursor().insertText(QStringLiteral(" added"));
 
     QVERIFY(revisions->changeCount() > 0);
-    QVERIFY(window.writeDocument()->textDocument()->toPlainText().contains(
-        QStringLiteral(" added")));
+    QVERIFY(scene.doc->textDocument()->toPlainText().contains(QStringLiteral(" added")));
 
     revisions->rejectAll();
     // Rejecting an insertion returns the document to what it was.
-    QCOMPARE(window.writeDocument()->textDocument()->toPlainText(),
-             QStringLiteral("original"));
+    QCOMPARE(scene.doc->textDocument()->toPlainText(), QStringLiteral("original"));
     QCOMPARE(revisions->changeCount(), 0);
 }
 
 void WriteReviewTest::acceptAndRejectAreExactInverses()
 {
-    WriteWindow window;
-    window.show();
-    WriteRevisions *revisions = window.revisions();
-    QWidgetTextControl *control = window.pageView()->control();
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+    WriteRevisions *revisions = scene.host.revisions();
+    PageTextControl *control = scene.control();
     control->textCursor().insertText(QStringLiteral("keep drop"));
 
     revisions->setRecording(true);
@@ -243,57 +238,65 @@ void WriteReviewTest::acceptAndRejectAreExactInverses()
     cursor.setPosition(5);
     cursor.setPosition(9, QTextCursor::KeepAnchor);
     control->setTextCursor(cursor);
-    QTest::keyClick(window.pageView(), Qt::Key_Delete);
+    scene.page->forceActiveFocus();
+    QTRY_VERIFY(scene.page->hasActiveFocus());
+    QTest::keyClick(scene.window, Qt::Key_Delete);
 
     // Struck text stays in the document until the change is resolved.
-    QVERIFY(window.writeDocument()->textDocument()->toPlainText().contains(
-        QStringLiteral("drop")));
+    QVERIFY(scene.doc->textDocument()->toPlainText().contains(QStringLiteral("drop")));
     QVERIFY(revisions->changeCount() > 0);
 
     revisions->acceptAll();
     // Accepting a deletion removes the text; rejecting would have kept it.
-    QCOMPARE(window.writeDocument()->textDocument()->toPlainText().trimmed(),
-             QStringLiteral("keep"));
+    QCOMPARE(scene.doc->textDocument()->toPlainText().trimmed(), QStringLiteral("keep"));
     QCOMPARE(revisions->changeCount(), 0);
 }
 
 void WriteReviewTest::rulerMarkersFollowTheCursorParagraph()
 {
-    WriteWindow window;
-    window.resize(1000, 700);
-    window.show();
-    WriteRuler *ruler = window.ruler();
-    QVERIFY(ruler != nullptr);
-    const qreal margin = window.writeDocument()->pageMargin();
-    QCOMPARE(qRound(ruler->markers().left), qRound(margin));
+    Scene scene(QSize(1000, 700));
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+    QVERIFY(scene.item(QStringLiteral("writeRuler")) != nullptr);
+    const qreal margin = scene.doc->pageMargin();
+    QCOMPARE(qRound(scene.host.rulerMarkers().value(QStringLiteral("left")).toReal()), qRound(margin));
 
-    QWidgetTextControl *control = window.pageView()->control();
+    PageTextControl *control = scene.control();
     QTextCursor cursor = control->textCursor();
     QTextBlockFormat indented;
     indented.setLeftMargin(48);
     indented.setTextIndent(24);
     cursor.mergeBlockFormat(indented);
     control->setTextCursor(cursor);
-    ruler->refresh();
 
     // The markers describe the paragraph the cursor is in, in document px.
-    QCOMPARE(qRound(ruler->markers().left), qRound(margin + 48));
-    QCOMPARE(qRound(ruler->markers().firstLine), qRound(margin + 48 + 24));
+    QVariantMap markers = scene.host.rulerMarkers();
+    QCOMPARE(qRound(markers.value(QStringLiteral("left")).toReal()), qRound(margin + 48));
+    QCOMPARE(qRound(markers.value(QStringLiteral("firstLine")).toReal()), qRound(margin + 48 + 24));
+    // Dragging the right marker writes the paragraph's right margin.
+    scene.host.applyRulerMarker(QStringLiteral("indent-right"), scene.doc->pageSize().width() - margin - 30);
+    QCOMPARE(qRound(control->textCursor().blockFormat().rightMargin()), 30);
+    // The Tk.Ruler shows the three markers.
+    QQuickItem *ruler = scene.item(QStringLiteral("writeRuler"));
+    QTRY_VERIFY(findItem(ruler, QStringLiteral("rulerMarker_indent-left")) != nullptr);
 }
 
 void WriteReviewTest::enterAfterAHeadingStartsBodyText()
 {
-    WriteWindow window;
-    window.show();
-    QWidgetTextControl *control = window.pageView()->control();
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+    PageTextControl *control = scene.control();
     QTextCursor cursor = control->textCursor();
     cursor.insertText(QStringLiteral("Chapter One"));
     StyleCatalog catalog;
     catalog.apply(cursor, StyleCatalog::Heading1);
     cursor.movePosition(QTextCursor::End);
     control->setTextCursor(cursor);
+    scene.page->forceActiveFocus();
+    QTRY_VERIFY(scene.page->hasActiveFocus());
 
-    QTest::keyClick(window.pageView(), Qt::Key_Return);
+    QTest::keyClick(scene.window, Qt::Key_Return);
 
     // Qt carries the block format forward, so without the reset everything
     // after a heading stays a heading — and the table of contents then
@@ -301,13 +304,30 @@ void WriteReviewTest::enterAfterAHeadingStartsBodyText()
     QCOMPARE(classifyBlockStyle(control->textCursor().block()), int(StyleCatalog::Normal));
 }
 
-int main(int argc, char *argv[])
+void WriteReviewTest::footnoteDialogRoundTrip()
 {
-    qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
-    QApplication::setDesktopFileName(QStringLiteral("org.qindaqt.QindaWrite"));
-    WriteReviewTest test;
-    return QTest::qExec(&test, argc, argv);
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    scene.control()->insertText(QStringLiteral("claim"));
+    QSignalSpy asked(&scene.host, &WriteHost::footnoteRequested);
+    scene.host.actions()->trigger(QString::fromLatin1(ActionId::kInsertFootnote));
+    QCOMPARE(asked.size(), 1);
+    QVERIFY(asked.first().at(0).toString().isEmpty());
+    // The dialog's answer inserts the marker and stores the note.
+    scene.host.commitFootnote(QString(), QStringLiteral("source"));
+    QCOMPARE(markerCount(scene.doc->textDocument()), 1);
+    QCOMPARE(scene.doc->footnotes().size(), 1);
+    // Double-clicking the marker asks again, with the note's text.
+    const int markerPos = scene.doc->textDocument()->toPlainText().size() - 1;
+    QVERIFY(scene.host.reviewActions()->editFootnoteAt(markerPos));
+    QCOMPARE(asked.size(), 2);
+    QCOMPARE(asked.last().at(1).toString(), QStringLiteral("source"));
+    // Emptying the note removes marker and note together.
+    scene.host.commitFootnote(asked.last().at(0).toString(), QString());
+    QCOMPARE(markerCount(scene.doc->textDocument()), 0);
+    QVERIFY(scene.doc->footnotes().isEmpty());
 }
+
+WRITE_TEST_MAIN(WriteReviewTest)
 
 #include "tst_write_review.moc"

@@ -1,69 +1,74 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// FormatController (M11 UI completeness): owns QindaWrite's persistent
-// format/insert actions, the formatting toolbar (font family, size,
-// character styles, alignment, lists, indent, inserts), all format
-// application behavior, and the two-way sync between the text cursor and
-// the UI. Menus and the toolbar share the same QActions, so a check mark
-// can never disagree between them.
+// FormatController: QindaWrite's format/insert commands as ActionEntries
+// over the page control — character styles, alignment, lists, indent,
+// the inserts — with the two-way sync between the text cursor and the
+// entries' check marks. The font family/size and the colour picker are
+// read and written by the host (the strip's combos and Tk.ColorButton);
+// the dialogs (table, columns, image, colour) are request signals the
+// window answers through the host's invokables.
 
 #include "write_actions.h"
 
+#include <QColor>
 #include <QObject>
 #include <QTextCharFormat>
+#include <QTextListFormat>
 
-class QComboBox;
-class QFontComboBox;
-class QMenu;
-class QToolBar;
+namespace QindaOffice::Quick {
+struct MenuNode;
+}
 
 namespace QindaOffice::Apps::Write {
 
-class PageTextView;
+class PageTextControl;
 class WriteDocument;
 
 class FormatController final : public QObject {
     Q_OBJECT
 public:
-    FormatController(PageTextView *view, WriteDocument *document, QObject *parent);
+    FormatController(PageTextControl *control, WriteDocument *document, Quick::ActionModel *model,
+                     QObject *parent);
 
     [[nodiscard]] const WriteActions &actions() const { return m_actions; }
-    // The toolbar is created on first call and returned after; the window
-    // owns placement (addToolBar).
-    [[nodiscard]] QToolBar *toolBar();
-    // Reuses the persistent actions so menus and toolbar stay in sync.
-    void populateFormatMenu(QMenu *menu);
-    void populateInsertMenu(QMenu *menu);
-    // Appends commands owned elsewhere (the typography set) to the same
-    // wrapping strip, so they are reachable without opening a menu.
-    void appendStripActions(const QList<QAction *> &actions);
+    [[nodiscard]] QList<Quick::MenuNode> formatMenuItems() const;
+    [[nodiscard]] QList<Quick::MenuNode> insertMenuItems() const;
 
+    // The font the caret sits in (the document default when the char
+    // format carries none — the combos never go blank).
+    [[nodiscard]] QString fontFamily() const;
+    [[nodiscard]] qreal fontPointSize() const;
+
+    // Merges into the selection, or pins for the next keystroke.
+    void applyCharFormat(const QTextCharFormat &format);
     // The actual insertions, separated from their dialogs so tests (and
     // future scripting) can drive them without modal UI.
     void insertTableAtCursor(int rows, int columns);
     void insertColumnsAtCursor(int columns, int gutterPx);
+    bool insertImageFile(const QString &path);
+
+signals:
+    // Dialog requests the window answers.
+    void textColorRequested(const QColor &current);
+    void tableDialogRequested();
+    void columnsDialogRequested();
+    void imageDialogRequested();
+    // The caret's format changed (the combos re-read fontFamily/size).
+    void formatChanged();
 
 private:
-    void applyCharFormat(const QTextCharFormat &format);
     void mergeBlockFormat(const QTextBlockFormat &format);
     void applyAlignment(Qt::Alignment alignment);
     void toggleList(QTextListFormat::Style style);
     void adjustIndent(int delta);
-    void pickTextColor();
     void clearDirectFormatting();
-    void insertTable();
-    void insertImage();
-    void insertColumns();
     void insertPageBreak();
     void syncFromControl();
 
-    PageTextView *m_view;
+    PageTextControl *m_control;
     WriteDocument *m_document;
     WriteActions m_actions;
-    QToolBar *m_toolBar = nullptr;
-    QFontComboBox *m_fontCombo = nullptr;
-    QComboBox *m_sizeCombo = nullptr;
     bool m_syncing = false;
 };
 

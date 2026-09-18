@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// QindaWrite entry point: shared office-shell startup with the page-view
-// window factory.
-
-#include "src/write_window.h"
+#include "src/write_host.h"
 
 #include "app_runner.h"
 
+#include <QUrl>
+
 int main(int argc, char *argv[])
 {
-    return QindaOffice::Shell::runOfficeApp(argc, argv, QStringLiteral(QQO_DESKTOP_ID),
-                                            [] { return new QindaOffice::Apps::Write::WriteWindow; });
+    return QindaOffice::Quick::runOfficeApp(
+        argc, argv, QStringLiteral(QQO_DESKTOP_ID),
+        QUrl(QStringLiteral("qrc:/qt/qml/QindaOffice/Write/WriteWindow.qml")),
+        [] { return new QindaOffice::Apps::Write::WriteHost; });
 }

@@ -3,14 +3,13 @@
 
 #include "standard_actions.h"
 
-#include <QActionGroup>
-#include <QIcon>
 #include <QKeySequence>
-#include <QObject>
 
 namespace QindaOffice::Apps::Write {
 
-QList<QAction *> WriteActions::all() const
+using Quick::ActionEntry;
+
+QList<ActionEntry *> WriteActions::all() const
 {
     return {bold,        italic,     underline,    strikeOut,      textColor,
             clearFormat, alignLeft,  alignCenter,  alignRight,     alignJustify,
@@ -20,79 +19,57 @@ QList<QAction *> WriteActions::all() const
 
 namespace {
 
-QAction *make(QObject *parent, const char *id, const QString &text,
-              const QKeySequence &shortcut = {}, const char *iconName = nullptr)
+ActionEntry *make(Quick::ActionModel *model, const char *id, const QString &text,
+                  const QKeySequence &shortcut = {}, const char *iconName = nullptr)
 {
-    auto *action = new QAction(text, parent);
-    action->setObjectName(QString::fromLatin1(id));
-    if (iconName != nullptr) {
-        action->setIcon(QIcon::fromTheme(QString::fromLatin1(iconName)));
-    }
-    if (!shortcut.isEmpty()) {
-        action->setShortcut(shortcut);
-    }
-    return action;
+    return model->add(QString::fromLatin1(id), text, shortcut,
+                      iconName != nullptr ? QString::fromLatin1(iconName) : QString());
 }
 
 } // namespace
 
-WriteActions createWriteActions(QObject *parent)
+WriteActions createWriteActions(Quick::ActionModel *model)
 {
-    using namespace Shell::ActionId;
+    using namespace Quick::ActionId;
     WriteActions a;
 
-    a.bold = make(parent, kFormatBold, QObject::tr("&Bold"),
-                  QKeySequence::Bold, "format-text-bold");
-    a.italic = make(parent, kFormatItalic, QObject::tr("&Italic"),
-                    QKeySequence::Italic, "format-text-italic");
-    a.underline = make(parent, kFormatUnderline, QObject::tr("&Underline"),
-                       QKeySequence::Underline, "format-text-underline");
-    a.strikeOut = make(parent, kFormatStrikeOut, QObject::tr("&Strikethrough"), {},
-                       "format-text-strikethrough");
-    for (QAction *action : {a.bold, a.italic, a.underline, a.strikeOut}) {
-        action->setCheckable(true);
+    a.bold = make(model, kFormatBold, QObject::tr("&Bold"), QKeySequence::Bold, "bold");
+    a.italic = make(model, kFormatItalic, QObject::tr("&Italic"), QKeySequence::Italic, "italic");
+    a.underline = make(model, kFormatUnderline, QObject::tr("&Underline"), QKeySequence::Underline,
+                       "underline");
+    a.strikeOut = make(model, kFormatStrikeOut, QObject::tr("&Strikethrough"), {}, "strikethrough");
+    for (ActionEntry *entry : {a.bold, a.italic, a.underline, a.strikeOut}) {
+        entry->setCheckable(true);
     }
-    a.textColor = make(parent, kFormatTextColor, QObject::tr("Text &Color…"), {},
-                       "format-text-color");
-    a.clearFormat = make(parent, kFormatClearFormat, QObject::tr("Clear Direct &Formatting"));
+    a.textColor = make(model, kFormatTextColor, QObject::tr("Text &Colour…"), {}, "baseline");
+    a.clearFormat = make(model, kFormatClearFormat, QObject::tr("Clear Direct &Formatting"));
 
-    auto *alignGroup = new QActionGroup(parent);
-    alignGroup->setObjectName(QStringLiteral("alignGroup"));
-    alignGroup->setExclusive(true);
-    a.alignLeft = make(parent, kFormatAlignLeft, QObject::tr("Align &Left"),
-                       QKeySequence(QStringLiteral("Ctrl+L")), "format-justify-left");
-    a.alignCenter = make(parent, kFormatAlignCenter, QObject::tr("Align &Center"),
-                         QKeySequence(QStringLiteral("Ctrl+E")), "format-justify-center");
-    a.alignRight = make(parent, kFormatAlignRight, QObject::tr("Align &Right"),
-                        QKeySequence(QStringLiteral("Ctrl+R")), "format-justify-right");
-    a.alignJustify = make(parent, kFormatAlignJustify, QObject::tr("&Justify"),
-                          QKeySequence(QStringLiteral("Ctrl+J")), "format-justify-fill");
-    for (QAction *action : {a.alignLeft, a.alignCenter, a.alignRight, a.alignJustify}) {
-        action->setCheckable(true);
-        alignGroup->addAction(action);
+    a.alignLeft = make(model, kFormatAlignLeft, QObject::tr("Align &Left"),
+                       QKeySequence(QStringLiteral("Ctrl+L")), "align-left");
+    a.alignCenter = make(model, kFormatAlignCenter, QObject::tr("Align &Center"),
+                         QKeySequence(QStringLiteral("Ctrl+E")), "align-center");
+    a.alignRight = make(model, kFormatAlignRight, QObject::tr("Align &Right"),
+                        QKeySequence(QStringLiteral("Ctrl+R")), "align-right");
+    a.alignJustify = make(model, kFormatAlignJustify, QObject::tr("&Justify"),
+                          QKeySequence(QStringLiteral("Ctrl+J")), "align-justify");
+    for (ActionEntry *entry : {a.alignLeft, a.alignCenter, a.alignRight, a.alignJustify}) {
+        entry->setCheckable(true);
+        entry->setRadioGroup(QStringLiteral("writeAlign"));
     }
 
-    // "format-list-unordered/-ordered" are Breeze names (not in the base
-    // freedesktop spec); the text label is the fallback when absent.
-    a.listBullet = make(parent, kFormatListBullet, QObject::tr("&Bullet List"), {},
-                        "format-list-unordered");
-    a.listNumbered = make(parent, kFormatListNumbered, QObject::tr("&Numbered List"), {},
-                          "format-list-ordered");
+    a.listBullet = make(model, kFormatListBullet, QObject::tr("&Bullet List"), {}, "list");
+    a.listNumbered = make(model, kFormatListNumbered, QObject::tr("&Numbered List"), {}, "list-ordered");
     a.listBullet->setCheckable(true);
     a.listNumbered->setCheckable(true);
 
-    a.indentMore = make(parent, kFormatIndentMore, QObject::tr("&Increase Indent"), {},
-                        "format-indent-more");
-    a.indentLess = make(parent, kFormatIndentLess, QObject::tr("&Decrease Indent"), {},
-                        "format-indent-less");
+    a.indentMore = make(model, kFormatIndentMore, QObject::tr("&Increase Indent"), {}, "indent-increase");
+    a.indentLess = make(model, kFormatIndentLess, QObject::tr("&Decrease Indent"), {}, "indent-decrease");
 
-    a.insertTable = make(parent, kInsertTable, QObject::tr("&Table…"), {}, "insert-table");
-    a.insertImage = make(parent, kInsertImage, QObject::tr("&Image…"), {}, "insert-image");
-    a.insertColumns = make(parent, kInsertColumns, QObject::tr("&Columns…"));
-    a.insertPageBreak =
-        make(parent, kInsertPageBreak, QObject::tr("&Page Break"),
-             QKeySequence(QStringLiteral("Ctrl+Return")));
-
+    a.insertTable = make(model, kInsertTable, QObject::tr("&Table…"), {}, "table");
+    a.insertImage = make(model, kInsertImage, QObject::tr("&Image…"), {}, "image");
+    a.insertColumns = make(model, kInsertColumns, QObject::tr("&Columns…"), {}, "columns-2");
+    a.insertPageBreak = make(model, kInsertPageBreak, QObject::tr("&Page Break"),
+                             QKeySequence(QStringLiteral("Ctrl+Return")));
     return a;
 }
 

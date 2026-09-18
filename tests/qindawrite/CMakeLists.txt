@@ -1,143 +1,27 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-function(qqo_add_write_test name)
-    add_executable(${name} ${name}.cpp)
-    target_link_libraries(${name} PRIVATE office_shell Qt6::Test Qt6::WidgetsPrivate KF6::SonnetCore)
-    target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps)
-    qqo_set_strict_warnings(${name})
-    add_test(NAME ${name} COMMAND ${name})
-    set_tests_properties(${name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-endfunction()
-
-qqo_add_write_test(tst_write_probe_pagination)
-qqo_add_write_test(tst_write_probe_control)
-qqo_add_write_test(tst_write_formats)
-target_sources(tst_write_formats PRIVATE
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/style_catalog.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_io.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/spell_checker.cpp)
-
+# QindaWrite's gates over the QtQuick app: the editing control on its own
+# (tst_write_control), the paged item against the PDF exporter
+# (tst_write_view), the strips, entries, find/replace and fixtures through
+# the real window (tst_write_ui), the typography set (tst_write_typography),
+# footnotes / TOC / tracked changes / ruler (tst_write_review), the panel
+# export through the desktop's validator (tst_write_menu_export), and the
+# format matrix and pagination probe. Every test links the app's static QML
+# module, so a source added to apps/qindawrite/CMakeLists.txt is in every test.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(POPPLER_QT6 REQUIRED poppler-qt6)
-add_executable(tst_write_view tst_write_view.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/find_replace_bar.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_controller.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_geometry.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_setup_io.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/table_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_accessibility.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_view.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/spell_checker.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_io.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/pdf_exporter.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/style_catalog.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_document.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_revisions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_review_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_footnotes.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_toc.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_ruler.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_window.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_window_ui.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_typography.cpp
-)
-target_link_libraries(tst_write_view PRIVATE office_shell office_ai Qt6::Test Qt6::WidgetsPrivate
-    ${POPPLER_QT6_LIBRARIES} KF6::SonnetCore)
-target_include_directories(tst_write_view PRIVATE ${POPPLER_QT6_INCLUDE_DIRS}
-    ${PROJECT_SOURCE_DIR}/apps)
+
+foreach(name IN ITEMS tst_write_control tst_write_view tst_write_ui tst_write_typography
+                      tst_write_review tst_write_menu_export tst_write_formats tst_write_probe_pagination)
+    add_executable(${name} ${name}.cpp write_test_support.h)
+    target_link_libraries(${name} PRIVATE qindawrite_app qindawrite_appplugin Qt6::Test)
+    target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)
+    target_compile_definitions(${name} PRIVATE QQO_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/qml_fixtures")
+    qqo_set_strict_warnings(${name})
+    qqo_desktop_runtime(${name})
+    add_test(NAME ${name} COMMAND ${name})
+    set_tests_properties(${name} PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
+endforeach()
+target_link_libraries(tst_write_view PRIVATE ${POPPLER_QT6_LIBRARIES})
+target_include_directories(tst_write_view PRIVATE ${POPPLER_QT6_INCLUDE_DIRS})
 target_compile_options(tst_write_view PRIVATE ${POPPLER_QT6_CFLAGS_OTHER})
-qqo_set_strict_warnings(tst_write_view)
-add_test(NAME tst_write_view COMMAND tst_write_view)
-set_tests_properties(tst_write_view PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-
-add_executable(tst_write_typography tst_write_typography.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/find_replace_bar.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_controller.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_geometry.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_setup_io.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/table_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_accessibility.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_view.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/spell_checker.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_io.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/pdf_exporter.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/style_catalog.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_document.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_revisions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_review_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_footnotes.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_toc.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_ruler.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_window.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_window_ui.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_typography.cpp
-)
-target_link_libraries(tst_write_typography PRIVATE office_shell office_ai Qt6::Test
-    Qt6::WidgetsPrivate KF6::SonnetCore)
-target_include_directories(tst_write_typography PRIVATE ${PROJECT_SOURCE_DIR}/apps)
-qqo_set_strict_warnings(tst_write_typography)
-add_test(NAME tst_write_typography COMMAND tst_write_typography)
-set_tests_properties(tst_write_typography PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-
-add_executable(tst_write_ui tst_write_ui.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/find_replace_bar.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_controller.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_geometry.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_setup_io.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/table_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_accessibility.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_view.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/spell_checker.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_io.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/pdf_exporter.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/style_catalog.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_document.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_revisions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_review_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_footnotes.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_toc.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_ruler.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_window.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_window_ui.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_typography.cpp
-)
-target_link_libraries(tst_write_ui PRIVATE office_shell office_ai Qt6::Test Qt6::WidgetsPrivate
-    KF6::SonnetCore)
-target_include_directories(tst_write_ui PRIVATE ${PROJECT_SOURCE_DIR}/apps)
-qqo_set_strict_warnings(tst_write_ui)
-add_test(NAME tst_write_ui COMMAND tst_write_ui)
-set_tests_properties(tst_write_ui PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-
-
-add_executable(tst_write_review tst_write_review.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/find_replace_bar.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_controller.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_geometry.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_setup_io.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/table_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_accessibility.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/page_text_view.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/spell_checker.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/format_io.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/pdf_exporter.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/style_catalog.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_document.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_revisions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_review_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_footnotes.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_toc.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_ruler.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_window.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_window_ui.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindawrite/src/write_typography.cpp
-)
-target_link_libraries(tst_write_review PRIVATE office_shell office_ai Qt6::Test
-    Qt6::WidgetsPrivate KF6::SonnetCore)
-target_include_directories(tst_write_review PRIVATE ${PROJECT_SOURCE_DIR}/apps)
-qqo_set_strict_warnings(tst_write_review)
-add_test(NAME tst_write_review COMMAND tst_write_review)
-set_tests_properties(tst_write_review PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

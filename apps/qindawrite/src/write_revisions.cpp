@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_revisions.h"
 
-#include "page_text_view.h"
+#include "page_text_control.h"
 #include "write_document.h"
-
-#include <QtWidgets/private/qwidgettextcontrol_p.h>
 
 #include <QKeyEvent>
 #include <QTextBlock>
@@ -31,9 +29,9 @@ bool isMarked(const QTextCharFormat &format)
 
 } // namespace
 
-WriteRevisions::WriteRevisions(PageTextView *view, WriteDocument *document, QObject *parent)
+WriteRevisions::WriteRevisions(PageTextControl *control, WriteDocument *document, QObject *parent)
     : QObject(parent)
-    , m_view(view)
+    , m_control(control)
     , m_document(document)
 {
     m_author = QString::fromLocal8Bit(qgetenv("USER"));
@@ -55,15 +53,28 @@ void WriteRevisions::setRecording(bool recording)
         return;
     }
     m_recording = recording;
-    if (recording) {
+    if (m_inputTarget != nullptr) {
         // The filter only exists while recording: intercepting delete keys
         // when nothing is being tracked would be a behaviour change with no
         // upside.
-        m_view->installEventFilter(this);
-    } else {
-        m_view->removeEventFilter(this);
+        if (recording) {
+            m_inputTarget->installEventFilter(this);
+        } else {
+            m_inputTarget->removeEventFilter(this);
+        }
     }
     emit recordingChanged(recording);
+}
+
+void WriteRevisions::setInputTarget(QObject *target)
+{
+    if (m_inputTarget != nullptr && m_recording) {
+        m_inputTarget->removeEventFilter(this);
+    }
+    m_inputTarget = target;
+    if (m_inputTarget != nullptr && m_recording) {
+        m_inputTarget->installEventFilter(this);
+    }
 }
 
 void WriteRevisions::markInserted(int position, int charsAdded)
@@ -91,7 +102,7 @@ void WriteRevisions::markInserted(int position, int charsAdded)
 
 void WriteRevisions::strikeSelection(bool forward)
 {
-    QWidgetTextControl *control = m_view->control();
+    PageTextControl *control = m_control;
     QTextCursor cursor = control->textCursor();
     if (!cursor.hasSelection()) {
         if (forward) {
@@ -125,11 +136,11 @@ void WriteRevisions::strikeSelection(bool forward)
 
 bool WriteRevisions::eventFilter(QObject *watched, QEvent *event)
 {
-    if (!m_recording || watched != m_view || event->type() != QEvent::KeyPress) {
+    if (!m_recording || watched != m_inputTarget || event->type() != QEvent::KeyPress) {
         return QObject::eventFilter(watched, event);
     }
     auto *key = static_cast<QKeyEvent *>(event);
-    const bool hasSelection = m_view->control()->textCursor().hasSelection();
+    const bool hasSelection = m_control->textCursor().hasSelection();
     if (key->key() == Qt::Key_Backspace) {
         strikeSelection(false);
         return true;
@@ -232,17 +243,17 @@ void WriteRevisions::rejectAll()
 
 bool WriteRevisions::acceptAtCursor()
 {
-    return resolve(true, m_view->control()->textCursor().position());
+    return resolve(true, m_control->textCursor().position());
 }
 
 bool WriteRevisions::rejectAtCursor()
 {
-    return resolve(false, m_view->control()->textCursor().position());
+    return resolve(false, m_control->textCursor().position());
 }
 
 bool WriteRevisions::goToNextChange()
 {
-    QWidgetTextControl *control = m_view->control();
+    PageTextControl *control = m_control;
     const int from = control->textCursor().position();
     const QTextDocument *text = m_document->textDocument();
     int first = -1;

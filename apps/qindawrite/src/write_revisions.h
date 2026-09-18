@@ -11,7 +11,7 @@
 //   that appeared gets kRevisionInsertProperty (the author) plus underline
 //   and the insertion colour.
 // * A DELETION cannot be marked after the fact — the text is already gone —
-//   so while recording, the delete gestures are intercepted on the view and
+//   so while recording, the delete gestures are intercepted on the item and
 //   turned into marks instead: the run gets kRevisionDeleteProperty plus a
 //   strikethrough and stays in the document until the change is accepted.
 //
@@ -28,7 +28,7 @@ class QTextDocument;
 
 namespace QindaOffice::Apps::Write {
 
-class PageTextView;
+class PageTextControl;
 class WriteDocument;
 
 // Author of the change; presence of the property IS the mark.
@@ -38,7 +38,12 @@ inline constexpr int kRevisionDeleteProperty = QTextFormat::UserProperty + 10;
 class WriteRevisions final : public QObject {
     Q_OBJECT
 public:
-    WriteRevisions(PageTextView *view, WriteDocument *document, QObject *parent);
+    WriteRevisions(PageTextControl *control, WriteDocument *document, QObject *parent);
+
+    // The object whose key presses the delete interception watches while
+    // recording (the page item); events are filtered, never consumed
+    // otherwise.
+    void setInputTarget(QObject *target);
 
     [[nodiscard]] bool isRecording() const { return m_recording; }
     void setRecording(bool recording);
@@ -74,8 +79,9 @@ private:
     // which is what "undo my own typing" has to mean.
     void strikeSelection(bool forward);
 
-    PageTextView *m_view;
+    PageTextControl *m_control;
     WriteDocument *m_document;
+    QObject *m_inputTarget = nullptr;
     QString m_author;
     bool m_recording = false;
     // True while this class is editing, so its own edits are not tracked

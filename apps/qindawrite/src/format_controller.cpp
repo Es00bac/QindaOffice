@@ -1,35 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "format_controller.h"
 
-#include "wrapping_tool_bar.h"
-
-#include "page_text_view.h"
+#include "menu_tree.h"
+#include "page_text_control.h"
 #include "write_document.h"
 
-#include <QColorDialog>
-#include <QComboBox>
-#include <QDialog>
-#include <QDialogButtonBox>
-#include <QFileDialog>
-#include <QFontComboBox>
-#include <QFormLayout>
 #include <QImage>
-#include <QMenu>
-#include <QSpinBox>
 #include <QTextBlock>
 #include <QTextCursor>
 #include <QTextList>
 #include <QTextTable>
-#include <QToolBar>
-#include <QtWidgets/private/qwidgettextcontrol_p.h>
 
 namespace QindaOffice::Apps::Write {
 
-namespace {
+using Quick::ActionEntry;
+using Quick::MenuNode;
 
-const int kFontSizes[] = {6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20,
-                          22, 24, 26, 28, 32, 36, 40, 44, 48, 54,
-                          60, 66, 72, 80, 88, 96};
+namespace {
 
 // Removes list membership from every block in [start, end]: the block's
 // objectIndex points at the list format; -1 detaches it (Qt's canonical
@@ -50,199 +37,141 @@ void removeFromList(QTextDocument *doc, int start, int end)
     }
 }
 
+MenuNode a(ActionEntry *entry)
+{
+    return MenuNode::action(entry->id());
+}
+
 } // namespace
 
-FormatController::FormatController(PageTextView *view, WriteDocument *document,
-                                   QObject *parent)
+FormatController::FormatController(PageTextControl *control, WriteDocument *document,
+                                   Quick::ActionModel *model, QObject *parent)
     : QObject(parent)
-    , m_view(view)
+    , m_control(control)
     , m_document(document)
-    , m_actions(createWriteActions(this))
+    , m_actions(createWriteActions(model))
 {
-    QWidgetTextControl *control = m_view->control();
+    const auto toggleFormat = [this](ActionEntry *entry, auto formatFor) {
+        connect(entry, &ActionEntry::toggled, this, [this, formatFor](bool on) {
+            if (!m_syncing) {
+                applyCharFormat(formatFor(on));
+            }
+        });
+    };
+    toggleFormat(m_actions.bold, [](bool on) {
+        QTextCharFormat f;
+        f.setFontWeight(on ? QFont::Bold : QFont::Normal);
+        return f;
+    });
+    toggleFormat(m_actions.italic, [](bool on) {
+        QTextCharFormat f;
+        f.setFontItalic(on);
+        return f;
+    });
+    toggleFormat(m_actions.underline, [](bool on) {
+        QTextCharFormat f;
+        f.setFontUnderline(on);
+        return f;
+    });
+    toggleFormat(m_actions.strikeOut, [](bool on) {
+        QTextCharFormat f;
+        f.setFontStrikeOut(on);
+        return f;
+    });
+    connect(m_actions.textColor, &ActionEntry::triggered, this, [this] {
+        emit textColorRequested(m_control->textCursor().charFormat().foreground().color());
+    });
+    connect(m_actions.clearFormat, &ActionEntry::triggered, this, [this] { clearDirectFormatting(); });
 
-    connect(m_actions.bold, &QAction::triggered, this, [this](bool on) {
-        QTextCharFormat format;
-        format.setFontWeight(on ? QFont::Bold : QFont::Normal);
-        applyCharFormat(format);
-    });
-    connect(m_actions.italic, &QAction::triggered, this, [this](bool on) {
-        QTextCharFormat format;
-        format.setFontItalic(on);
-        applyCharFormat(format);
-    });
-    connect(m_actions.underline, &QAction::triggered, this, [this](bool on) {
-        QTextCharFormat format;
-        format.setFontUnderline(on);
-        applyCharFormat(format);
-    });
-    connect(m_actions.strikeOut, &QAction::triggered, this, [this](bool on) {
-        QTextCharFormat format;
-        format.setFontStrikeOut(on);
-        applyCharFormat(format);
-    });
-    connect(m_actions.textColor, &QAction::triggered, this, [this] { pickTextColor(); });
-    connect(m_actions.clearFormat, &QAction::triggered, this,
-            [this] { clearDirectFormatting(); });
-
-    connect(m_actions.alignLeft, &QAction::triggered, this,
-            [this] { applyAlignment(Qt::AlignLeft); });
-    connect(m_actions.alignCenter, &QAction::triggered, this,
-            [this] { applyAlignment(Qt::AlignHCenter); });
-    connect(m_actions.alignRight, &QAction::triggered, this,
-            [this] { applyAlignment(Qt::AlignRight); });
-    connect(m_actions.alignJustify, &QAction::triggered, this,
-            [this] { applyAlignment(Qt::AlignJustify); });
-
-    connect(m_actions.listBullet, &QAction::triggered, this,
+    const struct {
+        ActionEntry *entry;
+        Qt::Alignment alignment;
+    } aligns[] = {{m_actions.alignLeft, Qt::AlignLeft},
+                  {m_actions.alignCenter, Qt::AlignHCenter},
+                  {m_actions.alignRight, Qt::AlignRight},
+                  {m_actions.alignJustify, Qt::AlignJustify}};
+    for (const auto &align : aligns) {
+        connect(align.entry, &ActionEntry::triggered, this, [this, alignment = align.alignment] {
+            if (!m_syncing) {
+                applyAlignment(alignment);
+            }
+        });
+    }
+    connect(m_actions.listBullet, &ActionEntry::triggered, this,
             [this] { toggleList(QTextListFormat::ListDisc); });
-    connect(m_actions.listNumbered, &QAction::triggered, this,
+    connect(m_actions.listNumbered, &ActionEntry::triggered, this,
             [this] { toggleList(QTextListFormat::ListDecimal); });
-    connect(m_actions.indentMore, &QAction::triggered, this, [this] { adjustIndent(1); });
-    connect(m_actions.indentLess, &QAction::triggered, this, [this] { adjustIndent(-1); });
+    connect(m_actions.indentMore, &ActionEntry::triggered, this, [this] { adjustIndent(1); });
+    connect(m_actions.indentLess, &ActionEntry::triggered, this, [this] { adjustIndent(-1); });
 
-    connect(m_actions.insertTable, &QAction::triggered, this, [this] { insertTable(); });
-    connect(m_actions.insertImage, &QAction::triggered, this, [this] { insertImage(); });
-    connect(m_actions.insertColumns, &QAction::triggered, this,
-            [this] { insertColumns(); });
-    connect(m_actions.insertPageBreak, &QAction::triggered, this,
-            [this] { insertPageBreak(); });
+    connect(m_actions.insertTable, &ActionEntry::triggered, this, &FormatController::tableDialogRequested);
+    connect(m_actions.insertImage, &ActionEntry::triggered, this, &FormatController::imageDialogRequested);
+    connect(m_actions.insertColumns, &ActionEntry::triggered, this,
+            &FormatController::columnsDialogRequested);
+    connect(m_actions.insertPageBreak, &ActionEntry::triggered, this, [this] { insertPageBreak(); });
 
-    connect(control, &QWidgetTextControl::currentCharFormatChanged, this,
+    connect(m_control, &PageTextControl::currentCharFormatChanged, this,
             [this](const QTextCharFormat &) { syncFromControl(); });
-    connect(control, &QWidgetTextControl::cursorPositionChanged, this,
-            [this] { syncFromControl(); });
+    connect(m_control, &PageTextControl::cursorPositionChanged, this, [this] { syncFromControl(); });
     syncFromControl();
 }
 
-QToolBar *FormatController::toolBar()
+QList<MenuNode> FormatController::formatMenuItems() const
 {
-    if (m_toolBar != nullptr) {
-        return m_toolBar;
-    }
-    auto *window = qobject_cast<QWidget *>(parent());
-    // WrappingToolBar: this strip carries ~16 commands plus three combos
-    // and overflowed at any ordinary width, hiding the tail behind the
-    // extension chevron. It wraps now (see wrapping_tool_bar.h).
-    auto *bar = new Shell::WrappingToolBar(tr("Formatting"), window);
-    m_toolBar = bar;
-    m_toolBar->setObjectName(QStringLiteral("formatToolBar"));
-
-    m_fontCombo = new QFontComboBox(m_toolBar);
-    m_fontCombo->setObjectName(QStringLiteral("fontFamilyCombo"));
-    m_fontCombo->setMinimumWidth(180);
-    bar->addStripWidget(m_fontCombo);
-    connect(m_fontCombo, &QFontComboBox::currentFontChanged, this,
-            [this](const QFont &font) {
-                if (m_syncing) {
-                    return;
-                }
-                QTextCharFormat format;
-                format.setFontFamilies({font.family()});
-                applyCharFormat(format);
-            });
-
-    m_sizeCombo = new QComboBox(m_toolBar);
-    m_sizeCombo->setObjectName(QStringLiteral("fontSizeCombo"));
-    m_sizeCombo->setEditable(true);
-    for (const int size : kFontSizes) {
-        m_sizeCombo->addItem(QString::number(size));
-    }
-    bar->addStripWidget(m_sizeCombo);
-    connect(m_sizeCombo, &QComboBox::activated, this, [this](int) {
-        bool ok = false;
-        const qreal size = m_sizeCombo->currentText().toDouble(&ok);
-        if (!ok || size <= 0) {
-            return;
-        }
-        QTextCharFormat format;
-        format.setFontPointSize(size);
-        applyCharFormat(format);
-    });
-
-    bar->addStripSeparator();
-    bar->addStripAction(m_actions.bold);
-    bar->addStripAction(m_actions.italic);
-    bar->addStripAction(m_actions.underline);
-    bar->addStripAction(m_actions.strikeOut);
-    bar->addStripAction(m_actions.textColor);
-    bar->addStripSeparator();
-    bar->addStripAction(m_actions.alignLeft);
-    bar->addStripAction(m_actions.alignCenter);
-    bar->addStripAction(m_actions.alignRight);
-    bar->addStripAction(m_actions.alignJustify);
-    bar->addStripSeparator();
-    bar->addStripAction(m_actions.listBullet);
-    bar->addStripAction(m_actions.listNumbered);
-    bar->addStripAction(m_actions.indentLess);
-    bar->addStripAction(m_actions.indentMore);
-    bar->addStripSeparator();
-    bar->addStripAction(m_actions.insertTable);
-    bar->addStripAction(m_actions.insertImage);
-    bar->addStripAction(m_actions.insertColumns);
-
-    syncFromControl();
-    return m_toolBar;
+    return {a(m_actions.bold),        a(m_actions.italic),      a(m_actions.underline),
+            a(m_actions.strikeOut),   a(m_actions.textColor),   a(m_actions.clearFormat),
+            MenuNode::separator(),    a(m_actions.alignLeft),   a(m_actions.alignCenter),
+            a(m_actions.alignRight),  a(m_actions.alignJustify), MenuNode::separator(),
+            a(m_actions.listBullet),  a(m_actions.listNumbered), a(m_actions.indentLess),
+            a(m_actions.indentMore)};
 }
 
-void FormatController::appendStripActions(const QList<QAction *> &actions)
+QList<MenuNode> FormatController::insertMenuItems() const
 {
-    auto *bar = qobject_cast<Shell::WrappingToolBar *>(toolBar());
-    if (bar == nullptr) {
-        return;
-    }
-    bar->addStripSeparator();
-    for (QAction *action : actions) {
-        bar->addStripAction(action);
-    }
+    return {a(m_actions.insertPageBreak), a(m_actions.insertTable), a(m_actions.insertImage),
+            a(m_actions.insertColumns)};
 }
 
-void FormatController::populateFormatMenu(QMenu *menu)
+QString FormatController::fontFamily() const
 {
-    menu->addAction(m_actions.bold);
-    menu->addAction(m_actions.italic);
-    menu->addAction(m_actions.underline);
-    menu->addAction(m_actions.strikeOut);
-    menu->addAction(m_actions.textColor);
-    menu->addAction(m_actions.clearFormat);
-    menu->addSeparator();
-    menu->addAction(m_actions.alignLeft);
-    menu->addAction(m_actions.alignCenter);
-    menu->addAction(m_actions.alignRight);
-    menu->addAction(m_actions.alignJustify);
-    menu->addSeparator();
-    menu->addAction(m_actions.listBullet);
-    menu->addAction(m_actions.listNumbered);
-    menu->addAction(m_actions.indentLess);
-    menu->addAction(m_actions.indentMore);
+    const QTextCharFormat format = m_control->currentCharFormat();
+    const QStringList families = format.fontFamilies().toStringList();
+    if (!families.isEmpty() && !families.first().isEmpty()) {
+        return families.first();
+    }
+    return m_document->textDocument()->defaultFont().family();
 }
 
-void FormatController::populateInsertMenu(QMenu *menu)
+qreal FormatController::fontPointSize() const
 {
-    menu->addAction(m_actions.insertPageBreak);
-    menu->addAction(m_actions.insertTable);
-    menu->addAction(m_actions.insertImage);
-    menu->addAction(m_actions.insertColumns);
+    // AGENT-GUARD: never blank. A pristine document has no explicit point
+    // size on its char format; fall back to the document's default font.
+    const qreal explicitSize = m_control->currentCharFormat().fontPointSize();
+    if (explicitSize > 0) {
+        return explicitSize;
+    }
+    const qreal fallback = m_document->textDocument()->defaultFont().pointSizeF();
+    return fallback > 0 ? fallback : 11.0;
 }
 
 void FormatController::applyCharFormat(const QTextCharFormat &format)
 {
-    QWidgetTextControl *control = m_view->control();
-    const QTextCursor cursor = control->textCursor();
+    const QTextCursor cursor = m_control->textCursor();
     if (cursor.hasSelection()) {
         QTextCursor edit = cursor;
         edit.mergeCharFormat(format);
     } else {
-        QTextCharFormat merged = control->currentCharFormat();
+        QTextCharFormat merged = m_control->currentCharFormat();
         merged.merge(format);
-        control->setCurrentCharFormat(merged);
+        m_control->setCurrentCharFormat(merged);
     }
     m_document->setDirty(true);
+    syncFromControl();
 }
 
 void FormatController::mergeBlockFormat(const QTextBlockFormat &format)
 {
-    QTextCursor cursor = m_view->control()->textCursor();
+    QTextCursor cursor = m_control->textCursor();
     cursor.mergeBlockFormat(format);
     m_document->setDirty(true);
 }
@@ -257,8 +186,7 @@ void FormatController::applyAlignment(Qt::Alignment alignment)
 
 void FormatController::toggleList(QTextListFormat::Style style)
 {
-    QWidgetTextControl *control = m_view->control();
-    const QTextCursor cursor = control->textCursor();
+    const QTextCursor cursor = m_control->textCursor();
     QTextDocument *doc = m_document->textDocument();
     QTextList *list = cursor.block().textList();
     if (list != nullptr && list->format().style() == style) {
@@ -278,123 +206,37 @@ void FormatController::toggleList(QTextListFormat::Style style)
 
 void FormatController::adjustIndent(int delta)
 {
-    const QTextCursor cursor = m_view->control()->textCursor();
+    const QTextCursor cursor = m_control->textCursor();
     QTextBlockFormat format;
     format.setIndent(qMax(0, cursor.blockFormat().indent() + delta));
     mergeBlockFormat(format);
 }
 
-void FormatController::pickTextColor()
-{
-    const QTextCursor cursor = m_view->control()->textCursor();
-    const QColor initial = cursor.charFormat().foreground().color();
-    const QColor color = QColorDialog::getColor(initial, m_view, tr("Text Color"));
-    if (!color.isValid()) {
-        return;
-    }
-    QTextCharFormat format;
-    format.setForeground(color);
-    applyCharFormat(format);
-}
-
 void FormatController::clearDirectFormatting()
 {
-    QWidgetTextControl *control = m_view->control();
-    QTextCursor cursor = control->textCursor();
+    QTextCursor cursor = m_control->textCursor();
     cursor.beginEditBlock();
     cursor.setCharFormat(QTextCharFormat());
     cursor.setBlockFormat(QTextBlockFormat());
     cursor.endEditBlock();
-    control->setCurrentCharFormat(QTextCharFormat());
+    m_control->setCurrentCharFormat(QTextCharFormat());
     m_document->setDirty(true);
-}
-
-void FormatController::insertTable()
-{
-    QDialog dialog(m_view);
-    dialog.setWindowTitle(tr("Insert Table"));
-    auto *layout = new QFormLayout(&dialog);
-    auto *rows = new QSpinBox(&dialog);
-    rows->setRange(1, 200);
-    rows->setValue(3);
-    auto *cols = new QSpinBox(&dialog);
-    cols->setRange(1, 20);
-    cols->setValue(3);
-    auto *buttons =
-        new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addRow(tr("Rows"), rows);
-    layout->addRow(tr("Columns"), cols);
-    layout->addRow(buttons);
-    if (dialog.exec() != QDialog::Accepted) {
-        return;
-    }
-    insertTableAtCursor(rows->value(), cols->value());
+    syncFromControl();
 }
 
 void FormatController::insertTableAtCursor(int rows, int columns)
 {
-    QTextCursor cursor = m_view->control()->textCursor();
+    QTextCursor cursor = m_control->textCursor();
     QTextTableFormat format;
     format.setBorder(1);
     format.setCellSpacing(2);
     format.setCellPadding(4);
     format.setWidth(QTextLength(QTextLength::PercentageLength, 100));
-    QTextTable *table = cursor.insertTable(rows, columns, format);
-    // Leave the control cursor inside the first cell so table-scoped UI
-    // (the Table menu/actions) enables immediately.
-    m_view->control()->setTextCursor(table->cellAt(0, 0).firstCursorPosition());
+    QTextTable *table = cursor.insertTable(qBound(1, rows, 200), qBound(1, columns, 20), format);
+    // Leave the cursor inside the first cell so table-scoped commands
+    // enable immediately.
+    m_control->setTextCursor(table->cellAt(0, 0).firstCursorPosition());
     m_document->setDirty(true);
-}
-
-void FormatController::insertImage()
-{
-    const QString path = QFileDialog::getOpenFileName(
-        m_view, tr("Insert Image"), QString(),
-        tr("Images (*.png *.jpg *.jpeg *.bmp *.gif *.svg);;All files (*)"));
-    if (path.isEmpty()) {
-        return;
-    }
-    QImage loaded(path);
-    if (loaded.isNull()) {
-        return;
-    }
-    const qreal contentWidth = m_document->pageSize().width() - 2 * m_document->pageMargin();
-    if (loaded.width() > contentWidth) {
-        loaded = loaded.scaledToWidth(int(contentWidth), Qt::SmoothTransformation);
-    }
-    QTextCursor cursor = m_view->control()->textCursor();
-    QTextImageFormat format;
-    format.setName(path);
-    format.setWidth(loaded.width());
-    format.setHeight(loaded.height());
-    cursor.insertImage(format);
-    m_document->setDirty(true);
-}
-
-void FormatController::insertColumns()
-{
-    QDialog dialog(m_view);
-    dialog.setWindowTitle(tr("Insert Columns"));
-    auto *layout = new QFormLayout(&dialog);
-    auto *cols = new QSpinBox(&dialog);
-    cols->setRange(2, 4);
-    cols->setValue(2);
-    auto *spacing = new QSpinBox(&dialog);
-    spacing->setRange(0, 96);
-    spacing->setValue(24);
-    auto *buttons =
-        new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addRow(tr("Columns"), cols);
-    layout->addRow(tr("Gutter (px)"), spacing);
-    layout->addRow(buttons);
-    if (dialog.exec() != QDialog::Accepted) {
-        return;
-    }
-    insertColumnsAtCursor(cols->value(), spacing->value());
 }
 
 void FormatController::insertColumnsAtCursor(int columns, int gutterPx)
@@ -403,20 +245,40 @@ void FormatController::insertColumnsAtCursor(int columns, int gutterPx)
     // (unlike ODF text:columns). A borderless 1xN table is the
     // serialization-safe equivalent: it round-trips through HTML, ODT and
     // DOCX and paginates like any other table.
-    QTextCursor cursor = m_view->control()->textCursor();
+    QTextCursor cursor = m_control->textCursor();
     QTextTableFormat format;
     format.setBorder(0);
     format.setCellSpacing(0);
     format.setCellPadding(gutterPx / 2);
     format.setWidth(QTextLength(QTextLength::PercentageLength, 100));
-    QTextTable *table = cursor.insertTable(1, columns, format);
-    m_view->control()->setTextCursor(table->cellAt(0, 0).firstCursorPosition());
+    QTextTable *table = cursor.insertTable(1, qBound(2, columns, 4), format);
+    m_control->setTextCursor(table->cellAt(0, 0).firstCursorPosition());
     m_document->setDirty(true);
+}
+
+bool FormatController::insertImageFile(const QString &path)
+{
+    QImage loaded(path);
+    if (loaded.isNull()) {
+        return false;
+    }
+    const qreal contentWidth = m_document->pageSize().width() - 2 * m_document->pageMargin();
+    if (loaded.width() > contentWidth) {
+        loaded = loaded.scaledToWidth(int(contentWidth), Qt::SmoothTransformation);
+    }
+    QTextCursor cursor = m_control->textCursor();
+    QTextImageFormat format;
+    format.setName(path);
+    format.setWidth(loaded.width());
+    format.setHeight(loaded.height());
+    cursor.insertImage(format);
+    m_document->setDirty(true);
+    return true;
 }
 
 void FormatController::insertPageBreak()
 {
-    QTextCursor cursor = m_view->control()->textCursor();
+    QTextCursor cursor = m_control->textCursor();
     QTextBlockFormat format;
     format.setPageBreakPolicy(QTextFormat::PageBreak_AlwaysBefore);
     cursor.insertBlock(format);
@@ -426,43 +288,25 @@ void FormatController::insertPageBreak()
 void FormatController::syncFromControl()
 {
     m_syncing = true;
-    QWidgetTextControl *control = m_view->control();
-    const QTextCursor cursor = control->textCursor();
-    const QTextCharFormat format = control->currentCharFormat();
-
+    const QTextCursor cursor = m_control->textCursor();
+    const QTextCharFormat format = m_control->currentCharFormat();
     m_actions.bold->setChecked(format.fontWeight() >= QFont::Bold);
     m_actions.italic->setChecked(format.fontItalic());
     m_actions.underline->setChecked(format.fontUnderline());
     m_actions.strikeOut->setChecked(format.fontStrikeOut());
 
-    if (m_fontCombo != nullptr) {
-        m_fontCombo->setCurrentFont(format.font());
-    }
-    if (m_sizeCombo != nullptr) {
-        // AGENT-GUARD: never leave the box blank. A pristine document has no
-        // explicit point size on its char format, so the combo showed
-        // nothing at all — which reads as "no size", a state the user
-        // cannot act on. Fall back to the document's own default font.
-        const qreal effective = format.fontPointSize() > 0
-            ? format.fontPointSize()
-            : m_document->textDocument()->defaultFont().pointSizeF();
-        m_sizeCombo->setCurrentText(QString::number(int(effective > 0 ? effective : 11)));
-    }
-
-    const Qt::Alignment alignment =
-        cursor.blockFormat().alignment() & Qt::AlignHorizontal_Mask;
-    m_actions.alignLeft->setChecked(alignment == Qt::AlignLeft);
+    const Qt::Alignment alignment = cursor.blockFormat().alignment() & Qt::AlignHorizontal_Mask;
+    m_actions.alignLeft->setChecked(alignment == Qt::AlignLeft || alignment == 0);
     m_actions.alignCenter->setChecked(alignment == Qt::AlignHCenter);
     m_actions.alignRight->setChecked(alignment == Qt::AlignRight);
     m_actions.alignJustify->setChecked(alignment == Qt::AlignJustify);
 
     QTextList *list = cursor.block().textList();
-    const int style =
-        list != nullptr ? list->format().style() : QTextListFormat::ListStyleUndefined;
+    const int style = list != nullptr ? list->format().style() : QTextListFormat::ListStyleUndefined;
     m_actions.listBullet->setChecked(style == QTextListFormat::ListDisc);
     m_actions.listNumbered->setChecked(style == QTextListFormat::ListDecimal);
-
     m_syncing = false;
+    emit formatChanged();
 }
 
 } // namespace QindaOffice::Apps::Write

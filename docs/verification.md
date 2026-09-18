@@ -239,6 +239,34 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M29 gates (QindaWrite on QindaTK)
+
+- [x] `tests/qindawrite`: `tst_write_control` (the editing engine on its
+      own: keys, mouse hit and drag, Shift-select, clipboard round trip,
+      undo, input-method preedit/commit, pinned format), `tst_write_view`
+      (3-page document paginates identically on screen and in the PDF
+      through Poppler; typing through the window reaches the document;
+      zoom is the viewport's transform; styles survive HTML; accessible
+      text over the item; header/footer in the PDF), `tst_write_ui`
+      (named strips, menu tree, char/paragraph formatting through the
+      entries, font combos, tables and columns, find/replace with wrap and
+      one-step undo, edit commands follow the control, paper palette
+      pinned and white in a window grab, zoom commands, table operations,
+      page setup round trip, the 29-command strip wraps at 560 px, pristine
+      host, structural fixtures at 1280 and 520), `tst_write_typography`,
+      `tst_write_review` (footnotes, TOC, tracked changes through the
+      window's key path, ruler markers through the host and `Tk.Ruler`,
+      footnote dialog round trip), `tst_write_menu_export` (validator
+      accepts the twelve menus; every command resolves; one AI menu with
+      the inline actions), `tst_write_formats` and the pagination probe on
+      `QGuiApplication`.
+- [x] `QQO_GRAB_DIR=<dir> tst_write_ui` saves 1280×800 and 520×700 PNGs;
+      reviewed before the commit (ruler numbered from the text column,
+      markers on the margins, paper white, strip wrapped in three rows).
+- [x] QindaTK `tst_qml`: `test_ruler_markers_drag_and_tabs`.
+- [ ] On the QindaQt desktop: the panel menu drives QindaWrite end to end;
+      Wayland text-input composes into the page (preedit visible).
+
 ### M28 gates (QindaCalc on QindaTK)
 
 - [x] `tests/qindacalc`: `tst_calc_window` (document, host, recovery, ods

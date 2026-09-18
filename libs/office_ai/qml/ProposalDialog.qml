@@ -10,8 +10,9 @@ Tk.Dialog {
 
     property string original: ""
     property string proposal: ""
-    // Apply hands back the (possibly edited) proposal.
-    signal applied(string text)
+    // Apply hands back the (possibly edited) proposal. (Not `applied`:
+    // T.Dialog already owns a signal of that name.)
+    signal proposalApplied(string text)
     signal regenerate()
 
     objectName: "proposalDialog"
@@ -20,7 +21,7 @@ Tk.Dialog {
     primaryText: qsTr("Apply")
     secondaryText: qsTr("Discard")
     tertiaryText: qsTr("Regenerate")
-    onAccepted: dialog.applied(proposalArea.text)
+    onAccepted: dialog.proposalApplied(proposalArea.text)
     // AGENT-GUARD: Regenerate must not accept — accepting applies, which
     // replaced the selection with exactly the text the user asked to redo.
     onTertiary: { dialog.regenerate(); dialog.close() }

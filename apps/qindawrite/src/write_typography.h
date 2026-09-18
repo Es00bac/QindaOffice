@@ -1,43 +1,39 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// QindaWrite's typography and insertion commands beyond the M11 set:
-// highlight colour, superscript/subscript, grow/shrink font, line spacing,
-// and Insert ▸ Date / Time / Special Character / Horizontal Rule /
-// Hyperlink, plus the word count readout.
-//
-// Rationale (D-018). The Format menu covered bold/italic/underline/strike,
-// one colour, alignment, lists and indent, and Insert covered page break,
-// table, image and columns — which leaves out the formatting a word
-// processor is actually reached for: highlighting a passage, a footnote
-// marker's superscript, changing line spacing, dropping today's date into a
-// letter, or turning a URL into a link. There was also no word count
-// anywhere, which is the one number people ask a word processor for.
-//
-// Same discipline as the rest: persistent window-scoped actions with stable
-// objectNames, shared between the menu bar, the toolbar and the context
-// menu (AGENTS.md rule 5).
+// QindaWrite's typography and insertion commands beyond the M11 set
+// (D-018): highlight colour, superscript/subscript, grow/shrink font,
+// line spacing, and Insert ▸ Date / Time / Special Character /
+// Horizontal Rule / Hyperlink, plus the word count. Entries in the
+// window's ActionModel (rule 5); the dialogs are request signals the
+// window answers through the host.
 
-#include <QAction>
+#include "action_model.h"
+
+#include <QColor>
 #include <QObject>
 #include <QTextCharFormat>
+#include <QVariantMap>
 
-class QMenu;
+namespace QindaOffice::Quick {
+struct MenuNode;
+}
 
 namespace QindaOffice::Apps::Write {
 
-class PageTextView;
+class PageTextControl;
 class WriteDocument;
 
 class WriteTypography final : public QObject {
     Q_OBJECT
 public:
-    WriteTypography(PageTextView *view, WriteDocument *document, QObject *parent);
+    WriteTypography(PageTextControl *control, WriteDocument *document, Quick::ActionModel *model,
+                    QObject *parent);
 
-    void populateFormatMenu(QMenu *menu);
-    void populateInsertMenu(QMenu *menu);
-    [[nodiscard]] QList<QAction *> stripActions() const;
-    [[nodiscard]] QAction *wordCountAction() const { return m_wordCount; }
+    [[nodiscard]] QList<Quick::MenuNode> formatMenuItems() const;
+    [[nodiscard]] QList<Quick::MenuNode> insertMenuItems() const;
+    [[nodiscard]] QStringList stripIds() const;
+    [[nodiscard]] QString wordCountId() const;
 
     // Words, characters (with and without spaces) and paragraphs of the
     // whole document, or of the selection when there is one.
@@ -49,41 +45,47 @@ public:
         bool selectionOnly = false;
     };
     [[nodiscard]] Counts counts() const;
+    [[nodiscard]] QVariantMap countsMap() const;
+    [[nodiscard]] QStringList symbols() const;
+
+    // Dialog answers.
+    void applyHighlight(const QColor &color);
+    void insertSymbol(const QString &text);
+    void insertHyperlink(const QString &url, const QString &label);
 
 signals:
-    // Emitted whenever the counts can have changed, so the window can keep
-    // the status bar current without polling.
     void countsChanged();
+    void highlightRequested();
+    void symbolRequested();
+    // `selected` is the selection the link will label (empty: ask for one).
+    void hyperlinkRequested(const QString &selected);
+    void wordCountRequested(const QVariantMap &counts);
 
 private:
-    void createActions();
+    void createActions(Quick::ActionModel *model);
     void applyCharFormat(const QTextCharFormat &format);
     void applyLineSpacing(qreal percent);
     void stepFontSize(int delta);
-    void pickHighlight();
-    void insertSymbol();
-    void insertHyperlink();
     void insertHorizontalRule();
     void insertDateTime(bool time);
-    void showWordCount();
     void syncFromCursor();
 
-    PageTextView *m_view;
+    PageTextControl *m_control;
     WriteDocument *m_document;
-    QAction *m_highlight = nullptr;
-    QAction *m_superscript = nullptr;
-    QAction *m_subscript = nullptr;
-    QAction *m_growFont = nullptr;
-    QAction *m_shrinkFont = nullptr;
-    QAction *m_spacingSingle = nullptr;
-    QAction *m_spacingOneHalf = nullptr;
-    QAction *m_spacingDouble = nullptr;
-    QAction *m_insertDate = nullptr;
-    QAction *m_insertTime = nullptr;
-    QAction *m_insertSymbol = nullptr;
-    QAction *m_insertRule = nullptr;
-    QAction *m_insertHyperlink = nullptr;
-    QAction *m_wordCount = nullptr;
+    Quick::ActionEntry *m_highlight = nullptr;
+    Quick::ActionEntry *m_superscript = nullptr;
+    Quick::ActionEntry *m_subscript = nullptr;
+    Quick::ActionEntry *m_growFont = nullptr;
+    Quick::ActionEntry *m_shrinkFont = nullptr;
+    Quick::ActionEntry *m_spacingSingle = nullptr;
+    Quick::ActionEntry *m_spacingOneHalf = nullptr;
+    Quick::ActionEntry *m_spacingDouble = nullptr;
+    Quick::ActionEntry *m_insertDate = nullptr;
+    Quick::ActionEntry *m_insertTime = nullptr;
+    Quick::ActionEntry *m_insertSymbol = nullptr;
+    Quick::ActionEntry *m_insertRule = nullptr;
+    Quick::ActionEntry *m_insertHyperlink = nullptr;
+    Quick::ActionEntry *m_wordCount = nullptr;
     bool m_syncing = false;
 };
 

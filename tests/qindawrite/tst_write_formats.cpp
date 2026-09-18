@@ -8,7 +8,7 @@
 #include "qindawrite/src/spell_checker.h"
 #include "qindawrite/src/style_catalog.h"
 
-#include <QApplication>
+#include <QGuiApplication>
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QTextCursor>
@@ -138,7 +138,7 @@ void WriteFormatsTest::tablesAndListsInsert()
 int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     WriteFormatsTest test;
     return QTest::qExec(&test, argc, argv);
 }

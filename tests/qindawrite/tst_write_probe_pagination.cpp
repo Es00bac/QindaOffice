@@ -13,7 +13,7 @@
 //    screen page count.
 
 #include <QAbstractTextDocumentLayout>
-#include <QApplication>
+#include <QGuiApplication>
 #include <QFile>
 #include <QPainter>
 #include <QPdfWriter>
@@ -179,7 +179,7 @@ void WriteProbePagination::pdfMatchesScreenPagination()
 int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     WriteProbePagination test;
     return QTest::qExec(&test, argc, argv);
 }
