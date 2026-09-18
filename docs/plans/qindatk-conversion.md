@@ -124,20 +124,30 @@ Tests run with `QT_QPA_PLATFORM=offscreen` **and** `QT_QUICK_BACKEND=software`
 `QML_IMPORT_PATH` must include the toolkit's install (or build) `qml/` dir
 and the suite's own `${CMAKE_BINARY_DIR}/qml`.
 
-### 0.4 Prerequisite the user must do once
+### 0.4 Prerequisite — done (2026-09-18)
 
-QindaTK has no git repository on either machine. Before M27 starts:
+QindaTK is under git on both machines, with the desktop as the repo home.
+The bare repository on `qinda` is authoritative; both working copies are
+clones of it and track `origin/main`:
 
-```
-cd ~/work_SPaC3/QindaTK && git init && git add -A && git commit -m "QindaTK 0.1.0"   # on the desktop
-git init --bare ~/git/QindaTK.git && git remote add origin ~/git/QindaTK.git && git push -u origin main
-# on the laptop: rm -rf ~/work_space/QindaTK && git clone desktop:git/QindaTK.git ~/work_space/QindaTK
-```
+| role | path | `origin` |
+| --- | --- | --- |
+| hub (authoritative) | `desktop:~/git/QindaTK.git` | — |
+| desktop working copy | `~/work_SPaC3/QindaTK` | `/home/cabewse/git/QindaTK.git` |
+| laptop working copy | `~/work_space/QindaTK` | `ssh://desktop/home/cabewse/git/QindaTK.git` |
 
-Until then, toolkit changes made here are rsynced back with
-`rsync -a --exclude build ~/work_space/QindaTK/ desktop:~/work_SPaC3/QindaTK/`
-**after** confirming nobody edited the desktop copy in the meantime
-(`rsync -n` first). The ebuild's `EGIT_REPO_URI` needs the bare repo.
+Toolkit changes now move between the machines with `git push` / `git pull`,
+like every other project. **Do not rsync this tree.** The instruction that
+used to stand here — `rsync -a --exclude build ~/work_space/QindaTK/
+desktop:~/work_SPaC3/QindaTK/` — predates the repository and would overwrite
+a live clone, reintroducing exactly the drift git now prevents.
+
+`build/` and `install/` are gitignored, so each machine keeps its own. The
+desktop checkout must stay at `~/work_SPaC3/QindaTK`: QindaStudio's
+`CMakeLists.txt` sets `QINDATK_ROOT` to `$ENV{HOME}/work_SPaC3/QindaTK` and
+reads its build tree, and the suite resolves the toolkit through
+`<QindaTK>/install`. The ebuild's `EGIT_REPO_URI` points at the bare
+repository.
 
 ---
 
