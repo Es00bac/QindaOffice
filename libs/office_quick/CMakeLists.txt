@@ -28,13 +28,28 @@ foreach(dependency IN ITEMS
     endif()
 endforeach()
 
-get_filename_component(QINDAQT_TOKENS_QML_RPATH "${QINDAQT_TOKENS_QML_LIB}" DIRECTORY)
+get_filename_component(_qindaqt_tokens_dir "${QINDAQT_TOKENS_QML_LIB}" DIRECTORY)
+# AGENT-GUARD: CACHE, not a plain set(). The helper below is called from
+# apps/ and tests/, which are sibling directory scopes: a directory-scoped
+# variable reads as EMPTY there, so the installed binaries were linked with
+# an empty INSTALL_RPATH and could not find libqindaqt_tokens_qml.so at all
+# (they only ran from the build tree, where CMake's automatic build rpath
+# happens to cover it).
+set(QINDAQT_TOKENS_QML_RPATH "${_qindaqt_tokens_dir}" CACHE INTERNAL
+    "Directory of the QindaQt.Tokens backing library")
+# $ORIGIN-relative first, the way the desktop's own QML apps are linked
+# (qindaqt-welcome carries $ORIGIN/../lib64/qt6/qml/QindaQt/Tokens), so an
+# installed binary keeps working under a prefix; the absolute path follows
+# as the fallback for a build tree or a split prefix.
+file(RELATIVE_PATH _qindaqt_tokens_rel "${CMAKE_INSTALL_FULL_BINDIR}" "${_qindaqt_tokens_dir}")
+set(QINDAQT_TOKENS_QML_INSTALL_RPATH "$ORIGIN/${_qindaqt_tokens_rel};${_qindaqt_tokens_dir}"
+    CACHE INTERNAL "Install RPATH for executables over office_quick")
 # Every executable over office_quick (apps and tests) finds the Tokens
 # backing library at run time through this.
 function(qqo_desktop_runtime target)
     set_target_properties(${target} PROPERTIES
         BUILD_RPATH "${QINDAQT_TOKENS_QML_RPATH}"
-        INSTALL_RPATH "${QINDAQT_TOKENS_QML_RPATH}")
+        INSTALL_RPATH "${QINDAQT_TOKENS_QML_INSTALL_RPATH}")
 endfunction()
 
 qt_add_library(office_quick STATIC)

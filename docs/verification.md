@@ -265,6 +265,12 @@ skip with a message where `soffice` is unavailable.
       assistant panel and the Widgets proposal dialog gone with them.
 - [x] `AGENTS.md` rewritten for the QtQuick suite (rules 3, 4, 8 restated;
       the QML rules and the headless-first verification section added).
+- [x] The INSTALLED binaries run, not just the build tree: every executable
+      over `office_quick` carries an RPATH to the QindaQt.Tokens backing
+      library (`$ORIGIN`-relative first, as the desktop's own QML apps are
+      linked, then the absolute directory). `objdump -x /usr/bin/qindacalc |
+      grep RUNPATH` must name it, and `<prefix>/bin/<app> --version` must
+      answer instead of dying on a missing `libqindaqt_tokens_qml.so`.
 - [ ] Packaging (operator, needs root and a clean tree):
       `tools/make-dist.sh 0.1.0_p<date>-r5 /var/cache/distfiles`, then
       `ebuild qindaoffice-0.1.0_p<date>-r5.ebuild manifest` in the overlay
