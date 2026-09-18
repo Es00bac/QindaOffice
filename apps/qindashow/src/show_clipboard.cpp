@@ -2,7 +2,7 @@
 #include "show_clipboard.h"
 
 #include "shape_json.h"
-#include "slide_canvas.h"
+#include "slide_canvas_item.h"
 
 #include <QClipboard>
 #include <QGuiApplication>
@@ -20,13 +20,9 @@ const char *shapeClipboardMimeType()
     return kMime;
 }
 
-void copySelectedShape(SlideCanvas *canvas)
+void copySelectedShape(SlideCanvasItem *canvas)
 {
-    ShapeItem *item = canvas->selectedItem();
-    if (item == nullptr) {
-        return;
-    }
-    const ShowModel::Shape *shape = item->modelShape();
+    const ShowModel::Shape *shape = canvas->selectedShape();
     if (shape == nullptr) {
         return;
     }
@@ -39,16 +35,16 @@ void copySelectedShape(SlideCanvas *canvas)
     QGuiApplication::clipboard()->setMimeData(mime);
 }
 
-void cutSelectedShape(SlideCanvas *canvas)
+void cutSelectedShape(SlideCanvasItem *canvas)
 {
-    if (canvas->selectedItem() == nullptr) {
+    if (canvas->selectedShape() == nullptr) {
         return;
     }
     copySelectedShape(canvas);
     canvas->deleteSelected(); // existing shapeRemoved undo payload
 }
 
-bool pasteShapeAtClipboard(SlideCanvas *canvas)
+bool pasteShapeAtClipboard(SlideCanvasItem *canvas)
 {
     const QMimeData *mime = QGuiApplication::clipboard()->mimeData();
     if (mime == nullptr || !mime->hasFormat(QString::fromLatin1(kMime))) {

@@ -1,19 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Snapping, guides and grouping for the slide canvas.
+// Snapping, guides and grouping for the slide canvas item.
 //
 // Snapping is what makes a slide look deliberate: edges and centres line up
 // with the slide and with each other instead of nearly lining up. The rule
-// is deliberately simple and predictable — within kSnapPx of a candidate,
+// is deliberately simple and predictable — within kSnapPt of a candidate,
 // take the candidate exactly, and draw the guide that says why.
 //
 // Grouping is a shape field, not a scene construct: shapes sharing a
 // groupId select and move as one, and the group survives save/reload
 // because it travels in the model (fodp qq:group).
 
-#include "slide_canvas.h"
+#include "slide_canvas_item.h"
 
-#include <QGraphicsScene>
-#include <QPainter>
 #include <QUuid>
 
 namespace QindaOffice::Apps::Show {
@@ -22,9 +20,9 @@ namespace {
 
 // Slide points, not pixels: the threshold must mean the same thing at
 // every zoom, or snapping gets stickier the further you zoom in.
-constexpr qreal kSnapPx = 6.0;
+constexpr qreal kSnapPt = 6.0;
 
-// Replaces `value` with the nearest candidate within kSnapPx, recording
+// Replaces `value` with the nearest candidate within kSnapPt, recording
 // the guide line to draw. Returns the delta applied.
 qreal snapTo(qreal value, const QList<qreal> &candidates, qreal *guideAt)
 {
@@ -32,7 +30,7 @@ qreal snapTo(qreal value, const QList<qreal> &candidates, qreal *guideAt)
     bool found = false;
     for (const qreal candidate : candidates) {
         const qreal delta = candidate - value;
-        if (qAbs(delta) <= kSnapPx && (!found || qAbs(delta) < qAbs(best))) {
+        if (qAbs(delta) <= kSnapPt && (!found || qAbs(delta) < qAbs(best))) {
             best = delta;
             *guideAt = candidate;
             found = true;
@@ -43,26 +41,28 @@ qreal snapTo(qreal value, const QList<qreal> &candidates, qreal *guideAt)
 
 } // namespace
 
-void SlideCanvas::setSnapEnabled(bool enabled)
+void SlideCanvasItem::setSnapEnabled(bool enabled)
 {
+    if (m_snap == enabled) {
+        return;
+    }
     m_snap = enabled;
     if (!enabled) {
         clearGuides();
     }
+    emit snapChanged();
 }
 
-void SlideCanvas::clearGuides()
+void SlideCanvasItem::clearGuides()
 {
     if (m_guides.isEmpty()) {
         return;
     }
     m_guides.clear();
-    if (scene() != nullptr) {
-        scene()->update();
-    }
+    update();
 }
 
-QRectF SlideCanvas::snapRect(const QString &shapeId, const QRectF &proposed)
+QRectF SlideCanvasItem::snapRect(const QString &shapeId, const QRectF &proposed)
 {
     m_guides.clear();
     if (!m_snap || m_slide == nullptr) {
@@ -74,14 +74,13 @@ QRectF SlideCanvas::snapRect(const QString &shapeId, const QRectF &proposed)
     QList<qreal> xs{0.0, m_slideSize.width() / 2.0, m_slideSize.width()};
     QList<qreal> ys{0.0, m_slideSize.height() / 2.0, m_slideSize.height()};
     for (const ShowModel::Shape &other : m_slide->shapes) {
-        if (other.id == shapeId) {
-            continue;
+        if (other.id == shapeId || m_gestureStart.contains(other.id)) {
+            continue; // a shape moving with the drag is not a target
         }
         const QRectF bounds = other.rect.normalized();
         xs << bounds.left() << bounds.center().x() << bounds.right();
         ys << bounds.top() << bounds.center().y() << bounds.bottom();
     }
-
     qreal guideX = 0;
     qreal guideY = 0;
     bool haveX = false;
@@ -117,29 +116,12 @@ QRectF SlideCanvas::snapRect(const QString &shapeId, const QRectF &proposed)
     return proposed.translated(dx, dy);
 }
 
-void SlideCanvas::drawForeground(QPainter *painter, const QRectF &rect)
-{
-    QGraphicsView::drawForeground(painter, rect);
-    if (m_guides.isEmpty()) {
-        return;
-    }
-    painter->save();
-    QPen pen(QColor(0xe0, 0x4f, 0x9a));
-    pen.setCosmetic(true);
-    pen.setStyle(Qt::DashLine);
-    painter->setPen(pen);
-    for (const QLineF &guide : m_guides) {
-        painter->drawLine(guide);
-    }
-    painter->restore();
-}
-
-bool SlideCanvas::selectionIsGrouped() const
+bool SlideCanvasItem::selectionIsGrouped() const
 {
     if (m_slide == nullptr) {
         return false;
     }
-    for (const QString &id : selectedShapeIds()) {
+    for (const QString &id : m_selected) {
         const ShowModel::Shape *shape = m_slide->findShape(id);
         if (shape != nullptr && !shape->groupId.isEmpty()) {
             return true;
@@ -148,16 +130,15 @@ bool SlideCanvas::selectionIsGrouped() const
     return false;
 }
 
-void SlideCanvas::groupSelected()
+void SlideCanvasItem::groupSelected()
 {
-    const QStringList ids = selectedShapeIds();
-    if (m_slide == nullptr || ids.size() < 2) {
+    if (m_slide == nullptr || m_selected.size() < 2) {
         return;
     }
     emit compoundEditStarted();
     const QString group = QUuid::createUuid().toString(QUuid::WithoutBraces).left(12);
     for (ShowModel::Shape &shape : m_slide->shapes) {
-        if (ids.contains(shape.id)) {
+        if (m_selected.contains(shape.id)) {
             shape.groupId = group;
         }
     }
@@ -165,16 +146,15 @@ void SlideCanvas::groupSelected()
     emit compoundEditFinished();
 }
 
-void SlideCanvas::ungroupSelected()
+void SlideCanvasItem::ungroupSelected()
 {
-    const QStringList ids = selectedShapeIds();
-    if (m_slide == nullptr || ids.isEmpty()) {
+    if (m_slide == nullptr || m_selected.isEmpty()) {
         return;
     }
     // Ungrouping one member ungroups the whole group: leaving the others
     // bound together would be a group the user cannot see or reach.
     QSet<QString> groups;
-    for (const QString &id : ids) {
+    for (const QString &id : m_selected) {
         const ShowModel::Shape *shape = m_slide->findShape(id);
         if (shape != nullptr && !shape->groupId.isEmpty()) {
             groups.insert(shape->groupId);

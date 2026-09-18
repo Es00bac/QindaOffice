@@ -25,43 +25,43 @@ namespace ShowModel = QindaOffice::Show;
 
 #include <QString>
 
-class QWidget;
-
 namespace QindaOffice::Ai {
 class ModelCatalog;
 }
 
 namespace QindaOffice::Apps::Show {
 
-class ShowWindow;
+class ShowHost;
 
 // Panel seams over a deck: the outline (titles + shape texts + notes) is
 // the document context; replies either replace the current slide's first
 // text box or append parsed outline slides.
 class ShowContext final : public Ai::DocumentContextProvider {
 public:
-    explicit ShowContext(ShowWindow *window);
+    explicit ShowContext(ShowHost *host);
     Ai::DocumentContext context(bool withDocument) override;
 
 private:
-    ShowWindow *m_window;
+    ShowHost *m_host;
 };
 
 class ShowApplier final : public Ai::EditApplier {
 public:
-    explicit ShowApplier(ShowWindow *window);
+    explicit ShowApplier(ShowHost *host);
     void replaceSelection(const QString &text) override;
     void insertAtCursor(const QString &text) override;
 
 private:
-    ShowWindow *m_window;
+    ShowHost *m_host;
 };
 
 [[nodiscard]] QList<ShowModel::Slide> slidesFromOutline(const QString &outline,
                                                         const QSizeF &slideSize);
 
-// Runs the deck-generation prompt against the picked model and appends
-// the parsed slides on success (the window owns undo/dirty handling).
-void generateDeckFromOutline(ShowWindow *window, Ai::ModelCatalog *catalog, QWidget *dialogParent);
+// Runs the deck-generation prompt for `outline` (the window asked for it)
+// against the first configured model and appends the parsed slides on
+// success (the host owns undo/dirty handling). False when no provider is
+// configured.
+bool generateDeckFromOutline(ShowHost *host, Ai::ModelCatalog *catalog, const QString &outline);
 
 } // namespace QindaOffice::Apps::Show

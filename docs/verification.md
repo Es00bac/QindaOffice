@@ -239,6 +239,38 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M30 gates (QindaShow on QindaTK)
+
+- [x] `tests/qindashow`: `tst_qindashow` (fodp round trip, pptx through
+      LibreOffice when present, the canvas item mutating the model with
+      its undo payloads and topmost-first hit-testing, the host wiring
+      deck / notes / transition / undo and reopening a saved deck, the
+      controller revealing builds before slides and reporting the build
+      duration, outline parsing, deck PDF, the text bridge),
+      `tst_show_ui` (named strips and menus, styling undoable, the shape
+      clipboard, insert commands, edit commands following the selection,
+      find across titles / shapes / notes with case sensitivity, the
+      canvas painting the page from a window grab, align against the
+      slide, bring-to-front in one step, move slide, Replace sweeping the
+      deck in one step, a sorter thumbnail per slide, the player window
+      advancing through the shared controller and the editor landing on
+      the slide the show ended on, pristine host, structural fixtures at
+      1280 and 520), `tst_show_design` (masters paint and supply default
+      type only, a build animation changes what is drawn mid-reveal,
+      snapping pulls an edge to the slide centre and the toggle follows
+      the canvas, grouping survives the fodp round trip, a multi-shape
+      gesture is one undo step, masters round-trip through the dialog
+      seam, animation entries follow the selection), `tst_show_menu_export`
+      (validator accepts the ten menus; every command resolves; one AI
+      menu with the inline actions, deck generation and the seven
+      animation entries).
+- [x] `QQO_GRAB_DIR=<dir> tst_show_ui` saves 1280×800 and 520×700 PNGs;
+      reviewed before the commit (sorter thumbnail, page centred on the
+      canvas, both strips, notes panel, "Slide 1 of 1   Shapes: 1").
+- [ ] On the QindaQt desktop: the panel menu drives QindaShow end to end;
+      F5 opens the player on this screen and the presenter view on the
+      second one; Escape ends both.
+
 ### M29 gates (QindaWrite on QindaTK)
 
 - [x] `tests/qindawrite`: `tst_write_control` (the editing engine on its

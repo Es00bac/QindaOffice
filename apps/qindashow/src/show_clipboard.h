@@ -9,11 +9,11 @@
 
 namespace QindaOffice::Apps::Show {
 
-class SlideCanvas;
+class SlideCanvasItem;
 
-void copySelectedShape(SlideCanvas *canvas);
-void cutSelectedShape(SlideCanvas *canvas);
-bool pasteShapeAtClipboard(SlideCanvas *canvas);
+void copySelectedShape(SlideCanvasItem *canvas);
+void cutSelectedShape(SlideCanvasItem *canvas);
+bool pasteShapeAtClipboard(SlideCanvasItem *canvas);
 
 [[nodiscard]] const char *shapeClipboardMimeType();
 

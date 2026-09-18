@@ -1,36 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "show_design_actions.h"
 
+#include "menu_tree.h"
 #include "show_commands.h"
 #include "show_document.h"
-#include "show_master_dialog.h"
-#include "show_window.h"
-#include "slide_canvas.h"
-
+#include "show_host.h"
+#include "slide_canvas_item.h"
 #include "standard_actions.h"
 
-#include <QIcon>
-#include <QInputDialog>
-#include <QMenu>
 #include <QUndoStack>
+#include <QUuid>
 
 namespace QindaOffice::Apps::Show {
 
-namespace {
+using Quick::ActionEntry;
+using Quick::MenuNode;
 
-QAction *make(QObject *parent, const char *id, const QString &text,
-              const QKeySequence &shortcut = {}, const char *iconName = nullptr)
-{
-    auto *action = new QAction(text, parent);
-    action->setObjectName(QString::fromLatin1(id));
-    if (iconName != nullptr) {
-        action->setIcon(QIcon::fromTheme(QString::fromLatin1(iconName)));
-    }
-    if (!shortcut.isEmpty()) {
-        action->setShortcut(shortcut);
-    }
-    return action;
-}
+namespace {
 
 struct AnimationEntry {
     ShowModel::ShapeAnimation animation;
@@ -44,49 +30,73 @@ const AnimationEntry kAnimations[] = {
     {ShowModel::ShapeAnimation::FlyInLeft, "showAnimFlyLeft", QT_TR_NOOP("Fly in from &left")},
     {ShowModel::ShapeAnimation::FlyInRight, "showAnimFlyRight", QT_TR_NOOP("Fly in from &right")},
     {ShowModel::ShapeAnimation::FlyInTop, "showAnimFlyTop", QT_TR_NOOP("Fly in from &top")},
-    {ShowModel::ShapeAnimation::FlyInBottom, "showAnimFlyBottom",
-     QT_TR_NOOP("Fly in from &bottom")},
+    {ShowModel::ShapeAnimation::FlyInBottom, "showAnimFlyBottom", QT_TR_NOOP("Fly in from &bottom")},
     {ShowModel::ShapeAnimation::Zoom, "showAnimZoom", QT_TR_NOOP("&Zoom in")},
 };
 
+MenuNode a(const ActionEntry *entry)
+{
+    return MenuNode::action(entry->id());
+}
+
 } // namespace
 
-ShowDesignActions::ShowDesignActions(ShowWindow *window)
-    : QObject(window)
-    , m_window(window)
+ShowDesignActions::ShowDesignActions(ShowHost *host)
+    : QObject(host)
+    , m_host(host)
 {
     createActions();
-    connect(window->canvas(), &SlideCanvas::selectionChanged, this,
-            [this](bool) { syncFromSelection(); });
+    connect(host->canvas(), &SlideCanvasItem::selectionChanged, this, [this] { syncFromSelection(); });
+    // The toggle follows the canvas, not only the click that flipped it:
+    // snapping is also set by preferences and by the canvas itself.
+    connect(host->canvas(), &SlideCanvasItem::snapChanged, this, [this] {
+        m_syncing = true;
+        m_snap->setChecked(m_host->canvas()->snapEnabled());
+        m_syncing = false;
+    });
     syncFromSelection();
 }
 
 void ShowDesignActions::createActions()
 {
-    using namespace Shell::ActionId;
-    m_group = make(this, kShowGroup, tr("&Group"), QKeySequence(QStringLiteral("Ctrl+G")),
-                   "object-group");
-    m_ungroup = make(this, kShowUngroup, tr("&Ungroup"),
-                     QKeySequence(QStringLiteral("Ctrl+Shift+G")), "object-ungroup");
-    m_snap = make(this, kShowSnapToGuides, tr("&Snap to Guides"));
+    using namespace Quick::ActionId;
+    Quick::ActionModel *model = m_host->actions();
+    const auto make = [model](const char *id, const QString &text, const QKeySequence &shortcut = {},
+                              const char *icon = nullptr) {
+        return model->add(QString::fromLatin1(id), text, shortcut,
+                          icon != nullptr ? QString::fromLatin1(icon) : QString());
+    };
+    m_group = make(kShowGroup, tr("&Group"), QKeySequence(QStringLiteral("Ctrl+G")), "group");
+    m_ungroup = make(kShowUngroup, tr("&Ungroup"), QKeySequence(QStringLiteral("Ctrl+Shift+G")), "ungroup");
+    m_snap = make(kShowSnapToGuides, tr("&Snap to Guides"));
     m_snap->setCheckable(true);
     m_snap->setChecked(true);
-    m_masters = make(this, kShowMasters, tr("Slide &Masters…"));
-    m_applyMaster = make(this, kShowApplyMaster, tr("Apply Master to Slide…"));
+    m_masters = make(kShowMasters, tr("Slide &Masters…"));
+    m_applyMaster = make(kShowApplyMaster, tr("Apply Master to Slide…"));
 
-    connect(m_group, &QAction::triggered, m_window->canvas(), &SlideCanvas::groupSelected);
-    connect(m_ungroup, &QAction::triggered, m_window->canvas(), &SlideCanvas::ungroupSelected);
-    connect(m_snap, &QAction::triggered, this, [this](bool on) {
-        m_window->canvas()->setSnapEnabled(on);
+    SlideCanvasItem *canvas = m_host->canvas();
+    connect(m_group, &ActionEntry::triggered, canvas, &SlideCanvasItem::groupSelected);
+    connect(m_ungroup, &ActionEntry::triggered, canvas, &SlideCanvasItem::ungroupSelected);
+    connect(m_snap, &ActionEntry::toggled, this, [this](bool on) {
+        if (!m_syncing) {
+            m_host->canvas()->setSnapEnabled(on);
+        }
     });
-    connect(m_masters, &QAction::triggered, this, &ShowDesignActions::editMasters);
-    connect(m_applyMaster, &QAction::triggered, this, &ShowDesignActions::applyMasterToSlide);
-
+    connect(m_masters, &ActionEntry::triggered, this, &ShowDesignActions::mastersRequested);
+    connect(m_applyMaster, &ActionEntry::triggered, this, [this] {
+        // Without any master there is nothing to choose: open the editor.
+        if (m_host->showDocument()->presentation()->masters.isEmpty()) {
+            emit mastersRequested();
+        } else {
+            emit applyMasterRequested();
+        }
+    });
     for (const AnimationEntry &entry : kAnimations) {
-        QAction *action = make(this, entry.id, tr(entry.label));
+        ActionEntry *action = make(entry.id, tr(entry.label));
         action->setCheckable(true);
+        action->setRadioGroup(QStringLiteral("showAnimation"));
         const ShowModel::ShapeAnimation animation = entry.animation;
-        connect(action, &QAction::triggered, this, [this, animation] {
+        connect(action, &ActionEntry::triggered, this, [this, animation] {
             if (!m_syncing) {
                 applyAnimation(animation);
             }
@@ -97,8 +107,7 @@ void ShowDesignActions::createActions()
 
 void ShowDesignActions::asOneSlideEdit(const QString &text, const std::function<void()> &mutate)
 {
-    SlideCanvas *canvas = m_window->canvas();
-    ShowModel::Slide *slide = canvas->slide();
+    ShowModel::Slide *slide = m_host->canvas()->slide();
     if (slide == nullptr) {
         return;
     }
@@ -107,15 +116,14 @@ void ShowDesignActions::asOneSlideEdit(const QString &text, const std::function<
     if (*slide == before) {
         return;
     }
-    auto *command = new SlideStateCommand(m_window->showDocument()->presentation(), slide->id,
-                                          before, *slide);
+    auto *command = new SlideStateCommand(m_host->showDocument()->presentation(), slide->id, before, *slide);
     command->setText(text);
-    m_window->showDocument()->undoStack()->push(command);
+    m_host->showDocument()->undoStack()->push(command);
 }
 
 void ShowDesignActions::applyAnimation(ShowModel::ShapeAnimation animation)
 {
-    SlideCanvas *canvas = m_window->canvas();
+    SlideCanvasItem *canvas = m_host->canvas();
     ShowModel::Slide *slide = canvas->slide();
     const QStringList ids = canvas->selectedShapeIds();
     if (slide == nullptr || ids.isEmpty()) {
@@ -138,16 +146,48 @@ void ShowDesignActions::applyAnimation(ShowModel::ShapeAnimation animation)
     syncFromSelection();
 }
 
-void ShowDesignActions::editMasters()
+QVariantList ShowDesignActions::mastersAsVariant() const
 {
-    ShowModel::Presentation *deck = m_window->showDocument()->presentation();
-    ShowMasterDialog dialog(deck->masters, m_window);
-    if (dialog.exec() != QDialog::Accepted) {
-        return;
+    QVariantList list;
+    for (const ShowModel::SlideMaster &master : m_host->showDocument()->presentation()->masters) {
+        list.append(QVariantMap{{QStringLiteral("id"), master.id},
+                                {QStringLiteral("name"), master.name},
+                                {QStringLiteral("background"), master.background},
+                                {QStringLiteral("titleColor"), master.titleColor},
+                                {QStringLiteral("bodyColor"), master.bodyColor},
+                                {QStringLiteral("fontFamily"), master.fontFamily}});
     }
-    const QList<ShowModel::SlideMaster> before = deck->masters;
-    const QList<ShowModel::SlideMaster> after = dialog.masters();
-    if (before == after) {
+    return list;
+}
+
+QStringList ShowDesignActions::masterNames() const
+{
+    QStringList names;
+    for (const ShowModel::SlideMaster &master : m_host->showDocument()->presentation()->masters) {
+        names.append(master.name.isEmpty() ? master.id : master.name);
+    }
+    return names;
+}
+
+void ShowDesignActions::applyMasters(const QVariantList &masters)
+{
+    ShowModel::Presentation *deck = m_host->showDocument()->presentation();
+    QList<ShowModel::SlideMaster> after;
+    for (const QVariant &value : masters) {
+        const QVariantMap map = value.toMap();
+        ShowModel::SlideMaster master;
+        master.id = map.value(QStringLiteral("id")).toString();
+        if (master.id.isEmpty()) {
+            master.id = QUuid::createUuid().toString(QUuid::WithoutBraces).left(12);
+        }
+        master.name = map.value(QStringLiteral("name")).toString();
+        master.background = map.value(QStringLiteral("background")).value<QColor>();
+        master.titleColor = map.value(QStringLiteral("titleColor")).value<QColor>();
+        master.bodyColor = map.value(QStringLiteral("bodyColor")).value<QColor>();
+        master.fontFamily = map.value(QStringLiteral("fontFamily")).toString();
+        after.append(master);
+    }
+    if (deck->masters == after) {
         return;
     }
     // Masters are deck state, not slide state, so this is a whole-deck
@@ -156,43 +196,26 @@ void ShowDesignActions::editMasters()
     deck->masters = after;
     auto *command = new SlideListCommand(deck, slidesBefore, deck->slides);
     command->setText(tr("Slide masters"));
-    m_window->showDocument()->undoStack()->push(command);
-    m_window->showDocument()->setDirty(true);
-    m_window->showDocument()->notifyContentChanged();
-    m_window->selectSlideRow(m_window->currentSlideRow());
+    m_host->showDocument()->undoStack()->push(command);
+    m_host->showDocument()->setDirty(true);
+    m_host->showDocument()->notifyContentChanged();
+    m_host->selectSlideRow(m_host->currentSlideRow());
 }
 
-void ShowDesignActions::applyMasterToSlide()
+void ShowDesignActions::applyMasterToSlide(int masterIndex)
 {
-    ShowModel::Presentation *deck = m_window->showDocument()->presentation();
-    if (deck->masters.isEmpty()) {
-        editMasters();
-        if (deck->masters.isEmpty()) {
-            return;
-        }
-    }
-    QStringList names{tr("None (plain white)")};
-    for (const ShowModel::SlideMaster &master : deck->masters) {
-        names.append(master.name.isEmpty() ? master.id : master.name);
-    }
-    bool ok = false;
-    const QString chosen = QInputDialog::getItem(m_window, tr("Apply Master"), tr("Master:"),
-                                                 names, 0, false, &ok);
-    if (!ok) {
-        return;
-    }
-    const int index = names.indexOf(chosen) - 1;
-    const QString masterId = index >= 0 ? deck->masters.at(index).id : QString();
-    asOneSlideEdit(tr("Slide master"), [this, masterId] {
-        m_window->canvas()->slide()->master = masterId;
-    });
-    m_window->selectSlideRow(m_window->currentSlideRow());
+    const ShowModel::Presentation *deck = m_host->showDocument()->presentation();
+    const QString masterId = masterIndex >= 0 && masterIndex < deck->masters.size()
+        ? deck->masters.at(masterIndex).id
+        : QString();
+    asOneSlideEdit(tr("Slide master"), [this, masterId] { m_host->canvas()->slide()->master = masterId; });
+    m_host->selectSlideRow(m_host->currentSlideRow());
 }
 
 void ShowDesignActions::syncFromSelection()
 {
     m_syncing = true;
-    SlideCanvas *canvas = m_window->canvas();
+    SlideCanvasItem *canvas = m_host->canvas();
     const QStringList ids = canvas->slide() != nullptr ? canvas->selectedShapeIds() : QStringList();
     m_group->setEnabled(ids.size() >= 2);
     m_ungroup->setEnabled(canvas->selectionIsGrouped());
@@ -221,39 +244,34 @@ void ShowDesignActions::syncFromSelection()
     m_syncing = false;
 }
 
-void ShowDesignActions::populateShapeMenu(QMenu *menu)
+QList<MenuNode> ShowDesignActions::shapeMenuItems() const
 {
-    menu->addSeparator();
-    menu->addAction(m_group);
-    menu->addAction(m_ungroup);
-    auto *animations = menu->addMenu(tr("A&nimation"));
-    animations->setObjectName(QStringLiteral("showAnimationMenu"));
-    for (QAction *action : m_animations) {
-        animations->addAction(action);
+    QList<MenuNode> animations;
+    for (const ActionEntry *entry : m_animations) {
+        animations.append(a(entry));
     }
+    return {MenuNode::separator(), a(m_group), a(m_ungroup),
+            MenuNode::submenu(QStringLiteral("showAnimationMenu"), tr("A&nimation"), animations)};
 }
 
-void ShowDesignActions::populateSlideMenu(QMenu *menu)
+QList<MenuNode> ShowDesignActions::slideMenuItems() const
 {
-    menu->addAction(m_applyMaster);
-    menu->addAction(m_masters);
+    return {a(m_applyMaster), a(m_masters)};
 }
 
-void ShowDesignActions::populateViewMenu(QMenu *menu)
+QList<MenuNode> ShowDesignActions::viewMenuItems() const
 {
-    menu->addAction(m_snap);
+    return {a(m_snap)};
 }
 
-void ShowDesignActions::populateContextMenu(QMenu *menu)
+QList<MenuNode> ShowDesignActions::contextMenuItems() const
 {
-    menu->addSeparator();
-    menu->addAction(m_group);
-    menu->addAction(m_ungroup);
+    return {MenuNode::separator(), a(m_group), a(m_ungroup)};
 }
 
-QList<QAction *> ShowDesignActions::stripActions() const
+QStringList ShowDesignActions::stripIds() const
 {
-    return {m_group, m_ungroup};
+    return {m_group->id(), m_ungroup->id()};
 }
 
 } // namespace QindaOffice::Apps::Show

@@ -4,10 +4,10 @@
 #include "chat_types.h"
 #include "model_catalog.h"
 #include "secret_store.h"
-#include "show_window.h"
+#include "show_document.h"
+#include "show_host.h"
 
-#include <QInputDialog>
-#include <QMessageBox>
+#include <QPointer>
 #include <QUuid>
 
 namespace QindaOffice::Apps::Show {
@@ -47,16 +47,16 @@ QString generationPrompt(const QString &outline)
 
 } // namespace
 
-ShowContext::ShowContext(ShowWindow *window)
-    : m_window(window)
+ShowContext::ShowContext(ShowHost *host)
+    : m_host(host)
 {
 }
 
 Ai::DocumentContext ShowContext::context(bool withDocument)
 {
     Ai::DocumentContext out;
-    const ShowModel::Presentation *deck = m_window->showDocument()->presentation();
-    const int current = m_window->currentSlideRow();
+    const ShowModel::Presentation *deck = m_host->showDocument()->presentation();
+    const int current = m_host->currentSlideRow();
     if (current >= 0 && current < deck->slides.size()) {
         out.selection = deck->slides.at(current).title;
     }
@@ -66,8 +66,8 @@ Ai::DocumentContext ShowContext::context(bool withDocument)
     return out;
 }
 
-ShowApplier::ShowApplier(ShowWindow *window)
-    : m_window(window)
+ShowApplier::ShowApplier(ShowHost *host)
+    : m_host(host)
 {
 }
 
@@ -75,14 +75,14 @@ void ShowApplier::replaceSelection(const QString &text)
 {
     // Replace the current slide's first text box content with the reply
     // (Rewrite slide / speaker-notes flows arrive here).
-    m_window->replaceCurrentSlideText(text);
+    m_host->replaceCurrentSlideText(text);
 }
 
 void ShowApplier::insertAtCursor(const QString &text)
 {
     // Deck outlines arrive as insert requests from the panel.
-    const ShowModel::Presentation *deck = m_window->showDocument()->presentation();
-    m_window->appendSlides(slidesFromOutline(text, deck->slideSize));
+    const ShowModel::Presentation *deck = m_host->showDocument()->presentation();
+    m_host->appendSlides(slidesFromOutline(text, deck->slideSize));
 }
 
 QList<ShowModel::Slide> slidesFromOutline(const QString &outline, const QSizeF &slideSize)
@@ -126,57 +126,41 @@ QList<ShowModel::Slide> slidesFromOutline(const QString &outline, const QSizeF &
     return slides;
 }
 
-void generateDeckFromOutline(ShowWindow *window, Ai::ModelCatalog *catalog, QWidget *dialogParent)
+bool generateDeckFromOutline(ShowHost *host, Ai::ModelCatalog *catalog, const QString &outline)
 {
-    const ShowModel::Presentation *deck = window->showDocument()->presentation();
-    const QString outline = QInputDialog::getText(
-        dialogParent, QObject::tr("Generate deck"), QObject::tr("Topic or outline:"));
-    if (outline.isEmpty()) {
-        return;
+    if (outline.trimmed().isEmpty()) {
+        return false;
     }
     Ai::ChatRequest request;
     request.maxTokens = 4096;
     request.temperature = 0.4;
     request.messages.append({QStringLiteral("user"), generationPrompt(outline), {}});
-
     const QStringList ids = catalog->modelIds();
     if (ids.isEmpty()) {
-        QMessageBox::information(dialogParent, QObject::tr("Generate deck"),
-                                 QObject::tr("No AI providers are configured."));
-        return;
+        return false;
     }
     const QString modelId = ids.first();
     // AGENT-GUARD: see InlineActionFlow — modelIds() hands out "<id>/<model>",
     // so comparing against candidate.id alone left secretKey empty and the
     // generation request went out unauthenticated.
-    const Ai::ProviderConfig config =
-        catalog->configFor(modelId).value_or(Ai::ProviderConfig{});
+    const Ai::ProviderConfig config = catalog->configFor(modelId).value_or(Ai::ProviderConfig{});
     auto *store = new Ai::SecretStore(catalog);
-    store->retrieve(config.secretKey,
-                    [window, catalog, request, modelId, dialogParent](const QString &secret) {
-                            Ai::ChatProvider *provider = catalog->createProvider(modelId, secret, catalog);
-                        if (provider == nullptr) {
-                            return;
-                        }
-                        auto *state = new QString;
-                        Ai::ChatRun *run = provider->start(request);
-                        QObject::connect(run, &Ai::ChatRun::textDelta, catalog,
-                                         [state](const QString &delta) { *state += delta; });
-                        QObject::connect(run, &Ai::ChatRun::failed, catalog,
-                                         [state](const Ai::ChatError &) { delete state; });
-                        QObject::connect(run, &Ai::ChatRun::finished, catalog,
-                                         [window, state](const Ai::ChatResult &result) {
-                                             const QString deckText = *state;
-                                             delete state;
-                                             if (result.text.isEmpty()) {
-                                                 return; // generation is best-effort
-                                             }
-                                             const ShowModel::Presentation *deck =
-                                                 window->showDocument()->presentation();
-                                             window->appendSlides(
-                                                 slidesFromOutline(result.text, deck->slideSize));
-                                         });
-                    });
+    QPointer<ShowHost> guard(host);
+    store->retrieve(config.secretKey, [guard, catalog, request, modelId](const QString &secret) {
+        Ai::ChatProvider *provider = catalog->createProvider(modelId, secret, catalog);
+        if (provider == nullptr) {
+            return;
+        }
+        Ai::ChatRun *run = provider->start(request);
+        QObject::connect(run, &Ai::ChatRun::finished, catalog, [guard](const Ai::ChatResult &result) {
+            if (guard == nullptr || result.text.isEmpty()) {
+                return; // generation is best-effort
+            }
+            const ShowModel::Presentation *deck = guard->showDocument()->presentation();
+            guard->appendSlides(slidesFromOutline(result.text, deck->slideSize));
+        });
+    });
+    return true;
 }
 
 } // namespace QindaOffice::Apps::Show

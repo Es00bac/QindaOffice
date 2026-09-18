@@ -5,6 +5,55 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-030: QindaShow on QtQuick, one renderer from canvas to projector
+
+**Date:** 2026-09-17 · **Status:** accepted (M30) · **Plan:**
+`docs/plans/qindatk-conversion.md` §5.3
+
+**Decision.** QindaShow is the fourth app on `office_quick` (D-027).
+`SlideCanvasItem` is a `QQuickPaintedItem` the size of the slide, in
+slide points, painting the page and every shape through `show_model`'s
+`renderShape` — the same call the thumbnails, the player, the presenter
+and the PDF make, so the editor cannot drift from the projector. The
+`Tk.Viewport` around it (`fitMode: "page"`) is the only zoom.
+
+The `QGraphicsScene` and its item-per-shape are gone, and with them a
+whole class of defect: selection is now a `QSet` of shape ids, so there
+is no item list to walk while items are being destroyed (the crash the
+Widgets canvas guarded against three separate times), and no item can
+cache a `Shape *` into a list that reallocates. Hit-testing is a
+topmost-first walk of the model, gestures (move, corner-grip resize,
+marquee) are the item's own, and snapping, grouping and z-order stay
+geometry over `show_model`.
+
+Two sibling items keep the rest honest: `SlideThumbItem` paints slide
+*n* for the sorter and repaints on the host's `deckRevision`;
+`SlideFrameItem` paints a controller's slide letterboxed on black at a
+build step and progress. The player is a QML `Window` with two stacked
+frames — the frozen outgoing one under the live incoming one — and the
+transition (cut / fade / slide / zoom) is a `NumberAnimation` over 350 ms
+`OutCubic`; a build step animates `buildProgress` for the arriving shapes
+instead of blending whole frames; both are skipped under
+`accessibility.reducedMotion`. Pen and laser annotations are a `Canvas`
+over the frames, still ephemeral and per slide. The presenter view is a
+second `Window` on another screen over the same `PresentationController`.
+
+The controllers keep their logic and lose their widgets: `ShowToolbox`,
+`ShowArrangeActions` and `ShowDesignActions` own `ActionEntry`s, and
+their dialogs are request signals the window answers (`MasterDialog`,
+`ApplyMasterDialog`, the replace prompt, the outline prompt, the
+toolkit's colour dialog, `Ai.ProposalDialog`). Masters travel to and
+from the QML editor as one `QVariantList`, applied in one undo step.
+
+**Two defects the port found.** `selectAllShapes()` built a `QSet` from
+`begin()` and `end()` of two *separate* temporary lists — undefined
+behaviour that reached `std::bad_alloc` under the new test; and the
+Snap to Guides check mark only followed the click that flipped it, not
+the canvas, so preferences or code changing snapping left the menu lying.
+**Known limitation:** the sorter's drag reorder moves one slide at a
+time (the drop row comes from the uniform card height); there is no
+multi-slide drag.
+
 ## D-029: QindaWrite on QtQuick, with its own editing control
 
 **Date:** 2026-09-17 · **Status:** accepted (M29) · **Plan:**

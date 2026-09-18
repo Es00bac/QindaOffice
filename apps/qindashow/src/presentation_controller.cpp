@@ -21,6 +21,31 @@ int PresentationController::buildCap(int slideIndex) const
     return highest;
 }
 
+QString PresentationController::notes() const
+{
+    return m_slide >= 0 && m_slide < m_deck->slides.size() ? m_deck->slides.at(m_slide).notes : QString();
+}
+
+QString PresentationController::transition() const
+{
+    return m_slide >= 0 && m_slide < m_deck->slides.size() ? m_deck->slides.at(m_slide).transition
+                                                            : QStringLiteral("cut");
+}
+
+int PresentationController::buildDurationMs() const
+{
+    if (m_slide < 0 || m_slide >= m_deck->slides.size()) {
+        return 0;
+    }
+    int longest = 0;
+    for (const ShowModel::Shape &shape : m_deck->slides.at(m_slide).shapes) {
+        if (shape.buildStep == m_build && shape.animation != ShowModel::ShapeAnimation::Appear) {
+            longest = qMax(longest, shape.animationMs);
+        }
+    }
+    return longest;
+}
+
 bool PresentationController::atEnd() const
 {
     return m_slide >= m_deck->slides.size() - 1 && m_build >= buildCap(m_slide);

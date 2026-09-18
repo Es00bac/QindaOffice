@@ -8,11 +8,10 @@
 // candidate, grouping really travels through the native format, and a
 // multi-shape gesture is one undo step.
 
-#include "src/show_commands.h"
-#include "src/show_design_actions.h"
-#include "src/show_document.h"
-#include "src/show_window.h"
-#include "src/slide_canvas.h"
+#include "show_test_support.h"
+
+#include "qindashow/src/show_commands.h"
+#include "qindashow/src/show_design_actions.h"
 
 #include "fodp_reader.h"
 #include "fodp_writer.h"
@@ -20,17 +19,13 @@
 #include "slide_renderer.h"
 #include "standard_actions.h"
 
-#include <QApplication>
 #include <QImage>
 #include <QPainter>
 #include <QUndoStack>
-#include <QtTest>
 
-namespace ShowApp = QindaOffice::Apps::Show;
-using ShowApp::ShowWindow;
-using ShowApp::SlideCanvas;
+using namespace ShowTest;
 using namespace QindaOffice::Show;
-namespace ActionId = ::QindaOffice::Shell::ActionId;
+namespace ActionId = QindaOffice::Quick::ActionId;
 
 namespace {
 
@@ -56,6 +51,11 @@ QColor pixelAt(const Slide &slide, const QSizeF &size, const SlideMaster *master
     return QColor(image.pixel(x, y));
 }
 
+QString sid(const char *id)
+{
+    return QString::fromLatin1(id);
+}
+
 } // namespace
 
 class ShowDesignTest : public QObject {
@@ -66,7 +66,9 @@ private slots:
     void buildAnimationChangesWhatIsDrawn();
     void snapPullsAnEdgeToTheSlideCentre();
     void groupingSelectsAndTravelsThroughFodp();
-    void multiShapeDragIsOneUndoStep();
+    void multiShapeGestureIsOneUndoStep();
+    void mastersRoundTripThroughTheDialogSeam();
+    void animationEntriesFollowTheSelection();
 };
 
 void ShowDesignTest::masterPaintsTheBackground()
@@ -81,10 +83,8 @@ void ShowDesignTest::masterPaintsTheBackground()
 
     QCOMPARE(deck.masterFor(slide), &deck.masters.first());
     // Without a master a slide is white paper; with one it is the master's.
-    QCOMPARE(pixelAt(slide, deck.slideSize, nullptr, 5, 5).name(),
-             QColor(Qt::white).name());
-    QCOMPARE(pixelAt(slide, deck.slideSize, deck.masterFor(slide), 5, 5).name(),
-             master.background.name());
+    QCOMPARE(pixelAt(slide, deck.slideSize, nullptr, 5, 5).name(), QColor(Qt::white).name());
+    QCOMPARE(pixelAt(slide, deck.slideSize, deck.masterFor(slide), 5, 5).name(), master.background.name());
 }
 
 void ShowDesignTest::masterSuppliesDefaultTypeOnly()
@@ -117,15 +117,13 @@ void ShowDesignTest::buildAnimationChangesWhatIsDrawn()
 {
     Presentation deck;
     Slide &slide = deck.addSlide(QStringLiteral("One"));
-    Shape box = makeBox(QStringLiteral("s"), QRectF(0, 0, deck.slideSize.width(),
-                                                    deck.slideSize.height()));
+    Shape box = makeBox(QStringLiteral("s"), QRectF(0, 0, deck.slideSize.width(), deck.slideSize.height()));
     box.buildStep = 1;
     box.animation = ShapeAnimation::Fade;
     slide.shapes.append(box);
 
     // Before its step the shape is not drawn at all.
-    QCOMPARE(pixelAt(slide, deck.slideSize, nullptr, 100, 60, 0).name(),
-             QColor(Qt::white).name());
+    QCOMPARE(pixelAt(slide, deck.slideSize, nullptr, 100, 60, 0).name(), QColor(Qt::white).name());
     // At its step, half-faded is neither the background nor the final fill.
     const QColor half = pixelAt(slide, deck.slideSize, nullptr, 100, 60, 1, 0.5);
     const QColor done = pixelAt(slide, deck.slideSize, nullptr, 100, 60, 1, 1.0);
@@ -136,39 +134,40 @@ void ShowDesignTest::buildAnimationChangesWhatIsDrawn()
 
 void ShowDesignTest::snapPullsAnEdgeToTheSlideCentre()
 {
-    ShowWindow window;
-    window.resize(900, 600);
-    window.show();
-    SlideCanvas *canvas = window.canvas();
-    ShowApp::ShapeItem *item =
-        canvas->addShape(ShapeKind::Rectangle, QRectF(10, 10, 100, 50));
-    QVERIFY(item != nullptr);
+    Scene scene(QSize(900, 600));
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    SlideCanvasItem *canvas = scene.canvas;
+    const QString id = canvas->addShape(ShapeKind::Rectangle, QRectF(10, 10, 100, 50));
+    QVERIFY(!id.isEmpty());
     const qreal centre = canvas->slideSize().width() / 2.0;
 
     // Three points shy of the slide's vertical centre: inside the threshold.
     const QRectF proposed(centre - 3, 200, 100, 50);
-    const QRectF snapped = canvas->snapRect(item->shapeId(), proposed);
-    QCOMPARE(qRound(snapped.left()), qRound(centre));
+    QCOMPARE(qRound(canvas->snapRect(id, proposed).left()), qRound(centre));
 
     // Far away: left exactly where it was.
     const QRectF far(centre - 60, 200, 100, 50);
-    QCOMPARE(qRound(canvas->snapRect(item->shapeId(), far).left()), qRound(centre - 60));
+    QCOMPARE(qRound(canvas->snapRect(id, far).left()), qRound(centre - 60));
 
     canvas->setSnapEnabled(false);
-    QCOMPARE(qRound(canvas->snapRect(item->shapeId(), proposed).left()), qRound(centre - 3));
+    QCOMPARE(qRound(canvas->snapRect(id, proposed).left()), qRound(centre - 3));
+    // The View menu's toggle is the same state.
+    QVERIFY(!scene.host.action(sid(ActionId::kShowSnapToGuides))->isChecked());
+    scene.host.action(sid(ActionId::kShowSnapToGuides))->setChecked(true);
+    QVERIFY(canvas->snapEnabled());
 }
 
 void ShowDesignTest::groupingSelectsAndTravelsThroughFodp()
 {
-    ShowWindow window;
-    window.show();
-    SlideCanvas *canvas = window.canvas();
-    const QString a = canvas->addShape(ShapeKind::Rectangle, QRectF(0, 0, 40, 40))->shapeId();
-    const QString b = canvas->addShape(ShapeKind::Ellipse, QRectF(60, 0, 40, 40))->shapeId();
-    canvas->itemFor(a)->setSelected(true);
-    canvas->itemFor(b)->setSelected(true);
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    SlideCanvasItem *canvas = scene.canvas;
+    const QString a = canvas->addShape(ShapeKind::Rectangle, QRectF(0, 0, 40, 40));
+    const QString b = canvas->addShape(ShapeKind::Ellipse, QRectF(60, 0, 40, 40));
+    canvas->setSelected(a, true);
+    canvas->setSelected(b, true);
 
-    window.action(QString::fromLatin1(ActionId::kShowGroup))->trigger();
+    QVERIFY(scene.host.actions()->trigger(sid(ActionId::kShowGroup)));
 
     const Shape *first = canvas->slide()->findShape(a);
     QVERIFY(first != nullptr);
@@ -177,16 +176,15 @@ void ShowDesignTest::groupingSelectsAndTravelsThroughFodp()
     // An empty group id matches nothing: an ungrouped shape is not "in the
     // group of all ungrouped shapes".
     QVERIFY(canvas->slide()->shapeIdsInGroup(QString()).isEmpty());
+    QVERIFY(canvas->selectionIsGrouped());
 
     // The group must survive the native format, or reopening scatters it.
     QString error;
-    const QByteArray fodp = writeFodp(*window.showDocument()->presentation(), &error);
+    const QByteArray fodp = writeFodp(*scene.doc->presentation(), &error);
     QVERIFY2(!fodp.isEmpty(), qPrintable(error));
     const Presentation back = readFodp(fodp, &error);
     QVERIFY2(error.isEmpty(), qPrintable(error));
     QCOMPARE(back.slides.size(), 1);
-    // The pristine deck carries a title placeholder too, so look the two
-    // grouped shapes up by id rather than by position.
     QString groupA;
     QString groupB;
     for (const Shape &shape : back.slides.first().shapes) {
@@ -199,20 +197,20 @@ void ShowDesignTest::groupingSelectsAndTravelsThroughFodp()
     QVERIFY2(!groupA.isEmpty(), "the group id did not survive the fodp round trip");
     QCOMPARE(groupA, groupB);
 
-    window.action(QString::fromLatin1(ActionId::kShowUngroup))->trigger();
+    QVERIFY(scene.host.actions()->trigger(sid(ActionId::kShowUngroup)));
     QVERIFY(canvas->slide()->findShape(a)->groupId.isEmpty());
 }
 
-void ShowDesignTest::multiShapeDragIsOneUndoStep()
+void ShowDesignTest::multiShapeGestureIsOneUndoStep()
 {
-    ShowWindow window;
-    window.show();
-    SlideCanvas *canvas = window.canvas();
-    const QString a = canvas->addShape(ShapeKind::Rectangle, QRectF(0, 0, 40, 40))->shapeId();
-    const QString b = canvas->addShape(ShapeKind::Ellipse, QRectF(60, 0, 40, 40))->shapeId();
-    canvas->itemFor(a)->setSelected(true);
-    canvas->itemFor(b)->setSelected(true);
-    const int before = window.showDocument()->undoStack()->count();
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    SlideCanvasItem *canvas = scene.canvas;
+    const QString a = canvas->addShape(ShapeKind::Rectangle, QRectF(0, 0, 40, 40));
+    const QString b = canvas->addShape(ShapeKind::Ellipse, QRectF(60, 0, 40, 40));
+    canvas->setSelected(a, true);
+    canvas->setSelected(b, true);
+    const int before = scene.doc->undoStack()->count();
 
     // The bracket a multi-shape drag emits: everything between becomes one
     // command instead of one per shape.
@@ -223,19 +221,65 @@ void ShowDesignTest::multiShapeDragIsOneUndoStep()
     canvas->setShapeRects(moved);
     emit canvas->compoundEditFinished();
 
-    QCOMPARE(window.showDocument()->undoStack()->count(), before + 1);
-    window.showDocument()->undoStack()->undo();
+    QCOMPARE(scene.doc->undoStack()->count(), before + 1);
+    scene.doc->undoStack()->undo();
     QCOMPARE(qRound(canvas->slide()->findShape(a)->rect.left()), 0);
     QCOMPARE(qRound(canvas->slide()->findShape(b)->rect.left()), 60);
 }
 
-int main(int argc, char *argv[])
+void ShowDesignTest::mastersRoundTripThroughTheDialogSeam()
 {
-    qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
-    QApplication::setDesktopFileName(QStringLiteral("org.qindaqt.QindaShow"));
-    ShowDesignTest test;
-    return QTest::qExec(&test, argc, argv);
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    QVERIFY(scene.host.masters().isEmpty());
+    // The QML editor hands the whole list back; one undo step for the deck.
+    QVariantList masters;
+    masters.append(QVariantMap{{QStringLiteral("id"), QString()},
+                               {QStringLiteral("name"), QStringLiteral("Dusk")},
+                               {QStringLiteral("background"), QColor(20, 40, 80)},
+                               {QStringLiteral("titleColor"), QColor(Qt::white)},
+                               {QStringLiteral("bodyColor"), QColor(220, 220, 220)},
+                               {QStringLiteral("fontFamily"), QStringLiteral("Courier")}});
+    const int before = scene.doc->undoStack()->count();
+    scene.host.applyMasters(masters);
+    QCOMPARE(scene.doc->presentation()->masters.size(), 1);
+    QVERIFY(!scene.doc->presentation()->masters.first().id.isEmpty()); // generated
+    QCOMPARE(scene.host.masterNames(), QStringList{QStringLiteral("Dusk")});
+    QCOMPARE(scene.doc->undoStack()->count(), before + 1);
+
+    // Applying it to the slide is a slide edit, and the canvas repaints with it.
+    scene.host.applyMasterToSlide(0);
+    QCOMPARE(scene.canvas->slide()->master, scene.doc->presentation()->masters.first().id);
+    QVERIFY(scene.canvas->master() != nullptr);
+    QCOMPARE(scene.canvas->master()->background.name(), QColor(20, 40, 80).name());
+    scene.doc->undoStack()->undo();
+    QVERIFY(scene.canvas->slide()->master.isEmpty());
+
+    // "None" puts the slide back on plain white.
+    scene.host.applyMasterToSlide(0);
+    scene.host.applyMasterToSlide(-1);
+    QVERIFY(scene.canvas->slide()->master.isEmpty());
 }
+
+void ShowDesignTest::animationEntriesFollowTheSelection()
+{
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    SlideCanvasItem *canvas = scene.canvas;
+    const QString id = canvas->addShape(ShapeKind::Rectangle, QRectF(0, 0, 40, 40));
+    QVERIFY(scene.host.actions()->trigger(QStringLiteral("showAnimFade")));
+    const Shape *shape = canvas->slide()->findShape(id);
+    QCOMPARE(shape->animation, ShapeAnimation::Fade);
+    // An animation only plays when the shape ARRIVES, so a shape that is on
+    // the slide from the start gets a build step too.
+    QCOMPARE(shape->buildStep, 1);
+    QVERIFY(scene.host.action(QStringLiteral("showAnimFade"))->isChecked());
+    QVERIFY(!scene.host.action(QStringLiteral("showAnimAppear"))->isChecked());
+    // Nothing selected: the entries are inert.
+    canvas->clearSelection();
+    QVERIFY(!scene.host.action(QStringLiteral("showAnimFade"))->isEnabled());
+}
+
+SHOW_TEST_MAIN(ShowDesignTest)
 
 #include "tst_show_design.moc"

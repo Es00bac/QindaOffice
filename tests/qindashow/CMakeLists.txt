@@ -1,103 +1,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-add_executable(tst_qindashow tst_qindashow.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/pdf_export.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/presentation_controller.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/presenter_window.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_ai.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_arrange.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_arrange_menus.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_clipboard.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_design_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_master_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_commands.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_document.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_find_bar.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_toolbox.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_window.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_window_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_window_ui.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas_input.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas_order.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas_snap.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_player.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/text_bridge.cpp
-)
-target_link_libraries(tst_qindashow PRIVATE office_shell office_ai show_model Qt6::Test)
-target_include_directories(tst_qindashow PRIVATE ${PROJECT_SOURCE_DIR}/apps/qindashow)
-target_compile_definitions(tst_qindashow PRIVATE
-    QQO_DESKTOP_ID="org.qindaqt.QindaShow"
-    QT_NO_CAST_FROM_ASCII
-)
-qqo_set_strict_warnings(tst_qindashow)
-add_test(NAME tst_qindashow COMMAND tst_qindashow)
-
-add_executable(tst_show_ui tst_show_ui.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/pdf_export.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/presentation_controller.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/presenter_window.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_ai.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_arrange.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_arrange_menus.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_clipboard.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_design_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_master_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_commands.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_document.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_find_bar.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_toolbox.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_window.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_window_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_window_ui.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas_input.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas_order.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas_snap.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_player.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/text_bridge.cpp
-)
-target_link_libraries(tst_show_ui PRIVATE office_shell office_ai show_model Qt6::Test)
-target_include_directories(tst_show_ui PRIVATE ${PROJECT_SOURCE_DIR}/apps/qindashow)
-target_compile_definitions(tst_show_ui PRIVATE
-    QQO_DESKTOP_ID="org.qindaqt.QindaShow"
-    QT_NO_CAST_FROM_ASCII
-)
-qqo_set_strict_warnings(tst_show_ui)
-add_test(NAME tst_show_ui COMMAND tst_show_ui)
-set_tests_properties(tst_show_ui PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-set_tests_properties(tst_qindashow PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-
-
-add_executable(tst_show_design tst_show_design.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/pdf_export.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/presentation_controller.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/presenter_window.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_ai.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_arrange.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_arrange_menus.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_clipboard.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_design_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_master_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_commands.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_document.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_find_bar.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_toolbox.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_window.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_window_actions.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/show_window_ui.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas_input.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas_order.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_canvas_snap.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/slide_player.cpp
-    ${PROJECT_SOURCE_DIR}/apps/qindashow/src/text_bridge.cpp
-)
-target_link_libraries(tst_show_design PRIVATE office_shell office_ai show_model Qt6::Test)
-target_include_directories(tst_show_design PRIVATE ${PROJECT_SOURCE_DIR}/apps/qindashow)
-target_compile_definitions(tst_show_design PRIVATE
-    QQO_DESKTOP_ID="org.qindaqt.QindaShow"
-    QT_NO_CAST_FROM_ASCII
-)
-qqo_set_strict_warnings(tst_show_design)
-add_test(NAME tst_show_design COMMAND tst_show_design)
-set_tests_properties(tst_show_design PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+# QindaShow's gates over the QtQuick app: the deck engine, the canvas item
+# and the host (tst_qindashow), the strips, clipboard, find, canvas
+# painting and arrange commands through the real window (tst_show_ui), the
+# design layer — masters, animations, snapping, grouping (tst_show_design)
+# — and the panel export through the desktop's validator
+# (tst_show_menu_export). Every test links the app's static QML module, so
+# a source added to apps/qindashow/CMakeLists.txt is in every test.
+foreach(name IN ITEMS tst_qindashow tst_show_ui tst_show_design tst_show_menu_export)
+    add_executable(${name} ${name}.cpp show_test_support.h)
+    target_link_libraries(${name} PRIVATE qindashow_app qindashow_appplugin Qt6::Test)
+    target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)
+    target_compile_definitions(${name} PRIVATE QQO_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/qml_fixtures")
+    qqo_set_strict_warnings(${name})
+    qqo_desktop_runtime(${name})
+    add_test(NAME ${name} COMMAND ${name})
+    set_tests_properties(${name} PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
+endforeach()
