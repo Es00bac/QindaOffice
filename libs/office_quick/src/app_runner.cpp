@@ -51,10 +51,10 @@ int runOfficeApp(int &argc, char *argv[], const QString &desktopId, const QUrl &
     const QStringList paths = parser.positionalArguments();
 
     QQmlApplicationEngine engine;
-#ifdef QQO_QINDATK_QML_DIR
+#ifdef QQO_QINDATK_QML_ROOT
     // The toolkit's QML modules, from wherever the build found them
     // (system Qt import path, or a local install prefix during development).
-    engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_DIR));
+    engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_ROOT));
 #endif
 
     OfficeApplication office;

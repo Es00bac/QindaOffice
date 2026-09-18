@@ -22,31 +22,39 @@ Tk.AppWindow {
     toolBarsVisible: host.toolBarsVisible
     statusBarVisible: host.statusBarVisible
 
-    // The desktop's QST-1 tokens when they are published (the bridge fails
-    // to load off the QindaQt desktop: the preset below stays — rule 9,
-    // degrade visibly, never block).
+    // The desktop's QST-1 tokens when they are published; otherwise the
+    // preset from Preferences (rule 9, degrade visibly: one log line says
+    // which). The bridge fails to load off a QindaQt install (no
+    // QindaQt.Tokens module) and loads-but-idles when no session publishes
+    // tokens; both cases are the preset.
+    //
     // AGENT-GUARD: declared as a property, not a child: Tk.AppWindow seats
     // ONE unanchored content child to fill the window, and a Loader among
     // the children made the app's content a second child (0×0, unseated).
     readonly property Loader themeBridge: Loader {
         objectName: "themeBridge"
         source: "ThemeBridge.qml"
-        onStatusChanged: if (status === Loader.Error) console.info("QindaOffice: no QindaQt tokens, using the " + Preferences.themePreset + " preset")
     }
-    Component.onCompleted: {
+    readonly property bool tokensApplied: themeBridge.status === Loader.Ready
+                                          && themeBridge.item !== null && themeBridge.item.applied
+    function applyChrome() {
         Tk.Density.modeName = Preferences.density
-        if (themeBridge.status !== Loader.Ready) {
+        if (!window.tokensApplied) {
             Tk.Theme.applyPreset(Preferences.themePreset)
+        }
+    }
+    onTokensAppliedChanged: window.applyChrome()
+    Component.onCompleted: {
+        window.applyChrome()
+        if (themeBridge.status === Loader.Error) {
+            console.info("QindaOffice: no QindaQt token bridge, using the " + Preferences.themePreset + " preset")
+        } else if (!window.tokensApplied) {
+            console.info("QindaOffice: no QindaQt tokens published, using the " + Preferences.themePreset + " preset")
         }
     }
     Connections {
         target: Preferences
-        function onChanged() {
-            Tk.Density.modeName = Preferences.density
-            if (themeBridge.status !== Loader.Ready) {
-                Tk.Theme.applyPreset(Preferences.themePreset)
-            }
-        }
+        function onChanged() { window.applyChrome() }
     }
 
     menuBar: MenuBarFromModel {

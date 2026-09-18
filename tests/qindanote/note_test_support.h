@@ -50,7 +50,7 @@ struct Scene {
     // size is set before show, as the suite itself does (ADR-0117).
     explicit Scene(const QSize &size = {})
     {
-        engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_DIR) + QStringLiteral("/.."));
+        engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_ROOT));
         QQmlComponent component(&engine,
                                 QUrl(QStringLiteral("qrc:/qt/qml/QindaOffice/Note/NoteWindow.qml")));
         if (component.isError()) {

@@ -69,12 +69,25 @@ qt_add_qml_module(office_quick
     QML_FILES ${office_quick_qml}
 )
 
+# The QML import ROOT the toolkit's modules live under (the directory that
+# contains QindaTK/qmldir and QindaTK/QindaQt/qmldir). AGENT-GUARD: the
+# package config hands out the module directory itself; adding THAT as an
+# import path resolved `import QindaTK` only through the linked library's
+# resources and left `QindaTK.QindaQt` (the desktop's token bridge, a
+# separate library) "not installed" — the chrome silently fell back to the
+# preset on the desktop.
+set(QindaTK_QML_ROOT "${QindaTK_QML_DIR}")
+get_filename_component(_qindatk_leaf "${QindaTK_QML_DIR}" NAME)
+if(_qindatk_leaf STREQUAL "QindaTK")
+    get_filename_component(QindaTK_QML_ROOT "${QindaTK_QML_DIR}" DIRECTORY)
+endif()
+
 target_compile_definitions(office_quick
     PUBLIC
         QQO_VERSION="${PROJECT_VERSION}"
-        # Where the toolkit's QML modules live; tests and apps add it to
-        # their engine's import path (the system Qt path needs no help).
-        QQO_QINDATK_QML_DIR="${QindaTK_QML_DIR}"
+        # Tests and apps add it to their engine's import path (the system
+        # Qt path needs no help, a development prefix does).
+        QQO_QINDATK_QML_ROOT="${QindaTK_QML_ROOT}"
     PRIVATE
         QQO_HAVE_POPPLER
         QT_NO_CAST_FROM_ASCII

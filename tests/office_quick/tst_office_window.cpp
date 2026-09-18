@@ -36,7 +36,7 @@ private slots:
     void windowBuildsFromTheHost()
     {
         QQmlApplicationEngine engine;
-        engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_DIR) + QStringLiteral("/.."));
+        engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_ROOT));
         DocumentHost host;
         host.menuTree()->insertMenuBefore(
             QStringLiteral("aiMenu"),
