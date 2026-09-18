@@ -2,7 +2,7 @@
 
 function(qqo_add_core_test name)
     add_executable(${name} ${name}.cpp)
-    target_link_libraries(${name} PRIVATE office_core Qt6::Widgets Qt6::Test)
+    target_link_libraries(${name} PRIVATE office_core Qt6::Gui Qt6::Test)
     qqo_set_strict_warnings(${name})
     add_test(NAME ${name} COMMAND ${name})
     # Core tests are widget-free; offscreen keeps any accidental Gui use safe.

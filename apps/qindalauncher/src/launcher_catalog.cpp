@@ -13,6 +13,7 @@
 #include <QHash>
 #include <QProcess>
 #include <QStandardPaths>
+#include <QUrl>
 
 namespace QindaOffice::Launcher {
 
@@ -42,26 +43,20 @@ QList<AppEntry> officeApps()
     };
 }
 
-QIcon iconFor(const AppEntry &app)
+QString iconSourceFor(const AppEntry &app)
 {
-    // Theme first (AGENTS.md rule 3: icons via QIcon::fromTheme). The
-    // suite installs its mascots into hicolor, which every theme falls back
-    // to — but a run from a build tree has no installed theme at all, so
-    // fall back to the file itself rather than showing four blank squares.
-    QIcon icon = QIcon::fromTheme(app.desktopId);
-    if (!icon.isNull()) {
-        return icon;
-    }
-    const QString leaf =
-        QStringLiteral("icons/hicolor/scalable/apps/%1.svg").arg(app.desktopId);
-    QStringList candidates =
-        QStandardPaths::locateAll(QStandardPaths::GenericDataLocation, leaf);
+    // The mascots live in hicolor, which is where a theme lookup would
+    // have found them; a run from a build tree has no installed theme at
+    // all, so the data directory beside the binary is tried too rather
+    // than showing four blank squares.
+    const QString leaf = QStringLiteral("icons/hicolor/scalable/apps/%1.svg").arg(app.desktopId);
+    QStringList candidates = QStandardPaths::locateAll(QStandardPaths::GenericDataLocation, leaf);
     const QDir here(QCoreApplication::applicationDirPath());
     candidates << here.filePath(QStringLiteral("../../data/") + leaf)
                << here.filePath(QStringLiteral("../data/") + leaf);
     for (const QString &candidate : std::as_const(candidates)) {
         if (QFileInfo::exists(candidate)) {
-            return QIcon(candidate);
+            return QUrl::fromLocalFile(QFileInfo(candidate).absoluteFilePath()).toString();
         }
     }
     return {};
@@ -69,15 +64,14 @@ QIcon iconFor(const AppEntry &app)
 
 // Every document type any of the four apps can open, so "Open a
 // document…" means what it says and the launcher picks the right app.
-QString openFilter()
+QStringList openNameFilters()
 {
-    return QObject::tr(
-        "All office documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt "
-        "*.xlsx *.ods *.xls *.xlsm *.csv *.tsv *.odp *.pptx *.fodp);;"
-        "Documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt);;"
-        "Spreadsheets (*.xlsx *.ods *.xls *.xlsm *.csv *.tsv);;"
-        "Presentations (*.odp *.pptx *.fodp);;"
-        "All files (*)");
+    return {QObject::tr("All office documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt "
+                        "*.xlsx *.ods *.xls *.xlsm *.csv *.tsv *.odp *.pptx *.fodp)"),
+            QObject::tr("Documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt)"),
+            QObject::tr("Spreadsheets (*.xlsx *.ods *.xls *.xlsm *.csv *.tsv)"),
+            QObject::tr("Presentations (*.odp *.pptx *.fodp)"),
+            QObject::tr("All files (*)")};
 }
 
 // Which app owns a path. The suffix is the only thing the launcher can go

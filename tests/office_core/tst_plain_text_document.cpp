@@ -2,7 +2,7 @@
 #include "atomic_file_store.h"
 #include "plain_text_document.h"
 
-#include <QApplication>
+#include <QGuiApplication>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -81,7 +81,7 @@ void PlainTextDocumentTest::byteRevisionRefreshesOnSave()
 int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     PlainTextDocumentTest test;
     return QTest::qExec(&test, argc, argv);
 }

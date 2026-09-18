@@ -5,6 +5,45 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-031: Qt Widgets are gone from the suite
+
+**Date:** 2026-09-17 · **Status:** accepted (M31) · **Plan:**
+`docs/plans/qindatk-conversion.md` §6 M31 (the plan calls this entry D-028;
+that number went to QindaCalc, so the ledger keeps this one as D-031)
+
+**Decision.** The conversion is finished, so the Widgets half of the suite
+is deleted rather than kept switchable:
+
+- `libs/office_shell` (the `QMainWindow` document frame, `WrappingToolBar`,
+  `FlowLayout`, `PreferencesDialog`, the Widgets `PrintHelper` and the
+  first global-menu export) and `tests/office_shell` are gone;
+  `libs/office_quick` is the suite's only shell.
+- `office_ai` loses its Widgets `AssistantPanel` and
+  `proposal_dialog_widgets`; the panel and the proposal dialog are QML
+  (`QindaOffice.Ai`), and `InlineActionFlow::run()` loses the
+  `dialogParent` argument that only the deleted fallback used.
+- The `QQO_WIDGETS_APPS` option, the `QQO_WIDGETS_AI` define and every
+  `Qt6::Widgets` / `Qt6::WidgetsPrivate` link are gone. No file in the
+  suite names `QApplication` or derives from `QWidget`.
+- The launcher is the fourth QtQuick app (`QindaOffice.Launcher`), so all
+  five binaries are QtQuick over QindaTK.
+
+**What still links QtWidgets, and why that is fine.** `libQt6Widgets.so`
+is loaded into every process because QtPrintSupport links it, and the
+suite prints through `QPrinter`/`QPdfWriter` (no `QPrintDialog`: the print
+and preview dialogs are ours, `PrintDialog.qml` and `PrintPreview.qml`).
+The ebuild therefore keeps `dev-qt/qtbase[widgets]`. What is gone is
+QtWidgets *as a UI framework*: no widget hierarchy, no `QApplication`, no
+style, no palette.
+
+**Nothing depended on it.** The four document apps had already moved
+(D-027 through D-030) and the launcher moved here; `office_core`,
+`calc_engine`, `calc_io`, `show_model` and `office_ink` were Qt Core/Gui
+from the start, and their tests only needed `QApplication` for a font
+database they get from `QGuiApplication` just as well. The one real seam
+was `InlineActionFlow`'s presenter, which each QtQuick host now fills with
+`Ai.ProposalDialog`.
+
 ## D-030: QindaShow on QtQuick, one renderer from canvas to projector
 
 **Date:** 2026-09-17 · **Status:** accepted (M30) · **Plan:**

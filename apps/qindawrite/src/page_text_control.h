@@ -5,7 +5,7 @@
 // §5.1, D-029). The plan named QQuickTextControl; Qt builds it with
 // Q_AUTOTEST_EXPORT, so the symbol is not in libQt6Quick and nothing
 // outside Qt can link it. QWidgetTextControl is exported but needs a
-// QApplication. This class is the subset of that API QindaWrite uses,
+// QtWidgets application. This class is the subset of that API QindaWrite uses,
 // over the document alone: one cursor, a pending char format for the
 // next keystroke, the standard key bindings, mouse selection (drag,
 // double-click word, triple-click paragraph), the clipboard as HTML +

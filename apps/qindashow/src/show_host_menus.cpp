@@ -100,7 +100,7 @@ void ShowHost::insertMenus()
     for (const Ai::InlineAction &inlineAction : Ai::inlineActions()) {
         const QString id = QStringLiteral("showAi%1").arg(inlineAction.id);
         connect(actions()->add(id, inlineAction.displayName), &ActionEntry::triggered, this,
-                [this, actionId = inlineAction.id] { m_inline->run(actionId, this); });
+                [this, actionId = inlineAction.id] { m_inline->run(actionId); });
         tree->appendTo(QStringLiteral("aiMenu"), MenuNode::action(id));
     }
     tree->appendTo(QStringLiteral("aiMenu"), MenuNode::separator());

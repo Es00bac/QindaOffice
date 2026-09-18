@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "libre_office_converter.h"
 
-#include <QApplication>
+#include <QGuiApplication>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -94,7 +94,7 @@ void LibreOfficeConverterTest::rejectsMissingInput()
 int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     LibreOfficeConverterTest test;
     return QTest::qExec(&test, argc, argv);
 }

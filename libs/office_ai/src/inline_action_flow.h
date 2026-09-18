@@ -6,8 +6,7 @@
 // selection. The model's proposal is shown against the original with
 // Apply / Regenerate / Discard through a PRESENTER the app supplies
 // (conversion plan §3.8: the QML window fills it with ProposalDialog.qml;
-// a Widgets app that sets none gets the QDialog from
-// proposal_dialog_widgets.h while QQO_WIDGETS_APPS is on). Structured
+// with no presenter the `proposalReady` signal is all there is). Structured
 // output v1 is "text in a fenced block" extraction everywhere.
 
 #include "document_context.h"
@@ -49,9 +48,8 @@ public:
     void setPresenter(ProposalPresenter presenter) { m_presenter = std::move(presenter); }
 
     // Runs the action over the current selection (explicit user action;
-    // nothing is sent without this call). `dialogParent` is the window the
-    // Widgets fallback dialog is parented to; a QML presenter ignores it.
-    void run(const QString &actionId, QObject *dialogParent = nullptr);
+    // nothing is sent without this call).
+    void run(const QString &actionId);
 
     [[nodiscard]] static QString extractProposal(const QString &modelText);
 
@@ -61,9 +59,8 @@ signals:
     void failed(const QString &message);
 
 private:
-    void execute(const InlineAction &action, QObject *dialogParent);
-    void present(const InlineAction &action, const QString &original, const QString &proposal,
-                 QObject *dialogParent);
+    void execute(const InlineAction &action);
+    void present(const InlineAction &action, const QString &original, const QString &proposal);
 
     ModelCatalog *m_catalog;
     DocumentContextProvider *m_context;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "recovery_journal.h"
 
-#include <QApplication>
+#include <QGuiApplication>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -115,7 +115,7 @@ void RecoveryJournalTest::emptySnapshotIsNotARecoveryPoint()
 int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     RecoveryJournalTest test;
     return QTest::qExec(&test, argc, argv);
 }

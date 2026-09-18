@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "atomic_file_store.h"
 
-#include <QApplication>
+#include <QGuiApplication>
 #include <QFile>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -52,7 +52,7 @@ void AtomicFileStoreTest::missingFileHasZeroRevision()
 int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     AtomicFileStoreTest test;
     return QTest::qExec(&test, argc, argv);
 }

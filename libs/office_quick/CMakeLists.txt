@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 # office_quick: the suite's document shell on QtQuick + QindaTK (plan
-# docs/plans/qindatk-conversion.md §3.2); replaces office_shell app by app.
+# docs/plans/qindatk-conversion.md §3.2); the suite's only shell since M31.
 # It is the ONLY library that links the QindaQt desktop's static archives
 # (AGENT-CONTRACT: every other lib and their tests build without the
 # desktop installed) and the only one that links QtPrintSupport.

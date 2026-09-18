@@ -9,8 +9,14 @@ cmake --build --preset dev
 ctest --preset dev --output-on-failure
 ```
 
-Widget tests run under `QT_QPA_PLATFORM=offscreen` (pinned via ctest
-`ENVIRONMENT`; each test's `main` also sets it defensively).
+Every test runs under `QT_QPA_PLATFORM=offscreen` and, for the QtQuick
+windows, `QT_QUICK_BACKEND=software` (pinned via ctest `ENVIRONMENT`; each
+test's `main` also sets both defensively). A build against a QindaTK
+development prefix needs `-DCMAKE_PREFIX_PATH=<QindaTK>/install`.
+
+The UI tests also write what a reviewer looks at: the structural fixtures
+in `tests/qml_fixtures/` (`QQO_UPDATE_FIXTURES=1` rewrites them) and, with
+`QQO_GRAB_DIR=<dir>`, a PNG of each window at 1280x800 and 520x700.
 
 ## On-desktop manual checklist (run inside a QindaQt session)
 
@@ -238,6 +244,38 @@ skip with a message where `soffice` is unavailable.
   index sees them).
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
+
+### M31 gates (launcher, Widgets removal, packaging, rules)
+
+- [x] `tests/qindalauncher/tst_launcher`: the catalog (four distinct apps
+      with role and blurb, which app owns a suffix, the four recent lists
+      merged newest-first with missing files skipped and an unparsable list
+      survived without being rewritten), the controller's published apps
+      and recents, and the real `LauncherWindow.qml` — a card per app whose
+      accessible name a screen reader can read, the recent row present, the
+      empty state hidden, the Open button there. `QQO_GRAB_DIR` saves the
+      window (reviewed: four mascot cards, the recent document, the Open
+      button).
+- [x] `ctest --preset dev` green (45 tests) with no Qt Widgets UI in the
+      suite: no `Qt6::Widgets` link outside `third_party`, and
+      `grep -rn QApplication apps libs tests` is empty. `libQt6Widgets.so`
+      is still loaded because QtPrintSupport links it (D-031).
+- [x] `libs/office_shell` and `tests/office_shell` deleted; the
+      `QQO_WIDGETS_APPS` option, the `QQO_WIDGETS_AI` define, the Widgets
+      assistant panel and the Widgets proposal dialog gone with them.
+- [x] `AGENTS.md` rewritten for the QtQuick suite (rules 3, 4, 8 restated;
+      the QML rules and the headless-first verification section added).
+- [ ] Packaging (operator, needs root and a clean tree):
+      `tools/make-dist.sh 0.1.0_p<date>-r5 /var/cache/distfiles`, then
+      `ebuild qindaoffice-0.1.0_p<date>-r5.ebuild manifest` in the overlay
+      and `emerge -1 dev-libs/qindatk gui-apps/qindaoffice`; all five
+      binaries (`qindawrite`, `qindacalc`, `qindashow`, `qindanote`,
+      `qindaoffice`), their desktop files and the QindaTK QML module
+      installed.
+- [ ] On the QindaQt desktop, the whole suite: the panel menu drives each
+      app end to end; portal file dialogs open; the tablet inks in
+      QindaNote; the QindaShow player takes the second screen; light and
+      dark themes and comfortable density all read correctly.
 
 ### M30 gates (QindaShow on QindaTK)
 

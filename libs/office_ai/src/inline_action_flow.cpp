@@ -7,10 +7,6 @@
 #include <QPointer>
 #include <QRegularExpression>
 
-#ifdef QQO_WIDGETS_AI
-#include "proposal_dialog_widgets.h"
-#endif
-
 namespace QindaOffice::Ai {
 
 const QVector<InlineAction> &inlineActions()
@@ -64,27 +60,22 @@ QString InlineActionFlow::extractProposal(const QString &modelText)
     return modelText.trimmed();
 }
 
-void InlineActionFlow::run(const QString &actionId, QObject *dialogParent)
+void InlineActionFlow::run(const QString &actionId)
 {
     for (const InlineAction &action : inlineActions()) {
         if (action.id == actionId) {
             m_pending = action;
-            execute(action, dialogParent);
+            execute(action);
             return;
         }
     }
 }
 
 void InlineActionFlow::present(const InlineAction &action, const QString &original,
-                               const QString &proposal, QObject *dialogParent)
+                               const QString &proposal)
 {
     emit proposalReady(original, proposal);
-    ProposalPresenter presenter = m_presenter;
-#ifdef QQO_WIDGETS_AI
-    if (!presenter.show) {
-        presenter = widgetsProposalPresenter(dialogParent);
-    }
-#endif
+    const ProposalPresenter presenter = m_presenter;
     if (!presenter.show) {
         return; // nobody to show it to: the signal above is all there is
     }
@@ -98,18 +89,15 @@ void InlineActionFlow::present(const InlineAction &action, const QString &origin
                 guard->m_applier->replaceSelection(proposal);
             }
         },
-        [guard, action, dialogParent] {
+        [guard, action] {
             if (guard != nullptr) {
-                guard->execute(action, dialogParent);
+                guard->execute(action);
             }
         });
 }
 
-void InlineActionFlow::execute(const InlineAction &action, QObject *dialogParent)
+void InlineActionFlow::execute(const InlineAction &action)
 {
-    if (dialogParent == nullptr) {
-        dialogParent = parent();
-    }
     if (m_context == nullptr || m_applier == nullptr) {
         return;
     }
@@ -135,8 +123,8 @@ void InlineActionFlow::execute(const InlineAction &action, QObject *dialogParent
     // every inline AI action against a key-based endpoint failed on auth.
     const ProviderConfig config = m_catalog->configFor(modelId).value_or(ProviderConfig{});
     auto *store = new SecretStore(this);
-    store->retrieve(config.secretKey, [this, action, request, modelId, store, context,
-                                      dialogParent](const QString &secret) {
+    store->retrieve(config.secretKey, [this, action, request, modelId, store,
+                                       context](const QString &secret) {
         store->deleteLater();
         ChatProvider *provider = m_catalog->createProvider(modelId, secret, this);
         if (provider == nullptr) {
@@ -146,27 +134,20 @@ void InlineActionFlow::execute(const InlineAction &action, QObject *dialogParent
         auto *state = new QString;
         connect(run, &ChatRun::textDelta, this, [state](const QString &delta) { *state += delta; });
         connect(run, &ChatRun::finished, this,
-                [this, action, context, state, dialogParent](const ChatResult &result) {
+                [this, action, context, state](const ChatResult &result) {
                     Q_UNUSED(result);
                     const QString proposal = extractProposal(*state);
                     delete state;
                     if (!proposal.isEmpty()) {
-                        present(action, context.selection, proposal, dialogParent);
+                        present(action, context.selection, proposal);
                     }
                 });
         // Surface failures: several failure modes previously looked exactly
         // like "the button did nothing".
-        connect(run, &ChatRun::failed, this, [this, state, dialogParent](const ChatError &error) {
+        connect(run, &ChatRun::failed, this, [this, state](const ChatError &error) {
             delete state;
             emit failed(error.message);
-            ProposalPresenter presenter = m_presenter;
-#ifdef QQO_WIDGETS_AI
-            if (!presenter.failed) {
-                presenter = widgetsProposalPresenter(dialogParent);
-            }
-#else
-            Q_UNUSED(dialogParent);
-#endif
+            const ProposalPresenter presenter = m_presenter;
             if (presenter.failed) {
                 presenter.failed(error.message);
             }

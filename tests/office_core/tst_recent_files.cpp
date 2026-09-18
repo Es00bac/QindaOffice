@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "recent_files.h"
 
-#include <QApplication>
+#include <QGuiApplication>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -70,7 +70,7 @@ void RecentFilesTest::removeAndClear()
 int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     RecentFilesTest test;
     return QTest::qExec(&test, argc, argv);
 }

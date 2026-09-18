@@ -11,7 +11,7 @@
 
 using namespace QindaOffice::Quick;
 
-// The print service without a QApplication (conversion plan §3.7): a job
+// The print service with no QtWidgets application (conversion plan §3.7): a job
 // renders its pages through the app's callback into a PDF, the preview is
 // rendered from that same PDF (Poppler) when available, and the printer
 // model lists what CUPS knows without crashing where it knows nothing.

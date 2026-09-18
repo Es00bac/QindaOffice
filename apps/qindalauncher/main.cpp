@@ -2,23 +2,30 @@
 // QindaQt Office launcher: the suite's front door.
 //
 // Not a document window, so it does not go through runOfficeApp — but the
-// desktop identity is pinned before anything maps, exactly as rule 2
-// requires, or the compositor cannot match the window to its .desktop file
+// desktop identity is pinned before anything maps, exactly as the rules
+// require, or the compositor cannot match the window to its .desktop file
 // and the launcher gets no icon in the panel or the task switcher.
 
-#include "launcher_window.h"
+#include "src/launcher_controller.h"
 
-#include <QApplication>
+#include "desktop_appearance.h"
+
 #include <QCommandLineParser>
+#include <QGuiApplication>
 #include <QIcon>
+#include <QQmlApplicationEngine>
+#include <QQmlContext>
+#include <QQuickStyle>
 
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
-    QApplication::setDesktopFileName(QStringLiteral(QQO_DESKTOP_ID));
-    QApplication::setApplicationName(QStringLiteral("qindaoffice"));
-    QApplication::setApplicationDisplayName(QApplication::translate("main", "QindaQt Office"));
-    QApplication::setApplicationVersion(QStringLiteral(QQO_VERSION));
+    QGuiApplication app(argc, argv);
+    QGuiApplication::setDesktopFileName(QStringLiteral(QQO_DESKTOP_ID));
+    QGuiApplication::setApplicationName(QStringLiteral("qindaoffice"));
+    QGuiApplication::setApplicationDisplayName(
+        QGuiApplication::translate("main", "QindaQt Office"));
+    QGuiApplication::setApplicationVersion(QStringLiteral(QQO_VERSION));
+    QQuickStyle::setStyle(QStringLiteral("Basic"));
 
     // The four apps answer --help and --version through app_runner; the
     // launcher does not go through it, so it has to answer for itself or it
@@ -27,16 +34,28 @@ int main(int argc, char *argv[])
     // MimeType and its Exec has no %f, because the apps own their own files.
     QCommandLineParser parser;
     parser.setApplicationDescription(
-        QApplication::translate("main", "QindaQt Office — the suite's front door"));
+        QGuiApplication::translate("main", "QindaQt Office — the suite's front door"));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.process(app);
 
     // The task switcher and the window container both read the window icon
     // when the .desktop file is not installed (a build-tree run).
-    QApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral(QQO_DESKTOP_ID)));
+    QGuiApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral(QQO_DESKTOP_ID)));
 
-    QindaOffice::Launcher::LauncherWindow window;
-    window.show();
-    return QApplication::exec();
+    QQmlApplicationEngine engine;
+#ifdef QQO_QINDATK_QML_ROOT
+    engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_ROOT));
+#endif
+    QString appearanceError;
+    if (!QindaOffice::Quick::DesktopAppearance::publishDesktopTheme(engine, &appearanceError)) {
+        qInfo("QindaOffice: desktop theme not published (%s)", qPrintable(appearanceError));
+    }
+    QindaOffice::Launcher::LauncherController controller;
+    engine.setInitialProperties({{QStringLiteral("launcher"), QVariant::fromValue(&controller)}});
+    engine.load(QUrl(QStringLiteral("qrc:/qt/qml/QindaOffice/Launcher/LauncherWindow.qml")));
+    if (engine.rootObjects().isEmpty()) {
+        return 1;
+    }
+    return QGuiApplication::exec();
 }

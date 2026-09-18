@@ -6,22 +6,41 @@
 // file that is no longer there, reading another app's state destructively,
 // or presenting a card that looks clickable for an app that is not there.
 
-#include "qindalauncher/src/app_card.h"
 #include "qindalauncher/src/launcher_catalog.h"
-#include "qindalauncher/src/launcher_window.h"
+#include "qindalauncher/src/launcher_controller.h"
 
 #include "paths.h"
 
-#include <QApplication>
-#include <QDir>
+#include <QAccessible>
+#include <QGuiApplication>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QListWidget>
+#include <QQmlApplicationEngine>
+#include <QQmlComponent>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QTemporaryDir>
 #include <QtTest>
 
 using namespace QindaOffice::Launcher;
+
+namespace {
+
+QQuickItem *findItem(QQuickItem *parent, const QString &name)
+{
+    for (QQuickItem *child : parent->childItems()) {
+        if (child->objectName() == name) {
+            return child;
+        }
+        if (QQuickItem *found = findItem(child, name)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+} // namespace
 
 class LauncherTest : public QObject {
     Q_OBJECT
@@ -31,32 +50,29 @@ private slots:
     void pathsGoToTheAppThatOpensThem();
     void recentsMergeTheFourListsAndSkipMissingFiles();
     void recentsSurviveAnUnreadableList();
-    void windowShowsACardPerAppAndAnEmptyState();
+    void controllerPublishesAppsAndRecents();
+    void windowShowsACardPerAppAndTheRecentList();
 
 private:
-    // Both directories outlive every slot: a QTemporaryDir scoped to one
-    // case deletes its files before the next case reads them, and the cases
-    // here deliberately share one set of recents.
-    QTemporaryDir m_config;
+    // The documents directory outlives every slot: a QTemporaryDir scoped
+    // to one case deletes its files before the next case reads them, and
+    // the cases here deliberately share one set of recents.
     QTemporaryDir m_documents;
     QString m_present;
 };
 
 void LauncherTest::initTestCase()
 {
-    QVERIFY(m_config.isValid());
     QVERIFY(m_documents.isValid());
-    // AGENT-GUARD: redirect XDG_CONFIG_HOME before anything reads it — the
-    // launcher walks the real per-app config dirs, and a test must never
-    // read or write the user's own recents.
-    qputenv("XDG_CONFIG_HOME", m_config.path().toLocal8Bit());
-
     m_present = m_documents.filePath(QStringLiteral("report.odt"));
     QFile file(m_present);
     QVERIFY(file.open(QIODevice::WriteOnly));
     file.write("x");
     file.close();
 
+    // AGENT-GUARD: XDG_CONFIG_HOME is redirected in main(), before anything
+    // reads it — the launcher walks the real per-app config dirs, and a test
+    // must never read or write the user's own recents.
     const auto writeRecents = [](const QString &appId, const QStringList &paths) {
         const QString dir = QindaOffice::Core::configDirFor(appId);
         QFile out(dir + QStringLiteral("/recent.json"));
@@ -65,8 +81,7 @@ void LauncherTest::initTestCase()
     };
     writeRecents(QStringLiteral("QindaWrite"), {m_present});
     // A path that no longer exists, and a file that is not JSON at all.
-    writeRecents(QStringLiteral("QindaCalc"),
-                 {m_documents.filePath(QStringLiteral("gone.xlsx"))});
+    writeRecents(QStringLiteral("QindaCalc"), {m_documents.filePath(QStringLiteral("gone.xlsx"))});
     const QString showDir = QindaOffice::Core::configDirFor(QStringLiteral("QindaShow"));
     QFile broken(showDir + QStringLiteral("/recent.json"));
     QVERIFY(broken.open(QIODevice::WriteOnly));
@@ -88,7 +103,7 @@ void LauncherTest::catalogNamesFourDistinctApps()
     }
     QCOMPARE(ids.size(), 4);
     QCOMPARE(binaries.size(), 4);
-    QVERIFY(!openFilter().isEmpty());
+    QVERIFY(openNameFilters().size() >= 4);
 }
 
 void LauncherTest::pathsGoToTheAppThatOpensThem()
@@ -121,29 +136,74 @@ void LauncherTest::recentsSurviveAnUnreadableList()
     QCOMPARE(QFile(dir + QStringLiteral("/recent.json")).size(), qint64(16));
 }
 
-void LauncherTest::windowShowsACardPerAppAndAnEmptyState()
+void LauncherTest::controllerPublishesAppsAndRecents()
 {
-    LauncherWindow window;
-    window.show();
-    const QList<AppCard *> cards = window.findChildren<AppCard *>();
-    QCOMPARE(cards.size(), 4);
-    for (AppCard *card : cards) {
-        // A painted card with no accessible identity is invisible to a
-        // screen reader.
-        QVERIFY2(!card->accessibleName().isEmpty(), qPrintable(card->objectName()));
-        QVERIFY(!card->accessibleDescription().isEmpty());
+    LauncherController controller;
+    const QVariantList apps = controller.apps();
+    QCOMPARE(apps.size(), 4);
+    for (const QVariant &value : apps) {
+        const QVariantMap app = value.toMap();
+        QVERIFY(!app.value(QStringLiteral("name")).toString().isEmpty());
+        QVERIFY(!app.value(QStringLiteral("role")).toString().isEmpty());
+        QVERIFY(!app.value(QStringLiteral("blurb")).toString().isEmpty());
+        // The window needs to know whether the binary is there at all.
+        QVERIFY(app.contains(QStringLiteral("available")));
+        QVERIFY(app.contains(QStringLiteral("iconSource")));
     }
-    QVERIFY(window.recentList() != nullptr);
-    // One real recent from the earlier case; the empty-state row only shows
+    QCOMPARE(controller.recents().size(), 1);
+    QCOMPARE(controller.recents().first().toMap().value(QStringLiteral("fileName")).toString(),
+             QStringLiteral("report.odt"));
+    // Opening a missing app fails visibly rather than silently.
+    QVERIFY(controller.status().isEmpty());
+}
+
+void LauncherTest::windowShowsACardPerAppAndTheRecentList()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_ROOT));
+    LauncherController controller;
+    QQmlComponent component(&engine,
+                            QUrl(QStringLiteral("qrc:/qt/qml/QindaOffice/Launcher/LauncherWindow.qml")));
+    QVERIFY2(!component.isError(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.createWithInitialProperties(
+        {{QStringLiteral("launcher"), QVariant::fromValue(&controller)}}));
+    QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get());
+    QVERIFY(window != nullptr);
+    window->resize(820, 640);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QTest::qWait(100);
+
+    for (const AppEntry &app : officeApps()) {
+        QQuickItem *card = findItem(window->contentItem(), QStringLiteral("appCard_") + app.id);
+        QVERIFY2(card != nullptr, qPrintable(app.id));
+        // A card with no accessible identity is invisible to a screen
+        // reader, so ask for what one would actually read.
+        QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(card);
+        QVERIFY2(iface != nullptr, qPrintable(app.id));
+        QVERIFY2(!iface->text(QAccessible::Name).isEmpty(), qPrintable(app.id));
+    }
+    // One real recent from the earlier case; the empty state only shows
     // when there is nothing at all.
-    QCOMPARE(window.recentList()->count(), 1);
+    QVERIFY(findItem(window->contentItem(), QStringLiteral("recentRow_0")) != nullptr);
+    QQuickItem *empty = findItem(window->contentItem(), QStringLiteral("launcherRecentEmpty"));
+    QVERIFY(empty != nullptr && !empty->isVisible());
+    QVERIFY(findItem(window->contentItem(), QStringLiteral("launcherOpenButton")) != nullptr);
+    const QString grabDir = qEnvironmentVariable("QQO_GRAB_DIR");
+    if (!grabDir.isEmpty()) {
+        window->grabWindow().save(grabDir + QStringLiteral("/qindaoffice_launcher.png"));
+    }
 }
 
 int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
-    QApplication::setDesktopFileName(QStringLiteral("org.qindaqt.QindaOffice"));
+    qputenv("QT_QUICK_BACKEND", "software");
+    QTemporaryDir config;
+    qputenv("XDG_CONFIG_HOME", config.path().toUtf8());
+    QGuiApplication app(argc, argv);
+    QGuiApplication::setDesktopFileName(QStringLiteral("org.qindaqt.QindaOffice"));
     LauncherTest test;
     return QTest::qExec(&test, argc, argv);
 }

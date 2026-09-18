@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// DocumentHost: everything DocumentWindow (office_shell) did for one
-// document window, minus the widgets (plan docs/plans/qindatk-conversion.md
-// §3.2). One host = one Core::Document = one Tk.AppWindow (ADR-0110). The
+// DocumentHost: everything the Widgets DocumentWindow it replaced did for
+// one document window, minus the widgets (plan
+// docs/plans/qindatk-conversion.md §3.2, D-031). One host = one
+// Core::Document = one Tk.AppWindow (ADR-0110). The
 // host owns the commands (ActionModel), the menu (MenuTree), the panel
 // export, the keyboard shortcuts, the recovery journal and auto-save
 // timers, the save/load/close flows and the status fields; the QML window

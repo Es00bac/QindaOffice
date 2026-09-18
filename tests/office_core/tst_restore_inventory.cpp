@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "restore_inventory.h"
 
-#include <QApplication>
+#include <QGuiApplication>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -77,7 +77,7 @@ void RestoreInventoryTest::exceeds64kFails()
 int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     RestoreInventoryTest test;
     return QTest::qExec(&test, argc, argv);
 }

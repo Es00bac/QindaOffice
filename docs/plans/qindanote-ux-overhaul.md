@@ -1,6 +1,18 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # QindaNote UX overhaul — implementation plan (M22 → M26)
 
+> **Re-targeted by the QindaTK conversion (M31).** M22 landed in the
+> Widgets QindaNote and M23 landed inside M27 as part of the QtQuick port,
+> so both are history. **M24, M25 and M26 still apply, with the same
+> designs, the same action ids and the same tests, but against the QtQuick
+> app**: the surface is `NotePageItem` (a `QQuickPaintedItem` under a
+> `Tk.Viewport`) instead of a `QWidget`, commands are
+> `Quick::ActionEntry`s in the window's `ActionModel` instead of
+> `QAction`s, panels are `Tk.DockPanel`s and every dialog named below is a
+> request signal the QML window answers. Where this file says
+> `office_shell`, read `office_quick`; where it says a Widgets dialog,
+> read its QML counterpart (D-031).
+
 **Audience:** Kimi, the implementing agent. This document is self-contained:
 it describes what QindaNote is today, exactly why it is unpleasant to use,
 the target design, and five milestone-sized work packages with file lists,

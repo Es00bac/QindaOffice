@@ -10,9 +10,9 @@
 // introducing a shared one — a shared list would be a new cross-app store
 // that rule exists to prevent.
 
-#include <QIcon>
 #include <QList>
 #include <QString>
+#include <QStringList>
 
 namespace QindaOffice::Launcher {
 
@@ -36,9 +36,12 @@ struct RecentEntry {
 // The four apps, in suite order.
 [[nodiscard]] QList<AppEntry> officeApps();
 
-// The app's icon, or a null icon when the theme has none (the launcher
-// then draws its own initial-letter tile rather than a blank square).
-[[nodiscard]] QIcon iconFor(const AppEntry &app);
+// A URL for the app's mascot, or empty when it is not installed (the
+// launcher then draws its own initial-letter tile rather than a blank
+// square). The suite installs its mascots into hicolor, which is where a
+// theme lookup would have found them too; QML needs a URL, so the file is
+// located directly.
+[[nodiscard]] QString iconSourceFor(const AppEntry &app);
 
 // Every app's recent list, newest first, bounded to `limit` in total.
 // Paths that no longer exist are skipped: offering a document that is gone
@@ -50,8 +53,9 @@ struct RecentEntry {
 // notebook is a DIRECTORY, so anything with no known suffix is QindaNote's.
 [[nodiscard]] QString appIdForPath(const QString &path);
 
-// The file-dialog filter covering every type the four apps open.
-[[nodiscard]] QString openFilter();
+// The file-dialog filters covering every type the four apps open, in the
+// form QtQuick.Dialogs wants ("Spreadsheets (*.xlsx *.ods)").
+[[nodiscard]] QStringList openNameFilters();
 
 // Absolute path to the app's binary: the install prefix first, then the
 // launcher's own directory so a build tree runs without installing.

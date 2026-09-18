@@ -11,7 +11,7 @@
 #include "shape_json.h"
 #include "slide_renderer.h"
 
-#include <QApplication>
+#include <QGuiApplication>
 #include <QPainter>
 #include <QProcess>
 #include <QTemporaryDir>
@@ -266,7 +266,7 @@ void ShowModelTest::shapeJsonCodecRoundTrips()
 int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     ShowModelTest test;
     return QTest::qExec(&test, argc, argv);
 }

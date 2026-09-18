@@ -6,7 +6,7 @@
 # catalog, the secret store, the AssistantController and the inline action
 # flow, plus the QML module QindaOffice.Ai (AssistantPanel, ProposalDialog).
 # Qt Core/Gui/Network/Qml only. The Qt Widgets panel and proposal dialog
-# compile only while QQO_WIDGETS_APPS is on, for the apps not yet converted.
+# is QML only (D-031: the Widgets panel and proposal dialog are gone).
 qt_add_library(office_ai STATIC
     src/anthropic_provider.cpp
     src/anthropic_provider.h
@@ -59,16 +59,5 @@ target_link_libraries(office_ai
     PRIVATE
         qt6keychain
 )
-
-if(QQO_WIDGETS_APPS)
-    target_sources(office_ai PRIVATE
-        src/assistant_panel.cpp
-        src/assistant_panel.h
-        src/proposal_dialog_widgets.cpp
-        src/proposal_dialog_widgets.h
-    )
-    target_link_libraries(office_ai PUBLIC Qt6::Widgets)
-    target_compile_definitions(office_ai PUBLIC QQO_WIDGETS_AI)
-endif()
 
 qqo_set_strict_warnings(office_ai)
