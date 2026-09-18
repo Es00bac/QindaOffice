@@ -239,6 +239,53 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M27 gates (QindaTK conversion, foundation + QindaNote)
+
+Build with the QindaTK checkout on the prefix path:
+
+```
+cmake --preset dev -DCMAKE_PREFIX_PATH=<QindaTK>/install
+cmake --build --preset dev
+ctest --preset dev --output-on-failure
+```
+
+QtQuick tests run under `QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software`
+(pinned via ctest `ENVIRONMENT`).
+
+- [x] `tests/office_quick`: `tst_action_model` (entries, radio groups,
+      trigger by id), `tst_menu_export` (the desktop's validator accepts the
+      exported tree; every exported command resolves and fires in the
+      model), `tst_document_host` (async open/save/close flows), `tst_office_window`
+      (the real `OfficeWindow.qml` over a host: bands, menu bar from the
+      tree, tool strip buttons follow their entries, View ▸ Show Menu Bar),
+      `tst_print_service` (PDF from the render callback, Poppler preview of
+      the same PDF, printer model).
+- [x] `tests/qindanote`: `tst_qindanote` (engine + host: reopen, lazy pages
+      never blanked, recovery, structure commands through the host, find
+      across unopened pages, replace all), `tst_note_blocks` (layout,
+      placed blocks, checklist state and nesting, merged typing undo, image
+      bytes, tap-to-type), `tst_note_input` (pen through
+      `QWindowSystemInterface`: inks with pressure in document units, touch
+      ignored, undo/redo, live eraser as one undo step, barrel-button
+      eraser, zoom is a view transform, tool shortcuts lose to a text
+      field, paper white under the dark preset, debounced page writes),
+      `tst_note_ui` (icon-only addressable strip, slots follow the tool,
+      wrap instead of hide, navigator opens pages, assistant panel follows
+      AI ▸ Assistant…, structural fixtures at 1280 and 520),
+      `tst_note_menu_export` (hard-asserts V5).
+- [x] `tests/office_ai`: `assistantControllerSendsAndStreams` over the mock
+      SSE server (no Widgets).
+- [x] The three Widgets apps still build and pass behind `QQO_WIDGETS_APPS=ON`.
+- [ ] On the QindaQt desktop from the build tree: the panel menu works end
+      to end (`busctl --user call … com.canonical.dbusmenu Event isvu -- <id>
+      clicked s "" 0` on a QindaNote command acts), pen with pressure and
+      tilt on a tablet, palm ignored, dark theme paper white.
+
+Fixtures: `tests/qml_fixtures/qindanote_{1280,520}.txt` are structural
+dumps (named items and visibility, no text or geometry);
+`QQO_UPDATE_FIXTURES=1 ctest -R tst_note_ui` rewrites them after an
+intentional chrome change.
+
 ### M21 the next tier, and the suite's launcher
 
 Automated by `tst_calc_rules`, `tst_calc_rules_ui`, `tst_write_review`,

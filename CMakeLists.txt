@@ -18,13 +18,28 @@ include(CTest)
 
 option(QQO_WITH_CHARTS "Build the Qt Charts integration (emerge dev-qt/qtcharts first)" OFF)
 option(QQO_STRICT_WARNINGS "Enable the suite's strict warning set on first-party targets" OFF)
+# The Qt Widgets apps (QindaWrite, QindaCalc, QindaShow, the launcher) and
+# office_shell build until their QindaTK conversion lands
+# (docs/plans/qindatk-conversion.md M28–M31); OFF builds the converted
+# apps alone, Widgets-free.
+option(QQO_WIDGETS_APPS "Build the Qt Widgets apps and office_shell (pre-conversion)" ON)
 
 # Qt 6.11 with the private Gui headers the per-window global-menu
 # announcement builds on (version-locked like the desktop per ADR-0116;
 # Qt6::GuiPrivate ships with qtbase's private-headers package).
 find_package(KF6Archive REQUIRED)
 find_package(KF6Sonnet REQUIRED)
-find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Widgets DBus Network PrintSupport Svg Test GuiPrivate WidgetsPrivate)
+set(QT_NO_PRIVATE_MODULE_WARNING ON)
+find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Widgets DBus Network PrintSupport Svg Test GuiPrivate WidgetsPrivate
+    Qml Quick QuickControls2 QuickTest QuickPrivate)
+# QindaTK: the suite's UI toolkit (docs/plans/qindatk-conversion.md). A
+# development checkout installs to <QindaTK>/install; point CMAKE_PREFIX_PATH
+# at it, or at the system prefix the dev-libs/qindatk ebuild installs into.
+find_package(QindaTK 0.1 REQUIRED)
+# Poppler renders the print preview from the very PDF the job would print.
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(POPPLER_QT6 REQUIRED IMPORTED_TARGET poppler-qt6)
+qt_standard_project_setup(REQUIRES 6.8)
 
 if(QQO_WITH_CHARTS)
     find_package(Qt6 6.11 REQUIRED COMPONENTS Charts)

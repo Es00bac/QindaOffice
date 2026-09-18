@@ -1,355 +1,101 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// M7 gates (plan section 8): a notebook survives reopen (ink + text),
-// bounded snapshot undo works, tablet pen events draw while touch events
-// are consumed without inking (palm-rejection baseline).
+// The notebook engine and the host: a notebook survives reopen, lazily
+// loaded pages are never blanked by a save, recovery round-trips, page
+// structure commands work through the host and find lands on the page
+// holding the text — none of it needs the window.
 
-#include "qindanote/src/note_page_view.h"
-#include "qindanote/src/note_window.h"
+#include "note_test_support.h"
 
-#include <QApplication>
-#include <QMouseEvent>
-#include <QTemporaryDir>
-#include "standard_actions.h"
-#include <QToolButton>
-#include <QLineEdit>
+#include <QFile>
 #include <QSignalSpy>
-#include <QTabletEvent>
-#include <QtTest>
 
 using namespace QindaOffice::Apps::Notes;
 namespace Ink = QindaOffice::Ink;
 
-class QindaNoteTest : public QObject {
+class QindaNoteTest final : public QObject {
     Q_OBJECT
-private slots:
-    void notebookSurvivesReopen();
-    void undoRemovesStrokes();
-    void penEventsInkAndTouchIsIgnored();
-    void penPresentationFlowsIntoStrokes();
-    void backgroundChoiceEditsEnvelope();
-    void zoomScalesPageNotTheDocument();
-    void savingNeverBlanksPagesThatWereNeverOpened();
-    void redoReplaysAnUndoneStroke();
-    void recoverySnapshotRoundTripsTheNotebook();
-    void findSelectsThePageHoldingTheText();
-    // D-017 structure and layout.
-    void freshWindowOpensOnAWritablePage();
-    void pageViewDoesNotForceTheWindowTall();
-    void newSectionLandsOnItsFirstPage();
-    void deletingAPageRemovesItsFile();
-    void movePageReordersTheSection();
-    void freshWindowIsPristineSoOpenCanReuseIt();
-};
 
-void QindaNoteTest::freshWindowOpensOnAWritablePage()
-{
-    NoteWindow window;
-    window.show();
-    // A pristine notebook used to be completely empty, so the navigator had
-    // nothing in it and the page surface was bound to no page at all.
-    QCOMPARE(window.noteDocument()->notebook()->sections().size(), 1);
-    QVERIFY(window.currentPage() != nullptr);
-    QVERIFY(window.pageView()->page() != nullptr);
-    QVERIFY2(window.statusInfo().contains(QStringLiteral("page 1 of 1")),
-             qPrintable(window.statusInfo()));
-}
-
-void QindaNoteTest::pageViewDoesNotForceTheWindowTall()
-{
-    NoteWindow window;
-    window.resize(900, 500);
-    window.show();
-    // The page widget is a full sheet tall; hosting it directly made that
-    // the WINDOW's minimum height, so QindaNote could not fit on a laptop.
-    QVERIFY2(window.minimumSizeHint().height() < 700,
-             qPrintable(QString::number(window.minimumSizeHint().height())));
-    QVERIFY2(window.height() < 700, qPrintable(QString::number(window.height())));
-}
-
-void QindaNoteTest::newSectionLandsOnItsFirstPage()
-{
-    NoteWindow window;
-    window.show();
-    Notebook *notebook = window.noteDocument()->notebook();
-    NoteSection &section = notebook->addSection(QStringLiteral("Research"));
-    const QString sectionId = section.id;
-    const QString pageId = notebook->addPage(section, QStringLiteral("Sources")).id;
-    window.refreshNavigator();
-    window.selectPageById(sectionId, pageId);
-    QCOMPARE(window.currentSectionId(), sectionId);
-    QCOMPARE(window.currentPageId(), pageId);
-    QVERIFY2(window.statusInfo().startsWith(QStringLiteral("Research")),
-             qPrintable(window.statusInfo()));
-}
-
-void QindaNoteTest::deletingAPageRemovesItsFile()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString path = dir.path() + QStringLiteral("/Work");
-    NoteDocument doc;
-    Notebook *notebook = doc.notebook();
-    auto &sections = const_cast<QVector<NoteSection> &>(notebook->sections());
-    NoteSection &section = sections.first();
-    const QString sectionId = section.id;
-    const QString extra = notebook->addPage(section, QStringLiteral("Scratch")).id;
-    QVERIFY2(doc.save(path), "save notebook");
-    const QString file =
-        path + QStringLiteral("/sections/%1/pages/%2.json").arg(sectionId, extra);
-    QVERIFY2(QFile::exists(file), qPrintable(file));
-
-    QVERIFY(notebook->removePage(sectionId, extra));
-
-    // An index entry removed without its file leaves an orphan the next
-    // load would resurrect.
-    QVERIFY(!QFile::exists(file));
-    QCOMPARE(notebook->sectionById(sectionId)->pages.size(), 1);
-}
-
-void QindaNoteTest::movePageReordersTheSection()
-{
-    NoteDocument doc;
-    Notebook *notebook = doc.notebook();
-    auto &sections = const_cast<QVector<NoteSection> &>(notebook->sections());
-    NoteSection &section = sections.first();
-    const QString first = section.pages.first().id;
-    const QString second = notebook->addPage(section, QStringLiteral("Second")).id;
-
-    QVERIFY(notebook->movePage(section.id, second, -1));
-
-    QCOMPARE(notebook->sectionById(section.id)->pages.first().id, second);
-    QCOMPARE(notebook->sectionById(section.id)->pages.last().id, first);
-    // Past the end is refused rather than clamped: a silent no-op that
-    // reports success would make Move Up look broken at the top.
-    QVERIFY(!notebook->movePage(section.id, second, -1));
-}
-
-void QindaNoteTest::notebookSurvivesReopen()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString path = dir.path() + QStringLiteral("/Work");
+    static Ink::Stroke stroke(const QPointF &from, const QPointF &to)
     {
-        NoteDocument doc;
-        QVERIFY2(doc.save(path), "create notebook");
-        NoteWindow window;
-        // Drive through the document directly (window wiring shares paths).
-        Notebook *notebook = doc.notebook();
-        QCOMPARE(notebook->sections().size(), 1);
-        NoteSection &section = const_cast<QVector<NoteSection> &>(notebook->sections()).first();
-        NotePage &page = section.pages.first();
-        QString error;
-        QVERIFY(doc.notebook()->loadPage(section, page, &error));
-        Ink::Stroke stroke;
-        stroke.samples = {{QPointF(10, 10), 0.7}, {QPointF(200, 120), 0.7}};
-        stroke.complete = true;
-        page.envelope.ink.appendStroke(stroke);
-        page.envelope.blocksJson = R"({"blocks":[{"type":"text","text":"remember milk"}]})";
-        QVERIFY(doc.notebook()->persistPage(section, page, &error));
-        QVERIFY(doc.notebook()->save(&error));
+        Ink::Stroke s;
+        s.samples = {{from, 0.7, 0, 0}, {to, 0.7, 0, 0}};
+        s.complete = true;
+        return s;
     }
+
+private slots:
+    void freshHostOpensOnAWritablePage()
     {
-        NoteDocument doc;
+        NoteHost host;
+        // A pristine notebook used to be completely empty, so the navigator
+        // had nothing in it and the page surface was bound to no page.
+        QCOMPARE(host.noteDocument()->notebook()->sections().size(), 1);
+        QVERIFY(host.currentPage() != nullptr);
+        QVERIFY2(host.statusInfo().contains(QStringLiteral("page 1 of 1")), qPrintable(host.statusInfo()));
+        // AGENT-CONTRACT (ADR-0110): untouched, the host is PRISTINE so
+        // File > Open can reuse the window.
+        QVERIFY(!host.isDirty());
+        QVERIFY(host.isPristineUntitled());
+        QVERIFY(host.navigator()->rowCount() >= 2); // the section and its page
+    }
+
+    void notebookSurvivesReopen()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.path() + QStringLiteral("/Work");
         QString error;
+        {
+            NoteDocument doc;
+            QVERIFY2(doc.save(path, &error), qPrintable(error));
+            Notebook *notebook = doc.notebook();
+            NoteSection *section = notebook->sectionById(notebook->sections().first().id);
+            NotePage &page = section->pages.first();
+            QVERIFY(notebook->loadPage(*section, page, &error));
+            page.envelope.ink.appendStroke(stroke(QPointF(10, 10), QPointF(200, 120)));
+            page.envelope.blocksJson = R"({"blocks":[{"type":"text","text":"remember milk"}]})";
+            QVERIFY(notebook->persistPage(*section, page, &error));
+            QVERIFY(notebook->save(&error));
+        }
+        NoteDocument doc;
         QVERIFY2(doc.load(path, &error), qPrintable(error));
         Notebook *notebook = doc.notebook();
-        NoteSection &section = const_cast<QVector<NoteSection> &>(notebook->sections()).first();
-        NotePage &page = section.pages.first();
-        QVERIFY(notebook->loadPage(section, page, &error));
+        NoteSection *section = notebook->sectionById(notebook->sections().first().id);
+        NotePage &page = section->pages.first();
+        QVERIFY(notebook->loadPage(*section, page, &error));
         QCOMPARE(page.envelope.ink.strokes().size(), 1);
         QVERIFY(page.envelope.blocksJson.contains("remember milk"));
     }
-}
 
-void QindaNoteTest::undoRemovesStrokes()
-{
-    NotePageView view;
-    NotePage page;
-    page.id = QStringLiteral("p");
-    view.setPage(&page);
-    // Two strokes via the mouse fallback path.
-    for (int i = 0; i < 2; ++i) {
-        QTest::mousePress(&view, Qt::LeftButton, Qt::NoModifier, QPoint(100 + i * 40, 80));
-        for (int step = 1; step <= 5; ++step) {
-            QTest::mouseMove(&view, QPoint(100 + i * 40 + step * 20, 80 + step * 10));
+    // AGENT-GUARD regression: pages load lazily, so an unopened page's
+    // envelope is EMPTY in memory. save() used to write every page
+    // unconditionally — viewing one page and pressing Ctrl+S replaced every
+    // other page's file with a blank envelope.
+    void savingNeverBlanksPagesThatWereNeverOpened()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.path() + QStringLiteral("/Notes");
+        QString error;
+        {
+            NoteDocument doc;
+            QVERIFY2(doc.save(path, &error), qPrintable(error));
+            Notebook *book = doc.notebook();
+            NoteSection *section = book->sectionById(book->sections().first().id);
+            NotePage &second = book->addPage(*section, QStringLiteral("Second"));
+            second.envelope.ink.appendStroke(stroke(QPointF(10, 10), QPointF(40, 40)));
+            QVERIFY2(doc.save(path, &error), qPrintable(error));
         }
-        QTest::mouseRelease(&view, Qt::LeftButton, Qt::NoModifier, QPoint(220, 140));
-    }
-    QCOMPARE(page.envelope.ink.strokes().size(), 2);
-    view.undo();
-    QCOMPARE(page.envelope.ink.strokes().size(), 1);
-    view.undo();
-    QCOMPARE(page.envelope.ink.strokes().size(), 0);
-}
-
-void QindaNoteTest::penEventsInkAndTouchIsIgnored()
-{
-    NotePageView view;
-    NotePage page;
-    view.setPage(&page);
-
-    // A pen tablet event draws.
-    const QPointF pos(120, 100);
-    auto *stylus = new QPointingDevice(QStringLiteral("test-stylus"), 1,
-                                       QInputDevice::DeviceType::Stylus,
-                                       QPointingDevice::PointerType::Pen,
-                                       QInputDevice::Capability::Position
-                                           | QInputDevice::Capability::Pressure,
-                                       1, 1);
-    QTabletEvent press(QEvent::TabletPress, stylus, pos, pos, 0.9, 0, 0, 0, 0, 0,
-                       Qt::NoModifier, Qt::LeftButton, Qt::LeftButton);
-    QCoreApplication::sendEvent(&view, &press);
-    QTabletEvent move(QEvent::TabletMove, stylus, QPointF(180, 140), QPointF(180, 140), 0.9, 0,
-                      0, 0, 0, 0, Qt::NoModifier, Qt::NoButton, Qt::NoButton);
-    QCoreApplication::sendEvent(&view, &move);
-    QTabletEvent release(QEvent::TabletRelease, stylus, QPointF(180, 140), QPointF(180, 140),
-                         0.0, 0, 0, 0, 0, 0, Qt::NoModifier, Qt::NoButton, Qt::NoButton);
-    QCoreApplication::sendEvent(&view, &release);
-    QCOMPARE(page.envelope.ink.strokes().size(), 1);
-
-    // A touch tablet event (resting palm) is consumed without inking.
-    const int before = page.envelope.ink.strokes().size();
-    auto *screen = new QPointingDevice(QStringLiteral("test-screen"), 2,
-                                       QInputDevice::DeviceType::TouchScreen,
-                                       QPointingDevice::PointerType::Finger,
-                                       QInputDevice::Capability::Position, 1, 1);
-    QTabletEvent palm(QEvent::TabletPress, screen, pos, pos, 1.0, 0, 0, 0, 0, 0, Qt::NoModifier,
-                      Qt::LeftButton, Qt::LeftButton);
-    QCoreApplication::sendEvent(&view, &palm);
-    QCOMPARE(page.envelope.ink.strokes().size(), before);
-}
-
-
-void QindaNoteTest::freshWindowIsPristineSoOpenCanReuseIt()
-{
-    NoteWindow window;
-    // AGENT-CONTRACT (ADR-0110): a freshly created, untouched window is
-    // PRISTINE, which is what lets File > Open replace its blank document
-    // instead of opening a second window and leaving the blank one behind.
-    // Anything that dirties a document during window construction — a
-    // syntax highlighter's first pass, a default-font apply — breaks that
-    // silently, which is exactly how it broke in QindaWrite.
-    QVERIFY(window.document() != nullptr);
-    QVERIFY2(!window.document()->isDirty(), "a fresh window must not be dirty");
-    QVERIFY(window.isPristineUntitled());
-}
-
-int main(int argc, char *argv[])
-{
-    qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
-    QApplication::setDesktopFileName(QStringLiteral("org.qindaqt.QindaNote"));
-    QindaNoteTest test;
-    return QTest::qExec(&test, argc, argv);
-}
-
-void QindaNoteTest::penPresentationFlowsIntoStrokes()
-{
-    NotePageView view;
-    NotePage page;
-    page.id = QStringLiteral("p1");
-    view.setPage(&page);
-    view.resize(800, 600);
-    view.setPenWidth(7);
-    view.setPenColor(QColor(200, 30, 40));
-
-    // Mouse-fallback inking inside the page area.
-    const QPoint start = view.pageRect().center().toPoint();
-    QTest::mousePress(&view, Qt::LeftButton, {}, start);
-    QTest::mouseMove(&view, start + QPoint(60, 10));
-    QTest::mouseRelease(&view, Qt::LeftButton, {}, start + QPoint(60, 10));
-
-    QCOMPARE(page.envelope.ink.strokes().size(), 1);
-    const Ink::Stroke &stroke = page.envelope.ink.strokes().first();
-    QCOMPARE(stroke.width, 7.0);
-    QCOMPARE(stroke.color, QColor(200, 30, 40));
-    QVERIFY(stroke.samples.size() >= 2);
-}
-
-void QindaNoteTest::backgroundChoiceEditsEnvelope()
-{
-    NotePageView view;
-    NotePage page;
-    page.id = QStringLiteral("p1");
-    view.setPage(&page);
-    QSignalSpy editedSpy(&view, &NotePageView::pageEdited);
-
-    view.setBackground(QStringLiteral("grid"));
-    QCOMPARE(page.envelope.background, QStringLiteral("grid"));
-    QCOMPARE(editedSpy.count(), 1);
-
-    // Unknown styles are still stored verbatim (forward-compatible with
-    // future backgrounds); blank default round-trips.
-    view.setBackground(QStringLiteral("blank"));
-    QCOMPARE(page.envelope.background, QStringLiteral("blank"));
-}
-
-void QindaNoteTest::zoomScalesPageNotTheDocument()
-{
-    NotePageView view;
-    NotePage page;
-    page.id = QStringLiteral("p1");
-    view.setPage(&page);
-    view.resize(1200, 800);
-    const QRectF at100 = view.pageRect();
-    view.setZoom(2.0);
-    const QRectF at200 = view.pageRect();
-    QVERIFY(at200.width() > at100.width() * 1.9);
-    QVERIFY(at200.height() > at100.height() * 1.9);
-
-    // Inked coordinates land in PAGE space regardless of zoom: the same
-    // widget-relative point produces the same document sample.
-    auto inkAt = [&view, &page](qreal zoom) {
-        page.envelope.ink.clear();
-        view.setZoom(zoom);
-        const QPoint widgetPt = view.pageRect().center().toPoint();
-        QTest::mousePress(&view, Qt::LeftButton, {}, widgetPt);
-        QTest::mouseMove(&view, widgetPt + QPoint(40, 0));
-        QTest::mouseRelease(&view, Qt::LeftButton, {}, widgetPt + QPoint(40, 0));
-        return page.envelope.ink.strokes().first().samples.first().pos;
-    };
-    const QPointF sample100 = inkAt(1.0);
-    const QPointF sample200 = inkAt(2.0);
-    QVERIFY(qAbs(sample100.x() - sample200.x()) < 2.0);
-    QVERIFY(qAbs(sample100.y() - sample200.y()) < 2.0);
-}
-
-// AGENT-GUARD regression: pages load lazily, so an unopened page's envelope
-// is EMPTY in memory. save() used to write every page unconditionally —
-// opening a notebook, viewing one page and pressing Ctrl+S replaced every
-// other page's file with a blank envelope.
-void QindaNoteTest::savingNeverBlanksPagesThatWereNeverOpened()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString path = dir.path() + QStringLiteral("/Notes");
-    QString error;
-    {
-        NoteDocument doc;
-        QVERIFY2(doc.save(path, &error), qPrintable(error));
-        Notebook *book = doc.notebook();
-        NoteSection *section = book->sectionById(book->sections().first().id);
-        QVERIFY(section != nullptr);
-        NotePage &second = book->addPage(*section, QStringLiteral("Second"));
-        Ink::Stroke stroke;
-        stroke.samples = {{QPointF(10, 10), 0.5, 0, 0}, {QPointF(40, 40), 0.5, 0, 0}};
-        second.envelope.ink.appendStroke(stroke);
-        QVERIFY2(doc.save(path, &error), qPrintable(error));
-    }
-    // Reopen, touch only the FIRST page, save.
-    {
-        NoteDocument doc;
-        QVERIFY2(doc.load(path, &error), qPrintable(error));
-        Notebook *book = doc.notebook();
-        NoteSection *section = book->sectionById(book->sections().first().id);
-        QVERIFY(section != nullptr);
-        QCOMPARE(section->pages.size(), 2);
-        QVERIFY(!section->pages.at(1).loaded); // never opened
-        QVERIFY(book->loadPage(*section, section->pages[0], &error));
-        QVERIFY2(doc.save(path, &error), qPrintable(error));
-    }
-    // The untouched page still has its stroke.
-    {
+        {
+            NoteDocument doc;
+            QVERIFY2(doc.load(path, &error), qPrintable(error));
+            Notebook *book = doc.notebook();
+            NoteSection *section = book->sectionById(book->sections().first().id);
+            QCOMPARE(section->pages.size(), 2);
+            QVERIFY(!section->pages.at(1).loaded);
+            QVERIFY(book->loadPage(*section, section->pages[0], &error));
+            QVERIFY2(doc.save(path, &error), qPrintable(error));
+        }
         NoteDocument doc;
         QVERIFY2(doc.load(path, &error), qPrintable(error));
         Notebook *book = doc.notebook();
@@ -357,118 +103,160 @@ void QindaNoteTest::savingNeverBlanksPagesThatWereNeverOpened()
         QVERIFY(book->loadPage(*section, section->pages[1], &error));
         QCOMPARE(section->pages.at(1).envelope.ink.strokes().size(), 1);
     }
-}
 
-// The view had an undo stack and no inverse, so Edit > Redo was dead.
-void QindaNoteTest::redoReplaysAnUndoneStroke()
-{
-    NotePage page;
-    page.loaded = true;
-    NotePageView view;
-    view.setPage(&page);
-    QSignalSpy redoSpy(&view, &NotePageView::redoAvailable);
-    Ink::Stroke stroke;
-    stroke.samples = {{QPointF(5, 5), 0.5, 0, 0}, {QPointF(30, 30), 0.5, 0, 0}};
-    page.envelope.ink.appendStroke(stroke);
-
-    view.undo(); // nothing pushed yet: no-op, and no redo appears
-    QCOMPARE(page.envelope.ink.strokes().size(), 1);
-
-    const QPoint widgetPt = view.pageRect().topLeft().toPoint() + QPoint(60, 60);
-    QTest::mousePress(&view, Qt::LeftButton, {}, widgetPt);
-    QTest::mouseMove(&view, widgetPt + QPoint(40, 0));
-    QTest::mouseRelease(&view, Qt::LeftButton, {}, widgetPt + QPoint(40, 0));
-    QCOMPARE(page.envelope.ink.strokes().size(), 2);
-
-    view.undo();
-    QCOMPARE(page.envelope.ink.strokes().size(), 1);
-    QVERIFY(!redoSpy.isEmpty());
-    QVERIFY(redoSpy.last().first().toBool()); // redo became available
-    view.redo();
-    QCOMPARE(page.envelope.ink.strokes().size(), 2);
-    // A fresh edit ends the redo branch.
-    QTest::mousePress(&view, Qt::LeftButton, {}, widgetPt);
-    QTest::mouseMove(&view, widgetPt + QPoint(0, 40));
-    QTest::mouseRelease(&view, Qt::LeftButton, {}, widgetPt + QPoint(0, 40));
-    view.redo();
-    QCOMPARE(page.envelope.ink.strokes().size(), 3); // redo did nothing
-}
-
-// recoverySnapshot() returned {} for notebooks, so a crash lost every
-// unsaved page and the shell offered a Recover prompt that always failed.
-void QindaNoteTest::recoverySnapshotRoundTripsTheNotebook()
-{
-    NoteDocument doc; // untitled: everything lives in memory
-    Notebook *book = doc.notebook();
-    NoteSection &section = book->addSection(QStringLiteral("Ideas"));
-    NotePage &page = book->addPage(section, QStringLiteral("Sketch"));
-    Ink::Stroke stroke;
-    stroke.samples = {{QPointF(3, 4), 0.7, 0, 0}, {QPointF(9, 12), 0.7, 0, 0}};
-    page.envelope.ink.appendStroke(stroke);
-    page.envelope.background = QStringLiteral("grid");
-
-    const QByteArray payload = doc.recoverySnapshot();
-    QVERIFY(!payload.isEmpty());
-
-    NoteDocument restored;
-    QString error;
-    QVERIFY2(restored.loadRecovery(payload, &error), qPrintable(error));
-    Notebook *back = restored.notebook();
-    // A pristine document already carries the default "Notes" section, so
-    // the round trip must hold BOTH it and the one the test added.
-    QCOMPARE(back->sections().size(), 2);
-    QCOMPARE(back->sections().last().name, QStringLiteral("Ideas"));
-    const NotePage &recovered = back->sections().last().pages.first();
-    QCOMPARE(recovered.title, QStringLiteral("Sketch"));
-    QCOMPARE(recovered.envelope.background, QStringLiteral("grid"));
-    QCOMPARE(recovered.envelope.ink.strokes().size(), 1);
-    QVERIFY(restored.isDirty());
-}
-
-
-// Edit > Find was a dead menu entry in QindaNote, and a search that skipped
-// pages nobody had opened would report "not found" for text that is there.
-void QindaNoteTest::findSelectsThePageHoldingTheText()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString path = dir.path() + QStringLiteral("/Search");
-    QString error;
-    QString wantedPageId;
+    void recoverySnapshotRoundTripsTheNotebook()
     {
-        NoteDocument seed;
-        QVERIFY2(seed.save(path, &error), qPrintable(error));
-        Notebook *book = seed.notebook();
-        NoteSection *section = book->sectionById(book->sections().first().id);
-        QVERIFY(section != nullptr);
-        NotePage &second = book->addPage(*section, QStringLiteral("Second"));
-        second.envelope.blocksJson =
-            R"({"blocks":[{"type":"text","text":"remember the pangolin"}]})";
-        wantedPageId = second.id;
-        QVERIFY2(seed.save(path, &error), qPrintable(error));
+        NoteDocument doc;
+        Notebook *book = doc.notebook();
+        NoteSection &section = book->addSection(QStringLiteral("Ideas"));
+        NotePage &page = book->addPage(section, QStringLiteral("Sketch"));
+        page.envelope.ink.appendStroke(stroke(QPointF(3, 4), QPointF(9, 12)));
+        page.envelope.background = QStringLiteral("grid");
+        const QByteArray payload = doc.recoverySnapshot();
+        QVERIFY(!payload.isEmpty());
+        NoteDocument restored;
+        QString error;
+        QVERIFY2(restored.loadRecovery(payload, &error), qPrintable(error));
+        Notebook *back = restored.notebook();
+        QCOMPARE(back->sections().size(), 2);
+        QCOMPARE(back->sections().last().name, QStringLiteral("Ideas"));
+        const NotePage &recovered = back->sections().last().pages.first();
+        QCOMPARE(recovered.title, QStringLiteral("Sketch"));
+        QCOMPARE(recovered.envelope.background, QStringLiteral("grid"));
+        QCOMPARE(recovered.envelope.ink.strokes().size(), 1);
+        QVERIFY(restored.isDirty());
     }
 
-    NoteWindow window;
-    window.show();
-    QVERIFY(QTest::qWaitForWindowExposed(&window));
-    window.openNotebookPath(path);
-    // The window lands on the FIRST page; the match is on a page that has
-    // never been opened, so its envelope is empty in memory right now.
-    QVERIFY(window.noteDocument()->notebook()->sections().first().pages.size() >= 2);
+    void deletingAPageRemovesItsFile()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.path() + QStringLiteral("/Work");
+        NoteDocument doc;
+        Notebook *notebook = doc.notebook();
+        NoteSection *section = notebook->sectionById(notebook->sections().first().id);
+        const QString sectionId = section->id;
+        const QString extra = notebook->addPage(*section, QStringLiteral("Scratch")).id;
+        QVERIFY(doc.save(path));
+        const QString file = path + QStringLiteral("/sections/%1/pages/%2.json").arg(sectionId, extra);
+        QVERIFY2(QFile::exists(file), qPrintable(file));
+        QVERIFY(notebook->removePage(sectionId, extra));
+        // An index entry removed without its file leaves an orphan the next
+        // load would resurrect.
+        QVERIFY(!QFile::exists(file));
+        QCOMPARE(notebook->sectionById(sectionId)->pages.size(), 1);
+    }
 
-    QAction *find = window.action(QString::fromLatin1(QindaOffice::Shell::ActionId::kEditFind));
-    QVERIFY(find != nullptr);
-    QVERIFY2(find->isEnabled(), "Edit > Find must be reachable");
-    find->trigger();
-    auto *findEdit = window.findChild<QLineEdit *>(QStringLiteral("noteFindEdit"));
-    QVERIFY(findEdit != nullptr);
-    findEdit->setText(QStringLiteral("pangolin"));
-    auto *next = window.findChild<QToolButton *>(QStringLiteral("noteFindNextButton"));
-    QVERIFY(next != nullptr);
-    next->click();
+    void structureCommandsGoThroughTheHost()
+    {
+        NoteHost host;
+        Notebook *book = host.noteDocument()->notebook();
+        const QString firstSection = host.currentSectionId();
+        const QString firstPage = host.currentPageId();
 
-    QCOMPARE(window.pageView()->page() != nullptr, true);
-    QCOMPARE(window.pageView()->page()->id, wantedPageId);
-}
+        host.actions()->trigger(QStringLiteral("notePageNew"));
+        QCOMPARE(book->sectionById(firstSection)->pages.size(), 2);
+        QVERIFY(host.currentPageId() != firstPage); // lands on the new page
+        QVERIFY(host.isDirty());
+
+        // New section: a name answered by the window's prompt.
+        QSignalSpy prompt(&host, &NoteHost::newSectionRequested);
+        host.actions()->trigger(QStringLiteral("noteSectionNew"));
+        QCOMPARE(prompt.count(), 1);
+        host.createSection(QStringLiteral("Research"));
+        QCOMPARE(book->sections().size(), 2);
+        QCOMPARE(book->sections().last().name, QStringLiteral("Research"));
+        QVERIFY2(host.statusInfo().startsWith(QStringLiteral("Research")), qPrintable(host.statusInfo()));
+        QCOMPARE(host.currentSectionId(), book->sections().last().id);
+
+        // Next/Previous walk every page in order and wrap across sections.
+        host.actions()->trigger(QStringLiteral("notePageNext"));
+        QCOMPARE(host.currentSectionId(), firstSection);
+        QCOMPARE(host.currentPageId(), firstPage);
+        host.actions()->trigger(QStringLiteral("notePagePrevious"));
+        QCOMPARE(host.currentSectionId(), book->sections().last().id);
+
+        // Rename through the prompt's answer.
+        host.renamePage(host.currentSectionId(), host.currentPageId(), QStringLiteral("Sources"));
+        QCOMPARE(host.currentPage()->title, QStringLiteral("Sources"));
+        QCOMPARE(host.currentPageTitle(), QStringLiteral("Sources"));
+
+        // Move: the second page of the first section up, then refuse past
+        // the top (a silent no-op that reports success made Move Up look
+        // broken).
+        host.selectPage(firstSection, book->sectionById(firstSection)->pages.last().id);
+        const QString moved = host.currentPageId();
+        host.actions()->trigger(QStringLiteral("notePageMoveUp"));
+        QCOMPARE(book->sectionById(firstSection)->pages.first().id, moved);
+        QVERIFY(!host.actions()->entry(QStringLiteral("notePageMoveUp"))->isEnabled());
+
+        // Duplicate lands right after its source with the same ink.
+        host.currentPage()->envelope.ink.appendStroke(stroke(QPointF(1, 1), QPointF(5, 5)));
+        host.actions()->trigger(QStringLiteral("notePageDuplicate"));
+        QCOMPARE(book->sectionById(firstSection)->pages.size(), 3);
+        QCOMPARE(book->sectionById(firstSection)->pages.at(1).id, host.currentPageId());
+        QCOMPARE(host.currentPage()->envelope.ink.strokes().size(), 1);
+        QVERIFY(host.currentPage()->title.endsWith(QStringLiteral("(copy)")));
+
+        // Delete asks first; the confirmed delete moves to a neighbour.
+        QSignalSpy ask(&host, &NoteHost::deletePageRequested);
+        host.actions()->trigger(QStringLiteral("notePageDelete"));
+        QCOMPARE(ask.count(), 1);
+        host.deletePageConfirmed();
+        QCOMPARE(book->sectionById(firstSection)->pages.size(), 2);
+        QVERIFY(host.currentPage() != nullptr);
+        // The last section can never be deleted.
+        host.deleteSectionConfirmed();
+        QCOMPARE(book->sections().size(), 1);
+        QVERIFY(!host.actions()->entry(QStringLiteral("noteSectionDelete"))->isEnabled());
+    }
+
+    void backgroundChoiceEditsThePage()
+    {
+        NoteHost host;
+        host.actions()->trigger(QStringLiteral("notePageBackground_grid"));
+        QCOMPARE(host.currentPage()->envelope.background, QStringLiteral("grid"));
+        QVERIFY(host.actions()->entry(QStringLiteral("notePageBackground_grid"))->isChecked());
+        host.setBackground(QStringLiteral("blank"));
+        QCOMPARE(host.currentPage()->envelope.background, QStringLiteral("blank"));
+    }
+
+    // Edit > Find was a dead menu entry in QindaNote, and a search that
+    // skipped pages nobody had opened would report "not found" for text
+    // that is there.
+    void findSelectsThePageHoldingTheText()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.path() + QStringLiteral("/Search");
+        QString error;
+        QString wanted;
+        {
+            NoteDocument seed;
+            QVERIFY2(seed.save(path, &error), qPrintable(error));
+            Notebook *book = seed.notebook();
+            NoteSection *section = book->sectionById(book->sections().first().id);
+            NotePage &second = book->addPage(*section, QStringLiteral("Second"));
+            second.envelope.blocksJson = R"({"blocks":[{"type":"text","text":"remember the pangolin"}]})";
+            wanted = second.id;
+            QVERIFY2(seed.save(path, &error), qPrintable(error));
+        }
+        NoteHost host;
+        QVERIFY(host.loadPath(path));
+        // The host lands on the FIRST page; the match is on a page that has
+        // never been opened, so its envelope is empty in memory right now.
+        QVERIFY(host.noteDocument()->notebook()->sections().first().pages.size() >= 2);
+        QCOMPARE(host.currentPageId(), host.noteDocument()->notebook()->sections().first().pages.first().id);
+        QVERIFY(host.actions()->entry(QStringLiteral("editFindAction"))->isEnabled());
+        QVERIFY(host.findNext(QStringLiteral("pangolin"), false));
+        QCOMPARE(host.currentPageId(), wanted);
+        QVERIFY(!host.findNext(QStringLiteral("no such text"), false));
+        // Replace All rewrites the typed text on every page.
+        QCOMPARE(host.replaceAll(QStringLiteral("pangolin"), QStringLiteral("armadillo")), 1);
+        QVERIFY(host.currentPage()->envelope.blocksJson.contains("armadillo"));
+    }
+};
+
+NOTE_TEST_MAIN(QindaNoteTest)
 
 #include "tst_qindanote.moc"

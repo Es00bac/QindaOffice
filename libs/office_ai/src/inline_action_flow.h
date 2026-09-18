@@ -3,18 +3,23 @@
 
 // InlineActionFlow (plan section 5.3): Rewrite / Shorten / Expand / Fix
 // grammar / Summarize / Continue writing / Explain over the current
-// selection, with a ProposalDialog showing original vs proposal and
-// Apply / Regenerate / Discard. Structured output v1 is "text in a fenced
-// block" extraction everywhere.
+// selection. The model's proposal is shown against the original with
+// Apply / Regenerate / Discard through a PRESENTER the app supplies
+// (conversion plan §3.8: the QML window fills it with ProposalDialog.qml;
+// a Widgets app that sets none gets the QDialog from
+// proposal_dialog_widgets.h while QQO_WIDGETS_APPS is on). Structured
+// output v1 is "text in a fenced block" extraction everywhere.
 
-#include "assistant_panel.h"
 #include "document_context.h"
 
-#include <QDialog>
+#include <QObject>
+#include <QVector>
 
-class QTextEdit;
+#include <functional>
 
 namespace QindaOffice::Ai {
+
+class ModelCatalog;
 
 // One canned inline action -> prompt template.
 struct InlineAction {
@@ -25,17 +30,14 @@ struct InlineAction {
 
 [[nodiscard]] const QVector<InlineAction> &inlineActions();
 
-class ProposalDialog : public QDialog {
-    Q_OBJECT
-public:
-    ProposalDialog(const QString &original, const QString &proposal, QWidget *parent = nullptr);
-
-signals:
-    void regenerateRequested();
-
-private:
-    QTextEdit *m_original;
-    QTextEdit *m_proposal;
+// How a proposal reaches the user. `show` presents original vs proposal
+// and calls exactly one of apply() / regenerate() / nothing (discard);
+// `failed` reports a provider error.
+struct ProposalPresenter {
+    std::function<void(const QString &original, const QString &proposal,
+                       std::function<void()> apply, std::function<void()> regenerate)>
+        show;
+    std::function<void(const QString &message)> failed;
 };
 
 class InlineActionFlow : public QObject {
@@ -44,18 +46,30 @@ public:
     InlineActionFlow(ModelCatalog *catalog, DocumentContextProvider *context,
                      EditApplier *applier, QObject *parent = nullptr);
 
+    void setPresenter(ProposalPresenter presenter) { m_presenter = std::move(presenter); }
+
     // Runs the action over the current selection (explicit user action;
-    // nothing is sent without this call).
-    void run(const QString &actionId, QWidget *dialogParent);
+    // nothing is sent without this call). `dialogParent` is the window the
+    // Widgets fallback dialog is parented to; a QML presenter ignores it.
+    void run(const QString &actionId, QObject *dialogParent = nullptr);
+
+    [[nodiscard]] static QString extractProposal(const QString &modelText);
+
+signals:
+    // Mirrors of the presenter calls, for tests and status lines.
+    void proposalReady(const QString &original, const QString &proposal);
+    void failed(const QString &message);
 
 private:
-    void execute(const InlineAction &action, QWidget *dialogParent = nullptr);
-    [[nodiscard]] static QString extractProposal(const QString &modelText);
+    void execute(const InlineAction &action, QObject *dialogParent);
+    void present(const InlineAction &action, const QString &original, const QString &proposal,
+                 QObject *dialogParent);
 
     ModelCatalog *m_catalog;
     DocumentContextProvider *m_context;
     EditApplier *m_applier;
     InlineAction m_pending;
+    ProposalPresenter m_presenter;
 };
 
 } // namespace QindaOffice::Ai

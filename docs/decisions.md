@@ -5,6 +5,71 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-027: The suite's UI is QindaTK on QtQuick; paper stays paper; the panel menu is exported from an action model
+
+**Date:** 2026-09-17 · **Status:** accepted (M27; M28–M31 extend it to the
+other apps) · **Plan:** `docs/plans/qindatk-conversion.md`
+
+**Decision.** The office suite's user interface is QindaTK (QML, on
+QtQuick) — the same toolkit the QindaQt desktop's first-party apps use —
+not Qt Widgets. One document is still one ordinary top-level window
+(ADR-0110), now a `Tk.AppWindow` over a `DocumentHost` in `libs/office_quick`
+(`QindaOffice.Shell`): the host owns the document, the commands
+(`ActionModel`), the menu tree (`MenuTree`) and every flow (open, save,
+close consent, overwrite, print, preferences) as *asynchronous requests the
+QML window answers with dialogs*; the window renders bands and dialogs from
+the host and never owns state. QindaNote is the first app on it.
+
+**What was verified before deciding (plan §2).**
+
+- *V2 — the pen.* QtQuick delivers a raw `QTabletEvent` (pressure, tilt,
+  pointer type) only to a C++ `QQuickPointerDeviceHandler` subclass and only
+  through the platform path; plain items and QML handlers see synthesised
+  mouse events with no pressure. Hence `Tk.StylusHandler` (a QindaTK
+  addition) and `NotePageItem` as a `QQuickPaintedItem` in document units
+  under a `Tk.Viewport`. Touch never reaches it: the palm baseline.
+- *V3 — the desktop's `AppShell::ActionRegistry`* refuses commands without
+  a shortcut and models flat menus only, so the suite keeps its own
+  exporter over the desktop's toolkit-neutral `Exporter::MenuSource`
+  (*V4*: validator limits depth 6, 128 children, 1024 items, unique ids,
+  one checked item per radio group).
+- *V5 — the Widgets suite's panel menu was dead for 71 of 72 commands*,
+  in every app, since the start: activation resolved through
+  `menuBar()->findChild<QAction*>(id)` while the actions were parented to
+  the window. `ActionModelMenuSource` exports from the model and
+  `GlobalMenuExport` resolves an activation by id *in the model*;
+  `tests/qindanote/tst_note_menu_export.cpp` asserts that every exported
+  command resolves and fires (a hard failure now, not an expected one).
+- *V9 — one announcement.* With `QGuiApplication` there is no
+  `QDBusMenuBar`, so the double export (`/MenuBar/2` from Qt plus the
+  suite's own endpoint) disappears; the suite's export is the only one.
+
+**Paper stays paper (D-004 kept).** The page is pinned white with dark ink
+under every theme; the chrome follows the desktop's tokens through
+`ThemeBridge.qml` when the `QindaTK.QindaQt` bridge is installed and the
+`sloom-dark` preset otherwise, at the `comfortable` density
+(`Preferences.themePreset` / `Preferences.density`). `NoteInputTest::
+pageIsPaperUnderTheDarkPreset` reads the pixels.
+
+**Printing without a QApplication.** `QPrintDialog`/`QPrintPreviewDialog`
+are Widgets-only. `PrintJob` renders the app's callback into a PDF; the
+preview is that same PDF rendered by Poppler (`PagePreviewItem`); the
+dialog (`PrintDialog.qml`) lists printers from `PrinterModel`. What you
+preview is what prints.
+
+**Rules superseded** (AGENTS.md is rewritten in M31): rule 3 (Widgets
+palette roles → QindaTK theme tokens; no literal colours in chrome), rule
+4 (`QAction` per command → one `ActionEntry` per command; the `objectName`
+becomes the entry id, the same stable string), rule 8 (menu shape is the
+`MenuTree`, exported through `ActionModelMenuSource`). The Widgets apps
+build behind `QQO_WIDGETS_APPS=ON` until their milestone lands.
+
+**Consequences.** Every window has a structural `--dump` fixture
+(`tests/qml_fixtures/`); QML files obey the same 500-line budget;
+`office_ai` is Widgets-free (`AssistantController` + `AssistantPanel.qml`,
+`ProposalDialog.qml`, an `InlineActionFlow` presenter seam), its Widgets
+panel compiled only behind the option.
+
 ## D-026: Ink is filled geometry, the eraser is live, and pen state is window-independent
 
 **Context.** QindaNote's M22 pen overhaul (`docs/plans/qindanote-ux-overhaul.md`).

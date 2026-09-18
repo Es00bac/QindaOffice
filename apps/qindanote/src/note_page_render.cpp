@@ -2,36 +2,32 @@
 #include "note_page_render.h"
 
 #include "ink_persistence.h"
-#include "note_blocks.h"
 
 #include <QImage>
-
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QPainter>
 
 namespace QindaOffice::Apps::Notes {
 
-namespace {
-
-void paintBackground(QPainter *painter, const QString &background, const QRectF &page)
+void paintNoteBackground(QPainter *painter, const QString &background, const QSizeF &pageSize)
 {
-    painter->setPen(QPen(QColor(0xc8, 0xc8, 0xd2), 1));
+    // Document surface, not chrome: the guide grey is a literal (D-004).
+    painter->setPen(QPen(QColor(0xc8, 0xc8, 0xd2), 0));
+    const qreal w = pageSize.width();
+    const qreal h = pageSize.height();
     if (background == QLatin1String("ruled")) {
-        for (qreal y = page.top() + 32; y < page.bottom(); y += 28) {
-            painter->drawLine(QPointF(page.left() + 24, y), QPointF(page.right() - 24, y));
+        for (qreal y = 32; y < h; y += 28) {
+            painter->drawLine(QPointF(24, y), QPointF(w - 24, y));
         }
     } else if (background == QLatin1String("grid")) {
-        for (qreal y = page.top() + 24; y < page.bottom(); y += 28) {
-            painter->drawLine(QPointF(page.left() + 24, y), QPointF(page.right() - 24, y));
+        for (qreal y = 24; y < h; y += 28) {
+            painter->drawLine(QPointF(24, y), QPointF(w - 24, y));
         }
-        for (qreal x = page.left() + 24; x < page.right(); x += 28) {
-            painter->drawLine(QPointF(x, page.top() + 24), QPointF(x, page.bottom() - 24));
+        for (qreal x = 24; x < w; x += 28) {
+            painter->drawLine(QPointF(x, 24), QPointF(x, h - 24));
         }
     } else if (background == QLatin1String("dotted")) {
-        for (qreal y = page.top() + 24; y < page.bottom(); y += 22) {
-            for (qreal x = page.left() + 24; x < page.right(); x += 22) {
+        for (qreal y = 24; y < h; y += 22) {
+            for (qreal x = 24; x < w; x += 22) {
                 painter->drawPoint(QPointF(x, y));
             }
         }
@@ -39,31 +35,31 @@ void paintBackground(QPainter *painter, const QString &background, const QRectF 
 }
 
 // AGENT-CONTRACT: the layout comes from note_blocks.h, the SAME function
-// the screen view positions its widgets with. Computing it twice is how
-// printed text ends up somewhere the user never saw it.
-//
-// Render order (AGENT-GUARD: identical to NotePageView::paintEvent, so the
-// printer and the screen cannot drift): background → image blocks →
-// text/checklist blocks → highlighter strokes → pen strokes. Ink sits
-// above typed text: annotating notes is the point.
-void paintBlocks(QPainter *painter, const QByteArray &blocksJson, const QRectF &page,
-                 PageBlock::Kind only)
+// the screen item paints and edits with. Computing it twice is how printed
+// text ends up somewhere the user never saw it.
+void paintNoteBlocks(QPainter *painter, const QList<PageBlock> &blocks, PageBlock::Kind kind,
+                     int skipIndex)
 {
+    painter->save();
+    painter->setFont(pageFont());
     painter->setPen(QColor(0x20, 0x20, 0x28));
-    for (const PageBlock &block : layoutBlocks(blocksJson, page.width())) {
-        if (block.kind != only) {
+    for (const PageBlock &block : blocks) {
+        if (block.kind != kind || block.index == skipIndex) {
             continue;
         }
-        const QRectF box = block.rect.translated(page.topLeft());
+        const QRectF box = block.rect;
         switch (block.kind) {
         case PageBlock::Kind::Text:
-            painter->drawText(box, Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop, block.text);
+            painter->drawText(box.adjusted(kTextPadding, kTextPadding, -kTextPadding, -kTextPadding),
+                              Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop, block.text);
             break;
         case PageBlock::Kind::Check: {
             // A printed checklist needs a real box and a real tick: a bare
             // "[x]" prefix reads as text, not as a checked item.
+            const qreal indent = block.level * kCheckIndent;
             const qreal side = qMin<qreal>(14, box.height() - 4);
-            const QRectF tick(box.left(), box.center().y() - side / 2, side, side);
+            const QRectF tick(box.left() + indent + 2, box.center().y() - side / 2, side, side);
+            painter->setPen(QPen(QColor(0x20, 0x20, 0x28), 1.2));
             painter->drawRect(tick);
             if (block.checked) {
                 painter->drawLine(tick.topLeft() + QPointF(2, side / 2),
@@ -71,8 +67,14 @@ void paintBlocks(QPainter *painter, const QByteArray &blocksJson, const QRectF &
                 painter->drawLine(tick.bottomLeft() + QPointF(side / 2, -2),
                                   tick.topRight() + QPointF(-2, 2));
             }
-            painter->drawText(box.adjusted(side + 8, 0, 0, 0),
+            QFont font = pageFont();
+            font.setStrikeOut(block.checked);
+            painter->setFont(font);
+            painter->setPen(block.checked ? QColor(0x20, 0x20, 0x28, 128) : QColor(0x20, 0x20, 0x28));
+            painter->drawText(box.adjusted(indent + side + 10, 0, -kTextPadding, 0),
                               Qt::AlignLeft | Qt::AlignVCenter, block.text);
+            painter->setFont(pageFont());
+            painter->setPen(QColor(0x20, 0x20, 0x28));
             break;
         }
         case PageBlock::Kind::Image: {
@@ -81,26 +83,31 @@ void paintBlocks(QPainter *painter, const QByteArray &blocksJson, const QRectF &
                 && !image.isNull()) {
                 painter->drawImage(box, image);
             } else {
+                // An unreadable image says so rather than leaving a gap the
+                // user cannot explain.
+                painter->setPen(Qt::DashLine);
                 painter->drawRect(box);
+                painter->drawText(box, Qt::AlignCenter, QObject::tr("Image unavailable"));
+                painter->setPen(QColor(0x20, 0x20, 0x28));
             }
             break;
         }
         }
     }
+    painter->restore();
 }
-
-} // namespace
 
 void renderNotePage(QPainter *painter, const NotePage &page, const QSizeF &pageSize)
 {
     const QRectF rect(QPointF(0, 0), pageSize);
     painter->fillRect(rect, Qt::white);
-    paintBackground(painter, page.envelope.background, rect);
     painter->save();
     painter->setClipRect(rect);
-    paintBlocks(painter, page.envelope.blocksJson, rect, PageBlock::Kind::Image);
-    paintBlocks(painter, page.envelope.blocksJson, rect, PageBlock::Kind::Text);
-    paintBlocks(painter, page.envelope.blocksJson, rect, PageBlock::Kind::Check);
+    paintNoteBackground(painter, page.envelope.background, pageSize);
+    const QList<PageBlock> blocks = layoutBlocks(page.envelope.blocksJson, pageSize.width());
+    paintNoteBlocks(painter, blocks, PageBlock::Kind::Image);
+    paintNoteBlocks(painter, blocks, PageBlock::Kind::Text);
+    paintNoteBlocks(painter, blocks, PageBlock::Kind::Check);
     Ink::renderStrokes(painter, page.envelope.ink.strokes());
     painter->restore();
 }

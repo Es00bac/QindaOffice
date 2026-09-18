@@ -6,17 +6,15 @@
 
 #include "mock_sse_server.h"
 
-#include "assistant_panel.h"
+#include "assistant_controller.h"
 #include "cli_provider.h"
 #include "http_chat_provider.h"
 #include "inline_action_flow.h"
 #include "model_catalog.h"
 #include "sse_parser.h"
 
-#include <QApplication>
+#include <QGuiApplication>
 #include <QSignalSpy>
-#include <QTextBrowser>
-#include <QToolButton>
 #include <QFile>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -35,7 +33,7 @@ private slots:
     void catalogSeedsAndCreatesProviders();
     void catalogResolvesTheIdsItHandsOut();
     void catalogKeepsAnUnreadableFileInsteadOfSeedingOverIt();
-    void assistantPanelSendsAndStreams();
+    void assistantControllerSendsAndStreams();
     void inlineActionExtractsFencedBlocks();
 };
 
@@ -247,7 +245,7 @@ void OfficeAiTest::catalogKeepsAnUnreadableFileInsteadOfSeedingOverIt()
     QVERIFY(!catalog.providers().isEmpty());
 }
 
-void OfficeAiTest::assistantPanelSendsAndStreams()
+void OfficeAiTest::assistantControllerSendsAndStreams()
 {
     MockSseServer server;
     server.setScript({
@@ -293,18 +291,26 @@ void OfficeAiTest::assistantPanelSendsAndStreams()
     };
     Ctx ctx;
     App app;
-    AssistantPanel panel(&catalog, &ctx, &app);
-    panel.show();
-
-    QSignalSpy spy(&panel, &AssistantPanel::currentModelId); // touch moc linkage
-    Q_UNUSED(spy);
-    panel.sendPrompt(QStringLiteral("hello"));
-    QTRY_VERIFY_WITH_TIMEOUT(!panel.findChild<QTextBrowser *>()->toPlainText().isEmpty()
-                                 && panel.findChild<QTextBrowser *>()->toPlainText().contains(
-                                     QStringLiteral("panel answer")),
-                             5000);
-    // Reply actions enable after the stream completes.
-    QTRY_VERIFY_WITH_TIMEOUT(panel.findChildren<QToolButton *>().size() >= 4, 3000);
+    AssistantController assistant(&catalog, &ctx, &app);
+    QVERIFY(!assistant.models().isEmpty());
+    QCOMPARE(assistant.modelId(), catalog.modelIds().first());
+    QVERIFY(!assistant.hasReply());
+    QSignalSpy streaming(&assistant, &AssistantController::streamingChanged);
+    assistant.send(QStringLiteral("hello"));
+    // The prompt is on the transcript at once; the reply streams in.
+    QVERIFY(assistant.conversation().contains(QStringLiteral("hello")));
+    QTRY_VERIFY_WITH_TIMEOUT(assistant.conversation().contains(QStringLiteral("panel answer")), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(!assistant.streaming(), 5000);
+    QVERIFY(streaming.count() >= 2);
+    // Reply actions work after the stream completes, through the seams.
+    QVERIFY(assistant.hasReply());
+    QCOMPARE(assistant.lastReply().trimmed(), QStringLiteral("panel answer"));
+    assistant.insert();
+    QCOMPARE(app.inserted.trimmed(), QStringLiteral("panel answer"));
+    assistant.replaceSelection();
+    QCOMPARE(app.applied.trimmed(), QStringLiteral("panel answer"));
+    assistant.clearConversation();
+    QVERIFY(assistant.conversation().isEmpty());
 }
 
 void OfficeAiTest::inlineActionExtractsFencedBlocks()
@@ -325,7 +331,7 @@ void OfficeAiTest::inlineActionExtractsFencedBlocks()
 int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     OfficeAiTest test;
     return QTest::qExec(&test, argc, argv);
 }
