@@ -5,6 +5,52 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-028: QindaCalc on QtQuick, and real-world Excel workbooks open
+
+**Date:** 2026-09-17 · **Status:** accepted (M28) · **Plan:**
+`docs/plans/qindatk-conversion.md` §5.2
+
+**Decision.** QindaCalc is the second app on `office_quick` (D-027).
+`SpreadsheetItem` is a `QQuickPaintedItem` over the sparse engine: one
+pair of visible-band lists drives painting, the header bands and
+hit-testing (frozen panes stay consistent by construction), scrolling is
+the item's own `scrollX/scrollY` bound to two `Tk.ScrollBar`s, and the
+one live cell editor is a `Tk.TextField` the QML grid places at
+`editorRect` — Return commits and moves down, Tab commits and moves
+right, Escape cancels, a printable key opens it with that character.
+`CalcHost` owns the Insert / Format / Data / Sheet command sets as
+`ActionEntry`s (the strips, the menus, the grid and sheet-tab context
+menus and the panel are one set), and every dialog is a request signal
+answered by QML (`SizeDialog`, `CondFormatDialog`, `ValidationDialog`,
+`CommentDialog`, `FilterPopover`, `ChartDialog`); the whole rule list
+travels through the dialog so one visit is one undo step. Charts render
+through QtCharts' QML `ChartView` from series data the host derives
+(`chart_series.h`); the Widgets chart dialog is gone.
+
+**Excel packages that would not open.** A workbook written by the Open
+XML SDK family (`Northstar_Excel_Demo.xlsx`) did not open at all. Three
+causes, each fixed where it belongs:
+
+- *Absolute part names.* Its relationships say `Target="/xl/workbook.xml"`;
+  QXlsx composes targets relative to the source part and read the package
+  as "no sheets". `calc_io` hands QXlsx a normalised copy with relative
+  targets (`xlsx_package.h`), leaving the vendored library untouched.
+- *No `<dimension>` element.* QXlsx then reports no columns, and the
+  importer walked nothing. The walk is bounded by the cells QXlsx loaded
+  (`getFullCells`).
+- *Quadratic import.* Every imported cell ran the incremental recalc over
+  its dependents and every volatile cell; 95 000 cells and 10 000 formulas
+  took minutes. `Workbook::beginBulkLoad()/endBulkLoad()` defers to one
+  `recalcAll()` — the import now takes ~10 s, most of it the single
+  recalc.
+
+The engine also gained `LET` (scoped bindings in `EvalContext::locals`),
+`SUMIFS`, `SUBTOTAL` and the renamed twins `RANK.EQ` / `FORECAST.LINEAR`,
+which that workbook uses throughout. **Known limitation:** array
+arithmetic inside a function argument (`SUMPRODUCT(range, (1+x)^range)`)
+is not evaluated — twelve cells of that workbook's Forecast sheet show
+`#VALUE!`; an array value type in the evaluator is the follow-up.
+
 ## D-027: The suite's UI is QindaTK on QtQuick; paper stays paper; the panel menu is exported from an action model
 
 **Date:** 2026-09-17 · **Status:** accepted (M27; M28–M31 extend it to the

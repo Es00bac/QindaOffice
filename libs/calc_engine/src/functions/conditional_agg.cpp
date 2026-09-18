@@ -6,10 +6,15 @@ namespace QindaOffice::Calc {
 void registerConditionalAggFunctions(QHash<QString, FunctionSpec> &r)
 {
     // One value range plus (criteria range, criterion) pairs.
-    const auto ifsAgg = [](bool average, bool countOnly, bool maxima) {
+    enum class Mode { Sum, Average, Min, Max };
+    const auto ifsAgg = [](Mode mode) {
+        const bool average = mode == Mode::Average;
+        const bool sum = mode == Mode::Sum;
+        const bool maxima = mode == Mode::Max;
+        constexpr bool countOnly = false;
         return FunctionSpec{3, 255, false,
-                            [average, countOnly, maxima](EvalContext &ctx,
-                                                         const QVector<Arg> &args) -> Value {
+                            [average, sum, maxima, countOnly](EvalContext &ctx,
+                                                              const QVector<Arg> &args) -> Value {
                                 const auto *valueRangeView = std::get_if<RangeView>(&args.at(0));
                                 if (!valueRangeView) return Err::Value;
                                 QVector<Value> values;
@@ -52,11 +57,11 @@ void registerConditionalAggFunctions(QHash<QString, FunctionSpec> &r)
                                     if (isBlank(values.at(i))) continue;
                                     const auto d = toNumber(values.at(i));
                                     if (!d.has_value()) continue;
-                                    if (count == 0 || (maxima && *d > result)
-                                        || (!maxima && !average && *d < result)) {
-                                        result = *d;
-                                    } else if (average) {
+                                    if (average || sum) {
                                         result += *d;
+                                    } else if (count == 0 || (maxima && *d > result)
+                                               || (!maxima && *d < result)) {
+                                        result = *d;
                                     }
                                     ++count;
                                 }
@@ -103,9 +108,10 @@ void registerConditionalAggFunctions(QHash<QString, FunctionSpec> &r)
                               }
                               return count;
                           }});
-    r.insert(QStringLiteral("AVERAGEIFS"), ifsAgg(true, false, false));
-    r.insert(QStringLiteral("MAXIFS"), ifsAgg(false, false, true));
-    r.insert(QStringLiteral("MINIFS"), ifsAgg(false, false, false));
+    r.insert(QStringLiteral("SUMIFS"), ifsAgg(Mode::Sum));
+    r.insert(QStringLiteral("AVERAGEIFS"), ifsAgg(Mode::Average));
+    r.insert(QStringLiteral("MAXIFS"), ifsAgg(Mode::Max));
+    r.insert(QStringLiteral("MINIFS"), ifsAgg(Mode::Min));
 }
 
 } // namespace QindaOffice::Calc

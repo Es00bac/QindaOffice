@@ -239,6 +239,29 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M28 gates (QindaCalc on QindaTK)
+
+- [x] `tests/qindacalc`: `tst_calc_window` (document, host, recovery, ods
+      bridge, pristine host; `QQO_SAMPLE_XLSX=<path>` runs the real-workbook
+      diagnostic), `tst_calc_ui` (named strips, undo/redo recalculates,
+      clipboard, formatting through the entries, find/replace with wrap,
+      the cursor outline on the cursor cell from a window grab, the strip
+      wraps at 560 px, D-015 grid commands, sheets, freeze panes,
+      structural fixtures at 1280 and 520), `tst_calc_rules_ui`
+      (validation through the dialog seam, conditional formatting as one
+      undo step, autofilter hides rows, comments survive undo and
+      recovery), `tst_calc_menu_export` (validator accepts the ten menus;
+      every command resolves; the template ids are in the tree).
+- [x] `tests/calc_io`: `absolutePartNamesStillOpen` (a package rewritten
+      to absolute targets opens with its styles); `tests/calc_engine`
+      fixture rows for `SUMIFS`, `RANK.EQ`, `FORECAST.LINEAR`, `SUBTOTAL`,
+      `LET`.
+- [x] `Northstar_Excel_Demo.xlsx` (11 sheets, 95 k cells, 10 k formulas)
+      opens in ~10 s with 12 `#VALUE!` cells (array arithmetic in
+      `SUMPRODUCT`, D-028 limitation); it did not open before.
+- [ ] On the QindaQt desktop: the panel menu drives QindaCalc end to end;
+      a wheel over the grid scrolls, Ctrl+wheel zooms.
+
 ### M27 gates (QindaTK conversion, foundation + QindaNote)
 
 Build with the QindaTK checkout on the prefix path:

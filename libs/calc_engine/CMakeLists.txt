@@ -25,6 +25,7 @@ add_library(calc_engine STATIC
     src/functions/math_extra.cpp
     src/functions/regression.cpp
     src/functions/statistical.cpp
+    src/functions/subtotal.cpp
     src/functions/text.cpp
     src/lexer.cpp
     src/lexer.h

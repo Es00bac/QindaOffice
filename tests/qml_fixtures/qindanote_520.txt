@@ -75,6 +75,11 @@ QQuickRootItem#NoteWindow
     Flex#appFindBar
       FindBar#findBar [hidden]
         CheckBox#findCase [hidden]
+        Flex#replaceRow [hidden]
+          Button#replaceAll [hidden]
+          Button#replaceOne [hidden]
+          TextField#replaceField [hidden]
+            IconButton#fieldClear [hidden]
         IconButton#findClose [hidden]
         IconButton#findNext [hidden]
         IconButton#findPrevious [hidden]

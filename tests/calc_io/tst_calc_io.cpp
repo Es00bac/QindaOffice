@@ -5,9 +5,12 @@
 // budget.
 
 #include "xlsx_bridge.h"
+#include "xlsx_package.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QElapsedTimer>
+#include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QProcess>
 #include <KArchiveDirectory>
@@ -29,7 +32,7 @@ private slots:
     void chartExportWritesChartPart();
     void chartRangeParsing();
     void namedRangesRoundTrip();
-
+    void absolutePartNamesStillOpen();
 };
 
 static Workbook sampleWorkbook()
@@ -272,6 +275,91 @@ int main(int argc, char *argv[])
     QCoreApplication app(argc, argv);
     CalcIoTest test;
     return QTest::qExec(&test, argc, argv);
+}
+
+
+// Open XML SDK, ClosedXML and others write ABSOLUTE part names in the
+// package relationships ("/xl/worksheets/sheet1.xml"); QXlsx composes
+// targets relative to the source part and read such a workbook as "no
+// sheets". calc_io hands QXlsx a relative copy.
+void CalcIoTest::absolutePartNamesStillOpen()
+{
+    QCOMPARE(IO::relativeTarget(QStringLiteral("xl"), QStringLiteral("/xl/styles.xml")),
+             QStringLiteral("styles.xml"));
+    QCOMPARE(IO::relativeTarget(QString(), QStringLiteral("/xl/workbook.xml")),
+             QStringLiteral("xl/workbook.xml"));
+    QCOMPARE(IO::relativeTarget(QStringLiteral("xl/worksheets"), QStringLiteral("/xl/drawings/drawing1.xml")),
+             QStringLiteral("../drawings/drawing1.xml"));
+    QCOMPARE(IO::relativeTarget(QStringLiteral("xl"), QStringLiteral("worksheets/sheet1.xml")),
+             QStringLiteral("worksheets/sheet1.xml"));
+
+    Workbook wb = sampleWorkbook();
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString relative = dir.path() + QStringLiteral("/relative.xlsx");
+    QString error;
+    QVERIFY2(IO::writeXlsxFile(wb, relative, &error), qPrintable(error));
+    QVERIFY(!IO::xlsxPackageHasAbsoluteTargets(relative));
+
+    // Rewrite every relationship target to its absolute part name, the way
+    // those producers do.
+    const QString absolute = dir.path() + QStringLiteral("/absolute.xlsx");
+    {
+        KZip in(relative);
+        QVERIFY(in.open(QIODevice::ReadOnly));
+        KZip out(absolute);
+        QVERIFY(out.open(QIODevice::WriteOnly));
+        std::function<void(const KArchiveDirectory *, const QString &)> copy =
+            [&](const KArchiveDirectory *d, const QString &prefix) {
+                for (const QString &name : d->entries()) {
+                    const KArchiveEntry *entry = d->entry(name);
+                    const QString path = prefix.isEmpty() ? name : prefix + QLatin1Char('/') + name;
+                    if (entry->isDirectory()) {
+                        copy(static_cast<const KArchiveDirectory *>(entry), path);
+                        continue;
+                    }
+                    QByteArray data = static_cast<const KArchiveFile *>(entry)->data();
+                    if (path.endsWith(QLatin1String(".rels"))) {
+                        const int rels = path.lastIndexOf(QLatin1String("_rels/"));
+                        QString sourceDir = path.left(qMax(0, rels));
+                        while (sourceDir.endsWith(QLatin1Char('/'))) {
+                            sourceDir.chop(1);
+                        }
+                        QString text = QString::fromUtf8(data);
+                        const QRegularExpression target(QStringLiteral("Target=\"([^\"/][^\"]*)\""));
+                        QString rewritten;
+                        qsizetype last = 0;
+                        auto it = target.globalMatch(text);
+                        while (it.hasNext()) {
+                            const auto match = it.next();
+                            rewritten += text.mid(last, match.capturedStart(0) - last);
+                            const QString joined = sourceDir.isEmpty()
+                                ? match.captured(1)
+                                : sourceDir + QLatin1Char('/') + match.captured(1);
+                            rewritten += QStringLiteral("Target=\"/%1\"").arg(QDir::cleanPath(joined));
+                            last = match.capturedEnd(0);
+                        }
+                        rewritten += text.mid(last);
+                        data = rewritten.toUtf8();
+                    }
+                    QVERIFY(out.writeFile(path, data));
+                }
+            };
+        copy(in.directory(), QString());
+        QVERIFY(out.close());
+    }
+    QVERIFY(IO::xlsxPackageHasAbsoluteTargets(absolute));
+
+    Workbook back;
+    QVERIFY2(IO::readXlsxFile(absolute, &back, &error), qPrintable(error));
+    QCOMPARE(back.sheetCount(), 1);
+    QCOMPARE(back.sheetName(0), QStringLiteral("Data"));
+    QCOMPARE(toText(back.cellValue(0, 2, 0)), QStringLiteral("30"));
+    QCOMPARE(toText(back.cellValue(0, 0, 1)), QStringLiteral("hello"));
+    // Styles came along too (they hang off a relationship as well).
+    const CellStyle *readStyle = back.style(back.sheetAt(0).styleIdAt({0, 0}));
+    QVERIFY(readStyle != nullptr);
+    QCOMPARE(readStyle->numberFormat, QStringLiteral("#,##0.00"));
 }
 
 #include "tst_calc_io.moc"

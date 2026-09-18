@@ -192,7 +192,9 @@ bool Workbook::setCellInput(qint32 sheet, const CellAddr &addr, const QString &i
     cell.isVolatile = false;
     cell.value = literal;
     m_dependencies.updateCell(CellKey(sheet, addr.row, addr.col), {});
-    recalc({CellKey(sheet, addr.row, addr.col)});
+    if (!m_bulkLoading) {
+        recalc({CellKey(sheet, addr.row, addr.col)});
+    }
     return true;
 }
 
@@ -204,7 +206,9 @@ void Workbook::setCellValue(qint32 sheet, const CellAddr &addr, const Value &val
     cell.isVolatile = false;
     cell.value = value;
     m_dependencies.updateCell(CellKey(sheet, addr.row, addr.col), {});
-    recalc({CellKey(sheet, addr.row, addr.col)});
+    if (!m_bulkLoading) {
+        recalc({CellKey(sheet, addr.row, addr.col)});
+    }
 }
 
 void Workbook::installFormula(qint32 sheet, const CellAddr &addr, const NodePtr &ast,
@@ -224,7 +228,15 @@ void Workbook::installFormula(qint32 sheet, const CellAddr &addr, const NodePtr 
     if (cell.isVolatile) {
         m_dependencies.addVolatile(key);
     }
-    recalc({key});
+    if (!m_bulkLoading) {
+        recalc({key});
+    }
+}
+
+void Workbook::endBulkLoad()
+{
+    m_bulkLoading = false;
+    recalcAll();
 }
 
 void Workbook::recalc(const QSet<CellKey> &edited)

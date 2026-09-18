@@ -65,6 +65,15 @@ public:
     // later sheets were still missing, leaving forward cross-sheet references
     // at their stale first-pass values.
     void recalcAll();
+    // Bulk load: between begin and end, installFormula/setCellValue/
+    // setCellInput record dependencies but do NOT recalculate; endBulkLoad
+    // runs one recalcAll. AGENT-GUARD: the per-cell recalc re-evaluated
+    // every dependent and every volatile cell on EVERY import — a 95k-cell
+    // workbook with 10k formulas took minutes to open (quadratic); one pass
+    // at the end is what a load needs anyway.
+    void beginBulkLoad() { m_bulkLoading = true; }
+    void endBulkLoad();
+    [[nodiscard]] bool isBulkLoading() const { return m_bulkLoading; }
 
     // Style table shared by the sheets.
     [[nodiscard]] qint32 addStyle(const CellStyle &style);
@@ -100,6 +109,7 @@ private:
     QVector<CellStyle> m_styles;
     QHash<QString, RangeRef> m_names;
     DependencyGraph m_dependencies;
+    bool m_bulkLoading = false;
 };
 
 } // namespace QindaOffice::Calc

@@ -10,6 +10,7 @@
 #include "../value.h"
 
 #include <QDate>
+#include <QHash>
 
 #include <functional>
 
@@ -47,6 +48,9 @@ struct EvalContext {
     const EvalHost *host = nullptr;
     qint32 sheet = 0;
     CellAddr here; // the cell being evaluated (ROW()/COLUMN() with no args)
+    // LET bindings in scope (upper-case name → value or range), consulted
+    // before the workbook's named ranges.
+    QHash<QString, Arg> locals;
 };
 
 struct FunctionSpec {
@@ -104,6 +108,7 @@ void registerLookupFunctions(QHash<QString, FunctionSpec> &registry);
 void registerDateFunctions(QHash<QString, FunctionSpec> &registry);
 void registerDateExtraFunctions(QHash<QString, FunctionSpec> &registry);
 void registerInfoFunctions(QHash<QString, FunctionSpec> &registry);
+void registerSubtotalFunctions(QHash<QString, FunctionSpec> &registry);
 void registerFinancialFunctions(QHash<QString, FunctionSpec> &registry);
 void registerFinancialExtraFunctions(QHash<QString, FunctionSpec> &registry);
 

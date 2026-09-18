@@ -27,6 +27,7 @@ const QHash<QString, FunctionSpec> &functionRegistry()
         registerDateFunctions(r);
         registerDateExtraFunctions(r);
         registerInfoFunctions(r);
+        registerSubtotalFunctions(r);
         registerFinancialFunctions(r);
         registerFinancialExtraFunctions(r);
         return r;

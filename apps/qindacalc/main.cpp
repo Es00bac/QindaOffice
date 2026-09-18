@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// QindaCalc entry point: the shared office-shell startup with the
-// spreadsheet window factory.
-
-#include "src/calc_window.h"
+#include "src/calc_host.h"
 
 #include "app_runner.h"
 
+#include <QUrl>
+
 int main(int argc, char *argv[])
 {
-    return QindaOffice::Shell::runOfficeApp(argc, argv, QStringLiteral(QQO_DESKTOP_ID),
-                                            [] { return new QindaOffice::Apps::QindaCalc::CalcWindow; });
+    return QindaOffice::Quick::runOfficeApp(
+        argc, argv, QStringLiteral(QQO_DESKTOP_ID),
+        QUrl(QStringLiteral("qrc:/qt/qml/QindaOffice/Calc/CalcWindow.qml")),
+        [] { return new QindaOffice::Apps::QindaCalc::CalcHost; });
 }

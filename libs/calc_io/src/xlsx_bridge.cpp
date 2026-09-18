@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "xlsx_bridge.h"
 
+#include "xlsx_package.h"
+
+#include <QElapsedTimer>
+#include <QTemporaryDir>
+
 #include "eval.h"
 #include "number_format.h"
 
@@ -190,6 +195,8 @@ bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
         }
         return false;
     }
+    // One recalc for the whole workbook, at the end (Workbook::beginBulkLoad).
+    out->beginBulkLoad();
     for (int sheetIndex = 0; sheetIndex < names.size(); ++sheetIndex) {
         if (!doc.selectSheet(sheetIndex)) {
             continue;
@@ -200,6 +207,8 @@ bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
         }
         Sheet &sheet = out->addSheet(names.at(sheetIndex));
         QHash<QString, qint32> styleIds;
+        QElapsedTimer sheetTimer;
+        sheetTimer.start();
 
         // Shared formulas: only the master cell carries text and the group's
         // ref; dependents carry only the si group index. Record masters by si
@@ -207,7 +216,17 @@ bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
         // dependents through the map, shifting the master AST by the cell's
         // offset (plan section 7.2).
         QHash<int, QXlsx::CellReference> sharedMasters;
-        const QXlsx::CellRange dim = worksheet->dimension();
+        // AGENT-GUARD: bound the walk by the cells that EXIST, not by the
+        // sheet's <dimension> element — producers may omit it (QXlsx then
+        // reports no columns at all), and a stale one would skip real
+        // cells. getFullCells hands back the extent of the loaded table.
+        int maxRow = -1;
+        int maxCol = -1;
+        static_cast<void>(worksheet->getFullCells(&maxRow, &maxCol));
+        QXlsx::CellRange dim = worksheet->dimension();
+        if (maxRow >= 1 && maxCol >= 1) {
+            dim = QXlsx::CellRange(1, 1, qMax(maxRow, dim.lastRow()), qMax(maxCol, dim.lastColumn()));
+        }
         for (int row = qMax(1, dim.firstRow()); row <= dim.lastRow(); ++row) {
             for (int col = qMax(1, dim.firstColumn()); col <= dim.lastColumn(); ++col) {
                 std::shared_ptr<QXlsx::Cell> cell = worksheet->cellAt(row, col);
@@ -307,18 +326,36 @@ bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
             sheet.addMerge({{range.firstRow() - 1, range.firstColumn() - 1},
                             {range.lastRow() - 1, range.lastColumn() - 1}});
         }
+        if (qEnvironmentVariableIsSet("QQO_XLSX_TRACE")) {
+            qInfo("xlsx: sheet %d (%s) %lld ms, %lld cells", sheetIndex,
+                  qPrintable(names.at(sheetIndex)), static_cast<long long>(sheetTimer.elapsed()),
+                  static_cast<long long>(sheet.cells().size()));
+        }
     }
+    QElapsedTimer recalcTimer;
+    recalcTimer.start();
     // AGENT-GUARD: a final full recalc is mandatory. installFormula evaluates
     // each cell as it loads, so a formula referencing a sheet that had not
     // been read yet (Summary before Detail — the common layout) captured a
     // stale 0/#REF! and no dependency edge could ever fix it afterwards.
-    out->recalcAll();
+    out->endBulkLoad();
+    if (qEnvironmentVariableIsSet("QQO_XLSX_TRACE")) {
+        qInfo("xlsx: recalcAll %lld ms", static_cast<long long>(recalcTimer.elapsed()));
+    }
     return true;
 }
 
 bool readXlsxFile(const QString &path, Workbook *out, QString *error)
 {
-    QXlsx::Document doc(path);
+    // AGENT-GUARD: QXlsx cannot follow absolute part names in the package
+    // relationships (a common shape from other producers); such a workbook
+    // read as "no sheets". Hand it a relative copy (xlsx_package.h).
+    QTemporaryDir scratch;
+    const QString source = normalizedXlsxPackage(path, scratch, error);
+    if (source.isEmpty()) {
+        return false;
+    }
+    QXlsx::Document doc(source);
     if (!doc.load()) {
         if (error != nullptr) {
             *error = QStringLiteral("cannot open %1 as xlsx").arg(path);
@@ -330,7 +367,7 @@ bool readXlsxFile(const QString &path, Workbook *out, QString *error)
     // leaves every formula that uses it evaluated against nothing (#NAME? at
     // best) and missing from the recalc index. readXlsx only appends sheets,
     // so seeding the name table first is safe.
-    readDefinedNames(path, out);
+    readDefinedNames(source, out);
     return readXlsx(doc, out, error);
 }
 

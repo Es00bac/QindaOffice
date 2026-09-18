@@ -1,55 +1,52 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// SpreadsheetView painting: the header bands, the cell grid and the
-// paintEvent that drives them. Split out of spreadsheet_view.cpp to keep
-// every file under the line budget (AGENTS.md).
+// SpreadsheetItem painting: the header bands, the cell grid and the
+// paint() that drives them. Moved from the Widgets view nearly verbatim:
+// palette roles became the chrome colour properties, the document
+// colours are fixed (D-004: paper stays paper).
 //
 // AGENT-GUARD: the grid is painted inside p.translate(kHeaderWidth,
 // kHeaderHeight), so cellRect() is ALREADY correct in that block. Adding the
 // header offset again there draws a full header down and to the right of the
-// cell it belongs to — use cursorViewportRect() only OUTSIDE the transform.
-//
-// AGENT-GUARD: every position here comes from visibleRowBands() /
-// visibleColumnBands(), the same lists hit-testing walks. Deriving a
-// position from the scroll value instead breaks the moment a pane is frozen.
+// cell it belongs to — use cursorItemRect() only OUTSIDE the transform.
 
-#include "spreadsheet_view.h"
+#include "spreadsheet_item.h"
 
 #include "spreadsheet_document.h"
 
 #include "number_format.h"
+#include "sheet.h"
 
 #include <QPainter>
-#include <QPaintEvent>
-#include <QScrollBar>
 
-namespace CalcEng = QindaOffice::Calc;
 namespace QindaOffice::Apps::QindaCalc {
 
 using namespace CalcEng;
 
 namespace {
 
-// Bit positions of CellStyle::borders.
 enum BorderBit { kLeft = 1, kRight = 2, kTop = 4, kBottom = 8 };
+
+// Document colours: the sheet is paper.
+const QColor kPaper(Qt::white);
+const QColor kInk(0x20, 0x20, 0x28);
+const QColor kGridLine(0xd8, 0xd8, 0xdc);
+const QColor kCommentMarker(0xc0, 0x39, 0x2b);
 
 } // namespace
 
-void SpreadsheetView::paintHeaderBands(QPainter &p, const QRect &clip)
+void SpreadsheetItem::paintHeaderBands(QPainter &p)
 {
-    Q_UNUSED(clip);
-    const QColor headerBg = palette().button().color();
-    const QColor headerFg = palette().buttonText().color();
-    const QColor line = palette().dark().color();
     const CellRange selection = selectionRange();
+    const QColor selectedHeader = m_selectionColor.lighter(170);
 
-    const QRect corner(0, 0, kHeaderWidth, kHeaderHeight);
-    p.fillRect(corner, headerBg);
-    p.setPen(line);
-    // The corner box selects the whole sheet; draw it as the little triangle
-    // every spreadsheet uses rather than the bullet that used to sit here.
-    const QPolygon marker({QPoint(kHeaderWidth - 6, 5), QPoint(kHeaderWidth - 6, kHeaderHeight - 5),
-                           QPoint(6, kHeaderHeight - 5)});
-    p.setBrush(headerFg);
+    const QRectF corner(0, 0, kHeaderWidth, kHeaderHeight);
+    p.fillRect(corner, m_headerColor);
+    p.setPen(m_headerLineColor);
+    // The corner box selects the whole sheet: the little triangle every
+    // spreadsheet uses.
+    const QPolygonF marker({QPointF(kHeaderWidth - 6, 5), QPointF(kHeaderWidth - 6, kHeaderHeight - 5),
+                            QPointF(6, kHeaderHeight - 5)});
+    p.setBrush(m_headerTextColor);
     p.drawPolygon(marker);
     p.setBrush(Qt::NoBrush);
 
@@ -59,10 +56,10 @@ void SpreadsheetView::paintHeaderBands(QPainter &p, const QRect &clip)
         const QRectF r(band.pos, 0, band.size, kHeaderHeight);
         const bool selected =
             band.index >= selection.topLeft.col && band.index <= selection.bottomRight.col;
-        p.fillRect(r, selected ? palette().highlight().color().lighter(170) : headerBg);
-        p.setPen(headerFg);
+        p.fillRect(r, selected ? selectedHeader : m_headerColor);
+        p.setPen(m_headerTextColor);
         p.drawText(r.adjusted(0, 0, -1, -1), Qt::AlignCenter, colName(band.index));
-        p.setPen(line);
+        p.setPen(m_headerLineColor);
         p.drawLine(r.bottomLeft(), r.bottomRight());
         p.drawLine(r.topRight(), r.bottomRight());
     }
@@ -74,35 +71,39 @@ void SpreadsheetView::paintHeaderBands(QPainter &p, const QRect &clip)
         const QRectF r(0, band.pos, kHeaderWidth, band.size);
         const bool selected =
             band.index >= selection.topLeft.row && band.index <= selection.bottomRight.row;
-        p.fillRect(r, selected ? palette().highlight().color().lighter(170) : headerBg);
-        p.setPen(headerFg);
+        p.fillRect(r, selected ? selectedHeader : m_headerColor);
+        p.setPen(m_headerTextColor);
         p.drawText(r.adjusted(0, 0, -1, -1), Qt::AlignCenter, QString::number(band.index + 1));
-        p.setPen(line);
+        p.setPen(m_headerLineColor);
         p.drawLine(r.bottomLeft(), r.bottomRight());
         p.drawLine(r.bottomRight(), r.topRight());
     }
     p.restore();
 }
 
-void SpreadsheetView::paintGrid(QPainter &p, const QRect &clip)
+void SpreadsheetItem::paintGrid(QPainter &p)
 {
-    const qint32 sheetIndex = m_document->activeSheet();
+    const Sheet *sheetPtr = activeSheet();
+    if (sheetPtr == nullptr) {
+        return;
+    }
     const Workbook &wb = *m_document->workbook();
-    const Sheet &sheet = wb.sheetAt(sheetIndex);
+    const Sheet &sheet = *sheetPtr;
     const QVector<Band> rows = visibleRowBands();
     const QVector<Band> cols = visibleColumnBands();
     const CellRange selection = selectionRange();
+    const QColor selectionFill = m_selectionColor.lighter(160);
 
     p.save();
     p.translate(kHeaderWidth, kHeaderHeight);
+    p.setClipRect(QRectF(0, 0, viewportWidth(), viewportHeight()));
 
     // The cell font scales with the view, or zooming would only move the
     // grid lines and leave the text at its original size.
     const QFont baseFont = scaledFont();
 
     // Merged blocks are painted once, from their top-left cell, over the
-    // whole span; the covered cells are skipped entirely so a merge reads as
-    // one cell instead of a grid of fragments.
+    // whole span; the covered cells are skipped entirely.
     const auto bandFor = [](const QVector<Band> &bands, qint32 index) -> const Band * {
         for (const Band &band : bands) {
             if (band.index == index) {
@@ -133,13 +134,11 @@ void SpreadsheetView::paintGrid(QPainter &p, const QRect &clip)
             const bool inSelection = selection.contains(addr);
             const bool isCursor = addr == m_cursor;
             if (inSelection) {
-                p.fillRect(cell, isCursor ? palette().highlight().color()
-                                          : palette().highlight().color().lighter(160));
+                p.fillRect(cell, isCursor ? m_selectionColor : selectionFill);
             }
             const Cell *cellData = sheet.cellAt(addr);
             const qint32 styleId = sheet.styleIdAt(addr);
-            // Styles live on EMPTY cells too (fill, borders), so read the
-            // style whether or not the cell has content.
+            // Styles live on EMPTY cells too (fill, borders).
             const CellStyle *style = styleId != 0 ? wb.style(styleId) : nullptr;
             // Conditional formatting layers OVER the cell's own style and
             // under the selection: a rule that hid the selection would make
@@ -182,14 +181,14 @@ void SpreadsheetView::paintGrid(QPainter &p, const QRect &clip)
                 }
                 p.setFont(cellFont);
                 if (inSelection && isCursor) {
-                    p.setPen(palette().highlightedText().color());
+                    p.setPen(kPaper);
                 } else if (conditional.foreground) {
                     p.setPen(QColor(conditional.foreground->r, conditional.foreground->g,
                                     conditional.foreground->b));
                 } else if (style != nullptr && style->fg.has_value()) {
                     p.setPen(QColor((*style->fg).r, (*style->fg).g, (*style->fg).b));
                 } else {
-                    p.setPen(palette().text().color());
+                    p.setPen(kInk);
                 }
                 // Explicit alignment wins; otherwise numbers right, text left.
                 Qt::Alignment alignment = Qt::AlignVCenter;
@@ -202,26 +201,23 @@ void SpreadsheetView::paintGrid(QPainter &p, const QRect &clip)
                 }
                 int flags = int(alignment);
                 if (style != nullptr && style->wrap) {
-                    // Wrapped text reads from the top of the cell, the way a
-                    // paragraph does; centring it vertically hides the tail.
                     flags = (flags & ~int(Qt::AlignVCenter)) | int(Qt::AlignTop)
                         | int(Qt::TextWordWrap);
                 }
                 p.drawText(cell.adjusted(4, 1, -4, -1), flags, text);
             }
             // A comment marker: the small corner triangle every spreadsheet
-            // uses. The text itself is a tooltip (see the view's input TU).
+            // uses. The text itself is the hover tooltip.
             if (sheet.commentAt(addr) != nullptr) {
                 const QPolygonF marker({cell.topRight() + QPointF(-7, 1),
                                         cell.topRight() + QPointF(-1, 1),
                                         cell.topRight() + QPointF(-1, 7)});
                 p.setPen(Qt::NoPen);
-                p.setBrush(QColor(0xc0, 0x39, 0x2b));
+                p.setBrush(kCommentMarker);
                 p.drawPolygon(marker);
                 p.setBrush(Qt::NoBrush);
             }
-            // Filter dropdown: drawn on the header row of an active filter,
-            // so the control lives exactly where the user expects to click.
+            // Filter dropdown on the header row of an active filter.
             const AutoFilter &filter = sheet.autoFilter();
             if (filter.active && filter.range.isValid()
                 && addr.row == filter.range.topLeft.row
@@ -229,21 +225,20 @@ void SpreadsheetView::paintGrid(QPainter &p, const QRect &clip)
                 && addr.col <= filter.range.bottomRight.col) {
                 const QRectF button(cell.right() - kFilterButtonPx, cell.top() + 2,
                                     kFilterButtonPx - 2, cell.height() - 4);
-                p.setPen(palette().mid().color());
-                p.setBrush(filter.allowed.contains(addr.col) ? palette().highlight().color()
-                                                             : palette().button().color());
+                p.setPen(m_headerLineColor);
+                p.setBrush(filter.allowed.contains(addr.col) ? m_selectionColor : m_headerColor);
                 p.drawRect(button);
-                p.setPen(palette().buttonText().color());
+                p.setPen(m_headerTextColor);
                 const QPointF centre = button.center();
                 p.drawPolygon(QPolygonF({centre + QPointF(-3, -1.5), centre + QPointF(3, -1.5),
                                          centre + QPointF(0, 2.5)}));
                 p.setBrush(Qt::NoBrush);
             }
-            p.setPen(palette().mid().color());
+            p.setPen(kGridLine);
             p.drawLine(cell.bottomLeft(), cell.bottomRight());
             p.drawLine(cell.topRight(), cell.bottomRight());
             if (style != nullptr && style->borders != 0) {
-                p.setPen(QPen(palette().text().color(), 1));
+                p.setPen(QPen(kInk, 1));
                 if (style->borders & kLeft) {
                     p.drawLine(cell.topLeft(), cell.bottomLeft());
                 }
@@ -260,37 +255,31 @@ void SpreadsheetView::paintGrid(QPainter &p, const QRect &clip)
         }
     }
 
-    // Cursor outline last. AGENT-GUARD: GRID coordinates — the painter is
-    // still inside p.translate(kHeaderWidth, kHeaderHeight) from the top of
-    // this block, so translating the rect here too applied the header offset
-    // TWICE and drew the outline a full header down and to the right of the
-    // cell it belongs to (the selection fill, painted in the loop above, sat
-    // in the right place, which is what made it look so odd).
-    p.setPen(QPen(palette().highlight().color().darker(140), 2));
+    // Cursor outline last, in GRID coordinates (see the file comment).
+    p.setPen(QPen(m_cursorColor, 2));
     p.setBrush(Qt::NoBrush);
     p.drawRect(cellRect(m_cursor));
 
     // The frozen split, so the user can see where the sheet stops scrolling.
     if (m_frozen.row > 0 || m_frozen.col > 0) {
-        p.setPen(QPen(palette().shadow().color(), 2));
+        p.setPen(QPen(m_headerLineColor.darker(150), 2));
         if (m_frozen.row > 0) {
-            const int y = int(frozenHeightPx());
-            p.drawLine(0, y, clip.width(), y);
+            const qreal y = frozenHeightPx();
+            p.drawLine(QPointF(0, y), QPointF(viewportWidth(), y));
         }
         if (m_frozen.col > 0) {
-            const int x = int(frozenWidthPx());
-            p.drawLine(x, 0, x, clip.height());
+            const qreal x = frozenWidthPx();
+            p.drawLine(QPointF(x, 0), QPointF(x, viewportHeight()));
         }
     }
     p.restore();
 }
 
-void SpreadsheetView::paintEvent(QPaintEvent *event)
+void SpreadsheetItem::paint(QPainter *painter)
 {
-    QPainter p(viewport());
-    p.fillRect(viewport()->rect(), palette().base().color());
-    paintGrid(p, event->rect());
-    paintHeaderBands(p, event->rect());
+    painter->fillRect(QRectF(0, 0, width(), height()), kPaper);
+    paintGrid(*painter);
+    paintHeaderBands(*painter);
 }
 
 } // namespace QindaOffice::Apps::QindaCalc

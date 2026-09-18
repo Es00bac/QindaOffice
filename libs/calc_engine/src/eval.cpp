@@ -77,10 +77,39 @@ QVector<Arg> buildCallArgs(const NodePtr &node, const FunctionSpec &spec, EvalCo
     return args;
 }
 
+// LET(name1, value1, [name2, value2, …], calculation): each value is bound
+// under its name for the rest of the call (later values may use earlier
+// names); the calculation is evaluated in that scope and its result — a
+// range stays a range — is the call's. Bindings never leak out of the call.
+Arg evalLet(const NodePtr &node, EvalContext &ctx)
+{
+    const qsizetype count = node->args.size();
+    if (count < 3 || count % 2 == 0) {
+        return Err::Value;
+    }
+    EvalContext scope = ctx;
+    for (qsizetype i = 0; i + 1 < count; i += 2) {
+        const NodePtr &nameNode = node->args.at(int(i));
+        if (!nameNode || nameNode->kind != Node::Kind::Name) {
+            return Err::Value;
+        }
+        scope.locals.insert(nameNode->text.toUpper(), evalArg(node->args.at(int(i) + 1), scope));
+    }
+    return evalArg(node->args.at(int(count) - 1), scope);
+}
+
+bool isLetCall(const NodePtr &node)
+{
+    return node->kind == Node::Kind::Call && node->text.compare(QLatin1String("LET"), Qt::CaseInsensitive) == 0;
+}
+
 // Evaluates a call node, keeping a range result AS a range (argument
 // position): SUM(OFFSET(A1,0,0,5,1)) must receive the range, not a scalar.
 Arg evalCallArg(const NodePtr &node, EvalContext &ctx)
 {
+    if (isLetCall(node)) {
+        return evalLet(node, ctx);
+    }
     const QHash<QString, FunctionSpec> &registry = functionRegistry();
     const auto it = registry.constFind(node->text.toUpper());
     if (it == registry.constEnd()) {
@@ -111,7 +140,11 @@ Arg evalArg(const NodePtr &node, EvalContext &ctx)
         return view;
     }
     if (node->kind == Node::Kind::Name) {
-        // A named range in argument position carries as a RangeView.
+        // A LET binding first; then a named range, which in argument
+        // position carries as a RangeView.
+        if (const auto local = ctx.locals.constFind(node->text.toUpper()); local != ctx.locals.constEnd()) {
+            return local.value();
+        }
         const auto target = ctx.host->namedRange(node->text.toUpper());
         if (!target.has_value()) {
             return Err::Name;
@@ -174,6 +207,9 @@ Value evalNode(const NodePtr &node, EvalContext &ctx)
     case Node::Kind::Error:
         return node->error;
     case Node::Kind::Name: {
+        if (const auto local = ctx.locals.constFind(node->text.toUpper()); local != ctx.locals.constEnd()) {
+            return scalarFromArg(ctx, local.value());
+        }
         // Named ranges resolve through the host (Workbook::namedRange).
         const auto target = ctx.host->namedRange(node->text.toUpper());
         if (!target.has_value()) {
@@ -250,6 +286,9 @@ Value evalNode(const NodePtr &node, EvalContext &ctx)
         }
     }
     case Node::Kind::Call: {
+        if (isLetCall(node)) {
+            return scalarFromArg(ctx, evalLet(node, ctx));
+        }
         const QHash<QString, FunctionSpec> &registry = functionRegistry();
         const auto it = registry.constFind(node->text.toUpper());
         if (it == registry.constEnd()) {
