@@ -7,7 +7,7 @@
 // mirrors the first-party composition documented under docs/wiki shell/global-menu):
 // the export is OPT-IN and FAIL-CLOSED. start() returns false whenever the
 // endpoint cannot be published and announced; the caller must then keep the
-// local QMenuBar visible. The panel binds the menu only for the focused
+// local menu bar visible. The panel binds the menu only for the focused
 // window and authenticates the endpoint by bus-owner PID, which trivially
 // matches because DbusMenuServer lives in this process.
 //

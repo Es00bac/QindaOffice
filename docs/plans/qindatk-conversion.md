@@ -1,6 +1,26 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Converting QindaQt Office to QindaTK — implementation plan (M27 → M31)
 
+> **Landed 2026-09-17 (M27–M31).** The whole suite is QtQuick over
+> QindaTK: QindaNote and the foundation (D-027), QindaCalc (D-028),
+> QindaWrite (D-029), QindaShow (D-030), the launcher and the removal of
+> Qt Widgets (D-031). `libs/office_shell` is deleted, `AGENTS.md` is
+> rewritten, and the toolkit is packaged as `dev-libs/qindatk`.
+>
+> Two gates are the operator's, not the code's, and stay open in
+> `docs/verification.md`: the on-desktop manual checklist (panel
+> activation per app, portal dialogs, tablet, the second-screen player,
+> light/dark themes, comfortable density) and
+> `emerge -1 dev-libs/qindatk gui-apps/qindaoffice` from a freshly cut
+> snapshot tarball.
+>
+> The `qtk-preview --dump` fixtures §7 asks for are in-test dumps of the
+> real windows instead (`tests/support/quick_dump.h` and
+> `tests/qml_fixtures/`): `qtk-preview` cannot load an app's own QML
+> module, and the window is what needs pinning. `QQO_GRAB_DIR=<dir>` on
+> the UI tests saves the PNGs.
+
+
 **Audience:** the implementing agent (Kimi or Claude). Self-contained: what
 the suite is today, what QindaTK is, what was verified on this machine
 before writing a line of the plan, the target architecture, the additions
