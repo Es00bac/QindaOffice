@@ -85,6 +85,13 @@ causes, each fixed where it belongs:
   `recalcAll()` — the import now takes ~10 s, most of it the single
   recalc.
 
+- *Console noise.* QXlsx's vendored worksheet reader printed
+  `qWarning("no count")` for every `mergeCells` element without the
+  optional `count` attribute (eleven times for this workbook); the line
+  is removed in `third_party/QXlsx`. And a path handed over by a second
+  launch now activates the window it loads into: it used to land silently
+  in the pristine window behind the terminal.
+
 The engine also gained `LET` (scoped bindings in `EvalContext::locals`),
 `SUMIFS`, `SUBTOTAL` and the renamed twins `RANK.EQ` / `FORECAST.LINEAR`,
 which that workbook uses throughout. **Known limitation:** array

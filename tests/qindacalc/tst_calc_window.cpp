@@ -157,6 +157,22 @@ private slots:
             }
         }
         QVERIFY(doc.workbook()->sheetCount() >= 2);
+        // The same file through the window: File ▸ Open's path (loadPath)
+        // must retitle the window and paint the first sheet; QQO_GRAB_DIR
+        // saves the result for review.
+        Scene scene(QSize(1280, 800));
+        QVERIFY2(scene.ready(), qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        QVERIFY(scene.host.loadPath(path));
+        QTest::qWait(300);
+        QVERIFY2(scene.host.windowTitle().contains(QFileInfo(path).fileName()), qPrintable(scene.host.windowTitle()));
+        QCOMPARE(scene.host.sheetNames().size(), doc.workbook()->sheetCount());
+        qInfo() << "title" << scene.host.windowTitle() << "status" << scene.host.statusInfo()
+                << "A1" << scene.doc->displayTextAt(0, {0, 0}) << "B2" << scene.doc->displayTextAt(0, {1, 1});
+        const QString grabDir = qEnvironmentVariable("QQO_GRAB_DIR");
+        if (!grabDir.isEmpty()) {
+            scene.window->grabWindow().save(grabDir + QStringLiteral("/qindacalc_northstar.png"));
+        }
     }
 
     // AGENT-CONTRACT (ADR-0110): a freshly created host is PRISTINE, which

@@ -270,7 +270,13 @@ bool OfficeApplication::openPaths(const QStringList &paths, QString *diagnostic,
         }
         if (!target->loadPath(path)) {
             allOpened = false;
+            continue;
         }
+        // AGENT-GUARD: a path handed over by a second launch lands in an
+        // EXISTING pristine window (ADR-0110); that window has to come to
+        // the front, or the load looks like nothing happened while the
+        // document sits behind the terminal on another workspace.
+        activate(target);
     }
     if (allOpened) {
         persistWindowInventory();
