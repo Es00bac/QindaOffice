@@ -26,7 +26,19 @@ struct RangeView {
     [[nodiscard]] bool isValid() const { return range.isValid(); }
 };
 
-using Arg = std::variant<Value, RangeView>;
+// A materialized array: the result of array arithmetic in an argument
+// (SUMPRODUCT(range, (1+x)^range) — M38). Only ever lives inside argument
+// evaluation — Value itself has no array case, so cell storage, snapshots
+// and number formats are untouched.
+struct ArrayValue {
+    qint32 rows = 0;
+    qint32 cols = 0;
+    QVector<Value> cells; // row-major, rows*cols entries
+
+    [[nodiscard]] bool isSingleCell() const { return rows == 1 && cols == 1; }
+};
+
+using Arg = std::variant<Value, RangeView, ArrayValue>;
 
 // Abstract cell access so eval stays workbook-implementation-agnostic.
 class EvalHost {

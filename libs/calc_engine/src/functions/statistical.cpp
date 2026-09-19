@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "functions.h"
 
+#include "../eval_array.h"
 #include <numeric>
 
 namespace QindaOffice::Calc {
@@ -20,22 +21,13 @@ Value numberAgg(const EvalContext &ctx, const QVector<Arg> &args,
 {
     QVector<double> numbers;
     for (const Arg &arg : args) {
-        if (std::holds_alternative<RangeView>(arg)) {
-            QVector<Value> values;
-            const Value err = sparseRangeValues(ctx, std::get<RangeView>(arg), &values);
-            if (isErr(err)) {
-                return err;
-            }
-            for (const Value &v : values) {
-                if (const auto d = toNumber(v);
-                    d.has_value() && !(skipTextAndBlank && isText(v))) {
-                    numbers.append(*d);
-                }
-            }
-        } else {
-            const Value v = std::get<Value>(arg);
-            if (const auto d = toNumber(v);
-                d.has_value() && !(skipTextAndBlank && isText(v))) {
+        QVector<Value> values;
+        const Value err = sparseArgValues(ctx, arg, &values);
+        if (isErr(err)) {
+            return err;
+        }
+        for (const Value &v : values) {
+            if (const auto d = toNumber(v); d.has_value() && !(skipTextAndBlank && isText(v))) {
                 numbers.append(*d);
             }
         }
@@ -79,14 +71,11 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
              FunctionSpec{1, 255, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
                               double count = 0;
                               for (const Arg &arg : args) {
-                                  if (std::holds_alternative<RangeView>(arg)) {
-                                      QVector<Value> values;
-                                      const Value err =
-                                          sparseRangeValues(ctx, std::get<RangeView>(arg), &values);
-                                      if (isErr(err)) return err;
-                                      count += double(values.size());
-                                  } else if (!isBlank(std::get<Value>(arg))) {
-                                      ++count;
+                                  QVector<Value> values;
+                                  const Value err = sparseArgValues(ctx, arg, &values);
+                                  if (isErr(err)) return err;
+                                  for (const Value &v : values) {
+                                      if (!isBlank(v)) ++count;
                                   }
                               }
                               return count;
@@ -172,13 +161,7 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
         return FunctionSpec{2, 2, false,
                             [largest](EvalContext &ctx, const QVector<Arg> &args) -> Value {
                                 QVector<Value> values;
-                                Value err;
-                                if (std::holds_alternative<RangeView>(args.at(0))) {
-                                    err = sparseRangeValues(ctx, std::get<RangeView>(args.at(0)),
-                                                            &values);
-                                } else {
-                                    values.append(std::get<Value>(args.at(0)));
-                                }
+                                const Value err = sparseArgValues(ctx, args.at(0), &values);
                                 if (isErr(err)) return err;
                                 const auto k = scalarNumber(args.at(1));
                                 if (!k) return Err::Value;

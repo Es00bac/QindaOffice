@@ -14,12 +14,15 @@
 #include <QFile>
 #include <QtTest>
 
+#include <limits>
+
 using namespace QindaOffice::Calc;
 
 class CalcFunctionsTest : public QObject {
     Q_OBJECT
 private slots:
     void fixtureRows();
+    void arrayArithmeticBroadcasts();
 };
 
 static Value parseInput(const QString &input)
@@ -156,6 +159,57 @@ void CalcFunctionsTest::fixtureRows()
     }
     QVERIFY2(row >= 300, qPrintable(QStringLiteral("fixture must carry >=300 rows, has %1").arg(row)));
     QCOMPARE(failed, 0);
+}
+
+// Array arithmetic (M38): an operator over a range or an array evaluates
+// element-wise in argument position. The shapes here are the ones the
+// Northstar sample workbook uses — SUMPRODUCT of a range against a powered
+// range — plus the broadcast and shape rules that make them work.
+void CalcFunctionsTest::arrayArithmeticBroadcasts()
+{
+    Workbook wb;
+    buildDataBlock(wb); // A1:A5 = 1..5, B1:B5 = 10..50
+    EvalContext ctx{&wb, 0, {}, {}};
+    const auto eval = [&ctx](const char *expr) {
+        ParseResult parsed = parseFormula(QString::fromLatin1(expr));
+        if (!parsed.error.isEmpty() || !parsed.root) {
+            return Value(Err::Name);
+        }
+        return evalNode(parsed.root, ctx);
+    };
+    const auto number = [&eval](const char *expr) {
+        const Value v = eval(expr);
+        return isNumber(v) ? std::get<double>(v) : std::numeric_limits<double>::quiet_NaN();
+    };
+
+    // The sample's own shape: SUMPRODUCT(values, (1+rate)^periods). Every
+    // one of these was #VALUE! before the evaluator could carry an array.
+    QVERIFY(qFuzzyCompare(number("SUMPRODUCT(A1:A5,(1+0.1)^A1:A5)"),
+                          1 * 1.1 + 2 * 1.21 + 3 * 1.331 + 4 * 1.4641 + 5 * 1.61051));
+    QVERIFY(qFuzzyCompare(number("SUMPRODUCT(A1:A5,B1:B5*2)"), 1100.0));
+
+    // Every operator broadcasts: scalar against range, range against range.
+    QCOMPARE(number("SUM(A1:A5*2)"), 30.0);
+    QCOMPARE(number("SUM(A1:A5+B1:B5)"), 165.0);
+    QCOMPARE(number("SUM(B1:B5/A1:A5)"), 50.0);
+    QCOMPARE(number("SUM(A1:A5*B1:B5)"), 550.0);
+    QCOMPARE(number("MAX(A1:A5*B1:B5)"), 250.0);
+    QCOMPARE(number("COUNT(A1:A5*2)"), 5.0);
+    // Comparisons yield booleans, and the --(…) idiom coerces them to 1/0.
+    QCOMPARE(number("SUMPRODUCT(--(A1:A5>2))"), 3.0);
+    QCOMPARE(number("SUM(-A1:A5)"), -15.0);
+    QCOMPARE(eval("TEXTJOIN(\",\",TRUE,A1:A5*2)"), Value(QStringLiteral("2,4,6,8,10")));
+
+    // A single row and a single column stretch along their degenerate axis
+    // the way Excel's outer product does: 3x1 against 1x2 is 3x2.
+    QCOMPARE(number("SUM(A1:A3*A1:B1)"), 66.0);
+
+    // Shapes that cannot line up, and arrays outside argument position.
+    QCOMPARE(eval("SUM(A1:A5*B1:B3)"), Value(Err::Value));
+    QCOMPARE(eval("A1:A5*2"), Value(Err::Value));  // no spilling: #VALUE!
+    QCOMPARE(number("A1:A1*2"), 2.0);              // …but 1x1 derefs
+    // An error element is the whole aggregate's answer.
+    QCOMPARE(eval("SUM(A1:A5*(1/0))"), Value(Err::Div0));
 }
 
 int main(int argc, char *argv[])

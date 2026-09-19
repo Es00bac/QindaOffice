@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "functions.h"
 
+#include "../eval_array.h"
 #include <QDateTime>
 #include <QRegularExpression>
 
@@ -39,6 +40,11 @@ Value scalarOrValue(const Arg &arg)
 {
     if (std::holds_alternative<RangeView>(arg)) {
         return Err::Value;
+    }
+    if (const auto *array = std::get_if<ArrayValue>(&arg)) {
+        // A computed grid in a scalar slot: one cell derefs, more is #VALUE!
+        // (the same rule the evaluator applies at the top level).
+        return array->isSingleCell() ? array->cells.first() : Value(Err::Value);
     }
     return std::get<Value>(arg);
 }
@@ -225,20 +231,12 @@ Value numberAgg(const EvalContext &ctx, const QVector<Arg> &args,
 {
     QVector<double> numbers;
     for (const Arg &arg : args) {
-        if (std::holds_alternative<RangeView>(arg)) {
-            QVector<Value> values;
-            const Value err = sparseRangeValues(ctx, std::get<RangeView>(arg), &values);
-            if (isErr(err)) {
-                return err;
-            }
-            for (const Value &v : values) {
-                if (const auto d = toNumber(v); d.has_value()
-                    && !(skipTextAndBlank && isText(v))) {
-                    numbers.append(*d);
-                }
-            }
-        } else {
-            const Value v = std::get<Value>(arg);
+        QVector<Value> values;
+        const Value err = sparseArgValues(ctx, arg, &values);
+        if (isErr(err)) {
+            return err;
+        }
+        for (const Value &v : values) {
             if (const auto d = toNumber(v); d.has_value() && !(skipTextAndBlank && isText(v))) {
                 numbers.append(*d);
             }
@@ -472,14 +470,12 @@ void registerMathFunctions(QHash<QString, FunctionSpec> &r)
              FunctionSpec{1, 255, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
                               QVector<QVector<Value>> grids;
                               for (const Arg &arg : args) {
-                                  const auto *view = std::get_if<RangeView>(&arg);
+                                  // Ranges, computed arrays and scalars all
+                                  // flatten here: the second argument of
+                                  // SUMPRODUCT(C8:C19,(1+rate)^B8:B19) is an
+                                  // array, and it must line up with the first.
                                   QVector<Value> values;
-                                  Value err;
-                                  if (view) {
-                                      err = flatRangeValues(ctx, *view, &values);
-                                  } else {
-                                      values.append(std::get<Value>(arg));
-                                  }
+                                  const Value err = flatArgValues(ctx, arg, &values);
                                   if (isErr(err)) return err;
                                   grids.append(values);
                               }

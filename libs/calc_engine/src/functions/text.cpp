@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "functions.h"
 
+#include "../eval_array.h"
 #include "../number_format.h"
 
 namespace QindaOffice::Calc {
@@ -11,8 +12,11 @@ void registerTextFunctions(QHash<QString, FunctionSpec> &r)
              FunctionSpec{0, 255, false, [](EvalContext &, const QVector<Arg> &args) -> Value {
                               QString out;
                               for (const Arg &arg : args) {
-                                  if (std::holds_alternative<RangeView>(arg)) return Err::Value;
-                                  out += toText(std::get<Value>(arg));
+                                  // CONCATENATE takes scalars only — a range
+                                  // (or a multi-cell array) is #VALUE!.
+                                  const Value v = scalarOrValue(arg);
+                                  if (isErr(v)) return v;
+                                  out += toText(v);
                               }
                               return out;
                           }});
@@ -20,16 +24,11 @@ void registerTextFunctions(QHash<QString, FunctionSpec> &r)
              FunctionSpec{0, 255, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
                               QString out;
                               for (const Arg &arg : args) {
-                                  if (std::holds_alternative<RangeView>(arg)) {
-                                      QVector<Value> values;
-                                      const Value err =
-                                          sparseRangeValues(ctx, std::get<RangeView>(arg), &values);
-                                      if (isErr(err)) return err;
-                                      for (const Value &v : values) {
-                                          if (!isBlank(v)) out += toText(v);
-                                      }
-                                  } else {
-                                      out += toText(std::get<Value>(arg));
+                                  QVector<Value> values;
+                                  const Value err = sparseArgValues(ctx, arg, &values);
+                                  if (isErr(err)) return err;
+                                  for (const Value &v : values) {
+                                      if (!isBlank(v)) out += toText(v);
                                   }
                               }
                               return out;
@@ -254,18 +253,11 @@ void registerTextJoinFunctions(QHash<QString, FunctionSpec> &r)
                               if (!ignoreEmpty) return Err::Value;
                               QStringList pieces;
                               for (int i = 2; i < args.size(); ++i) {
-                                  if (std::holds_alternative<RangeView>(args.at(i))) {
-                                      QVector<Value> values;
-                                      const Value err = sparseRangeValues(
-                                          ctx, std::get<RangeView>(args.at(i)), &values);
-                                      if (isErr(err)) return err;
-                                      for (const Value &v : values) {
-                                          const QString t = toText(v);
-                                          if (*ignoreEmpty && t.isEmpty()) continue;
-                                          pieces.append(t);
-                                      }
-                                  } else {
-                                      const QString t = toText(std::get<Value>(args.at(i)));
+                                  QVector<Value> values;
+                                  const Value err = sparseArgValues(ctx, args.at(i), &values);
+                                  if (isErr(err)) return err;
+                                  for (const Value &v : values) {
+                                      const QString t = toText(v);
                                       if (*ignoreEmpty && t.isEmpty()) continue;
                                       pieces.append(t);
                                   }

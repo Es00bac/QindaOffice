@@ -5,6 +5,58 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-038: Arrays live in arguments, not in cells
+
+**Date:** 2026-09-19 · **Status:** accepted (M38)
+
+**Context.** `SUMPRODUCT($C$8:$C$19,(1+rate)^$B$8:$B$19)` — the shape every
+discounted-cash-flow model in the wild uses — evaluated to `#VALUE!`. An
+operator whose operand was a range collapsed the range into a scalar
+position, and a range in scalar position is `#VALUE!` by design (D-028: no
+implicit intersection). Those six cells on the sample workbook's Forecast
+sheet, and the six that read them, were the last error cells in the file.
+
+**Decision.** `ArrayValue{rows, cols, cells}` joins `Value` and `RangeView`
+in `Arg`, the argument-position variant — and nowhere else.
+
+1. **`Value` is untouched.** A cell can hold a number, text, a boolean or
+   an error; it can never hold an array. So cell storage, undo snapshots,
+   the recovery payload, number formats and the paint path all stay exactly
+   as they were: this milestone changes no persisted state at all.
+2. **Operators broadcast in argument position only.** `evalArg` evaluates
+   both operands and, when either carries a grid, applies the operator
+   element-wise; `evalNode` (scalar position) keeps its old behaviour, so
+   the implicit-intersection rule for `OFFSET`/`INDIRECT` results is
+   preserved. Shapes follow Excel: 1x1 stretches to anything and a single
+   row or column stretches along its degenerate axis; any other mismatch
+   is `#VALUE!`.
+3. **No spilling.** An array reaching a scalar position derefs only when it
+   is 1x1; anything larger is `#VALUE!`. Spilling is a different model — it
+   needs cell ownership, a spill range and `#SPILL!` — and it is out of
+   scope here. The consequence worth naming: we broadcast in *every*
+   function argument, where legacy Excel broadcast only in array-aware ones
+   (SUMPRODUCT) or under Ctrl+Shift+Enter. That matches modern Excel's
+   dynamic-array semantics for everything that does not spill, which is the
+   behaviour an author writing the file today expects.
+4. **One reader per argument shape.** `flatArgValues`/`sparseArgValues`
+   replace the `holds_alternative<RangeView> ? … : std::get<Value>(arg)`
+   pattern that had been copy-pasted through eight function files. That
+   pattern was not just repetitive, it was a crash: with a third variant
+   alternative, the bare `std::get<Value>` in the else branch throws
+   `std::bad_variant_access`. Every site that collects an argument's values
+   now goes through one helper that knows all three shapes.
+5. **An error argument is the answer.** The new readers propagate an error
+   from any shape, scalar included — previously `SUM(A1, 5)` with `A1`
+   holding `#DIV/0!` quietly returned 5 while `SUM(A1:A2)` propagated. The
+   LibreOffice oracle fixture (300+ rows) agreed with propagation before
+   and after, which is the proof that this was a bug and not a choice.
+
+**Consequences.** The sample workbook now opens with zero error cells on
+all eleven sheets. Array-valued *functions* (TRANSPOSE, MMULT, SEQUENCE)
+still do not exist — `ArrayValue` gives them somewhere to land when they
+arrive. A whole-column operand materializes, so both broadcast and array
+reads keep `flatRangeValues`' four-million-cell ceiling.
+
 ## D-037: View and print state is document state, and it round-trips
 
 **Date:** 2026-09-19 · **Status:** accepted (M37)

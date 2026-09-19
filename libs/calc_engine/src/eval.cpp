@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "eval.h"
 
+#include "eval_array.h"
+
 #include <functional>
 
 namespace QindaOffice::Calc {
@@ -20,6 +22,11 @@ Value scalarFromArg(const EvalContext &ctx, const Arg &arg)
         }
         return ctx.host->cellValue(view->sheet, view->range.topLeft.row,
                                    view->range.topLeft.col);
+    }
+    if (const auto *array = std::get_if<ArrayValue>(&arg)) {
+        // A computed grid collapses only when it holds exactly one cell;
+        // anything larger would need spilling, which this engine does not do.
+        return array->isSingleCell() ? array->cells.first() : Value(Err::Value);
     }
     return std::get<Value>(arg);
 }
@@ -186,6 +193,27 @@ Arg evalArg(const NodePtr &node, EvalContext &ctx)
         }
         return Err::Value;
     }
+    if (node->kind == Node::Kind::Unary) {
+        // Array arithmetic (M38): -A1:A10, and the --(A1:A10>5) idiom that
+        // coerces a comparison grid to ones and zeroes.
+        const Arg operand = evalArg(node->left, ctx);
+        if (isArrayLike(operand)) {
+            return broadcastUnary(ctx, node->op, operand);
+        }
+        return applyUnaryOp(node->op, std::get<Value>(operand));
+    }
+    if (node->kind == Node::Kind::Binary) {
+        // Range and Union were handled above; every other operator evaluates
+        // element-wise when either side carries a grid. That is what makes
+        // SUMPRODUCT($C$8:$C$19,(1+rate)^$B$8:$B$19) a twelve-cell product
+        // instead of #VALUE! — a range in an operand used to be fatal.
+        const Arg lhs = evalArg(node->left, ctx);
+        const Arg rhs = evalArg(node->right, ctx);
+        if (isArrayLike(lhs) || isArrayLike(rhs)) {
+            return broadcastBinary(ctx, node->op, lhs, rhs);
+        }
+        return applyBinaryOp(node->op, std::get<Value>(lhs), std::get<Value>(rhs));
+    }
     if (node->kind == Node::Kind::Call) {
         return evalCallArg(node, ctx);
     }
@@ -235,55 +263,15 @@ Value evalNode(const NodePtr &node, EvalContext &ctx)
         }
         return ctx.host->cellValue(view.sheet, view.range.topLeft.row, view.range.topLeft.col);
     }
-    case Node::Kind::Unary: {
-        if (node->op == Op::Percent) {
-            const Value v = evalNode(node->left, ctx);
-            if (isErr(v)) return v;
-            const auto d = toNumber(v);
-            if (!d.has_value()) return Err::Value;
-            return *d / 100.0;
-        }
-        const Value v = evalNode(node->left, ctx);
-        if (isErr(v)) return v;
-        const auto d = toNumber(v);
-        if (!d.has_value()) return Err::Value;
-        return node->op == Op::Neg ? -*d : *d;
-    }
+    case Node::Kind::Unary:
+        return applyUnaryOp(node->op, evalNode(node->left, ctx));
     case Node::Kind::Binary: {
         if (node->op == Op::Range || node->op == Op::Union) {
             return Err::Value; // ranges only survive in argument position
         }
         const Value lhs = evalNode(node->left, ctx);
         if (isErr(lhs)) return lhs;
-        const Value rhs = evalNode(node->right, ctx);
-        if (isErr(rhs)) return rhs;
-        switch (node->op) {
-        case Op::Add: case Op::Sub: case Op::Mul: case Op::Div: case Op::Pow: {
-            const auto a = toNumber(lhs);
-            const auto b = toNumber(rhs);
-            if (!a.has_value() || !b.has_value()) return Err::Value;
-            switch (node->op) {
-            case Op::Add: return *a + *b;
-            case Op::Sub: return *a - *b;
-            case Op::Mul: return *a * *b;
-            case Op::Div:
-                if (*b == 0) return Err::Div0;
-                return *a / *b;
-            case Op::Pow: return std::pow(*a, *b);
-            default: break;
-            }
-            return Err::Value;
-        }
-        case Op::Concat:
-            return toText(lhs) + toText(rhs);
-        case Op::Eq: return compareValues(lhs, rhs) == 0;
-        case Op::Ne: return compareValues(lhs, rhs) != 0;
-        case Op::Lt: return compareValues(lhs, rhs) < 0;
-        case Op::Le: return compareValues(lhs, rhs) <= 0;
-        case Op::Gt: return compareValues(lhs, rhs) > 0;
-        case Op::Ge: return compareValues(lhs, rhs) >= 0;
-        default: return Err::Value;
-        }
+        return applyBinaryOp(node->op, lhs, evalNode(node->right, ctx));
     }
     case Node::Kind::Call: {
         if (isLetCall(node)) {

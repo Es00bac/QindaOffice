@@ -13,6 +13,8 @@ add_library(calc_engine STATIC
     src/dependencies.h
     src/eval.cpp
     src/eval.h
+    src/eval_array.cpp
+    src/eval_array.h
     src/functions/date.cpp
     src/functions/financial.cpp
     src/functions/functions.cpp

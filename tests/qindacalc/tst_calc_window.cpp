@@ -169,10 +169,10 @@ private slots:
             }
         }
         QVERIFY(doc.workbook()->sheetCount() >= 2);
-        // The known array-arithmetic gap (D-028, fixed in M38): SUMPRODUCT
-        // with an array expression argument yields #VALUE! today. Anything
-        // beyond those twelve is a new import failure.
-        QCOMPARE(totalErrors, 12);
+        // Not one error cell anywhere in the book. The last twelve were the
+        // array-arithmetic gap closed in M38 (SUMPRODUCT over a powered
+        // range); any error appearing here again is an import regression.
+        QCOMPARE(totalErrors, 0);
     }
 
     // The same file through File ▸ Open's path (loadPath): the window must

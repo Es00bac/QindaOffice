@@ -245,6 +245,25 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M38 gates (array arithmetic)
+
+Automated by `tst_calc_functions` and `tst_calc_window`. Rationale in D-038.
+
+- [x] `arrayArithmeticBroadcasts`: the sample's own shape
+      (`SUMPRODUCT(A1:A5,(1+0.1)^A1:A5)`), every operator broadcasting a
+      scalar against a range and a range against a range, the
+      `--(A1:A5>2)` coercion idiom, row-against-column stretching, and
+      `TEXTJOIN` over a computed array.
+- [x] Same gate, negative half: a shape mismatch is `#VALUE!`, an array in
+      scalar position is `#VALUE!` unless it is 1x1, and an error element
+      is the whole aggregate's answer.
+- [x] `fixtureRows` stays green — the 300+ LibreOffice oracle rows are the
+      check that broadcasting did not change any scalar answer.
+- [x] `opensARealExcelWorkbook`: the sample workbook now reports **zero**
+      error cells across all eleven sheets (was 12, pinned since M32).
+- [ ] On the desktop: open the sample, read Forecast B26:C28 against the
+      values Excel shows.
+
 ### M37 gates (view & print state)
 
 Automated by `tst_calc_io_view` and `tst_calc_window`. Rationale in D-037.

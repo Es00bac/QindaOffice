@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "functions.h"
 
+#include "../eval_array.h"
 namespace QindaOffice::Calc {
 
 void registerFinancialFunctions(QHash<QString, FunctionSpec> &r)
@@ -83,20 +84,12 @@ void registerFinancialFunctions(QHash<QString, FunctionSpec> &r)
                               double npv = 0;
                               int period = 0;
                               for (int i = 1; i < args.size(); ++i) {
-                                  if (std::holds_alternative<RangeView>(args.at(i))) {
-                                      QVector<Value> values;
-                                      const Value err =
-                                          flatRangeValues(ctx, std::get<RangeView>(args.at(i)), &values);
-                                      if (isErr(err)) return err;
-                                      for (const Value &v : values) {
-                                          const auto d = toNumber(v);
-                                          if (d.has_value() && !isText(v)) {
-                                              npv += *d / std::pow(1.0 + *rate, ++period);
-                                          }
-                                      }
-                                  } else {
-                                      const auto d = toNumber(std::get<Value>(args.at(i)));
-                                      if (d.has_value() && !isText(std::get<Value>(args.at(i)))) {
+                                  QVector<Value> values;
+                                  const Value err = flatArgValues(ctx, args.at(i), &values);
+                                  if (isErr(err)) return err;
+                                  for (const Value &v : values) {
+                                      const auto d = toNumber(v);
+                                      if (d.has_value() && !isText(v)) {
                                           npv += *d / std::pow(1.0 + *rate, ++period);
                                       }
                                   }
@@ -106,12 +99,9 @@ void registerFinancialFunctions(QHash<QString, FunctionSpec> &r)
     r.insert(QStringLiteral("IRR"),
              FunctionSpec{1, 2, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
                               QVector<Value> values;
-                              if (std::holds_alternative<RangeView>(args.at(0))) {
-                                  const Value err =
-                                      flatRangeValues(ctx, std::get<RangeView>(args.at(0)), &values);
-                                  if (isErr(err)) return err;
-                              } else {
-                                  values.append(std::get<Value>(args.at(0)));
+                              if (const Value err = flatArgValues(ctx, args.at(0), &values);
+                                  isErr(err)) {
+                                  return err;
                               }
                               double guess = 0.1;
                               if (args.size() > 1) {

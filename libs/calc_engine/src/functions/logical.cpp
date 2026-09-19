@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "functions.h"
 
+#include "../eval_array.h"
 namespace QindaOffice::Calc {
 
 void registerLogicalFunctions(QHash<QString, FunctionSpec> &r)
@@ -54,20 +55,10 @@ void registerLogicalFunctions(QHash<QString, FunctionSpec> &r)
                                 bool acc = emptyResult;
                                 bool any = false;
                                 for (const Arg &arg : args) {
-                                    if (std::holds_alternative<RangeView>(arg)) {
-                                        QVector<Value> values;
-                                        const Value err =
-                                            sparseRangeValues(ctx, std::get<RangeView>(arg), &values);
-                                        if (isErr(err)) return err;
-                                        for (const Value &v : values) {
-                                            if (isBlank(v)) continue;
-                                            const auto b = toBool(v);
-                                            if (!b.has_value()) return Err::Value;
-                                            acc = fold(acc, *b);
-                                            any = true;
-                                        }
-                                    } else {
-                                        const Value v = std::get<Value>(arg);
+                                    QVector<Value> values;
+                                    const Value err = sparseArgValues(ctx, arg, &values);
+                                    if (isErr(err)) return err;
+                                    for (const Value &v : values) {
                                         if (isBlank(v)) continue;
                                         const auto b = toBool(v);
                                         if (!b.has_value()) return Err::Value;
