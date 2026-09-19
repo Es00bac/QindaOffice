@@ -7,6 +7,7 @@
 #include "xlsx_bridge.h"
 
 #include "xlsx_package.h"
+#include "xlsx_read_xml.h"
 #include "xlsx_style.h"
 
 #include <QElapsedTimer>
@@ -169,7 +170,8 @@ ThemePalette paletteForPackage(const QString &path)
     return themePaletteFromXml(xml);
 }
 
-bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palette, QString *error)
+bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palette,
+                  const QString &packagePath, QString *error)
 {
     if (out == nullptr) {
         if (error != nullptr) {
@@ -305,6 +307,11 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
             sheet.addMerge({{range.firstRow() - 1, range.firstColumn() - 1},
                             {range.lastRow() - 1, range.lastColumn() - 1}});
         }
+        // The features QXlsx has no public model for (conditional formats,
+        // validations, autofilter, comments) read straight from the package.
+        if (!packagePath.isEmpty()) {
+            readSheetExtras(packagePath, out, sheetIndex, palette, &sheet);
+        }
         if (qEnvironmentVariableIsSet("QQO_XLSX_TRACE")) {
             qInfo("xlsx: sheet %d (%s) %lld ms, %lld cells", sheetIndex,
                   qPrintable(names.at(sheetIndex)), static_cast<long long>(sheetTimer.elapsed()),
@@ -329,8 +336,9 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
 bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
 {
     // No package in hand (the document came from the caller): the stock
-    // palette is the best available reading of its theme colours.
-    return readXlsxImpl(doc, out, ThemePalette::officeDefault(), error);
+    // palette is the best available reading of its theme colours, and the
+    // package-level extras cannot be reached.
+    return readXlsxImpl(doc, out, ThemePalette::officeDefault(), QString(), error);
 }
 
 bool readXlsxFile(const QString &path, Workbook *out, QString *error)
@@ -357,7 +365,7 @@ bool readXlsxFile(const QString &path, Workbook *out, QString *error)
     // best) and missing from the recalc index. readXlsx only appends sheets,
     // so seeding the name table first is safe.
     readDefinedNames(source, out);
-    return readXlsxImpl(doc, out, paletteForPackage(source), error);
+    return readXlsxImpl(doc, out, paletteForPackage(source), source, error);
 }
 
 } // namespace QindaOffice::Calc::IO

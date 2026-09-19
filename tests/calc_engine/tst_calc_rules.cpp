@@ -42,6 +42,9 @@ class CalcRulesTest : public QObject {
 private slots:
     void blankCellsSatisfyNoComparison();
     void rulesLayerInOrder();
+    void expressionRulesEvaluateShifted();
+    void dataBarsScaleOverTheRange();
+    void stopIfTrueTruncatesTheWalk();
     void validationNeverBlocksClearing();
     void validationChecksListsAndLengths();
     void filterHidesRowsButNeverTheHeader();
@@ -90,11 +93,85 @@ void CalcRulesTest::rulesLayerInOrder()
     QCOMPARE(small.background->r, quint8(200));
     QVERIFY(!small.bold.has_value());
 
-    // The later rule wins field by field, so the two compose rather than
-    // one cancelling the other.
+    // First-wins per field (Excel's precedence model): the earlier rule's
+    // background is final, and the later rule still contributes the bold it
+    // alone sets — the two compose rather than one cancelling the other.
     const CondFormat large = sheet.condFormatFor(at(0, 0), Value(7.0));
-    QCOMPARE(large.background->r, quint8(0));
+    QCOMPARE(large.background->r, quint8(200));
     QVERIFY(large.bold.value_or(false));
+}
+
+void CalcRulesTest::expressionRulesEvaluateShifted()
+{
+    Workbook wb;
+    wb.addSheet(QStringLiteral("S"));
+    // "A1>10" relative to the range's top-left: at A2 it reads A2>10, at A3
+    // A3>10 — the per-cell view Excel's expression rules produce.
+    wb.setCellInput(0, {0, 0}, QStringLiteral("5"));
+    wb.setCellInput(0, {1, 0}, QStringLiteral("11"));
+    wb.setCellInput(0, {2, 0}, QStringLiteral("12"));
+    CondFormatRule rule;
+    rule.op = CondFormatRule::Op::Expression;
+    rule.range = {at(0, 0), at(2, 0)};
+    rule.formula = QStringLiteral("A1>10");
+    rule.format.bold = true;
+    QVERIFY(prepareCondRule(rule));
+    wb.sheetAt(0).setCondFormats({rule});
+    QVERIFY(!wb.condFormatFor(0, at(0, 0)).bold.has_value());
+    QVERIFY(wb.condFormatFor(0, at(1, 0)).bold.value_or(false));
+    QVERIFY(wb.condFormatFor(0, at(2, 0)).bold.value_or(false));
+    // A rule whose formula does not parse is dropped by the caller.
+    CondFormatRule broken = rule;
+    broken.formula = QStringLiteral("A1>");
+    QVERIFY(!prepareCondRule(broken));
+}
+
+void CalcRulesTest::dataBarsScaleOverTheRange()
+{
+    Workbook wb;
+    wb.addSheet(QStringLiteral("S"));
+    for (int i = 0; i < 4; ++i) {
+        wb.setCellInput(0, {i, 0}, QString::number((i + 1) * 10));
+    }
+    CondFormatRule rule;
+    rule.op = CondFormatRule::Op::DataBar;
+    rule.range = {at(0, 0), at(3, 0)};
+    rule.barColor = Rgb{10, 20, 30};
+    wb.sheetAt(0).setCondFormats({rule});
+    const double third = 1.0 / 3.0;
+    QCOMPARE(wb.condFormatFor(0, at(0, 0)).dataBar->fraction, 0.0);
+    QVERIFY(qAbs(wb.condFormatFor(0, at(1, 0)).dataBar->fraction - third) < 0.001);
+    QVERIFY(qAbs(wb.condFormatFor(0, at(2, 0)).dataBar->fraction - 2 * third) < 0.001);
+    QCOMPARE(wb.condFormatFor(0, at(3, 0)).dataBar->fraction, 1.0);
+    QCOMPARE(int(wb.condFormatFor(0, at(3, 0)).dataBar->color.r), 10);
+    // No bar on text.
+    wb.setCellInput(0, {0, 0}, QStringLiteral("nope"));
+    QVERIFY(!wb.condFormatFor(0, at(0, 0)).dataBar.has_value());
+}
+
+void CalcRulesTest::stopIfTrueTruncatesTheWalk()
+{
+    Sheet sheet(QStringLiteral("Sheet1"));
+    const CellRange all{at(0, 0), at(9, 9)};
+    CondFormatRule stop = numericRule(CondFormatRule::Op::GreaterThan, 0, all);
+    stop.format.background = Rgb{255, 0, 0};
+    stop.stopIfTrue = true;
+    CondFormatRule other = numericRule(CondFormatRule::Op::GreaterThan, 0, all);
+    other.format.background = Rgb{0, 0, 255};
+    other.format.bold = true;
+
+    // stopIfTrue first: the later rule never contributes.
+    sheet.setCondFormats({stop, other});
+    CondFormat merged = sheet.condFormatFor(at(0, 0), Value(5.0));
+    QCOMPARE(merged.background->r, quint8(255));
+    QVERIFY(!merged.bold.has_value());
+
+    // stopIfTrue second: the earlier rule's fields are final anyway, and
+    // the stop rule contributes nothing new — but evaluation ends there.
+    sheet.setCondFormats({other, stop});
+    merged = sheet.condFormatFor(at(0, 0), Value(5.0));
+    QCOMPARE(merged.background->b, quint8(255));
+    QVERIFY(merged.bold.value_or(false));
 }
 
 void CalcRulesTest::validationNeverBlocksClearing()

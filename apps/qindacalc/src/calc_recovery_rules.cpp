@@ -71,6 +71,10 @@ QJsonObject condFormatsToJson(const QList<CalcEng::CondFormatRule> &rules)
             {QStringLiteral("first"), rule.first},
             {QStringLiteral("second"), rule.second},
             {QStringLiteral("text"), rule.text},
+            {QStringLiteral("formula"), rule.formula},
+            {QStringLiteral("bar"),
+             QJsonArray{rule.barColor.r, rule.barColor.g, rule.barColor.b}},
+            {QStringLiteral("stop"), rule.stopIfTrue},
             {QStringLiteral("bg"), rgbToJson(rule.format.background)},
             {QStringLiteral("fg"), rgbToJson(rule.format.foreground)},
             {QStringLiteral("bold"), boolToJson(rule.format.bold)},
@@ -91,15 +95,28 @@ QList<CalcEng::CondFormatRule> condFormatsFromJson(const QJsonObject &object)
         // switch in condRuleMatches.
         const int op = item.value(QStringLiteral("op")).toInt();
         rule.op = CalcEng::CondFormatRule::Op(
-            qBound(0, op, int(CalcEng::CondFormatRule::Op::NotEmpty)));
+            qBound(0, op, int(CalcEng::CondFormatRule::Op::DataBar)));
         rule.first = item.value(QStringLiteral("first")).toDouble();
         rule.second = item.value(QStringLiteral("second")).toDouble();
         rule.text = item.value(QStringLiteral("text")).toString();
+        rule.formula = item.value(QStringLiteral("formula")).toString();
+        const QJsonArray bar = item.value(QStringLiteral("bar")).toArray();
+        if (bar.size() == 3) {
+            rule.barColor = CalcEng::Rgb{quint8(bar.at(0).toInt()), quint8(bar.at(1).toInt()),
+                                         quint8(bar.at(2).toInt())};
+        }
+        rule.stopIfTrue = item.value(QStringLiteral("stop")).toBool(false);
         rule.format.background = rgbFromJson(item.value(QStringLiteral("bg")));
         rule.format.foreground = rgbFromJson(item.value(QStringLiteral("fg")));
         rule.format.bold = boolFromJson(item.value(QStringLiteral("bold")));
         rule.format.italic = boolFromJson(item.value(QStringLiteral("italic")));
-        if (rule.range.isValid()) {
+        if (!rule.range.isValid()) {
+            continue;
+        }
+        // An Expression rule whose formula does not reparse is dropped, like
+        // an unreadable one on import — a rule that can never match must not
+        // ride the document forever.
+        if (CalcEng::prepareCondRule(rule)) {
             rules.append(rule);
         }
     }

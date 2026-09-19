@@ -5,6 +5,66 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-034: Conditional formats, validations, filters and comments round-trip
+
+**Date:** 2026-09-18 · **Status:** accepted (M34)
+
+**Context.** The engine has modelled the four range-rule kinds since M21 —
+conditional formats, data validation, autofilter, cell comments — but no
+file kept them: the xlsx bridge read and wrote none of it, so every rule
+died on open and on save. Conditional-format *merging* also used M21's
+"later rules win", which is not Excel's model.
+
+**Decision.**
+
+1. **Excel's precedence model replaces "later rules win".** A sheet's rule
+   list is in precedence order (xlsx priority ascending); evaluation walks
+   it with first-wins-per-field and stopIfTrue truncation. The engine enum
+   gains GreaterThanOrEqual/LessThanOrEqual, Expression (formula stored
+   relative to the range top-left, evaluated shifted — the shared-formula
+   trick) and DataBar (fraction over the range's numeric extent, cached
+   and invalidated on every recalc). `Workbook::condFormatFor(sheet, addr)`
+   is the one evaluation path the grid and printer share.
+2. **Read is direct package XML** (`xlsx_read_xml.cpp`): conditional
+   formats + the dxf table, validations, autofilter, comments — QXlsx has
+   no public model for any of them. dxf visible fills come from `bgColor`
+   (Excel's dxf convention); colour attributes resolve through the
+   theme/indexed/rgb resolver from M33. Unmappable rules (exotic
+   operators, color scales, custom validations, Warning-style prompts,
+   non-literal cellIs bounds) are SKIPPED with a count, never
+   approximated — a wrong min/max is a trap, and an imported Warning
+   validation would block valid input. Range-ref validation lists resolve
+   to their current values (the live link is lost, noted here).
+3. **Write splits by capability**: validations and conditional formats go
+   through QXlsx's public model (`addDataValidation`,
+   `addConditionalFormatting` — a dxf's visible fill is `P_Fill_FgColor`,
+   which QXlsx's solid-fill swap emits as the file's `bgColor`, exactly
+   Excel's dxf shape); autofilter and comments go through the new
+   post-pass (`xlsx_post.cpp` + `xlsx_manifest.h` + `xlsx_xml.cpp` +
+   `xlsx_write_xml.cpp`): the write half builds a manifest while the model
+   is in hand, and after `saveAs` the pass rewrites the package in place —
+   `<autoFilter>` after `</sheetData>`, comments parts plus rels and
+   content-type overrides. VML is skipped (the openpyxl precedent: Excel
+   and LibreOffice read the comments part without it; a live-Excel check
+   can revisit). Part names and anchors are asserted — a silent miss is
+   data loss the user never hears about (D-012).
+4. **The dialog preserves what it cannot represent.** CondFormatDialog
+   shows import-only rules (Expression, DataBar, or-equal comparisons)
+   read-only; the host re-inserts them at their original positions on
+   Apply, so a dialog visit never demotes or drops an imported rule. New
+   rules land at the end (lowest precedence).
+5. **Two read-side bugs the gates caught**: an absent `dxfId` attribute
+   must not read as dxf 0 (every dataBar silently gained dxf 0's format),
+   and xlsx hex colours carry no `#`.
+
+**Consequences.** `tst_calc_io_rules` gates all four kinds both directions
+(package-inspection included); engine tests cover expression shifting,
+data-bar fractions and stopIfTrue; `sampleRulesEnforceAndImport` proves
+the sample's dropdowns reject off-list input and its data bars measure
+live values. The M21 "later rules win" test flipped to first-wins with
+the semantics change documented here. Table-scoped filters and comments
+with rich text remain out of scope (tables land in M36).
+
 ## D-033: The full cell-style set round-trips xlsx, fills included
 
 **Date:** 2026-09-18 · **Status:** accepted (M33)

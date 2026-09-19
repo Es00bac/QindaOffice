@@ -99,24 +99,31 @@ void Sheet::replaceContents(QHash<quint64, Cell> cells, QHash<quint64, qint32> s
 
 CondFormat Sheet::condFormatFor(const CellAddr &addr, const Value &value) const
 {
+    // The classic-ops path (tests and callers without a workbook); the app
+    // evaluates through Workbook::condFormatFor, which also resolves
+    // Expression and DataBar rules against live values. The merge is
+    // first-wins-per-field with stopIfTrue, Excel's model: the list is in
+    // precedence order, so a field an earlier rule set is final.
     CondFormat merged;
     for (const CondFormatRule &rule : m_condFormats) {
-        if (!rule.range.contains(addr) || !condRuleMatches(rule, value)) {
+        if (rule.op == CondFormatRule::Op::Expression || rule.op == CondFormatRule::Op::DataBar
+            || !rule.range.contains(addr) || !condRuleMatches(rule, value)) {
             continue;
         }
-        // Later rules win field by field, so a "highlight the row" rule and
-        // a "make negatives red" rule compose instead of cancelling.
-        if (rule.format.background) {
+        if (!merged.background.has_value() && rule.format.background.has_value()) {
             merged.background = rule.format.background;
         }
-        if (rule.format.foreground) {
+        if (!merged.foreground.has_value() && rule.format.foreground.has_value()) {
             merged.foreground = rule.format.foreground;
         }
-        if (rule.format.bold) {
+        if (!merged.bold.has_value() && rule.format.bold.has_value()) {
             merged.bold = rule.format.bold;
         }
-        if (rule.format.italic) {
+        if (!merged.italic.has_value() && rule.format.italic.has_value()) {
             merged.italic = rule.format.italic;
+        }
+        if (rule.stopIfTrue) {
+            break;
         }
     }
     return merged;

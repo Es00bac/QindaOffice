@@ -241,6 +241,8 @@ void Workbook::endBulkLoad()
 
 void Workbook::recalc(const QSet<CellKey> &edited)
 {
+    // Values the data bars measure against are moving; drop their extents.
+    m_dataBarExtents.clear();
     QSet<CellKey> dirty = m_dependencies.dependentsOf(edited);
     dirty |= m_dependencies.volatileCells();
     dirty |= edited;
@@ -315,6 +317,15 @@ Value Workbook::cellValue(qint32 sheet, qint32 row, qint32 col) const
     }
     const Cell *cell = m_sheets.at(size_t(sheet))->cellAt({row, col});
     return cell != nullptr ? cell->value : Value(std::monostate{});
+}
+
+CondFormat Workbook::condFormatFor(qint32 sheet, const CellAddr &addr) const
+{
+    if (sheet < 0 || sheet >= qint32(m_sheets.size())) {
+        return {};
+    }
+    return condFormatForHost(m_sheets.at(size_t(sheet))->condFormats(), sheet, addr, *this,
+                             m_dataBarExtents);
 }
 
 QVector<QPair<CellAddr, Value>> Workbook::nonBlankCellsIn(qint32 sheet, const CellRange &range) const

@@ -94,6 +94,12 @@ public:
     [[nodiscard]] QVector<QPair<CellAddr, Value>> nonBlankCellsIn(
         qint32 sheet, const CellRange &range) const override;
 
+    // The full conditional-format evaluation for a cell (classic ops AND
+    // Expression/DataBar rules against live values). Painting and printing
+    // both go through this, so paper and screen cannot disagree. The data
+    // bar extent cache is invalidated by every recalculation.
+    [[nodiscard]] CondFormat condFormatFor(qint32 sheet, const CellAddr &addr) const;
+
     [[nodiscard]] DependencyGraph &dependencies() { return m_dependencies; }
 
     // Floating charts anchored on the sheets (plan section 7.2); exported
@@ -110,6 +116,9 @@ private:
     QHash<QString, RangeRef> m_names;
     DependencyGraph m_dependencies;
     bool m_bulkLoading = false;
+    // Data-bar min/max per rule (keyed by rule content), cleared on every
+    // recalculation. Mutable: condFormatFor is a const evaluation.
+    mutable QHash<quint64, QPair<double, double>> m_dataBarExtents;
 };
 
 } // namespace QindaOffice::Calc

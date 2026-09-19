@@ -242,6 +242,51 @@ private slots:
         }
     }
 
+    // Imported rules are live: the sample's list validations enforce on the
+    // one edit path every UI edit takes, its conditional formats arrive with
+    // their precedence and dxfs, and its data bars measure against the
+    // range's values.
+    void sampleRulesEnforceAndImport()
+    {
+        const QString path = qEnvironmentVariable("QQO_SAMPLE_XLSX");
+        if (path.isEmpty()) {
+            QSKIP("QQO_SAMPLE_XLSX not set");
+        }
+        SpreadsheetDocument doc;
+        QString error;
+        QVERIFY2(doc.load(path, &error), qPrintable(error));
+        int condFormats = 0;
+        int validations = 0;
+        for (qint32 s = 0; s < doc.workbook()->sheetCount(); ++s) {
+            condFormats += doc.workbook()->sheetAt(s).condFormats().size();
+            validations += doc.workbook()->sheetAt(s).validations().size();
+        }
+        QCOMPARE(condFormats, 8);
+        QCOMPARE(validations, 9);
+
+        // Controls!B5 is a scenario dropdown (Downside/Base/Upside): a value
+        // outside the list is refused with a reason; a listed one goes in.
+        const qint32 controls = doc.workbook()->sheetIndex(QStringLiteral("Controls"));
+        QVERIFY(controls >= 0);
+        doc.setActiveSheet(controls);
+        const QString before = Calc::toText(doc.workbook()->cellValue(controls, 4, 1));
+        QSignalSpy rejected(&doc, &SpreadsheetDocument::inputRejected);
+        doc.applyInput({4, 1}, QStringLiteral("Bogus"));
+        QCOMPARE(rejected.size(), 1);
+        QCOMPARE(Calc::toText(doc.workbook()->cellValue(controls, 4, 1)), before);
+        doc.applyInput({4, 1}, QStringLiteral("Upside"));
+        QCOMPARE(rejected.size(), 1);
+        QCOMPARE(Calc::toText(doc.workbook()->cellValue(controls, 4, 1)), QStringLiteral("Upside"));
+
+        // Monthly!C8:C43 carries a dataBar: the extent spans the column's
+        // numbers, so C8 (the smallest) shows ~0 and a later cell more.
+        const qint32 monthly = doc.workbook()->sheetIndex(QStringLiteral("Monthly"));
+        QVERIFY(monthly >= 0);
+        const Calc::CondFormat low = doc.workbook()->condFormatFor(monthly, {7, 2});
+        QVERIFY(low.dataBar.has_value());
+        QCOMPARE(low.dataBar->fraction, 0.0);
+    }
+
     // Dashboard!A1:P2 is a merged banner with a solid navy fill (FF142B44)
     // and white bold text. The pixel is sampled off-glyph, away from the
     // cursor, so only the fill can satisfy it. (Red until M33 landed cell

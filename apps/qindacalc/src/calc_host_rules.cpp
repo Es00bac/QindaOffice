@@ -112,12 +112,21 @@ QVariantList CalcHost::condFormatRules() const
 {
     QVariantList list;
     for (const CondFormatRule &rule : sheet().condFormats()) {
+        // Ops the dialog cannot author (import-only) travel marked: the
+        // dialog shows them read-only and the host re-inserts them at their
+        // original positions on Apply, so precedence survives the visit.
+        const bool imported = rule.op == CondFormatRule::Op::Expression
+            || rule.op == CondFormatRule::Op::DataBar
+            || rule.op == CondFormatRule::Op::GreaterThanOrEqual
+            || rule.op == CondFormatRule::Op::LessThanOrEqual;
         list.append(QVariantMap{
             {QStringLiteral("range"), rangeText(rule.range)},
             {QStringLiteral("op"), int(rule.op)},
             {QStringLiteral("first"), rule.first},
             {QStringLiteral("second"), rule.second},
             {QStringLiteral("text"), rule.text},
+            {QStringLiteral("formula"), rule.formula},
+            {QStringLiteral("imported"), imported},
             {QStringLiteral("background"), colorText(rule.format.background)},
             {QStringLiteral("foreground"), colorText(rule.format.foreground)},
             {QStringLiteral("bold"), rule.format.bold.value_or(false)},
@@ -129,7 +138,7 @@ QVariantList CalcHost::condFormatRules() const
 
 void CalcHost::setCondFormatRules(const QVariantList &rules)
 {
-    QList<CondFormatRule> out;
+    QList<CondFormatRule> fromDialog;
     for (const QVariant &value : rules) {
         const QVariantMap map = value.toMap();
         CondFormatRule rule;
@@ -149,7 +158,25 @@ void CalcHost::setCondFormatRules(const QVariantList &rules)
         if (map.value(QStringLiteral("italic")).toBool()) {
             rule.format.italic = true;
         }
-        out.append(rule);
+        fromDialog.append(rule);
+    }
+    // Re-insert the import-only rules at their original positions (the
+    // dialog returned only the rows it could edit). Rules the user added
+    // land at the end — the lowest precedence.
+    QList<CondFormatRule> out;
+    int index = 0;
+    for (const CondFormatRule &original : sheet().condFormats()) {
+        if (original.op == CondFormatRule::Op::Expression
+            || original.op == CondFormatRule::Op::DataBar
+            || original.op == CondFormatRule::Op::GreaterThanOrEqual
+            || original.op == CondFormatRule::Op::LessThanOrEqual) {
+            out.append(original);
+        } else if (index < fromDialog.size()) {
+            out.append(fromDialog.at(index++));
+        }
+    }
+    for (; index < fromDialog.size(); ++index) {
+        out.append(fromDialog.at(index));
     }
     // The whole list comes back, so adding three rules and removing one is
     // ONE undo step — which is what the user did.

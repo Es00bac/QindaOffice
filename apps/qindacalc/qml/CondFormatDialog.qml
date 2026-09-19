@@ -31,6 +31,15 @@ Tk.Dialog {
         dialog.selected = -1
     }
     function describe(rule) {
+        if (rule.imported) {
+            // Import-only shapes (formula rules, data bars, or-equal
+            // comparisons): shown so the user knows they exist, never
+            // editable here — the host re-inserts them verbatim.
+            if (rule.op === 10) return rule.range + ": " + qsTr("formula “%1” (imported)").arg(rule.formula)
+            if (rule.op === 11) return rule.range + ": " + qsTr("data bar (imported)")
+            if (rule.op === 8) return rule.range + ": " + qsTr("greater than or equal %1 (imported)").arg(rule.first)
+            return rule.range + ": " + qsTr("less than or equal %1 (imported)").arg(rule.first)
+        }
         let condition = dialog.ops[rule.op]
         if (rule.op <= 1 || rule.op === 3 || rule.op === 4) condition += " " + rule.first
         if (rule.op === 2) condition += " " + rule.first + " – " + rule.second
@@ -47,12 +56,14 @@ Tk.Dialog {
     }
     function removeSelected() {
         if (dialog.selected < 0) return
+        // Import-only rules are read-only; they cannot be removed here.
+        if (dialog.rules[dialog.selected].imported) return
         const list = dialog.rules.slice()
         list.splice(dialog.selected, 1)
         dialog.rules = list
         dialog.selected = -1
     }
-    onAccepted: dialog.host.setCondFormatRules(dialog.rules)
+    onAccepted: dialog.host.setCondFormatRules(dialog.rules.filter(rule => !rule.imported))
 
     Tk.Flex {
         direction: Tk.Flex.Column
@@ -71,6 +82,7 @@ Tk.Dialog {
                         required property int index
                         objectName: "condFormatRule_" + index
                         text: dialog.describe(modelData)
+                        enabled: !modelData.imported
                         selected: dialog.selected === index
                         onClicked: dialog.selected = index
                     }

@@ -245,6 +245,33 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M34 gates (rules & annotations round-trip)
+
+Automated by `tst_calc_io_rules`, `tst_calc_rules` and `tst_calc_window`.
+Rationale in D-034.
+
+- [x] `condFormatsRoundTrip`: a cellIs rule with a dxf survives
+      (package-inspected dxf fill as `bgColor`), evaluates after reimport,
+      and keeps stopIfTrue.
+- [x] `expressionAndDataBarSurvive`: the formula text round-trips, reparses
+      and evaluates shifted; the bar colour and live fraction survive.
+- [x] `validationsRoundTrip`: list (with message) and whole-number rules
+      enforce after the round trip; unmappable operators/styles are
+      skipped with a count, never approximated.
+- [x] `autoFilterRoundTrip`: the element lands after `</sheetData>`,
+      re-imports active with its allowed values, and hides the same rows.
+- [x] `commentsRoundTrip`: the comments part, rels and content-type
+      override exist; author/text return at the right cells.
+- [x] Engine: expression rules shift per cell, data bars scale over the
+      range, stopIfTrue truncates, merge is first-wins-per-field (the M21
+      later-wins test flipped, D-034).
+- [x] `sampleRulesEnforceAndImport` (QQO_SAMPLE_XLSX): 8 conditional
+      formats and 9 validations arrive; Controls!B5 rejects "Bogus" with a
+      reason and accepts "Upside"; the Monthly data bar measures live.
+- [ ] On the desktop: data bars paint on Monthly/Product Analysis/
+      Customer Analysis; the "REORDER"/"FOLLOW UP" rows colour; a comment
+      hover shows the imported text.
+
 ### M33 gates (full style round-trip)
 
 Automated by `tst_calc_io_styles` and `tst_calc_window`. Rationale in D-033.

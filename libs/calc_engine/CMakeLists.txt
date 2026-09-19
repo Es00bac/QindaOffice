@@ -37,6 +37,7 @@ add_library(calc_engine STATIC
     src/sheet.h
     src/sheet_rules.cpp
     src/sheet_rules.h
+    src/sheet_rules_eval.cpp
     src/structure.cpp
     src/structure.h
     src/structure_sheets.cpp

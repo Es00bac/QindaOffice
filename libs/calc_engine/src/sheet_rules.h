@@ -24,13 +24,24 @@ namespace QindaOffice::Calc {
 
 // --- Conditional formatting -----------------------------------------------
 
+// A data bar's resolved display: the bar colour and the fraction of the cell
+// width it covers (0..1, computed over the range's numeric values).
+struct DataBarFill {
+    Rgb color{0, 0, 0};
+    double fraction = 0;
+    bool operator==(const DataBarFill &) const = default;
+};
+
 // The formatting a matching rule contributes. Fields left unset leave the
-// cell's own style alone, so two rules can layer (later rules win).
+// cell's own style alone, so two rules can layer: evaluation walks the rule
+// list in order (highest precedence first, Excel's model) and the FIRST
+// matching rule to set a field wins it — a stopIfTrue match ends the walk.
 struct CondFormat {
     std::optional<Rgb> background;
     std::optional<Rgb> foreground;
     std::optional<bool> bold;
     std::optional<bool> italic;
+    std::optional<DataBarFill> dataBar;
     bool operator==(const CondFormat &) const = default;
 };
 
@@ -44,21 +55,50 @@ struct CondFormatRule {
         ContainsText,
         IsEmpty,
         NotEmpty,
+        GreaterThanOrEqual,
+        LessThanOrEqual,
+        Expression,  // `formula` (relative to range top-left) evaluates truthy
+        DataBar,     // bar over the value's share of the range min..max
     };
 
     CellRange range;
     Op op = Op::GreaterThan;
-    double first = 0;   // GreaterThan/LessThan/EqualTo/NotEqualTo/Between low
+    double first = 0;   // (Greater|Less)Than(OrEqual)/EqualTo/NotEqualTo/Between low
     double second = 0;  // Between high
     QString text;       // ContainsText
+    QString formula;    // Expression: as read/typed, relative to range top-left
+    NodePtr ast;        // parsed `formula`, shared with the undo snapshots
+    Rgb barColor{99, 142, 198}; // DataBar (default: Excel's stock blue)
+    bool stopIfTrue = false;
     CondFormat format;
     bool operator==(const CondFormatRule &) const = default;
 };
 
-// True when `value` satisfies `rule`. Text comparisons are case-insensitive
-// (what a user typing a rule expects); numeric comparisons coerce through
-// toNumber, so the text "12" compares as a number like everywhere else.
+// True when `value` satisfies `rule` (the classic ops — Expression/DataBar
+// need the workbook, see sheet_rules_eval). Text comparisons are
+// case-insensitive (what a user typing a rule expects); numeric comparisons
+// coerce through toNumber, so the text "12" compares as a number like
+// everywhere else.
 [[nodiscard]] bool condRuleMatches(const CondFormatRule &rule, const Value &value);
+
+class EvalHost;
+
+// Host-aware matching and merging (sheet_rules_eval.cpp): Expression rules
+// evaluate their formula shifted to `addr` (the stored text is relative to
+// the range's top-left, exactly like a shared formula's master), DataBar
+// rules resolve their fraction over the range's numeric values, and the
+// merge walks in list order with first-wins-per-field and stopIfTrue.
+[[nodiscard]] bool condRuleMatchesHost(const CondFormatRule &rule, const CellAddr &addr,
+                                       const EvalHost &host, qint32 sheet);
+[[nodiscard]] CondFormat condFormatForHost(const QList<CondFormatRule> &rules,
+                                           qint32 sheet, const CellAddr &addr,
+                                           const EvalHost &host,
+                                           QHash<quint64, QPair<double, double>> &extentCache);
+
+// Prepares an Expression rule: parses `formula` into `ast` (returns false
+// and leaves ast null when the formula does not parse; callers then drop or
+// text-ify the rule rather than keeping one that can never match).
+[[nodiscard]] bool prepareCondRule(CondFormatRule &rule);
 
 // --- Data validation ------------------------------------------------------
 

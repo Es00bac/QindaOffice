@@ -7,12 +7,21 @@
 # Split in M33: xlsx_read / xlsx_write / xlsx_style. Qt Core+Gui + KArchive.
 add_library(calc_io STATIC
     src/xlsx_bridge.h
+    src/xlsx_manifest.h
     src/xlsx_package.cpp
     src/xlsx_package.h
+    src/xlsx_post.cpp
+    src/xlsx_post.h
     src/xlsx_read.cpp
+    src/xlsx_read_xml.cpp
+    src/xlsx_read_xml.h
     src/xlsx_style.cpp
     src/xlsx_style.h
     src/xlsx_write.cpp
+    src/xlsx_write_xml.cpp
+    src/xlsx_write_xml.h
+    src/xlsx_xml.cpp
+    src/xlsx_xml.h
 )
 
 target_include_directories(calc_io

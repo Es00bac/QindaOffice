@@ -7,7 +7,10 @@
 
 #include "xlsx_bridge.h"
 
+#include "xlsx_manifest.h"
+#include "xlsx_post.h"
 #include "xlsx_style.h"
+#include "xlsx_write_xml.h"
 
 #include "eval.h"
 #include "number_format.h"
@@ -17,6 +20,8 @@
 #include <xlsxworksheet.h>
 #include <xlsxcellformula.h>
 #include <xlsxchart.h>
+#include <xlsxconditionalformatting.h>
+#include <xlsxdatavalidation.h>
 
 namespace QindaOffice::Calc::IO {
 
@@ -33,9 +38,147 @@ qreal pxToPt(qreal px)
     return px * 72.0 / 96.0;
 }
 
+// The dxf for a conditional format. AGENT-NOTE: a dxf's visible fill is the
+// file's bgColor element (Excel's dxf convention — the reverse of a cell
+// fill), and QXlsx's solid-fill swap writes P_Fill_FgColor AS bgColor, so
+// the foreground setter is the right one here and ONLY here.
+QXlsx::Format dxfFromCondFormat(const CondFormat &cf)
+{
+    QXlsx::Format format;
+    if (cf.bold.has_value()) {
+        format.setFontBold(*cf.bold);
+    }
+    if (cf.italic.has_value()) {
+        format.setFontItalic(*cf.italic);
+    }
+    if (cf.foreground.has_value()) {
+        format.setFontColor(QColor(cf.foreground->r, cf.foreground->g, cf.foreground->b));
+    }
+    if (cf.background.has_value()) {
+        format.setFillPattern(QXlsx::Format::PatternSolid);
+        format.setPatternForegroundColor(
+            QColor(cf.background->r, cf.background->g, cf.background->b));
+    }
+    return format;
+}
+
+void writeValidations(QXlsx::Worksheet *worksheet, const Sheet &sheet)
+{
+    for (const ValidationRule &rule : sheet.validations()) {
+        QXlsx::DataValidation validation;
+        switch (rule.kind) {
+        case ValidationRule::Kind::List: {
+            QStringList escaped = rule.list;
+            for (QString &item : escaped) {
+                item.replace(QStringLiteral("\""), QStringLiteral("\"\""));
+            }
+            validation.setValidationType(QXlsx::DataValidation::List);
+            validation.setFormula1(QStringLiteral("\"") + escaped.join(QLatin1Char(','))
+                                   + QStringLiteral("\""));
+            break;
+        }
+        case ValidationRule::Kind::WholeNumber:
+            validation.setValidationType(QXlsx::DataValidation::Whole);
+            validation.setValidationOperator(QXlsx::DataValidation::Between);
+            validation.setFormula1(QString::number(rule.min));
+            validation.setFormula2(QString::number(rule.max));
+            break;
+        case ValidationRule::Kind::Decimal:
+            validation.setValidationType(QXlsx::DataValidation::Decimal);
+            validation.setValidationOperator(QXlsx::DataValidation::Between);
+            validation.setFormula1(QString::number(rule.min));
+            validation.setFormula2(QString::number(rule.max));
+            break;
+        case ValidationRule::Kind::TextLength:
+            validation.setValidationType(QXlsx::DataValidation::TextLength);
+            validation.setValidationOperator(QXlsx::DataValidation::Between);
+            validation.setFormula1(QString::number(rule.min));
+            validation.setFormula2(QString::number(rule.max));
+            break;
+        case ValidationRule::Kind::NotEmpty:
+            // Excel has no "not empty" validation; the idiom is a custom
+            // formula over the range's first cell.
+            validation.setValidationType(QXlsx::DataValidation::Custom);
+            validation.setFormula1(QStringLiteral("LEN(TRIM(%1))>0")
+                                       .arg(addrText(rule.range.topLeft)));
+            break;
+        }
+        if (!rule.message.isEmpty()) {
+            validation.setErrorMessage(rule.message);
+        }
+        validation.setErrorStyle(QXlsx::DataValidation::Stop);
+        validation.addRange(QXlsx::CellRange(rule.range.topLeft.row + 1,
+                                             rule.range.topLeft.col + 1,
+                                             rule.range.bottomRight.row + 1,
+                                             rule.range.bottomRight.col + 1));
+        worksheet->addDataValidation(validation);
+    }
+}
+
+void writeCondFormats(QXlsx::Worksheet *worksheet, const Sheet &sheet)
+{
+    using Op = CondFormatRule::Op;
+    for (const CondFormatRule &rule : sheet.condFormats()) {
+        QXlsx::ConditionalFormatting cf;
+        const QXlsx::Format dxf = dxfFromCondFormat(rule.format);
+        const QString first = QString::number(rule.first);
+        const QString second = QString::number(rule.second);
+        bool added = true;
+        switch (rule.op) {
+        case Op::GreaterThan:
+            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_GreaterThan, first, dxf, rule.stopIfTrue);
+            break;
+        case Op::GreaterThanOrEqual:
+            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_GreaterThanOrEqual, first, dxf, rule.stopIfTrue);
+            break;
+        case Op::LessThan:
+            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_LessThan, first, dxf, rule.stopIfTrue);
+            break;
+        case Op::LessThanOrEqual:
+            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_LessThanOrEqual, first, dxf, rule.stopIfTrue);
+            break;
+        case Op::Between:
+            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_Between, first, second, dxf, rule.stopIfTrue);
+            break;
+        case Op::EqualTo:
+            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_Equal, first, dxf, rule.stopIfTrue);
+            break;
+        case Op::NotEqualTo:
+            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_NotEqual, first, dxf, rule.stopIfTrue);
+            break;
+        case Op::ContainsText:
+            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_ContainsText, rule.text, dxf, rule.stopIfTrue);
+            break;
+        case Op::IsEmpty:
+            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_Blanks, dxf, rule.stopIfTrue);
+            break;
+        case Op::NotEmpty:
+            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_NoBlanks, dxf, rule.stopIfTrue);
+            break;
+        case Op::Expression:
+            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_Expression, rule.formula, dxf, rule.stopIfTrue);
+            break;
+        case Op::DataBar:
+            cf.addDataBarRule(QColor(rule.barColor.r, rule.barColor.g, rule.barColor.b),
+                              true, rule.stopIfTrue);
+            break;
+        }
+        if (!added) {
+            continue;
+        }
+        cf.addRange(QXlsx::CellRange(rule.range.topLeft.row + 1, rule.range.topLeft.col + 1,
+                                     rule.range.bottomRight.row + 1,
+                                     rule.range.bottomRight.col + 1));
+        worksheet->addConditionalFormatting(cf);
+    }
+}
+
 } // namespace
 
-std::unique_ptr<QXlsx::Document> writeXlsx(const Workbook &wb, QString *error)
+// Builds the QXlsx model and, when `manifest` is non-null, the post-pass
+// patch list for the features QXlsx has no model for (autofilter, comments).
+std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *manifest,
+                                           QString *error)
 {
     Q_UNUSED(error);
     auto doc = std::make_unique<QXlsx::Document>();
@@ -113,6 +256,24 @@ std::unique_ptr<QXlsx::Document> writeXlsx(const Workbook &wb, QString *error)
         for (const qint32 row : sheet.sizedRows()) {
             worksheet->setRowHeight(row + 1, row + 1, pxToPt(sheet.rowHeight(row)));
         }
+        writeValidations(worksheet, sheet);
+        writeCondFormats(worksheet, sheet);
+        if (manifest != nullptr) {
+            // QXlsx's sheet part naming is deterministic (document order);
+            // the post-pass asserts it before touching anything.
+            PatchManifest::SheetPatch patch;
+            patch.sheetPart = QStringLiteral("xl/worksheets/sheet%1.xml").arg(s + 1);
+            if (sheet.autoFilter().active) {
+                patch.autoFilterXml = autoFilterXml(sheet.autoFilter());
+            }
+            if (!sheet.comments().isEmpty()) {
+                patch.commentsPart = QStringLiteral("xl/comments%1.xml").arg(s + 1);
+                patch.commentsXml = commentsPartXml(sheet.comments());
+            }
+            if (!patch.autoFilterXml.isEmpty() || !patch.commentsPart.isEmpty()) {
+                manifest->sheets.append(patch);
+            }
+        }
     }
     // Floating charts (plan section 7.2): one chart part per spec, anchored
     // at its cell. QXlsx renders clustered bars for StackedBar (its chart
@@ -157,9 +318,18 @@ std::unique_ptr<QXlsx::Document> writeXlsx(const Workbook &wb, QString *error)
     return doc;
 }
 
+std::unique_ptr<QXlsx::Document> writeXlsx(const Workbook &wb, QString *error)
+{
+    // No post-pass without a file: the returned document carries everything
+    // QXlsx has a model for (which now includes validations and conditional
+    // formats) but not the manifest-only features (autofilter, comments).
+    return buildXlsx(wb, nullptr, error);
+}
+
 bool writeXlsxFile(const Workbook &wb, const QString &path, QString *error)
 {
-    std::unique_ptr<QXlsx::Document> doc = writeXlsx(wb, error);
+    PatchManifest manifest;
+    std::unique_ptr<QXlsx::Document> doc = buildXlsx(wb, &manifest, error);
     if (doc == nullptr) {
         return false;
     }
@@ -167,6 +337,10 @@ bool writeXlsxFile(const Workbook &wb, const QString &path, QString *error)
         if (error != nullptr) {
             *error = QStringLiteral("cannot write %1").arg(path);
         }
+        return false;
+    }
+    // The manifest-only parts land after QXlsx finished the package.
+    if (!manifest.sheets.isEmpty() && !applyPatchManifest(path, manifest, error)) {
         return false;
     }
     return true;

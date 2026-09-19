@@ -35,8 +35,12 @@ bool condRuleMatches(const CondFormatRule &rule, const Value &value)
     switch (rule.op) {
     case Op::GreaterThan:
         return *number > rule.first;
+    case Op::GreaterThanOrEqual:
+        return *number >= rule.first;
     case Op::LessThan:
         return *number < rule.first;
+    case Op::LessThanOrEqual:
+        return *number <= rule.first;
     case Op::Between:
         return *number >= qMin(rule.first, rule.second)
             && *number <= qMax(rule.first, rule.second);
@@ -47,6 +51,8 @@ bool condRuleMatches(const CondFormatRule &rule, const Value &value)
     case Op::ContainsText:
     case Op::IsEmpty:
     case Op::NotEmpty:
+    case Op::Expression:
+    case Op::DataBar:
         break;
     }
     return false;

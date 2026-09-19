@@ -142,16 +142,27 @@ void SpreadsheetItem::paintGrid(QPainter &p)
             const CellStyle *style = styleId != 0 ? wb.style(styleId) : nullptr;
             // Conditional formatting layers OVER the cell's own style and
             // under the selection: a rule that hid the selection would make
-            // the cursor invisible on a formatted block.
+            // the cursor invisible on a formatted block. Evaluation goes
+            // through the workbook so Expression and DataBar rules resolve
+            // against live values.
             const CondFormat conditional = sheet.condFormats().isEmpty()
                 ? CondFormat{}
-                : sheet.condFormatFor(addr, cellData != nullptr ? cellData->value : Value());
+                : wb.condFormatFor(m_document->activeSheet(), addr);
             if (!inSelection) {
                 if (conditional.background) {
                     p.fillRect(cell, QColor(conditional.background->r, conditional.background->g,
                                             conditional.background->b));
                 } else if (style != nullptr && style->bg.has_value()) {
                     p.fillRect(cell, QColor((*style->bg).r, (*style->bg).g, (*style->bg).b));
+                }
+                // A data bar under the text, translucent the way Excel's
+                // bars sit over the cell's own fill.
+                if (conditional.dataBar.has_value()) {
+                    const DataBarFill &bar = *conditional.dataBar;
+                    QRectF barRect = cell;
+                    barRect.setWidth(cell.width() * bar.fraction);
+                    p.fillRect(barRect,
+                               QColor(bar.color.r, bar.color.g, bar.color.b, 115));
                 }
             }
             if (cellData != nullptr && !isBlank(cellData->value)) {

@@ -63,8 +63,9 @@ public:
     [[nodiscard]] const QList<CondFormatRule> &condFormats() const { return m_condFormats; }
     void setCondFormats(QList<CondFormatRule> rules) { m_condFormats = std::move(rules); }
     // The merged formatting of every rule matching `addr` with `value`, in
-    // rule order (later rules win). Painting and printing both go through
-    // this, so paper and screen cannot disagree.
+    // precedence order (first-wins per field, stopIfTrue ends the walk).
+    // Classic ops only — Expression/DataBar rules are skipped here; the app
+    // evaluates them through Workbook::condFormatFor.
     [[nodiscard]] CondFormat condFormatFor(const CellAddr &addr, const Value &value) const;
 
     [[nodiscard]] const QList<ValidationRule> &validations() const { return m_validations; }
