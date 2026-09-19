@@ -203,6 +203,7 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
             continue;
         }
         Sheet &sheet = out->addSheet(names.at(sheetIndex));
+        sheet.setHidden(worksheet->sheetState() != QXlsx::AbstractSheet::SS_Visible);
         QElapsedTimer sheetTimer;
         sheetTimer.start();
 
@@ -326,6 +327,30 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
     // been read yet (Summary before Detail — the common layout) captured a
     // stale 0/#REF! and no dependency edge could ever fix it afterwards.
     out->endBulkLoad();
+    // View state that lives outside the sheet parts: the active tab and the
+    // _xlnm print names, both from xl/workbook.xml. (QXlsx's activeSheet()
+    // is unusable here: the read loop above selects every sheet in turn, so
+    // it always reports the LAST one.)
+    if (!packagePath.isEmpty()) {
+        QXlsx::ZipReader zip(packagePath);
+        if (zip.exists()) {
+            const QByteArray workbookXml = zip.fileData(QStringLiteral("xl/workbook.xml"));
+            QXmlStreamReader reader(workbookXml);
+            while (!reader.atEnd()) {
+                if (reader.readNext() == QXmlStreamReader::StartElement
+                    && reader.name() == QLatin1String("workbookView")) {
+                    const QString tab = reader.attributes()
+                                            .value(QLatin1String("activeTab"))
+                                            .toString();
+                    if (!tab.isEmpty()) {
+                        out->setActiveTab(tab.toInt());
+                    }
+                    break;
+                }
+            }
+            readPrintNames(workbookXml, out);
+        }
+    }
     if (qEnvironmentVariableIsSet("QQO_XLSX_TRACE")) {
         qInfo("xlsx: recalcAll %lld ms", static_cast<long long>(recalcTimer.elapsed()));
     }

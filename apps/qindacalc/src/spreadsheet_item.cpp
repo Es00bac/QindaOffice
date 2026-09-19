@@ -95,14 +95,14 @@ void SpreadsheetItem::setCursorCell(const CellAddr &addr, bool extendSelection)
     const qreal topEdge = kHeaderHeight + frozenHeightPx();
     qreal sx = m_scrollX;
     qreal sy = m_scrollY;
-    if (m_cursor.col >= m_frozen.col) {
+    if (m_cursor.col >= frozen().col) {
         if (rect.left() < leftEdge) {
             sx += rect.left() - leftEdge;
         } else if (rect.right() > width()) {
             sx += rect.right() - width();
         }
     }
-    if (m_cursor.row >= m_frozen.row) {
+    if (m_cursor.row >= frozen().row) {
         if (rect.top() < topEdge) {
             sy += rect.top() - topEdge;
         } else if (rect.bottom() > height()) {
@@ -186,7 +186,7 @@ qreal SpreadsheetItem::viewportHeight() const
 qreal SpreadsheetItem::frozenHeightPx() const
 {
     qreal y = 0;
-    for (qint32 r = 0; r < m_frozen.row; ++r) {
+    for (qint32 r = 0; r < frozen().row; ++r) {
         y += rowHeightPx(r);
     }
     return y;
@@ -195,7 +195,7 @@ qreal SpreadsheetItem::frozenHeightPx() const
 qreal SpreadsheetItem::frozenWidthPx() const
 {
     qreal x = 0;
-    for (qint32 c = 0; c < m_frozen.col; ++c) {
+    for (qint32 c = 0; c < frozen().col; ++c) {
         x += colWidthPx(c);
     }
     return x;
@@ -234,7 +234,7 @@ int SpreadsheetItem::rowTop(qint32 row) const
     for (qint32 r = 0; r < row; ++r) {
         y += visibleRowHeightPx(r, hidden);
     }
-    return int(row < m_frozen.row ? y : y - m_scrollY);
+    return int(row < frozen().row ? y : y - m_scrollY);
 }
 
 int SpreadsheetItem::colLeft(qint32 col) const
@@ -243,7 +243,7 @@ int SpreadsheetItem::colLeft(qint32 col) const
     for (qint32 c = 0; c < col; ++c) {
         x += colWidthPx(c);
     }
-    return int(col < m_frozen.col ? x : x - m_scrollX);
+    return int(col < frozen().col ? x : x - m_scrollX);
 }
 
 QVector<SpreadsheetItem::Band> SpreadsheetItem::visibleRowBands() const
@@ -255,7 +255,7 @@ QVector<SpreadsheetItem::Band> SpreadsheetItem::visibleRowBands() const
     const Sheet *sheet = activeSheet();
     const QSet<qint32> hidden = sheet != nullptr ? sheet->filteredOutRows() : QSet<qint32>();
     qreal y = 0;
-    for (qint32 r = 0; r < m_frozen.row && y < viewportH; ++r) {
+    for (qint32 r = 0; r < frozen().row && y < viewportH; ++r) {
         if (hidden.contains(r)) {
             continue;
         }
@@ -264,7 +264,7 @@ QVector<SpreadsheetItem::Band> SpreadsheetItem::visibleRowBands() const
         y += h;
     }
     const qreal split = y;
-    qint32 row = m_frozen.row;
+    qint32 row = frozen().row;
     qreal top = split;
     while (row < Sheet::kMaxRows - 1 && top + visibleRowHeightPx(row, hidden) <= split + m_scrollY) {
         top += visibleRowHeightPx(row, hidden);
@@ -287,13 +287,13 @@ QVector<SpreadsheetItem::Band> SpreadsheetItem::visibleColumnBands() const
     QVector<Band> bands;
     const qreal viewportW = viewportWidth();
     qreal x = 0;
-    for (qint32 c = 0; c < m_frozen.col && x < viewportW; ++c) {
+    for (qint32 c = 0; c < frozen().col && x < viewportW; ++c) {
         const qreal w = colWidthPx(c);
         bands.append({c, x, w});
         x += w;
     }
     const qreal split = x;
-    qint32 col = m_frozen.col;
+    qint32 col = frozen().col;
     qreal left = split;
     while (col < Sheet::kMaxCols - 1 && left + colWidthPx(col) <= split + m_scrollX) {
         left += colWidthPx(col);
@@ -408,18 +408,13 @@ void SpreadsheetItem::geometryChange(const QRectF &newGeometry, const QRectF &ol
     }
 }
 
-void SpreadsheetItem::setFrozen(int row, int col)
+CalcEng::CellAddr SpreadsheetItem::frozen() const
 {
-    const CellAddr next{qMax(qint32(0), qint32(row)), qMax(qint32(0), qint32(col))};
-    if (next == m_frozen) {
-        return;
+    const Sheet *sheet = activeSheet();
+    if (sheet == nullptr) {
+        return {0, 0};
     }
-    m_frozen = next;
-    m_scrollX = 0;
-    m_scrollY = 0;
-    updateScrollRanges();
-    update();
-    emit frozenChanged();
+    return {sheet->freezeRows(), sheet->freezeCols()};
 }
 
 void SpreadsheetItem::setZoom(qreal zoom)

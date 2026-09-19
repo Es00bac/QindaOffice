@@ -43,5 +43,9 @@ void readSheetCharts(const QString &packagePath, Workbook *wb, qint32 sheetIndex
                                                        const QString &sheetPart);
 // Structured tables, resolved through the sheet's rels (table parts).
 [[nodiscard]] QList<TableSpec> readTables(QXlsx::ZipReader &zip, const QString &sheetPart);
+// Sheet view state (frozen pane, selection, page setup) from the sheet XML.
+void readSheetViews(const QByteArray &xml, Sheet *sheet);
+// _xlnm print names (Print_Area/Print_Titles) from xl/workbook.xml.
+void readPrintNames(const QByteArray &workbookXml, Workbook *wb);
 
 } // namespace QindaOffice::Calc::IO

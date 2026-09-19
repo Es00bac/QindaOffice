@@ -9,6 +9,7 @@
 
 #include "workbook.h"
 
+#include <QRegularExpression>
 #include <QXmlStreamReader>
 
 #include <xlsxzipreader_p.h>
@@ -309,6 +310,97 @@ QList<TableSpec> readTables(QXlsx::ZipReader &zip, const QString &sheetPart)
         }
     }
     return out;
+}
+
+// Sheet view state: the frozen pane (state="frozen" only — a plain "split"
+// is an unfrozen split view, not a freeze), the selection cell, and the
+// page setup.
+void readSheetViews(const QByteArray &xml, Sheet *sheet)
+{
+    QXmlStreamReader reader(xml);
+    while (!reader.atEnd()) {
+        if (reader.readNext() != QXmlStreamReader::StartElement) {
+            continue;
+        }
+        const QStringView name = reader.name();
+        const auto attributes = reader.attributes();
+        if (name == QLatin1String("pane")) {
+            const QStringView state = attributes.value(QLatin1String("state"));
+            if (state == QLatin1String("frozen") || state == QLatin1String("frozenSplit")) {
+                sheet->setFreeze(attributes.value(QLatin1String("ySplit")).toInt(),
+                                 attributes.value(QLatin1String("xSplit")).toInt());
+            }
+        } else if (name == QLatin1String("selection")) {
+            const std::optional<CellAddr> addr =
+                addrFromText(attributes.value(QLatin1String("activeCell")).toString());
+            if (addr.has_value()) {
+                sheet->setCursor(*addr);
+            }
+        } else if (name == QLatin1String("pageSetup")) {
+            Sheet::PageSetup setup;
+            setup.orientation = attributes.value(QLatin1String("orientation"))
+                                == QLatin1String("landscape")
+                ? 1
+                : 0;
+            setup.fitToWidth = attributes.value(QLatin1String("fitToWidth")).toInt();
+            setup.fitToHeight = attributes.value(QLatin1String("fitToHeight")).toInt();
+            sheet->setPageSetup(setup);
+        }
+    }
+}
+
+// _xlnm built-in names (Print_Area / Print_Titles) are SHEET-LOCAL fields,
+// not user names — they ride localSheetId and never enter the formula name
+// table. A rows title spells "$1:$1", a cols title "$A:$A".
+void readPrintNames(const QByteArray &workbookXml, Workbook *wb)
+{
+    QXmlStreamReader reader(workbookXml);
+    while (!reader.atEnd()) {
+        if (reader.readNext() != QXmlStreamReader::StartElement
+            || reader.name() != QLatin1String("definedName")) {
+            continue;
+        }
+        const auto attributes = reader.attributes();
+        const QString name = attributes.value(QLatin1String("name")).toString();
+        if (!name.startsWith(QLatin1String("_xlnm."), Qt::CaseInsensitive)) {
+            reader.readElementText(); // consume the body
+            continue;
+        }
+        const int sheetId = attributes.value(QLatin1String("localSheetId")).toInt();
+        const QString body = reader.readElementText();
+        if (sheetId < 0 || sheetId >= wb->sheetCount()) {
+            continue;
+        }
+        // Strip the sheet qualifier: "Sheet1!$A$1:$D$10" → the range.
+        const int bang = body.indexOf(QLatin1Char('!'));
+        const QString refText = body.mid(bang + 1);
+        Sheet &sheet = wb->sheetAt(sheetId);
+        if (name.compare(QLatin1String("_xlnm.Print_Area"), Qt::CaseInsensitive) == 0) {
+            if (const std::optional<CellRange> range = rangeFromText(refText)) {
+                sheet.setPrintArea(*range);
+            }
+        } else if (name.compare(QLatin1String("_xlnm.Print_Titles"), Qt::CaseInsensitive) == 0) {
+            // Rows: "$1:$1" / "1:1"; columns: "$A:$A" / "A:A".
+            static const QRegularExpression rowsPattern(QStringLiteral("^\\$?(\\d+):\\$?(\\d+)$"));
+            static const QRegularExpression colsPattern(
+                QStringLiteral("^\\$?([A-Za-z]+):\\$?([A-Za-z]+)$"));
+            const auto rowsMatch = rowsPattern.match(refText);
+            const auto colsMatch = colsPattern.match(refText);
+            if (rowsMatch.hasMatch()) {
+                const qint32 first = rowsMatch.captured(1).toInt() - 1;
+                const qint32 last = rowsMatch.captured(2).toInt() - 1;
+                sheet.setPrintTitles(CellRange{{first, 0}, {last, Sheet::kMaxCols - 1}},
+                                     sheet.printTitleCols());
+            } else if (colsMatch.hasMatch()) {
+                const std::optional<qint32> first = colFromName(colsMatch.captured(1));
+                const std::optional<qint32> last = colFromName(colsMatch.captured(2));
+                if (first.has_value() && last.has_value()) {
+                    sheet.setPrintTitles(sheet.printTitleRows(),
+                                         CellRange{{0, *first}, {Sheet::kMaxRows - 1, *last}});
+                }
+            }
+        }
+    }
 }
 
 } // namespace QindaOffice::Calc::IO

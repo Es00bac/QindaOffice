@@ -321,13 +321,13 @@ void SpreadsheetItem::paintGrid(QPainter &p)
     p.drawRect(cellRect(m_cursor));
 
     // The frozen split, so the user can see where the sheet stops scrolling.
-    if (m_frozen.row > 0 || m_frozen.col > 0) {
+    if (frozen().row > 0 || frozen().col > 0) {
         p.setPen(QPen(m_headerLineColor.darker(150), 2));
-        if (m_frozen.row > 0) {
+        if (frozen().row > 0) {
             const qreal y = frozenHeightPx();
             p.drawLine(QPointF(0, y), QPointF(viewportWidth(), y));
         }
-        if (m_frozen.col > 0) {
+        if (frozen().col > 0) {
             const qreal x = frozenWidthPx();
             p.drawLine(QPointF(x, 0), QPointF(x, viewportHeight()));
         }

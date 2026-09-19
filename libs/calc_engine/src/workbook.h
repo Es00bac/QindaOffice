@@ -25,6 +25,10 @@ public:
     [[nodiscard]] qint32 sheetCount() const override { return qint32(m_sheets.size()); }
     [[nodiscard]] QString sheetName(qint32 index) const override;
     [[nodiscard]] qint32 sheetIndex(const QString &name) const override;
+    // The active tab (view state that round-trips to xlsx; the document
+    // layer maps it to its own active sheet on load/save).
+    [[nodiscard]] qint32 activeTab() const { return m_activeTab; }
+    void setActiveTab(qint32 index) { m_activeTab = qBound(qint32(0), index, qMax(qint32(0), sheetCount() - 1)); }
     Sheet &addSheet(const QString &name);
     [[nodiscard]] Sheet &sheetAt(qint32 index);
     [[nodiscard]] const Sheet &sheetAt(qint32 index) const;
@@ -112,6 +116,7 @@ private:
 
     std::vector<std::unique_ptr<Sheet>> m_sheets;
     QHash<QString, qint32> m_sheetIndex;
+    qint32 m_activeTab = 0;
     QVector<CellStyle> m_styles;
     QHash<QString, RangeRef> m_names;
     DependencyGraph m_dependencies;

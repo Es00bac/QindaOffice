@@ -32,6 +32,14 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
         ss.filter = sheet.autoFilter();
         ss.comments = sheet.comments();
         ss.tables = sheet.tables();
+        ss.freezeRows = sheet.freezeRows();
+        ss.freezeCols = sheet.freezeCols();
+        ss.hidden = sheet.isHidden();
+        ss.cursor = sheet.cursor();
+        ss.printArea = sheet.printArea();
+        ss.printTitleRows = sheet.printTitleRows();
+        ss.printTitleCols = sheet.printTitleCols();
+        ss.pageSetup = sheet.pageSetup();
         snap.sheets.append(ss);
     }
     // The style table is indexed by position; copy through the public
@@ -80,6 +88,12 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
         sheet.setAutoFilter(ss.filter);
         sheet.setComments(ss.comments);
         sheet.setTables(ss.tables);
+        sheet.setFreeze(ss.freezeRows, ss.freezeCols);
+        sheet.setHidden(ss.hidden);
+        sheet.setCursor(ss.cursor);
+        sheet.setPrintArea(ss.printArea);
+        sheet.setPrintTitles(ss.printTitleRows, ss.printTitleCols);
+        sheet.setPageSetup(ss.pageSetup);
     }
     for (const CalcEng::CellStyle &style : snapshot.styles) {
         fresh.addStyle(style);

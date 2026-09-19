@@ -98,6 +98,39 @@ public:
     // The table covering `addr`, or nullptr (banding paints through this).
     [[nodiscard]] const TableSpec *tableCovering(const CellAddr &addr) const;
 
+    // --- View & print state (M37): document state, not view state — it
+    // round-trips to xlsx and rides undo/recovery like everything else.
+    [[nodiscard]] qint32 freezeRows() const { return m_freezeRows; }
+    [[nodiscard]] qint32 freezeCols() const { return m_freezeCols; }
+    void setFreeze(qint32 rows, qint32 cols)
+    {
+        m_freezeRows = qMax(qint32(0), rows);
+        m_freezeCols = qMax(qint32(0), cols);
+    }
+    [[nodiscard]] bool isHidden() const { return m_hidden; }
+    void setHidden(bool hidden) { m_hidden = hidden; }
+    // The cursor the sheet restores when activated (persisted per sheet).
+    [[nodiscard]] CellAddr cursor() const { return m_cursor; }
+    void setCursor(const CellAddr &addr) { m_cursor = addr; }
+    [[nodiscard]] const std::optional<CellRange> &printArea() const { return m_printArea; }
+    void setPrintArea(std::optional<CellRange> area) { m_printArea = area; }
+    // Rows/columns repeated on every printed page (Excel's Print_Titles).
+    [[nodiscard]] const std::optional<CellRange> &printTitleRows() const { return m_printTitleRows; }
+    [[nodiscard]] const std::optional<CellRange> &printTitleCols() const { return m_printTitleCols; }
+    void setPrintTitles(std::optional<CellRange> rows, std::optional<CellRange> cols)
+    {
+        m_printTitleRows = rows;
+        m_printTitleCols = cols;
+    }
+    struct PageSetup {
+        int orientation = 0; // 0 portrait, 1 landscape
+        int fitToWidth = 0;  // pages wide (0 = unconstrained)
+        int fitToHeight = 0; // pages tall
+        bool operator==(const PageSetup &) const = default;
+    };
+    [[nodiscard]] const PageSetup &pageSetup() const { return m_pageSetup; }
+    void setPageSetup(const PageSetup &setup) { m_pageSetup = setup; }
+
     [[nodiscard]] qint32 styleIdAt(const CellAddr &addr) const;
     void setStyleIdAt(const CellAddr &addr, qint32 id);
     // The full sparse style map (undo snapshots must cover styles set on
@@ -116,6 +149,14 @@ private:
     AutoFilter m_filter;
     QHash<quint64, CellComment> m_comments;
     QList<TableSpec> m_tables;
+    qint32 m_freezeRows = 0;
+    qint32 m_freezeCols = 0;
+    bool m_hidden = false;
+    CellAddr m_cursor{0, 0};
+    std::optional<CellRange> m_printArea;
+    std::optional<CellRange> m_printTitleRows;
+    std::optional<CellRange> m_printTitleCols;
+    PageSetup m_pageSetup;
 };
 
 } // namespace QindaOffice::Calc

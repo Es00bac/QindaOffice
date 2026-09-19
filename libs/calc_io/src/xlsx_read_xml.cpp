@@ -255,6 +255,7 @@ void readSheetExtras(const QString &packagePath, Workbook *wb, qint32 sheetIndex
     if (!tables.isEmpty()) {
         sheet->setTables(tables);
     }
+    readSheetViews(xml, sheet);
     if (skipped > 0) {
         qInfo("xlsx: sheet %d: skipped %d unmappable rule(s)", int(sheetIndex), skipped);
     }

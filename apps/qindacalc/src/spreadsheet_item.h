@@ -49,8 +49,6 @@ class SpreadsheetItem : public QQuickPaintedItem {
     Q_PROPERTY(qreal scrollHeight READ scrollHeight NOTIFY scrollChanged)
     Q_PROPERTY(qreal viewportWidth READ viewportWidth NOTIFY scrollChanged)
     Q_PROPERTY(qreal viewportHeight READ viewportHeight NOTIFY scrollChanged)
-    Q_PROPERTY(int frozenRow READ frozenRow NOTIFY frozenChanged)
-    Q_PROPERTY(int frozenCol READ frozenCol NOTIFY frozenChanged)
     Q_PROPERTY(bool editing READ isEditing NOTIFY editingChanged)
     Q_PROPERTY(QRectF editorRect READ editorRect NOTIFY editingChanged)
     Q_PROPERTY(QString editorText READ editorText NOTIFY editingChanged)
@@ -101,10 +99,11 @@ public:
     [[nodiscard]] qreal scrollHeight() const { return m_scrollHeight; }
     [[nodiscard]] qreal viewportWidth() const;
     [[nodiscard]] qreal viewportHeight() const;
-    Q_INVOKABLE void setFrozen(int row, int col);
-    [[nodiscard]] CalcEng::CellAddr frozen() const { return m_frozen; }
-    [[nodiscard]] int frozenRow() const { return m_frozen.row; }
-    [[nodiscard]] int frozenCol() const { return m_frozen.col; }
+    // Freeze state is DOCUMENT state (Sheet::freezeRows/Cols — it
+    // round-trips to xlsx and rides undo/recovery); the item reads through.
+    [[nodiscard]] CalcEng::CellAddr frozen() const;
+    [[nodiscard]] int frozenRow() const { return frozen().row; }
+    [[nodiscard]] int frozenCol() const { return frozen().col; }
     // The cursor cell in ITEM coordinates (grid position plus the header
     // offset); cellRect() is in GRID coordinates (inside the painter's
     // translate). Use this outside the painter only.
@@ -169,7 +168,6 @@ signals:
     void filterButtonClicked(int column, qreal x, qreal y);
     void zoomChanged();
     void scrollChanged();
-    void frozenChanged();
     void editingChanged();
     void cellFontChanged();
     void hoverChanged();
@@ -223,7 +221,6 @@ private:
     // phantom cell otherwise.
     CalcEng::CellAddr m_anchor{0, 0};
     CalcEng::CellAddr m_cursor{0, 0};
-    CalcEng::CellAddr m_frozen{0, 0};
     qreal m_zoom = 1.0;
     qreal m_scrollX = 0;
     qreal m_scrollY = 0;

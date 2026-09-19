@@ -5,6 +5,62 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-037: View and print state is document state, and it round-trips
+
+**Date:** 2026-09-19 · **Status:** accepted (M37)
+
+**Context.** A workbook opened in Excel the way its author left it — frozen
+panes, hidden sheets, the active tab and cursor, print areas and page
+setup — lost every one of those on open and on save. Freeze panes also
+lived only in the view (`SpreadsheetItem::m_frozen`): not per-sheet, not
+persisted, not undoable, not in the recovery payload.
+
+**Decision.**
+
+1. **Freeze state moves to the engine.** `Sheet::freezeRows/freezeCols`,
+   mutated only through `SpreadsheetDocument::setFreeze` (one undo step);
+   the item reads through and mutates nothing. `Sheet` also gains
+   `hidden`, `cursor`, `printArea`, `printTitles`, and `pageSetup
+   {orientation, fitToWidth, fitToHeight}` — all of it snapshot and
+   recovery state (D-019). The workbook gains `activeTab`.
+2. **Read is QXlsx where its API is honest, package XML elsewhere.**
+   Hidden sheets read via `sheetState()`; panes, selection and pageSetup
+   parse from the sheet XML; the active tab comes from
+   `<workbookView activeTab>` — NOT from QXlsx's `activeSheet()`, which
+   the read loop's own selectSheet calls move (a read that asks the
+   mutable document what the file said reads its own writes). Print areas
+   and titles parse `_xlnm.*` defined names with `localSheetId` into the
+   per-sheet FIELDS — never into the formula name table (the M3 reader's
+   `_xlnm` skip was silently destroying them).
+3. **Write is QXlsx where it serializes, post-pass elsewhere.** Hidden
+   sheets and the active tab go through QXlsx (the write loop restores the
+   engine's active tab unconditionally — it selects every sheet in turn,
+   so without the restore the file opens on the LAST sheet). Frozen panes
+   and the selection expand QXlsx's self-closed `<sheetView>`; pageSetup
+   inserts at its schema position; print names merge into the
+   `<definedNames>` block (QXlsx's `defineName` has no localSheetId).
+   The post-pass gate now fires for print-name-only workbooks too —
+   the feature that nearly shipped broken is the one whose trigger
+   condition forgot its own trigger.
+4. **The tab strip shows visible sheets only.** CalcHost maps view↔engine
+   indices internally (the one place an indirection belongs); every
+   public sheet index is the strip's. Switching sheets saves the outgoing
+   sheet's cursor and restores the incoming one, per Excel. Sheet menu
+   gains Hide/Unhide (unhide answers a small picker dialog with the
+   hidden names). Hiding the active sheet activates the first visible
+   one; hiding the last visible sheet is refused.
+5. **Print honors the file.** The render callback prints the sheet's
+   print area when set (the used range otherwise) and applies the file's
+   orientation.
+
+**Consequences.** `tst_calc_io_view` gates every piece both directions
+(package-inspected: `state="frozen"`, `state="hidden"`, `localSheetId`,
+the `_xlnm` names never entering the formula name table);
+`freezeToggleIsUndoableAndRecovered`, `hiddenSheetsLeaveTheTabStrip` and
+`printHonorsThePrintArea` (a real PDF read back through Poppler) gate the
+app side. The sample workbook gains nothing visible here — it carries no
+panes or hidden sheets — but every one of its successors keeps them.
+
 ## D-036: Charts render without QtCharts, and Excel tables round-trip
 
 **Date:** 2026-09-19 · **Status:** accepted (M36)

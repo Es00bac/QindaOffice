@@ -246,13 +246,21 @@ int CalcHost::replaceAll(const QString &needle, const QString &replacement, bool
 Quick::PrintRenderCallback CalcHost::printRenderCallback() const
 {
     // Snapshot what to print now; the render runs synchronously inside the
-    // print job, so the document cannot move under it.
+    // print job, so the document cannot move under it. A print area set on
+    // the sheet (from the file) wins over the used range.
     const SpreadsheetDocument *doc = m_document;
     const qint32 sheetIndex = m_document->activeSheet();
-    const CellRange used = m_grid != nullptr ? m_grid->usedRange() : CellRange{};
-    return [doc, sheetIndex, used](QPrinter *printer, QPainter *painter) {
+    const Sheet &sheet = m_document->workbook()->sheetAt(sheetIndex);
+    const CellRange used = sheet.printArea().has_value()
+        ? *sheet.printArea()
+        : (m_grid != nullptr ? m_grid->usedRange() : CellRange{});
+    const bool landscape = sheet.pageSetup().orientation == 1;
+    return [doc, sheetIndex, used, landscape](QPrinter *printer, QPainter *painter) {
         if (!used.isValid() || sheetIndex >= doc->workbook()->sheetCount()) {
             return;
+        }
+        if (landscape && printer->pageLayout().orientation() != QPageLayout::Landscape) {
+            printer->setPageOrientation(QPageLayout::Landscape);
         }
         const Sheet &s = doc->workbook()->sheetAt(sheetIndex);
         const QRectF page(0, 0, printer->width(), printer->height());

@@ -259,6 +259,37 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
         out.insert(QStringLiteral("filter"), autoFilterToJson(sheet.filter));
         out.insert(QStringLiteral("comments"), commentsToJson(sheet.comments));
         out.insert(QStringLiteral("tables"), tablesToJson(sheet.tables));
+        // View & print state (M37): round-trips to xlsx, rides recovery.
+        if (sheet.freezeRows != 0 || sheet.freezeCols != 0) {
+            out.insert(QStringLiteral("freeze"), QJsonArray{sheet.freezeRows, sheet.freezeCols});
+        }
+        if (sheet.hidden) {
+            out.insert(QStringLiteral("hidden"), true);
+        }
+        if (sheet.cursor != CalcEng::CellAddr{0, 0}) {
+            out.insert(QStringLiteral("cursor"), QJsonArray{sheet.cursor.row, sheet.cursor.col});
+        }
+        const auto optionalRange = [](const std::optional<CalcEng::CellRange> &range) {
+            return range.has_value()
+                ? QJsonArray{range->topLeft.row, range->topLeft.col,
+                             range->bottomRight.row, range->bottomRight.col}
+                : QJsonArray{};
+        };
+        if (sheet.printArea.has_value()) {
+            out.insert(QStringLiteral("printArea"), optionalRange(sheet.printArea));
+        }
+        if (sheet.printTitleRows.has_value()) {
+            out.insert(QStringLiteral("printTitleRows"), optionalRange(sheet.printTitleRows));
+        }
+        if (sheet.printTitleCols.has_value()) {
+            out.insert(QStringLiteral("printTitleCols"), optionalRange(sheet.printTitleCols));
+        }
+        if (sheet.pageSetup.orientation != 0 || sheet.pageSetup.fitToWidth != 0
+            || sheet.pageSetup.fitToHeight != 0) {
+            out.insert(QStringLiteral("pageSetup"),
+                       QJsonArray{sheet.pageSetup.orientation, sheet.pageSetup.fitToWidth,
+                                  sheet.pageSetup.fitToHeight});
+        }
         sheets.append(out);
     }
     root.insert(QStringLiteral("sheets"), sheets);
@@ -353,6 +384,33 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
         sheet.filter = autoFilterFromJson(object.value(QStringLiteral("filter")).toObject());
         sheet.comments = commentsFromJson(object.value(QStringLiteral("comments")).toArray());
         sheet.tables = tablesFromJson(object.value(QStringLiteral("tables")).toArray());
+        const QJsonArray freeze = object.value(QStringLiteral("freeze")).toArray();
+        if (freeze.size() == 2) {
+            sheet.freezeRows = freeze.at(0).toInt();
+            sheet.freezeCols = freeze.at(1).toInt();
+        }
+        sheet.hidden = object.value(QStringLiteral("hidden")).toBool(false);
+        const QJsonArray cursor = object.value(QStringLiteral("cursor")).toArray();
+        if (cursor.size() == 2) {
+            sheet.cursor = {cursor.at(0).toInt(), cursor.at(1).toInt()};
+        }
+        const auto optionalRange = [](const QJsonValue &value) -> std::optional<CalcEng::CellRange> {
+            const QJsonArray quad = value.toArray();
+            if (quad.size() != 4) {
+                return std::nullopt;
+            }
+            return CalcEng::CellRange{{quad.at(0).toInt(), quad.at(1).toInt()},
+                                      {quad.at(2).toInt(), quad.at(3).toInt()}};
+        };
+        sheet.printArea = optionalRange(object.value(QStringLiteral("printArea")));
+        sheet.printTitleRows = optionalRange(object.value(QStringLiteral("printTitleRows")));
+        sheet.printTitleCols = optionalRange(object.value(QStringLiteral("printTitleCols")));
+        const QJsonArray pageSetup = object.value(QStringLiteral("pageSetup")).toArray();
+        if (pageSetup.size() == 3) {
+            sheet.pageSetup.orientation = pageSetup.at(0).toInt();
+            sheet.pageSetup.fitToWidth = pageSetup.at(1).toInt();
+            sheet.pageSetup.fitToHeight = pageSetup.at(2).toInt();
+        }
         snapshot.sheets.append(sheet);
     }
     snapshot.activeSheet = qBound(0, snapshot.activeSheet, snapshot.sheets.size() - 1);

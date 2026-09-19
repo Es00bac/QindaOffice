@@ -34,6 +34,15 @@ struct SheetSnapshot {
     CalcEng::AutoFilter filter;
     QHash<quint64, CalcEng::CellComment> comments;
     QList<CalcEng::TableSpec> tables;
+    // View & print state is document state (M37): it round-trips to xlsx.
+    qint32 freezeRows = 0;
+    qint32 freezeCols = 0;
+    bool hidden = false;
+    CalcEng::CellAddr cursor{0, 0};
+    std::optional<CalcEng::CellRange> printArea;
+    std::optional<CalcEng::CellRange> printTitleRows;
+    std::optional<CalcEng::CellRange> printTitleCols;
+    CalcEng::Sheet::PageSetup pageSetup;
 };
 
 struct WorkbookSnapshot {

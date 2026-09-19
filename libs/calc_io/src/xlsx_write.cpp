@@ -38,6 +38,20 @@ qreal pxToPt(qreal px)
     return px * 72.0 / 96.0;
 }
 
+// The reference spelling of a sheet name in print names: quoted when the
+// name carries anything but word characters ('Sheet 1'!$A$1).
+QString printSheetName(const QString &name)
+{
+    for (const QChar c : name) {
+        if (!c.isLetterOrNumber() && c != QLatin1Char('_')) {
+            return QStringLiteral("'") + QString(name).replace(QStringLiteral("'"),
+                                                               QStringLiteral("''"))
+                + QStringLiteral("'");
+        }
+    }
+    return name;
+}
+
 // The dxf for a conditional format. AGENT-NOTE: a dxf's visible fill is the
 // file's bgColor element (Excel's dxf convention — the reverse of a cell
 // fill), and QXlsx's solid-fill swap writes P_Fill_FgColor AS bgColor, so
@@ -205,6 +219,9 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
         doc->selectSheet(sheet.name());
         QXlsx::Worksheet *worksheet =
             static_cast<QXlsx::Worksheet *>(doc->sheet(sheet.name()));
+        if (sheet.isHidden()) {
+            worksheet->setSheetState(QXlsx::AbstractSheet::SS_Hidden);
+        }
         for (auto it = sheet.cells().constBegin(); it != sheet.cells().constEnd(); ++it) {
             const quint64 key = it.key();
             const CellAddr addr{qint32(key & 0xffffffffu), qint32(key >> 32)};
@@ -271,8 +288,45 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
                 patch.commentsXml = commentsPartXml(sheet.comments());
             }
             patch.tables = sheet.tables();
+            patch.freezeRows = sheet.freezeRows();
+            patch.freezeCols = sheet.freezeCols();
+            if (sheet.cursor().isValid() && sheet.cursor() != CellAddr{0, 0}) {
+                patch.activeCell = addrText(sheet.cursor());
+            }
+            const Sheet::PageSetup &setup = sheet.pageSetup();
+            if (setup.orientation != 0 || setup.fitToWidth != 0 || setup.fitToHeight != 0) {
+                patch.pageSetupXml = QByteArrayLiteral("<pageSetup")
+                    + (setup.orientation != 0 ? QByteArrayLiteral(" orientation=\"landscape\"") : QByteArray())
+                    + (setup.fitToWidth != 0 ? QByteArrayLiteral(" fitToWidth=\"") + QByteArray::number(setup.fitToWidth) + "\"" : QByteArray())
+                    + (setup.fitToHeight != 0 ? QByteArrayLiteral(" fitToHeight=\"") + QByteArray::number(setup.fitToHeight) + "\"" : QByteArray())
+                    + QByteArrayLiteral("/>");
+            }
+            if (sheet.printArea().has_value()) {
+                manifest->printAreas.append(
+                    {s, QStringLiteral("%1!%2:%3")
+                            .arg(printSheetName(sheet.name()),
+                                 addrText(sheet.printArea()->topLeft, true, true),
+                                 addrText(sheet.printArea()->bottomRight, true, true))});
+            }
+            if (sheet.printTitleRows().has_value() || sheet.printTitleCols().has_value()) {
+                QStringList parts;
+                if (sheet.printTitleCols().has_value()) {
+                    parts.append(QStringLiteral("%1!$%2:$%3")
+                                     .arg(printSheetName(sheet.name()),
+                                          colName(sheet.printTitleCols()->topLeft.col),
+                                          colName(sheet.printTitleCols()->bottomRight.col)));
+                }
+                if (sheet.printTitleRows().has_value()) {
+                    parts.append(QStringLiteral("%1!$%2:$%3")
+                                     .arg(printSheetName(sheet.name()))
+                                     .arg(sheet.printTitleRows()->topLeft.row + 1)
+                                     .arg(sheet.printTitleRows()->bottomRight.row + 1));
+                }
+                manifest->printTitles.append({s, parts.join(QLatin1Char(','))});
+            }
             if (!patch.autoFilterXml.isEmpty() || !patch.commentsPart.isEmpty()
-                || !patch.tables.isEmpty()) {
+                || !patch.tables.isEmpty() || patch.freezeRows != 0 || patch.freezeCols != 0
+                || !patch.activeCell.isEmpty() || !patch.pageSetupXml.isEmpty()) {
                 manifest->sheets.append(patch);
             }
         }
@@ -359,6 +413,9 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
     for (auto it = names.constBegin(); it != names.constEnd(); ++it) {
         static_cast<void>(doc->workbook()->defineName(it.key(), rangeRefText(it.value())));
     }
+    // The write loop selected every sheet in turn; restore the engine's
+    // active tab unconditionally, or the file opens on the LAST sheet.
+    doc->workbook()->setActiveSheet(wb.activeTab());
     return doc;
 }
 
@@ -384,7 +441,8 @@ bool writeXlsxFile(const Workbook &wb, const QString &path, QString *error)
         return false;
     }
     // The manifest-only parts land after QXlsx finished the package.
-    if ((!manifest.sheets.isEmpty() || !manifest.charts.isEmpty())
+    if ((!manifest.sheets.isEmpty() || !manifest.charts.isEmpty()
+         || !manifest.printAreas.isEmpty() || !manifest.printTitles.isEmpty())
         && !applyPatchManifest(path, manifest, error)) {
         return false;
     }

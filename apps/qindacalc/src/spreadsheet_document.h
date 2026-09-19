@@ -94,6 +94,10 @@ public:
     void setValidations(const QList<CalcEng::ValidationRule> &rules);
     void setAutoFilter(const CalcEng::AutoFilter &filter);
     void setComment(const CalcEng::CellAddr &addr, const CalcEng::CellComment &comment);
+    // Freeze panes and sheet visibility (M37): document state (it
+    // round-trips to xlsx), so the document owns it — one undo step each.
+    void setFreeze(qint32 rows, qint32 cols);
+    void setSheetHidden(qint32 index, bool hidden);
     // Chart insert is a document mutation like any other: snapshot, push,
     // dirty, notify. It used to append straight into Workbook::charts, so a
     // chart could not be undone and never reached the recovery journal.
@@ -103,7 +107,11 @@ public:
     // absolute address, so it must not follow whichever sheet the formula
     // using it happens to live on.
     void defineName(const QString &name, const CalcEng::RangeRef &target);
-    void setActiveSheet(qint32 index) { m_activeSheet = index; }
+    void setActiveSheet(qint32 index)
+    {
+        m_activeSheet = index;
+        m_workbook.setActiveTab(index);
+    }
     [[nodiscard]] qint32 activeSheet() const { return m_activeSheet; }
 
     // Undo seam: the command object restores a snapshot through here so

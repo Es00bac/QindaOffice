@@ -257,6 +257,7 @@ OfficeWindow {
         function onFilterMenuRequested(column, values, allowed, x, y) { filterPopover.show(column, values, allowed, gridHost.grid.mapToItem(null, x, y)) }
         function onChartDialogRequested(initialRange) { chartDialog.rangeText = initialRange; chartDialog.open() }
         function onTemplateConsentRequested(path) { templateConsent.path = path; templateConsent.open() }
+        function onUnhideSheetRequested(hiddenNames) { unhideSheet.hiddenNames = hiddenNames; unhideSheet.open() }
     }
 
     SizeDialog { id: sizeDialog; onValueApplied: function(v) { if (forRows) window.calc.applyRowHeight(v); else window.calc.applyColumnWidth(v) } }
@@ -271,6 +272,33 @@ OfficeWindow {
         property int sheetIndex: -1
         title: qsTr("Delete sheet"); variant: "danger"; destructive: true; primaryText: qsTr("Delete")
         onAccepted: window.calc.deleteSheetConfirmed(sheetIndex)
+    }
+    Tk.Dialog {
+        id: unhideSheet
+        objectName: "unhideSheetDialog"
+        property var hiddenNames: []
+        title: qsTr("Unhide sheet")
+        primaryText: qsTr("Close")
+        Tk.Scroll {
+            implicitHeight: Math.min(160, hiddenRows.implicitHeight)
+            Tk.Flex {
+                id: hiddenRows
+                direction: Tk.Flex.Column
+                Repeater {
+                    model: unhideSheet.hiddenNames
+                    Tk.ListRow {
+                        required property string modelData
+                        objectName: "hiddenSheet_" + modelData
+                        text: modelData
+                        onClicked: {
+                            window.calc.unhideSheets(modelData)
+                            unhideSheet.hiddenNames = unhideSheet.hiddenNames.filter(n => n !== modelData)
+                            if (unhideSheet.hiddenNames.length === 0) unhideSheet.close()
+                        }
+                    }
+                }
+            }
+        }
     }
     CondFormatDialog { id: condFormat; host: window.calc }
     ValidationDialog { id: validation; host: window.calc }

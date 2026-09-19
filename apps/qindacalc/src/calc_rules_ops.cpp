@@ -55,6 +55,55 @@ void SpreadsheetDocument::setAutoFilter(const CalcEng::AutoFilter &filter)
     emit contentChanged();
 }
 
+void SpreadsheetDocument::setFreeze(qint32 rows, qint32 cols)
+{
+    CalcEng::Sheet &sheet = m_workbook.sheetAt(m_activeSheet);
+    if (sheet.freezeRows() == rows && sheet.freezeCols() == cols) {
+        return;
+    }
+    const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
+    sheet.setFreeze(rows, cols);
+    pushUndo(before, tr("Freeze panes"));
+    setDirty(true);
+    emit contentChanged();
+}
+
+void SpreadsheetDocument::setSheetHidden(qint32 index, bool hidden)
+{
+    if (index < 0 || index >= m_workbook.sheetCount()) {
+        return;
+    }
+    CalcEng::Sheet &sheet = m_workbook.sheetAt(index);
+    if (sheet.isHidden() == hidden) {
+        return;
+    }
+    // Hiding the last visible sheet would leave a window with no grid.
+    if (hidden) {
+        int visible = 0;
+        for (qint32 s = 0; s < m_workbook.sheetCount(); ++s) {
+            visible += m_workbook.sheetAt(s).isHidden() ? 0 : 1;
+        }
+        if (visible <= 1) {
+            return;
+        }
+    }
+    const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
+    sheet.setHidden(hidden);
+    // The active sheet must stay a visible one.
+    if (hidden && m_activeSheet == index) {
+        for (qint32 s = 0; s < m_workbook.sheetCount(); ++s) {
+            if (!m_workbook.sheetAt(s).isHidden()) {
+                setActiveSheet(s);
+                break;
+            }
+        }
+    }
+    pushUndo(before, hidden ? tr("Hide sheet") : tr("Unhide sheet"));
+    setDirty(true);
+    emit contentChanged();
+    emit structureChanged();
+}
+
 void SpreadsheetDocument::setComment(const CalcEng::CellAddr &addr,
                                      const CalcEng::CellComment &comment)
 {

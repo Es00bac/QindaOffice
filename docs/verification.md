@@ -245,6 +245,27 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M37 gates (view & print state)
+
+Automated by `tst_calc_io_view` and `tst_calc_window`. Rationale in D-037.
+
+- [x] `viewStateRoundTrips`: frozen panes (`state="frozen"`, xSplit/
+      ySplit), hidden sheets (`state="hidden"`), the active tab, the
+      selection cell and page setup (landscape/fitToWidth) survive.
+- [x] `printNamesAreLocalDefinedNames`: `_xlnm.Print_Area/Titles` write
+      with `localSheetId`, read into per-sheet fields, and never enter
+      the formula name table.
+- [x] `freezeToggleIsUndoableAndRecovered`: the freeze toggle lands on
+      the sheet (undo clears, redo restores) and the recovery payload
+      carries it.
+- [x] `hiddenSheetsLeaveTheTabStrip`: a hidden sheet drops out of the
+      strip, activating a view index reaches the right engine sheet, and
+      hiding the active sheet activates a visible one.
+- [x] `printHonorsThePrintArea`: the exported PDF (read back through
+      Poppler) contains rows inside the area and none outside it.
+- [ ] On the desktop: freeze row 1, hide a sheet, save, reopen — the
+      pane, the tab and the print layout come back as left.
+
 ### M36 gates (Excel tables + the custom chart renderer)
 
 Automated by `tst_calc_io_tables`, `tst_calc_structure` and

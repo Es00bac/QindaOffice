@@ -135,6 +135,53 @@ bool applyPatchManifest(const QString &path, const PatchManifest &manifest, QStr
                 return false;
             }
         }
+        // Frozen panes and the selection cell live inside <sheetView> —
+        // QXlsx writes it self-closed, so expand it.
+        if (patch.freezeRows != 0 || patch.freezeCols != 0 || !patch.activeCell.isEmpty()) {
+            QByteArray &xml = parts[patch.sheetPart];
+            QByteArray view = QByteArrayLiteral("<sheetView showRuler=\"0\" workbookViewId=\"0\"/>");
+            if (!xml.contains(view)) {
+                if (error != nullptr) {
+                    *error = QStringLiteral("post-pass: no stock <sheetView> in %1")
+                                 .arg(patch.sheetPart);
+                }
+                return false;
+            }
+            QByteArray inner;
+            if (patch.freezeRows != 0 || patch.freezeCols != 0) {
+                // The pane's top-left cell is the first unfrozen one.
+                const QString topLeft = addrText({patch.freezeRows, patch.freezeCols});
+                inner = QByteArrayLiteral("<pane xSplit=\"") + QByteArray::number(patch.freezeCols)
+                    + QByteArrayLiteral("\" ySplit=\"") + QByteArray::number(patch.freezeRows)
+                    + QByteArrayLiteral("\" topLeftCell=\"") + topLeft.toUtf8()
+                    + QByteArrayLiteral("\" activePane=\"bottomRight\" state=\"frozen\"/>");
+                if (!patch.activeCell.isEmpty()) {
+                    inner += QByteArrayLiteral("<selection pane=\"bottomRight\" activeCell=\"")
+                        + patch.activeCell.toUtf8() + QByteArrayLiteral("\" sqref=\"")
+                        + patch.activeCell.toUtf8() + QByteArrayLiteral("\"/>");
+                }
+            } else if (!patch.activeCell.isEmpty()) {
+                inner = QByteArrayLiteral("<selection activeCell=\"") + patch.activeCell.toUtf8()
+                    + QByteArrayLiteral("\" sqref=\"") + patch.activeCell.toUtf8()
+                    + QByteArrayLiteral("\"/>");
+            }
+            xml.replace(view, QByteArrayLiteral("<sheetView showRuler=\"0\" workbookViewId=\"0\">")
+                                  + inner + QByteArrayLiteral("</sheetView>"));
+        }
+        if (!patch.pageSetupXml.isEmpty()) {
+            // Schema: pageSetup precedes headerFooter/drawing/tableParts.
+            if (!insertBeforeFirst(&parts[patch.sheetPart],
+                                   {QStringLiteral("<headerFooter"), QStringLiteral("<drawing"),
+                                    QStringLiteral("<legacyDrawing"), QStringLiteral("<tableParts"),
+                                    QStringLiteral("<extLst"), QStringLiteral("</worksheet>")},
+                                   patch.pageSetupXml)) {
+                if (error != nullptr) {
+                    *error = QStringLiteral("post-pass: no pageSetup anchor in %1")
+                                 .arg(patch.sheetPart);
+                }
+                return false;
+            }
+        }
         if (!patch.commentsPart.isEmpty()) {
             parts.insert(patch.commentsPart, patch.commentsXml);
             const QString relsPath = relsPathFor(patch.sheetPart);
@@ -164,6 +211,34 @@ bool applyPatchManifest(const QString &path, const PatchManifest &manifest, QStr
             appendContentTypeOverride(&parts[QStringLiteral("[Content_Types].xml")],
                                       QStringLiteral("/") + patch.commentsPart,
                                       QStringLiteral("application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"));
+        }
+    }
+
+    // Workbook-level print names: merge into xl/workbook.xml's
+    // <definedNames> (created when QXlsx wrote none).
+    if (!manifest.printAreas.isEmpty() || !manifest.printTitles.isEmpty()) {
+        QByteArray &workbookXml = parts[QStringLiteral("xl/workbook.xml")];
+        QByteArray entries;
+        for (const auto &[sheetId, body] : manifest.printAreas) {
+            entries += QByteArrayLiteral("<definedName name=\"_xlnm.Print_Area\" localSheetId=\"")
+                + QByteArray::number(sheetId) + QByteArrayLiteral("\">") + body.toUtf8()
+                + QByteArrayLiteral("</definedName>");
+        }
+        for (const auto &[sheetId, body] : manifest.printTitles) {
+            entries += QByteArrayLiteral("<definedName name=\"_xlnm.Print_Titles\" localSheetId=\"")
+                + QByteArray::number(sheetId) + QByteArrayLiteral("\">") + body.toUtf8()
+                + QByteArrayLiteral("</definedName>");
+        }
+        if (workbookXml.contains("</definedNames>")) {
+            workbookXml.replace("</definedNames>", entries + "</definedNames>");
+        } else if (!insertAfterTag(&workbookXml, QStringLiteral("sheets"),
+                                   QByteArrayLiteral("<definedNames>") + entries
+                                       + QByteArrayLiteral("</definedNames>"))) {
+            // <definedNames> follows <sheets> in the workbook schema.
+            if (error != nullptr) {
+                *error = QStringLiteral("post-pass: no </sheets> in xl/workbook.xml");
+            }
+            return false;
         }
     }
 

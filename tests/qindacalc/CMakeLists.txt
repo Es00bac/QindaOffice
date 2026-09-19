@@ -5,6 +5,9 @@
 # commands (tst_calc_rules_ui) and the panel export through the desktop's
 # validator (tst_calc_menu_export). Every test links the app's static QML
 # module, so a source added to apps/qindacalc/CMakeLists.txt is in every test.
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(POPPLER_QT6 REQUIRED poppler-qt6)
+
 foreach(name IN ITEMS tst_calc_window tst_calc_ui tst_calc_rules_ui tst_calc_menu_export)
     add_executable(${name} ${name}.cpp calc_test_support.h)
     target_link_libraries(${name} PRIVATE qindacalc_app qindacalc_appplugin Qt6::Test)
@@ -16,3 +19,8 @@ foreach(name IN ITEMS tst_calc_window tst_calc_ui tst_calc_rules_ui tst_calc_men
     set_tests_properties(${name} PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
 endforeach()
+
+# The print-path gate in tst_calc_window reads the produced PDF back.
+target_link_libraries(tst_calc_window PRIVATE ${POPPLER_QT6_LIBRARIES})
+target_include_directories(tst_calc_window PRIVATE ${POPPLER_QT6_INCLUDE_DIRS})
+target_compile_options(tst_calc_window PRIVATE ${POPPLER_QT6_CFLAGS_OTHER})

@@ -186,31 +186,72 @@ void CalcHost::documentReplaced()
 
 // ---- sheets --------------------------------------------------------------------
 
+qint32 CalcHost::engineSheetIndex(qint32 viewIndex) const
+{
+    const Workbook *wb = m_document->workbook();
+    for (qint32 i = 0; i < wb->sheetCount(); ++i) {
+        if (wb->sheetAt(i).isHidden()) {
+            continue;
+        }
+        if (viewIndex-- == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+qint32 CalcHost::viewSheetIndex(qint32 engineIndex) const
+{
+    const Workbook *wb = m_document->workbook();
+    qint32 view = 0;
+    for (qint32 i = 0; i < wb->sheetCount(); ++i) {
+        if (wb->sheetAt(i).isHidden()) {
+            continue;
+        }
+        if (i == engineIndex) {
+            return view;
+        }
+        ++view;
+    }
+    return -1;
+}
+
 QStringList CalcHost::sheetNames() const
 {
     QStringList names;
     const Workbook *wb = m_document->workbook();
     for (qint32 i = 0; i < wb->sheetCount(); ++i) {
-        names.append(wb->sheetName(i));
+        if (!wb->sheetAt(i).isHidden()) {
+            names.append(wb->sheetName(i));
+        }
     }
     return names;
 }
 
 int CalcHost::activeSheet() const
 {
-    return int(m_document->activeSheet());
+    return int(viewSheetIndex(m_document->activeSheet()));
 }
 
 void CalcHost::setActiveSheet(int index)
 {
-    if (index < 0 || index >= m_document->workbook()->sheetCount()
-        || index == m_document->activeSheet()) {
+    const qint32 engineIndex = engineSheetIndex(qint32(index));
+    if (engineIndex < 0 || engineIndex == m_document->activeSheet()) {
         return;
     }
     if (m_grid != nullptr) {
         m_grid->cancelEditor();
+        // The cursor travels with its sheet (Excel restores it per tab).
+        m_document->workbook()->sheetAt(m_document->activeSheet())
+            .setCursor({m_grid->cursorRow(), m_grid->cursorCol()});
     }
-    m_document->setActiveSheet(qint32(index));
+    m_document->setActiveSheet(engineIndex);
+    if (m_grid != nullptr) {
+        const CalcEng::CellAddr saved = m_document->workbook()->sheetAt(engineIndex).cursor();
+        if (saved.isValid()) {
+            m_grid->setCursorCell(saved);
+        }
+    }
     refreshGrid();
     emit sheetsChanged();
     syncFromCursor();
@@ -228,30 +269,48 @@ void CalcHost::activateSheetForMenu(int index)
 
 void CalcHost::moveSheet(int from, int to)
 {
-    m_document->moveSheet(qint32(from), qint32(to));
+    const qint32 engineFrom = engineSheetIndex(qint32(from));
+    const qint32 engineTo = engineSheetIndex(qint32(to));
+    if (engineFrom >= 0 && engineTo >= 0) {
+        m_document->moveSheet(engineFrom, engineTo);
+    }
 }
 
 void CalcHost::renameSheet(int index, const QString &rawName)
 {
     const QString name = rawName.trimmed();
     const Workbook *wb = m_document->workbook();
-    if (index < 0 || index >= wb->sheetCount() || name.isEmpty()) {
+    const qint32 engineIndex = engineSheetIndex(qint32(index));
+    if (engineIndex < 0 || name.isEmpty()) {
         return;
     }
-    if (wb->sheetIndex(name) >= 0 && wb->sheetIndex(name) != index) {
+    if (wb->sheetIndex(name) >= 0 && wb->sheetIndex(name) != engineIndex) {
         showStatusMessage(tr("A sheet called “%1” already exists.").arg(name), 8000);
         return;
     }
-    m_document->renameSheet(qint32(index), name);
+    m_document->renameSheet(engineIndex, name);
 }
 
 void CalcHost::deleteSheetConfirmed(int index)
 {
-    if (index < 0 || index >= m_document->workbook()->sheetCount()
-        || m_document->workbook()->sheetCount() <= 1) {
+    const qint32 engineIndex = engineSheetIndex(qint32(index));
+    if (engineIndex < 0 || m_document->workbook()->sheetCount() <= 1) {
         return;
     }
-    m_document->removeSheet(qint32(index));
+    m_document->removeSheet(engineIndex);
+}
+
+void CalcHost::setSheetHidden(bool hidden)
+{
+    m_document->setSheetHidden(m_document->activeSheet(), hidden);
+}
+
+void CalcHost::unhideSheets(const QString &name)
+{
+    const qint32 index = m_document->workbook()->sheetIndex(name);
+    if (index >= 0) {
+        m_document->setSheetHidden(index, false);
+    }
 }
 
 // ---- formula bar and name box ----------------------------------------------------

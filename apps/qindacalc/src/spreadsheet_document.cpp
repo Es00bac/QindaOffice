@@ -76,11 +76,9 @@ bool SpreadsheetDocument::loadStaged(const QString &path, QString *error)
 void SpreadsheetDocument::adoptStagedLoad(const QString &path)
 {
     m_workbook = std::move(m_staged);
-    // AGENT-GUARD: clamp the active-sheet index — the previous workbook may
-    // have had more sheets than the loaded one, and every accessor indexes
-    // m_sheets.at(m_activeSheet) (an out-of-range value aborts the process
-    // in the structureChanged handler before the UI can react).
-    m_activeSheet = 0;
+    // The file's active tab wins (default 0); clamp against a workbook
+    // whose sheet list differs from what the tab index assumed.
+    m_activeSheet = qBound(qint32(0), m_workbook.activeTab(), m_workbook.sheetCount() - 1);
     // A loaded document starts with empty history (like every editor).
     m_undoStack.clear();
     setCanonicalPath(path);

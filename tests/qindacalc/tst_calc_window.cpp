@@ -15,6 +15,8 @@
 #include <QFileInfo>
 #include <QUndoStack>
 
+#include <poppler-qt6.h>
+
 using namespace CalcTest;
 using namespace QindaOffice::Apps::QindaCalc;
 namespace ActionId = QindaOffice::Quick::ActionId;
@@ -427,6 +429,80 @@ private slots:
             }
         }
         QVERIFY2(colours.size() > 3, qPrintable(QStringLiteral("colours: %1").arg(colours.size())));
+    }
+
+    // Freeze panes are document state: the toggle lands on the sheet, undo
+    // clears it, and the recovery payload carries it.
+    void freezeToggleIsUndoableAndRecovered()
+    {
+        Scene scene;
+        QVERIFY2(scene.ready(), qPrintable(scene.error));
+        scene.doc->applyInput({2, 2}, QStringLiteral("1"));
+        scene.grid->setCursorCell(2, 2);
+        scene.host.actions()->entry(QString::fromLatin1("calcFreezePanesAction"))
+            ->setChecked(true);
+        QTRY_COMPARE(scene.doc->workbook()->sheetAt(0).freezeRows(), 2);
+        QCOMPARE(scene.doc->workbook()->sheetAt(0).freezeCols(), 2);
+        scene.doc->undoStack()->undo();
+        QCOMPARE(scene.doc->workbook()->sheetAt(0).freezeRows(), 0);
+        scene.doc->undoStack()->redo();
+        QCOMPARE(scene.doc->workbook()->sheetAt(0).freezeRows(), 2);
+
+        scene.doc->applyInput({0, 0}, QStringLiteral("x"));
+        const QByteArray payload = scene.doc->recoverySnapshot();
+        SpreadsheetDocument restored;
+        QString error;
+        QVERIFY2(restored.loadRecovery(payload, &error), qPrintable(error));
+        QCOMPARE(restored.workbook()->sheetAt(0).freezeRows(), 2);
+        QCOMPARE(restored.workbook()->sheetAt(0).freezeCols(), 2);
+    }
+
+    // Hidden sheets have no tab, and the strip's view indices map to the
+    // right engine sheets.
+    void hiddenSheetsLeaveTheTabStrip()
+    {
+        CalcHost host;
+        SpreadsheetDocument *doc = host.spreadsheetDocument();
+        doc->insertSheet(QStringLiteral("Second"));
+        doc->insertSheet(QStringLiteral("Third"));
+        QCOMPARE(host.sheetNames().size(), 3);
+        host.setActiveSheet(0);
+        doc->setSheetHidden(0, true); // hides "Sheet1"
+        QCOMPARE(host.sheetNames(), (QStringList{QStringLiteral("Second"), QStringLiteral("Third")}));
+        // Hiding the active sheet moved the active one to a visible sheet,
+        // and activating view index 1 reaches engine sheet 2.
+        QCOMPARE(doc->workbook()->sheetName(doc->activeSheet()), QStringLiteral("Second"));
+        host.setActiveSheet(1);
+        QCOMPARE(doc->activeSheet(), 2);
+        QCOMPARE(host.activeSheet(), 1);
+        // Unhide restores the tab at its position.
+        doc->setSheetHidden(0, false);
+        QCOMPARE(host.sheetNames().size(), 3);
+    }
+
+    // The print path honors the sheet's print area: rows outside it never
+    // reach the PDF.
+    void printHonorsThePrintArea()
+    {
+        CalcHost host;
+        SpreadsheetDocument *doc = host.spreadsheetDocument();
+        for (int r = 0; r < 20; ++r) {
+            doc->applyInput({r, 0}, QString::number(r));
+        }
+        doc->workbook()->sheetAt(0).setPrintArea(Calc::CellRange{{0, 0}, {4, 0}});
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.path() + QStringLiteral("/area.pdf");
+        QVERIFY(host.exportPdf(path));
+        std::unique_ptr<Poppler::Document> pdf(Poppler::Document::load(path));
+        QVERIFY(pdf != nullptr);
+        QString allText;
+        for (int page = 0; page < pdf->numPages(); ++page) {
+            std::unique_ptr<Poppler::Page> pdfPage(pdf->page(page));
+            allText += pdfPage->text(QRectF());
+        }
+        QVERIFY(allText.contains(QStringLiteral("4")));
+        QVERIFY2(!allText.contains(QStringLiteral("15")), qPrintable(allText.left(400)));
     }
 
     // Dashboard!A1:P2 is a merged banner with a solid navy fill (FF142B44)

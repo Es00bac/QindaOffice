@@ -60,6 +60,9 @@ public:
     Q_INVOKABLE void attachGrid(SpreadsheetItem *grid);
 
     // ---- sheets ----
+    // The tab strip is VISIBLE sheets only (hidden sheets have no tab,
+    // Excel's model); every public index here is the strip's view index,
+    // mapped to the engine's sheet index inside the host.
     [[nodiscard]] QStringList sheetNames() const;
     [[nodiscard]] int activeSheet() const;
     void setActiveSheet(int index);
@@ -68,6 +71,10 @@ public:
     Q_INVOKABLE void deleteSheetConfirmed(int index);
     // The sheet-tab context menu acts on the tab under the pointer.
     Q_INVOKABLE void activateSheetForMenu(int index);
+    // Hide/Unhide Sheet (engine index space, called from the sheet menu
+    // after activateSheetForMenu pinned the target).
+    void setSheetHidden(bool hidden);
+    Q_INVOKABLE void unhideSheets(const QString &name);
 
     // ---- formula bar and name box ----
     [[nodiscard]] QString cursorText() const;
@@ -131,6 +138,7 @@ signals:
     void columnWidthRequested(qreal current);
     void renameSheetRequested(int index, const QString &name);
     void deleteSheetRequested(int index, const QString &name);
+    void unhideSheetRequested(const QStringList &hiddenNames);
     void condFormatRequested();
     void validationRequested();
     void commentRequested(const QString &cell, const QString &text);
@@ -153,6 +161,9 @@ private:
     // calc_host.cpp
     void wireEditCommands();
     void wireGrid();
+    // View (tab-strip) index <-> engine sheet index. -1 when out of range.
+    [[nodiscard]] qint32 engineSheetIndex(qint32 viewIndex) const;
+    [[nodiscard]] qint32 viewSheetIndex(qint32 engineIndex) const;
     void updateSelectionStatus();
     void syncFromCursor();
     void goToRange(const CalcEng::RangeRef &ref);

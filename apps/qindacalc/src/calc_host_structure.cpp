@@ -150,6 +150,21 @@ void CalcHost::createStructureActions()
                 const int index = activeSheet();
                 emit deleteSheetRequested(index, m_document->workbook()->sheetName(qint32(index)));
             });
+    connect(make(ActionId::kCalcSheetHide, tr("&Hide Sheet")), &ActionEntry::triggered, this,
+            [this] { setSheetHidden(true); });
+    connect(make(ActionId::kCalcSheetUnhide, tr("&Unhide Sheet…")), &ActionEntry::triggered, this,
+            [this] {
+                QStringList hidden;
+                const Workbook *wb = m_document->workbook();
+                for (qint32 i = 0; i < wb->sheetCount(); ++i) {
+                    if (wb->sheetAt(i).isHidden()) {
+                        hidden.append(wb->sheetName(i));
+                    }
+                }
+                if (!hidden.isEmpty()) {
+                    emit unhideSheetRequested(hidden);
+                }
+            });
     connect(make(ActionId::kCalcSheetDuplicate, tr("D&uplicate Sheet")), &ActionEntry::triggered, this,
             [this] {
                 const qint32 index = m_document->activeSheet();
@@ -216,7 +231,8 @@ void CalcHost::insertMenus()
                           {a(ActionId::kInsertSheet), a(ActionId::kCalcSheetRename),
                            a(ActionId::kCalcSheetDuplicate), a(ActionId::kCalcSheetDelete),
                            MenuNode::separator(), a(ActionId::kCalcSheetMoveLeft),
-                           a(ActionId::kCalcSheetMoveRight)}));
+                           a(ActionId::kCalcSheetMoveRight), MenuNode::separator(),
+                           a(ActionId::kCalcSheetHide), a(ActionId::kCalcSheetUnhide)}));
     // The grid's context menu and the sheet-tab menu are submenus the
     // window pops up (MenuFromNode over the same entries); they are not
     // top-level menus, so they are kept off the tree and built by id.
@@ -391,17 +407,17 @@ void CalcHost::autoSum()
 
 void CalcHost::toggleFreeze(bool on)
 {
-    if (m_grid == nullptr) {
-        return;
-    }
     if (!on) {
-        m_grid->setFrozen(0, 0);
+        m_document->setFreeze(0, 0);
+        refreshGrid();
         return;
     }
     // Freeze above and left of the cursor: put the cursor in B2 and the
-    // first row and column stay put.
+    // first row and column stay put. The state lives on the SHEET (it
+    // round-trips to xlsx and rides undo/recovery).
     const CellAddr at = cursor();
-    m_grid->setFrozen(int(at.row), int(at.col));
+    m_document->setFreeze(qint32(at.row), qint32(at.col));
+    refreshGrid();
 }
 
 } // namespace QindaOffice::Apps::QindaCalc

@@ -25,8 +25,21 @@ struct PatchManifest {
         QString commentsPart;    // "xl/comments1.xml", or empty
         QByteArray commentsXml;  // the comments part's content
         QList<TableSpec> tables; // structured tables (parts + tableParts element)
+        // View state: frozen panes (0/0 = none), the selection cell, and
+        // page setup (empty = default). Written by expanding QXlsx's
+        // self-closed <sheetView> and inserting <pageSetup>.
+        qint32 freezeRows = 0;
+        qint32 freezeCols = 0;
+        QString activeCell;      // A1 text; empty = none
+        QByteArray pageSetupXml; // "<pageSetup .../>", or empty
     };
     QList<SheetPatch> sheets;
+
+    // Workbook-level print names (_xlnm.Print_Area / _xlnm.Print_Titles):
+    // (localSheetId, body text) pairs for the <definedNames> post-pass edit
+    // (QXlsx's defineName has no scope parameter).
+    QList<QPair<int, QString>> printAreas;
+    QList<QPair<int, QString>> printTitles;
 
     // Charts. Grouping-only patches target a chart part QXlsx already wrote
     // (its grouping serialization is commented out upstream); generated
