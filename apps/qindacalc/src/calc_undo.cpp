@@ -61,14 +61,12 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
 void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapshot)
 {
     CalcEng::Workbook fresh;
-    QSet<CalcEng::CellKey> allKeys;
     for (const SheetSnapshot &ss : snapshot.sheets) {
         CalcEng::Sheet &sheet = fresh.addSheet(ss.name);
         for (auto it = ss.cells.constBegin(); it != ss.cells.constEnd(); ++it) {
             const quint64 key = it.key();
             const CalcEng::CellAddr addr{qint32(key & 0xffffffffu), qint32(key >> 32)};
             sheet.ensureCell(addr) = it.value();
-            allKeys.insert(CalcEng::CellKey(fresh.sheetCount() - 1, addr.row, addr.col));
         }
         for (auto it = ss.colWidths.constBegin(); it != ss.colWidths.constEnd(); ++it) {
             sheet.setColumnWidth(it.key(), it.value());
@@ -125,7 +123,10 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
             }
         }
     }
-    fresh.recalc(allKeys);
+    // recalcAll marks the formula cells; the value cells it used to be
+    // handed alongside them could never change, but they made the dirty set
+    // ten times bigger and the sort that orders it far more than that.
+    fresh.recalcAll();
     *workbook = std::move(fresh);
 }
 
@@ -152,6 +153,17 @@ void WorkbookUndoCommand::undo()
 
 void WorkbookUndoCommand::redo()
 {
+    // QUndoStack::push() calls redo() the moment the command is pushed, but
+    // this command was built FROM the workbook's current state: "after" is a
+    // snapshot of what is already there. Restoring it would rebuild every
+    // sheet and recalculate every formula to reach the state it started in —
+    // seconds of work per edit on a hundred-thousand-cell workbook. The
+    // notification still goes out, so the views refresh either way.
+    if (!m_pushed) {
+        m_pushed = true;
+        m_document->noteSnapshotApplied(m_after);
+        return;
+    }
     apply(m_after);
 }
 

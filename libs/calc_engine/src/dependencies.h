@@ -56,6 +56,15 @@ public:
     [[nodiscard]] QSet<CellKey> directDependentsOf(const CellKey &cell) const;
     [[nodiscard]] QVector<DepTarget> targetsOf(const CellKey &cell) const;
 
+    // Borrowed views for the hot paths. directDependentsOf and targetsOf
+    // both return by value, and the closure and the topological sort call
+    // them once per dirty cell: on a 100k-cell workbook that was 177s of
+    // set-building and vector-copying to order 1.7s of evaluation. These
+    // hand out the stored containers instead, and never outlive an edit.
+    [[nodiscard]] static qint64 bandOf(const CellKey &cell);
+    [[nodiscard]] const QSet<CellKey> *bandDependents(qint64 band) const;
+    [[nodiscard]] const QVector<DepTarget> *targetsFor(const CellKey &cell) const;
+
     void addVolatile(const CellKey &cell);
     void removeVolatile(const CellKey &cell);
     [[nodiscard]] const QSet<CellKey> &volatileCells() const { return m_volatile; }
@@ -74,6 +83,9 @@ private:
 // established only when the dependent's recorded targets exactly cover the
 // dependency cell, so band over-approximation can create spurious ordering
 // hints but never a false cycle. Leftover dirty nodes are real cycles.
+// Candidates come from the band index alone: updateCell files every target
+// there, single cells included, so it is a superset of the exact map and
+// each edge is still discovered exactly once.
 [[nodiscard]] QVector<CellKey> topoOrder(const QSet<CellKey> &dirty,
                                          const DependencyGraph &graph,
                                          QSet<CellKey> *cycles);

@@ -117,6 +117,9 @@ public:
     // Undo seam: the command object restores a snapshot through here so
     // dirty/content/structure notifications stay uniform.
     void applySnapshot(const WorkbookSnapshot &snapshot);
+    // The half of applySnapshot that is not the rebuild: used when the
+    // workbook already holds the snapshot's state (see WorkbookUndoCommand).
+    void noteSnapshotApplied(const WorkbookSnapshot &snapshot);
 
     [[nodiscard]] QUndoStack *undoStack() { return &m_undoStack; }
 

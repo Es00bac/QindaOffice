@@ -5,6 +5,50 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-039: Recalculation cost was ordering, not arithmetic
+
+**Date:** 2026-09-19 · **Status:** accepted (M38)
+
+**Context.** Typing one value into the sample workbook took about three
+minutes. Instrumenting `Workbook::recalc` showed where: ordering a
+106,464-cell dirty set took **177 seconds**, while evaluating every formula
+in it took **1.7**. A single-cell edit spent four seconds sorting 4,162
+cells to do a third of a second of arithmetic.
+
+**Decision.**
+
+1. **The hot paths borrow, they do not copy.** `directDependentsOf` returns
+   a freshly built `QSet` (a union of the single-cell map and the band's
+   set) and `targetsOf` returns a `QVector` by value. Both were called once
+   per dirty cell, so a band holding a thousand range formulas rebuilt that
+   thousand-entry set a thousand times. `bandDependents` and `targetsFor`
+   hand out the stored containers instead; the by-value pair stays for
+   callers outside a recalc.
+2. **Candidates come from the band index alone.** `updateCell` files every
+   target in the band index, single cells included, so the band set is a
+   superset of the exact map: consulting both found nothing extra and
+   risked counting an edge twice. The closure consults only the band index
+   too — it was always deliberately over-approximate there.
+3. **The dirty set is grouped by band before sorting.** A band's candidate
+   set and each candidate's target list are then looked up once per band
+   instead of once per cell in it. Edges stay exact (`targetCovers` against
+   the real range), so the cycle detection D-019 depends on is unchanged.
+4. **`QUndoStack::push()` redoes immediately — that redo must do nothing.**
+   Every workbook command is built *from* the workbook's current state, so
+   the "after" snapshot it carries is what the workbook already holds.
+   Restoring it rebuilt every sheet and recalculated every formula to
+   arrive where it started. The first `redo()` now only notifies; later
+   ones (a real redo) restore. `restoreSnapshot` also recalculates formula
+   cells rather than every restored cell — the value cells could never
+   change, but they made the dirty set ten times larger.
+
+**Consequences.** One edit in the sample workbook: 181s → **0.9s**. The
+sample gate that exercises it: 302s → 7.8s (it had been failing on QtTest's
+300-second watchdog). Whole-suite time fell too. The remaining cost is the
+exact edge set, which Kahn's algorithm needs; if that ever dominates, the
+next step is binary-searching a band's sorted dirty cells against each
+target's row span rather than testing every pair.
+
 ## D-038: Arrays live in arguments, not in cells
 
 **Date:** 2026-09-19 · **Status:** accepted (M38)

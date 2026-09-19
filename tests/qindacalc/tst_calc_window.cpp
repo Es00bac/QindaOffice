@@ -60,8 +60,12 @@ private slots:
         doc->applyInput({0, 0}, QStringLiteral("2"));
         QVERIFY(doc->isDirty());
         doc->undoStack()->undo();
+        QCOMPARE(Calc::toText(doc->workbook()->cellValue(0, 0, 0)), QStringLiteral("1"));
         QVERIFY(!doc->isDirty());
+        // Redo has to rebuild here, where pushing the command did not: the
+        // push already found the workbook holding its "after" state.
         doc->undoStack()->redo();
+        QCOMPARE(Calc::toText(doc->workbook()->cellValue(0, 0, 0)), QStringLiteral("2"));
         QVERIFY(doc->isDirty());
     }
 

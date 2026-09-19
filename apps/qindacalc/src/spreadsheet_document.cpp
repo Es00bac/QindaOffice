@@ -451,6 +451,11 @@ void SpreadsheetDocument::defineName(const QString &name, const CalcEng::RangeRe
 void SpreadsheetDocument::applySnapshot(const WorkbookSnapshot &snapshot)
 {
     restoreSnapshot(&m_workbook, snapshot);
+    noteSnapshotApplied(snapshot);
+}
+
+void SpreadsheetDocument::noteSnapshotApplied(const WorkbookSnapshot &snapshot)
+{
     m_activeSheet = qBound(qint32(0), snapshot.activeSheet, m_workbook.sheetCount() - 1);
     // Dirty is not set here: QUndoStack::cleanChanged drives it, so undoing
     // back to the saved position clears the mark instead of latching it on.

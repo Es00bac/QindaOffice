@@ -78,6 +78,8 @@ private:
     SpreadsheetDocument *m_document;
     WorkbookSnapshot m_before;
     WorkbookSnapshot m_after;
+    // QUndoStack::push() redoes immediately; the first one is a no-op here.
+    bool m_pushed = false;
 };
 
 } // namespace QindaOffice::Apps::QindaCalc

@@ -264,6 +264,20 @@ Automated by `tst_calc_functions` and `tst_calc_window`. Rationale in D-038.
 - [ ] On the desktop: open the sample, read Forecast B26:C28 against the
       values Excel shows.
 
+Recalculation cost (D-039), same milestone:
+
+- [x] `orderingTheDirtySetStaysCheap`: 3000 formulas packed into one row
+      band, all reading ranges that cover it — the shape where the sort
+      used to rebuild the same candidate set once per dirty cell. Budget
+      3s; measured 10.5s before the fix and ~1.1s after, so the gate
+      separates the two worlds with room on both sides.
+- [x] `undoBackToTheSavedStateClearsDirty`: undo and redo each land the
+      right cell value, which is what makes skipping the push-time redo
+      safe.
+- [x] `sampleRulesEnforceAndImport` (sample-gated): one edit to
+      `Controls!B5` in the 106k-cell workbook, start to finish, in 7.8s
+      of test — it used to trip QtTest's 300-second watchdog.
+
 ### M37 gates (view & print state)
 
 Automated by `tst_calc_io_view` and `tst_calc_window`. Rationale in D-037.

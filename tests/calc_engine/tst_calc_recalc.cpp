@@ -7,6 +7,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QtTest>
@@ -21,6 +22,7 @@ private slots:
     void volatileRecalc();
     void crossSheetDependency();
     void wholeColumnDependency();
+    void orderingTheDirtySetStaysCheap();
 };
 
 static CellAddr addrFromText(const QString &text)
@@ -137,6 +139,42 @@ void CalcRecalcTest::wholeColumnDependency()
     QCOMPARE(display(wb.cellValue(0, 0, 0)), QStringLiteral("4"));
     wb.setCellInput(0, {500, 1}, QStringLiteral("6"));
     QCOMPARE(display(wb.cellValue(0, 0, 0)), QStringLiteral("10"));
+}
+
+// Ordering the dirty set, not evaluating it, used to dominate recalc: the
+// topological sort rebuilt a band's candidate set and deep-copied each
+// candidate's target list once per dirty cell. The shape that exposes it is
+// many formulas packed into one row band whose ranges all cover that band —
+// then every dirty cell reconstructs the same thousand-entry candidate set.
+// A real 100k-cell workbook spent three minutes here to do two seconds of
+// arithmetic.
+void CalcRecalcTest::orderingTheDirtySetStaysCheap()
+{
+    Workbook wb;
+    wb.addSheet(QStringLiteral("Big"));
+    constexpr int kValues = 400;
+    constexpr int kFormulaRows = 250;   // one 256-row band
+    constexpr int kFormulaCols = 12;    // 3000 formulas in that band
+    wb.beginBulkLoad();
+    for (int row = 0; row < kValues; ++row) {
+        wb.setCellInput(0, {row, 0}, QString::number(row));
+    }
+    for (int row = 0; row < kFormulaRows; ++row) {
+        for (int col = 0; col < kFormulaCols; ++col) {
+            const int first = (row + col) % 200;
+            wb.setCellInput(0, {row, col + 2},
+                            QStringLiteral("=SUM(A%1:A%2)").arg(first + 1).arg(first + 60));
+        }
+    }
+    QElapsedTimer timer;
+    timer.start();
+    wb.endBulkLoad(); // sorts and evaluates all 3000 formulas at once
+    const qint64 elapsed = timer.elapsed();
+    QVERIFY(isNumber(wb.cellValue(0, 0, 2)));
+    // Milliseconds of sorting, not seconds: the budget only has to separate
+    // those two worlds, so it is deliberately loose for slower machines.
+    QVERIFY2(elapsed < 3000,
+             qPrintable(QStringLiteral("ordering 3000 formulas took %1 ms").arg(elapsed)));
 }
 
 int main(int argc, char *argv[])

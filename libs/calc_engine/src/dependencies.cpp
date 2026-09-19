@@ -86,6 +86,23 @@ void DependencyGraph::clear()
     m_volatile.clear();
 }
 
+qint64 DependencyGraph::bandOf(const CellKey &cell)
+{
+    return bandKey(cell.sheet(), cell.row() / kBandRows);
+}
+
+const QSet<CellKey> *DependencyGraph::bandDependents(qint64 band) const
+{
+    const auto it = m_bandDependents.constFind(band);
+    return it != m_bandDependents.constEnd() ? &it.value() : nullptr;
+}
+
+const QVector<DepTarget> *DependencyGraph::targetsFor(const CellKey &cell) const
+{
+    const auto it = m_targets.constFind(cell);
+    return it != m_targets.constEnd() ? &it.value() : nullptr;
+}
+
 QSet<CellKey> DependencyGraph::directDependentsOf(const CellKey &cell) const
 {
     QSet<CellKey> out;
@@ -109,19 +126,24 @@ QVector<DepTarget> DependencyGraph::targetsOf(const CellKey &cell) const
 QSet<CellKey> DependencyGraph::dependentsOf(const QSet<CellKey> &edited) const
 {
     QSet<CellKey> closure = edited;
-    QSet<CellKey> frontier = edited;
+    QVector<CellKey> frontier(edited.constBegin(), edited.constEnd());
     while (!frontier.isEmpty()) {
-        QSet<CellKey> next;
+        QVector<CellKey> next;
         for (const CellKey &cell : frontier) {
-            const QSet<CellKey> deps = directDependentsOf(cell);
-            for (const CellKey &dep : deps) {
+            // The band index is a superset of the single-cell map, so one
+            // borrowed set covers both — and nothing is allocated per cell.
+            const QSet<CellKey> *deps = bandDependents(bandOf(cell));
+            if (deps == nullptr) {
+                continue;
+            }
+            for (const CellKey &dep : *deps) {
                 if (!closure.contains(dep)) {
                     closure.insert(dep);
-                    next.insert(dep);
+                    next.append(dep);
                 }
             }
         }
-        frontier = next;
+        frontier = std::move(next);
     }
     return closure;
 }
@@ -143,20 +165,35 @@ QVector<CellKey> topoOrder(const QSet<CellKey> &dirty, const DependencyGraph &gr
     // whose recorded targets actually cover it.
     QHash<CellKey, int> indegree;
     QMultiHash<CellKey, CellKey> edges;
+    // Group the dirty cells by band first, so a band's candidate set and
+    // each candidate's target list are looked up once for the whole band
+    // rather than once per cell in it.
+    QHash<qint64, QVector<CellKey>> dirtyByBand;
     for (const CellKey &cell : dirty) {
-        const QSet<CellKey> candidates = graph.directDependentsOf(cell);
-        for (const CellKey &candidate : candidates) {
+        dirtyByBand[DependencyGraph::bandOf(cell)].append(cell);
+    }
+    for (auto it = dirtyByBand.constBegin(); it != dirtyByBand.constEnd(); ++it) {
+        const QSet<CellKey> *candidates = graph.bandDependents(it.key());
+        if (candidates == nullptr) {
+            continue;
+        }
+        for (const CellKey &candidate : *candidates) {
             if (!dirty.contains(candidate)) {
                 continue;
             }
-            const QVector<DepTarget> targets = graph.targetsOf(candidate);
-            const bool covers = std::any_of(targets.begin(), targets.end(),
-                                            [&cell](const DepTarget &t) {
-                                                return targetCovers(t, cell);
-                                            });
-            if (covers) {
-                edges.insert(cell, candidate);
-                indegree[candidate] += 1;
+            const QVector<DepTarget> *targets = graph.targetsFor(candidate);
+            if (targets == nullptr) {
+                continue;
+            }
+            for (const CellKey &cell : it.value()) {
+                const bool covers = std::any_of(targets->cbegin(), targets->cend(),
+                                                [&cell](const DepTarget &t) {
+                                                    return targetCovers(t, cell);
+                                                });
+                if (covers) {
+                    edges.insert(cell, candidate);
+                    indegree[candidate] += 1;
+                }
             }
         }
     }
