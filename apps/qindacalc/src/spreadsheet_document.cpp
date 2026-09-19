@@ -30,14 +30,26 @@ SpreadsheetDocument::SpreadsheetDocument()
             [this](bool clean) { setDirty(!clean); });
 }
 
-bool SpreadsheetDocument::load(const QString &path, QString *error)
+bool SpreadsheetDocument::loadCanRunOnWorker(const QString &path) const
 {
+    return path.endsWith(QLatin1String(".xlsx"), Qt::CaseInsensitive)
+        || path.endsWith(QLatin1String(".csv"), Qt::CaseInsensitive)
+        || path.endsWith(QLatin1String(".tsv"), Qt::CaseInsensitive);
+}
+
+bool SpreadsheetDocument::loadStaged(const QString &path, QString *error)
+{
+    // Worker half of the load (AGENT-CONTRACT in document.h): native reads
+    // only, into the staging workbook — no signals, no GUI classes. The
+    // engine and the xlsx bridge are QtCore/QImage territory and reentrant;
+    // the QXlsx noise filter swaps the process message handler atomically
+    // and forwards everything but its one message, so a concurrent GUI log
+    // line is unaffected.
     CalcEng::Workbook fresh;
     bool ok = false;
     if (path.endsWith(QLatin1String(".xlsx"), Qt::CaseInsensitive)) {
         ok = CalcEng::IO::readXlsxFile(path, &fresh, error);
-    } else if (path.endsWith(QLatin1String(".csv"), Qt::CaseInsensitive)
-               || path.endsWith(QLatin1String(".tsv"), Qt::CaseInsensitive)) {
+    } else {
         QFile file(path);
         if (!file.open(QIODevice::ReadOnly)) {
             if (error != nullptr) {
@@ -53,25 +65,17 @@ bool SpreadsheetDocument::load(const QString &path, QString *error)
             }
         }
         ok = true;
-    } else {
-        // Foreign spreadsheet formats (ods, xls, xlsm...) come in through the
-        // headless LibreOffice bridge, converted to xlsx first. The .desktop
-        // file has always declared these types, so refusing them here meant
-        // double-clicking an .ods in the file manager launched QindaCalc just
-        // to show an error.
-        const QString converted =
-            Core::convertBlocking(path, QStringLiteral("xlsx"),
-                                  QStringLiteral(".qindacalc-lo"), error);
-        if (converted.isEmpty()) {
-            return false;
-        }
-        ok = CalcEng::IO::readXlsxFile(converted, &fresh, error);
-        QFile::remove(converted);
     }
     if (!ok) {
         return false;
     }
-    m_workbook = std::move(fresh);
+    m_staged = std::move(fresh);
+    return true;
+}
+
+void SpreadsheetDocument::adoptStagedLoad(const QString &path)
+{
+    m_workbook = std::move(m_staged);
     // AGENT-GUARD: clamp the active-sheet index — the previous workbook may
     // have had more sheets than the loaded one, and every accessor indexes
     // m_sheets.at(m_activeSheet) (an out-of-range value aborts the process
@@ -84,6 +88,35 @@ bool SpreadsheetDocument::load(const QString &path, QString *error)
     setDirty(false);
     emit contentChanged();
     emit structureChanged();
+}
+
+bool SpreadsheetDocument::load(const QString &path, QString *error)
+{
+    if (loadCanRunOnWorker(path)) {
+        if (!loadStaged(path, error)) {
+            return false;
+        }
+    } else {
+        // Foreign spreadsheet formats (ods, xls, xlsm...) come in through the
+        // headless LibreOffice bridge, converted to xlsx first. The .desktop
+        // file has always declared these types, so refusing them here meant
+        // double-clicking an .ods in the file manager launched QindaCalc just
+        // to show an error.
+        CalcEng::Workbook fresh;
+        const QString converted =
+            Core::convertBlocking(path, QStringLiteral("xlsx"),
+                                  QStringLiteral(".qindacalc-lo"), error);
+        if (converted.isEmpty()) {
+            return false;
+        }
+        const bool ok = CalcEng::IO::readXlsxFile(converted, &fresh, error);
+        QFile::remove(converted);
+        if (!ok) {
+            return false;
+        }
+        m_staged = std::move(fresh);
+    }
+    adoptStagedLoad(path);
     return true;
 }
 

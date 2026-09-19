@@ -26,7 +26,7 @@ option(QQO_STRICT_WARNINGS "Enable the suite's strict warning set on first-party
 find_package(KF6Archive REQUIRED)
 find_package(KF6Sonnet REQUIRED)
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
-find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Widgets DBus Network PrintSupport Svg Test GuiPrivate
+find_package(Qt6 6.11 REQUIRED COMPONENTS Core Concurrent Gui Widgets DBus Network PrintSupport Svg Test GuiPrivate
     Qml Quick QuickControls2 QuickTest QuickPrivate)
 # QindaTK: the suite's UI toolkit (docs/plans/qindatk-conversion.md). A
 # development checkout installs to <QindaTK>/install; point CMAKE_PREFIX_PATH

@@ -123,7 +123,9 @@ private slots:
     // A real-world Excel workbook (absolute part names, no <dimension>,
     // tables, drawings, charts): set QQO_SAMPLE_XLSX to a path and the test
     // loads it, prints one line per sheet (cell count, error cells with up
-    // to six samples) and requires every sheet to arrive.
+    // to six samples) and requires every sheet to arrive. Error cells are
+    // counted with isErr on the VALUE — a literal text cell like "#" is not
+    // an error (the old startsWith('#') heuristic flagged one).
     void opensARealExcelWorkbook()
     {
         const QString path = qEnvironmentVariable("QQO_SAMPLE_XLSX");
@@ -134,22 +136,23 @@ private slots:
         QString error;
         const bool ok = doc.load(path, &error);
         QVERIFY2(ok, qPrintable(error));
+        int totalErrors = 0;
         for (qint32 s = 0; s < doc.workbook()->sheetCount(); ++s) {
             const Calc::Sheet &sheet = doc.workbook()->sheetAt(s);
             int errors = 0;
             QStringList samples;
             for (auto it = sheet.cells().constBegin(); it != sheet.cells().constEnd(); ++it) {
-                const Calc::CellAddr addr{qint32(it.key() & 0xffffffffu), qint32(it.key() >> 32)};
-                const QString shown = doc.displayTextAt(s, addr);
-                if (!shown.startsWith(QLatin1Char('#'))) {
+                if (!Calc::isErr(it.value().value)) {
                     continue;
                 }
+                const Calc::CellAddr addr{qint32(it.key() & 0xffffffffu), qint32(it.key() >> 32)};
                 ++errors;
                 if (samples.size() < 6) {
                     samples.append(Calc::addrText(addr) + QLatin1Char('=') + doc.inputTextAt(addr).left(60)
-                                   + QStringLiteral(" -> ") + shown);
+                                   + QStringLiteral(" -> ") + doc.displayTextAt(s, addr));
                 }
             }
+            totalErrors += errors;
             qInfo() << "sheet" << s << doc.workbook()->sheetName(s) << "cells" << sheet.cells().size()
                     << "errors" << errors;
             for (const QString &sample : samples) {
@@ -157,22 +160,107 @@ private slots:
             }
         }
         QVERIFY(doc.workbook()->sheetCount() >= 2);
-        // The same file through the window: File ▸ Open's path (loadPath)
-        // must retitle the window and paint the first sheet; QQO_GRAB_DIR
-        // saves the result for review.
+        // The known array-arithmetic gap (D-028, fixed in M38): SUMPRODUCT
+        // with an array expression argument yields #VALUE! today. Anything
+        // beyond those twelve is a new import failure.
+        QCOMPARE(totalErrors, 12);
+    }
+
+    // The same file through File ▸ Open's path (loadPath): the window must
+    // retitle, the grid must actually paint, and the sheet strip must show
+    // one tab per sheet — the TabStrip regression that hid every tab lived
+    // exactly here (a QStringList model is not Array.isArray). The load is
+    // asynchronous (worker thread), so completion is awaited, not slept.
+    void windowResponsiveAfterSampleLoad()
+    {
+        const QString path = qEnvironmentVariable("QQO_SAMPLE_XLSX");
+        if (path.isEmpty()) {
+            QSKIP("QQO_SAMPLE_XLSX not set");
+        }
+        Scene scene(QSize(1280, 800));
+        QVERIFY2(scene.ready(), qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        QElapsedTimer timer;
+        timer.start();
+        QVERIFY(scene.host.loadPath(path));
+        QTRY_VERIFY_WITH_TIMEOUT(!scene.host.isLoading(), 300000);
+        qInfo() << "load + paint" << timer.elapsed() << "ms";
+        QVERIFY2(scene.host.windowTitle().contains(QFileInfo(path).fileName()),
+                 qPrintable(scene.host.windowTitle()));
+        QCOMPARE(scene.host.sheetNames().size(), 11);
+        QQuickItem *strip = scene.item("sheetStrip");
+        QVERIFY(strip != nullptr);
+        QCOMPARE(strip->property("count").toInt(), scene.host.sheetNames().size());
+        qInfo() << "title" << scene.host.windowTitle() << "status" << scene.host.statusInfo()
+                << "A1" << scene.doc->displayTextAt(0, {0, 0}) << "B2" << scene.doc->displayTextAt(0, {1, 1});
+        // Painted, not blank: the banner band (solid, above the glyphs) and
+        // a far empty cell must differ (a dead paint gives one uniform color
+        // everywhere). The adoption signals land one frame after isLoading
+        // drops, so poll.
+        QImage grab;
+        QTRY_VERIFY_WITH_TIMEOUT(
+            (grab = scene.window->grabWindow(),
+             grab.pixelColor(400, 140) != grab.pixelColor(1200, 700)),
+            10000);
+        const QString grabDir = qEnvironmentVariable("QQO_GRAB_DIR");
+        if (!grabDir.isEmpty()) {
+            grab.save(grabDir + QStringLiteral("/qindacalc_northstar.png"));
+        }
+    }
+
+    // Tabs outgrow narrow windows: every tab must be scrollable into the
+    // strip's viewport, and switching sheets (keyboard, menu) must reveal
+    // the newly active tab on its own.
+    void allTabsReachableAtSmallWidths()
+    {
+        Scene scene(QSize(900, 700));
+        QVERIFY2(scene.ready(), qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        for (int i = 1; i <= 12; ++i) {
+            scene.doc->insertSheet(QStringLiteral("Very Long Sheet Name %1").arg(i));
+        }
+        QQuickItem *strip = scene.item("sheetStrip");
+        QVERIFY(strip != nullptr);
+        QTRY_COMPARE(strip->property("count").toInt(), 13);
+        QQuickItem *flick = scene.item("sheetTabFlick");
+        QVERIFY(flick != nullptr);
+        QTRY_VERIFY(flick->property("overflows").toBool());
+        for (int i = 0; i < 13; ++i) {
+            scene.host.setActiveSheet(i);
+            QQuickItem *tab = scene.item(QStringLiteral("tab_%1").arg(i));
+            QVERIFY(tab != nullptr);
+            QTRY_VERIFY(tab->mapToItem(flick, QPointF(0, 0)).x() >= -0.5
+                        && tab->mapToItem(flick, QPointF(tab->width(), 0)).x()
+                            <= flick->width() + 0.5);
+        }
+    }
+
+    // P1 (M33) gate, red until then: Dashboard!A1:P2 is a merged banner with
+    // a solid navy fill (FF142B44) and white bold text. The pixel is sampled
+    // off-glyph, away from the cursor, so only the fill can satisfy it.
+    void sampleDashboardKeepsItsDarkTitle()
+    {
+        const QString path = qEnvironmentVariable("QQO_SAMPLE_XLSX");
+        if (path.isEmpty()) {
+            QSKIP("QQO_SAMPLE_XLSX not set");
+        }
         Scene scene(QSize(1280, 800));
         QVERIFY2(scene.ready(), qPrintable(scene.error));
         QVERIFY(QTest::qWaitForWindowExposed(scene.window));
         QVERIFY(scene.host.loadPath(path));
-        QTest::qWait(300);
-        QVERIFY2(scene.host.windowTitle().contains(QFileInfo(path).fileName()), qPrintable(scene.host.windowTitle()));
-        QCOMPARE(scene.host.sheetNames().size(), doc.workbook()->sheetCount());
-        qInfo() << "title" << scene.host.windowTitle() << "status" << scene.host.statusInfo()
-                << "A1" << scene.doc->displayTextAt(0, {0, 0}) << "B2" << scene.doc->displayTextAt(0, {1, 1});
-        const QString grabDir = qEnvironmentVariable("QQO_GRAB_DIR");
-        if (!grabDir.isEmpty()) {
-            scene.window->grabWindow().save(grabDir + QStringLiteral("/qindacalc_northstar.png"));
-        }
+        QTRY_VERIFY_WITH_TIMEOUT(!scene.host.isLoading(), 300000);
+        scene.host.setActiveSheet(1); // Dashboard
+        // Move the cursor off the banner: the selection overlay would
+        // otherwise be what the pixel sees. Wait for the click to land
+        // (status bar follows the cursor) plus a frame, then grab once.
+        QTest::mouseClick(scene.window, Qt::LeftButton, Qt::NoModifier, QPoint(700, 400));
+        QTRY_VERIFY_WITH_TIMEOUT(!scene.host.statusInfo().startsWith(QLatin1String("A1")), 5000);
+        QTest::qWait(150);
+        const QImage grab = scene.window->grabWindow();
+        const QColor a1 = grab.pixelColor(1000, 140);
+        qInfo() << "Dashboard A1:P2 pixel" << a1;
+        QEXPECT_FAIL("", "cell fills/borders land in M33 (P1)", Continue);
+        QVERIFY(a1.red() < 100 && a1.green() < 100 && a1.blue() < 100);
     }
 
     // AGENT-CONTRACT (ADR-0110): a freshly created host is PRISTINE, which

@@ -245,6 +245,35 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M32 gates (sheet tabs render; worker-thread loads)
+
+Automated by `tst_calc_window` (QindaOffice) and QindaTK's
+`qindatk_qml::ControlsStructure`. Rationale in D-032.
+
+- [x] QindaTK `test_tab_strip_accepts_cpp_sequence_model`: a C++
+      `QStringList` sequence (`Qt.application.arguments`) yields tab
+      delegates — fails without the QindaTK 7fdc60c fix, passes with it;
+      QindaTK `ctest --preset dev` stays 14/14.
+- [x] `tst_calc_window::allTabsReachableAtSmallWidths`: 13 long-named
+      sheets at 900 px — the strip overflows, and every tab scrolls into
+      the viewport when activated.
+- [x] `tst_calc_window::windowResponsiveAfterSampleLoad`
+      (`QQO_SAMPLE_XLSX`): the window retitles, shows one tab per sheet
+      (11), and paints (grab pixel check) after an awaited worker-thread
+      load; wall time logged.
+- [x] `tst_calc_window::opensARealExcelWorkbook` counts error cells by
+      `isErr` (the literal text cell `#` is not an error) and pins the 12
+      known array-arithmetic `#VALUE!` cells until M38 tightens it to 0.
+- [x] `tst_calc_window::sampleDashboardKeepsItsDarkTitle`: red by design
+      (QEXPECT_FAIL) until M33 lands cell fills — Dashboard!A1:P2 is a
+      navy merged banner whose fill the importer drops today.
+- [x] The structural fixtures `qindacalc_{1280,520}.txt` record
+      `QQuickTabButton#tab_0` — the first fixture with a visible tab.
+- [ ] On the QindaQt desktop with the packaged QindaTK: the installed
+      `qindacalc` opens the sample workbook with all eleven tabs shown
+      and responsive while loading (needs the `dev-libs/qindatk` rebuild
+      carrying 7fdc60c).
+
 ### M31 gates (launcher, Widgets removal, packaging, rules)
 
 - [x] `tests/qindalauncher/tst_launcher`: the catalog (four distinct apps

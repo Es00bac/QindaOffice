@@ -51,6 +51,24 @@ void Document::notifyContentChanged()
     emit contentChanged();
 }
 
+bool Document::loadCanRunOnWorker(const QString &path) const
+{
+    Q_UNUSED(path);
+    return false;
+}
+
+bool Document::loadStaged(const QString &path, QString *error)
+{
+    Q_UNUSED(path);
+    Q_UNUSED(error);
+    return false;
+}
+
+void Document::adoptStagedLoad(const QString &path)
+{
+    Q_UNUSED(path);
+}
+
 void Document::setCanonicalPath(const QString &path)
 {
     m_path = path;

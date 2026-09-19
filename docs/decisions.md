@@ -5,6 +5,61 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-032: Sheet tabs that render, and loads that don't freeze the window
+
+**Date:** 2026-09-18 · **Status:** accepted (M32)
+
+**Context.** Opening a real 11-sheet workbook, the window showed no way to
+switch sheets: the tab bar rendered its add button and nothing else. The
+structural fixtures even enshrined the empty bar as "correct" — no test had
+ever asserted a tab delegate exists.
+
+**Decision.**
+
+1. **The root cause lived in QindaTK, and that is where it was fixed.**
+   `Tk.TabStrip` counted its model with `Array.isArray(model)`; a C++
+   `QStringList`/`QVariantList` property reaches QML as a *sequence object*
+   (it has `length` and indexing but is not a true JS array), so the count
+   was 0 and zero delegates were created. Fixed in QindaTK (7fdc60c):
+   count by `.length`, with a regression test that feeds the strip
+   `Qt.application.arguments` (a genuine in-process C++ sequence) and a
+   docs row stating the contract. The suite consumes the fix through the
+   QindaTK install prefix; the `dev-libs/qindatk` package carries it to
+   installed systems.
+2. **The app-side tab bar scrolls.** `CalcSheetTabs.qml` wraps the strip in
+   a `Flickable` (interactive only while the model overflows) with nudge
+   buttons that appear on overflow, and switching sheets by any path
+   scrolls the active tab into view. QindaTK's strip keeps its
+   no-overflow contract; composition is the app's job.
+3. **Native loads run on a worker thread.** A real workbook imports for
+   seconds; a synchronously blocked GUI thread reads as a dead app (no
+   repaint, no tabs, "nothing works"). `Core::Document` gains an opt-in
+   seam — `loadCanRunOnWorker(path)` / `loadStaged(path, error)` /
+   `adoptStagedLoad(path)` — and `DocumentHost::loadPath` runs the staged
+   half through `QtConcurrent` with a wait cursor, a persistent "Opening …"
+   status and a `loading` property, adopting on the GUI thread when the
+   `QFutureWatcher` finishes. SpreadsheetDocument opts in for
+   xlsx/csv/tsv; foreign formats stay synchronous because the LibreOffice
+   bridge's nested event loop belongs to the GUI thread. The other three
+   apps keep the default (synchronous) path unchanged.
+4. **Error cells are counted by value, not by glyph.** The real-workbook
+   diagnostic flagged any display text starting with '#' — including a
+   literal text cell whose content IS "#". It now counts `isErr(value)`
+   and asserts the sample's exact known gap: 12 `#VALUE!` cells from
+   array arithmetic in function arguments (the M38 follow-up; array
+   constants and spill are out of scope).
+
+**Consequences.** The 100k-cell perf gate and the whole suite stay green;
+`windowResponsiveAfterSampleLoad`, `allTabsReachableAtSmallWidths` and the
+red-by-design `sampleDashboardKeepsItsDarkTitle` (green at M33) lock the
+fixes in. The import audit behind this milestone also confirmed the M33+
+backlog: fills/borders/alignment/wrap/underline are dropped by
+`styleFromFormat`/`formatFromStyle` both directions (the sample's title is
+white text on a navy fill — it renders only because the cursor's selection
+overlay sits on it), charts/tables/cond-formats/validations/filters/
+comments are not read or written, formula cells export unformatted, and
+styles on empty cells are lost on save.
+
 ## D-031: Qt Widgets are gone from the suite
 
 **Date:** 2026-09-17 · **Status:** accepted (M31) · **Plan:**

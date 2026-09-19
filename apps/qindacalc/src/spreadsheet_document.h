@@ -40,6 +40,13 @@ public:
 
     bool load(const QString &path, QString *error = nullptr) override;
     bool save(const QString &path, QString *error = nullptr) override;
+    // Native formats (xlsx/csv/tsv) read on a worker thread: a real-world
+    // workbook takes seconds to import and a frozen window reads as a dead
+    // app. Foreign formats keep the GUI path — the LibreOffice bridge runs
+    // a nested event loop that belongs to the GUI thread.
+    [[nodiscard]] bool loadCanRunOnWorker(const QString &path) const override;
+    bool loadStaged(const QString &path, QString *error) override;
+    void adoptStagedLoad(const QString &path) override;
     [[nodiscard]] QStringList mimeTypes() const override;
     [[nodiscard]] QByteArray recoverySnapshot() const override;
     bool loadRecovery(const QByteArray &snapshot, QString *error = nullptr) override;
@@ -130,6 +137,10 @@ private:
     void pushUndo(const WorkbookSnapshot &before, const QString &text);
 
     CalcEng::Workbook m_workbook;
+    // Staging area for the worker-thread load (loadStaged writes it off the
+    // GUI thread, adoptStagedLoad moves it in on the GUI thread; the host
+    // never starts a second load while one is staged).
+    CalcEng::Workbook m_staged;
     qint32 m_activeSheet = 0;
     QUndoStack m_undoStack;
 };

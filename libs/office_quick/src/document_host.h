@@ -53,6 +53,10 @@ class DocumentHost : public QObject {
     Q_PROPERTY(bool toolBarsVisible READ toolBarsVisible NOTIFY chromeChanged)
     Q_PROPERTY(bool statusBarVisible READ statusBarVisible NOTIFY chromeChanged)
     Q_PROPERTY(bool closeAuthorized READ closeAuthorized NOTIFY closeAuthorizedChanged)
+    // True while a worker-thread load (Document::loadStaged) is in flight;
+    // the window shows busy feedback and the load's completion arrives by
+    // signal, not by loadPath returning.
+    Q_PROPERTY(bool loading READ isLoading NOTIFY loadingChanged)
     Q_PROPERTY(QindaOffice::Quick::ActionModel *actions READ actions CONSTANT)
     Q_PROPERTY(QindaOffice::Quick::MenuTree *menuTree READ menuTree CONSTANT)
     Q_PROPERTY(QUrl preferencesPage READ preferencesPage NOTIFY preferencesPageChanged)
@@ -109,6 +113,7 @@ public:
     [[nodiscard]] bool toolBarsVisible() const;
     [[nodiscard]] bool statusBarVisible() const;
     [[nodiscard]] bool closeAuthorized() const { return m_closeAuthorized; }
+    [[nodiscard]] bool isLoading() const { return m_loading; }
     [[nodiscard]] QUrl preferencesPage() const { return m_preferencesPage; }
     void setPreferencesPage(const QUrl &url);
 
@@ -173,6 +178,7 @@ signals:
     void localMenuVisibleChanged();
     void chromeChanged();
     void closeAuthorizedChanged();
+    void loadingChanged();
     void preferencesPageChanged();
 
 private:
@@ -195,6 +201,8 @@ private:
     // The save that runs once a writable target is settled.
     void performSave(const QString &path);
     void finishSave(bool ok);
+    // GUI-thread completion of a worker-thread load started by loadPath().
+    void finishAsyncLoad(const QString &path, bool ok);
     // Optimistic concurrency: true when the write may proceed now, false
     // when the window was asked (overwriteConsentRequested) first.
     [[nodiscard]] bool ensureWritableTarget(const QString &path);
@@ -213,6 +221,9 @@ private:
     QString m_journalKey;
     QString m_statusInfo;
     QString m_statusMessage;
+    // Set by the worker half of an async load, read at finishAsyncLoad —
+    // the QFutureWatcher completion is the synchronization edge between them.
+    QString m_asyncError;
     QUrl m_preferencesPage;
     QString m_pendingPath;
     Pending m_pending = Pending::None;

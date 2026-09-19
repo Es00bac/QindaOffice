@@ -17,7 +17,12 @@ QQuickRootItem#CalcWindow
                 IconButton#fieldClear [hidden]
             CalcSheetTabs#sheetTabs
               IconButton#sheetAdd
-              TabStrip#sheetStrip
+              IconButton#sheetNudgeLeft [hidden]
+              IconButton#sheetNudgeRight [hidden]
+              QQuickFlickable#sheetTabFlick
+                TabStrip#sheetStrip
+                  QQuickTabButton#tab_0
+                    IconButton#tabClose_0 [hidden]
             Flex#dockZone_overlay [hidden]
             ScrollBar#gridHScroll
             ScrollBar#gridVScroll

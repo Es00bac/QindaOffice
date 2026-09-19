@@ -35,6 +35,21 @@ public:
     virtual bool load(const QString &path, QString *error = nullptr) = 0;
     virtual bool save(const QString &path, QString *error = nullptr) = 0;
 
+    // ---- worker-thread load (opt-in) ----
+    // True when `path` may load through loadStaged()/adoptStagedLoad() so the
+    // host can keep the GUI responsive on multi-second reads. Default false:
+    // the host calls load() on the GUI thread as always.
+    [[nodiscard]] virtual bool loadCanRunOnWorker(const QString &path) const;
+    // Worker half, invoked off the GUI thread: read `path` into a staging
+    // area owned by the implementation. AGENT-CONTRACT: no signals, no
+    // QObjects outside the staging area, no GUI classes — the object is
+    // GUI-thread-owned and only the adoption edge synchronizes the two.
+    virtual bool loadStaged(const QString &path, QString *error);
+    // GUI half: adopt the staged content and do everything load() would do
+    // after a successful read (canonical path, byte revision, dirty, and the
+    // content/structure notifications).
+    virtual void adoptStagedLoad(const QString &path);
+
     // MIME types this document can load natively (feeds the open dialog and
     // the .desktop MimeType list).
     [[nodiscard]] virtual QStringList mimeTypes() const = 0;

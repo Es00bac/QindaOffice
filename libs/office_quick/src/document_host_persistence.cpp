@@ -12,9 +12,12 @@
 #include "recovery_journal.h"
 
 #include <QFileInfo>
+#include <QFutureWatcher>
+#include <QGuiApplication>
 #include <QQuickWindow>
 #include <QStandardPaths>
 #include <QTimer>
+#include <QtConcurrent/QtConcurrent>
 
 namespace QindaOffice::Quick {
 
@@ -50,13 +53,36 @@ bool DocumentHost::isPristineUntitled() const
 
 bool DocumentHost::loadPath(const QString &path)
 {
-    if (m_document == nullptr) {
+    if (m_document == nullptr || m_loading) {
         return false;
+    }
+    if (m_document->loadCanRunOnWorker(path)) {
+        // Worker-thread load (multi-second on real workbooks): the window
+        // stays responsive — busy feedback up front, completion by signal.
+        // The worker writes m_asyncError/m_document's staging area; the
+        // QFutureWatcher's finished delivery is the synchronization edge.
+        m_loading = true;
+        emit loadingChanged();
+        QGuiApplication::setOverrideCursor(Qt::WaitCursor);
+        showStatusMessage(tr("Opening %1 …").arg(path), 0);
+        m_asyncError.clear();
+        auto *watcher = new QFutureWatcher<bool>(this);
+        connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher, path] {
+            const bool ok = watcher->result();
+            watcher->deleteLater();
+            finishAsyncLoad(path, ok);
+        });
+        watcher->setFuture(QtConcurrent::run([this, path] {
+            return m_document->loadStaged(path, &m_asyncError);
+        }));
+        return true;
     }
     QString error;
     m_loading = true;
+    emit loadingChanged();
     const bool ok = m_document->load(path, &error);
     m_loading = false;
+    emit loadingChanged();
     if (!ok) {
         emit messageRequested(tr("Open failed"), tr("Could not open %1:\n%2").arg(path, error),
                               QStringLiteral("danger"));
@@ -69,6 +95,26 @@ bool DocumentHost::loadPath(const QString &path)
     }
     showStatusMessage(tr("Opened %1").arg(path));
     return true;
+}
+
+void DocumentHost::finishAsyncLoad(const QString &path, bool ok)
+{
+    m_loading = false;
+    emit loadingChanged();
+    QGuiApplication::restoreOverrideCursor();
+    if (!ok) {
+        emit messageRequested(tr("Open failed"),
+                              tr("Could not open %1:\n%2").arg(path, m_asyncError),
+                              QStringLiteral("danger"));
+        return;
+    }
+    m_document->adoptStagedLoad(path);
+    syncTitle();
+    documentReplaced();
+    if (m_services != nullptr) {
+        m_services->documentSaved(m_document->canonicalPath());
+    }
+    showStatusMessage(tr("Opened %1").arg(path));
 }
 
 bool DocumentHost::restoreFromJournal(const QString &path, bool untitled,
