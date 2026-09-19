@@ -13,9 +13,11 @@ add_library(calc_io STATIC
     src/xlsx_parts.cpp
     src/xlsx_parts.h
     src/xlsx_post.cpp
+    src/xlsx_post_images.cpp
+    src/xlsx_post_images.h
     src/xlsx_post.h
     src/xlsx_read.cpp
-    src/xlsx_read_charts.cpp
+    src/xlsx_read_drawings.cpp
     src/xlsx_read_parts.cpp
     src/xlsx_read_xml.cpp
     src/xlsx_read_xml.h

@@ -8,6 +8,7 @@
 // read-side normalization).
 
 #include "chart_spec.h"
+#include "image_spec.h"
 #include "sheet_rules.h"
 
 #include <QByteArray>
@@ -55,6 +56,15 @@ struct PatchManifest {
         int toRow = 0;          // sheet's geometry while the model is in hand
     };
     QList<ChartPatch> charts;
+
+    // Pictures: the file's own bytes into xl/media plus an <xdr:pic> anchor
+    // merged into the sheet's drawing (QXlsx re-encodes images as PNG and
+    // sizes them from DPI, so it cannot carry these — see xlsx_post_images).
+    struct ImagePatch {
+        QString sheetPart;
+        ImageSpec spec;
+    };
+    QList<ImagePatch> images;
 };
 
 } // namespace QindaOffice::Calc::IO

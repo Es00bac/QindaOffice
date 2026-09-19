@@ -5,6 +5,46 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-040: Pictures keep the author's bytes
+
+**Date:** 2026-09-19 · **Status:** accepted (M39)
+
+**Context.** The last floating object the engine could not carry. QXlsx has
+`Document::insertImage`, and the plan assumed it — but reading the vendored
+source settles it: `DrawingAnchor::setObjectPicture` does
+`img.save(&buffer, "PNG")` for every image, and `insertImage` computes the
+on-sheet extent from the QImage's `dotsPerMeter`. A JPEG photograph would
+come back a PNG several times its size, at a size the author never chose.
+
+**Decision.**
+
+1. **`ImageSpec` holds encoded bytes, never a QImage.** `calc_engine` links
+   Qt Core only, and the file's own bytes are the thing that has to survive.
+   The bytes are a `QSharedPointer<const QByteArray>`: an image is never
+   edited in place, every undo step copies the whole workbook, and a
+   two-megabyte photo copied per keystroke is a stalled grid. Equality
+   compares the pointer, which is what a snapshot comparison wants.
+2. **Pictures are written by the post-pass.** By the write-path rule
+   (D-035) QXlsx owns what it serializes completely; re-encoding the bytes
+   and re-deriving the size is "drops semantics", so images go through the
+   package like tables and comments: the file's bytes into `xl/media`, a
+   relationship from the sheet's drawing, an `<xdr:pic>` anchor at the
+   author's extent. `ensureDrawingPart` is shared with the chart writer, so
+   a sheet carrying both gets ONE drawing with both anchors — gated, because
+   a rival drawing the sheet does not point at would be invisible.
+3. **One walk reads both.** Charts and pictures live in the same drawing
+   part, so `readSheetCharts` became `readSheetDrawings`: one anchor walk,
+   branching on whether the anchor holds a `<c:chart>` or an `<a:blip>`.
+4. **The recovery payload carries the bytes, base64.** A side-car directory
+   would be smaller, but a recovery file that cannot restore what was on
+   screen is worse than a large one.
+
+**Consequences.** Images paint on the grid above the cells and below the
+cursor, decoded through a cache keyed on the shared bytes (the entry holds
+the byte array alive, so an address can never be recycled under a stale
+entry). Insert ▸ Image… is one undo step. Formats Qt cannot decode are
+still stored and written back untouched — they simply do not paint.
+
 ## D-039: Recalculation cost was ordering, not arithmetic
 
 **Date:** 2026-09-19 · **Status:** accepted (M38)

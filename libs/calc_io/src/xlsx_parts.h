@@ -2,7 +2,7 @@
 #pragma once
 
 // Shared internals for the direct package readers (xlsx_read_xml,
-// xlsx_read_parts, xlsx_read_charts): address/range parsing, .rels reading,
+// xlsx_read_parts, xlsx_read_drawings): address/range parsing, .rels reading,
 // part resolution and colour-attribute resolution. Everything reads the
 // NORMALIZED package (xlsx_package.h), so relationship targets are already
 // relative; element names are compared as local names because producers may

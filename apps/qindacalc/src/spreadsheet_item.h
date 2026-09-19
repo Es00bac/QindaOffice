@@ -24,7 +24,10 @@
 
 #include <QColor>
 #include <QFont>
+#include <QHash>
+#include <QImage>
 #include <QQuickPaintedItem>
+#include <QSharedPointer>
 #include <QtQml/qqmlregistration.h>
 
 namespace CalcEng = QindaOffice::Calc;
@@ -112,6 +115,7 @@ public:
     // Test seam: the grid-space top of a row (collapses onto the row above
     // when a filter hides it).
     Q_INVOKABLE int rowTopForTest(int row) const { return rowTop(row); }
+    Q_INVOKABLE int colLeftForTest(int col) const { return colLeft(col); }
     Q_INVOKABLE void refreshAll();
     [[nodiscard]] QFont cellFont() const { return m_font; }
     void setCellFont(const QFont &font);
@@ -211,8 +215,18 @@ private:
     [[nodiscard]] qint32 rowBoundaryAt(qreal y) const;
     [[nodiscard]] qint32 filterButtonAt(const QPointF &gridPos) const;
     [[nodiscard]] const CalcEng::Sheet *activeSheet() const;
+    // Decoded pictures, keyed by their shared bytes. The entry keeps the
+    // byte array alive, so an address can never be recycled under a stale
+    // cache entry; without the decode cache a scroll would re-decode every
+    // photo on the sheet, every frame.
+    struct CachedImage {
+        QSharedPointer<const QByteArray> bytes;
+        QImage image;
+    };
+    mutable QHash<quintptr, CachedImage> m_imageCache;
     void emitSelectionChanged();
     void paintHeaderBands(QPainter &p);
+    void paintImages(QPainter &p);
     void paintGrid(QPainter &p);
     void setChrome(QColor &slot, const QColor &value);
 

@@ -37,7 +37,8 @@ qt_add_qml_module(qindacalc_app
         src/calc_recovery.cpp src/calc_recovery.h
         src/calc_recovery_rules.cpp src/calc_recovery_rules.h
         src/calc_rules_ops.cpp
-        src/calc_structure_ops.cpp
+        src/calc_object_ops.cpp
+    src/calc_structure_ops.cpp
         src/calc_undo.cpp src/calc_undo.h
         src/chart_item.cpp src/chart_item.h
         src/chart_series.cpp src/chart_series.h

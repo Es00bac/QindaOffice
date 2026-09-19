@@ -315,6 +315,8 @@ void SpreadsheetItem::paintGrid(QPainter &p)
         }
     }
 
+    paintImages(p);
+
     // Cursor outline last, in GRID coordinates (see the file comment).
     p.setPen(QPen(m_cursorColor, 2));
     p.setBrush(Qt::NoBrush);
@@ -333,6 +335,37 @@ void SpreadsheetItem::paintGrid(QPainter &p)
         }
     }
     p.restore();
+}
+
+// Floating pictures (M39): drawn over the cells they cover and under the
+// cursor, in GRID coordinates like everything else in paintGrid, so they
+// scroll and freeze with the sheet. A spec with no size falls back to the
+// image's own pixels.
+void SpreadsheetItem::paintImages(QPainter &p)
+{
+    if (m_document == nullptr) {
+        return;
+    }
+    const CalcEng::Workbook *book = m_document->workbook();
+    const qint32 active = m_document->activeSheet();
+    for (const CalcEng::ImageSpec &spec : book->images) {
+        if (spec.sheet != active || !spec.isValid()) {
+            continue;
+        }
+        const auto key = quintptr(spec.bytes.data());
+        auto it = m_imageCache.constFind(key);
+        if (it == m_imageCache.constEnd()) {
+            it = m_imageCache.insert(key, {spec.bytes, QImage::fromData(*spec.bytes)});
+        }
+        const QImage &image = it.value().image;
+        if (image.isNull()) {
+            continue; // a format this build cannot decode: leave the cells alone
+        }
+        const QRectF anchor = cellRect({spec.anchorRow, spec.anchorCol});
+        const QSizeF size(spec.widthPx > 0 ? spec.widthPx : image.width(),
+                          spec.heightPx > 0 ? spec.heightPx : image.height());
+        p.drawImage(QRectF(anchor.topLeft(), size), image);
+    }
 }
 
 void SpreadsheetItem::paint(QPainter *painter)

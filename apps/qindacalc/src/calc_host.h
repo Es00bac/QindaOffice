@@ -117,6 +117,9 @@ public:
     Q_INVOKABLE bool findPrevious(const QString &needle, bool caseSensitive);
     Q_INVOKABLE void replaceCurrent(const QString &needle, const QString &replacement, bool caseSensitive);
     Q_INVOKABLE int replaceAll(const QString &needle, const QString &replacement, bool caseSensitive);
+    // The picture picker's answer: anchored at the grid cursor, one undo
+    // step. Takes the QML file URL, which is not a path until it is.
+    Q_INVOKABLE void insertImageChosen(const QUrl &file);
     Q_INVOKABLE void loadTemplateResolved(const QString &path, const QString &choice);
     // ---- charts ----
     [[nodiscard]] bool chartsAvailable() const;
@@ -146,6 +149,7 @@ signals:
                              qreal x, qreal y);
     void contextMenuRequested(qreal x, qreal y);
     void chartDialogRequested(const QString &initialRange);
+    void imageDialogRequested();
     void templateConsentRequested(const QString &path);
     void findRequested(bool replace);
     void assistantToggleRequested(bool visible);

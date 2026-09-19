@@ -250,6 +250,17 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
                 doc->write(row, col, std::get<bool>(cell.value), format);
             } else if (isErr(cell.value)) {
                 doc->write(row, col, errText(std::get<Err>(cell.value)), format);
+            } else if (!format.isEmpty()) {
+                // AGENT-GUARD: a BLANK cell that still carries a style. The
+                // reader makes a Cell for every <c> element in the file,
+                // painted-but-empty ones included, so these have a Cell and
+                // no value — they match none of the branches above, and the
+                // styled-empty loop below skips them precisely BECAUSE a
+                // Cell exists. Without this branch the author's empty
+                // painted cells (2,114 of them in the sample workbook)
+                // disappear on save, which is exactly the silent loss D-012
+                // forbids.
+                worksheet->writeBlank(row, col, format);
             }
         }
         // Styles live on EMPTY cells too (a painted fill, a border on a
@@ -407,6 +418,21 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
             manifest->charts.append(patch);
         }
     }
+    // Floating images (M39). QXlsx's insertImage re-encodes every image as
+    // PNG and sizes it from the QImage's DPI, which loses the author's
+    // format and extent, so pictures always travel in the manifest.
+    if (manifest != nullptr) {
+        for (const ImageSpec &image : wb.images) {
+            if (image.sheet < 0 || image.sheet >= wb.sheetCount() || !image.isValid()) {
+                continue;
+            }
+            PatchManifest::ImagePatch patch;
+            patch.spec = image;
+            patch.sheetPart = QStringLiteral("xl/worksheets/sheet%1.xml").arg(image.sheet + 1);
+            manifest->images.append(patch);
+        }
+    }
+
     // Named ranges: the canonical text form is already the xlsx spelling
     // ("Sheet1!$A$1:$A$5"), so the workbook's own defineName takes it as is.
     const QHash<QString, RangeRef> &names = wb.namedRanges();
@@ -442,7 +468,8 @@ bool writeXlsxFile(const Workbook &wb, const QString &path, QString *error)
     }
     // The manifest-only parts land after QXlsx finished the package.
     if ((!manifest.sheets.isEmpty() || !manifest.charts.isEmpty()
-         || !manifest.printAreas.isEmpty() || !manifest.printTitles.isEmpty())
+         || !manifest.images.isEmpty() || !manifest.printAreas.isEmpty()
+         || !manifest.printTitles.isEmpty())
         && !applyPatchManifest(path, manifest, error)) {
         return false;
     }

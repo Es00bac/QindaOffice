@@ -50,6 +50,7 @@ struct WorkbookSnapshot {
     QVector<CalcEng::CellStyle> styles;
     QHash<QString, CalcEng::RangeRef> names;
     QList<CalcEng::ChartSpec> charts;
+    QList<CalcEng::ImageSpec> images;
     qint32 activeSheet = 0;
 };
 

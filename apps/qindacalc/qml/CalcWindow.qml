@@ -242,6 +242,7 @@ OfficeWindow {
     Connections {
         target: window.calc
         function onFindRequested(replace) { if (replace) findBar.openReplace(); else findBar.open() }
+        function onImageDialogRequested() { imageDialog.open() }
         function onAssistantToggleRequested(visible) { if (visible) dock.showPanel("assistant"); else dock.hidePanel("assistant") }
         function onRowHeightRequested(current) { sizeDialog.forRows = true; sizeDialog.value = current; sizeDialog.open() }
         function onColumnWidthRequested(current) { sizeDialog.forRows = false; sizeDialog.value = current; sizeDialog.open() }
@@ -314,6 +315,13 @@ OfficeWindow {
         onAccepted: window.calc.loadTemplateResolved(templateConsent.path, "save")
         onTertiary: window.calc.loadTemplateResolved(templateConsent.path, "discard")
         onRejected: window.calc.loadTemplateResolved(templateConsent.path, "cancel")
+    }
+    Dialogs.FileDialog {
+        id: imageDialog
+        objectName: "insertImageDialog"
+        title: qsTr("Insert Image")
+        nameFilters: [qsTr("Images (*.png *.jpg *.jpeg *.gif *.bmp *.webp)"), qsTr("All files (*)")]
+        onAccepted: window.calc.insertImageChosen(selectedFile)
     }
     Dialogs.ColorDialog {
         id: colorDialog

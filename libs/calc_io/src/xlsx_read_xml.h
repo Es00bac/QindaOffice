@@ -6,7 +6,8 @@
 // parts, so those are read straight out of the package XML after the cell
 // walk, per sheet. Split: xlsx_read_xml.cpp (conditional formats + the dxf
 // table + orchestration), xlsx_read_parts.cpp (validations/autofilter/
-// comments), xlsx_read_charts.cpp (charts); shared helpers in xlsx_parts.*.
+// comments), xlsx_read_drawings.cpp (the sheet's drawing: charts and
+// pictures); shared helpers in xlsx_parts.*.
 
 #include "sheet_rules.h"
 #include "xlsx_style.h"
@@ -31,9 +32,10 @@ namespace QindaOffice::Calc::IO {
 void readSheetExtras(const QString &packagePath, Workbook *wb, qint32 sheetIndex,
                      const ThemePalette &palette, Sheet *sheet);
 
-// Reads the sheet's chart parts (via its drawing rels) and appends them to
-// the workbook's chart list with `sheetIndex` set.
-void readSheetCharts(const QString &packagePath, Workbook *wb, qint32 sheetIndex);
+// Reads the sheet's drawing (via its rels) and appends what it holds to the
+// workbook: charts to `charts`, pictures to `images`, both with
+// `sheetIndex` set.
+void readSheetDrawings(const QString &packagePath, Workbook *wb, qint32 sheetIndex);
 
 // The xlsx_read_parts.cpp readers (called by readSheetExtras).
 [[nodiscard]] QList<ValidationRule> readValidations(const QByteArray &xml, Workbook *wb,

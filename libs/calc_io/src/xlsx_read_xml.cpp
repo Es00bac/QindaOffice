@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Direct package readers for conditional formats (+ the dxf table) and the
 // orchestration of the per-sheet extras (validations/autofilter/comments in
-// xlsx_read_parts.cpp, charts in xlsx_read_charts.cpp). Reads the NORMALIZED
+// xlsx_read_parts.cpp, charts in xlsx_read_drawings.cpp). Reads the NORMALIZED
 // package, so relationship targets are already relative; element names are
 // compared as local names because producers may prefix.
 

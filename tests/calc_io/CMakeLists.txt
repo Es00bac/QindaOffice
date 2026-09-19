@@ -35,3 +35,11 @@ target_link_libraries(tst_calc_io_view PRIVATE calc_io KF6::Archive Qt6::Test)
 qqo_set_strict_warnings(tst_calc_io_view)
 add_test(NAME tst_calc_io_view COMMAND tst_calc_io_view)
 set_tests_properties(tst_calc_io_view PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# Images need Qt6::Gui for QImage: the test encodes real PNG/JPEG bytes so
+# the byte-for-byte media assertion means something.
+add_executable(tst_calc_io_images tst_calc_io_images.cpp)
+target_link_libraries(tst_calc_io_images PRIVATE calc_io KF6::Archive Qt6::Gui Qt6::Test)
+qqo_set_strict_warnings(tst_calc_io_images)
+add_test(NAME tst_calc_io_images COMMAND tst_calc_io_images)
+set_tests_properties(tst_calc_io_images PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

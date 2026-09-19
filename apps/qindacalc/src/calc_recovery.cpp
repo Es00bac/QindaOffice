@@ -128,6 +128,38 @@ QJsonObject chartToJson(const CalcEng::ChartSpec &chart)
     };
 }
 
+// Pictures carry their encoded bytes base64'd. A crash payload is written
+// on a timer, so this is the one place the bytes are copied per save — the
+// alternative (a side-car directory) would leave the payload incomplete,
+// and a recovery file that cannot restore what was on screen is worse than
+// a larger one.
+QJsonObject imageToJson(const CalcEng::ImageSpec &image)
+{
+    return QJsonObject{
+        {QStringLiteral("bytes"), QString::fromLatin1(image.bytes->toBase64())},
+        {QStringLiteral("format"), image.format},
+        {QStringLiteral("sheet"), image.sheet},
+        {QStringLiteral("row"), image.anchorRow},
+        {QStringLiteral("col"), image.anchorCol},
+        {QStringLiteral("w"), image.widthPx},
+        {QStringLiteral("h"), image.heightPx},
+    };
+}
+
+CalcEng::ImageSpec imageFromJson(const QJsonObject &object)
+{
+    CalcEng::ImageSpec image;
+    image.bytes = QSharedPointer<const QByteArray>::create(QByteArray::fromBase64(
+        object.value(QStringLiteral("bytes")).toString().toLatin1()));
+    image.format = object.value(QStringLiteral("format")).toString(QStringLiteral("png"));
+    image.sheet = object.value(QStringLiteral("sheet")).toInt(0);
+    image.anchorRow = object.value(QStringLiteral("row")).toInt(0);
+    image.anchorCol = object.value(QStringLiteral("col")).toInt(0);
+    image.widthPx = object.value(QStringLiteral("w")).toInt(0);
+    image.heightPx = object.value(QStringLiteral("h")).toInt(0);
+    return image;
+}
+
 CalcEng::ChartSpec chartFromJson(const QJsonObject &object)
 {
     CalcEng::ChartSpec chart;
@@ -220,6 +252,13 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
         charts.append(chartToJson(chart));
     }
     root.insert(QStringLiteral("charts"), charts);
+    QJsonArray images;
+    for (const CalcEng::ImageSpec &image : snapshot.images) {
+        if (image.isValid()) {
+            images.append(imageToJson(image));
+        }
+    }
+    root.insert(QStringLiteral("images"), images);
 
     QJsonArray sheets;
     for (const SheetSnapshot &sheet : snapshot.sheets) {
@@ -336,6 +375,13 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
     }
     for (const QJsonValue &value : root.value(QStringLiteral("charts")).toArray()) {
         snapshot.charts.append(chartFromJson(value.toObject()));
+    }
+    // Absent in payloads written before M39; an old one simply has none.
+    for (const QJsonValue &value : root.value(QStringLiteral("images")).toArray()) {
+        const CalcEng::ImageSpec image = imageFromJson(value.toObject());
+        if (image.isValid()) {
+            snapshot.images.append(image);
+        }
     }
     for (const QJsonValue &value : sheetArray) {
         const QJsonObject object = value.toObject();

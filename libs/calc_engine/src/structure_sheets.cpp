@@ -116,6 +116,17 @@ bool removeSheet(Workbook &book, qint32 index)
         charts.append(spec);
     }
     book.charts = charts;
+    QList<ImageSpec> images;
+    for (ImageSpec spec : std::as_const(book.images)) {
+        if (spec.sheet == index) {
+            continue;
+        }
+        if (spec.sheet > index) {
+            --spec.sheet;
+        }
+        images.append(spec);
+    }
+    book.images = images;
     if (!book.removeSheetAt(index)) {
         return false;
     }
@@ -167,6 +178,9 @@ bool moveSheet(Workbook &book, qint32 from, qint32 to)
         charts.append(spec);
     }
     book.charts = charts;
+    for (ImageSpec &spec : book.images) {
+        spec.sheet = remap(spec.sheet);
+    }
     book.reindexAll();
     return true;
 }

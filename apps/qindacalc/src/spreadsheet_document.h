@@ -102,6 +102,10 @@ public:
     // dirty, notify. It used to append straight into Workbook::charts, so a
     // chart could not be undone and never reached the recovery journal.
     void addChart(const CalcEng::ChartSpec &spec);
+    // Inserts a picture anchored at (row, col) as one undo step. `path` is
+    // read here so the document owns the bytes; false when the file cannot
+    // be read or holds no image this build can decode.
+    Q_INVOKABLE bool addImageFromFile(const QString &path, int row, int col);
     // Defines (or redefines) a named range over `target`, undoably. An
     // unqualified target is pinned to the active sheet first: a name is an
     // absolute address, so it must not follow whichever sheet the formula

@@ -312,7 +312,7 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
         // validations, autofilter, comments) read straight from the package.
         if (!packagePath.isEmpty()) {
             readSheetExtras(packagePath, out, sheetIndex, palette, &sheet);
-            readSheetCharts(packagePath, out, sheetIndex);
+            readSheetDrawings(packagePath, out, sheetIndex);
         }
         if (qEnvironmentVariableIsSet("QQO_XLSX_TRACE")) {
             qInfo("xlsx: sheet %d (%s) %lld ms, %lld cells", sheetIndex,

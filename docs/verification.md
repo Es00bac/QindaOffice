@@ -245,6 +245,39 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M39 gates (floating images) and the parity close-out
+
+Automated by `tst_calc_io_images`, `tst_calc_window` and `tst_calc_sample`.
+Rationale in D-040.
+
+- [x] `imagesRoundTrip`: a real JPEG survives byte-for-byte (the point of
+      not using QXlsx's insertImage), with its format, anchor and extent;
+      the media part, the content-type default, the drawing relationship
+      and the `<xdr:pic>` anchor are package-inspected.
+- [x] `picturesAndChartsShareOneDrawing`: a sheet with both gets one
+      drawing part holding both anchors, and both come back on re-read.
+- [x] `imagesFollowStructuralEdits`: anchors move with inserted rows and
+      columns, ignore edits on other sheets, and go with a removed sheet.
+- [x] `imagesInsertPaintAndRecover`: Insert ▸ Image… lands a picture at
+      the cursor as ONE undo step, the grid paints it (the pixel inside
+      its rect is the image's own colour), and the recovery payload
+      brings the bytes back.
+
+The close-out for the whole parity run (M32–M39), sample-gated:
+
+- [x] `sampleSurvivesOurOwnSaveAndReopen`: the author's workbook, saved by
+      us and read back, is still the author's workbook — all 11 sheets,
+      106,464 cells, 106,402 styles, 8 conditional formats, 9 validations,
+      6 tables, 4 charts, 6 series, the frozen panes, the print areas, the
+      active tab and the recomputed Forecast value, with zero error cells
+      on both sides. This gate is what caught the blank-but-styled cells
+      the writer had been dropping (2,114 of them).
+- [x] `whatWeWriteOpensInLibreOffice`: our package converted by headless
+      LibreOffice and read back — the external judge that our own reader
+      and writer do not merely share a bug.
+- [ ] On the desktop, with real Excel: open the saved file and confirm the
+      look. The one check no test here can make.
+
 ### M38 gates (array arithmetic)
 
 Automated by `tst_calc_functions` and `tst_calc_window`. Rationale in D-038.

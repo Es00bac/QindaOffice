@@ -64,6 +64,12 @@ void CalcHost::createTextActions()
         menuTree()->insertInto(QStringLiteral("fileMenu"), QString::fromLatin1(ActionId::kFileCloseWindow),
                                submenu);
     }
+    // Pictures. Unlike charts this needs no optional dependency — Qt's own
+    // image plugins decode, and the engine only ever holds the bytes.
+    connect(actions()->add(QString::fromLatin1(ActionId::kInsertImage), tr("&Image…"), {},
+                           QStringLiteral("insert-image")),
+            &ActionEntry::triggered, this, [this] { emit imageDialogRequested(); });
+
     // Charts.
     ActionEntry *chart = actions()->add(QString::fromLatin1(ActionId::kInsertChart), tr("&Chart…"), {},
                                         QStringLiteral("chart-column"));
@@ -74,6 +80,13 @@ void CalcHost::createTextActions()
                                       .arg(colName(at.col), QString::number(at.row + 1),
                                            colName(at.col + 1), QString::number(at.row + 6)));
     });
+}
+
+void CalcHost::insertImageChosen(const QUrl &file)
+{
+    const QString path = file.isLocalFile() ? file.toLocalFile() : file.toString();
+    const CellAddr at = cursor();
+    static_cast<void>(spreadsheetDocument()->addImageFromFile(path, at.row, at.col));
 }
 
 // ---- templates ----------------------------------------------------------------------

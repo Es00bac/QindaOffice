@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "xlsx_post.h"
 
+#include "xlsx_post_images.h"
 #include "xlsx_write_charts.h"
 #include "xlsx_write_xml.h"
 #include "xlsx_xml.h"
@@ -334,46 +335,10 @@ bool applyPatchManifest(const QString &path, const PatchManifest &manifest, QStr
             &parts[QStringLiteral("[Content_Types].xml")], QStringLiteral("/") + chartPart,
             QStringLiteral("application/vnd.openxmlformats-officedocument.drawingml.chart+xml"));
 
-        const QString sheetRelsPath = relsPathFor(patch.sheetPart);
-        QByteArray sheetRelsXml = parts.value(sheetRelsPath);
-        QString drawingPart = drawingPartFor(sheetRelsXml);
-        if (drawingPart.isEmpty()) {
-            drawingPart = QStringLiteral("xl/drawings/drawing%1.xml").arg(++drawingPartCount);
-            parts.insert(drawingPart,
-                         QByteArrayLiteral(
-                             "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-                             "<xdr:wsDr xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\">"
-                             "</xdr:wsDr>"));
-            appendContentTypeOverride(
-                &parts[QStringLiteral("[Content_Types].xml")], QStringLiteral("/") + drawingPart,
-                QStringLiteral("application/vnd.openxmlformats-officedocument.drawing+xml"));
-            const QString drawingRid = appendRelationship(
-                &sheetRelsXml,
-                QStringLiteral("http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
-                QStringLiteral("../drawings/") + drawingPart.mid(drawingPart.lastIndexOf(QLatin1Char('/')) + 1));
-            if (drawingRid.isEmpty()) {
-                if (error != nullptr) {
-                    *error = QStringLiteral("post-pass: broken rels part %1").arg(sheetRelsPath);
-                }
-                return false;
-            }
-            // <drawing> precedes legacyDrawing/picture/tableParts/extLst in
-            // the worksheet schema; the close tag is the fallback anchor.
-            if (!insertBeforeFirst(&parts[patch.sheetPart],
-                                   {QStringLiteral("<legacyDrawing"), QStringLiteral("<picture"),
-                                    QStringLiteral("<tableParts"), QStringLiteral("<extLst"),
-                                    QStringLiteral("</worksheet>")},
-                                   QByteArrayLiteral("<drawing r:id=\"") + drawingRid.toUtf8()
-                                       + QByteArrayLiteral("\"/>"))) {
-                if (error != nullptr) {
-                    *error = QStringLiteral("post-pass: no drawing anchor in %1")
-                                 .arg(patch.sheetPart);
-                }
-                return false;
-            }
+        QString drawingPart;
+        if (!ensureDrawingPart(&parts, patch.sheetPart, &drawingPartCount, &drawingPart, error)) {
+            return false;
         }
-        parts.insert(sheetRelsPath, sheetRelsXml);
-
         const QString drawingRelsPath = relsPathFor(drawingPart);
         QByteArray drawingRelsXml = parts.value(drawingRelsPath);
         const QString chartRid = appendRelationship(
@@ -399,6 +364,16 @@ bool applyPatchManifest(const QString &path, const PatchManifest &manifest, QStr
             }
             return false;
         }
+    }
+
+    int mediaCount = 0;
+    for (auto it = parts.constBegin(); it != parts.constEnd(); ++it) {
+        if (it.key().startsWith(QLatin1String("xl/media/"))) {
+            ++mediaCount;
+        }
+    }
+    if (!applyImagePatches(&parts, manifest.images, &drawingPartCount, &mediaCount, error)) {
+        return false;
     }
 
     KZip out(path);

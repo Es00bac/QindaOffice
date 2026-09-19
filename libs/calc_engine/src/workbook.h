@@ -2,6 +2,7 @@
 #pragma once
 
 #include "chart_spec.h"
+#include "image_spec.h"
 #include "dependencies.h"
 #include "eval.h"
 #include "sheet.h"
@@ -109,6 +110,9 @@ public:
     // Floating charts anchored on the sheets (plan section 7.2); exported
     // to xlsx, dropped with a warning on import (QXlsx has no chart read).
     QList<ChartSpec> charts;
+
+    // Floating images (M39, D-040), encoded bytes as the file carried them.
+    QList<ImageSpec> images;
 
 private:
     static Value parseLiteral(const QString &input, bool *isFormula, NodePtr *ast,

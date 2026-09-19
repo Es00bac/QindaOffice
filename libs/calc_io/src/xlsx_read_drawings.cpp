@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Direct package reader for chart parts (xlsx_read_xml.h): QXlsx's chart
-// support is write-only (no public series accessor), so chart XML is parsed
-// here — plot type and grouping, title, per-series tx/cat/val references,
-// and the drawing anchor that places the chart on the sheet. Producers may
-// put charts on any path (the sample uses xl/drawings/charts/), so parts
-// are always resolved through the rels, never by convention.
+// Direct package reader for a sheet's drawing (xlsx_read_xml.h): one walk
+// over the anchors yields both floating objects the engine models — charts
+// (QXlsx's chart support is write-only, so chart XML is parsed here: plot
+// type and grouping, title, per-series tx/cat/val references) and pictures
+// (the blip's media bytes, kept in the format the file used). Producers may
+// put either on any path (the sample uses xl/drawings/charts/), so parts are
+// always resolved through the rels, never by convention.
 
 #include "xlsx_read_xml.h"
 
@@ -12,6 +13,8 @@
 
 #include "workbook.h"
 
+#include <QSharedPointer>
+#include <QSize>
 #include <QXmlStreamReader>
 
 #include <xlsxzipreader_p.h>
@@ -35,6 +38,7 @@ struct Anchor {
     int widthPx = 0;
     int heightPx = 0;
     QString chartRid;
+    QString picRid; // a:blip r:embed — set when the anchor holds a picture
 };
 
 // One twoCellAnchor/oneCellAnchor element; the reader must be positioned at
@@ -54,6 +58,8 @@ Anchor readAnchor(QXmlStreamReader &reader, const QLatin1String &kind)
                 section = Section::To;
             } else if (name == QLatin1String("chart")) {
                 anchor.chartRid = reader.attributes().value(QLatin1String("r:id")).toString();
+            } else if (name == QLatin1String("blip")) {
+                anchor.picRid = reader.attributes().value(QLatin1String("r:embed")).toString();
             } else if (name == QLatin1String("ext")) {
                 // oneCellAnchor's size, EMU (9525 per px).
                 anchor.widthPx = reader.attributes().value(QLatin1String("cx")).toInt() / 9525;
@@ -85,6 +91,28 @@ Anchor readAnchor(QXmlStreamReader &reader, const QLatin1String &kind)
         }
     }
     return anchor;
+}
+
+// An anchor's on-sheet size: a twoCellAnchor spans the cells between its
+// corners, a oneCellAnchor carries its own extent in EMU. Invalid when the
+// anchor says neither, which leaves the object at its natural size.
+QSize anchorSize(const Anchor &anchor, const Sheet &sheet)
+{
+    if (anchor.toCol >= 0 && anchor.toRow >= 0) {
+        int width = 0;
+        for (int col = anchor.fromCol; col < anchor.toCol; ++col) {
+            width += int(sheet.columnWidth(col));
+        }
+        int height = 0;
+        for (int row = anchor.fromRow; row < anchor.toRow; ++row) {
+            height += int(sheet.rowHeight(row));
+        }
+        return {qMax(width, 1), qMax(height, 1)};
+    }
+    if (anchor.widthPx > 0 && anchor.heightPx > 0) {
+        return {anchor.widthPx, anchor.heightPx};
+    }
+    return {};
 }
 
 // The first text inside c:title (rich runs concatenated).
@@ -202,7 +230,7 @@ void readChartPart(const QByteArray &xml, ChartSpec *spec)
 
 } // namespace
 
-void readSheetCharts(const QString &packagePath, Workbook *wb, qint32 sheetIndex)
+void readSheetDrawings(const QString &packagePath, Workbook *wb, qint32 sheetIndex)
 {
     QXlsx::ZipReader zip(packagePath);
     if (!zip.exists()) {
@@ -249,6 +277,28 @@ void readSheetCharts(const QString &packagePath, Workbook *wb, qint32 sheetIndex
             ? QLatin1String("twoCellAnchor")
             : QLatin1String("oneCellAnchor");
         const Anchor anchor = readAnchor(reader, kind);
+        QSize size = anchorSize(anchor, sheet);
+        if (!anchor.picRid.isEmpty()) {
+            const QString mediaPart =
+                resolveTarget(drawingDir, drawingRels.value(anchor.picRid).second);
+            const QByteArray bytes = zip.fileData(mediaPart);
+            if (bytes.isEmpty()) {
+                continue; // a blip pointing at nothing: not our data to invent
+            }
+            ImageSpec image;
+            image.bytes = QSharedPointer<const QByteArray>::create(bytes);
+            const int dot = mediaPart.lastIndexOf(QLatin1Char('.'));
+            if (dot > 0) {
+                image.format = mediaPart.mid(dot + 1).toLower();
+            }
+            image.sheet = sheetIndex;
+            image.anchorRow = anchor.fromRow;
+            image.anchorCol = anchor.fromCol;
+            image.widthPx = size.width();
+            image.heightPx = size.height();
+            wb->images.append(image);
+            continue;
+        }
         const QString chartPart = resolveTarget(drawingDir, drawingRels.value(anchor.chartRid).second);
         const QByteArray chartXml = zip.fileData(chartPart);
         if (anchor.chartRid.isEmpty() || chartXml.isEmpty()) {
@@ -258,20 +308,9 @@ void readSheetCharts(const QString &packagePath, Workbook *wb, qint32 sheetIndex
         spec.sheet = sheetIndex;
         spec.anchorRow = anchor.fromRow;
         spec.anchorCol = anchor.fromCol;
-        if (anchor.toCol >= 0 && anchor.toRow >= 0) {
-            int width = 0;
-            for (int col = anchor.fromCol; col < anchor.toCol; ++col) {
-                width += int(sheet.columnWidth(col));
-            }
-            int height = 0;
-            for (int row = anchor.fromRow; row < anchor.toRow; ++row) {
-                height += int(sheet.rowHeight(row));
-            }
-            spec.widthPx = qMax(width, 1);
-            spec.heightPx = qMax(height, 1);
-        } else if (anchor.widthPx > 0 && anchor.heightPx > 0) {
-            spec.widthPx = anchor.widthPx;
-            spec.heightPx = anchor.heightPx;
+        if (size.isValid()) {
+            spec.widthPx = size.width();
+            spec.heightPx = size.height();
         }
         readChartPart(chartXml, &spec);
         if (!spec.series.isEmpty()) {

@@ -8,7 +8,8 @@
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(POPPLER_QT6 REQUIRED poppler-qt6)
 
-foreach(name IN ITEMS tst_calc_window tst_calc_ui tst_calc_rules_ui tst_calc_menu_export)
+foreach(name IN ITEMS tst_calc_window tst_calc_sample tst_calc_ui tst_calc_rules_ui
+                      tst_calc_menu_export)
     add_executable(${name} ${name}.cpp calc_test_support.h)
     target_link_libraries(${name} PRIVATE qindacalc_app qindacalc_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)

@@ -10,6 +10,8 @@
 
 #include <QFile>
 #include <QFileInfo>
+#include <QImage>
+#include <QImageReader>
 #include <QSaveFile>
 #include <QTemporaryDir>
 
@@ -413,16 +415,6 @@ void SpreadsheetDocument::insertSheet(const QString &name)
     m_workbook.addSheet(name);
     m_activeSheet = m_workbook.sheetCount() - 1;
     pushUndo(before, tr("Insert sheet"));
-    setDirty(true);
-    emit contentChanged();
-    emit structureChanged();
-}
-
-void SpreadsheetDocument::addChart(const CalcEng::ChartSpec &spec)
-{
-    const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
-    m_workbook.charts.append(spec);
-    pushUndo(before, tr("Insert chart"));
     setDirty(true);
     emit contentChanged();
     emit structureChanged();

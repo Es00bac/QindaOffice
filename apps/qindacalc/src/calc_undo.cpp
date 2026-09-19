@@ -55,6 +55,7 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
     }
     snap.names = workbook.namedRanges();
     snap.charts = workbook.charts;
+    snap.images = workbook.images;
     return snap;
 }
 
@@ -102,6 +103,7 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
         fresh.defineName(it.key(), it.value());
     }
     fresh.charts = snapshot.charts;
+    fresh.images = snapshot.images;
 
     // Re-register the dependency index from the restored ASTs and recalc
     // everything once (restores volatile and cycle-detected state).

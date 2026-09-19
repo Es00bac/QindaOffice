@@ -194,9 +194,9 @@ void CalcHost::insertMenus()
     QList<MenuNode> insertItems{a(ActionId::kCalcInsertRows), a(ActionId::kCalcInsertColumns),
                                 MenuNode::separator(), a(ActionId::kCalcDeleteRows),
                                 a(ActionId::kCalcDeleteColumns), MenuNode::separator(),
-                                a(ActionId::kCalcComment)};
+                                a(ActionId::kCalcComment), MenuNode::separator(),
+                                a(ActionId::kInsertImage)};
     if (chartsAvailable()) {
-        insertItems.append(MenuNode::separator());
         insertItems.append(a(ActionId::kInsertChart));
     }
     menuTree()->insertMenuBefore(QStringLiteral("aiMenu"),

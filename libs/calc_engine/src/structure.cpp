@@ -271,6 +271,23 @@ void rewriteCharts(Workbook &book, const StructureEdit &edit)
     book.charts = kept;
 }
 
+// Images have no data source, so an edit only ever moves their anchor: a
+// picture whose anchor cell is removed lands on the cell that took its
+// place, the way a chart's does.
+void rewriteImages(Workbook &book, const StructureEdit &edit)
+{
+    const Band band = bandOf(edit);
+    const bool rows = editsRows(edit);
+    for (ImageSpec &spec : book.images) {
+        if (spec.sheet != edit.sheet) {
+            continue;
+        }
+        qint32 &anchor = rows ? spec.anchorRow : spec.anchorCol;
+        const qint32 moved = movedIndex(anchor, band);
+        anchor = moved < 0 ? band.at : moved;
+    }
+}
+
 // Moves the sheet's sparse maps. Cells and styles that fall in a removed
 // band are dropped; merges follow their span and collapse with it.
 void moveSheetContents(Sheet &sheet, const StructureEdit &edit)
@@ -411,6 +428,7 @@ void applyStructureEdit(Workbook &book, const StructureEdit &edit)
     rewriteFormulas(book, edit);
     rewriteNames(book, edit);
     rewriteCharts(book, edit);
+    rewriteImages(book, edit);
     moveSheetContents(book.sheetAt(edit.sheet), edit);
     book.reindexAll();
 }
