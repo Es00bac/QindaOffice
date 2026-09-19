@@ -8,6 +8,7 @@
 // read-side normalization).
 
 #include "chart_spec.h"
+#include "sheet_rules.h"
 
 #include <QByteArray>
 #include <QHash>
@@ -23,6 +24,7 @@ struct PatchManifest {
         QByteArray autoFilterXml; // "<autoFilter ...>...</autoFilter>", or empty
         QString commentsPart;    // "xl/comments1.xml", or empty
         QByteArray commentsXml;  // the comments part's content
+        QList<TableSpec> tables; // structured tables (parts + tableParts element)
     };
     QList<SheetPatch> sheets;
 

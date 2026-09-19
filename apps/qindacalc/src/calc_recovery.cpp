@@ -258,6 +258,7 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
         out.insert(QStringLiteral("validations"), validationsToJson(sheet.validations));
         out.insert(QStringLiteral("filter"), autoFilterToJson(sheet.filter));
         out.insert(QStringLiteral("comments"), commentsToJson(sheet.comments));
+        out.insert(QStringLiteral("tables"), tablesToJson(sheet.tables));
         sheets.append(out);
     }
     root.insert(QStringLiteral("sheets"), sheets);
@@ -351,6 +352,7 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
             validationsFromJson(object.value(QStringLiteral("validations")).toObject());
         sheet.filter = autoFilterFromJson(object.value(QStringLiteral("filter")).toObject());
         sheet.comments = commentsFromJson(object.value(QStringLiteral("comments")).toArray());
+        sheet.tables = tablesFromJson(object.value(QStringLiteral("tables")).toArray());
         snapshot.sheets.append(sheet);
     }
     snapshot.activeSheet = qBound(0, snapshot.activeSheet, snapshot.sheets.size() - 1);

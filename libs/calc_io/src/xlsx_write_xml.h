@@ -17,4 +17,8 @@ namespace QindaOffice::Calc::IO {
 // The <autoFilter> element for a sheet's filter model (empty when inactive).
 [[nodiscard]] QByteArray autoFilterXml(const AutoFilter &filter);
 
+// One xl/tables/tableN.xml part for a TableSpec (id is workbook-wide and
+// assigned by the post-pass).
+[[nodiscard]] QByteArray tablePartXml(const TableSpec &table, int tableId);
+
 } // namespace QindaOffice::Calc::IO

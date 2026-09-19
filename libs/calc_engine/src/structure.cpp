@@ -367,6 +367,15 @@ void moveSheetContents(Sheet &sheet, const StructureEdit &edit)
             filter = AutoFilter{};
         }
     }
+    // Tables are range-addressed state like every other rule: a table whose
+    // span dies with the band is dropped, one straddling an insertion grows.
+    QList<TableSpec> tables;
+    for (TableSpec table : sheet.tables()) {
+        if (const auto moved = movedRange(table.range)) {
+            table.range = *moved;
+            tables.append(table);
+        }
+    }
     QHash<quint64, CellComment> comments;
     comments.reserve(sheet.comments().size());
     for (const auto &[packed, comment] : sheet.comments().asKeyValueRange()) {
@@ -384,6 +393,7 @@ void moveSheetContents(Sheet &sheet, const StructureEdit &edit)
     sheet.setCondFormats(std::move(condFormats));
     sheet.setValidations(std::move(validations));
     sheet.setAutoFilter(std::move(filter));
+    sheet.setTables(std::move(tables));
     sheet.setComments(std::move(comments));
 }
 

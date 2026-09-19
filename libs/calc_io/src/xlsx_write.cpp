@@ -270,7 +270,9 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
                 patch.commentsPart = QStringLiteral("xl/comments%1.xml").arg(s + 1);
                 patch.commentsXml = commentsPartXml(sheet.comments());
             }
-            if (!patch.autoFilterXml.isEmpty() || !patch.commentsPart.isEmpty()) {
+            patch.tables = sheet.tables();
+            if (!patch.autoFilterXml.isEmpty() || !patch.commentsPart.isEmpty()
+                || !patch.tables.isEmpty()) {
                 manifest->sheets.append(patch);
             }
         }

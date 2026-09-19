@@ -33,6 +33,7 @@ struct SheetSnapshot {
     QList<CalcEng::ValidationRule> validations;
     CalcEng::AutoFilter filter;
     QHash<quint64, CalcEng::CellComment> comments;
+    QList<CalcEng::TableSpec> tables;
 };
 
 struct WorkbookSnapshot {

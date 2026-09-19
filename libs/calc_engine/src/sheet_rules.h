@@ -141,4 +141,23 @@ struct CellComment {
     bool operator==(const CellComment &) const = default;
 };
 
+// --- Excel tables (ListObjects) -------------------------------------------
+
+// A structured table over a range: banded rows and a styled header supplied
+// by its tableStyle name, column captions, and (in files) its own filter
+// and totals row. Table-scoped filters are NOT imported (the sheet's
+// AutoFilter stays singular — D-036); the totals row is recorded but not
+// evaluated.
+struct TableSpec {
+    QString name;        // displayName (unique workbook-wide in a valid file)
+    CellRange range;     // header row first, body rows after
+    bool headerRow = true;
+    bool totalsRow = false;
+    QString styleName;   // e.g. "TableStyleMedium2"; empty = Medium2
+    bool rowStripes = true;
+    bool colStripes = false;
+    QStringList columnNames;
+    bool operator==(const TableSpec &) const = default;
+};
+
 } // namespace QindaOffice::Calc

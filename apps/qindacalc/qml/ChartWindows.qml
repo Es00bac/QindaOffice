@@ -29,10 +29,16 @@ QtObject {
             transientParent: root.parentWindow
             color: Tk.Theme.color.panel
             visible: true
-            Loader {
+            ChartItem {
+                id: chartItem
                 anchors.fill: parent
-                source: "ChartCanvas.qml"
-                onLoaded: item.data = Qt.binding(function() { return root.host.chartSeriesAt(chartWindow.index) })
+                chartData: ({})
+                inkColor: Tk.Theme.color.text
+                Component.onCompleted: chartItem.chartData = root.host.chartSeriesAt(chartWindow.index)
+                Connections {
+                    target: root.host
+                    function onChartsChanged() { chartItem.chartData = root.host.chartSeriesAt(chartWindow.index) }
+                }
             }
         }
     }

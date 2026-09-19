@@ -2,6 +2,7 @@
 #include "xlsx_post.h"
 
 #include "xlsx_write_charts.h"
+#include "xlsx_write_xml.h"
 #include "xlsx_xml.h"
 
 #include <KArchiveDirectory>
@@ -169,14 +170,63 @@ bool applyPatchManifest(const QString &path, const PatchManifest &manifest, QStr
     // ---- charts ------------------------------------------------------------
     int chartPartCount = 0;
     int drawingPartCount = 0;
+    int tablePartCount = 0;
     for (auto it = parts.constBegin(); it != parts.constEnd(); ++it) {
         if (it.key().startsWith(QLatin1String("xl/charts/chart"))) {
             ++chartPartCount;
         } else if (it.key().startsWith(QLatin1String("xl/drawings/drawing"))
                    && it.key().endsWith(QLatin1String(".xml"))) {
             ++drawingPartCount;
+        } else if (it.key().startsWith(QLatin1String("xl/tables/table"))) {
+            ++tablePartCount;
         }
     }
+    for (const PatchManifest::SheetPatch &patch : manifest.sheets) {
+        if (!patch.tables.isEmpty()) {
+            // One part per table (ids unique workbook-wide), sheet rels and
+            // the <tableParts> element (last before </worksheet>).
+            const QString relsPath = relsPathFor(patch.sheetPart);
+            QByteArray relsXml = parts.value(relsPath);
+            QStringList rids;
+            for (const TableSpec &table : patch.tables) {
+                const QString tablePart = QStringLiteral("xl/tables/table%1.xml").arg(++tablePartCount);
+                parts.insert(tablePart, tablePartXml(table, tablePartCount));
+                appendContentTypeOverride(
+                    &parts[QStringLiteral("[Content_Types].xml")], QStringLiteral("/") + tablePart,
+                    QStringLiteral("application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"));
+                const QString rid = appendRelationship(
+                    &relsXml,
+                    QStringLiteral("http://schemas.openxmlformats.org/officeDocument/2006/relationships/table"),
+                    QStringLiteral("../tables/")
+                        + tablePart.mid(tablePart.lastIndexOf(QLatin1Char('/')) + 1));
+                if (rid.isEmpty()) {
+                    if (error != nullptr) {
+                        *error = QStringLiteral("post-pass: broken rels part %1").arg(relsPath);
+                    }
+                    return false;
+                }
+                rids.append(rid);
+            }
+            parts.insert(relsPath, relsXml);
+            QByteArray tablePartsXml = QByteArrayLiteral("<tableParts count=\"")
+                + QByteArray::number(rids.size()) + QByteArrayLiteral("\">");
+            for (const QString &rid : rids) {
+                tablePartsXml += QByteArrayLiteral("<tablePart r:id=\"") + rid.toUtf8()
+                    + QByteArrayLiteral("\"/>");
+            }
+            tablePartsXml += QByteArrayLiteral("</tableParts>");
+            if (!insertBeforeFirst(&parts[patch.sheetPart],
+                                   {QStringLiteral("<extLst"), QStringLiteral("</worksheet>")},
+                                   tablePartsXml)) {
+                if (error != nullptr) {
+                    *error = QStringLiteral("post-pass: no tableParts anchor in %1")
+                                 .arg(patch.sheetPart);
+                }
+                return false;
+            }
+        }
+    }
+
     for (const PatchManifest::ChartPatch &patch : manifest.charts) {
         if (!patch.generate) {
             // QXlsx wrote the chart but cannot say "stacked" (its grouping

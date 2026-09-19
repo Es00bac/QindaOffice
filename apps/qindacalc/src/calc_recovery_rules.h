@@ -26,4 +26,7 @@ namespace QindaOffice::Apps::QindaCalc {
 [[nodiscard]] QJsonArray commentsToJson(const QHash<quint64, CalcEng::CellComment> &comments);
 [[nodiscard]] QHash<quint64, CalcEng::CellComment> commentsFromJson(const QJsonArray &array);
 
+[[nodiscard]] QJsonArray tablesToJson(const QList<CalcEng::TableSpec> &tables);
+[[nodiscard]] QList<CalcEng::TableSpec> tablesFromJson(const QJsonArray &array);
+
 } // namespace QindaOffice::Apps::QindaCalc

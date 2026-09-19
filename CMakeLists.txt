@@ -37,9 +37,8 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(POPPLER_QT6 REQUIRED IMPORTED_TARGET poppler-qt6)
 qt_standard_project_setup(REQUIRES 6.8)
 
-if(QQO_WITH_CHARTS)
-    find_package(Qt6 6.11 REQUIRED COMPONENTS Charts)
-endif()
+# QQO_WITH_CHARTS gates the chart FEATURE (the custom ChartItem renderer,
+# D-036); no QtCharts build or runtime dependency exists anymore.
 
 # QXlsx (MIT) is vendored as a git submodule (plan section 3): the suite's
 # xlsx reader/writer for calc_io (M3). Vendored code is exempt from the

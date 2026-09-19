@@ -32,6 +32,27 @@ const QColor kInk(0x20, 0x20, 0x28);
 const QColor kGridLine(0xd8, 0xd8, 0xdc);
 const QColor kCommentMarker(0xc0, 0x39, 0x2b);
 
+// The stock Excel table styles a real workbook names. headerText contrasts
+// with the header fill; bandFill is the stripe colour. The engine stores
+// only styleName (it is QtCore-only), so the palette lives here.
+struct TableStyleColors {
+    QColor headerFill;
+    QColor headerText;
+    QColor bandFill;
+};
+
+TableStyleColors tableStyleColors(const QString &styleName)
+{
+    static const QHash<QString, TableStyleColors> styles = {
+        {QStringLiteral("TableStyleMedium1"), {QColor(0x2F, 0x5B, 0x95), QColor(Qt::white), QColor(0xD3, 0xDE, 0xEE)}},
+        {QStringLiteral("TableStyleMedium2"), {QColor(0x44, 0x72, 0xC4), QColor(Qt::white), QColor(0xD9, 0xE1, 0xF2)}},
+        {QStringLiteral("TableStyleMedium3"), {QColor(0xC6, 0x59, 0x11), QColor(Qt::white), QColor(0xF8, 0xCB, 0xAD)}},
+        {QStringLiteral("TableStyleMedium4"), {QColor(0x7B, 0x7B, 0x7B), QColor(Qt::white), QColor(0xE2, 0xEF, 0xDA)}},
+        {QStringLiteral("TableStyleMedium9"), {QColor(0x1F, 0x8A, 0x70), QColor(Qt::white), QColor(0xD1, 0xE4, 0xDF)}},
+    };
+    return styles.value(styleName, styles.value(QStringLiteral("TableStyleMedium2")));
+}
+
 } // namespace
 
 void SpreadsheetItem::paintHeaderBands(QPainter &p)
@@ -149,6 +170,22 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                 ? CondFormat{}
                 : wb.condFormatFor(m_document->activeSheet(), addr);
             if (!inSelection) {
+                // A structured table's style is the LOWEST layer: direct
+                // cell fills and conditional formats paint over it (Excel's
+                // precedence), the header row paints its style's fill.
+                if (const TableSpec *table = sheet.tableCovering(addr)) {
+                    const TableStyleColors colors = tableStyleColors(table->styleName);
+                    const bool header = table->headerRow && addr.row == table->range.topLeft.row;
+                    const bool totals = table->totalsRow && addr.row == table->range.bottomRight.row;
+                    const int bodyIndex = addr.row - table->range.topLeft.row
+                        - (table->headerRow ? 1 : 0);
+                    if (header) {
+                        p.fillRect(cell, colors.headerFill);
+                    } else if (!totals && table->rowStripes && bodyIndex >= 0
+                               && bodyIndex % 2 == 1) {
+                        p.fillRect(cell, colors.bandFill);
+                    }
+                }
                 if (conditional.background) {
                     p.fillRect(cell, QColor(conditional.background->r, conditional.background->g,
                                             conditional.background->b));
@@ -203,6 +240,10 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                                     (*formatted.colour).b));
                 } else if (style != nullptr && style->fg.has_value()) {
                     p.setPen(QColor((*style->fg).r, (*style->fg).g, (*style->fg).b));
+                } else if (const TableSpec *table = sheet.tableCovering(addr);
+                           table != nullptr && table->headerRow
+                           && addr.row == table->range.topLeft.row) {
+                    p.setPen(tableStyleColors(table->styleName).headerText);
                 } else {
                     p.setPen(kInk);
                 }

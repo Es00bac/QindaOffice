@@ -245,6 +245,27 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M36 gates (Excel tables + the custom chart renderer)
+
+Automated by `tst_calc_io_tables`, `tst_calc_structure` and
+`tst_calc_window`. Rationale in D-036.
+
+- [x] `tablesRoundTrip`: the table part, content-types, rels and the
+      `<tableParts>` element are package-inspected; the reimported table
+      keeps name, range, style, header and column names.
+- [x] `tablesFollowStructuralEdits`: row insert above/inside moves and
+      grows a table; removing its span drops it.
+- [x] `sampleTablesImportAndBand` (QQO_SAMPLE_XLSX): six tables import by
+      name; the Orders header paints dark and a stripe row differs from
+      its unbanded neighbour on screen.
+- [x] `chartWindowsRender` (QQO_SAMPLE_XLSX): a chart window paints real
+      series pixels (several distinct colours in the plot area) — the
+      QtCharts ChartView path segfaulted under QGuiApplication before the
+      custom ChartItem existed.
+- [ ] On the desktop: insert a chart through the dialog (its preview is
+      the same ChartItem) and open the sample — four chart windows render
+      live data and stay put on edits.
+
 ### M35 gates (chart import + StackedBar export)
 
 Automated by `tst_calc_io_charts`, `tst_calc_structure` and

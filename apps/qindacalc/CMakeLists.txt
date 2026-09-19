@@ -7,7 +7,6 @@ set(qindacalc_qml
     qml/CalcGrid.qml
     qml/CalcSheetTabs.qml
     qml/CalcWindow.qml
-    qml/ChartCanvas.qml
     qml/ChartDialog.qml
     qml/ChartWindows.qml
     qml/CommentDialog.qml
@@ -40,6 +39,7 @@ qt_add_qml_module(qindacalc_app
         src/calc_rules_ops.cpp
         src/calc_structure_ops.cpp
         src/calc_undo.cpp src/calc_undo.h
+        src/chart_item.cpp src/chart_item.h
         src/chart_series.cpp src/chart_series.h
         src/spreadsheet_document.cpp src/spreadsheet_document.h
         src/spreadsheet_item.cpp src/spreadsheet_item.h
@@ -51,8 +51,8 @@ target_include_directories(qindacalc_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(qindacalc_app PUBLIC office_quick office_quickplugin office_ai office_aiplugin calc_io)
 target_compile_definitions(qindacalc_app PRIVATE QT_NO_CAST_FROM_ASCII)
 if(QQO_WITH_CHARTS)
-    # The chart canvas is QML (QtCharts' ChartView, loaded from the system
-    # QML path at run time); C++ only needs the flag.
+    # The chart surface is the custom ChartItem (D-036); C++ only needs the
+    # flag, and QtCharts is not involved anywhere.
     target_compile_definitions(qindacalc_app PUBLIC QQO_WITH_CHARTS)
 endif()
 qqo_set_strict_warnings(qindacalc_app)

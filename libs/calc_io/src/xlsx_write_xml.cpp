@@ -81,4 +81,50 @@ QByteArray autoFilterXml(const AutoFilter &filter)
     return xml;
 }
 
+QByteArray tablePartXml(const TableSpec &table, int tableId)
+{
+    QByteArray xml;
+    QXmlStreamWriter writer(&xml);
+    writer.writeStartDocument();
+    writer.writeStartElement(QStringLiteral("table"));
+    writer.writeDefaultNamespace(
+        QStringLiteral("http://schemas.openxmlformats.org/spreadsheetml/2006/main"));
+    writer.writeAttribute(QStringLiteral("id"), QString::number(tableId));
+    writer.writeAttribute(QStringLiteral("name"), table.name);
+    writer.writeAttribute(QStringLiteral("displayName"), table.name);
+    writer.writeAttribute(QStringLiteral("ref"),
+                          QStringLiteral("%1:%2").arg(addrText(table.range.topLeft),
+                                                      addrText(table.range.bottomRight)));
+    writer.writeAttribute(QStringLiteral("headerRowCount"),
+                          QString::number(table.headerRow ? 1 : 0));
+    writer.writeAttribute(QStringLiteral("totalsRowCount"),
+                          QString::number(table.totalsRow ? 1 : 0));
+    writer.writeAttribute(QStringLiteral("totalsRowShown"),
+                          QString::number(table.totalsRow ? 1 : 0));
+    const int columns = table.range.bottomRight.col - table.range.topLeft.col + 1;
+    writer.writeStartElement(QStringLiteral("tableColumns"));
+    writer.writeAttribute(QStringLiteral("count"), QString::number(columns));
+    for (int i = 0; i < columns; ++i) {
+        writer.writeEmptyElement(QStringLiteral("tableColumn"));
+        writer.writeAttribute(QStringLiteral("id"), QString::number(i + 1));
+        writer.writeAttribute(QStringLiteral("name"),
+                              table.columnNames.value(i, QStringLiteral("Column%1").arg(i + 1)));
+    }
+    writer.writeEndElement(); // tableColumns
+    writer.writeStartElement(QStringLiteral("tableStyleInfo"));
+    writer.writeAttribute(QStringLiteral("name"),
+                          table.styleName.isEmpty() ? QStringLiteral("TableStyleMedium2")
+                                                    : table.styleName);
+    writer.writeAttribute(QStringLiteral("showFirstColumn"), QStringLiteral("0"));
+    writer.writeAttribute(QStringLiteral("showLastColumn"), QStringLiteral("0"));
+    writer.writeAttribute(QStringLiteral("showRowStripes"),
+                          QString::number(table.rowStripes ? 1 : 0));
+    writer.writeAttribute(QStringLiteral("showColumnStripes"),
+                          QString::number(table.colStripes ? 1 : 0));
+    writer.writeEndElement(); // tableStyleInfo
+    writer.writeEndElement(); // table
+    writer.writeEndDocument();
+    return xml;
+}
+
 } // namespace QindaOffice::Calc::IO

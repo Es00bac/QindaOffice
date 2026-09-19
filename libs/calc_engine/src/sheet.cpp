@@ -188,6 +188,16 @@ const CellComment *Sheet::commentAt(const CellAddr &addr) const
     return it != m_comments.constEnd() ? &it.value() : nullptr;
 }
 
+const TableSpec *Sheet::tableCovering(const CellAddr &addr) const
+{
+    for (const TableSpec &table : m_tables) {
+        if (table.range.contains(addr)) {
+            return &table;
+        }
+    }
+    return nullptr;
+}
+
 void Sheet::setCommentAt(const CellAddr &addr, const CellComment &comment)
 {
     if (comment.text.isEmpty()) {

@@ -31,6 +31,7 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
         ss.validations = sheet.validations();
         ss.filter = sheet.autoFilter();
         ss.comments = sheet.comments();
+        ss.tables = sheet.tables();
         snap.sheets.append(ss);
     }
     // The style table is indexed by position; copy through the public
@@ -78,6 +79,7 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
         sheet.setValidations(ss.validations);
         sheet.setAutoFilter(ss.filter);
         sheet.setComments(ss.comments);
+        sheet.setTables(ss.tables);
     }
     for (const CalcEng::CellStyle &style : snapshot.styles) {
         fresh.addStyle(style);

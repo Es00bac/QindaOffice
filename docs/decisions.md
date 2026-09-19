@@ -5,6 +5,55 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-036: Charts render without QtCharts, and Excel tables round-trip
+
+**Date:** 2026-09-19 · **Status:** accepted (M36)
+
+**Context.** Testing the sample workbook on a full window surfaced a latent
+M28 regression: QtCharts' `ChartView` dereferences null under
+`QGuiApplication` — its title machinery creates a `QWidgetTextControl`,
+which needs a `QApplication` (proven with a minimal probe: QApplication
+works, QGuiApplication dumps core; the stack is `QChartPrivate::init()` →
+`decorateChart` → `setTitleFont` → `QGraphicsTextItem::document()` →
+`QWidgetTextControl::setCursorWidth`). The whole suite runs QGuiApplication
+by design (D-031: no file names `QApplication` or derives from `QWidget`),
+so every chart window — insert or open — crashed, on the desktop too. The
+Imported-charts milestone was merely the first reliable trigger.
+
+**Decision.**
+
+1. **Charts render through a custom `ChartItem`** (`apps/qindacalc/src/
+   chart_item.*`), a `QQuickPaintedItem` over the same
+   `{title, kind, categories, series}` map `chartSeriesData` produces: all
+   six kinds (grouped/stacked bars with a zero line, lines with markers,
+   area fills, pie, scatter), value axis with gridlines and tick labels,
+   sparse category labels, title and legend in the Office series palette.
+   No QtCharts, no Widgets, fully offscreen-testable — matching the
+   suite's custom-paint culture (SpreadsheetItem, SlideRenderer). The ink
+   follows `Tk.Theme.color.text` via a QML-set property. The QtCharts
+   build/runtime dependency is gone (`QQO_WITH_CHARTS` now just gates the
+   feature; the ebuild's qtcharts dependency is stale until the next
+   packaging revision).
+2. **Excel tables (ListObjects) round-trip.** `TableSpec` joins the
+   sheet-rules family (range-addressed, moved by structural edits, carried
+   by undo/recovery like every other rule): name, range, header/totals
+   rows, styleName, stripes, column names. Read parses `xl/tables/`
+   through the sheet's rels; write generates table parts +
+   `<tableParts>` + content-types in the post-pass. Table-scoped filters
+   are NOT imported (the sheet's autofilter stays singular) and the
+   totals row is recorded, not evaluated.
+3. **Banding paints as the LOWEST layer.** A table's header/stripes paint
+   under the cell's own fill and under conditional formats (Excel's
+   precedence — a navy KPI header cell keeps its navy), using the stock
+   `TableStyleMediumN` palettes with Medium2 as the fallback.
+
+**Consequences.** The sample workbook opens with its four charts rendered
+in floating windows (verified pixel-wise) and its six tables banded;
+`chartWindowsRender`, `sampleTablesImportAndBand` and
+`tablesRoundTrip`/`tablesFollowStructuralEdits` gate it. The crash hunt
+also fixed `ChartDialog`'s preview (same ChartView disease) and confirmed
+`ChartCanvas.qml`'s removal leaves zero QtCharts references.
+
 ## D-035: Charts round-trip, series and grouping included
 
 **Date:** 2026-09-18 · **Status:** accepted (M35)

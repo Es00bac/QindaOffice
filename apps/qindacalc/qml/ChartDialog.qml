@@ -4,8 +4,8 @@ import QindaTK as Tk
 import QindaOffice.Calc
 
 // Chart creation: kind, title, data range, header toggles, a live preview
-// (QtCharts, when the suite was built with it), then Insert. The chart is
-// anchored on the cursor cell as a floating object.
+// (the custom ChartItem), then Insert. The chart is anchored on the cursor
+// cell as a floating object.
 Tk.Dialog {
     id: dialog
 
@@ -37,13 +37,14 @@ Tk.Dialog {
                 Tk.CheckBox { id: headerV; objectName: "chartHeaderV"; text: qsTr("First column names the categories") }
             }
         }
-        Loader {
+        ChartItem {
             objectName: "chartPreview"
-            active: dialog.host.chartsAvailable && dialog.visible
+            visible: dialog.host.chartsAvailable
             width: parent.width
             height: 260
-            source: dialog.host.chartsAvailable ? "ChartCanvas.qml" : ""
-            onLoaded: item.data = Qt.binding(function() { return dialog.host.chartSeries(dialog.spec()) })
+            inkColor: Tk.Theme.color.text
+            chartData: dialog.host.chartsAvailable ? dialog.host.chartSeries(dialog.spec())
+                                                   : ({})
         }
     }
 }

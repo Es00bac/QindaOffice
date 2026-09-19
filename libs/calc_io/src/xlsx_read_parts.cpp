@@ -251,4 +251,64 @@ QHash<quint64, CellComment> readComments(QXlsx::ZipReader &zip, const QString &s
     return out;
 }
 
+// One table part: attributes, columns, style info. Table-scoped filters are
+// NOT read (the sheet's AutoFilter stays singular — D-036).
+TableSpec readTablePart(const QByteArray &xml)
+{
+    TableSpec table;
+    QXmlStreamReader reader(xml);
+    while (!reader.atEnd()) {
+        const auto token = reader.readNext();
+        if (token != QXmlStreamReader::StartElement) {
+            continue;
+        }
+        const QStringView name = reader.name();
+        if (name == QLatin1String("table")) {
+            const auto attributes = reader.attributes();
+            table.name = attributes.value(QLatin1String("displayName")).toString();
+            if (table.name.isEmpty()) {
+                table.name = attributes.value(QLatin1String("name")).toString();
+            }
+            table.range = rangeFromText(attributes.value(QLatin1String("ref")).toString())
+                              .value_or(CellRange{});
+            // headerRowCount defaults to 1 when absent; totals to 0.
+            const QStringView header = attributes.value(QLatin1String("headerRowCount"));
+            table.headerRow = header.isEmpty() || header != QLatin1String("0");
+            table.totalsRow = attributes.value(QLatin1String("totalsRowCount")).toInt() > 0;
+        } else if (name == QLatin1String("tableColumn")) {
+            table.columnNames.append(reader.attributes().value(QLatin1String("name")).toString());
+        } else if (name == QLatin1String("tableStyleInfo")) {
+            const auto attributes = reader.attributes();
+            table.styleName = attributes.value(QLatin1String("name")).toString();
+            table.rowStripes = attributes.value(QLatin1String("showRowStripes")) != QLatin1String("0");
+            table.colStripes = attributes.value(QLatin1String("showColumnStripes")) == QLatin1String("1");
+        }
+    }
+    return table;
+}
+
+QList<TableSpec> readTables(QXlsx::ZipReader &zip, const QString &sheetPart)
+{
+    QList<TableSpec> out;
+    const int slash = sheetPart.lastIndexOf(QLatin1Char('/'));
+    const QString ownerDir = sheetPart.left(slash);
+    const QString relsPath = ownerDir + QStringLiteral("/_rels") + sheetPart.mid(slash)
+        + QStringLiteral(".rels");
+    const QHash<QString, QPair<QString, QString>> rels = readRels(zip, relsPath);
+    for (auto it = rels.constBegin(); it != rels.constEnd(); ++it) {
+        if (!it.value().first.endsWith(QLatin1String("/table"))) {
+            continue;
+        }
+        const QByteArray xml = zip.fileData(resolveTarget(ownerDir, it.value().second));
+        if (xml.isEmpty()) {
+            continue;
+        }
+        const TableSpec table = readTablePart(xml);
+        if (!table.name.isEmpty() && table.range.isValid()) {
+            out.append(table);
+        }
+    }
+    return out;
+}
+
 } // namespace QindaOffice::Calc::IO

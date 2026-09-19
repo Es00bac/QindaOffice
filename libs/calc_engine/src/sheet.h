@@ -91,6 +91,13 @@ public:
     void setCommentAt(const CellAddr &addr, const CellComment &comment);
     bool clearCommentAt(const CellAddr &addr);
 
+    // Structured tables (sheet_rules.h): range-addressed like every other
+    // rule, moved by structure.cpp and carried by undo/recovery.
+    [[nodiscard]] const QList<TableSpec> &tables() const { return m_tables; }
+    void setTables(QList<TableSpec> tables) { m_tables = std::move(tables); }
+    // The table covering `addr`, or nullptr (banding paints through this).
+    [[nodiscard]] const TableSpec *tableCovering(const CellAddr &addr) const;
+
     [[nodiscard]] qint32 styleIdAt(const CellAddr &addr) const;
     void setStyleIdAt(const CellAddr &addr, qint32 id);
     // The full sparse style map (undo snapshots must cover styles set on
@@ -108,6 +115,7 @@ private:
     QList<ValidationRule> m_validations;
     AutoFilter m_filter;
     QHash<quint64, CellComment> m_comments;
+    QList<TableSpec> m_tables;
 };
 
 } // namespace QindaOffice::Calc

@@ -41,5 +41,7 @@ void readSheetCharts(const QString &packagePath, Workbook *wb, qint32 sheetIndex
 [[nodiscard]] AutoFilter readAutoFilter(const QByteArray &xml);
 [[nodiscard]] QHash<quint64, CellComment> readComments(QXlsx::ZipReader &zip,
                                                        const QString &sheetPart);
+// Structured tables, resolved through the sheet's rels (table parts).
+[[nodiscard]] QList<TableSpec> readTables(QXlsx::ZipReader &zip, const QString &sheetPart);
 
 } // namespace QindaOffice::Calc::IO

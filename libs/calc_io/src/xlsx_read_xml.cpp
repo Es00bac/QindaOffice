@@ -251,6 +251,10 @@ void readSheetExtras(const QString &packagePath, Workbook *wb, qint32 sheetIndex
     if (!comments.isEmpty()) {
         sheet->setComments(comments);
     }
+    const QList<TableSpec> tables = readTables(zip, parts.at(sheetIndex));
+    if (!tables.isEmpty()) {
+        sheet->setTables(tables);
+    }
     if (skipped > 0) {
         qInfo("xlsx: sheet %d: skipped %d unmappable rule(s)", int(sheetIndex), skipped);
     }

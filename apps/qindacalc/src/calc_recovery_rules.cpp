@@ -220,4 +220,45 @@ QHash<quint64, CalcEng::CellComment> commentsFromJson(const QJsonArray &array)
     return comments;
 }
 
+QJsonArray tablesToJson(const QList<CalcEng::TableSpec> &tables)
+{
+    QJsonArray array;
+    for (const CalcEng::TableSpec &table : tables) {
+        array.append(QJsonObject{
+            {QStringLiteral("name"), table.name},
+            {QStringLiteral("range"), rangeToJson(table.range)},
+            {QStringLiteral("header"), table.headerRow},
+            {QStringLiteral("totals"), table.totalsRow},
+            {QStringLiteral("style"), table.styleName},
+            {QStringLiteral("rowStripes"), table.rowStripes},
+            {QStringLiteral("colStripes"), table.colStripes},
+            {QStringLiteral("columns"), QJsonArray::fromStringList(table.columnNames)},
+        });
+    }
+    return array;
+}
+
+QList<CalcEng::TableSpec> tablesFromJson(const QJsonArray &array)
+{
+    QList<CalcEng::TableSpec> tables;
+    for (const QJsonValue &entry : array) {
+        const QJsonObject item = entry.toObject();
+        CalcEng::TableSpec table;
+        table.name = item.value(QStringLiteral("name")).toString();
+        table.range = rangeFromJson(item.value(QStringLiteral("range")).toArray());
+        table.headerRow = item.value(QStringLiteral("header")).toBool(true);
+        table.totalsRow = item.value(QStringLiteral("totals")).toBool(false);
+        table.styleName = item.value(QStringLiteral("style")).toString();
+        table.rowStripes = item.value(QStringLiteral("rowStripes")).toBool(true);
+        table.colStripes = item.value(QStringLiteral("colStripes")).toBool(false);
+        for (const QJsonValue &column : item.value(QStringLiteral("columns")).toArray()) {
+            table.columnNames.append(column.toString());
+        }
+        if (table.range.isValid() && !table.name.isEmpty()) {
+            tables.append(table);
+        }
+    }
+    return tables;
+}
+
 } // namespace QindaOffice::Apps::QindaCalc

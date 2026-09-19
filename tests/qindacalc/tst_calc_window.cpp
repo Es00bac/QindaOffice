@@ -287,6 +287,62 @@ private slots:
         QCOMPARE(low.dataBar->fraction, 0.0);
     }
 
+    // The sample's six Excel tables import with names, ranges and style
+    // info, and the banding paints: a stripe row differs from its unbanded
+    // neighbour on screen.
+    void sampleTablesImportAndBand()
+    {
+        const QString path = qEnvironmentVariable("QQO_SAMPLE_XLSX");
+        if (path.isEmpty()) {
+            QSKIP("QQO_SAMPLE_XLSX not set");
+        }
+        Scene scene(QSize(1280, 800));
+        QVERIFY2(scene.ready(), qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        QVERIFY(scene.host.loadPath(path));
+        QTRY_VERIFY_WITH_TIMEOUT(!scene.host.isLoading(), 300000);
+        int tables = 0;
+        QStringList names;
+        for (qint32 s = 0; s < scene.doc->workbook()->sheetCount(); ++s) {
+            tables += scene.doc->workbook()->sheetAt(s).tables().size();
+            for (const Calc::TableSpec &table : scene.doc->workbook()->sheetAt(s).tables()) {
+                names.append(table.name);
+            }
+        }
+        QCOMPARE(tables, 6);
+        QVERIFY(names.contains(QStringLiteral("OrderLedger")));
+        QVERIFY(names.contains(QStringLiteral("MonthlyPerformance")));
+
+        // Orders!OrderLedger spans A7:R5007: header at sheet row 7, body
+        // from 8 — row 9 is banded, row 8 is not. Column C, mid-cell, away
+        // from the cursor. rowTopForTest is 1-based; add the grid's scene
+        // position for window coordinates.
+        const qint32 orders = scene.doc->workbook()->sheetIndex(QStringLiteral("Orders"));
+        QVERIFY(orders >= 0);
+        scene.host.setActiveSheet(orders);
+        const int yBase = int(scene.grid->mapToScene(QPointF(0, 0)).y());
+        const int yHeader = yBase + scene.grid->rowTopForTest(7) + 6;
+        const int yPlain = yBase + scene.grid->rowTopForTest(8) + 6;
+        const int yBanded = yBase + scene.grid->rowTopForTest(9) + 6;
+        QImage grab;
+        QTRY_VERIFY_WITH_TIMEOUT((grab = scene.window->grabWindow(), !grab.isNull()), 5000);
+        const QString grabDir = qEnvironmentVariable("QQO_GRAB_DIR");
+        if (!grabDir.isEmpty()) {
+            grab.save(grabDir + QStringLiteral("/qindacalc_orders.png"));
+        }
+        const int x = 200;
+        const QColor header = grab.pixelColor(x, yHeader);
+        const QColor plain = grab.pixelColor(x, yPlain);
+        const QColor banded = grab.pixelColor(x, yBanded);
+        qInfo() << "Orders table rows: header" << header << "plain" << plain << "banded" << banded;
+        // The header paints dark (the workbook's own navy wins over the
+        // table style, Excel's precedence), and a stripe row differs from
+        // its unbanded neighbour (the Medium2 band, #D9E1F2, is off-white).
+        QVERIFY(header.red() < 150 && header.green() < 150 && header.blue() < 150);
+        QVERIFY(plain != banded);
+        QVERIFY(banded.red() < 250 && banded.blue() > 200);
+    }
+
     // The sample's four chart parts import as floating chart objects on the
     // sheets the file put them on, with their kinds and series intact.
     void sampleChartsImport()
@@ -322,6 +378,55 @@ private slots:
         CalcHost host;
         host.spreadsheetDocument()->load(path, &error);
         QCOMPARE(host.charts().size(), 4);
+    }
+
+    // A chart window paints actual series pixels, not a blank panel (the
+    // custom ChartItem — D-036; the QtCharts ChartView path crashed under
+    // QGuiApplication before this existed).
+    void chartWindowsRender()
+    {
+        const QString path = qEnvironmentVariable("QQO_SAMPLE_XLSX");
+        if (path.isEmpty()) {
+            QSKIP("QQO_SAMPLE_XLSX not set");
+        }
+        Scene scene(QSize(1280, 800));
+        QVERIFY2(scene.ready(), qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        QVERIFY(scene.host.loadPath(path));
+        QTRY_VERIFY_WITH_TIMEOUT(!scene.host.isLoading(), 300000);
+        QQuickWindow *chartWindow = nullptr;
+        QTRY_VERIFY_WITH_TIMEOUT(
+            [&] {
+                for (QWindow *window : QGuiApplication::allWindows()) {
+                    if (window->objectName() == QLatin1String("chartWindow_0")) {
+                        chartWindow = qobject_cast<QQuickWindow *>(window);
+                        return true;
+                    }
+                }
+                return false;
+            }(),
+            10000);
+        QVERIFY(chartWindow != nullptr);
+        QImage grab;
+        QTRY_VERIFY_WITH_TIMEOUT((grab = chartWindow->grabWindow(), !grab.isNull()), 5000);
+        const QString grabDir = qEnvironmentVariable("QQO_GRAB_DIR");
+        if (!grabDir.isEmpty()) {
+            for (QWindow *window : QGuiApplication::allWindows()) {
+                if (window->objectName().startsWith(QLatin1String("chartWindow_"))) {
+                    qobject_cast<QQuickWindow *>(window)->grabWindow().save(
+                        grabDir + QStringLiteral("/qindacalc_%1.png").arg(window->objectName()));
+                }
+            }
+        }
+        // A rendered plot has several distinct colours in its centre (bars/
+        // lines, gridlines, panel); a blank panel has one.
+        QSet<QRgb> colours;
+        for (int y = grab.height() / 4; y < grab.height() * 3 / 4; y += 7) {
+            for (int x = grab.width() / 4; x < grab.width() * 3 / 4; x += 7) {
+                colours.insert(grab.pixel(x, y));
+            }
+        }
+        QVERIFY2(colours.size() > 3, qPrintable(QStringLiteral("colours: %1").arg(colours.size())));
     }
 
     // Dashboard!A1:P2 is a merged banner with a solid navy fill (FF142B44)
