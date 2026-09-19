@@ -61,8 +61,10 @@ QJsonObject styleToJson(const CalcEng::CellStyle &style)
     if (style.bold) out.insert(QStringLiteral("b"), true);
     if (style.italic) out.insert(QStringLiteral("i"), true);
     if (style.underline) out.insert(QStringLiteral("u"), true);
+    if (style.strikeout) out.insert(QStringLiteral("strike"), true);
     if (style.wrap) out.insert(QStringLiteral("wrap"), true);
     if (style.alignment != 0) out.insert(QStringLiteral("align"), style.alignment);
+    if (style.vAlign != 1) out.insert(QStringLiteral("valign"), style.vAlign);
     if (style.borders != 0) out.insert(QStringLiteral("borders"), style.borders);
     const auto rgb = [](const CalcEng::Rgb &c) {
         return QJsonArray{c.r, c.g, c.b};
@@ -82,8 +84,12 @@ CalcEng::CellStyle styleFromJson(const QJsonObject &object)
     style.bold = object.value(QStringLiteral("b")).toBool(false);
     style.italic = object.value(QStringLiteral("i")).toBool(false);
     style.underline = object.value(QStringLiteral("u")).toBool(false);
+    style.strikeout = object.value(QStringLiteral("strike")).toBool(false);
     style.wrap = object.value(QStringLiteral("wrap")).toBool(false);
     style.alignment = object.value(QStringLiteral("align")).toInt(0);
+    // Absent means centered: payloads from before vAlign existed must not
+    // flip every cell to the top.
+    style.vAlign = object.value(QStringLiteral("valign")).toInt(1);
     style.borders = object.value(QStringLiteral("borders")).toInt(0);
     const auto rgb = [&object](const QString &key) -> std::optional<CalcEng::Rgb> {
         const QJsonArray array = object.value(key).toArray();

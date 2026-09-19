@@ -191,6 +191,7 @@ void CalcHost::insertMenus()
         MenuNode::submenu(
             QStringLiteral("calcFormatMenu"), tr("F&ormat"),
             {a(ActionId::kFormatBold), a(ActionId::kFormatItalic), a(ActionId::kFormatUnderline),
+             a(ActionId::kFormatStrikeOut),
              a(ActionId::kFormatTextColor), a(ActionId::kCalcFillColor), MenuNode::separator(),
              a(ActionId::kFormatAlignLeft), a(ActionId::kFormatAlignCenter),
              a(ActionId::kFormatAlignRight), MenuNode::separator(),

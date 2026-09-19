@@ -5,6 +5,68 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-033: The full cell-style set round-trips xlsx, fills included
+
+**Date:** 2026-09-18 · **Status:** accepted (M33)
+
+**Context.** An 11-sheet production workbook rendered wrong in every
+styled region: `styleFromFormat` imported only numberFormat/bold/italic/
+fontSize/fontFamily/font-colour and the writer emitted the same subset —
+underline, solid fills, alignment, wrap and borders were lost in both
+directions, formula cells exported with the default format, styles set on
+EMPTY cells never reached the file, and the style dedup key
+cross-contaminated formats that differed only off the happy path.
+
+**Decision.**
+
+1. **calc_io is split per the M33 file map** (`xlsx_read.cpp`,
+   `xlsx_write.cpp`, `xlsx_style.*`; the bridge keeps its public API in
+   `xlsx_bridge.h`). The 531-line `xlsx_bridge.cpp` is gone.
+2. **The full CellStyle set maps both directions** (`xlsx_style.cpp`):
+   underline, strikeout (new field), solid fills, horizontal AND vertical
+   alignment (new `vAlign`), wrap and the border presence mask. Theme
+   +tint and legacy indexed colours resolve through the package's own
+   `xl/theme` palette (with the stock Office palette as fallback) via the
+   raw `XlsxColor` from `Format::property()` — QXlsx's public colour
+   accessors surface only literal RGB. Tint uses the ECMA-376 lumMod/
+   lumOff channel approximation. On write, colours serialize as resolved
+   RGB (QXlsx writes its own fixed theme; RGB renders identically
+   everywhere).
+3. **Solid fills follow the FILE's semantics, not QXlsx's naming.** QXlsx
+   swaps the roles on purpose ("Excel reverses the role of foreground and
+   background colours"): for a solid fill the file's `fgColor` — the one
+   Excel and LibreOffice paint — lands in `P_Fill_BgColor`, and only
+   `P_Fill_BgColor` is written back out as `fgColor`. Reading or setting
+   the public `patternForegroundColor()` loses the fill for every
+   external consumer (it is the file's `bgColor`, usually white). Both
+   directions of the bridge use `P_Fill_BgColor`, pinned by a package
+   inspection gate.
+4. **Formula cells keep their format** (`writeFormula(row, col, formula,
+   format, cached)` registers it) and **styled empty cells write** via
+   `writeBlank`; the v1 "Document vs Worksheet" note was stale. Dedup is
+   workbook-wide on QXlsx's `formatKey()` (covers every attribute).
+5. **Borders stay a 4-bit presence mask** (any real edge sets its bit;
+   export writes thin) — per-side styles/colours remain out of scope.
+   **Font sizes are whole-point both directions** for now: QXlsx reads
+   `<sz val>` with `toInt()` and writes the int getter, so half points
+   (10.5/13.5) arrive as engine-default and export truncated. Restoring
+   them needs the styles.xml xf/font parsing of the M34+ package readers.
+6. **New style fields ride the existing seams:** `StylePatch` and
+   recovery JSON gain `strikeout`/`vAlign` (absent-key tolerant; old
+   payloads decode vAlign as centre), the grid paints strikeout, vertical
+   alignment and `[Red]`-style number-format section colours (section
+   colour beats font colour, Excel's order), and the Format menu gains a
+   Strikethrough action reusing the shared `formatStrikeoutAction` id.
+
+**Consequences.** `tst_calc_io_styles` gates the round trip on value,
+formula and empty cells, custom codes, theme+tint resolution and the
+fgColor external contract; `sampleDashboardKeepsItsDarkTitle` flipped
+from red-by-design to green (the sample's navy banner fills in);
+`largeSheetStaysResponsive` stays green with the hoisted style cache.
+The paint-layer and import audit behind M32/M33 also produced the
+verified QXlsx API map the M34+ package readers build on (fill swap,
+write-only chart read, public DataValidation, private cond-format lists).
+
 ## D-032: Sheet tabs that render, and loads that don't freeze the window
 
 **Date:** 2026-09-18 · **Status:** accepted (M32)

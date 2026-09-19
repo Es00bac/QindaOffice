@@ -63,6 +63,8 @@ void CalcHost::createFormatActions()
               [](bool on) { StylePatch p; p.italic = on; return p; }, tr("Italic"));
     checkable(make(ActionId::kFormatUnderline, tr("&Underline"), "underline"),
               [](bool on) { StylePatch p; p.underline = on; return p; }, tr("Underline"));
+    checkable(make(ActionId::kFormatStrikeOut, tr("&Strikethrough"), "strikethrough"),
+              [](bool on) { StylePatch p; p.strikeout = on; return p; }, tr("Strikethrough"));
     const struct {
         const char *id;
         const char *text;
@@ -226,6 +228,7 @@ void CalcHost::syncFormatFromCursor()
     model->setChecked(QString::fromLatin1(ActionId::kFormatBold), style != nullptr && style->bold);
     model->setChecked(QString::fromLatin1(ActionId::kFormatItalic), style != nullptr && style->italic);
     model->setChecked(QString::fromLatin1(ActionId::kFormatUnderline), style != nullptr && style->underline);
+    model->setChecked(QString::fromLatin1(ActionId::kFormatStrikeOut), style != nullptr && style->strikeout);
     const int alignment = style != nullptr ? style->alignment : 0;
     model->setChecked(QString::fromLatin1(ActionId::kFormatAlignLeft), alignment == 0);
     model->setChecked(QString::fromLatin1(ActionId::kFormatAlignCenter), alignment == 1);

@@ -370,8 +370,14 @@ void SpreadsheetDocument::restyleRange(const CalcEng::CellRange &range,
             if (patch.underline) {
                 style.underline = *patch.underline;
             }
+            if (patch.strikeout) {
+                style.strikeout = *patch.strikeout;
+            }
             if (patch.alignment) {
                 style.alignment = *patch.alignment;
+            }
+            if (patch.vAlign) {
+                style.vAlign = *patch.vAlign;
             }
             if (patch.numberFormat) {
                 style.numberFormat = *patch.numberFormat;

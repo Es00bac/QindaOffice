@@ -245,8 +245,29 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
-### M32 gates (sheet tabs render; worker-thread loads)
+### M33 gates (full style round-trip)
 
+Automated by `tst_calc_io_styles` and `tst_calc_window`. Rationale in D-033.
+
+- [x] `fullStyleRoundTripsOnValueFormulaAndEmptyCells`: every CellStyle
+      field (custom number format, bold/italic/underline/strikeout, font
+      size/family, fg/bg, H+V alignment, wrap, border mask) survives on
+      all three cell kinds; the package carries the fill as `fgColor`
+      (the colour external consumers paint).
+- [x] `customNumberFormatsRoundTrip`: the sample workbook's own codes
+      (`0.0%;[Red](0.0%);–`, `$#,##0.00;[Red]($#,##0.00);–`) serialize.
+- [x] `themeColorsResolveToRgb`: a `theme="4" tint="-0.25"` colour
+      resolves through the package's own palette.
+- [x] `tst_calc_window::sampleDashboardKeepsItsDarkTitle` is GREEN (was
+      red by design at M32): the sample's navy banner fill imports.
+- [x] `recoverySnapshotRoundTripsTheWholeWorkbook` covers strikeout and
+      vAlign; old payloads decode vAlign as centre.
+- [x] `largeSheetStaysResponsive` stays green with workbook-wide style
+      dedup (`formatKey()`) and the hoisted format cache.
+- [ ] On the desktop: the sample workbook shows fills, wraps and banner
+      colours on every sheet (visual pass over the M32 state).
+
+### M32 gates (sheet tabs render; worker-thread loads)
 Automated by `tst_calc_window` (QindaOffice) and QindaTK's
 `qindatk_qml::ControlsStructure`. Rationale in D-032.
 

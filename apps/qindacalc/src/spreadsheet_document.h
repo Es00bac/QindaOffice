@@ -151,7 +151,9 @@ struct StylePatch {
     std::optional<bool> bold;
     std::optional<bool> italic;
     std::optional<bool> underline;
+    std::optional<bool> strikeout;
     std::optional<int> alignment;
+    std::optional<int> vAlign;
     std::optional<QString> numberFormat;
     std::optional<QString> fontFamily;
     std::optional<qreal> fontSize;

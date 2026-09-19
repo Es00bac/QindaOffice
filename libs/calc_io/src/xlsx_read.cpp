@@ -1,17 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// The xlsx read half of the QXlsx <-> calc_engine bridge (split out of the
+// old xlsx_bridge.cpp in M33): sheets, cells, shared-formula shifting,
+// styles, geometry, merges and defined names. Style mapping and colour
+// resolution live in xlsx_style.*.
+
 #include "xlsx_bridge.h"
 
 #include "xlsx_package.h"
+#include "xlsx_style.h"
 
 #include <QElapsedTimer>
 #include <QLoggingCategory>
 #include <QTemporaryDir>
 
 #include "eval.h"
-#include "number_format.h"
 
 #include <xlsxcell.h>
-#include <xlsxchart.h>
 #include <xlsxcellformula.h>
 #include <xlsxdocument.h>
 #include <xlsxformat.h>
@@ -69,74 +73,9 @@ qreal charWidthToPx(qreal chars)
     return chars * 7.0 + 5.0;
 }
 
-qreal pxToCharWidth(qreal px)
-{
-    return qMax(1.0, (px - 5.0) / 7.0);
-}
-
 qreal ptToPx(qreal pt)
 {
     return pt * 96.0 / 72.0;
-}
-
-qreal pxToPt(qreal px)
-{
-    return px * 72.0 / 96.0;
-}
-
-CellStyle styleFromFormat(const QXlsx::Format &format)
-{
-    CellStyle style;
-    // Built-in formats may carry only the numFmtId (empty format string).
-    style.numberFormat = !format.numberFormat().isEmpty()
-        ? format.numberFormat()
-        : NumberFormat::builtinCode(format.numberFormatIndex());
-    style.bold = format.fontBold();
-    style.italic = format.fontItalic();
-    style.fontSize = format.fontSize();
-    style.fontFamily = format.fontName();
-    if (format.fontColor().isValid()) {
-        const QColor c = format.fontColor();
-        style.fg = Rgb{quint8(c.red()), quint8(c.green()), quint8(c.blue())};
-    }
-    return style;
-}
-
-QXlsx::Format formatFromStyle(const CellStyle &style, QXlsx::Format base = {})
-{
-    QXlsx::Format format = base;
-    if (!style.numberFormat.isEmpty()
-        && style.numberFormat.compare(QLatin1String("General"), Qt::CaseInsensitive) != 0) {
-        // Built-in formats serialize reliably through their numFmtId; custom
-        // codes go through the format-code path (font attributes persist on
-        // both, but QXlsx 1.5.1 drops custom codes on write).
-        static const QHash<QString, int> kBuiltin = {
-            {QStringLiteral("0"), 1}, {QStringLiteral("0.00"), 2},
-            {QStringLiteral("#,##0"), 3}, {QStringLiteral("#,##0.00"), 4},
-            {QStringLiteral("0%"), 9}, {QStringLiteral("0.00%"), 10},
-            {QStringLiteral("0.00E+00"), 11}, {QStringLiteral("mm-dd-yy"), 14},
-            {QStringLiteral("d-mmm-yy"), 15}, {QStringLiteral("d-mmm"), 16},
-            {QStringLiteral("mmm-yy"), 17}, {QStringLiteral("h:mm AM/PM"), 18},
-            {QStringLiteral("h:mm:ss AM/PM"), 19}, {QStringLiteral("h:mm"), 20},
-            {QStringLiteral("h:mm:ss"), 21}, {QStringLiteral("m/d/yy h:mm"), 22},
-            {QStringLiteral("@"), 49},
-        };
-        const auto it = kBuiltin.constFind(style.numberFormat);
-        if (it != kBuiltin.constEnd()) {
-            format.setNumberFormatIndex(it.value());
-        } else {
-            format.setNumberFormat(style.numberFormat);
-        }
-    }
-    format.setFontBold(style.bold);
-    format.setFontItalic(style.italic);
-    if (style.fontSize > 0) {
-        format.setFontSize(style.fontSize);
-    }
-    if (!style.fontFamily.isEmpty()) {
-        format.setFontName(style.fontFamily);
-    }
-    return format;
 }
 
 Value valueFromCell(const std::shared_ptr<QXlsx::Cell> &cell, bool date1904)
@@ -173,7 +112,6 @@ Value valueFromCell(const std::shared_ptr<QXlsx::Cell> &cell, bool date1904)
     }
 }
 
-
 // AGENT-NOTE: QXlsx parses <definedName> into WorkbookPrivate::definedNamesList
 // but exposes no public reader for it (AbstractOOXmlFile::d_ptr is protected),
 // so the names are read straight out of xl/workbook.xml. ZipReader is QXlsx's
@@ -202,7 +140,8 @@ void readDefinedNames(const QString &path, Workbook *out)
             continue;
         }
         // Print areas and similar built-ins are spelled _xlnm.*; they are
-        // not user names and the engine has nothing to do with them.
+        // not user names and the engine has nothing to do with them (M37
+        // reads them into per-sheet print fields).
         if (name.startsWith(QLatin1String("_xlnm"), Qt::CaseInsensitive)) {
             continue;
         }
@@ -215,9 +154,22 @@ void readDefinedNames(const QString &path, Workbook *out)
     }
 }
 
-} // namespace
+// The theme palette for the whole read, from xl/theme/theme1.xml when the
+// package has one (writers may omit it; the Office default then applies).
+ThemePalette paletteForPackage(const QString &path)
+{
+    QXlsx::ZipReader zip(path);
+    if (!zip.exists()) {
+        return ThemePalette::officeDefault();
+    }
+    const QByteArray xml = zip.fileData(QStringLiteral("xl/theme/theme1.xml"));
+    if (xml.isEmpty()) {
+        return ThemePalette::officeDefault();
+    }
+    return themePaletteFromXml(xml);
+}
 
-bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
+bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palette, QString *error)
 {
     if (out == nullptr) {
         if (error != nullptr) {
@@ -235,6 +187,11 @@ bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
     }
     // One recalc for the whole workbook, at the end (Workbook::beginBulkLoad).
     out->beginBulkLoad();
+    // AGENT-NOTE: style dedup is workbook-wide and keyed by QXlsx's own
+    // formatKey, which covers EVERY attribute — the old hand-built key let
+    // bold-only and italic-only cells collide, and a per-sheet table minted
+    // duplicate styles for one format used on two sheets.
+    QHash<QByteArray, qint32> styleIds;
     for (int sheetIndex = 0; sheetIndex < names.size(); ++sheetIndex) {
         if (!doc.selectSheet(sheetIndex)) {
             continue;
@@ -244,7 +201,6 @@ bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
             continue;
         }
         Sheet &sheet = out->addSheet(names.at(sheetIndex));
-        QHash<QString, qint32> styleIds;
         QElapsedTimer sheetTimer;
         sheetTimer.start();
 
@@ -323,26 +279,11 @@ bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
                     out->setCellValue(sheetIndex, addr,
                                       valueFromCell(cell, date1904));
                 }
-                // Import every cell that carries a real format record; the
-                // dedup key must cover all imported attributes, not just the
-                // number-format string (bold-only and italic-only cells
-                // shared a key before and cross-contaminated styles).
                 const QXlsx::Format format = cell->format();
                 if (!format.isEmpty()) {
-                    const CellStyle imported = styleFromFormat(format);
-                    const QString key = imported.numberFormat + QLatin1Char('\x1f')
-                        + (imported.bold ? QLatin1String("B") : QString())
-                        + (imported.italic ? QLatin1String("I") : QString())
-                        + (imported.underline ? QLatin1String("U") : QString())
-                        + QString::number(imported.fontSize) + QLatin1Char('\x1f')
-                        + imported.fontFamily + QLatin1Char('\x1f')
-                        + (imported.fg.has_value()
-                               ? QString::number((*imported.fg).r * 65536
-                                                     + (*imported.fg).g * 256
-                                                     + (*imported.fg).b)
-                               : QString());
+                    const QByteArray key = format.formatKey();
                     if (!styleIds.contains(key)) {
-                        styleIds.insert(key, out->addStyle(imported));
+                        styleIds.insert(key, out->addStyle(styleFromFormat(format, palette)));
                     }
                     sheet.setStyleIdAt(addr, styleIds.value(key));
                 }
@@ -383,6 +324,15 @@ bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
     return true;
 }
 
+} // namespace
+
+bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
+{
+    // No package in hand (the document came from the caller): the stock
+    // palette is the best available reading of its theme colours.
+    return readXlsxImpl(doc, out, ThemePalette::officeDefault(), error);
+}
+
 bool readXlsxFile(const QString &path, Workbook *out, QString *error)
 {
     // AGENT-GUARD: QXlsx cannot follow absolute part names in the package
@@ -407,125 +357,7 @@ bool readXlsxFile(const QString &path, Workbook *out, QString *error)
     // best) and missing from the recalc index. readXlsx only appends sheets,
     // so seeding the name table first is safe.
     readDefinedNames(source, out);
-    return readXlsx(doc, out, error);
-}
-
-std::unique_ptr<QXlsx::Document> writeXlsx(const Workbook &wb, QString *error)
-{
-    Q_UNUSED(error);
-    auto doc = std::make_unique<QXlsx::Document>();
-    QHash<qint32, QXlsx::Format> formats;
-    for (qint32 s = 0; s < wb.sheetCount(); ++s) {
-        const Sheet &sheet = wb.sheetAt(s);
-        if (s == 0 && !doc->sheetNames().isEmpty()) {
-            doc->renameSheet(doc->sheetNames().first(), sheet.name());
-        } else {
-            doc->addSheet(sheet.name());
-        }
-        doc->selectSheet(sheet.name());
-        QXlsx::Worksheet *worksheet =
-            static_cast<QXlsx::Worksheet *>(doc->sheet(sheet.name()));
-        for (auto it = sheet.cells().constBegin(); it != sheet.cells().constEnd(); ++it) {
-            const quint64 key = it.key();
-            const CellAddr addr{qint32(key & 0xffffffffu), qint32(key >> 32)};
-            const Cell &cell = it.value();
-            const qint32 styleId = sheet.styleIdAt(addr);
-            const QXlsx::Format format =
-                styleId != 0 && wb.style(styleId) != nullptr
-                ? formatFromStyle(*wb.style(styleId))
-                : QXlsx::Format();
-            const int row = addr.row + 1;
-            const int col = addr.col + 1;
-            // AGENT-NOTE: value writes go through Document (it registers the
-            // cell format into the workbook style table; Worksheet::write
-            // drops it). Formulas use the Worksheet API - QXlsx has no
-            // Document::writeFormula - so formula cells keep the default
-            // format in v1 (documented limitation). The engine's evaluated
-            // value is written as the cached result: consumers that do not
-            // recalculate on load (LibreOffice's default for xlsx) still
-            // show correct data.
-            if (cell.hasFormula()) {
-                const double cached = isNumber(cell.value) ? std::get<double>(cell.value) : 0.0;
-                worksheet->writeFormula(row, col, QStringLiteral("=") + cell.formula,
-                                        QXlsx::Format(), cached);
-            } else if (isNumber(cell.value)) {
-                doc->write(row, col, std::get<double>(cell.value), format);
-            } else if (isText(cell.value)) {
-                doc->write(row, col, std::get<QString>(cell.value), format);
-            } else if (isBool(cell.value)) {
-                doc->write(row, col, std::get<bool>(cell.value), format);
-            } else if (isErr(cell.value)) {
-                doc->write(row, col, errText(std::get<Err>(cell.value)), format);
-            }
-        }
-        for (const CellRange &merge : sheet.merges()) {
-            doc->mergeCells(QXlsx::CellRange(merge.topLeft.row + 1, merge.topLeft.col + 1,
-                                             merge.bottomRight.row + 1,
-                                             merge.bottomRight.col + 1));
-        }
-        for (const qint32 col : sheet.sizedColumns()) {
-            worksheet->setColumnWidth(col + 1, col + 1, pxToCharWidth(sheet.columnWidth(col)));
-        }
-        for (const qint32 row : sheet.sizedRows()) {
-            worksheet->setRowHeight(row + 1, row + 1, pxToPt(sheet.rowHeight(row)));
-        }
-    }
-    // Floating charts (plan section 7.2): one chart part per spec, anchored
-    // at its cell. QXlsx renders clustered bars for StackedBar (its chart
-    // API has no grouping control) - a documented export limitation.
-    for (const ChartSpec &chart : wb.charts) {
-        const CellRange range = parseChartRange(chart.rangeText);
-        if (!range.isValid() || chart.sheet < 0 || chart.sheet >= wb.sheetCount()) {
-            continue;
-        }
-        doc->selectSheet(wb.sheetName(chart.sheet));
-        auto *worksheet = static_cast<QXlsx::Worksheet *>(doc->sheet(wb.sheetName(chart.sheet)));
-        if (worksheet == nullptr) {
-            continue;
-        }
-        QXlsx::Chart *qxChart =
-            worksheet->insertChart(chart.anchorRow + 1, chart.anchorCol + 1,
-                                   QSize(chart.widthPx, chart.heightPx));
-        if (qxChart == nullptr) {
-            continue;
-        }
-        qxChart->addSeries(QXlsx::CellRange(range.topLeft.row + 1, range.topLeft.col + 1,
-                                            range.bottomRight.row + 1, range.bottomRight.col + 1),
-                           worksheet, chart.headerH, chart.headerV);
-        QXlsx::Chart::ChartType type = QXlsx::Chart::CT_BarChart;
-        switch (chart.kind) {
-        case ChartSpec::Kind::Line: type = QXlsx::Chart::CT_LineChart; break;
-        case ChartSpec::Kind::Area: type = QXlsx::Chart::CT_AreaChart; break;
-        case ChartSpec::Kind::Pie: type = QXlsx::Chart::CT_PieChart; break;
-        case ChartSpec::Kind::Scatter: type = QXlsx::Chart::CT_ScatterChart; break;
-        case ChartSpec::Kind::Bar:
-        case ChartSpec::Kind::StackedBar: type = QXlsx::Chart::CT_BarChart; break;
-        }
-        qxChart->setChartType(type);
-        qxChart->setChartTitle(chart.title);
-    }
-    // Named ranges: the canonical text form is already the xlsx spelling
-    // ("Sheet1!$A$1:$A$5"), so the workbook's own defineName takes it as is.
-    const QHash<QString, RangeRef> &names = wb.namedRanges();
-    for (auto it = names.constBegin(); it != names.constEnd(); ++it) {
-        static_cast<void>(doc->workbook()->defineName(it.key(), rangeRefText(it.value())));
-    }
-    return doc;
-}
-
-bool writeXlsxFile(const Workbook &wb, const QString &path, QString *error)
-{
-    std::unique_ptr<QXlsx::Document> doc = writeXlsx(wb, error);
-    if (doc == nullptr) {
-        return false;
-    }
-    if (!doc->saveAs(path)) {
-        if (error != nullptr) {
-            *error = QStringLiteral("cannot write %1").arg(path);
-        }
-        return false;
-    }
-    return true;
+    return readXlsxImpl(doc, out, paletteForPackage(source), error);
 }
 
 } // namespace QindaOffice::Calc::IO

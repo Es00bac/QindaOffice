@@ -83,6 +83,8 @@ private slots:
         doc.applyInput({0, 0}, QStringLiteral("=Sheet1!A1*3"));
         StylePatch patch;
         patch.bold = true;
+        patch.strikeout = true;
+        patch.vAlign = 0;
         doc.restyleRange({{0, 0}, {0, 0}}, patch, QStringLiteral("Bold"));
         Calc::RangeRef total;
         total.sheet = QStringLiteral("Sheet1");
@@ -98,7 +100,12 @@ private slots:
         QVERIFY2(restored.loadRecovery(payload, &error), qPrintable(error));
         QCOMPARE(restored.workbook()->sheetCount(), 2);
         QCOMPARE(Calc::toText(restored.workbook()->cellValue(1, 0, 0)), QStringLiteral("30"));
-        QVERIFY(restored.workbook()->style(restored.workbook()->sheetAt(1).styleIdAt({0, 0}))->bold);
+        const Calc::CellStyle *restyledStyle =
+            restored.workbook()->style(restored.workbook()->sheetAt(1).styleIdAt({0, 0}));
+        QVERIFY(restyledStyle != nullptr);
+        QVERIFY(restyledStyle->bold);
+        QVERIFY(restyledStyle->strikeout);
+        QCOMPARE(restyledStyle->vAlign, 0);
         QVERIFY(restored.workbook()->namedRange(QStringLiteral("TOTAL")).has_value());
         QCOMPARE(restored.workbook()->charts.size(), 1);
     }
@@ -235,9 +242,10 @@ private slots:
         }
     }
 
-    // P1 (M33) gate, red until then: Dashboard!A1:P2 is a merged banner with
-    // a solid navy fill (FF142B44) and white bold text. The pixel is sampled
-    // off-glyph, away from the cursor, so only the fill can satisfy it.
+    // Dashboard!A1:P2 is a merged banner with a solid navy fill (FF142B44)
+    // and white bold text. The pixel is sampled off-glyph, away from the
+    // cursor, so only the fill can satisfy it. (Red until M33 landed cell
+    // fills; now the proof they round-trip.)
     void sampleDashboardKeepsItsDarkTitle()
     {
         const QString path = qEnvironmentVariable("QQO_SAMPLE_XLSX");
@@ -259,7 +267,6 @@ private slots:
         const QImage grab = scene.window->grabWindow();
         const QColor a1 = grab.pixelColor(1000, 140);
         qInfo() << "Dashboard A1:P2 pixel" << a1;
-        QEXPECT_FAIL("", "cell fills/borders land in M33 (P1)", Continue);
         QVERIFY(a1.red() < 100 && a1.green() < 100 && a1.blue() < 100);
     }
 

@@ -155,12 +155,11 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                 }
             }
             if (cellData != nullptr && !isBlank(cellData->value)) {
-                const QString text =
+                const FormattedText formatted =
                     NumberFormat(style != nullptr && !style->numberFormat.isEmpty()
                                      ? style->numberFormat
                                      : QStringLiteral("General"))
-                        .format(cellData->value)
-                        .text;
+                        .format(cellData->value);
                 QFont cellFont = baseFont;
                 if (style != nullptr) {
                     if (!style->fontFamily.isEmpty()) {
@@ -172,6 +171,7 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                     cellFont.setBold(style->bold);
                     cellFont.setItalic(style->italic);
                     cellFont.setUnderline(style->underline);
+                    cellFont.setStrikeOut(style->strikeout);
                 }
                 if (conditional.bold) {
                     cellFont.setBold(*conditional.bold);
@@ -185,13 +185,21 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                 } else if (conditional.foreground) {
                     p.setPen(QColor(conditional.foreground->r, conditional.foreground->g,
                                     conditional.foreground->b));
+                } else if (formatted.colour.has_value()) {
+                    // A [Red]-style section colour in the number format wins
+                    // over the font colour (Excel's order).
+                    p.setPen(QColor((*formatted.colour).r, (*formatted.colour).g,
+                                    (*formatted.colour).b));
                 } else if (style != nullptr && style->fg.has_value()) {
                     p.setPen(QColor((*style->fg).r, (*style->fg).g, (*style->fg).b));
                 } else {
                     p.setPen(kInk);
                 }
                 // Explicit alignment wins; otherwise numbers right, text left.
-                Qt::Alignment alignment = Qt::AlignVCenter;
+                Qt::Alignment alignment = style != nullptr
+                    ? (style->vAlign == 0 ? Qt::AlignTop
+                                          : style->vAlign == 2 ? Qt::AlignBottom : Qt::AlignVCenter)
+                    : Qt::AlignVCenter;
                 if (style != nullptr && style->alignment != 0) {
                     alignment |= style->alignment == 1 ? Qt::AlignHCenter : Qt::AlignRight;
                 } else {
@@ -201,10 +209,10 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                 }
                 int flags = int(alignment);
                 if (style != nullptr && style->wrap) {
-                    flags = (flags & ~int(Qt::AlignVCenter)) | int(Qt::AlignTop)
+                    flags = (flags & ~int(Qt::AlignVertical_Mask)) | int(Qt::AlignTop)
                         | int(Qt::TextWordWrap);
                 }
-                p.drawText(cell.adjusted(4, 1, -4, -1), flags, text);
+                p.drawText(cell.adjusted(4, 1, -4, -1), flags, formatted.text);
             }
             // A comment marker: the small corner triangle every spreadsheet
             // uses. The text itself is the hover tooltip.
