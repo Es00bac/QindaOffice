@@ -107,12 +107,19 @@ CalcEng::CellStyle styleFromJson(const QJsonObject &object)
 // --- ChartSpec --------------------------------------------------------
 QJsonObject chartToJson(const CalcEng::ChartSpec &chart)
 {
+    QJsonArray series;
+    for (const CalcEng::ChartSeriesSpec &ser : chart.series) {
+        series.append(QJsonObject{{QStringLiteral("name"), ser.name},
+                                  {QStringLiteral("cat"), ser.catRange},
+                                  {QStringLiteral("val"), ser.valRange}});
+    }
     return QJsonObject{
         {QStringLiteral("kind"), int(chart.kind)},
         {QStringLiteral("title"), chart.title},
         {QStringLiteral("range"), chart.rangeText},
         {QStringLiteral("headerH"), chart.headerH},
         {QStringLiteral("headerV"), chart.headerV},
+        {QStringLiteral("series"), series},
         {QStringLiteral("sheet"), chart.sheet},
         {QStringLiteral("row"), chart.anchorRow},
         {QStringLiteral("col"), chart.anchorCol},
@@ -130,6 +137,13 @@ CalcEng::ChartSpec chartFromJson(const QJsonObject &object)
     chart.rangeText = object.value(QStringLiteral("range")).toString();
     chart.headerH = object.value(QStringLiteral("headerH")).toBool(false);
     chart.headerV = object.value(QStringLiteral("headerV")).toBool(false);
+    for (const QJsonValue &entry : object.value(QStringLiteral("series")).toArray()) {
+        const QJsonObject ser = entry.toObject();
+        chart.series.append(CalcEng::ChartSeriesSpec{
+            ser.value(QStringLiteral("name")).toString(),
+            ser.value(QStringLiteral("cat")).toString(),
+            ser.value(QStringLiteral("val")).toString()});
+    }
     chart.sheet = object.value(QStringLiteral("sheet")).toInt(0);
     chart.anchorRow = object.value(QStringLiteral("row")).toInt(0);
     chart.anchorCol = object.value(QStringLiteral("col")).toInt(0);

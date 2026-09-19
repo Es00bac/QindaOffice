@@ -201,12 +201,15 @@ void rewriteNames(Workbook &book, const StructureEdit &edit)
     }
 }
 
-// Charts carry a range and an anchor cell on one sheet; both move with the
-// edit, and a chart whose whole data range is removed goes with it.
+// Charts carry a range and/or series references plus an anchor cell on one
+// sheet; all move with the edit. A series whose range dies is dropped, and
+// a chart is dropped when its last data source (range and series alike)
+// goes with the band.
 void rewriteCharts(Workbook &book, const StructureEdit &edit)
 {
     const Band band = bandOf(edit);
     const bool rows = editsRows(edit);
+    const QString editedSheetName = book.sheetName(edit.sheet);
     QList<ChartSpec> kept;
     kept.reserve(book.charts.size());
     for (ChartSpec spec : std::as_const(book.charts)) {
@@ -214,22 +217,51 @@ void rewriteCharts(Workbook &book, const StructureEdit &edit)
             kept.append(spec);
             continue;
         }
-        CellRange range = parseChartRange(spec.rangeText);
-        if (range.isValid()) {
-            qint32 lo = rows ? range.topLeft.row : range.topLeft.col;
-            qint32 hi = rows ? range.bottomRight.row : range.bottomRight.col;
-            if (!movedSpan(lo, hi, band)) {
-                continue; // the chart's data is gone
+        if (!spec.rangeText.isEmpty()) {
+            CellRange range = parseChartRange(spec.rangeText);
+            if (range.isValid()) {
+                qint32 lo = rows ? range.topLeft.row : range.topLeft.col;
+                qint32 hi = rows ? range.bottomRight.row : range.bottomRight.col;
+                if (!movedSpan(lo, hi, band)) {
+                    spec.rangeText.clear(); // the chart's range died
+                } else {
+                    if (rows) {
+                        range.topLeft.row = lo;
+                        range.bottomRight.row = hi;
+                    } else {
+                        range.topLeft.col = lo;
+                        range.bottomRight.col = hi;
+                    }
+                    spec.rangeText = addrText(range.topLeft) + QLatin1Char(':')
+                        + addrText(range.bottomRight);
+                }
             }
-            if (rows) {
-                range.topLeft.row = lo;
-                range.bottomRight.row = hi;
-            } else {
-                range.topLeft.col = lo;
-                range.bottomRight.col = hi;
+        }
+        for (ChartSeriesSpec &series : spec.series) {
+            for (QString *refText : {&series.catRange, &series.valRange}) {
+                const ParseResult parsed = parseFormula(*refText);
+                if (!parsed.root || parsed.root->kind != Node::Kind::Ref) {
+                    continue;
+                }
+                RangeRef ref = parsed.root->ref;
+                // The parser keeps a quoted sheet's display spelling; the
+                // comparison and the re-serialized text want the name.
+                ref.sheet = unquotedSheetName(ref.sheet);
+                if (!adjustRef(ref, edit, false, editedSheetName)) {
+                    refText->clear(); // the reference died with the band
+                } else {
+                    *refText = rangeRefText(ref);
+                }
             }
-            spec.rangeText = addrText(range.topLeft) + QLatin1Char(':')
-                + addrText(range.bottomRight);
+        }
+        spec.series.erase(std::remove_if(spec.series.begin(), spec.series.end(),
+                                         [](const ChartSeriesSpec &series) {
+                                             return series.valRange.isEmpty();
+                                         }),
+                          spec.series.end());
+        const bool hasRange = parseChartRange(spec.rangeText).isValid();
+        if (!hasRange && spec.series.isEmpty()) {
+            continue; // no data source left
         }
         qint32 &anchor = rows ? spec.anchorRow : spec.anchorCol;
         const qint32 moved = movedIndex(anchor, band);

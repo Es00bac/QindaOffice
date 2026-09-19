@@ -287,6 +287,43 @@ private slots:
         QCOMPARE(low.dataBar->fraction, 0.0);
     }
 
+    // The sample's four chart parts import as floating chart objects on the
+    // sheets the file put them on, with their kinds and series intact.
+    void sampleChartsImport()
+    {
+        const QString path = qEnvironmentVariable("QQO_SAMPLE_XLSX");
+        if (path.isEmpty()) {
+            QSKIP("QQO_SAMPLE_XLSX not set");
+        }
+        SpreadsheetDocument doc;
+        QString error;
+        QVERIFY2(doc.load(path, &error), qPrintable(error));
+        QCOMPARE(doc.workbook()->charts.size(), 4);
+        const qint32 dashboard = doc.workbook()->sheetIndex(QStringLiteral("Dashboard"));
+        const qint32 forecast = doc.workbook()->sheetIndex(QStringLiteral("Forecast"));
+        QVERIFY(dashboard >= 0 && forecast >= 0);
+        int dashboardCharts = 0;
+        int forecastCharts = 0;
+        int seriesTotal = 0;
+        for (const Calc::ChartSpec &chart : doc.workbook()->charts) {
+            QVERIFY(!chart.series.isEmpty());
+            QVERIFY(!chart.title.isEmpty());
+            seriesTotal += chart.series.size();
+            if (chart.sheet == dashboard) {
+                ++dashboardCharts;
+            } else if (chart.sheet == forecast) {
+                ++forecastCharts;
+            }
+        }
+        QCOMPARE(dashboardCharts, 2);
+        QCOMPARE(forecastCharts, 2);
+        QCOMPARE(seriesTotal, 6);
+        // And the host exposes them for the chart windows.
+        CalcHost host;
+        host.spreadsheetDocument()->load(path, &error);
+        QCOMPARE(host.charts().size(), 4);
+    }
+
     // Dashboard!A1:P2 is a merged banner with a solid navy fill (FF142B44)
     // and white bold text. The pixel is sampled off-glyph, away from the
     // cursor, so only the fill can satisfy it. (Red until M33 landed cell

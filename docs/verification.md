@@ -245,6 +245,26 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M35 gates (chart import + StackedBar export)
+
+Automated by `tst_calc_io_charts`, `tst_calc_structure` and
+`tst_calc_window`. Rationale in D-035.
+
+- [x] `chartImportReadsKindsAndGrouping`: a StackedBar chart part reads
+      back as StackedBar with title, anchor and both series' cat/val refs.
+- [x] `stackedBarExportWritesGrouping`: the rangeText path's package
+      carries `<c:grouping val="stacked"/>` (post-pass).
+- [x] `chartsSurviveRoundTrip`: a series-authored chart generates its
+      part + drawing anchor (content-types, rels, `<drawing r:id>`
+      inspected) and reimports with kind, title and series intact.
+- [x] `chartSeriesFollowTheEdit`: row insert moves series refs and the
+      anchor; removing the data band drops the series and then the chart.
+- [x] `sampleChartsImport` (QQO_SAMPLE_XLSX): four charts land — two on
+      Dashboard, two on Forecast — with titles and six series; the host
+      exposes all four for the chart windows.
+- [ ] On the desktop: the Dashboard and Forecast chart windows render
+      their series live (ChartView over the imported refs).
+
 ### M34 gates (rules & annotations round-trip)
 
 Automated by `tst_calc_io_rules`, `tst_calc_rules` and `tst_calc_window`.

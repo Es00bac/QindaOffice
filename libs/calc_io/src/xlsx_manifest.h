@@ -7,6 +7,8 @@
 // touching the vendored library (the write-side mirror of xlsx_package.h's
 // read-side normalization).
 
+#include "chart_spec.h"
+
 #include <QByteArray>
 #include <QHash>
 #include <QString>
@@ -23,6 +25,21 @@ struct PatchManifest {
         QByteArray commentsXml;  // the comments part's content
     };
     QList<SheetPatch> sheets;
+
+    // Charts. Grouping-only patches target a chart part QXlsx already wrote
+    // (its grouping serialization is commented out upstream); generated
+    // charts carry the full spec + anchor and land as new parts with an
+    // anchor merged into the sheet's drawing.
+    struct ChartPatch {
+        QString sheetPart;      // the sheet the chart is anchored on
+        QString qxlsxChartPart; // set for grouping-only patches ("xl/charts/chartN.xml")
+        bool stacked = false;
+        bool generate = false;  // true → generate part + anchor from `spec`
+        ChartSpec spec;
+        int toCol = 0;          // anchor's bottom-right, computed from the
+        int toRow = 0;          // sheet's geometry while the model is in hand
+    };
+    QList<ChartPatch> charts;
 };
 
 } // namespace QindaOffice::Calc::IO

@@ -5,6 +5,65 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-035: Charts round-trip, series and grouping included
+
+**Date:** 2026-09-18 · **Status:** accepted (M35)
+
+**Context.** Opening a workbook with charts dropped every one of them on
+the floor: QXlsx's chart read is write-oriented (no public series accessor,
+grouping parsed into dead branches), and the bridge never looked at chart
+parts. Exported stacked bars silently became clustered (QXlsx's grouping
+serialization is commented out upstream), and the engine's single-range
+`ChartSpec.rangeText` could not even SAY an imported chart's shape — a
+shared category column with scattered value columns.
+
+**Decision.**
+
+1. **ChartSpec grows an explicit series list.** `ChartSeriesSpec{name,
+   catRange, valRange}` (xlsx reference spelling, sheet-qualified) rides
+   `ChartSpec.series`; a non-empty list wins for rendering and export,
+   and rangeText+headerH/V stays the UI authoring path (ChartDialog
+   untouched). Structural edits move series ranges through the same
+   `adjustRef` as formulas (a series whose range dies is dropped; a chart
+   with no data source left goes with it); the recovery payload carries
+   them.
+2. **Chart import is a direct package read** (`xlsx_read_charts.cpp`):
+   sheet rels → drawing anchors (twoCellAnchor/oneCellAnchor) →
+   graphicFrame → drawing rels → chart part — always by relationship,
+   never by path convention (a real producer uses `xl/drawings/charts/`).
+   Plot type and grouping map to Kind (`barChart`+`stacked` → StackedBar),
+   title and per-series tx/cat/val references read directly. Mixed charts
+   read as their first plot type (documented).
+3. **The write splits by authoring path.** rangeText charts keep the
+   QXlsx path, with a manifest entry sending StackedBar's
+   `<c:grouping val="stacked"/>` into the saved chart part in the
+   post-pass. Series-authored charts travel whole in the manifest: the
+   post-pass generates the chart part (`xlsx_write_charts.cpp`), mints a
+   fresh rId, and merges a graphicFrame anchor into the sheet's drawing —
+   appending to a QXlsx-created drawing when one exists, creating drawing
+   part + rels + content-types + `<drawing r:id>` otherwise. All anchors
+   and part names are asserted (D-012).
+4. **References carry a display spelling.** `RangeRef.sheet` keeps the
+   file's quoting ("'Data'"), and every consumer that compares against
+   workbook names must unquote first — `unquotedSheetName()` (value.h)
+   now exists next to `rangeRefText`, and the chart series paths use it
+   (eval's `resolveSheet` had the same logic inline). Two bugs this
+   surfaced are worth recording: a QStringView taken from
+   `QXmlStreamReader::name()` dangles once the reader advances (anchor
+   parsing must compare against compile-time literals), and a generated
+   part that uses a prefix WITHOUT declaring it is namespace-invalid —
+   the `a:` namespace on the chart part root, or every reader stops at
+   the title element.
+
+**Consequences.** `tst_calc_io_charts` gates kind/grouping import,
+   multi-series refs, the StackedBar grouping on export (both write
+   paths), and the full write→read trip including package inspection;
+   `chartSeriesFollowTheEdit` pins the structural moves;
+   `sampleChartsImport` proves the sample workbook's four charts land on
+   their sheets with titles and six series total. xlsx_read_xml.cpp was
+   split (validations/autofilter/comments moved to `xlsx_read_parts.cpp`,
+   helpers to `xlsx_parts.*`) to stay inside the line budget.
+
 ## D-034: Conditional formats, validations, filters and comments round-trip
 
 **Date:** 2026-09-18 · **Status:** accepted (M34)

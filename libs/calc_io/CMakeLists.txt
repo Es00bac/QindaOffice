@@ -10,14 +10,20 @@ add_library(calc_io STATIC
     src/xlsx_manifest.h
     src/xlsx_package.cpp
     src/xlsx_package.h
+    src/xlsx_parts.cpp
+    src/xlsx_parts.h
     src/xlsx_post.cpp
     src/xlsx_post.h
     src/xlsx_read.cpp
+    src/xlsx_read_charts.cpp
+    src/xlsx_read_parts.cpp
     src/xlsx_read_xml.cpp
     src/xlsx_read_xml.h
     src/xlsx_style.cpp
     src/xlsx_style.h
     src/xlsx_write.cpp
+    src/xlsx_write_charts.cpp
+    src/xlsx_write_charts.h
     src/xlsx_write_xml.cpp
     src/xlsx_write_xml.h
     src/xlsx_xml.cpp

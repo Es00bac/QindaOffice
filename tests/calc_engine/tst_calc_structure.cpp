@@ -53,6 +53,7 @@ private slots:
     void sortRangeMovesRowsAndShiftsFormulas();
     void sortRangeKeepsHeaderAndSinksBlanks();
     void recalcAllRefreshesOffDiagonalCells();
+    void chartSeriesFollowTheEdit();
 };
 
 void CalcStructureTest::insertRowsMovesCellsAndFormulas()
@@ -284,6 +285,37 @@ void CalcStructureTest::recalcAllRefreshesOffDiagonalCells()
     book.recalcAll();
 
     QCOMPARE(numberAt(book, 0, at(0, 1)), 12.0);
+}
+
+void CalcStructureTest::chartSeriesFollowTheEdit()
+{
+    Workbook book;
+    book.addSheet(QStringLiteral("Data"));
+    for (int r = 0; r < 4; ++r) {
+        book.setCellInput(0, at(r, 0), QString::number((r + 1) * 10));
+        book.setCellInput(0, at(r, 1), QString::number((r + 1) * 4));
+    }
+    ChartSpec chart;
+    chart.kind = ChartSpec::Kind::Line;
+    chart.title = QStringLiteral("t");
+    chart.sheet = 0;
+    chart.anchorRow = 10;
+    chart.series.append(ChartSeriesSpec{QStringLiteral("A"),
+                                        QStringLiteral("'Data'!$A$1:$A$4"),
+                                        QStringLiteral("'Data'!$B$1:$B$4")});
+    book.charts.append(chart);
+
+    // Insert two rows above the data: the series and the anchor all move
+    // (the canonical spelling drops the quotes on a bare sheet name).
+    applyStructureEdit(book, {StructureOp::InsertRows, 0, 0, 2});
+    QCOMPARE(book.charts.size(), 1);
+    QCOMPARE(book.charts.at(0).series.at(0).catRange, QStringLiteral("Data!$A$3:$A$6"));
+    QCOMPARE(book.charts.at(0).series.at(0).valRange, QStringLiteral("Data!$B$3:$B$6"));
+    QCOMPARE(book.charts.at(0).anchorRow, 12);
+
+    // Remove every data row: the series dies, and the chart goes with it.
+    applyStructureEdit(book, {StructureOp::RemoveRows, 0, 2, 4});
+    QCOMPARE(book.charts.size(), 0);
 }
 
 QTEST_MAIN(CalcStructureTest)

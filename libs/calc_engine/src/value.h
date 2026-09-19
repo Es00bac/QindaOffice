@@ -120,5 +120,10 @@ struct RangeRef {
 [[nodiscard]] QString colName(qint32 col); // 0 -> "A", 25 -> "Z", 26 -> "AA"
 [[nodiscard]] std::optional<qint32> colFromName(const QString &name);
 [[nodiscard]] QString rangeRefText(const RangeRef &ref);
+// The name to compare against Workbook::sheetIndex: RangeRef.sheet keeps the
+// file's display spelling, quotes included ("'Data'!A1" → "'Data'"), so a
+// comparison without this never matches (eval.cpp's resolveSheet unquotes
+// the same way).
+[[nodiscard]] QString unquotedSheetName(QString name);
 
 } // namespace QindaOffice::Calc

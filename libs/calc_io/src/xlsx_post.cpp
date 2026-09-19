@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "xlsx_post.h"
 
+#include "xlsx_write_charts.h"
 #include "xlsx_xml.h"
 
 #include <KArchiveDirectory>
 #include <KArchiveFile>
 #include <KZip>
+
+#include <QDir>
+#include <QRegularExpression>
+#include <QXmlStreamReader>
 
 #include <functional>
 
@@ -39,6 +44,56 @@ QString relsPathFor(const QString &part)
     const int slash = part.lastIndexOf(QLatin1Char('/'));
     return part.left(slash) + QStringLiteral("/_rels") + part.mid(slash)
         + QStringLiteral(".rels");
+}
+
+// Inserts `fragment` before the first of the candidates (tag fragments like
+// "<legacyDrawing" or "</worksheet>"). Returns false when none exists.
+bool insertBeforeFirst(QByteArray *xml, const QStringList &candidates, const QByteArray &fragment)
+{
+    int earliest = -1;
+    for (const QString &candidate : candidates) {
+        const int found = xml->indexOf(candidate.toUtf8());
+        if (found >= 0 && (earliest < 0 || found < earliest)) {
+            earliest = found;
+        }
+    }
+    if (earliest < 0) {
+        return false;
+    }
+    xml->insert(earliest, fragment);
+    return true;
+}
+
+// The largest id="N" attribute value in a drawing part (+1 for the next one).
+int nextShapeId(const QByteArray &drawingXml)
+{
+    int maxId = 0;
+    static const QRegularExpression idAttr(QStringLiteral("id=\"(\\d+)\""));
+    auto it = idAttr.globalMatch(QString::fromUtf8(drawingXml));
+    while (it.hasNext()) {
+        maxId = qMax(maxId, it.next().captured(1).toInt());
+    }
+    return maxId + 1;
+}
+
+// The drawing part a sheet's rels point at, or empty.
+QString drawingPartFor(const QByteArray &sheetRelsXml)
+{
+    QXmlStreamReader reader(sheetRelsXml);
+    while (!reader.atEnd()) {
+        if (reader.readNext() != QXmlStreamReader::StartElement
+            || reader.name() != QLatin1String("Relationship")) {
+            continue;
+        }
+        const auto attributes = reader.attributes();
+        if (attributes.value(QLatin1String("Type")).toString()
+            .endsWith(QLatin1String("/drawing"))) {
+            // Targets here are relative to xl/worksheets.
+            return QDir::cleanPath(QStringLiteral("xl/worksheets/")
+                                   + attributes.value(QLatin1String("Target")).toString());
+        }
+    }
+    return {};
 }
 
 } // namespace
@@ -108,6 +163,116 @@ bool applyPatchManifest(const QString &path, const PatchManifest &manifest, QStr
             appendContentTypeOverride(&parts[QStringLiteral("[Content_Types].xml")],
                                       QStringLiteral("/") + patch.commentsPart,
                                       QStringLiteral("application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"));
+        }
+    }
+
+    // ---- charts ------------------------------------------------------------
+    int chartPartCount = 0;
+    int drawingPartCount = 0;
+    for (auto it = parts.constBegin(); it != parts.constEnd(); ++it) {
+        if (it.key().startsWith(QLatin1String("xl/charts/chart"))) {
+            ++chartPartCount;
+        } else if (it.key().startsWith(QLatin1String("xl/drawings/drawing"))
+                   && it.key().endsWith(QLatin1String(".xml"))) {
+            ++drawingPartCount;
+        }
+    }
+    for (const PatchManifest::ChartPatch &patch : manifest.charts) {
+        if (!patch.generate) {
+            // QXlsx wrote the chart but cannot say "stacked" (its grouping
+            // serialization is commented out upstream).
+            if (patch.stacked) {
+                if (!parts.contains(patch.qxlsxChartPart)) {
+                    if (error != nullptr) {
+                        *error = QStringLiteral("post-pass: %1 missing").arg(patch.qxlsxChartPart);
+                    }
+                    return false;
+                }
+                QByteArray &xml = parts[patch.qxlsxChartPart];
+                const QByteArray anchor = QByteArrayLiteral("<c:barDir val=\"col\"/>");
+                if (!xml.contains(anchor)) {
+                    if (error != nullptr) {
+                        *error = QStringLiteral("post-pass: no barDir anchor in %1")
+                                     .arg(patch.qxlsxChartPart);
+                    }
+                    return false;
+                }
+                xml.replace(anchor, anchor + QByteArrayLiteral("<c:grouping val=\"stacked\"/>"));
+            }
+            continue;
+        }
+        // A series-authored chart: a new chart part plus a graphicFrame
+        // anchor merged into the sheet's drawing (created when absent).
+        const QString chartPart = QStringLiteral("xl/charts/chart%1.xml").arg(++chartPartCount);
+        parts.insert(chartPart, chartPartXml(patch.spec));
+        appendContentTypeOverride(
+            &parts[QStringLiteral("[Content_Types].xml")], QStringLiteral("/") + chartPart,
+            QStringLiteral("application/vnd.openxmlformats-officedocument.drawingml.chart+xml"));
+
+        const QString sheetRelsPath = relsPathFor(patch.sheetPart);
+        QByteArray sheetRelsXml = parts.value(sheetRelsPath);
+        QString drawingPart = drawingPartFor(sheetRelsXml);
+        if (drawingPart.isEmpty()) {
+            drawingPart = QStringLiteral("xl/drawings/drawing%1.xml").arg(++drawingPartCount);
+            parts.insert(drawingPart,
+                         QByteArrayLiteral(
+                             "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+                             "<xdr:wsDr xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\">"
+                             "</xdr:wsDr>"));
+            appendContentTypeOverride(
+                &parts[QStringLiteral("[Content_Types].xml")], QStringLiteral("/") + drawingPart,
+                QStringLiteral("application/vnd.openxmlformats-officedocument.drawing+xml"));
+            const QString drawingRid = appendRelationship(
+                &sheetRelsXml,
+                QStringLiteral("http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
+                QStringLiteral("../drawings/") + drawingPart.mid(drawingPart.lastIndexOf(QLatin1Char('/')) + 1));
+            if (drawingRid.isEmpty()) {
+                if (error != nullptr) {
+                    *error = QStringLiteral("post-pass: broken rels part %1").arg(sheetRelsPath);
+                }
+                return false;
+            }
+            // <drawing> precedes legacyDrawing/picture/tableParts/extLst in
+            // the worksheet schema; the close tag is the fallback anchor.
+            if (!insertBeforeFirst(&parts[patch.sheetPart],
+                                   {QStringLiteral("<legacyDrawing"), QStringLiteral("<picture"),
+                                    QStringLiteral("<tableParts"), QStringLiteral("<extLst"),
+                                    QStringLiteral("</worksheet>")},
+                                   QByteArrayLiteral("<drawing r:id=\"") + drawingRid.toUtf8()
+                                       + QByteArrayLiteral("\"/>"))) {
+                if (error != nullptr) {
+                    *error = QStringLiteral("post-pass: no drawing anchor in %1")
+                                 .arg(patch.sheetPart);
+                }
+                return false;
+            }
+        }
+        parts.insert(sheetRelsPath, sheetRelsXml);
+
+        const QString drawingRelsPath = relsPathFor(drawingPart);
+        QByteArray drawingRelsXml = parts.value(drawingRelsPath);
+        const QString chartRid = appendRelationship(
+            &drawingRelsXml,
+            QStringLiteral("http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"),
+            // Relative to xl/drawings, chart parts live one level up.
+            QStringLiteral("../charts/") + chartPart.mid(chartPart.lastIndexOf(QLatin1Char('/')) + 1));
+        if (chartRid.isEmpty()) {
+            if (error != nullptr) {
+                *error = QStringLiteral("post-pass: broken rels part %1").arg(drawingRelsPath);
+            }
+            return false;
+        }
+        parts.insert(drawingRelsPath, drawingRelsXml);
+
+        QByteArray &drawingXml = parts[drawingPart];
+        const QByteArray frame = graphicFrameAnchorXml(chartRid, nextShapeId(drawingXml),
+                                                       patch.spec.anchorCol, patch.spec.anchorRow,
+                                                       patch.toCol, patch.toRow);
+        if (!insertBeforeFirst(&drawingXml, {QStringLiteral("</xdr:wsDr>")}, frame)) {
+            if (error != nullptr) {
+                *error = QStringLiteral("post-pass: malformed drawing %1").arg(drawingPart);
+            }
+            return false;
         }
     }
 

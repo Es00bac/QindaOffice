@@ -10,9 +10,22 @@
 
 #include "value.h"
 
+#include <QList>
 #include <QString>
 
 namespace QindaOffice::Calc {
+
+// One chart series as an imported file spells it: explicit category and
+// value ranges (sheet-qualified, xlsx reference syntax) plus the series
+// title. Imported charts are usually NOT one contiguous block (a shared
+// category column with scattered value columns), which the single-range
+// form cannot say.
+struct ChartSeriesSpec {
+    QString name;
+    QString catRange;
+    QString valRange;
+    bool operator==(const ChartSeriesSpec &) const = default;
+};
 
 struct ChartSpec {
     enum class Kind { Bar, StackedBar, Line, Area, Pie, Scatter };
@@ -21,6 +34,9 @@ struct ChartSpec {
     QString rangeText; // "A1:B5" form, on `sheet`
     bool headerH = false; // first row carries series/categories names
     bool headerV = false;
+    // A non-empty series list wins for rendering and export; rangeText +
+    // headerH/V remains the UI authoring path (ChartDialog).
+    QList<ChartSeriesSpec> series;
     qint32 sheet = 0;
     int anchorRow = 0; // floating-object anchor cell
     int anchorCol = 0;

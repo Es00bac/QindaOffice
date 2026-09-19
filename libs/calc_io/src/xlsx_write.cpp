@@ -275,12 +275,44 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
             }
         }
     }
-    // Floating charts (plan section 7.2): one chart part per spec, anchored
-    // at its cell. QXlsx renders clustered bars for StackedBar (its chart
-    // API has no grouping control) - the M35 post-pass inserts the grouping.
+    // Floating charts (plan section 7.2). Charts with an explicit series
+    // list (imported, usually multi-range) cannot go through QXlsx's
+    // single-range chart API — they travel in the manifest and the
+    // post-pass generates their parts and drawing anchors. rangeText charts
+    // keep the QXlsx path; StackedBar gets its grouping in the post-pass
+    // (QXlsx's grouping serialization is commented out upstream).
+    int qxlsxChartCount = 0;
     for (const ChartSpec &chart : wb.charts) {
+        if (chart.sheet < 0 || chart.sheet >= wb.sheetCount()) {
+            continue;
+        }
+        if (manifest != nullptr && !chart.series.isEmpty()) {
+            const Sheet &sheet = wb.sheetAt(chart.sheet);
+            PatchManifest::ChartPatch patch;
+            patch.generate = true;
+            patch.spec = chart;
+            patch.sheetPart = QStringLiteral("xl/worksheets/sheet%1.xml").arg(chart.sheet + 1);
+            // The anchor's far corner, from the pixel size against the
+            // sheet's actual geometry.
+            int width = 0;
+            int col = chart.anchorCol;
+            while (col < Sheet::kMaxCols && width < chart.widthPx) {
+                width += int(sheet.columnWidth(col));
+                ++col;
+            }
+            int height = 0;
+            int row = chart.anchorRow;
+            while (row < Sheet::kMaxRows && height < chart.heightPx) {
+                height += int(sheet.rowHeight(row));
+                ++row;
+            }
+            patch.toCol = col;
+            patch.toRow = row;
+            manifest->charts.append(patch);
+            continue;
+        }
         const CellRange range = parseChartRange(chart.rangeText);
-        if (!range.isValid() || chart.sheet < 0 || chart.sheet >= wb.sheetCount()) {
+        if (!range.isValid()) {
             continue;
         }
         doc->selectSheet(wb.sheetName(chart.sheet));
@@ -308,6 +340,16 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
         }
         qxChart->setChartType(type);
         qxChart->setChartTitle(chart.title);
+        ++qxlsxChartCount;
+        if (manifest != nullptr && chart.kind == ChartSpec::Kind::StackedBar) {
+            PatchManifest::ChartPatch patch;
+            patch.stacked = true;
+            patch.sheetPart = QStringLiteral("xl/worksheets/sheet%1.xml").arg(chart.sheet + 1);
+            // QXlsx names chart parts xl/charts/chart<N>.xml in insertion
+            // order (xlsxdocument.cpp) — the post-pass asserts existence.
+            patch.qxlsxChartPart = QStringLiteral("xl/charts/chart%1.xml").arg(qxlsxChartCount);
+            manifest->charts.append(patch);
+        }
     }
     // Named ranges: the canonical text form is already the xlsx spelling
     // ("Sheet1!$A$1:$A$5"), so the workbook's own defineName takes it as is.
@@ -340,7 +382,8 @@ bool writeXlsxFile(const Workbook &wb, const QString &path, QString *error)
         return false;
     }
     // The manifest-only parts land after QXlsx finished the package.
-    if (!manifest.sheets.isEmpty() && !applyPatchManifest(path, manifest, error)) {
+    if ((!manifest.sheets.isEmpty() || !manifest.charts.isEmpty())
+        && !applyPatchManifest(path, manifest, error)) {
         return false;
     }
     return true;

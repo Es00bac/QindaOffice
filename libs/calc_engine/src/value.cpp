@@ -192,4 +192,12 @@ QString rangeRefText(const RangeRef &ref)
     return out;
 }
 
+QString unquotedSheetName(QString name)
+{
+    if (name.startsWith(QLatin1Char('\'')) && name.endsWith(QLatin1Char('\''))) {
+        name = name.mid(1, name.size() - 2).replace(QStringLiteral("''"), QStringLiteral("'"));
+    }
+    return name;
+}
+
 } // namespace QindaOffice::Calc
