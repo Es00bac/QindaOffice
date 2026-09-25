@@ -29,7 +29,7 @@ Tk.AppWindow {
 
         Tk.Grid {
             objectName: "launcherAppGrid"
-            columns: "repeat(2, minmax(220, 1fr))"
+            columns: "repeat(auto-fill, minmax(220, 1fr))"
             gap: Tk.Theme.space.sm
             Repeater {
                 model: window.launcher.apps
@@ -40,7 +40,11 @@ Tk.AppWindow {
                     objectName: "appCard_" + modelData.id
                     interactive: modelData.available
                     padding: Tk.Theme.space.md
-                    Accessible.role: Accessible.Button
+                    // AGENT-NOTE: Tk.Box ignores a non-interactive box for
+                    // accessibility; a card for an app that is not installed
+                    // must still be read out ("… is not installed").
+                    Accessible.role: modelData.available ? Accessible.Button : Accessible.StaticText
+                    Accessible.ignored: false
                     Accessible.name: modelData.name + " — " + modelData.role
                     Accessible.description: modelData.available
                         ? modelData.blurb : qsTr("%1 is not installed").arg(modelData.name)

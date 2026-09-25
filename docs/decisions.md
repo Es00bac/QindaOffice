@@ -5,6 +5,166 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-042: QindaMail is a document-less window over one mail service per process
+
+**Date:** 2026-09-25 · **Status:** accepted (M44, `apps/qindamail`)
+
+**Context.** Every suite app so far is one `Core::Document` per ordinary
+window (rule 1, ADR-0110). Mail, calendar and tasks are not documents: they
+are one local store and a set of accounts that every window of the app shows
+at the same time, and they must work with no account at all. Protocol
+exchanges (IMAP, POP3, SMTP, CalDAV, iCalendar feeds, EWS, Graph) are
+asynchronous and need credentials applied before each request and refreshed
+after an authentication failure (QindaTK D-189, D-043 here).
+
+**Decision.**
+
+1. **A main window is a `MailHost : DocumentHost` without a document.**
+   Save/Save As/Print stay disabled (D-011); the menu, the panel export, the
+   fail-closed menu bar and the per-window `ActionModel` are the shell's.
+   `fileNewAction` keeps its id and becomes *New Window* (Ctrl+Shift+N);
+   *New Message* takes Ctrl+N. `DocumentHost` gained two protected hooks for
+   such hosts, `openWithoutDocument(path)` and `reusableWithoutDocument()`,
+   and a virtual `title()`, so `mailto:`/`webcal:`/`.ics`/`.eml` paths (also
+   those a second launch hands over) reach the open window instead of a
+   document loader.
+2. **One `MailService` per process**, shared by every main window
+   (`MailHost.service`): the `LocalProductivityStore` file, the attachment
+   store, `AccountStore`, `MailSecrets`, `AutoConfig` and one
+   `AccountRuntime` per configured account. Folder, selection and search
+   state live on the service, so all main windows show the same mailbox.
+3. **One credential path.** `AccountRuntime::run(service, provider, start,
+   done)` is the only way a remote request starts: keyring secret or OAuth
+   token first, then the request, then one retry with a refreshed credential
+   after an authentication rejection; a missing or dead sign-in is status
+   `needsSignIn` and never reaches the server. IMAP gets one provider per
+   mailbox (the provider applies results to its `mailbox`).
+4. **Composers are secondary `Window`s** owned by the main window's QML, one
+   draft each, reached through `MailHost.composeRequested(draft)`; drafts are
+   store records, sending is `MailService.send(draft)`.
+5. **"On this computer" always exists** (id `local`, not in
+   `accounts.json`): Inbox (opened `.eml` files), Drafts, Outbox, Sent,
+   Archive, Trash, the default calendar and the task board — the app is
+   useful with no account, and POP3 accounts file their Sent copies there.
+6. **The Sent copy is filed exactly once**: Gmail and Microsoft 365 file it
+   themselves; other IMAP accounts APPEND to their Sent mailbox; POP3 (or a
+   failed APPEND) keeps a local copy.
+
+**Consequences.** QindaMail reuses the shell unchanged apart from the three
+hooks, and every account kind goes through one tested credential path.
+Main windows cannot show different folders at once (a second window is a
+second view of the same mailbox). Calendar/tasks views read service state
+too, so a second window's calendar follows the first's range. The launcher
+card, the QML (ribbon, panes, dialogs, composer) and the fixtures are the
+app lead's part of M44.
+
+## D-044: Exchange and Microsoft 365 calendars are host adapters over the store
+
+**Date:** 2026-09-25 · **Status:** accepted (M43)
+
+**Context.** QindaMail's `exchange` and `microsoft365` accounts need their
+calendars, and neither speaks CalDAV: on-premises Exchange offers Exchange
+Web Services, Microsoft 365 offers Microsoft Graph, and Microsoft is
+retiring EWS in Exchange Online, so one protocol cannot serve both. The
+toolkit implements only the standard protocols and leaves hosted services
+to host adapters with the same surface (QindaTK D-189 item 3); its
+CalDAV provider already fixed what the calendar views and the store expect
+(QindaTK D-186–D-188).
+
+**Decision.**
+
+1. **Two adapters, one surface.** `libs/mail_exchange` has
+   `EwsCalendarProvider` (EWS SOAP 1.1, on-premises Exchange 2010 SP1+) and
+   `GraphCalendarProvider` (Graph v1.0, Microsoft 365) over a shared
+   `HostedCalendarProvider`: `CalDavProvider`'s invokables, signals, result
+   states and record fields, plus `listCalendars`. The views, the projection
+   and the store do not know which service an event came from. The library
+   depends on QindaTK and Qt Network only; secrets arrive via `setSecret`, so
+   it does not depend on `office_mail` (D-043).
+2. **One sync engine, a backend per service.** A worker-thread engine makes
+   CalDavJobs' decisions — remote change by version (`ChangeKey` /
+   `@odata.etag`), local edit by the toolkit's own `ICal::digest`, pushes
+   only for clean conflicts — over a backend with `list`/`fetch`/`create`/
+   `update`/`remove`. Each request runs sequentially on a job-local
+   `QNetworkAccessManager` (HTTP/2, system proxy) and the result is applied
+   on the GUI thread, the D-186 shape.
+3. **Writes are conditional and minimal.** EWS `UpdateItem` carries the
+   stored `ChangeKey` with `NeverOverwrite`; Graph `PATCH`/`DELETE` carry
+   `If-Match`. A `remoteBaseline` of the last synced mapping makes a write
+   send only the changed fields, so HTML bodies, attendees and categories the
+   adapters do not map are never rewritten. After a write the item is read
+   back and its canonical mapping adopted. Anything the server cannot hold
+   (a 29–31 monthly rule, restoring a deleted occurrence, editing a
+   relative pattern, a read-only item) becomes a conflict with a reason,
+   never a silent loss.
+4. **Windows zones from Qt's CLDR table.** `QTimeZone`'s
+   `windowsIdToDefaultIanaId`/`ianaIdToWindowsId` (CLDR `windowsZones.xml`,
+   the call QindaTK's CalDAV codec uses) maps both ways, preferring the
+   record's current zone; no second table is shipped. Times travel as UTC
+   instants and become wall time in the event's zone.
+5. **Exchange patterns map to the rule subset only where the semantics are
+   equal.** Exchange's month-end and 29 February behaviour and its
+   relative patterns become `recurrenceRaw` (an equivalent RRULE), read-only.
+6. **Credentials never leave their origin.** https or loopback (or an
+   explicit `allowInsecureAuth`), no redirects, same-origin
+   `@odata.nextLink` only, bounded paging that fails rather than syncs half
+   a window, secrets redacted everywhere (D-187 there).
+
+**Consequences.** QindaMail's Exchange and Microsoft 365 calendars reuse
+every calendar view unchanged; the app lane registers the two types in its
+QML module and feeds tokens from `office_mail`. Graph knows deleted
+occurrences only inside the sync window, EWS addresses plain occurrences by
+`InstanceIndex`, and Graph notifies attendees when the organizer moves a
+meeting; docs/mail.md lists these limits. Qualification against real
+servers is WP-089/WP-090, deferred with the toolkit's hosted accounts; the
+tests run against in-process EWS and Graph endpoints on 127.0.0.1.
+
+## D-043: Hosted accounts sign in with PKCE over loopback and keep secrets in the keyring
+
+**Date:** 2026-09-25 · **Status:** accepted (M43, `office_mail`)
+
+**Context.** QindaMail needs Gmail and Microsoft 365 / Outlook.com, which
+sign in with OAuth 2.0 (Microsoft refuses passwords for IMAP/SMTP), plus the
+password and app-password services. The toolkit implements only the
+protocols and leaves sign-in, discovery and the keyring to the host (QindaTK
+D-189). A native app cannot keep a client secret, the suite has no client ID
+it could ship, and a password or refresh token in a config file or a log is
+a credential leak.
+
+**Decision.**
+
+1. **Authorization Code + PKCE over a loopback redirect** (RFC 8252 §7.3,
+   RFC 7636 S256): a one-shot `QTcpServer` on `127.0.0.1` with an ephemeral
+   port, a CSPRNG verifier and `state`, and a flow that ends on a state
+   mismatch without exchanging the code. The browser gets a static page;
+   the query is never echoed.
+2. **Tokens per resource.** Microsoft issues one token per resource, so the
+   session consents to every resource at authorization and fetches the Graph
+   (or EWS) token by a refresh-token grant with that resource's scopes;
+   Google's one token covers mail and calendar. `invalid_grant` means the
+   refresh token is dead: it is wiped and the host must re-authorize.
+3. **No shipped client IDs.** `OAuthClientRegistry` reads the account's own
+   ID, then `$XDG_CONFIG_HOME/qindaoffice/mail/oauth-clients.json`, then a
+   distributor's `/usr/share/qindaoffice/oauth-clients.json`; with none it
+   says so and the dialog offers an app password for Gmail mail.
+4. **Secrets live only in the keyring** (QtKeychain, service
+   `qindaoffice-mail`, key `<accountId>/<service>`). No file backend, no
+   `insecureFallback`; a missing secret service is an honest error. The
+   account file refuses secret-looking keys, and no QML-visible call or
+   result carries a secret: QML hands them to the providers' write-only
+   `setSecret` through `MailSecrets.applySecret` and
+   `OAuth2Session.applyAccessToken`.
+5. **Discovery is https-only**: presets, then autoconfig.&lt;domain&gt;,
+   .well-known, the Mozilla ISPDB (Thunderbird's order without its http and
+   MX steps); only the provider's own server sees the full address.
+
+**Consequences.** Every hosted sign-in needs a client ID the user or the
+distribution registers (documented in `docs/mail.md`). Tests run the whole
+flow against local fake servers and assert that tokens appear in no log
+output, result or file. Accounts on unusual servers without autoconfig
+are entered by hand; MX-based detection and CalDAV principal discovery are
+later work.
+
 ## D-041: The ribbon is a third view of the same commands
 
 **Date:** 2026-09-25 · **Status:** accepted (M40)

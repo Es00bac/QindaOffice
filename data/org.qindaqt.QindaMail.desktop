@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=QindaMail
+GenericName=Mail and Calendar
+Comment=Mail, calendar and tasks in an ordinary QindaQt window — part of QindaQt Office
+Exec=qindamail %U
+Icon=org.qindaqt.QindaMail
+Terminal=false
+Categories=Qt;Office;Network;Email;Calendar;
+MimeType=message/rfc822;text/calendar;x-scheme-handler/mailto;x-scheme-handler/webcal;
+StartupNotify=true
+StartupWMClass=qindamail

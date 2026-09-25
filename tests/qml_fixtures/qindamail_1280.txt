@@ -1,0 +1,326 @@
+QQuickRootItem#MailWindow
+  MenuBarFromModel#officeMenuBar
+  QQuickControl#ApplicationWindowContentControl
+    QQuickContentItem#ApplicationWindow
+      QQuickItem#appContent
+        QQuickItem#mailContent
+          Flex#mailRoot
+            NavigationRail#mailRail
+              QQuickItem#navigationGroup_workspaces [hidden]
+                QQuickButton#navigationButton_workspaces [hidden]
+              QQuickItem#navigationItem_calendar
+                QQuickButton#navigationButton_calendar
+              QQuickItem#navigationItem_mail
+                QQuickButton#navigationButton_mail
+              QQuickItem#navigationItem_tasks
+                QQuickButton#navigationButton_tasks
+            QQuickContentItem#Splitter [hidden]
+              Box#calendarSidePane [hidden]
+                Button#calendarNewEvent [hidden]
+                Button#calendarSubscribe [hidden]
+                CalendarPicker#calendarMiniMonth [hidden]
+                  Grid#calendarGrid [hidden]
+                  Label#calendarMonthLabel [hidden]
+                Caption#sectionCount_Calendars [hidden]
+                Flex#calendarToggle_local [hidden]
+                Overline#sectionTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              CalendarGridView#mailCalendarGrid [hidden]
+                CalendarGridAllDay#calendarGridAllDay [hidden]
+                Notice#calendarGridNotice [hidden]
+                  IconButton#noticeDismiss [hidden]
+                  Label#noticeText [hidden]
+                  Label#noticeTitle [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                QQuickItem#calendarGridHeader [hidden]
+                Scroll#calendarGridScroll [hidden]
+                  QQuickItem#calendarGridDay_2026-09-20 [hidden]
+                  QQuickItem#calendarGridDay_2026-09-21 [hidden]
+                  QQuickItem#calendarGridDay_2026-09-22 [hidden]
+                  QQuickItem#calendarGridDay_2026-09-23 [hidden]
+                  QQuickItem#calendarGridDay_2026-09-24 [hidden]
+                  QQuickItem#calendarGridDay_2026-09-25 [hidden]
+                  QQuickItem#calendarGridDay_2026-09-26 [hidden]
+                  QQuickItem#calendarGridGutter [hidden]
+                  QQuickItem#calendarGridNowLine [hidden]
+              Flex#calendarHeader [hidden]
+                Button#calendarToday [hidden]
+                Heading#calendarTitle [hidden]
+                IconButton#calendarNext [hidden]
+                IconButton#calendarPrevious [hidden]
+                Segmented#calendarMode [hidden]
+                  QQuickAbstractButton#segment_0 [hidden]
+                    QQuickRectangle#segmentFocus_0 [hidden]
+                  QQuickAbstractButton#segment_1 [hidden]
+                    QQuickRectangle#segmentFocus_1 [hidden]
+                  QQuickAbstractButton#segment_2 [hidden]
+                    QQuickRectangle#segmentFocus_2 [hidden]
+                  QQuickAbstractButton#segment_3 [hidden]
+                    QQuickRectangle#segmentFocus_3 [hidden]
+              QQuickRectangle#boxFocusRing [hidden]
+            QQuickRectangle#boxFocusRing [hidden]
+            QQuickRectangle#splitterHandle [hidden]
+              QQuickMouseArea#splitterHitTarget [hidden]
+              QQuickRectangle#splitterFocusRing [hidden]
+            Splitter#mailSplitter
+              QQuickContentItem#Splitter
+                FolderPane#folderPane
+                  Button#folderAddAccount
+                  Button#folderNewMessage
+                  QQuickListView#folderList
+                    Flex#folderAccount_local
+                      Button#folderSignIn_local [hidden]
+                    ListRow#folder_acct:local:Archive
+                      Caption#rowSecondary [hidden]
+                      Label#rowText
+                      QQuickRectangle#rowFocusRing [hidden]
+                    ListRow#folder_acct:local:Drafts
+                      Caption#rowSecondary [hidden]
+                      Label#rowText
+                      QQuickRectangle#rowFocusRing [hidden]
+                    ListRow#folder_acct:local:Inbox
+                      Caption#rowSecondary [hidden]
+                      Label#rowText
+                      QQuickRectangle#rowFocusRing [hidden]
+                    ListRow#folder_acct:local:Outbox
+                      Caption#rowSecondary [hidden]
+                      Label#rowText
+                      QQuickRectangle#rowFocusRing [hidden]
+                    ListRow#folder_acct:local:Sent
+                      Caption#rowSecondary [hidden]
+                      Label#rowText
+                      QQuickRectangle#rowFocusRing [hidden]
+                    ListRow#folder_acct:local:Trash
+                      Caption#rowSecondary [hidden]
+                      Label#rowText
+                      QQuickRectangle#rowFocusRing [hidden]
+                    ListRow#folder_all:inbox
+                      Caption#rowSecondary [hidden]
+                      Label#rowText
+                      QQuickRectangle#rowFocusRing [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                MessageList#messageList
+                  Heading#messageListTitle
+                  IconButton#messageListSync
+                  QQuickListView#messageRows
+                    Caption#emptyText [hidden]
+                    MessageRow#messageRow_m1
+                      IconButton#messageRowArchive [hidden]
+                      IconButton#messageRowDelete [hidden]
+                      IconButton#messageRowFlag [hidden]
+                      Label#messageRowSender
+                      Overline#messageDay
+                    MessageRow#messageRow_m2
+                      IconButton#messageRowArchive [hidden]
+                      IconButton#messageRowDelete [hidden]
+                      IconButton#messageRowFlag [hidden]
+                      Label#messageRowSender
+                      Overline#messageDay [hidden]
+                    MessageRow#messageRow_m3
+                      IconButton#messageRowArchive [hidden]
+                      IconButton#messageRowDelete [hidden]
+                      IconButton#messageRowFlag [hidden]
+                      Label#messageRowSender
+                      Overline#messageDay
+                    MessageRow#messageRow_m4
+                      IconButton#messageRowArchive [hidden]
+                      IconButton#messageRowDelete [hidden]
+                      IconButton#messageRowFlag [hidden]
+                      Label#messageRowSender
+                      Overline#messageDay
+                    MessageRow#messageRow_m5
+                      IconButton#messageRowArchive [hidden]
+                      IconButton#messageRowDelete [hidden]
+                      IconButton#messageRowFlag [hidden]
+                      Label#messageRowSender
+                      Overline#messageDay [hidden]
+                    MessageRow#messageRow_m6
+                      IconButton#messageRowArchive [hidden]
+                      IconButton#messageRowDelete [hidden]
+                      IconButton#messageRowFlag [hidden]
+                      Label#messageRowSender
+                      Overline#messageDay
+                    MessageRow#messageRow_m7
+                      IconButton#messageRowArchive [hidden]
+                      IconButton#messageRowDelete [hidden]
+                      IconButton#messageRowFlag [hidden]
+                      Label#messageRowSender
+                      Overline#messageDay [hidden]
+                    Overline#emptyTitle [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                  SearchField#messageSearch
+                    IconButton#fieldClear [hidden]
+                  Segmented#messageFilter
+                    QQuickAbstractButton#segment_0
+                      QQuickRectangle#segmentFocus_0 [hidden]
+                    QQuickAbstractButton#segment_1
+                      QQuickRectangle#segmentFocus_1 [hidden]
+                    QQuickAbstractButton#segment_2
+                      QQuickRectangle#segmentFocus_2 [hidden]
+                    QQuickAbstractButton#segment_3
+                      QQuickRectangle#segmentFocus_3 [hidden]
+                ReadingPane#readingPane
+                  Caption#emptyText
+                  Overline#emptyTitle
+                  QQuickRectangle#boxFocusRing [hidden]
+                  Scroll#readingScroll [hidden]
+                    Caption#readingDate [hidden]
+                    Flex#readingActions [hidden]
+                      Button#readingAction_mailArchiveAction [hidden]
+                      Button#readingAction_mailDeleteAction [hidden]
+                      Button#readingAction_mailForwardAction [hidden]
+                      Button#readingAction_mailReplyAction [hidden]
+                      Button#readingAction_mailReplyAllAction [hidden]
+                      Button#readingAction_mailToggleFlagAction [hidden]
+                    Flex#readingAttachments [hidden]
+                    Heading#readingSubject [hidden]
+                    IconButton#noticeDismiss [hidden]
+                    Label#noticeText [hidden]
+                    Label#noticeTitle [hidden]
+                    Label#readingSender [hidden]
+                    QQuickRectangle#boxFocusRing [hidden]
+                    QQuickRectangle#readingAvatar [hidden]
+                    QQuickTextEdit#readingBody [hidden]
+              QQuickRectangle#splitterHandle
+                QQuickMouseArea#splitterHitTarget
+                QQuickRectangle#splitterFocusRing [hidden]
+              QQuickRectangle#splitterHandle
+                QQuickMouseArea#splitterHitTarget
+                QQuickRectangle#splitterFocusRing [hidden]
+            TaskBoard#mailTaskBoard [hidden]
+              Box#taskColumn_doing [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#taskColumn_done [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#taskColumn_todo [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#taskConflicts [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Label#taskRequestState [hidden]
+              Notice#taskRequestNotice [hidden]
+                IconButton#noticeDismiss [hidden]
+                Label#noticeText [hidden]
+                Label#noticeTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              QQuickRectangle#boxFocusRing [hidden]
+              TextField#taskFilter [hidden]
+                IconButton#fieldClear [hidden]
+            TextField#taskNewField [hidden]
+              IconButton#fieldClear [hidden]
+          Toast#mailToast [hidden]
+            Notice#toastNotice [hidden]
+              Button#toastAction [hidden]
+              IconButton#noticeDismiss [hidden]
+              Label#noticeText [hidden]
+              Label#noticeTitle [hidden]
+              QQuickRectangle#boxFocusRing [hidden]
+  QQuickItem#appFooter
+    Flex#appFindBar [hidden]
+    Flex#appStatusBar
+      OfficeStatusBar#officeStatusBar
+        QQuickRectangle#boxFocusRing [hidden]
+        StatusField#statusInfo [hidden]
+          QQuickAbstractButton#statusAction [hidden]
+          QQuickRectangle#statusFocusRing [hidden]
+        StatusField#statusMessage [hidden]
+          QQuickAbstractButton#statusAction [hidden]
+          QQuickRectangle#statusFocusRing [hidden]
+  QQuickItem#appHeader
+    Flex#appToolBars
+      RibbonFromModel#officeRibbon
+        Flex#ribbonTabRow
+          IconButton#ribbonCollapseButton
+          QQuickItem#ribbonTrailing
+            CommandSearch#ribbonCommandSearch
+              IconButton#fieldClear [hidden]
+          QQuickTabButton#ribbonTab_accounts
+          QQuickTabButton#ribbonTab_file
+          QQuickTabButton#ribbonTab_home
+          QQuickTabButton#ribbonTab_view
+        QQuickItem#ribbonGroupViewport
+          Flex#ribbonGroups
+            RibbonGroup#ribbonGroup_delete
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_mailArchiveAction
+                RibbonButton#ribbonAction_mailArchiveAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_mailDeleteAction
+                RibbonButton#ribbonAction_mailDeleteAction
+                  Icon#ribbonButtonIcon
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel
+            RibbonGroup#ribbonGroup_find
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_mailSearchAction
+                RibbonButton#ribbonAction_mailSearchAction
+                  Icon#ribbonButtonIcon
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel
+              RibbonSlot#ribbonItem_mailSyncAction
+                RibbonButton#ribbonAction_mailSyncAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_move
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_mailMoveAction
+                RibbonButton#ribbonAction_mailMoveAction
+                  Icon#ribbonButtonIcon
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel
+            RibbonGroup#ribbonGroup_new
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_mailNewMessageAction
+                RibbonButton#ribbonAction_mailNewMessageAction
+                  Icon#ribbonButtonIcon
+                  QQuickItem#ribbonButtonMenuArea
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel
+            RibbonGroup#ribbonGroup_respond
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_mailForwardAction
+                RibbonButton#ribbonAction_mailForwardAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_mailReplyAction
+                RibbonButton#ribbonAction_mailReplyAction
+                  Icon#ribbonButtonIcon
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel
+              RibbonSlot#ribbonItem_mailReplyAllAction
+                RibbonButton#ribbonAction_mailReplyAllAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_tags
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_mailToggleFlagAction
+                RibbonButton#ribbonAction_mailToggleFlagAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_mailToggleReadAction
+                RibbonButton#ribbonAction_mailToggleReadAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+        QQuickRectangle#ribbonBackground

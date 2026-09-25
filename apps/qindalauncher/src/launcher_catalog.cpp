@@ -40,6 +40,11 @@ QList<AppEntry> officeApps()
          QObject::tr("Notes"),
          QObject::tr("Handwriting, typing and checklists on an endless page."),
          QObject::tr("New notebook")},
+        {QStringLiteral("QindaMail"), QStringLiteral("org.qindaqt.QindaMail"),
+         QStringLiteral("qindamail"), QStringLiteral("QindaMail"),
+         QObject::tr("Mail and calendar"),
+         QObject::tr("Every inbox and calendar you have, and your tasks, in one place."),
+         QObject::tr("New message")},
     };
 }
 

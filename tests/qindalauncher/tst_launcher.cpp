@@ -91,7 +91,8 @@ void LauncherTest::initTestCase()
 void LauncherTest::catalogNamesFourDistinctApps()
 {
     const QList<AppEntry> apps = officeApps();
-    QCOMPARE(apps.size(), 4);
+    // Write, Calc, Show, Note, Mail (M44) and Books (M47) when built.
+    QVERIFY(apps.size() >= 5);
     QSet<QString> ids;
     QSet<QString> binaries;
     for (const AppEntry &app : apps) {
@@ -101,8 +102,8 @@ void LauncherTest::catalogNamesFourDistinctApps()
         ids.insert(app.id);
         binaries.insert(app.binary);
     }
-    QCOMPARE(ids.size(), 4);
-    QCOMPARE(binaries.size(), 4);
+    QCOMPARE(ids.size(), apps.size());
+    QCOMPARE(binaries.size(), apps.size());
     QVERIFY(openNameFilters().size() >= 4);
 }
 
@@ -140,7 +141,7 @@ void LauncherTest::controllerPublishesAppsAndRecents()
 {
     LauncherController controller;
     const QVariantList apps = controller.apps();
-    QCOMPARE(apps.size(), 4);
+    QCOMPARE(apps.size(), officeApps().size());
     for (const QVariant &value : apps) {
         const QVariantMap app = value.toMap();
         QVERIFY(!app.value(QStringLiteral("name")).toString().isEmpty());
@@ -170,7 +171,7 @@ void LauncherTest::windowShowsACardPerAppAndTheRecentList()
     QVERIFY2(object != nullptr, qPrintable(component.errorString()));
     auto *window = qobject_cast<QQuickWindow *>(object.get());
     QVERIFY(window != nullptr);
-    window->resize(820, 640);
+    window->resize(1100, 760);
     window->show();
     QVERIFY(QTest::qWaitForWindowExposed(window));
     QTest::qWait(100);

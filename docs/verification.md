@@ -281,6 +281,194 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M44 gates (QindaMail core — `apps/qindamail` C++)
+
+- **UI** (`tst_qindamail_ui`): the real `MailWindow.qml` over a seeded store —
+  the inbox lists the messages with day headings, a click fills the
+  reading pane (subject, attachment chip), the ribbon gate holds in the
+  Mail, Calendar and Tasks workspaces at 1280 and 520 px (a command counts
+  as reachable when some workspace's ribbon reaches it; Save/Save As and
+  the edit commands are menu-only in a document-less window), the
+  composer window and the account dialog open, structural fixtures
+  `qindamail_{1280,520}.txt`. Grabs reviewed: `M44-iter4-*` in the
+  validation gallery (inbox, calendar week with the now line, tasks,
+  composer, account kinds, 520 px).
+
+Automated by `tst_qindamail_drafts`, `tst_qindamail_service`,
+`tst_qindamail_accounts`, `tst_qindamail_calendar`, `tst_qindamail_host` and
+`tst_qindamail_flow` (`ctest -R qindamail`). Each test runs a `MailService`
+over its own temp tree with an in-memory keyring, `autoSync` off and the
+network watcher off; the only servers are the tests' own POP3/SMTP fakes on
+127.0.0.1. Rationale in D-042; reference in [mail.md](mail.md#qindamail-app).
+
+- [x] Drafts: address lists, Re:/Fwd: rules (Re, RE, Re[2], AW / Fwd, FW),
+      quoting, reply / reply-all (own addresses in any case and duplicates
+      removed; a reply to one's own message goes to its recipients), forward
+      header block, In-Reply-To and References.
+- [x] `mailto:` — every example of RFC 6068 §6 (percent-encoded `%`, `?`,
+      `&`, quotes, UTF-8 subject, IDN domain to ACE, `to=` merged with the
+      path, `+` kept), other schemes refused.
+- [x] Message list rules: dateText (time today, weekday this week, date
+      before), day groups, multi-word search, unread / flagged / attachment
+      filters.
+- [x] The local account and its folders exist with no account; folder
+      counts (per folder, all inboxes, `unreadTotal`); collapse/expand;
+      account headers not selectable; conversations, filters and search
+      through the service; the conversations setting survives a restart.
+- [x] Selecting an unread message marks it read after `markReadDelayMs`,
+      and not when the selection moves on first; `selectedMessage` carries
+      `accountId`, `to`, `bodyTruncated`, `attachments`.
+- [x] Local actions (flag, archive, move, delete → Trash → gone) answer
+      `operationFinished` on a later turn; cross-account moves and unknown
+      ids are refused.
+- [x] Reply / forward / mailto drafts from the service; a forward owns
+      copies of the attachment bytes (discarding it never deletes the
+      message's); drafts persist; sending from the local account is refused
+      and keeps the draft.
+- [x] An opened `.eml` lands once in the local Inbox with its attachment
+      bytes; opening an attachment writes only store bytes to a private file.
+- [x] Accounts: add writes the password to the keyring only (never to
+      `accounts.json`); remove wipes every secret, purges the account's
+      cached messages/events and keeps its drafts; secret-named fields are
+      refused.
+- [x] Protocol objects per kind (gmail, imap preset, microsoft365, pop3,
+      exchange): host, port, security, user, mechanism, the secret key SMTP
+      shares, the calendar provider type and URL, the OAuth resource, the
+      sent-mail rule; one IMAP provider per mailbox.
+- [x] Credentials before every request: a stored password reaches the
+      provider (a closed loopback port answers `offline`); no stored password
+      is `needsSignIn` without a connection; the auth-rejection
+      classification (IMAP, POP3, SMTP 535, HTTP 401, not TLS policy).
+- [x] Calendar: create / update / delete (series, occurrence, following),
+      the projection of a weekly rule with an exception clipped to the
+      requested days, grid `shift-local` / `resize-local` in occurrence,
+      series and following scopes (a second split included), refusals,
+      visibility (persisted), recurrence preview, `.ics` export → import
+      round trip (rule and EXDATE kept, re-import idempotent).
+- [x] Tasks: add, move between columns, update, delete, persisted.
+- [x] Host: 30 command ids with shipped Lucide icons, unique shortcuts, the
+      `mailView` and `calendarMode` radio groups, enabled state from view and
+      selection, the panel export accepted by the desktop's validator with
+      every exported id resolving and every command in a menu, `mailto:` and
+      `.ics` paths handed to the window, `MailWindow.qml` instantiates.
+- [x] Flow against local servers: POP3 sync with the keyring password, a
+      reply sent over SMTP and filed in the local Sent folder (draft gone),
+      a wrong password retried once and then `needsSignIn` (cleared by a new
+      password), an unreachable SMTP server leaves the message in the
+      Outbox; no password in results, `store.json` or `accounts.json`.
+- [ ] Lead lane: QindaMail fixtures and grabs (1280/520), ribbon squeeze,
+      the launcher card.
+- [ ] On the desktop: a real IMAP account (and Gmail/Microsoft 365 with a
+      registered client ID, WP-089/WP-090), `qindamail mailto:…` from a
+      browser, a `webcal:` link, the panel menu.
+
+### M43 gates (mail accounts, autoconfig, OAuth, secrets — `office_mail`)
+
+Automated by `tst_mail_accounts`, `tst_mail_autoconfig` and `tst_mail_oauth`
+(`ctest -R mail`). Offline: every server is a `FakeHttpServer` on
+127.0.0.1 and the keyring is in memory (`QQO_MAIL_SECRET_BACKEND=memory` in
+the ctest environment). Rationale in D-043; reference in `docs/mail.md`.
+
+- [x] `jsonRoundTripKeepsUnknownFields`: unknown keys at the root, in an
+      account, in `incoming` and in a calendar entry survive load → update →
+      save; the typed fields round-trip exactly.
+- [x] `validation` (12 rows): kind, address, host, port, clear text to a
+      non-loopback host, `xoauth2` without a provider, a calendar on POP3,
+      `http:` CalDAV, Microsoft with a password, sync interval, and a
+      secret-named key nested or at the top — each refused with its field
+      path, and nothing written.
+- [x] `noSecretOnDisk`: with a password in the (in-memory) keyring, the
+      written `accounts.json` contains neither the password nor the word.
+- [x] `removeWipesSecrets`: removing an account removes every service's
+      secret for it and leaves another account's alone.
+- [x] `corruptFileIsMovedAside`, `newerSchemaIsReadOnly`: never overwrite
+      what cannot be read or what a newer build wrote.
+- [x] `presets` (14 rows) and `everyPresetMakesAValidAccount`; `draftFor`.
+- [x] `clientRegistryOrder`: account → user file → system file; a
+      secret borrowed for a matching ID; a broken file reported; the
+      "no client ID" text with the Gmail app-password hint.
+- [x] `secretsInMemory`: `check` never returns the value, `applySecret`
+      reaches `setSecret`, unknown services and bad ids refused, a missing
+      secret service reported (`unavailable`) with nothing stored.
+- [x] `qmlTypesRegistered`: `import QindaOffice.Mail` creates all four
+      types and wires them.
+- [x] `parseGmail` / `parseOutlook` / `parseFastmail` /
+      `parsePlaceholdersAndSkipPlainText` over ISPDB-shaped fixtures
+      (`tests/office_mail/fixtures`), `parseRejectsGarbage` (5 rows).
+- [x] `presetNeedsNoNetwork`, `fallbackOrder` (preset → autoconfig →
+      well-known → ISPDB, the address sent only to step 2),
+      `firstSourceWins`, `invalidDocumentFallsThrough`, `nothingFound`,
+      `unreachableIsOffline`, `httpsOnly`, `oversizedAndSlowAnswers`,
+      `cancelAndBadInput`.
+- [x] `pkceMatchesRfc7636AppendixB` (the RFC's verifier → challenge
+      vector) and verifier/state shape.
+- [x] `authorizationRequest`, `fullFlowMicrosoft`,
+      `googleOneTokenAndClientSecret`: the test plays the browser; the
+      fake token server checks code, verifier against the challenge,
+      redirect URI and client; the refresh token lands in the keyring and
+      the loopback port closes.
+- [x] `secondResourceSameRefreshToken`: the Graph token comes from a
+      refresh-token grant with `offline_access Calendars.ReadWrite` and the
+      same refresh token (`+/=` intact); a rotated refresh token is stored.
+- [x] `stateMismatchRejected` (no code exchange), `deniedConsent` (nothing
+      reflected into the page), `refreshFromKeyringThenCached`,
+      `concurrentRefreshesShareOneGrant`, `invalidGrantNeedsReauthorization`
+      (token forgotten and wiped), `serverTroubleIsOffline`,
+      `timeoutAndCancel`, `applyAccessToken`, `configureFromRegistry`,
+      `xoauth2Format` (Google's published example).
+- [x] `tokensNeverLogged`: every message of a full flow with all debug
+      categories enabled, and every result, is free of the tokens.
+- [ ] On the desktop (needs a registered client ID; QindaTK WP-089/WP-090):
+      sign in to a real Gmail and Microsoft 365 account from the account
+      dialog (M44), confirm the browser page, the keyring entry (service
+      `qindaoffice-mail` in Seahorse or KWalletManager) and a mail sync
+      with the token.
+
+### M43 gates (Exchange)
+
+Automated by `tst_mail_exchange_mapping`, `tst_mail_exchange_ews`,
+`tst_mail_exchange_ews_writes`, `tst_mail_exchange_graph` and
+`tst_mail_exchange_graph_writes` (`ctest -R exchange`), against in-process
+EWS and Graph endpoints on 127.0.0.1 — no real network. Rationale in D-044;
+behaviour in [mail.md](mail.md#exchange-and-microsoft-365-calendars).
+
+- [x] Initial sync maps a single meeting (organizer, attendees, join URL),
+      a read-only all-day event, a weekly Denver series across the 8 March
+      2026 DST change with one deleted and one moved occurrence, and a
+      second-Tuesday series (`recurrenceRaw`); the toolkit projection puts
+      the series at 16:00Z, then 15:00Z, the moved instance at its new time
+      and nothing on the deleted day (EWS and Graph).
+- [x] A second sync, and a sync after reloading the store file into a new
+      store and adapter, fetches and writes nothing.
+- [x] Graph pages every collection through `@odata.nextLink`; an exception
+      moved outside the window is an override, not a deletion.
+- [x] A local edit is written with the stored `ChangeKey` /
+      `If-Match: <etag>` and only the changed field; a server edit plus a
+      local edit is a conflict with nothing overwritten; `resolveConflict`
+      `local` writes over the recorded version (a further server edit gives
+      412 and a fresh conflict), `remote` adopts the server copy.
+- [x] Local create (EWS `CreateItem` / Graph `POST` with `transactionId`)
+      in Europe/Zurich sends the Windows zone and keeps the record's zone;
+      `removeRemote` deletes conditionally; a server deletion removes the
+      record, or makes a conflict when it was edited here.
+- [x] Occurrence edits: a moved occurrence is `UpdateItem` on
+      `OccurrenceItemId` `InstanceIndex` 4 / `PATCH` of the instance; an
+      exclusion is `DeleteItem` #5 / `DELETE` of the instance; restoring a
+      deleted occurrence is a conflict with a reason.
+- [x] 401 → `rejected` with `authRejected`; 429/503 `Retry-After` and EWS
+      `BackOffMilliseconds` → `offline`, `retryable`, `retryAfterSeconds`;
+      refused connection → `offline`; plain `http:` to a non-loopback host
+      and a foreign `@odata.nextLink` → `rejected` before the token is sent.
+- [x] The password, `user:password` base64 and the tokens appear in no
+      result, transcript, captured log line (Qt network categories and the
+      adapter's own category enabled) or saved store/recovery file.
+- [x] Windows↔IANA mapping (preferred zone kept), DST wall times, pattern
+      mapping incl. Exchange's month-end semantics, Retry-After forms, XML
+      DTD/depth refusal (`tst_mail_exchange_mapping`).
+- [ ] Against a real Exchange 2016+/Exchange Online mailbox (WP-089/WP-090):
+      `InstanceIndex` addressing, the Graph `$filter`, all-day events created
+      in Outlook, attendee notifications from Graph edits.
+
 ### M39 gates (floating images) and the parity close-out
 
 Automated by `tst_calc_io_images`, `tst_calc_window` and `tst_calc_sample`.

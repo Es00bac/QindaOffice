@@ -47,12 +47,18 @@ QString suffixFromFilter(const QString &filter)
 
 bool DocumentHost::isPristineUntitled() const
 {
+    if (m_document == nullptr) {
+        return reusableWithoutDocument();
+    }
     return m_document != nullptr && m_document->canonicalPath().isEmpty()
         && !m_document->isDirty();
 }
 
 bool DocumentHost::loadPath(const QString &path)
 {
+    if (m_document == nullptr && !m_loading) {
+        return openWithoutDocument(path);
+    }
     if (m_document == nullptr || m_loading) {
         return false;
     }
