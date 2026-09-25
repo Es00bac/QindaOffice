@@ -245,6 +245,51 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M43 gates (Exchange)
+
+Automated by `tst_mail_exchange_mapping`, `tst_mail_exchange_ews`,
+`tst_mail_exchange_ews_writes`, `tst_mail_exchange_graph` and
+`tst_mail_exchange_graph_writes` (`ctest -R exchange`), against in-process
+EWS and Graph endpoints on 127.0.0.1 — no real network. Rationale in D-044;
+behaviour in [mail.md](mail.md#exchange-and-microsoft-365-calendars).
+
+- [x] Initial sync maps a single meeting (organizer, attendees, join URL),
+      a read-only all-day event, a weekly Denver series across the 8 March
+      2026 DST change with one deleted and one moved occurrence, and a
+      second-Tuesday series (`recurrenceRaw`); the toolkit projection puts
+      the series at 16:00Z, then 15:00Z, the moved instance at its new time
+      and nothing on the deleted day (EWS and Graph).
+- [x] A second sync, and a sync after reloading the store file into a new
+      store and adapter, fetches and writes nothing.
+- [x] Graph pages every collection through `@odata.nextLink`; an exception
+      moved outside the window is an override, not a deletion.
+- [x] A local edit is written with the stored `ChangeKey` /
+      `If-Match: <etag>` and only the changed field; a server edit plus a
+      local edit is a conflict with nothing overwritten; `resolveConflict`
+      `local` writes over the recorded version (a further server edit gives
+      412 and a fresh conflict), `remote` adopts the server copy.
+- [x] Local create (EWS `CreateItem` / Graph `POST` with `transactionId`)
+      in Europe/Zurich sends the Windows zone and keeps the record's zone;
+      `removeRemote` deletes conditionally; a server deletion removes the
+      record, or makes a conflict when it was edited here.
+- [x] Occurrence edits: a moved occurrence is `UpdateItem` on
+      `OccurrenceItemId` `InstanceIndex` 4 / `PATCH` of the instance; an
+      exclusion is `DeleteItem` #5 / `DELETE` of the instance; restoring a
+      deleted occurrence is a conflict with a reason.
+- [x] 401 → `rejected` with `authRejected`; 429/503 `Retry-After` and EWS
+      `BackOffMilliseconds` → `offline`, `retryable`, `retryAfterSeconds`;
+      refused connection → `offline`; plain `http:` to a non-loopback host
+      and a foreign `@odata.nextLink` → `rejected` before the token is sent.
+- [x] The password, `user:password` base64 and the tokens appear in no
+      result, transcript, captured log line (Qt network categories and the
+      adapter's own category enabled) or saved store/recovery file.
+- [x] Windows↔IANA mapping (preferred zone kept), DST wall times, pattern
+      mapping incl. Exchange's month-end semantics, Retry-After forms, XML
+      DTD/depth refusal (`tst_mail_exchange_mapping`).
+- [ ] Against a real Exchange 2016+/Exchange Online mailbox (WP-089/WP-090):
+      `InstanceIndex` addressing, the Graph `$filter`, all-day events created
+      in Outlook, attendee notifications from Graph edits.
+
 ### M39 gates (floating images) and the parity close-out
 
 Automated by `tst_calc_io_images`, `tst_calc_window` and `tst_calc_sample`.

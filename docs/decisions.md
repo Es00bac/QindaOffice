@@ -5,6 +5,67 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-044: Exchange and Microsoft 365 calendars are host adapters over the store
+
+**Date:** 2026-09-25 · **Status:** accepted (M43)
+
+**Context.** QindaMail's `exchange` and `microsoft365` accounts need their
+calendars, and neither speaks CalDAV: on-premises Exchange offers Exchange
+Web Services, Microsoft 365 offers Microsoft Graph, and Microsoft is
+retiring EWS in Exchange Online, so one protocol cannot serve both. The
+toolkit implements only the standard protocols and leaves hosted services
+to host adapters with the same surface (QindaTK D-189 item 3); its
+CalDAV provider already fixed what the calendar views and the store expect
+(QindaTK D-186–D-188).
+
+**Decision.**
+
+1. **Two adapters, one surface.** `libs/mail_exchange` has
+   `EwsCalendarProvider` (EWS SOAP 1.1, on-premises Exchange 2010 SP1+) and
+   `GraphCalendarProvider` (Graph v1.0, Microsoft 365) over a shared
+   `HostedCalendarProvider`: `CalDavProvider`'s invokables, signals, result
+   states and record fields, plus `listCalendars`. The views, the projection
+   and the store do not know which service an event came from. The library
+   depends on QindaTK and Qt Network only; secrets arrive via `setSecret`, so
+   it does not depend on `office_mail` (D-043).
+2. **One sync engine, a backend per service.** A worker-thread engine makes
+   CalDavJobs' decisions — remote change by version (`ChangeKey` /
+   `@odata.etag`), local edit by the toolkit's own `ICal::digest`, pushes
+   only for clean conflicts — over a backend with `list`/`fetch`/`create`/
+   `update`/`remove`. Each request runs sequentially on a job-local
+   `QNetworkAccessManager` (HTTP/2, system proxy) and the result is applied
+   on the GUI thread, the D-186 shape.
+3. **Writes are conditional and minimal.** EWS `UpdateItem` carries the
+   stored `ChangeKey` with `NeverOverwrite`; Graph `PATCH`/`DELETE` carry
+   `If-Match`. A `remoteBaseline` of the last synced mapping makes a write
+   send only the changed fields, so HTML bodies, attendees and categories the
+   adapters do not map are never rewritten. After a write the item is read
+   back and its canonical mapping adopted. Anything the server cannot hold
+   (a 29–31 monthly rule, restoring a deleted occurrence, editing a
+   relative pattern, a read-only item) becomes a conflict with a reason,
+   never a silent loss.
+4. **Windows zones from Qt's CLDR table.** `QTimeZone`'s
+   `windowsIdToDefaultIanaId`/`ianaIdToWindowsId` (CLDR `windowsZones.xml`,
+   the call QindaTK's CalDAV codec uses) maps both ways, preferring the
+   record's current zone; no second table is shipped. Times travel as UTC
+   instants and become wall time in the event's zone.
+5. **Exchange patterns map to the rule subset only where the semantics are
+   equal.** Exchange's month-end and 29 February behaviour and its
+   relative patterns become `recurrenceRaw` (an equivalent RRULE), read-only.
+6. **Credentials never leave their origin.** https or loopback (or an
+   explicit `allowInsecureAuth`), no redirects, same-origin
+   `@odata.nextLink` only, bounded paging that fails rather than syncs half
+   a window, secrets redacted everywhere (D-187 there).
+
+**Consequences.** QindaMail's Exchange and Microsoft 365 calendars reuse
+every calendar view unchanged; the app lane registers the two types in its
+QML module and feeds tokens from `office_mail`. Graph knows deleted
+occurrences only inside the sync window, EWS addresses plain occurrences by
+`InstanceIndex`, and Graph notifies attendees when the organizer moves a
+meeting; docs/mail.md lists these limits. Qualification against real
+servers is WP-089/WP-090, deferred with the toolkit's hosted accounts; the
+tests run against in-process EWS and Graph endpoints on 127.0.0.1.
+
 ## D-040: Pictures keep the author's bytes
 
 **Date:** 2026-09-19 · **Status:** accepted (M39)
