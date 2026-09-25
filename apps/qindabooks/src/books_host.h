@@ -92,6 +92,8 @@ signals:
     void transferRequested();
     void depositRequested();
     void importStatementRequested();
+    // Banking ▸ Connections… (M48): the QML opens ConnectionsDialog.qml.
+    void connectionsRequested();
     void reconcileRequested();
     void bankRulesRequested();
     void reportRequested(const QString &reportId); // "" = let the user pick

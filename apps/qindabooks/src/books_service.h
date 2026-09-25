@@ -28,7 +28,8 @@
 // recurring, PDF, e-mail), books_service_journal.cpp,
 // books_service_banking.cpp (registers, import, feed, rules),
 // books_service_reconcile.cpp, books_service_reports.cpp,
-// books_service_analysis.cpp (dashboard, housekeeping).
+// books_service_analysis.cpp (dashboard, housekeeping),
+// books_service_connections.cpp (Mercury / Stripe connections, M48).
 
 #include "books_format.h"
 
@@ -41,6 +42,10 @@
 
 #include <functional>
 #include <optional>
+
+namespace QindaOffice::Books::Connect {
+class ConnectionsController;
+}
 
 namespace QindaOffice::Books {
 class BooksDocument;
@@ -64,6 +69,8 @@ class BooksService : public QObject {
     Q_PROPERTY(int dueRecurringCount READ dueRecurringCount NOTIFY changed)
     // Bumped on every change: a cheap binding dependency for views.
     Q_PROPERTY(int revision READ revision NOTIFY changed)
+    // A Mercury/Stripe sync is running (M48).
+    Q_PROPERTY(bool syncingConnections READ syncingConnections NOTIFY connectionsChanged)
 public:
     // `document` is the window's BooksDocument (owned by the host).
     explicit BooksService(::QindaOffice::Books::BooksDocument *document, QObject *parent = nullptr);
@@ -77,6 +84,12 @@ public:
     // Launches `program args` detached; tests replace it (email).
     using Launcher = std::function<bool(const QString &program, const QStringList &arguments)>;
     void setLauncher(Launcher launcher) { m_launcher = std::move(launcher); }
+    // The window's bank/payment connections (tests point it at fake
+    // servers with setEndpoints()).
+    [[nodiscard]] ::QindaOffice::Books::Connect::ConnectionsController *connectionsController() const
+    {
+        return m_connections;
+    }
     // A report built fresh from the books (the print source uses it).
     [[nodiscard]] std::optional<::QindaOffice::Books::ReportTable> buildReport(const QString &id,
                                                                              const QVariantMap &options,
@@ -196,12 +209,38 @@ public:
     Q_INVOKABLE QVariantMap exportListCsv(const QString &kind, const QUrl &fileUrl);
     Q_INVOKABLE QVariantMap importListCsv(const QString &kind, const QUrl &fileUrl);
 
+    // ---- bank and payment connections (books_service_connections.cpp, M48, D-048) ----
+    // AGENT-CONTRACT (the lead's ConnectionsDialog.qml): providers are
+    // "mercury" | "stripe"; status is disconnected | connected | syncing |
+    // error | needsToken. connectMercury/connectStripe/disconnect return
+    // their result directly (they wait for the provider and the keyring
+    // with user input blocked, ≤ 30 s); sync and payment links answer
+    // through the signals below. No call ever returns a token.
+    Q_INVOKABLE QVariantList connections() const;
+    Q_INVOKABLE QVariantMap connectMercury(const QString &token);
+    Q_INVOKABLE QVariantMap linkMercuryAccount(const QString &mercuryAccountId, qint64 booksAccountId);
+    Q_INVOKABLE QVariantList mercuryLinks() const;
+    Q_INVOKABLE QVariantMap connectStripe(const QString &key);
+    Q_INVOKABLE QVariantMap stripeSettings() const;
+    Q_INVOKABLE QVariantMap saveStripeSettings(const QVariantMap &map);
+    Q_INVOKABLE QString syncConnections();
+    // Removes the token and the link settings; imported history stays.
+    Q_INVOKABLE QVariantMap disconnect(const QString &provider);
+    Q_INVOKABLE QString createPaymentLink(qint64 invoiceId);
+    [[nodiscard]] bool syncingConnections() const;
+
 signals:
     void changed();
     void companyChanged();
     void todayChanged();
     // variant: "info" | "success" | "warning" | "danger"
     void notify(const QString &title, const QString &text, const QString &variant);
+    // M48: connection state changed (status, secret, settings, syncing).
+    void connectionsChanged();
+    // result: {ok, imported, applied, matched, posted, errors[]}
+    void connectionSyncFinished(const QString &requestId, const QVariantMap &result);
+    // result: {ok, url, error, reused}
+    void paymentLinkFinished(const QString &requestId, const QVariantMap &result);
 
 private:
     // Shared helpers for the split implementation files.
@@ -216,7 +255,14 @@ private:
     [[nodiscard]] static QString localPath(const QUrl &url);
     bool writeFile(const QString &path, const QByteArray &bytes, QString *error) const;
 
+    // Waits (user input blocked) for an async call's callback, ≤ timeoutMs.
+    [[nodiscard]] static std::optional<QVariantMap>
+    waitFor(const std::function<void(std::function<void(const QVariantMap &)>)> &start, int timeoutMs = 30000);
+    // The body text of an invoice e-mail's "Pay online" line ("" without one).
+    [[nodiscard]] QString payOnlineLine(qint64 documentId) const;
+
     ::QindaOffice::Books::BooksDocument *m_document;
+    ::QindaOffice::Books::Connect::ConnectionsController *m_connections = nullptr;
     Launcher m_launcher;
     QDate m_today;
     int m_revision = 0;

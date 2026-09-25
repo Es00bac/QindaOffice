@@ -47,6 +47,9 @@ constexpr Command kCommands[] = {
     {"booksJournalEntryAction", QT_TRANSLATE_NOOP("BooksHost", "&Journal Entry…"), "", "book-open"},
     {"booksTransferAction", QT_TRANSLATE_NOOP("BooksHost", "&Transfer…"), "", "arrow-left-right"},
     {"booksDepositAction", QT_TRANSLATE_NOOP("BooksHost", "&Deposit…"), "", "piggy-bank"},
+    // M48 (D-048): Mercury and Stripe connections.
+    {"booksSyncBankAction", QT_TRANSLATE_NOOP("BooksHost", "S&ync Mercury && Stripe"), "F5", "refresh-cw"},
+    {"booksConnectionsAction", QT_TRANSLATE_NOOP("BooksHost", "Co&nnections…"), "", "link"},
     {"booksImportStatementAction", QT_TRANSLATE_NOOP("BooksHost", "&Import Statement…"), "", "import"},
     {"booksReconcileAction", QT_TRANSLATE_NOOP("BooksHost", "&Reconcile…"), "", "scale"},
     {"booksBankRulesAction", QT_TRANSLATE_NOOP("BooksHost", "Bank R&ules…"), "", "workflow"},
@@ -132,6 +135,8 @@ void BooksHost::createActions()
     on("booksJournalEntryAction", [this] { emit journalEntryRequested(); });
     on("booksTransferAction", [this] { emit transferRequested(); });
     on("booksDepositAction", [this] { emit depositRequested(); });
+    on("booksSyncBankAction", [this] { static_cast<void>(m_service->syncConnections()); });
+    on("booksConnectionsAction", [this] { emit connectionsRequested(); });
     on("booksImportStatementAction", [this] { emit importStatementRequested(); });
     on("booksReconcileAction", [this] { emit reconcileRequested(); });
     on("booksBankRulesAction", [this] { emit bankRulesRequested(); });
@@ -191,7 +196,9 @@ void BooksHost::insertMenus()
                                                       a("booksNewCheckAction"), a("booksNewVendorCreditAction"),
                                                       MenuNode::separator(), a("booksNewVendorAction")}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("booksBankingMenu"), tr("&Banking"),
-                                                     {a("booksImportStatementAction"), a("booksBankRulesAction"),
+                                                     {a("booksSyncBankAction"), a("booksConnectionsAction"),
+                                                      MenuNode::separator(), a("booksImportStatementAction"),
+                                                      a("booksBankRulesAction"),
                                                       MenuNode::separator(), a("booksDepositAction"),
                                                       a("booksTransferAction"), MenuNode::separator(),
                                                       a("booksReconcileAction")}));

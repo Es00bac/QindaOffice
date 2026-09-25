@@ -5,6 +5,7 @@
 
 #include "accounts.h"
 #include "company_file.h"
+#include "connections.h"
 #include "documents.h"
 #include "journal.h"
 #include "lists.h"
@@ -318,6 +319,9 @@ QVariantMap BooksService::document(qint64 id) const
     out.insert(QStringLiteral("discountAmount"),
                doc->discount.kind == Discount::Kind::Amount ? money.plain(doc->discount.amount.minor()) : QString());
     out.insert(QStringLiteral("taxRateId"), doc->taxRateId);
+    // The online payment link while it still charges the open balance (M48).
+    const std::optional<PaymentLinkRecord> link = Connections(*c).currentPaymentLink(id);
+    out.insert(QStringLiteral("paymentLinkUrl"), link ? link->url : QString());
     out.insert(QStringLiteral("sourceDocId"), doc->sourceDocId);
     out.insert(QStringLiteral("lines"), lines);
     out.insert(QStringLiteral("applications"), applications);

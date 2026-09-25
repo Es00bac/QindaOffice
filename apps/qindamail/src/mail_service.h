@@ -209,6 +209,10 @@ public:
     Q_INVOKABLE QVariantMap replyDraft(const QString &messageId, bool replyAll);
     Q_INVOKABLE QVariantMap forwardDraft(const QString &messageId);
     Q_INVOKABLE QVariantMap mailtoDraft(const QString &url) const;
+    // `draft` with local files imported into its attachment store (M48,
+    // `qindamail --attach`); files that cannot be read are named in
+    // `missingAttachments`, the composer says so.
+    Q_INVOKABLE QVariantMap attachFiles(const QVariantMap &draft, const QStringList &paths);
     // Stores the draft (new id when it has none): {ok, id, error}.
     Q_INVOKABLE QVariantMap saveDraft(const QVariantMap &draft);
     Q_INVOKABLE bool discardDraft(const QString &draftId);

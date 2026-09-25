@@ -85,6 +85,7 @@ OfficeWindow {
     ItemDialog { id: itemDialog; books: window.books }
     AccountDialog { id: accountDialog; books: window.books }
     JournalEntryDialog { id: journalDialog; books: window.books }
+    ConnectionsDialog { id: connectionsDialog; books: window.books }
     Tk.PromptDialog {
         id: closeBooks
         objectName: "closeBooksDialog"
@@ -138,10 +139,18 @@ OfficeWindow {
             exportDialog.open()
         }
         function onImportListsRequested() { importListsDialog.open() }
+        function onConnectionsRequested() { connectionsDialog.openDialog() }
     }
     Connections {
         target: window.books
         function onNotify(title, text, variant) { toast.title = title; toast.message = text; toast.variant = variant; toast.show() }
+        function onConnectionSyncFinished(requestId, result) {
+            toast.title = result.ok ? qsTr("Synced") : qsTr("Sync finished with problems")
+            toast.message = result.ok ? qsTr("%1 new lines, %2 invoices paid, %3 payouts matched").arg(result.imported || 0).arg(result.applied || 0).arg(result.matched || 0)
+                                      : (result.errors || []).join(" · ")
+            toast.variant = result.ok ? "success" : "warning"
+            toast.show()
+        }
     }
     Component.onCompleted: {
         window.booksHost.preferencesPageUrl = Qt.resolvedUrl("BooksPreferencesPage.qml")

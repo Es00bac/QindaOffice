@@ -157,6 +157,22 @@ private slots:
         QVERIFY2(!totals.value(str("totalText")).toString().isEmpty(), "the service computed the invoice's totals");
     }
 
+    void connectionsDialogOpens()
+    {
+        Scene scene(QSize(1320, 840));
+        QVERIFY2(scene.window != nullptr, qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        QVERIFY(scene.host.actions()->trigger(str("booksConnectionsAction")));
+        QObject *dialog = scene.window->findChild<QObject *>(str("connectionsDialog"));
+        QVERIFY(dialog != nullptr);
+        QTRY_VERIFY(dialog->property("opened").toBool());
+        QTest::qWait(200);
+        QindaOffice::Test::saveGrab(scene.window, str("qindabooks_connections"));
+        // Nothing is connected in a fresh company: both cards offer Connect.
+        QVERIFY(scene.window->findChild<QObject *>(str("mercuryConnect")) != nullptr);
+        QVERIFY(scene.window->findChild<QObject *>(str("stripeConnect")) != nullptr);
+    }
+
     void ribbonGateHolds()
     {
         for (const int width : {1320, 520}) {

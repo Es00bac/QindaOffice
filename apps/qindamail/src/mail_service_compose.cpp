@@ -18,6 +18,7 @@
 #include <qindatk/local_productivity_store.h>
 #include <qindatk/smtp_mail_provider.h>
 
+#include <QFileInfo>
 #include <QLocale>
 #include <QTimer>
 #include <QUuid>
@@ -134,6 +135,31 @@ QVariantMap MailService::mailtoDraft(const QString &url) const
                      QLatin1Char('<') + draft.value(QStringLiteral("inReplyTo")).toString() + QLatin1Char('>'));
     }
     return draft;
+}
+
+QVariantMap MailService::attachFiles(const QVariantMap &draft, const QStringList &paths)
+{
+    QVariantMap out = draft;
+    QVariantList attachments = draft.value(QStringLiteral("attachments")).toList();
+    QStringList missing = draft.value(QStringLiteral("missingAttachments")).toStringList();
+    const QString id = draft.value(QStringLiteral("id")).toString();
+    int n = int(attachments.size());
+    for (const QString &path : paths) {
+        // The draft owns a COPY: the source file (an outbox PDF) may go away.
+        const QVariantMap copied = m_attachments->importFile(id + QStringLiteral("/att") + QString::number(++n), path);
+        if (!copied.value(QStringLiteral("ok")).toBool()) {
+            missing.append(QFileInfo(path).fileName());
+            continue;
+        }
+        attachments.append(QVariantMap{{QStringLiteral("id"), copied.value(QStringLiteral("id"))},
+                                       {QStringLiteral("name"), copied.value(QStringLiteral("name"))},
+                                       {QStringLiteral("mimeType"), copied.value(QStringLiteral("mimeType"))},
+                                       {QStringLiteral("size"), copied.value(QStringLiteral("size"))},
+                                       {QStringLiteral("state"), QStringLiteral("local")}});
+    }
+    out.insert(QStringLiteral("attachments"), attachments);
+    out.insert(QStringLiteral("missingAttachments"), missing);
+    return out;
 }
 
 QVariantMap MailService::saveDraft(const QVariantMap &draft)

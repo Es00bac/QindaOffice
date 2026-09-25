@@ -37,6 +37,8 @@ QtObject {
                 "booksPrintDocumentAction", "booksEmailDocumentAction", "booksVoidAction"] }
         ] },
         { id: "banking", label: qsTr("Banking"), keyTip: "B", groups: [
+            { id: "connections", label: qsTr("Connections"), items: [
+                { action: "booksSyncBankAction", size: "large" }, "booksConnectionsAction"] },
             { id: "statements", label: qsTr("Statements"), items: [
                 { action: "booksImportStatementAction", size: "large" }, "booksBankRulesAction"] },
             { id: "reconcile", label: qsTr("Reconcile"), items: [{ action: "booksReconcileAction", size: "large" }] },

@@ -3,8 +3,9 @@
 
 Bookkeeping for small businesses — proper double-entry records, invoices,
 bills, banking, reconciliation, sales tax, reports and financial analysis
-(M45–M47; decisions [D-045](decisions.md#d-045-bookkeeping-model-one-company-file-integer-money-immutable-postings)
-and [D-046](decisions.md#d-046-bookkeeping-io-one-page-painter-for-pdf-and-paper-bank-files-in-accountant-files-out)).
+(M45–M48; decisions [D-045](decisions.md#d-045-bookkeeping-model-one-company-file-integer-money-immutable-postings),
+[D-046](decisions.md#d-046-bookkeeping-io-one-page-painter-for-pdf-and-paper-bank-files-in-accountant-files-out)
+and [D-048](decisions.md#d-048-bank-and-payment-connections-feed-lines-first-tokens-in-the-keyring)).
 QuickBooks is the reference for *scope*, not for look or file format.
 
 | Target | Depends on | What it is |
@@ -12,6 +13,7 @@ QuickBooks is the reference for *scope*, not for look or file format.
 | `books_engine` | Qt Core + Qt Sql (QSQLITE) | The ledger and everything computed from it. No Gui, no Quick. |
 | `books_document` | `books_engine`, `office_core` | `BooksDocument : Core::Document` — the company file as a DocumentHost document. |
 | `books_io` | `books_engine`, Qt Gui/PrintSupport | Printed forms and reports (PDF/paper/CSV), bank-file import, CSV/IIF export, backups. |
+| `books_connect` | `books_engine`, Qt Network, qt6keychain | Online connections (M48): Mercury bank transactions and Stripe balance history into the bank feed, payout matching, Stripe payment links; tokens in the keyring. |
 
 ## One company, one file
 
@@ -21,7 +23,7 @@ cannot mix; one file is one window (rule 1). The file is complete on its
 own: copy it and you have copied the books.
 
 - `PRAGMA application_id = 0x51424B53` ("QBKS"), `PRAGMA user_version` =
-  schema version (currently **2**).
+  schema version (currently **3**).
 - `foreign_keys = ON`, `journal_mode = DELETE` (no `-wal`/`-shm`
   sidecars), `synchronous = FULL`, 5 s busy timeout.
 - Opening an **older** file backs it up to `<file>.pre-v<N>.bak` and
@@ -36,7 +38,7 @@ own: copy it and you have copied the books.
   (nested calls use savepoints) and commits immediately;
   `CompanyFile::changed()` fires after each outermost commit.
 
-### Schema (v2)
+### Schema (v3)
 
 | Table | Holds |
 | --- | --- |
@@ -54,6 +56,8 @@ own: copy it and you have copied the books.
 | `reconciliations`, `reconciliation_marks` | reconciliation sessions |
 | `audit_log` | who/when/what with before/after JSON (append-only) |
 | `budgets` (v2) | amount per account per month (per class) |
+| `connections` (v3) | one row per online connection (`mercury`, `stripe`): status, settings JSON, sync cursor, last sync, last error — never a token |
+| `payment_links` (v3) | online payment links made for invoices (amount, currency, URL, Stripe id) |
 
 `journal_lines` duplicates the transaction's date, kind and void flag so
 every report aggregates one indexed table.
@@ -358,12 +362,164 @@ item import into QuickBooks. IIF is export-only.
 `VACUUM INTO` copy named by time and keeps the newest `keep`; each copy is
 a complete company file.
 
+## Bank and payment connections (Mercury, Stripe)
+
+M48, [D-048](decisions.md#d-048-bank-and-payment-connections-feed-lines-first-tokens-in-the-keyring),
+library `books_connect`. A company can pull its **Mercury** bank
+transactions and its **Stripe** balance history straight into the books,
+and put a **Stripe payment link** on an invoice. Everything arrives in the
+bank feed first, as if a statement had been imported, so rules, matching,
+review and reconciliation work exactly as they do for files.
+
+### Setting it up (what the user does once)
+
+1. **Mercury — create a read-only API token.** In Mercury: *Settings ▸
+   Tokens ▸ Create an API token*, choose **Read Only** (read-only tokens
+   need no IP whitelist; QindaBooks never moves money), copy the token —
+   Mercury shows it once. In QindaBooks: *Banking ▸ Connections… ▸
+   Mercury*, paste it. QindaBooks lists the Mercury accounts (name, last
+   four digits, balance); for each one to sync, pick an existing bank
+   account or let QindaBooks create **"Mercury Checking ••1234"**.
+2. **Stripe — create a restricted key.** In the Stripe Dashboard:
+   *Developers ▸ API keys ▸ Create restricted key* (a key starting
+   `rk_live_`; `rk_test_` for a sandbox). Give it **Read** on:
+   - **Balance** — `GET /v1/balance` (checking the key) and the balance
+     history;
+   - **Balance transaction sources** — `GET /v1/balance_transactions`
+     with the sources expanded;
+   - **Charges**, **Refunds**, **Payouts** (and **Disputes** if you take
+     disputes) — the expanded source objects;
+   - optionally **Account** (Connect) — only for the business name shown
+     in Connections; without it the connection is simply called "Stripe".
+
+   For **payment links** add **Write** on **Products**, **Prices** and
+   **Payment Links** (`POST /v1/prices` with `product_data`, `POST
+   /v1/payment_links`). A key without them syncs fine and only payment
+   links fail, with Stripe's own message naming the missing permission.
+   If you prefer, keep sync on a read-only key and do not use payment
+   links. (Permission labels are as the Dashboard's restricted-key editor
+   names them; they were not checked against a live account — Stripe's
+   403 answer, shown verbatim minus the key, says which one to add.)
+   Paste the key in *Banking ▸ Connections… ▸ Stripe*. QindaBooks creates
+   a bank-type **"Stripe (USD)"** clearing account and a **"Merchant
+   Fees"** expense account if the chart has none, and sends payouts to the
+   Mercury-linked checking account (all three can be changed).
+3. *Banking ▸ Sync Mercury & Stripe* (**F5**) — the first sync reaches
+   back 90 days; later ones continue from where the last one stopped.
+
+A token is checked with the provider **before** it is stored; a refused
+one is never kept. Tokens live only in the desktop keyring (QtKeychain,
+service `qindaoffice-books`, key `<companyUuid>/<provider>`), never in the
+company file, a log, a result or an error message (errors are redacted,
+tests assert all four). `companyUuid` is a stable id in the company's
+settings, created on first use; a copy of the file (Save As, a backup)
+keeps it and so reaches the same keyring entry — it is the same business.
+*Disconnect* removes the token and the connection's settings; everything
+already imported stays. A company without connections never touches the
+keyring.
+
+### Mercury
+
+`GET /accounts` validates the token and lists accounts; `GET
+/account/{id}/transactions?start=…&limit=500&offset=…&order=asc` pages
+until `total` (Mercury API reference, checked 2026-09-25). Only **posted**
+transactions are imported — status `sent` with a `postedAt` time; pending,
+failed, cancelled, reversed and blocked ones are skipped, and a pending one
+is imported once it posts. Line: date = `postedAt` (local date), amount =
+Mercury's signed `amount` (dollars → cents exactly; a value with more
+decimals than the currency has is refused, never rounded), payee =
+`counterpartyName`, memo = `bankDescription` · `note` · `externalMemo`,
+FITID = the Mercury transaction id. The cursor per account is the newest
+`postedAt` seen and the oldest still-pending creation date; the next sync
+asks from the earlier of *last posted − 7 days* and *oldest pending* (the
+overlap costs nothing: the feed dedups on FITID). Rules run on new lines.
+Mercury accounts are US-dollar accounts, so only a USD company can connect
+Mercury (one company, one currency).
+
+### Stripe: the accounting model
+
+The Stripe balance is money the business holds at Stripe, so it is a
+**bank-type clearing account** ("Stripe (USD)") whose statement is Stripe's
+balance history (`GET /v1/balance_transactions`, newest first, pages
+through `starting_after`, `created[gte]` from the cursor, sources expanded;
+posted oldest first). Every balance transaction becomes feed lines on that
+account with FITID = the `txn_…` id (its fee: `txn_…:fee`), so the
+account's balance **equals Stripe's available + pending balance** and a
+second sync imports nothing.
+
+| Stripe `type` | Feed lines on the clearing account | Posted automatically |
+| --- | --- | --- |
+| `charge`, `payment` | +gross; −fee | the fee → Merchant Fees (*autoPostFees*); a payment whose metadata names an invoice **of this company** → a customer payment applied to it, deposited to the clearing account and matched to the gross line (*autoApplyInvoices*) — the invoice shows Paid. Otherwise the sale waits for review (rules apply). |
+| `refund`, `payment_refund` | −amount (a fee line if any) | nothing: review |
+| `payout` | −amount | a **Transfer** clearing → payout account (reference = the `po_…` id), matched to the line (*autoPostPayouts*) |
+| `stripe_fee`, `stripe_fx_fee`, `tax_fee`, `application_fee` | −amount | → Merchant Fees (*autoPostFees*) |
+| `adjustment` (disputes), `payout_failure`, anything else | ±amount (+ fee line) | nothing: review |
+
+**Payouts are never income twice.** The payout transfer's bank-side line
+waits uncleared; the bank's own deposit (Mercury line, payee or memo
+containing "Stripe", same amount, dated within 7 days of the payout) is
+**matched** to it — whichever arrives first. Both import orders are tested.
+
+**Invoices paid online.** A charge carries `qindabooks_invoice` (document
+id), `qindabooks_company` (the company uuid) and `invoice_number` in its
+metadata when it came from a QindaBooks payment link (Stripe copies a
+payment intent's metadata onto its charge). A company uuid that is not
+this file's is **never** looked up — the payment waits for review with a
+note, because businesses never mix. An invoice that is no longer open is
+reported the same way. The payment applies up to the open balance; any
+excess stays as customer credit.
+
+A posting the books refuse (a closed period, say) leaves the line in the
+feed and says why; the import and its postings commit together, so a crash
+never leaves a line imported but unposted. Multi-currency is out of scope:
+a balance transaction in another currency is reported and skipped.
+
+### Payment links
+
+`createPaymentLink(invoiceId)` makes a Stripe **Price** (`unit_amount` =
+the invoice's open balance, the company currency, inline `product_data`
+"Invoice INV-1001 — <company>") and a **Payment Link** for it with
+`metadata` and `payment_intent_data[metadata]` = {`qindabooks_invoice`,
+`qindabooks_company`, `invoice_number`}, `payment_intent_data[description]`
+and `restrictions[completed_sessions][limit]=1` (one completed payment per
+link). Each request carries an **Idempotency-Key**
+`qindabooks-<uuid>-inv<id>-<amount><currency>-price|link`, so a retried
+request returns the same objects. Payment Links rather than Checkout
+Sessions because a Checkout Session expires within a day and an invoice
+link must work until the customer pays; a Payment Link does not expire.
+The URL is stored (`payment_links`) and is **current** while its amount
+equals the open balance: `document(id).paymentLinkUrl`, the invoice PDF
+("Pay online: <url>" under the payment instructions) and the e-mail body
+show only a current link. Asking again for the same amount reuses it
+without a request; after a partial payment a new link is made for the new
+balance.
+
+### QML API (BooksService, M48)
+
+| Call | Result |
+| --- | --- |
+| `connections()` | `[{provider ("mercury" \| "stripe"), name, status (disconnected \| connected \| syncing \| error \| needsToken), lastSync, lastError, summary}]` |
+| `connectMercury(token)` | `{ok, error, accounts: [{id, name, kind, lastFour, balance, balanceText, currentBalance, currentBalanceText}]}` — waits for Mercury (input blocked, ≤ 30 s) |
+| `linkMercuryAccount(mercuryAccountId, booksAccountId)` | `{ok, id, error}`; 0 creates "Mercury Checking ••1234", < 0 unlinks |
+| `mercuryLinks()` | `[{mercuryAccountId, name, kind, lastFour, booksAccountId, booksAccountName, linked}]` |
+| `connectStripe(key)` | `{ok, error, accountName, livemode}` |
+| `stripeSettings()` / `saveStripeSettings(map)` | `{connected, clearingAccountId/Name, feeAccountId/Name, payoutAccountId/Name, autoPostFees, autoPostPayouts, autoApplyInvoices, accountName, livemode, currency}`; save takes any of the ids and flags |
+| `syncConnections()` | requestId → `connectionSyncFinished(requestId, {ok, imported, applied, matched, posted, errors[]})` |
+| `disconnect(provider)` | `{ok, error}` |
+| `createPaymentLink(invoiceId)` | requestId → `paymentLinkFinished(requestId, {ok, url, error, reused})` |
+| properties / signals | `syncingConnections`, `connectionsChanged()` |
+
+BooksHost adds `booksSyncBankAction` ("Sync Mercury & Stripe", F5,
+`refresh-cw`) and `booksConnectionsAction` ("Connections…", `link`, emits
+`connectionsRequested()`), first in the Banking menu; the dialog is
+`qml/ConnectionsDialog.qml`.
+
 ## Out of scope — plainly
 
 Payroll; inventory quantities and COGS from stock; multi-currency and
 currency revaluation (one company, one currency); online bank-feed
-connections (statements are imported from files the bank lets you
-download); e-filing of tax returns and 1099s (vendors carry a 1099 flag
+connections other than Mercury and Stripe (every other bank's statements
+are imported from the files it lets you download); e-filing of tax returns and 1099s (vendors carry a 1099 flag
 and Expenses by Vendor gives the totals); multi-user concurrent editing of
 one company file.
 
@@ -416,6 +572,7 @@ company file.
 | Reconcile | `startReconciliation`, `reconciliationInProgress`, `reconcileCandidates`, `markCleared`, `reconcileState`, `finishReconciliation`, `cancelReconciliation`, `undoLastReconciliation` |
 | Reports | `reportCatalog()` (with the option words each report takes), `runReport(id, options)` (the `ReportTable` as a map: typed columns, rows with kind/depth/key/cells/drill), `drillDown(drill)`, `exportReport(id, options, url, "pdf" \| "csv")`, `rangePreset(name)` (fiscal-year aware) |
 | Dashboard | `kpis(asOf)` (MTD/YTD income, expenses, net; open/overdue invoices, unpaid bills, cash), `monthlyTrends(months)`, `expenseBreakdown(from, to)`, `ratios(asOf)` (value text, definition, `good`) |
+| Connections (M48) | `connections`, `connectMercury`, `linkMercuryAccount`, `mercuryLinks`, `connectStripe`, `stripeSettings`, `saveStripeSettings`, `syncConnections` (→ `connectionSyncFinished`), `disconnect`, `createPaymentLink` (→ `paymentLinkFinished`) — see [Bank and payment connections](#bank-and-payment-connections-mercury-stripe); `document(id).paymentLinkUrl` |
 | Housekeeping | `backupNow()` (timestamped copies in `$XDG_DATA_HOME/qindaoffice/books/backups`, newest 20 kept), `backupTo(url)`, `exportIif`, `exportJournalCsv`, `exportListCsv`, `importListCsv` |
 
 **Printing the current source.** Print, Print Preview and File ▸ Export
@@ -430,11 +587,11 @@ reads better wide. With no source the print commands are disabled.
 
 **E-mailing an invoice.** `emailDocument(id)` writes the form's PDF to
 `$XDG_CACHE_HOME/qindaoffice/books/outbox/<number>.pdf` and starts
-`qindamail mailto:<customer>?subject=Invoice INV-1001 from <company>&body=…`.
-QindaMail's `mailto:` handling reads to/cc/bcc/subject/body only, so the
-PDF is **not attached**: the service says so through `notify()` and names
-the file to attach. When QindaMail takes an attachment argument, pass
-the path there.
+`qindamail --attach <pdf> mailto:<customer>?subject=Invoice INV-1001 from <company>&body=…`
+(M48): QindaMail opens a composer draft with the PDF already attached
+(`attached: true` in the result). When the invoice has a current Stripe
+payment link the body carries "Pay online: <url>" above the payment
+instructions.
 
 **Runtime requirement.** The company file is SQLite through Qt Sql's
 **QSQLITE driver plugin**, which is loaded at run time: a Qt without it
@@ -454,3 +611,7 @@ one second), `tst_books_document`. `tests/books_io/` (M46): see
 `tst_qindabooks_banking`, `tst_qindabooks_host`,
 `tst_qindabooks_menu_export` — see
 [verification](verification.md#m47-gates-the-qindabooks-app).
+`tests/books_connect/` (M48): `tst_books_connect_mercury`,
+`tst_books_connect_stripe` against a fake Mercury/Stripe API on 127.0.0.1
+(`fake_bank_api.h`), plus `tst_qindabooks_connections` — see
+[verification](verification.md#m48-gates-mercury-and-stripe-connections).

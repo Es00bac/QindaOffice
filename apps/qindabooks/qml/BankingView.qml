@@ -67,7 +67,10 @@ Item {
                 }
                 Tk.Caption { visible: view.accounts.length === 0; text: qsTr("Add a Bank or Credit Card account in Accounting."); wrapMode: Text.Wrap; width: parent.width }
                 Tk.Spacer { }
-                Tk.Button { objectName: "bankImport"; variant: "accent"; iconName: "file-input"; text: qsTr("Import statement…"); enabled: view.accountId > 0; onClicked: view.importStatement() }
+                Tk.Button { objectName: "bankSync"; variant: "accent"; iconName: "refresh-cw"; text: view.books !== null && view.books.syncingConnections ? qsTr("Syncing…") : qsTr("Sync Mercury & Stripe")
+                            available: view.books !== null && !view.books.syncingConnections; onClicked: view.host.actions.trigger("booksSyncBankAction") }
+                Tk.Button { objectName: "bankConnections"; variant: "outline"; iconName: "link"; text: qsTr("Connections…"); onClicked: view.host.actions.trigger("booksConnectionsAction") }
+                Tk.Button { objectName: "bankImport"; variant: "outline"; iconName: "file-input"; text: qsTr("Import statement…"); enabled: view.accountId > 0; onClicked: view.importStatement() }
                 Tk.Button { objectName: "bankReconcile"; variant: "outline"; iconName: "scale"; text: qsTr("Reconcile…"); enabled: view.accountId > 0; onClicked: view.startReconcile() }
             }
         }

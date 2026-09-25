@@ -175,6 +175,28 @@ const char *const kVersion2[] = {
     "CREATE INDEX journal_lines_party ON journal_lines(party_id)",
 };
 
+// ---- version 3: bank and payment connections (M48, D-048) -------------------
+// AGENT-GUARD: nothing here ever holds a credential. API tokens live only
+// in the desktop keyring (books_connect/src/connect_secrets.h, key
+// `<company_uuid>/<provider>`); `settings` and `cursor` are JSON of
+// account links, flags and sync positions. Connections::save() refuses a
+// value that looks like a token.
+// payment_links: every online payment link made for a document (the
+// newest one whose amount equals the open balance is the current one).
+const char *const kVersion3[] = {
+    "CREATE TABLE connections ("
+    " provider TEXT PRIMARY KEY CHECK (provider IN ('mercury', 'stripe')),"
+    " status TEXT NOT NULL DEFAULT 'connected', settings TEXT NOT NULL DEFAULT '{}',"
+    " cursor TEXT NOT NULL DEFAULT '{}', last_sync TEXT, last_error TEXT,"
+    " created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+    "CREATE TABLE payment_links ("
+    " id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL REFERENCES documents(id),"
+    " provider TEXT NOT NULL, amount INTEGER NOT NULL, currency TEXT NOT NULL,"
+    " url TEXT NOT NULL, remote_id TEXT, created_at TEXT NOT NULL)",
+    "CREATE INDEX payment_links_doc ON payment_links(doc_id, id)",
+    "CREATE INDEX documents_reference ON documents(kind, reference)",
+};
+
 template<std::size_t N>
 bool runAll(const QSqlDatabase &db, const char *const (&statements)[N], QString *error)
 {
@@ -191,6 +213,7 @@ bool step(const QSqlDatabase &db, int toVersion, QString *error)
     switch (toVersion) {
     case 1: return runAll(db, kVersion1, error);
     case 2: return runAll(db, kVersion2, error);
+    case 3: return runAll(db, kVersion3, error);
     default: break;
     }
     if (error != nullptr) {

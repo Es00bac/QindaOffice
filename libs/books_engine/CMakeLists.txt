@@ -29,6 +29,8 @@ add_library(books_engine STATIC
     src/company_file.h
     src/company_settings.cpp
     src/company_settings.h
+    src/connections.cpp
+    src/connections.h
     src/decimal.cpp
     src/decimal.h
     src/documents.cpp

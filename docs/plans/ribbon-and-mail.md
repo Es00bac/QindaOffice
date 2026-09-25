@@ -35,7 +35,7 @@ and in QindaTK's `AGENTS.md` apply unchanged and outrank anything here.
 | M45 | `books_engine`: double-entry ledger in a SQLite company file, sales/purchases, banking, tax, reports | QindaOffice |
 | M46 | `books_io`: invoice/statement PDF, CSV/OFX/QFX/QIF bank import, CSV/IIF export, backups | QindaOffice |
 | M47 | QindaBooks app (`apps/qindabooks`, `org.qindaqt.QindaBooks`), launcher card | QindaOffice |
-| M48 | QindaBooks connections: Mercury bank feed, Stripe charges/fees/payouts, payment links; PDF hand-off to QindaMail | QindaOffice |
+| M48 | `books_connect`: Mercury bank sync, Stripe balance history + payouts + payment links, keyring tokens; `qindamail --attach` | QindaOffice |
 | M49 | QindaBase (Access): a `.qbase` SQLite database with tables, queries, forms and reports | QindaOffice |
 | M50 | QindaDiagram (Visio): flowcharts, org charts and network diagrams on the toolkit's diagram canvas | QindaOffice |
 | M51 | QindaPlan (Project): tasks, dependencies, working calendars, Gantt, resources, baselines | QindaOffice |
@@ -175,6 +175,7 @@ cover video. The suite adds Access, Visio and Project equivalents
 | OM-accounts | QindaOffice `work/mail-accounts` | `office_mail`: accounts, presets, autoconfig, OAuth, secrets + tests |
 | OM-exchange | QindaOffice `work/mail-exchange` | `office_mail`: EWS + Graph calendar adapters + tests |
 | OB-engine | QindaOffice `work/books-engine` | `books_engine` + `books_io` + tests |
+| OB-connect | QindaOffice `work/books-connect` | `books_connect` + service wiring + `qindamail --attach` + tests (M48) |
 | app | QindaOffice `main` (lead) | ribbons in the four apps, QindaMail, QindaBooks |
 
 Decision numbers are reserved so parallel lanes never collide: QindaTK

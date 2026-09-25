@@ -3,11 +3,13 @@
 // groups hold one checked member, shortcuts are unique, the enabled state
 // follows the view and the selection, the panel export passes the desktop's
 // own validator with every exported id resolving, paths handed to the app
-// (mailto:, .ics) land in the right place, and the window instantiates
-// from the app's QML module.
+// (mailto:, .ics) land in the right place, `qindamail --attach <file>
+// mailto:…` opens a composer with the files attached (M48), and the window
+// instantiates from the app's QML module.
 
 #include "mail_test_support.h"
 
+#include "qindamail/src/launch_arguments.h"
 #include "qindamail/src/mail_host.h"
 
 #include "menu_source.h"
@@ -229,6 +231,64 @@ private slots:
         QCOMPARE(host.view(), QStringLiteral("calendar"));
         QTRY_COMPARE(env.service->store()->events().size(), 1);
         QVERIFY(!host.loadPath(env.dir.filePath(QStringLiteral("missing.eml"))));
+    }
+
+    void attachHandOff()
+    {
+        namespace Launch = QindaOffice::Apps::Mail::Launch;
+        MailTest::Env env;
+        const QString pdf = env.dir.filePath(QStringLiteral("INV-1001.pdf"));
+        const QString notes = env.dir.filePath(QStringLiteral("notes.txt"));
+        for (const QString &path : {pdf, notes}) {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write(path.endsWith(QStringLiteral(".pdf")) ? QByteArray("%PDF-1.4\n%fake\n") : QByteArray("hello\n"));
+        }
+        // No --attach: the arguments pass through untouched.
+        const QStringList plain{QStringLiteral("mailto:joe@example.com"), QStringLiteral("--new-instance")};
+        QCOMPARE(Launch::foldAttachArguments(plain, env.dir.path()), plain);
+        // Repeatable, both spellings, relative paths made absolute.
+        const QStringList folded = Launch::foldAttachArguments(
+            {QStringLiteral("--attach"), QStringLiteral("INV-1001.pdf"), QStringLiteral("--attach=") + notes,
+             QStringLiteral("mailto:ap@acme.test?subject=Invoice%20INV-1001&body=Hello"), QStringLiteral("--new-instance")},
+            env.dir.path());
+        QCOMPARE(folded.size(), 2);
+        QCOMPARE(folded.first(), QStringLiteral("--new-instance"));
+        const Launch::ComposeRequest request = Launch::parseComposeToken(folded.last());
+        QVERIFY(request.ok);
+        QCOMPARE(request.attachments, (QStringList{pdf, notes}));
+        QCOMPARE(request.mailto, QStringLiteral("mailto:ap@acme.test?subject=Invoice%20INV-1001&body=Hello"));
+        QVERIFY(!Launch::parseComposeToken(QStringLiteral("mailto:x@y")).ok);
+
+        MailHost host(env.service.get());
+        QSignalSpy compose(&host, &MailHost::composeRequested);
+        QVERIFY(host.loadPath(folded.last()));
+        QTRY_COMPARE(compose.count(), 1);
+        const QVariantMap draft = compose.first().first().toMap();
+        QCOMPARE(draft.value(QStringLiteral("to")).toString(), QStringLiteral("ap@acme.test"));
+        QCOMPARE(draft.value(QStringLiteral("subject")).toString(), QStringLiteral("Invoice INV-1001"));
+        const QVariantList attached = draft.value(QStringLiteral("attachments")).toList();
+        QCOMPARE(attached.size(), 2);
+        QCOMPARE(attached.first().toMap().value(QStringLiteral("name")).toString(), QStringLiteral("INV-1001.pdf"));
+        QCOMPARE(attached.first().toMap().value(QStringLiteral("mimeType")).toString(), QStringLiteral("application/pdf"));
+        // The draft owns a copy in the attachment store.
+        const QVariantMap stored =
+            env.service->attachmentStore()->read(attached.first().toMap().value(QStringLiteral("id")).toString());
+        QVERIFY(stored.value(QStringLiteral("ok")).toBool());
+        QVERIFY(stored.value(QStringLiteral("bytes")).toByteArray().startsWith("%PDF"));
+
+        // A file that is gone is named, not silently dropped.
+        const QStringList missing = Launch::foldAttachArguments(
+            {QStringLiteral("--attach"), env.dir.filePath(QStringLiteral("gone.pdf"))}, env.dir.path());
+        QVERIFY(host.loadPath(missing.last()));
+        QTRY_COMPARE(compose.count(), 2);
+        const QVariantMap blank = compose.last().first().toMap();
+        QVERIFY(blank.value(QStringLiteral("attachments")).toList().isEmpty());
+        QCOMPARE(blank.value(QStringLiteral("missingAttachments")).toStringList(), QStringList{QStringLiteral("gone.pdf")});
+
+        // AGENT-GUARD check: a mailto: link can never attach a local file.
+        const QVariantMap hostile = env.service->mailtoDraft(QStringLiteral("mailto:x@example.com?attach=") + pdf);
+        QVERIFY(hostile.value(QStringLiteral("attachments")).toList().isEmpty());
     }
 
     void windowInstantiates()

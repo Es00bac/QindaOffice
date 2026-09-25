@@ -106,13 +106,15 @@ private slots:
         QSqlDatabase::removeDatabase(QStringLiteral("v1"));
         auto file = CompanyFile::open(path, &error);
         QVERIFY2(file, qPrintable(error));
-        QCOMPARE(file->schemaVersion(), 2);
+        QCOMPARE(file->schemaVersion(), Schema::kCurrentVersion);
         QCOMPARE(file->settings().legalName, QStringLiteral("Old Co"));
-        // v2 added budgets; the pre-migration copy sits next to the file.
+        // v2 added budgets, v3 the connection tables; the pre-migration
+        // copy sits next to the file.
+        QCOMPARE(Sql::scalarInt(file->database(), QStringLiteral("SELECT COUNT(*) FROM connections")), 0);
         QVERIFY(Sql::exec(file->database(),
                           QStringLiteral("INSERT INTO accounts(name, type, created_at) VALUES('Rent', 14, 'now')")));
         QVERIFY(Budgets(*file).set(1, 2026, 1, 1000).ok);
-        QVERIFY(QFileInfo::exists(path + QStringLiteral(".pre-v2.bak")));
+        QVERIFY(QFileInfo::exists(path + QStringLiteral(".pre-v%1.bak").arg(Schema::kCurrentVersion)));
         QCOMPARE(Ledger(*file).auditTrail(QStringLiteral("schema")).size(), 1);
     }
 

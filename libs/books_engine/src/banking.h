@@ -115,8 +115,10 @@ public:
     // ---- registers and money movement ----
     [[nodiscard]] QList<RegisterEntry> registerFor(qint64 accountId, const QDate &from = {},
                                                    const QDate &to = {}) const;
+    // `reference` is stored on the document (books_connect names a Stripe
+    // payout id there, so a bank deposit can later be matched to it).
     Result transfer(qint64 fromAccountId, qint64 toAccountId, const Money &amount, const QDate &date,
-                    const QString &memo = {}, const PostOptions &options = {});
+                    const QString &memo = {}, const PostOptions &options = {}, const QString &reference = {});
     // Deposits payments sitting in Undeposited Funds (by payment/sales
     // receipt document id) into a bank account in one deposit.
     Result deposit(qint64 bankAccountId, const QDate &date, const QList<qint64> &paymentDocIds,

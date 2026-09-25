@@ -31,6 +31,7 @@ Tk.Dialog {
     property var paymentAccounts: []
     property var terms: []
     property var taxRates: []
+    property string linkRequest: ""
 
     objectName: "documentEditor"
     title: (existing ? "" : qsTr("New ")) + (titles[kind] || kind) + (existing && doc.number ? " " + doc.number : "")
@@ -69,6 +70,15 @@ Tk.Dialog {
         return true
     }
     onAccepted: if (!voided) save("open")
+    Connections {
+        target: editor.books
+        function onPaymentLinkFinished(requestId, result) {
+            if (requestId !== editor.linkRequest) return
+            editor.linkRequest = ""
+            if (result.ok) editor.doc = editor.books.document(editor.doc.id)
+            else { error.text = String(result.error || ""); error.visible = true }
+        }
+    }
     onTertiary: save("draft")
 
     Tk.Flex {
@@ -193,6 +203,18 @@ Tk.Dialog {
             Tk.Button { small: true; variant: "ghost"; iconName: "printer"; text: qsTr("Print"); onClicked: { editor.host.setPrintSource("document", editor.doc.id, ({})); editor.host.actions.trigger("filePrintAction") } }
             Tk.Button { small: true; variant: "ghost"; iconName: "file-down"; text: qsTr("Save PDF…"); onClicked: pdfDialog.open() }
             Tk.Button { small: true; variant: "ghost"; iconName: "send"; text: qsTr("Email"); visible: editor.sales; onClicked: editor.books.emailDocument(editor.doc.id) }
+            Tk.Button {
+                objectName: "documentPaymentLink"
+                small: true; variant: "ghost"; iconName: "link"
+                visible: editor.kind === "invoice" && !editor.voided && editor.doc.status !== "paid"
+                text: String(editor.doc.paymentLinkUrl || "").length > 0 ? qsTr("Copy payment link") : qsTr("Get payment link")
+                tooltip: String(editor.doc.paymentLinkUrl || "") || qsTr("Create a Stripe payment link for the open balance; it prints on the invoice")
+                onClicked: {
+                    if (String(editor.doc.paymentLinkUrl || "").length > 0) { clipboardHelper.text = editor.doc.paymentLinkUrl; clipboardHelper.selectAll(); clipboardHelper.copy() }
+                    else editor.linkRequest = editor.books.createPaymentLink(editor.doc.id)
+                }
+            }
+            TextEdit { id: clipboardHelper; visible: false }
             Tk.Button { small: true; variant: "ghost"; iconName: "file-check"; text: qsTr("Convert to invoice"); visible: editor.kind === "estimate" && !editor.voided
                         onClicked: { const r = editor.books.convertEstimate(editor.doc.id); if (r.ok) editor.openFor("invoice", r.id) } }
             Tk.Spacer { }

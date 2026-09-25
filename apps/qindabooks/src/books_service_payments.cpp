@@ -13,6 +13,7 @@
 #include "sales.h"
 
 #include <QDir>
+#include <QFileInfo>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -240,23 +241,25 @@ QVariantMap BooksService::emailDocument(qint64 id)
         body += tr(" is due on %1").arg(money.locale.toString(doc->dueDate, QLocale::LongFormat));
     }
     body += QStringLiteral(".\n\n");
+    // M48: the invoice's Stripe payment link while it charges the balance due.
+    if (const QString online = payOnlineLine(id); !online.isEmpty()) {
+        body += online + QStringLiteral("\n\n");
+    }
     if (!c->settings().paymentInstructions.isEmpty()) {
         body += c->settings().paymentInstructions + QStringLiteral("\n\n");
     }
     body += tr("Thank you,\n%1").arg(company);
-    // AGENT-NOTE (M47): QindaMail's mailto: parser (apps/qindamail,
-    // draft_builder.cpp parseMailto) reads to/cc/bcc/subject/body only and
-    // takes no attachment argument, so the PDF is NOT attached: we open
-    // the draft and say where the PDF is (notify). When QindaMail grows an
-    // attachment argument, pass `path` here and set `attached`.
+    // AGENT-CONTRACT (apps/qindamail main.cpp, launch_arguments.h
+    // foldAttachArguments): `qindamail --attach <path> mailto:…` opens a
+    // composer draft with the file imported into its attachment store. The
+    // mailto: URL itself never carries an attachment (RFC 6068 §3).
     const QString mailto = QStringLiteral("mailto:") + QString::fromLatin1(QUrl::toPercentEncoding(email, "@+"))
         + QStringLiteral("?subject=") + QString::fromLatin1(QUrl::toPercentEncoding(subject))
         + QStringLiteral("&body=") + QString::fromLatin1(QUrl::toPercentEncoding(body));
     const Launcher launch = m_launcher ? m_launcher : Launcher(launchDetached);
-    const bool launched = launch(QStringLiteral("qindamail"), {mailto});
+    const bool launched = launch(QStringLiteral("qindamail"), {QStringLiteral("--attach"), path, mailto});
     if (launched) {
-        emit notify(tr("Message opened in QindaMail"),
-                    tr("QindaMail cannot take attachments from another app yet — attach %1 to the message.").arg(path),
+        emit notify(tr("Message opened in QindaMail"), tr("%1 is attached.").arg(QFileInfo(path).fileName()),
                     QStringLiteral("info"));
     } else {
         emit notify(tr("QindaMail did not start"), tr("The PDF is saved at %1.").arg(path), QStringLiteral("warning"));
@@ -269,7 +272,7 @@ QVariantMap BooksService::emailDocument(qint64 id)
     QVariantMap out = launched ? Format::success(id) : Format::failure(tr("QindaMail could not be started."));
     out.insert(QStringLiteral("path"), path);
     out.insert(QStringLiteral("launched"), launched);
-    out.insert(QStringLiteral("attached"), false);
+    out.insert(QStringLiteral("attached"), launched);
     out.insert(QStringLiteral("mailto"), mailto);
     out.insert(QStringLiteral("to"), email);
     out.insert(QStringLiteral("subject"), subject);

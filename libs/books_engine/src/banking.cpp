@@ -73,7 +73,7 @@ QList<RegisterEntry> Banking::registerFor(qint64 accountId, const QDate &from, c
 }
 
 Result Banking::transfer(qint64 fromAccountId, qint64 toAccountId, const Money &amount, const QDate &date,
-                         const QString &memo, const PostOptions &options)
+                         const QString &memo, const PostOptions &options, const QString &reference)
 {
     ChartOfAccounts chart(m_file);
     if (!chart.account(fromAccountId) || !chart.account(toAccountId) || fromAccountId == toAccountId) {
@@ -87,6 +87,7 @@ Result Banking::transfer(qint64 fromAccountId, qint64 toAccountId, const Money &
     doc.kind = DocKind::Transfer;
     doc.date = date;
     doc.memo = memo;
+    doc.reference = reference;
     doc.accountId = fromAccountId;
     doc.toAccountId = toAccountId;
     doc.total = amount;
@@ -99,7 +100,7 @@ Result Banking::transfer(qint64 fromAccountId, qint64 toAccountId, const Money &
         PostingLine{toAccountId, amount.minor(), 0, 0, 0, 0, 0, 0, memo},
         PostingLine{fromAccountId, 0, amount.minor(), 0, 0, 0, 0, 0, memo},
     };
-    if (const Result p = Ledger(m_file).postLines(doc.id, doc.kind, date, {}, memo, lines, options); !p.ok) {
+    if (const Result p = Ledger(m_file).postLines(doc.id, doc.kind, date, reference, memo, lines, options); !p.ok) {
         return p;
     }
     m_file.audit(QStringLiteral("create"), QStringLiteral("document"), doc.id, {},

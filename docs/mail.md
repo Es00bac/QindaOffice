@@ -556,6 +556,13 @@ A forward copies the attachment bytes it can read into its own ids.
 `subject`, `body`, `in-reply-to`; other headers ignored). `qindamail
 mailto:…`, a `webcal:` URL, an `.ics` or `.eml` path — on the command line or
 handed to the running instance — reach `MailHost::openWithoutDocument`.
+`qindamail --attach <path> [--attach <path> …] [mailto:…]` (M48, D-048)
+opens a composer whose draft has the files imported into the attachment
+store (`attachFiles`; unreadable ones are named in `missingAttachments`).
+`main()` folds the options and the mailto: URL into one private
+`qindamail-compose:` positional (`src/launch_arguments.h`), so the hand-off
+to a running instance carries it too. A mailto: URL never attaches a file,
+and the `qindamail-compose:` scheme is not registered as a URL handler.
 
 ### QML API
 
@@ -576,7 +583,7 @@ listed in `mail_host.h`): mail*, cal*, `taskNewAction`; radio groups
 | properties | `accounts` [{id, kind, displayName, emailAddress, color, enabled, status, lastError, lastSync, hasMail, hasCalendar, canSend, usesOAuth}], `accountStore`, `autoConfig`, `secrets`, `store`, `attachmentStore`, `busy`, `statusText`, `online`, `autoSync` (RW), `defaultAccountId`, `ownAddresses`, `sendableAccounts` [{id, displayName, emailAddress}], `folderModel`, `currentFolderKey` (RW), `currentFolderName`, `unreadTotal`, `messageModel`, `searchText` (RW), `filter` (RW: all/unread/flagged/attachments), `threaded` (RW), `selectedMessageId` (RW), `selectedMessage`, `markReadDelayMs` (RW, 500; <0 never), `calendars` [{id, accountId, name, color, visible, readOnly, service}], `writableCalendars`, `events`, `eventsError`, `taskColumns` |
 | folders / messages | `toggleFolderExpanded(key)`, `folderTargets(accountId)` → [{key, name, depth, iconName, specialUse, accountId}], `conversation(threadId)`, `messageById(id)`, `markRead(ids, read)`, `setFlagged(ids, flagged)`, `archive(ids)`, `deleteMessages(ids)`, `moveTo(ids, folderKey)`, `fetchAttachment(messageId, attachmentId)`, `openAttachment(…)`, `saveAttachmentAs(…, url)`, `importMessageFile(path)` |
 | sync | `syncAll()`, `syncAccount(id)`, `syncFolder(key)` |
-| drafts | `newDraft(accountId)`, `replyDraft(messageId, replyAll)`, `forwardDraft(messageId)`, `mailtoDraft(url)`, `saveDraft(draft)` → {ok, id, error}, `discardDraft(id)` → bool, `send(draft)` → requestId |
+| drafts | `newDraft(accountId)`, `replyDraft(messageId, replyAll)`, `forwardDraft(messageId)`, `mailtoDraft(url)`, `attachFiles(draft, paths)`, `saveDraft(draft)` → {ok, id, error}, `discardDraft(id)` → bool, `send(draft)` → requestId |
 | accounts | `addAccount(map, password)`, `updateAccount(map, password)`, `removeAccount(id)` (→ AccountStore results; remove adds `purgedRecords`), `signIn(id)`, `testAccount(requestId, map, password)`, `discoverCalendars(requestId, url, userName, password)`, `accountById(id)` |
 | calendar | `setCalendarVisible(id, visible)`, `projectRange(startDate, endDate)` (local dates, half-open), `createEvent(map)`, `updateEvent(map)` (with `occurrenceId` + `scope: "occurrence"` an override), `deleteEvent(eventId, occurrenceId, scope)`, `applyChange(requestId, eventId, proposal)`, `eventById(id)`, `importIcs(url, calendarId)`, `exportIcs(url, calendarId)`, `subscribeFeed(url, name, color)`, `recurrencePreview(eventId, rule)` |
 | tasks | `addTask(title)` → id, `moveTask(requestId, taskId, toStatus, index)`, `updateTask(map)`, `deleteTask(id)` |

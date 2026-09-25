@@ -6,6 +6,7 @@
 #include "books_document.h"
 #include "chart_templates.h"
 #include "company_file.h"
+#include "connections_controller.h"
 #include "lists.h"
 
 #include <QFile>
@@ -154,11 +155,18 @@ BooksService::BooksService(BooksDocument *document, QObject *parent)
     if (pinned.isValid()) {
         m_today = pinned;
     }
+    m_connections = new Connect::ConnectionsController([this] { return file(); }, Connect::defaultSecretBackend(), this);
+    m_connections->setToday([this] { return todayDate(); });
+    connect(m_connections, &Connect::ConnectionsController::stateChanged, this, &BooksService::connectionsChanged);
     if (m_document != nullptr) {
         connect(m_document, &BooksDocument::companyChanged, this, [this] {
             ++m_revision;
+            // Which tokens this company has in the keyring (only asked when
+            // it has connections, so plain books never touch the keyring).
+            m_connections->refreshSecretStates();
             emit companyChanged();
             emit changed();
+            emit connectionsChanged();
         });
         connect(m_document, &BooksDocument::booksChanged, this, [this] {
             ++m_revision;
