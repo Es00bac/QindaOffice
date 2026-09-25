@@ -36,6 +36,8 @@ class Preferences final : public QObject {
     QML_SINGLETON
     Q_PROPERTY(bool showStatusBar READ showStatusBar WRITE setShowStatusBar NOTIFY changed)
     Q_PROPERTY(bool showToolBars READ showToolBars WRITE setShowToolBars NOTIFY changed)
+    // The ribbon draws one row per group (View ▸ Compact Ribbon, D-041).
+    Q_PROPERTY(bool ribbonCompact READ ribbonCompact WRITE setRibbonCompact NOTIFY changed)
     Q_PROPERTY(int defaultZoomPercent READ defaultZoomPercent WRITE setDefaultZoomPercent NOTIFY changed)
     Q_PROPERTY(int autoSaveMinutes READ autoSaveMinutes WRITE setAutoSaveMinutes NOTIFY changed)
     Q_PROPERTY(QString documentFontFamily READ documentFontFamily WRITE setDocumentFontFamily NOTIFY changed)
@@ -66,6 +68,8 @@ public:
     void setShowStatusBar(bool on);
     [[nodiscard]] bool showToolBars() const;
     void setShowToolBars(bool on);
+    [[nodiscard]] bool ribbonCompact() const;
+    void setRibbonCompact(bool on);
 
     // Zoom a freshly opened document starts at (View ▸ Zoom still moves the
     // window's own zoom without touching this).

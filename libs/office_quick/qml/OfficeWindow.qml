@@ -8,8 +8,12 @@ import QindaOffice.Shell
 // host owns the commands, the menu tree and every flow; this file renders
 // the menu bar and status bar from it and answers the dialogs it asks for
 // (open, save as, overwrite consent, close consent, messages, about,
-// preferences, print). Apps derive from it: NoteWindow.qml is
-// `OfficeWindow { toolBars: [...]; findBar: ...; NotePage {} }`.
+// preferences, print, command search). Apps derive from it: NoteWindow.qml
+// is `OfficeWindow { ribbonTabs: [...]; findBar: ...; NotePage {} }`.
+//
+// AGENT-NOTE (D-041): the toolbar band holds ONE RibbonFromModel built from
+// `ribbonTabs` (the app's ribbon layout over its ActionModel). An app may
+// still assign `toolBars` itself, which replaces the ribbon.
 //
 // AGENT-CONTRACT (ADR-0117): width/height are set once here; nothing in
 // the suite resizes a shown window.
@@ -55,6 +59,52 @@ Tk.AppWindow {
     Connections {
         target: Preferences
         function onChanged() { window.applyChrome() }
+    }
+
+    // The app's ribbon layout (RibbonFromModel.qml documents the shape).
+    property var ribbonTabs: []
+    // Contextual ribbon tabs this window derives in QML ("table", "shape").
+    property var ribbonContexts: []
+    readonly property RibbonFromModel ribbon: officeRibbon
+    toolBars: [
+        RibbonFromModel {
+            id: officeRibbon
+            actions: window.host.actions
+            host: window.host
+            layout: window.ribbonTabs
+            extraContexts: window.ribbonContexts
+            visible: window.ribbonTabs.length > 0
+        }
+    ]
+
+    // Help ▸ Search Commands… (Alt+Q): every command of the menu tree,
+    // sectioned by its top-level menu, activated by id through the model.
+    function commandList() {
+        const out = [], seen = ({})
+        const strip = function(text) { return String(text || "").replace(/&&/g, "\u0001").replace(/&/g, "").replace(/\u0001/g, "&") }
+        const walk = function(node, section, path) {
+            for (const child of (node.children || [])) {
+                if (child.kind === "menu") {
+                    walk(child, section, path.concat([strip(child.title)]))
+                } else if (child.kind === "action" && !seen[child.id]) {
+                    const entry = window.host.actions.entry(child.id)
+                    if (entry === null || !entry.visible) continue
+                    seen[child.id] = true
+                    out.push({ id: child.id, label: entry.plainText, shortcut: entry.shortcutText,
+                               section: section, iconName: entry.iconName, enabled: entry.enabled,
+                               keywords: path.join(" ") })
+                }
+            }
+        }
+        for (const menu of window.host.menuTree.menus) walk(menu, strip(menu.title), [])
+        return out
+    }
+    Tk.CommandPalette {
+        id: commandPalette
+        objectName: "commandPalette"
+        hostItem: window.contentItem
+        placeholderText: qsTr("Search commands…")
+        onActivated: function(id) { window.host.actions.trigger(id) }
     }
 
     menuBar: MenuBarFromModel {
@@ -106,6 +156,13 @@ Tk.AppWindow {
         }
         function onAboutRequested() { about.open() }
         function onPreferencesRequested() { preferences.open() }
+        function onCommandSearchRequested() {
+            commandPalette.commands = window.commandList()
+            const seed = officeRibbon.trailing !== null ? officeRibbon.trailing.handoffText : ""
+            commandPalette.open()
+            commandPalette.filterText = seed
+            if (officeRibbon.trailing !== null) officeRibbon.trailing.handoffText = ""
+        }
         function onPrintRequested() {
             const job = window.host.createPrintJob()
             if (job !== null) {

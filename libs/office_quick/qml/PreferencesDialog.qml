@@ -21,6 +21,7 @@ Tk.Dialog {
 
     onOpened: {
         showToolBars.checked = Preferences.showToolBars
+        ribbonCompact.checked = Preferences.ribbonCompact
         showStatusBar.checked = Preferences.showStatusBar
         defaultZoom.value = Preferences.defaultZoomPercent
         restorePrevious.checked = host !== null && host.restorePreviousDocuments()
@@ -34,6 +35,7 @@ Tk.Dialog {
     }
     onAccepted: {
         Preferences.showToolBars = showToolBars.checked
+        Preferences.ribbonCompact = ribbonCompact.checked
         Preferences.showStatusBar = showStatusBar.checked
         Preferences.defaultZoomPercent = defaultZoom.value
         Preferences.density = density.currentIndex === 1 ? "comfortable" : "compact"
@@ -67,7 +69,8 @@ Tk.Dialog {
             visible: tabs.currentIndex === 0
             direction: Tk.Flex.Column
             gap: Tk.Theme.space.sm
-            Tk.PropertyRow { label: qsTr("Toolbars"); Tk.Switch { id: showToolBars; objectName: "prefShowToolBars"; text: qsTr("Show toolbars") } }
+            Tk.PropertyRow { label: qsTr("Ribbon"); Tk.Switch { id: showToolBars; objectName: "prefShowToolBars"; text: qsTr("Show the ribbon") } }
+            Tk.PropertyRow { label: qsTr("Ribbon layout"); Tk.Switch { id: ribbonCompact; objectName: "prefRibbonCompact"; text: qsTr("Compact: one row per group") } }
             Tk.PropertyRow { label: qsTr("Status bar"); Tk.Switch { id: showStatusBar; objectName: "prefShowStatusBar"; text: qsTr("Show status bar") } }
             Tk.PropertyRow { label: qsTr("New windows"); Tk.NumberField { id: defaultZoom; objectName: "prefDefaultZoom"; from: 25; to: 400; stepSize: 10; suffix: " %"; label: qsTr("Zoom") } }
             Tk.PropertyRow {

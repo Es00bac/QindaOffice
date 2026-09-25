@@ -56,9 +56,14 @@ void addStandardActions(ActionModel *model, const QString &appDisplayName)
     ActionEntry *menuBar = model->add(id(kViewShowMenuBar), tr("Show Menu &Bar"));
     menuBar->setCheckable(true);
     menuBar->setChecked(true);
-    ActionEntry *toolBars = model->add(id(kViewShowToolBars), tr("Show &Toolbars"));
+    // AGENT-NOTE (D-041): the id predates the ribbon and stays (rule 5);
+    // the toolbar band IS the ribbon now, so the label says so.
+    ActionEntry *toolBars = model->add(id(kViewShowToolBars), tr("Show &Ribbon"));
     toolBars->setCheckable(true);
     toolBars->setChecked(true);
+    ActionEntry *compact = model->add(id(kViewCompactRibbon), tr("&Compact Ribbon"), {},
+                                      QStringLiteral("panel-top"));
+    compact->setCheckable(true);
     ActionEntry *statusBar = model->add(id(kViewShowStatusBar), tr("Show &Status Bar"));
     statusBar->setCheckable(true);
     statusBar->setChecked(true);
@@ -72,6 +77,8 @@ void addStandardActions(ActionModel *model, const QString &appDisplayName)
     restore->setEnabled(false); // enabled by the application services
     model->add(id(kSettingsPreferences), tr("&Preferences…"));
 
+    model->add(id(kHelpSearchCommands), tr("&Search Commands…"),
+               QKeySequence(QStringLiteral("Alt+Q")), QStringLiteral("search"));
     model->add(id(kHelpAbout), tr("&About %1").arg(appDisplayName));
     model->add(id(kHelpAboutQt), tr("About &Qt"));
 
@@ -115,14 +122,15 @@ QList<MenuNode> standardMenuTree()
     menus.append(MenuNode::submenu(
         QStringLiteral("viewMenu"), tr("&View"),
         {a(kViewZoomIn), a(kViewZoomOut), a(kViewZoomReset), MenuNode::separator(),
-         a(kViewShowToolBars), a(kViewShowStatusBar), a(kViewShowMenuBar)}));
+         a(kViewShowToolBars), a(kViewCompactRibbon), a(kViewShowStatusBar), a(kViewShowMenuBar)}));
     // App menus slot in between View and AI (insertMenuBefore("aiMenu", …)).
     menus.append(MenuNode::submenu(QStringLiteral("aiMenu"), tr("&AI"), {a(kAiAssistant)}));
     menus.append(MenuNode::submenu(QStringLiteral("settingsMenu"), tr("&Settings"),
                                    {a(kSettingsRestorePrevious), MenuNode::separator(),
                                     a(kSettingsPreferences)}));
     menus.append(MenuNode::submenu(QStringLiteral("helpMenu"), tr("&Help"),
-                                   {a(kHelpAbout), a(kHelpAboutQt)}));
+                                   {a(kHelpSearchCommands), MenuNode::separator(), a(kHelpAbout),
+                                    a(kHelpAboutQt)}));
     return menus;
 }
 

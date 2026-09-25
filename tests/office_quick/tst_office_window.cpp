@@ -16,7 +16,8 @@ using namespace QindaOffice::Quick;
 
 // The real window QML over a real host, offscreen: the static module
 // registers, the bands exist, the menu bar is built from the tree with
-// live-bound items, and a panel-style activation reaches the host.
+// live-bound items, the ribbon draws the same entries (compact mode, the
+// command palette), and a panel-style activation reaches the host.
 class OfficeWindowTest final : public QObject {
     Q_OBJECT
 
@@ -50,8 +51,9 @@ import QindaTK as Tk
 import QindaOffice.Shell
 OfficeWindow {
     width: 800; height: 600
-    toolBars: [ ToolBarFromModel { objectName: "mainBar"; actions: host.actions
-                commands: ["fileNewAction", "fileOpenAction", "|", "editUndoAction", "viewShowMenuBarAction"] } ]
+    ribbonTabs: [{ id: "home", label: "Home", groups: [
+        { id: "g", label: "Group", items: [{ action: "fileNewAction", size: "large" }, "fileOpenAction",
+                                           "editUndoAction", "viewShowMenuBarAction", "noSuchCommand"] }] }]
     Rectangle { objectName: "content"; color: "white" }
 }
 )qml", QUrl(QStringLiteral("inline.qml")));
@@ -82,12 +84,47 @@ OfficeWindow {
         QCOMPARE(newItem->property("text").toString(), QStringLiteral("&New"));
         QCOMPARE(newItem->property("shortcut").toString(), QStringLiteral("Ctrl+N"));
 
-        // A tool strip button follows its entry.
-        QQuickItem *undoButton = findItem(root, QStringLiteral("toolButton_editUndoAction"));
+        // D-041: a ribbon button follows its entry; an unknown id is skipped
+        // (one warning), never drawn as a dead button.
+        QQuickItem *ribbon = findItem(root, QStringLiteral("officeRibbon"));
+        QVERIFY(ribbon != nullptr && ribbon->isVisible());
+        QCOMPARE(ribbon->property("currentTabId").toString(), QStringLiteral("home"));
+        QQuickItem *undoButton = findItem(root, QStringLiteral("ribbonAction_editUndoAction"));
         QVERIFY(undoButton != nullptr);
         QVERIFY(!undoButton->isEnabled());
         host.actions()->setEnabled(QString::fromLatin1(ActionId::kEditUndo), true);
         QTRY_VERIFY(undoButton->isEnabled());
+        QVERIFY(findItem(root, QStringLiteral("ribbonItem_noSuchCommand")) == nullptr);
+        QCOMPARE(findItem(root, QStringLiteral("ribbonAction_fileNewAction"))->property("size").toString(),
+                 QStringLiteral("large"));
+        // View ▸ Compact Ribbon is the ribbon's mode.
+        host.actions()->trigger(QString::fromLatin1(ActionId::kViewCompactRibbon));
+        QTRY_COMPARE(ribbon->property("mode").toString(), QStringLiteral("compact"));
+        host.actions()->trigger(QString::fromLatin1(ActionId::kViewCompactRibbon));
+        QTRY_COMPARE(ribbon->property("mode").toString(), QStringLiteral("expanded"));
+
+        // Help ▸ Search Commands… (Alt+Q) opens the palette over the menu
+        // tree's commands; activating a row triggers the entry by id.
+        QObject *palette = window->findChild<QObject *>(QStringLiteral("commandPalette"));
+        QVERIFY(palette != nullptr);
+        QVERIFY(host.actions()->trigger(QString::fromLatin1(ActionId::kHelpSearchCommands)));
+        QTRY_VERIFY(palette->property("opened").toBool());
+        const QVariantList commands = palette->property("commands").toList();
+        QVERIFY(commands.size() > 20);
+        bool hasNew = false;
+        for (const QVariant &row : commands) {
+            const QVariantMap map = row.toMap();
+            if (map.value(QStringLiteral("id")).toString() == QString::fromLatin1(ActionId::kFileNew)) {
+                hasNew = true;
+                QCOMPARE(map.value(QStringLiteral("label")).toString(), QStringLiteral("New"));
+                QCOMPARE(map.value(QStringLiteral("section")).toString(), QStringLiteral("File"));
+            }
+        }
+        QVERIFY(hasNew);
+        QSignalSpy fromPalette(&host, &DocumentHost::newWindowRequested);
+        QMetaObject::invokeMethod(palette, "activated", Q_ARG(QString, QString::fromLatin1(ActionId::kFileNew)));
+        QCOMPARE(fromPalette.count(), 1);
+        QMetaObject::invokeMethod(palette, "close");
         QVERIFY(findItem(root, QStringLiteral("content")) != nullptr);
         QVERIFY(findItem(root, QStringLiteral("officeStatusBar")) != nullptr);
 

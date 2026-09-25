@@ -65,8 +65,10 @@ set(office_quick_qml
     qml/PreferencesDialog.qml
     qml/PrintDialog.qml
     qml/PrintPreview.qml
+    qml/CommandSearch.qml
+    qml/RibbonFromModel.qml
+    qml/StandardRibbon.js
     qml/ThemeBridge.qml
-    qml/ToolBarFromModel.qml
 )
 # Published flat (OfficeWindow.qml, not qml/OfficeWindow.qml), like QindaTK.
 foreach(qml_file IN LISTS office_quick_qml)

@@ -16,7 +16,18 @@ development prefix needs `-DCMAKE_PREFIX_PATH=<QindaTK>/install`.
 
 The UI tests also write what a reviewer looks at: the structural fixtures
 in `tests/qml_fixtures/` (`QQO_UPDATE_FIXTURES=1` rewrites them) and, with
-`QQO_GRAB_DIR=<dir>`, a PNG of each window at 1280x800 and 520x700.
+`QQO_GRAB_DIR=<dir>`, a PNG of each window at 1280x800 and 520x700 — saved
+*before* the fixture comparison, so a failing layout is still captured.
+`QQO_GRAB_PREFIX` prefixes the file names.
+
+**Validation gallery.** `tools/validation_gallery.py` (default
+`http://127.0.0.1:8788/`) is a live page of every capture of the current
+work: untracked or modified PNGs in the checkout, its `QindaOffice-*`
+worktrees and the plan's QindaTK lane worktrees, plus
+`~/.local/share/qindaoffice-validation-gallery/inbox/`. Grab straight into
+it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
+QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
+runs never overwrite earlier evidence.
 
 ## On-desktop manual checklist (run inside a QindaQt session)
 
@@ -57,6 +68,31 @@ app-side requirements above are the parts the suite owns):
       mid-edit and relaunch — the Recover dialog offers the journal entry.
 
 ## Milestone-specific gates
+
+### M40 gates (the ribbon, D-041)
+
+- **Ribbon gate** (`tests/support/ribbon_gate.h`, one test per app,
+  `ribbonReachesEveryCommandAndSqueezes`) at a desktop width and at 520 px:
+  every command of the menu tree is reachable from the ribbon — a button
+  or a dropdown entry — unless the app lists it as menu-only with a reason
+  (Quit, Find Next/Previous, About, Restore Previous, and the colour
+  dialogs the colour buttons open); every icon name the layout asks for
+  exists in QindaTK; every item of every tab, contextual tabs forced on,
+  is visible and inside the ribbon. This replaces the strips' squeeze
+  tests: the ribbon squeezes (large → small → icon) and then wraps, it
+  never scrolls or hides a command (QindaTK D-297).
+- **Live binding**: Write's Bold button toggles the entry and shows its
+  state; Calc's Undo follows the entry's enabled state; Note's tools stay
+  one radio group; Write's Table and Show's Shape tabs appear only in
+  their context.
+- **Shell**: `tst_office_window` builds a ribbon from ids (an unknown id is
+  skipped, never drawn), flips View ▸ Compact Ribbon, and opens Help ▸
+  Search Commands… (Alt+Q) — the palette lists the menu tree's commands by
+  section and activates by id.
+- **Pixels reviewed**: all four apps at 1280 and 520, dark preset
+  (validation gallery, `M40-*`).
+- `--list-commands` on every app prints id, label, shortcut, icon and menu
+  path — the inventory the ribbon layouts were written against.
 
 Added per milestone in the milestone commit (formula tables, xlsx
 round-trips, fodp→pptx conversion, provider smoke tests, pen-input checks,

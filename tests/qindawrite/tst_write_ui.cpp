@@ -12,6 +12,7 @@
 #include "qindawrite/src/page_setup_io.h"
 #include "qindawrite/src/table_actions.h"
 #include "support/quick_dump.h"
+#include "support/ribbon_gate.h"
 
 #include "menu_tree.h"
 #include "standard_actions.h"
@@ -55,31 +56,41 @@ QString sid(const char *id)
 class WriteUiTest : public QObject {
     Q_OBJECT
 private slots:
-    void toolbarsExposeNamedCommands()
+    // D-041: the ribbon draws the host's own entries — the named buttons
+    // exist, bind live, and the font widgets ride in the Font group.
+    void ribbonExposesNamedCommands()
     {
         Scene scene;
         QVERIFY2(scene.ready(), qPrintable(scene.error));
         QVERIFY(QTest::qWaitForWindowExposed(scene.window));
         QTest::qWait(100);
-        QQuickItem *mainBar = scene.item(QStringLiteral("mainBar"));
-        QQuickItem *formatBar = scene.item(QStringLiteral("formatBar"));
-        QVERIFY(mainBar != nullptr && formatBar != nullptr);
-        for (const char *id : {ActionId::kFileNew, ActionId::kFileOpen, ActionId::kFileSave, ActionId::kEditUndo,
-                               ActionId::kEditCut, ActionId::kEditFind}) {
-            QVERIFY2(findItem(mainBar, QStringLiteral("toolButton_") + sid(id)) != nullptr, id);
-        }
+        QQuickItem *ribbon = scene.item(QStringLiteral("officeRibbon"));
+        QVERIFY(ribbon != nullptr);
+        QCOMPARE(ribbon->property("currentTabId").toString(), QStringLiteral("home"));
         const WriteActions &format = scene.host.formatController()->actions();
         for (ActionEntry *entry : format.all()) {
             QVERIFY2(!entry->id().isEmpty(), qPrintable(entry->text()));
         }
         for (ActionEntry *entry : {format.bold, format.italic, format.underline, format.alignLeft,
-                                   format.listBullet, format.insertTable}) {
-            QVERIFY2(findItem(formatBar, QStringLiteral("toolButton_") + entry->id()) != nullptr,
+                                   format.listBullet}) {
+            QVERIFY2(findItem(ribbon, QStringLiteral("ribbonAction_") + entry->id()) != nullptr,
                      qPrintable(entry->id()));
         }
-        // Font family and size controls live on the format strip.
-        QVERIFY(findItem(formatBar, QStringLiteral("fontFamilyCombo")) != nullptr);
-        QVERIFY(findItem(formatBar, QStringLiteral("fontSizeCombo")) != nullptr);
+        QVERIFY(findItem(ribbon, QStringLiteral("fontFamilyCombo")) != nullptr);
+        QVERIFY(findItem(ribbon, QStringLiteral("fontSizeCombo")) != nullptr);
+        // The button is the entry: triggering it toggles the entry and the
+        // entry's state is what the button shows.
+        QQuickItem *bold = findItem(ribbon, QStringLiteral("ribbonAction_") + format.bold->id());
+        scene.selectFirstWord();
+        QVERIFY(!bold->property("checked").toBool());
+        QTest::mouseClick(scene.window, Qt::LeftButton, {},
+                          bold->mapToScene(QPointF(bold->width() / 2, bold->height() / 2)).toPoint());
+        QTRY_VERIFY(format.bold->isChecked());
+        QTRY_VERIFY(bold->property("checked").toBool());
+        // The Table tab is contextual: absent until the cursor is in a table.
+        QVERIFY(!ribbon->property("contextIds").toStringList().contains(QStringLiteral("table")));
+        scene.host.insertTable(2, 2);
+        QTRY_VERIFY(ribbon->property("contextIds").toStringList().contains(QStringLiteral("table")));
     }
 
     void appMenusExist()
@@ -375,35 +386,21 @@ private slots:
         QCOMPARE(formatPageDecoration(QStringLiteral("{page}/{pages}"), 2, 7), QStringLiteral("2/7"));
     }
 
-    // The widest strip in the suite: ~40 commands plus four slots. It
-    // wraps; every command keeps a visible button inside the strip.
-    void formatStripWrapsInsteadOfHidingCommands()
+    // The ribbon gate (tests/support/ribbon_gate.h) at a desktop width and
+    // squeezed: every menu command reachable, every icon real, every item
+    // of every tab visible inside the ribbon.
+    void ribbonReachesEveryCommandAndSqueezes()
     {
-        Scene scene(QSize(1400, 700));
-        QVERIFY2(scene.ready(), qPrintable(scene.error));
-        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
-        QTest::qWait(150);
-        QQuickItem *bar = scene.item(QStringLiteral("formatBar"));
-        QVERIFY(bar != nullptr);
-        QStringList buttons;
-        std::function<void(QQuickItem *)> collect = [&](QQuickItem *item) {
-            for (QQuickItem *child : item->childItems()) {
-                if (child->objectName().startsWith(QStringLiteral("toolButton_"))) {
-                    buttons.append(child->objectName());
-                }
-                collect(child);
-            }
-        };
-        collect(bar);
-        QVERIFY2(buttons.size() >= 28, qPrintable(QStringLiteral("only %1 commands on the strip").arg(buttons.size())));
-        const qreal wideHeight = bar->height();
-        scene.window->resize(560, 700);
-        QTRY_VERIFY(bar->height() > wideHeight);
-        for (const QString &name : buttons) {
-            QQuickItem *button = findItem(bar, name);
-            QVERIFY2(button != nullptr && button->isVisible(), qPrintable(name));
-            const QRectF rect = button->mapRectToItem(bar, QRectF(0, 0, button->width(), button->height()));
-            QVERIFY2(rect.right() <= bar->width() + 0.5, qPrintable(name));
+        for (const int width : {1400, 520}) {
+            Scene scene(QSize(width, 700));
+            QVERIFY2(scene.ready(), qPrintable(scene.error));
+            QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+            QTest::qWait(150);
+            const QStringList problems = QindaOffice::Test::ribbonProblems(
+                scene.window, scene.host.menuTree(),
+                // The colour dialogs are the colour buttons' "Custom…" (the slots).
+                {QStringLiteral("formatTextColorAction"), QStringLiteral("formatHighlightAction")});
+            QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
         }
     }
 
@@ -426,14 +423,10 @@ private slots:
             QVERIFY2(scene.ready(), qPrintable(scene.error));
             QVERIFY(QTest::qWaitForWindowExposed(scene.window));
             QTest::qWait(150);
+            QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindawrite_%1").arg(width));
             QString diff;
             const QString path = QStringLiteral(QQO_FIXTURE_DIR "/qindawrite_%1.txt").arg(width);
             QVERIFY2(QindaOffice::Test::matchesFixture(scene.window, path, &diff), qPrintable(diff));
-            // QQO_GRAB_DIR=<dir> also saves a PNG of each window for review.
-            const QString grabDir = qEnvironmentVariable("QQO_GRAB_DIR");
-            if (!grabDir.isEmpty()) {
-                scene.window->grabWindow().save(QStringLiteral("%1/qindawrite_%2.png").arg(grabDir).arg(width));
-            }
         }
     }
 };

@@ -4,13 +4,17 @@
 #include "desktop_appearance.h"
 
 #include "document_host.h"
+#include "menu_tree.h"
 #include "office_application.h"
 
 #include <QCommandLineParser>
 #include <QFileInfo>
 #include <QGuiApplication>
+
+#include <memory>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
+#include <QTextStream>
 #include <QUrl>
 
 // AGENT-GUARD: QindaOffice.Shell is a STATIC QML module. Its type
@@ -20,6 +24,33 @@
 // or `import QindaOffice.Shell` fails with "module not installed".
 
 namespace QindaOffice::Quick {
+
+namespace {
+
+// --list-commands: one line per command of a fresh window's menu tree —
+// id, label, shortcut, icon, menu path — tab-separated. The ids are the
+// stable activation identities (AGENTS.md rule 5), so this is the table
+// keybinding docs, panel scripts and ribbon layouts are written against.
+void listCommands(const QList<MenuNode> &nodes, const ActionModel *actions, const QString &path,
+                  QTextStream &out)
+{
+    for (const MenuNode &node : nodes) {
+        if (node.kind == MenuNode::Kind::Submenu) {
+            QString title = node.title;
+            title.remove(QLatin1Char('&'));
+            listCommands(node.children, actions, path.isEmpty() ? title : path + QStringLiteral(" > ") + title,
+                         out);
+        } else if (node.kind == MenuNode::Kind::Action) {
+            const ActionEntry *entry = actions->entry(node.id);
+            if (entry != nullptr) {
+                out << node.id << '\t' << entry->plainText() << '\t' << entry->shortcutText() << '\t'
+                    << entry->iconName() << '\t' << path << '\n';
+            }
+        }
+    }
+}
+
+} // namespace
 
 int runOfficeApp(int &argc, char *argv[], const QString &desktopId, const QUrl &windowUrl,
                  const std::function<DocumentHost *()> &hostFactory)
@@ -47,10 +78,19 @@ int runOfficeApp(int &argc, char *argv[], const QString &desktopId, const QUrl &
     QCommandLineOption newInstance(QStringLiteral("new-instance"),
                                    QStringLiteral("Launch a second independent process"));
     parser.addOption(newInstance);
+    QCommandLineOption listCommandsOption(QStringLiteral("list-commands"),
+                                          QStringLiteral("Print every command (id, label, shortcut, icon, menu) and exit"));
+    parser.addOption(listCommandsOption);
     parser.addPositionalArgument(QStringLiteral("paths"), QStringLiteral("Documents to open"),
                                  QStringLiteral("[paths...]"));
     parser.process(application);
     const QStringList paths = parser.positionalArguments();
+    if (parser.isSet(listCommandsOption)) {
+        std::unique_ptr<DocumentHost> host(hostFactory());
+        QTextStream out(stdout);
+        listCommands(host->menuTree()->topLevel(), host->actions(), {}, out);
+        return 0;
+    }
 
     QQmlApplicationEngine engine;
 #ifdef QQO_QINDATK_QML_ROOT

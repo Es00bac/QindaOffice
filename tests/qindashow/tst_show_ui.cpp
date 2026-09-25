@@ -14,6 +14,7 @@
 #include "qindashow/src/show_commands.h"
 #include "qindashow/src/show_toolbox.h"
 #include "support/quick_dump.h"
+#include "support/ribbon_gate.h"
 
 #include "menu_tree.h"
 #include "standard_actions.h"
@@ -63,12 +64,10 @@ private slots:
         QVERIFY2(scene.ready(), qPrintable(scene.error));
         QVERIFY(QTest::qWaitForWindowExposed(scene.window));
         QTest::qWait(100);
-        QQuickItem *mainBar = scene.item(QStringLiteral("mainBar"));
-        QQuickItem *shapeBar = scene.item(QStringLiteral("shapeBar"));
-        QVERIFY(mainBar != nullptr && shapeBar != nullptr);
-        for (const char *id : {ActionId::kFileNew, ActionId::kFileSave, ActionId::kEditUndo, ActionId::kEditCopy,
-                               ActionId::kSlideNew, ActionId::kSlideStartShow}) {
-            QVERIFY2(findItem(mainBar, QStringLiteral("toolButton_") + sid(id)) != nullptr, id);
+        QQuickItem *ribbon = scene.item(QStringLiteral("officeRibbon"));
+        QVERIFY(ribbon != nullptr);
+        for (const char *id : {ActionId::kEditUndo, ActionId::kEditCopy, ActionId::kSlideNew}) {
+            QVERIFY2(findItem(ribbon, QStringLiteral("ribbonAction_") + sid(id)) != nullptr, id);
         }
         const ShowInsertActions &insert = scene.host.toolbox()->insertActions();
         const ShowStyleActions &style = scene.host.toolbox()->styleActions();
@@ -76,10 +75,11 @@ private slots:
             QVERIFY2(!entry->id().isEmpty(), qPrintable(entry->text()));
         }
         for (const ActionEntry *entry : {insert.rectangle, insert.ellipse, style.bold}) {
-            QVERIFY2(findItem(shapeBar, QStringLiteral("toolButton_") + entry->id()) != nullptr,
+            QVERIFY2(findItem(ribbon, QStringLiteral("ribbonAction_") + entry->id()) != nullptr,
                      qPrintable(entry->id()));
         }
-        QVERIFY(findItem(shapeBar, QStringLiteral("fillColorButton")) != nullptr);
+        // The Shape tab (fill and stroke buttons) is contextual on a selection.
+        QVERIFY(!ribbon->property("contextIds").toStringList().contains(QStringLiteral("shape")));
         // The menus name the same entries.
         const MenuNode *insertMenu = scene.host.menuTree()->find(QStringLiteral("showInsertMenu"));
         const MenuNode *shapeMenu = scene.host.menuTree()->find(QStringLiteral("showShapeMenu"));
@@ -413,6 +413,22 @@ private slots:
         QVERIFY(scene.host.isPristineUntitled());
     }
 
+    // The ribbon gate (tests/support/ribbon_gate.h, D-041) at a desktop
+    // width and squeezed: every menu command reachable, every icon real,
+    // every item of every tab (contextual ones forced on) inside the ribbon.
+    void ribbonReachesEveryCommandAndSqueezes()
+    {
+        for (const int width : {1280, 520}) {
+            Scene scene(QSize(width, 700));
+            QVERIFY2(scene.ready(), qPrintable(scene.error));
+            QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+            QTest::qWait(150);
+            const QStringList problems = QindaOffice::Test::ribbonProblems(
+                scene.window, scene.host.menuTree(), {QStringLiteral("showFillColorAction"), QStringLiteral("showStrokeColorAction")});
+            QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+        }
+    }
+
     void structuralFixtures()
     {
         for (const int width : {1280, 520}) {
@@ -420,13 +436,10 @@ private slots:
             QVERIFY2(scene.ready(), qPrintable(scene.error));
             QVERIFY(QTest::qWaitForWindowExposed(scene.window));
             QTest::qWait(150);
+            QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindashow_%1").arg(width));
             QString diff;
             const QString path = QStringLiteral(QQO_FIXTURE_DIR "/qindashow_%1.txt").arg(width);
             QVERIFY2(QindaOffice::Test::matchesFixture(scene.window, path, &diff), qPrintable(diff));
-            const QString grabDir = qEnvironmentVariable("QQO_GRAB_DIR");
-            if (!grabDir.isEmpty()) {
-                scene.window->grabWindow().save(QStringLiteral("%1/qindashow_%2.png").arg(grabDir).arg(width));
-            }
         }
     }
 };

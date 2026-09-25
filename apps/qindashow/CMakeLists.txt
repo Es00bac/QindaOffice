@@ -9,6 +9,7 @@ set(qindashow_qml
     qml/PresenterView.qml
     qml/ShowPlayer.qml
     qml/ShowWindow.qml
+    qml/ShowRibbonLayout.qml
     qml/SlideCanvasView.qml
     qml/SlidePanel.qml
     qml/SlideSorter.qml

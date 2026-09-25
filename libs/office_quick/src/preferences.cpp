@@ -16,6 +16,7 @@ namespace {
 // existing install, so add a new key instead.
 constexpr QLatin1StringView kShowStatusBar("ui.showStatusBar");
 constexpr QLatin1StringView kShowToolBars("ui.showToolBars");
+constexpr QLatin1StringView kRibbonCompact("ui.ribbonCompact");
 constexpr QLatin1StringView kDefaultZoom("ui.defaultZoomPercent");
 constexpr QLatin1StringView kAutoSaveMinutes("files.autoSaveMinutes");
 constexpr QLatin1StringView kFontFamily("document.fontFamily");
@@ -72,6 +73,16 @@ bool Preferences::showToolBars() const
 void Preferences::setShowToolBars(bool on)
 {
     put(kShowToolBars, on);
+}
+
+bool Preferences::ribbonCompact() const
+{
+    return m_settings->value(kRibbonCompact, false).toBool();
+}
+
+void Preferences::setRibbonCompact(bool on)
+{
+    put(kRibbonCompact, on);
 }
 
 int Preferences::defaultZoomPercent() const

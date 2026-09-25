@@ -7,9 +7,9 @@ import QindaOffice.Ai as Ai
 import QindaOffice.Write
 
 // The QindaWrite window (plan §5.1): the shared OfficeWindow over a
-// WriteHost, with the main strip and the format strip (font, size,
-// character styles, colours, alignment, lists, indent, inserts, the
-// typography set, review and the table section), the ruler above the
+// WriteHost, with the ribbon (WriteRibbonLayout.qml: font, size, character
+// styles, colours, alignment, lists, styles, inserts, references, review,
+// the contextual Table tab), the ruler above the
 // page, the pages in a zoomable viewport, the find/replace bar, the
 // assistant dock and the dialogs the host asks for.
 OfficeWindow {
@@ -20,33 +20,17 @@ OfficeWindow {
     width: 1180
     height: 780
 
-    toolBars: [
-        ToolBarFromModel {
-            objectName: "mainBar"
-            actions: window.host.actions
-            commands: ["fileNewAction", "fileOpenAction", "fileSaveAction", "|",
-                       "editUndoAction", "editRedoAction", "|",
-                       "editCutAction", "editCopyAction", "editPasteAction", "|",
-                       "editFindAction", "|", "viewZoomOutAction", "viewZoomInAction", "|",
-                       "filePrintAction"]
-        },
-        ToolBarFromModel {
-            objectName: "formatBar"
-            compact: true
-            actions: window.host.actions
-            commands: [{ component: fontSlot }, { component: sizeSlot }, "|",
-                       "formatBoldAction", "formatItalicAction", "formatUnderlineAction", "formatStrikeOutAction",
-                       { component: textColorSlot }, { component: highlightSlot }, "|",
-                       "formatAlignLeftAction", "formatAlignCenterAction", "formatAlignRightAction", "formatAlignJustifyAction", "|",
-                       "formatListBulletAction", "formatListNumberedAction", "formatIndentLessAction", "formatIndentMoreAction", "|",
-                       "insertTableAction", "insertImageAction", "insertColumnsAction", "|",
-                       "formatSuperscriptAction", "formatSubscriptAction", "formatGrowFontAction", "formatShrinkFontAction", "|",
-                       "reviewTrackChangesAction", "insertFootnoteAction", "|",
-                       "tableInsertRowAboveAction", "tableInsertRowBelowAction", "tableInsertColumnLeftAction",
-                       "tableInsertColumnRightAction", "tableDeleteRowAction", "tableDeleteColumnAction",
-                       "tableMergeCellsAction", "tableSplitCellAction"]
-        }
-    ]
+    // The ribbon (D-041): WriteRibbonLayout.qml; Table appears while the
+    // cursor is in a table (the table commands are enabled exactly then).
+    readonly property WriteRibbonLayout ribbonLayout: WriteRibbonLayout {
+        fontSlot: fontSlot
+        sizeSlot: sizeSlot
+        textColorSlot: textColorSlot
+        highlightSlot: highlightSlot
+    }
+    ribbonTabs: ribbonLayout.tabs
+    ribbonContexts: tableContext.enabled ? ["table"] : []
+    readonly property ActionEntry tableContext: host.actions.entry("tableDeleteRowAction")
 
     Component {
         id: fontSlot

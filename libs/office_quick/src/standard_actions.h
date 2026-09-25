@@ -38,6 +38,9 @@ inline const char kViewZoomReset[] = "viewZoomResetAction";
 inline const char kViewShowMenuBar[] = "viewShowMenuBarAction";
 inline const char kViewShowToolBars[] = "viewShowToolBarsAction";
 inline const char kViewShowStatusBar[] = "viewShowStatusBarAction";
+// M40 (D-041): the ribbon's one-row mode, and the command search.
+inline const char kViewCompactRibbon[] = "viewCompactRibbonAction";
+inline const char kHelpSearchCommands[] = "helpSearchCommandsAction";
 inline const char kAiAssistant[] = "aiAssistantAction";
 inline const char kSettingsPreferences[] = "settingsPreferencesAction";
 inline const char kSettingsRestorePrevious[] = "settingsRestorePreviousAction";

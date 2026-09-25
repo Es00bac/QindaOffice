@@ -9,6 +9,7 @@
 
 #include "qindacalc/src/calc_clipboard.h"
 #include "support/quick_dump.h"
+#include "support/ribbon_gate.h"
 
 #include "standard_actions.h"
 
@@ -45,24 +46,23 @@ class CalcUiTest final : public QObject {
     }
 
 private slots:
-    void toolbarsExposeNamedCommands()
+    void ribbonExposesNamedCommands()
     {
         Scene scene;
         QVERIFY2(scene.ready(), qPrintable(scene.error));
         QVERIFY(QTest::qWaitForWindowExposed(scene.window));
         QTest::qWait(100);
-        QQuickItem *mainBar = scene.item(QStringLiteral("mainBar"));
-        QQuickItem *formatBar = scene.item(QStringLiteral("formatBar"));
-        QVERIFY(mainBar != nullptr && formatBar != nullptr);
-        for (const char *id : {ActionId::kFileSave, ActionId::kEditUndo, ActionId::kEditCopy,
-                               ActionId::kEditPaste, ActionId::kEditFind}) {
-            QVERIFY2(findItem(mainBar, QStringLiteral("toolButton_") + QString::fromLatin1(id)) != nullptr, id);
+        QQuickItem *ribbon = scene.item(QStringLiteral("officeRibbon"));
+        QVERIFY(ribbon != nullptr);
+        for (const char *id : {ActionId::kEditUndo, ActionId::kEditCopy, ActionId::kEditPaste,
+                               ActionId::kFormatBold, ActionId::kCalcAutoSum}) {
+            QVERIFY2(findItem(ribbon, QStringLiteral("ribbonAction_") + QString::fromLatin1(id)) != nullptr, id);
         }
-        QVERIFY(findItem(formatBar, QStringLiteral("toolButton_formatBoldAction")) != nullptr);
-        QVERIFY(findItem(formatBar, QStringLiteral("cellNumberFormatCombo")) != nullptr);
-        QVERIFY(findItem(formatBar, QStringLiteral("cellFontFamilyCombo")) != nullptr);
-        // Fresh document: nothing to undo yet.
+        QVERIFY(findItem(ribbon, QStringLiteral("cellNumberFormatCombo")) != nullptr);
+        QVERIFY(findItem(ribbon, QStringLiteral("cellFontFamilyCombo")) != nullptr);
+        // Fresh document: nothing to undo yet, and the ribbon shows it.
         QVERIFY(!scene.host.actions()->entry(QString::fromLatin1(ActionId::kEditUndo))->isEnabled());
+        QVERIFY(!findItem(ribbon, QStringLiteral("ribbonAction_editUndoAction"))->isEnabled());
     }
 
     void undoRedoRestoresValuesAndRecalculates()
@@ -203,28 +203,19 @@ private slots:
                                 .arg(painted.left()).arg(painted.top()).arg(expected.left()).arg(expected.top())));
     }
 
-    void formatStripWrapsInsteadOfHidingCommands()
+    // The ribbon gate (tests/support/ribbon_gate.h, D-041) at a desktop
+    // width and squeezed: every menu command reachable, every icon real,
+    // every item of every tab (contextual ones forced on) inside the ribbon.
+    void ribbonReachesEveryCommandAndSqueezes()
     {
-        Scene scene(QSize(1200, 600));
-        QVERIFY2(scene.ready(), qPrintable(scene.error));
-        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
-        QTest::qWait(100);
-        QQuickItem *bar = scene.item(QStringLiteral("formatBar"));
-        QVERIFY(bar != nullptr);
-        const QStringList wanted = {QStringLiteral("toolButton_formatBoldAction"),
-                                    QStringLiteral("toolButton_formatItalicAction"),
-                                    QStringLiteral("toolButton_formatUnderlineAction"),
-                                    QStringLiteral("toolButton_formatAlignLeftAction"),
-                                    QStringLiteral("toolButton_formatAlignCenterAction"),
-                                    QStringLiteral("toolButton_formatAlignRightAction")};
-        const qreal wideHeight = bar->height();
-        scene.window->resize(560, 600);
-        QTRY_VERIFY(bar->height() > wideHeight);
-        for (const QString &id : wanted) {
-            QQuickItem *button = findItem(bar, id);
-            QVERIFY2(button != nullptr && button->isVisible(), qPrintable(id));
-            const QRectF rect = button->mapRectToItem(bar, QRectF(0, 0, button->width(), button->height()));
-            QVERIFY2(rect.right() <= bar->width() + 0.5, qPrintable(id));
+        for (const int width : {1280, 520}) {
+            Scene scene(QSize(width, 700));
+            QVERIFY2(scene.ready(), qPrintable(scene.error));
+            QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+            QTest::qWait(150);
+            const QStringList problems = QindaOffice::Test::ribbonProblems(
+                scene.window, scene.host.menuTree(), {QStringLiteral("formatTextColorAction"), QStringLiteral("calcFillColorAction")});
+            QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
         }
     }
 
@@ -399,6 +390,7 @@ private slots:
             QVERIFY(dock != nullptr);
             QVERIFY(QMetaObject::invokeMethod(dock, "resetLayout"));
             QTest::qWait(150);
+            QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindacalc_%1").arg(width));
             QString diff;
             const QString path = QStringLiteral(QQO_FIXTURE_DIR "/qindacalc_%1.txt").arg(width);
             QVERIFY2(QindaOffice::Test::matchesFixture(scene.window, path, &diff), qPrintable(diff));

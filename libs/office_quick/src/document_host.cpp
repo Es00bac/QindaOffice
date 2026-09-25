@@ -152,6 +152,14 @@ void DocumentHost::wireStandardCommands()
                 }
                 emit chromeChanged();
             });
+    connect(m_actions->entry(QString::fromLatin1(kViewCompactRibbon)), &ActionEntry::toggled, this,
+            [this](bool compact) {
+                if (!m_applyingChromePrefs) {
+                    Preferences::instance().setRibbonCompact(compact);
+                }
+                emit chromeChanged();
+            });
+    on(kHelpSearchCommands, [this] { emit commandSearchRequested(); });
     connect(m_actions->entry(QString::fromLatin1(kViewShowStatusBar)), &ActionEntry::toggled, this,
             [this](bool show) {
                 if (!m_applyingChromePrefs) {
@@ -170,6 +178,20 @@ void DocumentHost::wireStandardCommands()
 bool DocumentHost::toolBarsVisible() const
 {
     return m_actions->entry(QString::fromLatin1(ActionId::kViewShowToolBars))->isChecked();
+}
+
+void DocumentHost::setRibbonContexts(const QStringList &contexts)
+{
+    if (contexts == m_ribbonContexts) {
+        return;
+    }
+    m_ribbonContexts = contexts;
+    emit ribbonContextsChanged();
+}
+
+bool DocumentHost::ribbonCompact() const
+{
+    return m_actions->entry(QString::fromLatin1(ActionId::kViewCompactRibbon))->isChecked();
 }
 
 bool DocumentHost::statusBarVisible() const
@@ -401,6 +423,7 @@ void DocumentHost::applyChromePreferences()
     const Preferences &prefs = Preferences::instance();
     m_actions->entry(QString::fromLatin1(ActionId::kViewShowToolBars))->setChecked(prefs.showToolBars());
     m_actions->entry(QString::fromLatin1(ActionId::kViewShowStatusBar))->setChecked(prefs.showStatusBar());
+    m_actions->entry(QString::fromLatin1(ActionId::kViewCompactRibbon))->setChecked(prefs.ribbonCompact());
     m_applyingChromePrefs = false;
     emit chromeChanged();
     restartAutoSaveTimer();

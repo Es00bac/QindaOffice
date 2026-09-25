@@ -7,12 +7,11 @@ import QindaOffice.Ai as Ai
 import QindaOffice.Show
 
 // The QindaShow window (plan §5.3): the shared OfficeWindow over a
-// ShowHost, with the main strip (file, undo, clipboard, find, zoom, slide
-// commands, start show) and the shapes strip (inserts, styling, arrange,
-// group), the slide sorter docked left, the canvas in a page-fitting
-// viewport, the notes / transition / layout panel docked right, the find
-// bar, the assistant dock, the player and presenter windows while a show
-// runs, and the dialogs the host asks for.
+// ShowHost, with the ribbon (ShowRibbonLayout.qml; the Shape tab appears
+// while shapes are selected), the slide sorter docked left, the canvas in a
+// page-fitting viewport, the notes / transition / layout panel docked
+// right, the find bar, the assistant dock, the player and presenter windows
+// while a show runs, and the dialogs the host asks for.
 OfficeWindow {
     id: window
 
@@ -21,29 +20,15 @@ OfficeWindow {
     width: 1180
     height: 780
 
-    toolBars: [
-        ToolBarFromModel {
-            objectName: "mainBar"
-            actions: window.host.actions
-            commands: ["fileNewAction", "fileOpenAction", "fileSaveAction", "|",
-                       "editUndoAction", "editRedoAction", "|",
-                       "editCutAction", "editCopyAction", "editPasteAction", "|",
-                       "editFindAction", "|", "viewZoomOutAction", "viewZoomInAction", "|",
-                       "slideNewAction", "slideDuplicateAction", "slideDeleteAction", "|",
-                       "slideStartShowAction"]
-        },
-        ToolBarFromModel {
-            objectName: "shapeBar"
-            compact: true
-            actions: window.host.actions
-            commands: ["showInsertTextBoxAction", "showInsertRectangleAction", "showInsertEllipseAction",
-                       "showInsertLineAction", "showInsertArrowAction", "showInsertImageAction", "|",
-                       "formatBoldAction", "formatItalicAction", { component: fillSlot }, { component: strokeSlot }, "|",
-                       "showBringToFrontAction", "showSendToBackAction", "showAlignLeftAction", "showAlignHCenterAction",
-                       "showAlignRightAction", "showAlignTopAction", "showAlignVCenterAction", "showAlignBottomAction", "|",
-                       "showGroupAction", "showUngroupAction"]
-        }
-    ]
+    // The ribbon (D-041): ShowRibbonLayout.qml; Shape is contextual on a
+    // selection (Delete Shape is enabled exactly when something is selected).
+    readonly property ShowRibbonLayout ribbonLayout: ShowRibbonLayout {
+        fillSlot: fillSlot
+        strokeSlot: strokeSlot
+    }
+    ribbonTabs: ribbonLayout.tabs
+    ribbonContexts: shapeContext.enabled ? ["shape"] : []
+    readonly property ActionEntry shapeContext: host.actions.entry("showDeleteShapeAction")
 
     Component {
         id: fillSlot

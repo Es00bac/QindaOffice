@@ -5,6 +5,47 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-041: The ribbon is a third view of the same commands
+
+**Date:** 2026-09-25 · **Status:** accepted (M40)
+
+**Context.** The suite's windows carried one or two wrapping tool strips
+(`ToolBarFromModel`) with every command at the same weight; the finished
+QindaTK has a `Ribbon`. The user asked for "something similar to the
+Office ribbon, without copying it". The suite's rules still hold: the
+window's menu is data and the panel export is a view of it (rule 4), every
+command is a persistent ActionEntry with a stable id (rule 5), and at
+520 px no command may be hidden.
+
+**Decision.**
+
+1. **One `RibbonFromModel` per window**, created by `OfficeWindow` from the
+   app's `ribbonTabs` layout (a `<App>RibbonLayout.qml` per app, shared
+   File/View/Clipboard/Editing/Assistant pieces in `StandardRibbon.js`).
+   Items name ActionEntry ids; the ribbon binds to the entries themselves
+   (QindaTK's Action-shaped `item.action`), so the ribbon, the menus, the
+   keyboard and the panel can never disagree. Unknown ids are skipped with
+   a warning. The menu tree stays the source of the panel export.
+2. **File is a tab.** When the panel exports the menu the local menu bar
+   hides, so the ribbon itself reaches New/Open/Save/Print/Export.
+3. **The look is QindaTK's** (D-297 there): pill tabs, soft group cards
+   with Overline captions, a primary (`large`) command per group, two-row
+   stacks, a command search beside the tabs, contextual tabs in the accent
+   (Write *Table*, Show *Shape*), View ▸ Compact Ribbon (persisted,
+   `ui.ribbonCompact`), collapse by the chevron or a double-click on a tab.
+4. **Search Commands… (Alt+Q)** is a real command (`helpSearchCommandsAction`)
+   that opens a `Tk.CommandPalette` over the menu tree — the ribbon's
+   search field is only a launcher for it.
+5. **The ribbon gate replaces the strips' squeeze tests** (verification.md
+   M40): coverage of the menu tree, real icon names, every item of every
+   tab inside the ribbon at 520 px.
+
+**Consequences.** `ToolBarFromModel` is gone; `viewShowToolBarsAction`
+keeps its id and now reads "Show Ribbon". Apps derive contextual tabs in
+QML (`ribbonContexts`) or in C++ (`DocumentHost::setRibbonContexts`). A new
+command must be placed in the app's ribbon layout or listed as menu-only
+in its gate, or the app's UI test fails.
+
 ## D-040: Pictures keep the author's bytes
 
 **Date:** 2026-09-19 · **Status:** accepted (M39)

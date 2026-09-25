@@ -7,10 +7,10 @@ import QindaOffice.Ai as Ai
 import QindaOffice.Note
 
 // The QindaNote window (plan §5.4): the shared OfficeWindow over a
-// NoteHost, with the main strip, the ink strip (tools, colour and width
-// buttons that follow the active tool, block commands, background), the
-// navigator in a dock on the left, the page in a zoomable viewport with a
-// zoom island, the find bar, and the dialogs the host asks for.
+// NoteHost, with the ribbon (NoteRibbonLayout.qml: tools, the colour and
+// width buttons that follow the active tool, blocks, pages, background),
+// the navigator in a dock on the left, the page in a zoomable viewport with
+// a zoom island, the find bar, and the dialogs the host asks for.
 OfficeWindow {
     id: window
 
@@ -21,27 +21,14 @@ OfficeWindow {
     height: 780
 
     // ---- tool strips ----
-    toolBars: [
-        ToolBarFromModel {
-            objectName: "mainBar"
-            actions: window.host.actions
-            commands: ["fileNewAction", "fileOpenAction", "fileSaveAction", "|",
-                    "editUndoAction", "editRedoAction", "|",
-                    "editFindAction", "|", "viewZoomOutAction", "viewZoomInAction"]
-        },
-        ToolBarFromModel {
-            objectName: "inkBar"
-            compact: true
-            actions: window.host.actions
-            commands: ["notePenTool", "noteHighlighterTool", "noteEraserTool", "noteTextTool", "|",
-                    { component: colorSlot }, { component: widthSlot }, "|",
-                    "noteAddTextAction", "noteAddCheckAction", "noteAddImageAction", "|",
-                    "notePageNew", "noteSectionNew", { component: backgroundSlot }]
-        }
-    ]
+    // The ribbon (D-041): NoteRibbonLayout.qml over this window's slots.
+    readonly property NoteRibbonLayout ribbonLayout: NoteRibbonLayout {
+        colorSlot: colorSlot
+        widthSlot: widthSlot
+        backgroundSlot: backgroundSlot
+    }
+    ribbonTabs: ribbonLayout.tabs
 
-    // The colour button follows the active tool: the pen's swatches for the
-    // pen, the highlighter's for the highlighter; the eraser has none.
     Component {
         id: colorSlot
         Tk.ColorButton {

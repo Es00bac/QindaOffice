@@ -7,6 +7,7 @@ set(qindacalc_qml
     qml/CalcGrid.qml
     qml/CalcSheetTabs.qml
     qml/CalcWindow.qml
+    qml/CalcRibbonLayout.qml
     qml/ChartDialog.qml
     qml/ChartWindows.qml
     qml/CommentDialog.qml

@@ -52,6 +52,10 @@ class DocumentHost : public QObject {
     Q_PROPERTY(bool localMenuVisible READ localMenuVisible NOTIFY localMenuVisibleChanged)
     Q_PROPERTY(bool toolBarsVisible READ toolBarsVisible NOTIFY chromeChanged)
     Q_PROPERTY(bool statusBarVisible READ statusBarVisible NOTIFY chromeChanged)
+    // View ▸ Compact Ribbon (D-041); the window's RibbonFromModel follows it.
+    Q_PROPERTY(bool ribbonCompact READ ribbonCompact NOTIFY chromeChanged)
+    // Contextual ribbon tabs the app currently offers ("table", "shape", …).
+    Q_PROPERTY(QStringList ribbonContexts READ ribbonContexts NOTIFY ribbonContextsChanged)
     Q_PROPERTY(bool closeAuthorized READ closeAuthorized NOTIFY closeAuthorizedChanged)
     // True while a worker-thread load (Document::loadStaged) is in flight;
     // the window shows busy feedback and the load's completion arrives by
@@ -112,6 +116,10 @@ public:
     [[nodiscard]] bool localMenuVisible() const { return m_localMenuVisible; }
     [[nodiscard]] bool toolBarsVisible() const;
     [[nodiscard]] bool statusBarVisible() const;
+    [[nodiscard]] bool ribbonCompact() const;
+    [[nodiscard]] QStringList ribbonContexts() const { return m_ribbonContexts; }
+    // Apps call this when the selection changes what the ribbon offers.
+    void setRibbonContexts(const QStringList &contexts);
     [[nodiscard]] bool closeAuthorized() const { return m_closeAuthorized; }
     [[nodiscard]] bool isLoading() const { return m_loading; }
     [[nodiscard]] QUrl preferencesPage() const { return m_preferencesPage; }
@@ -170,6 +178,9 @@ signals:
     void preferencesRequested();
     void printRequested();
     void printPreviewRequested();
+    // Help ▸ Search Commands… (Alt+Q): the window opens its command palette.
+    void commandSearchRequested();
+    void ribbonContextsChanged();
     void saveFinished(bool ok);
     void documentChanged();
     void titleChanged();
@@ -220,6 +231,7 @@ private:
     QList<QShortcut *> m_shortcuts;
     QString m_journalKey;
     QString m_statusInfo;
+    QStringList m_ribbonContexts;
     QString m_statusMessage;
     // Set by the worker half of an async load, read at finishAsyncLoad —
     // the QFutureWatcher completion is the synchronization edge between them.

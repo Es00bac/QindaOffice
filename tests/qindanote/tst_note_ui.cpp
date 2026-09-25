@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The window's chrome: the ink strip is icon-only for every command that
-// ships a glyph, every strip command is addressable (toolButton_<id>), the
-// strip wraps rather than hides commands in a narrow window, the colour
-// and width slots follow the active tool, and the navigator lists the
-// notebook.
+// The window's chrome: the ribbon's tool buttons carry their glyphs and are
+// one radio group, the ribbon gate holds (every command reachable, nothing
+// hidden when squeezed), the colour and width slots follow the active tool,
+// and the navigator lists the notebook.
 
 #include "note_test_support.h"
 
 #include "support/quick_dump.h"
+#include "support/ribbon_gate.h"
 
 using namespace NoteTest;
 using namespace QindaOffice::Apps::Notes;
@@ -16,32 +16,25 @@ class NoteUiTest final : public QObject {
     Q_OBJECT
 
 private slots:
-    void stripIsIconOnlyAndAddressable()
+    void ribbonToolsAreAddressableAndExclusive()
     {
         Scene scene;
         QVERIFY2(scene.ready(), qPrintable(scene.error));
         QVERIFY(QTest::qWaitForWindowExposed(scene.window));
-        QQuickItem *bar = findItem(scene.window->contentItem(), QStringLiteral("inkBar"));
-        QVERIFY(bar != nullptr);
-        const QStringList iconOnly = {
-            QStringLiteral("notePenTool"),      QStringLiteral("noteHighlighterTool"),
-            QStringLiteral("noteEraserTool"),   QStringLiteral("noteTextTool"),
-            QStringLiteral("noteAddTextAction"), QStringLiteral("noteAddCheckAction"),
-            QStringLiteral("noteAddImageAction"), QStringLiteral("notePageNew"),
-        };
-        for (const QString &id : iconOnly) {
-            QQuickItem *button = findItem(bar, QStringLiteral("toolButton_") + id);
-            QVERIFY2(button != nullptr, qPrintable(id));
-            QVERIFY2(button->isVisible(), qPrintable(id));
-            // D-013: an icon that stops resolving must fail here rather than
-            // silently re-widen the strip as a text button.
+        QQuickItem *ribbon = findItem(scene.window->contentItem(), QStringLiteral("officeRibbon"));
+        QVERIFY(ribbon != nullptr);
+        for (const QString &id : {QStringLiteral("notePenTool"), QStringLiteral("noteHighlighterTool"),
+                                  QStringLiteral("noteEraserTool"), QStringLiteral("noteTextTool"),
+                                  QStringLiteral("noteAddTextAction"), QStringLiteral("noteAddCheckAction"),
+                                  QStringLiteral("noteAddImageAction"), QStringLiteral("notePageNew")}) {
+            QQuickItem *button = findItem(ribbon, QStringLiteral("ribbonAction_") + id);
+            QVERIFY2(button != nullptr && button->isVisible(), qPrintable(id));
+            // D-013: an icon that stops resolving must fail here.
             QVERIFY2(!button->property("iconName").toString().isEmpty(), qPrintable(id));
-            QVERIFY2(button->width() < 48, qPrintable(id + QStringLiteral(" is %1 wide").arg(button->width())));
         }
         // The tool buttons are one radio group: pen checked, the rest not.
-        QQuickItem *pen = findItem(bar, QStringLiteral("toolButton_notePenTool"));
-        QQuickItem *eraser = findItem(bar, QStringLiteral("toolButton_noteEraserTool"));
-        QVERIFY(pen != nullptr && eraser != nullptr);
+        QQuickItem *pen = findItem(ribbon, QStringLiteral("ribbonAction_notePenTool"));
+        QQuickItem *eraser = findItem(ribbon, QStringLiteral("ribbonAction_noteEraserTool"));
         QVERIFY(pen->property("checked").toBool());
         QVERIFY(!eraser->property("checked").toBool());
         scene.host.actions()->trigger(QStringLiteral("noteEraserTool"));
@@ -73,26 +66,19 @@ private slots:
         QVERIFY(scene.page->penColor() != QColor(Qt::black));
     }
 
-    void stripWrapsInsteadOfHidingCommands()
+    // The ribbon gate (tests/support/ribbon_gate.h, D-041) at a desktop
+    // width and squeezed: every menu command reachable, every icon real,
+    // every item of every tab (contextual ones forced on) inside the ribbon.
+    void ribbonReachesEveryCommandAndSqueezes()
     {
-        Scene scene;
-        QVERIFY2(scene.ready(), qPrintable(scene.error));
-        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
-        QQuickItem *bar = findItem(scene.window->contentItem(), QStringLiteral("inkBar"));
-        QVERIFY(bar != nullptr);
-        const qreal wideHeight = bar->height();
-        // AGENT-NOTE: the window is created at its size (ADR-0117); the
-        // test squeezes it to check the wrap, which no product code does.
-        scene.window->resize(480, 700);
-        QTest::qWait(300);
-        QTRY_VERIFY(bar->height() > wideHeight);
-        for (QQuickItem *button : bar->findChildren<QQuickItem *>()) {
-            if (!button->objectName().startsWith(QStringLiteral("toolButton_"))) {
-                continue;
-            }
-            const QRectF rect = button->mapRectToItem(bar, QRectF(0, 0, button->width(), button->height()));
-            QVERIFY2(button->isVisible() && rect.right() <= bar->width() + 0.5,
-                     qPrintable(button->objectName()));
+        for (const int width : {1280, 520}) {
+            Scene scene(QSize(width, 700));
+            QVERIFY2(scene.ready(), qPrintable(scene.error));
+            QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+            QTest::qWait(150);
+            const QStringList problems = QindaOffice::Test::ribbonProblems(
+                scene.window, scene.host.menuTree(), {});
+            QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
         }
     }
 
@@ -161,6 +147,7 @@ private slots:
             QVERIFY(dock != nullptr);
             QVERIFY(QMetaObject::invokeMethod(dock, "resetLayout"));
             QTest::qWait(150);
+            QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindanote_%1").arg(width));
             QString diff;
             const QString path = QStringLiteral(QQO_FIXTURE_DIR "/qindanote_%1.txt").arg(width);
             QVERIFY2(QindaOffice::Test::matchesFixture(scene.window, path, &diff), qPrintable(diff));

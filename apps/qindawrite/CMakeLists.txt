@@ -13,6 +13,7 @@ set(qindawrite_qml
     qml/WritePreferencesPage.qml
     qml/WriteRuler.qml
     qml/WriteWindow.qml
+    qml/WriteRibbonLayout.qml
 )
 foreach(qml_file IN LISTS qindawrite_qml)
     get_filename_component(qml_name "${qml_file}" NAME)

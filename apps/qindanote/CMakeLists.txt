@@ -33,6 +33,7 @@ set(qindanote_qml
     qml/NotePage.qml
     qml/NotePreferencesPage.qml
     qml/NoteWindow.qml
+    qml/NoteRibbonLayout.qml
 )
 foreach(qml_file IN LISTS qindanote_qml)
     get_filename_component(qml_name "${qml_file}" NAME)

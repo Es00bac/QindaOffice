@@ -7,11 +7,10 @@ import QindaOffice.Ai as Ai
 import QindaOffice.Calc
 
 // The QindaCalc window (plan §5.2): the shared OfficeWindow over a
-// CalcHost, with the main strip and the format strip (font, size, bold /
-// italic / underline, colours, alignment, number format, then the
-// structural and rule commands), the formula bar with its name box, the
-// grid, the sheet tabs, the find/replace bar, the assistant dock and the
-// dialogs the host asks for.
+// CalcHost, with the ribbon (CalcRibbonLayout.qml: font, size, borders,
+// colours, alignment, number format, cells, editing, charts, data tools,
+// sheets), the formula bar with its name box, the grid, the sheet tabs, the
+// find/replace bar, the assistant dock and the dialogs the host asks for.
 OfficeWindow {
     id: window
 
@@ -26,31 +25,15 @@ OfficeWindow {
         return null
     }
 
-    toolBars: [
-        ToolBarFromModel {
-            objectName: "mainBar"
-            actions: window.host.actions
-            commands: ["fileNewAction", "fileOpenAction", "fileSaveAction", "|",
-                       "editUndoAction", "editRedoAction", "|",
-                       "editCutAction", "editCopyAction", "editPasteAction", "|",
-                       "editFindAction", "|", "viewZoomOutAction", "viewZoomInAction", "|",
-                       "insertChartAction", "insertSheetAction"]
-        },
-        ToolBarFromModel {
-            objectName: "formatBar"
-            compact: true
-            actions: window.host.actions
-            commands: [{ component: fontSlot }, { component: sizeSlot }, "|",
-                       "formatBoldAction", "formatItalicAction", "formatUnderlineAction",
-                       { component: textColorSlot }, { component: fillColorSlot }, "|",
-                       "formatAlignLeftAction", "formatAlignCenterAction", "formatAlignRightAction", "|",
-                       { component: numberFormatSlot }, "|",
-                       "calcAutoSumAction", "calcSortAscendingAction", "calcSortDescendingAction",
-                       "calcMergeCellsAction", "calcBordersAllAction", "calcWrapTextAction",
-                       "calcInsertRowsAction", "calcDeleteRowsAction", "calcAutoFilterAction",
-                       "calcCondFormatAction", "calcCommentAction"]
-        }
-    ]
+    // The ribbon (D-041): CalcRibbonLayout.qml over this window's slots.
+    readonly property CalcRibbonLayout ribbonLayout: CalcRibbonLayout {
+        fontSlot: fontSlot
+        sizeSlot: sizeSlot
+        textColorSlot: textColorSlot
+        fillColorSlot: fillColorSlot
+        numberFormatSlot: numberFormatSlot
+    }
+    ribbonTabs: ribbonLayout.tabs
 
     Component {
         id: fontSlot

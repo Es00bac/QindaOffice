@@ -116,4 +116,19 @@ inline bool matchesFixture(QQuickWindow *window, const QString &path, QString *d
     return false;
 }
 
+// QQO_GRAB_DIR=<dir> saves a PNG of the window for review, BEFORE any
+// fixture comparison (a failing layout is exactly the one to look at).
+// QQO_GRAB_PREFIX (e.g. "M40-") is prepended so a run can be dropped
+// straight into the validation gallery inbox (tools/validation_gallery.py).
+inline void saveGrab(QQuickWindow *window, const QString &name)
+{
+    const QString dir = qEnvironmentVariable("QQO_GRAB_DIR");
+    if (dir.isEmpty() || window == nullptr) {
+        return;
+    }
+    QDir().mkpath(dir);
+    window->grabWindow().save(QStringLiteral("%1/%2%3.png")
+                                  .arg(dir, qEnvironmentVariable("QQO_GRAB_PREFIX"), name));
+}
+
 } // namespace QindaOffice::Test

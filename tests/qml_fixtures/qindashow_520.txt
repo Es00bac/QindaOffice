@@ -8,6 +8,7 @@ QQuickRootItem#ShowWindow
           DockZone#dockZone_center [hidden]
           DockZone#dockZone_left
             DockDivider#dockDivider_left_0
+              QQuickRectangle#dockDivider_left_0_focus [hidden]
             Flex#dockLane_left_0
               DockFrame#dockFrame_slides
                 Box#panelBody
@@ -16,14 +17,19 @@ QQuickRootItem#ShowWindow
                     QQuickItem#dockPanelContent_slides
                       SlideSorter#slideSorter
                         Card#slideThumb_0
+                          QQuickRectangle#boxFocusRing [hidden]
                           SlideThumbItem#slideThumbImage_0
+                  QQuickRectangle#boxFocusRing [hidden]
                 Box#panelHeader
+                  IconButton#dockPlacement_slides
                   IconButton#panelClose
                   IconButton#panelCollapse
                   IconButton#panelFloat
                   Overline#panelTitle
+                  QQuickRectangle#boxFocusRing [hidden]
           DockZone#dockZone_right
             DockDivider#dockDivider_right_0
+              QQuickRectangle#dockDivider_right_0_focus [hidden]
             Flex#dockLane_right_0
               DockFrame#dockFrame_slide
                 Box#panelBody
@@ -32,20 +38,28 @@ QQuickRootItem#ShowWindow
                     QQuickItem#dockPanelContent_slide
                       Box#propertyEditor
                         ComboBox#slideTransitionCombo
+                          QQuickText#comboDisplayText
+                        QQuickRectangle#boxFocusRing [hidden]
                       Box#propertyEditor
                         ComboBox#slideLayoutCombo
+                          QQuickText#comboDisplayText
+                        QQuickRectangle#boxFocusRing [hidden]
                       Caption#propertyLabel
                       Caption#propertyLabel
                       TextArea#slideNotes
+                  QQuickRectangle#boxFocusRing [hidden]
                 Box#panelHeader
+                  IconButton#dockPlacement_slide
                   IconButton#panelClose
                   IconButton#panelCollapse
                   IconButton#panelFloat
                   Overline#panelTitle
+                  QQuickRectangle#boxFocusRing [hidden]
           DockZone#dockZone_top [hidden]
           QQuickItem#dockCanvas
             Flex#dockZone_overlay [hidden]
             SlideCanvasView#showViewport
+              QQuickRectangle#viewportFocusRing
               Scroll#viewportScroll
                 QQuickItem#viewportSurface
                   QQuickItem#viewportContent
@@ -60,16 +74,21 @@ QQuickRootItem#ShowWindow
               Button#assistantReplace [hidden]
               Button#assistantSend [hidden]
               ComboBox#assistantModel [hidden]
+                QQuickText#comboDisplayText [hidden]
               IconButton#assistantClear [hidden]
               IconButton#assistantStop [hidden]
               Scroll#assistantTranscript [hidden]
                 Caption#emptyText [hidden]
                 Label#assistantConversation [hidden]
+                  QQuickTextEdit#selectableText [hidden]
                 Overline#emptyTitle [hidden]
               Segmented#assistantScope [hidden]
                 QQuickAbstractButton#segment_0 [hidden]
+                  QQuickRectangle#segmentFocus_0 [hidden]
                 QQuickAbstractButton#segment_1 [hidden]
+                  QQuickRectangle#segmentFocus_1 [hidden]
                 QQuickAbstractButton#segment_2 [hidden]
+                  QQuickRectangle#segmentFocus_2 [hidden]
               TextField#assistantPrompt [hidden]
                 IconButton#fieldClear [hidden]
   QQuickItem#appFooter
@@ -84,50 +103,186 @@ QQuickRootItem#ShowWindow
         IconButton#findClose [hidden]
         IconButton#findNext [hidden]
         IconButton#findPrevious [hidden]
+        QQuickRectangle#boxFocusRing [hidden]
         TextField#findField [hidden]
           IconButton#fieldClear [hidden]
     Flex#appStatusBar
       OfficeStatusBar#officeStatusBar
+        QQuickRectangle#boxFocusRing [hidden]
         StatusField#statusInfo
+          QQuickAbstractButton#statusAction
+          QQuickRectangle#statusFocusRing [hidden]
         StatusField#statusMessage [hidden]
+          QQuickAbstractButton#statusAction [hidden]
+          QQuickRectangle#statusFocusRing [hidden]
   QQuickItem#appHeader
     Flex#appToolBars
-      ToolBarFromModel#mainBar
-        IconButton#toolButton_editCopyAction
-        IconButton#toolButton_editCutAction
-        IconButton#toolButton_editFindAction
-        IconButton#toolButton_editPasteAction
-        IconButton#toolButton_editRedoAction
-        IconButton#toolButton_editUndoAction
-        IconButton#toolButton_fileNewAction
-        IconButton#toolButton_fileOpenAction
-        IconButton#toolButton_fileSaveAction
-        IconButton#toolButton_slideDeleteAction
-        IconButton#toolButton_slideDuplicateAction
-        IconButton#toolButton_slideNewAction
-        IconButton#toolButton_slideStartShowAction
-        IconButton#toolButton_viewZoomInAction
-        IconButton#toolButton_viewZoomOutAction
-      ToolBarFromModel#shapeBar
-        ColorButton#fillColorButton
-          QQuickRectangle#colorButtonSwatch
-        ColorButton#strokeColorButton
-          QQuickRectangle#colorButtonSwatch
-        IconButton#toolButton_formatBoldAction
-        IconButton#toolButton_formatItalicAction
-        IconButton#toolButton_showAlignBottomAction
-        IconButton#toolButton_showAlignHCenterAction
-        IconButton#toolButton_showAlignLeftAction
-        IconButton#toolButton_showAlignRightAction
-        IconButton#toolButton_showAlignTopAction
-        IconButton#toolButton_showAlignVCenterAction
-        IconButton#toolButton_showBringToFrontAction
-        IconButton#toolButton_showGroupAction
-        IconButton#toolButton_showInsertArrowAction
-        IconButton#toolButton_showInsertEllipseAction
-        IconButton#toolButton_showInsertImageAction
-        IconButton#toolButton_showInsertLineAction
-        IconButton#toolButton_showInsertRectangleAction
-        IconButton#toolButton_showInsertTextBoxAction
-        IconButton#toolButton_showSendToBackAction
-        IconButton#toolButton_showUngroupAction
+      RibbonFromModel#officeRibbon
+        Flex#ribbonTabRow
+          IconButton#ribbonCollapseButton
+          QQuickItem#ribbonTrailing
+            CommandSearch#ribbonCommandSearch
+              IconButton#fieldClear [hidden]
+          QQuickTabButton#ribbonTab_animations
+          QQuickTabButton#ribbonTab_design
+          QQuickTabButton#ribbonTab_file
+          QQuickTabButton#ribbonTab_home
+          QQuickTabButton#ribbonTab_insert
+          QQuickTabButton#ribbonTab_slideShow
+          QQuickTabButton#ribbonTab_view
+        QQuickItem#ribbonGroupViewport
+          Flex#ribbonGroups
+            RibbonGroup#ribbonGroup_arrangeHome
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_alignMenu
+                RibbonButton#ribbonAction_alignMenu
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_orderMenu
+                RibbonButton#ribbonAction_orderMenu
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_clipboard
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_editCopyAction
+                RibbonButton#ribbonAction_editCopyAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editCutAction
+                RibbonButton#ribbonAction_editCutAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editPasteAction
+                RibbonButton#ribbonAction_editPasteAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_drawing
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_showInsertArrowAction
+                RibbonButton#ribbonAction_showInsertArrowAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_showInsertEllipseAction
+                RibbonButton#ribbonAction_showInsertEllipseAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_showInsertLineAction
+                RibbonButton#ribbonAction_showInsertLineAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_showInsertRectangleAction
+                RibbonButton#ribbonAction_showInsertRectangleAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_showInsertTextBoxAction
+                RibbonButton#ribbonAction_showInsertTextBoxAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_editing
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_editFindAction
+                RibbonButton#ribbonAction_editFindAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editReplaceAction
+                RibbonButton#ribbonAction_editReplaceAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editSelectAllAction
+                RibbonButton#ribbonAction_editSelectAllAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_history
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_editRedoAction
+                RibbonButton#ribbonAction_editRedoAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editUndoAction
+                RibbonButton#ribbonAction_editUndoAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_slides
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_showSlideMoveDownAction
+                RibbonButton#ribbonAction_showSlideMoveDownAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_showSlideMoveUpAction
+                RibbonButton#ribbonAction_showSlideMoveUpAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_slideDeleteAction
+                RibbonButton#ribbonAction_slideDeleteAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_slideDuplicateAction
+                RibbonButton#ribbonAction_slideDuplicateAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_slideNewAction
+                RibbonButton#ribbonAction_slideNewAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_text
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_formatBoldAction
+                RibbonButton#ribbonAction_formatBoldAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_formatItalicAction
+                RibbonButton#ribbonAction_formatItalicAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+        QQuickRectangle#ribbonBackground
