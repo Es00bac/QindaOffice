@@ -245,6 +245,102 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M45/M46 gates (bookkeeping engine and I/O)
+
+Automated by `ctest -R books` (headless, temp dirs). Rationale in D-045
+and D-046; the worked example is in [books.md](books.md).
+
+M45 — `books_engine`, `books_document`:
+
+- [x] `tst_books_money`: 0.1 + 0.2 = 0.30 exactly; overflow detected
+      (never wraps); INT64_MIN prints; JPY/KWD exponents; half-up vs
+      half-even vs toward/away from zero; allocation sums exactly and each
+      part is within one minor unit; locale parse (grouping, symbol,
+      parentheses, trailing minus, German decimal comma) refuses excess
+      fraction digits; **no `double`/`float`/`qreal` in the engine
+      sources** (scanned).
+- [x] `tst_books_company`: create/reopen (one file, no `-wal`); refuse a
+      foreign file, a newer schema ("newer version"), a missing file;
+      migrate a v1 file to v2 with a `.pre-v2.bak` copy and an audit row;
+      `VACUUM INTO` backup never overwrites; settings, counters, logo;
+      currency fixed once posted; all four templates name every system
+      role and balance (also with opening balances); nonprofit functional
+      groups; chart rules (duplicate, cross-class parent, delete with
+      postings refused, deactivate only at zero balance, inactive account
+      refused).
+- [x] `tst_books_ledger`: balanced/unbalanced/one-line/unknown-account/
+      currency-mismatch; lock date refused, override without reason
+      refused, with reason stored + audited; void = zero effect with lines
+      and trail kept; edit = void + repost with the same document id and a
+      failed edit changing nothing; triggers refuse UPDATE/DELETE of
+      posted lines, un-void and audit edits; opening balances.
+- [x] `tst_books_sales`: estimate → invoice (10% discount, 6% + 1.25%
+      two-agency tax on 1,800.00 = 130.50, total 2,065.50) → partial
+      payment → over-applications refused → overpayment credit → credit
+      applied → taxed credit memo → two refunds: A/R 0, Sales Tax Payable
+      123.25 (State 102.00, City 21.25), statement of 7 lines closing at 0;
+      drafts, edits under payments, voided payment reopens the invoice;
+      sales receipt to Undeposited Funds; recurring Jan 31 monthly → Feb 28,
+      Mar 31, Apr 30, re-run creates nothing.
+- [x] `tst_books_purchases`: bills with vendor terms, vendor credit
+      applied, two bills paid in one run (one payment per vendor), card
+      charge and check, edit below payments refused.
+- [x] `tst_books_banking`: transfers and registers (bank and card sign);
+      deposits from Undeposited Funds, no double deposit, void returns
+      them; bank feed dedup (hash + occurrence keeps two identical
+      coffees, FITID beats text), rules by priority/direction/amount,
+      accept suggestions, match suggestions ranked by date and payee,
+      exclude/restore/categorize as Check; reconciliation refuses to
+      finish at a non-zero difference, report numbers, reconciled lines
+      block void, next session starts at the reconciled balance, undo.
+- [x] `tst_books_reports` (fixture Q1 2026): P&L accrual (net −200.00)
+      and cash (−720.00); months, classes, prior year and prior period
+      with % change; Balance Sheet balances on both bases at four dates;
+      net income rolls into Retained Earnings next year; cash flow ties to
+      the change in cash on both bases and for February alone; trial
+      balance debits = credits (11,720.00); aging exactly 30 days late in
+      1–30, 31 in 31–60, 91 in 91+; balances, open invoices/unpaid bills
+      as of dates; sales by customer/item on both bases; expenses by
+      vendor/category; sales tax liability; budget vs actual; GL, journal,
+      transaction list; cash recognition of a 3-way split payment is exact.
+- [x] `tst_books_analysis`: the seven ratios against hand arithmetic,
+      unavailable ratios, expense mix, monthly trends with month-end cash,
+      trailing-average forecast.
+- [x] `tst_books_perf`: 50,000 journal lines; P&L and Balance Sheet each
+      < 1 s (measured ~0.5 s and ~0.07 s in a Debug build).
+- [x] `tst_books_document`: never dirty, own commits refresh the byte
+      revision, Save no-op, Save As copies and switches (and replaces an
+      existing target), recovery refused, untitled scratch company dirty
+      until saved.
+
+M46 — `books_io`: see the list below (tests `tst_books_io_*`).
+
+- [x] `tst_books_io_forms` (8): invoice PDF is one page and its Poppler
+      text holds company, number, customer, address, total, balance due,
+      discount/tax labels and "Page 1 of 1"; an 80-line invoice runs to 5
+      pages with the header repeated and every line printed once;
+      estimate, sales receipt, credit memo, statement (aging strip); void
+      refused; a QPrinter through `asPrintCallback` paints the same page.
+- [x] `tst_books_io_reports` (10): P&L PDF text; CSV round trip of P&L,
+      Balance Sheet, Trial Balance, A/R aging detail to the minor unit;
+      12-month P&L goes landscape; multi-page journal repeats its header;
+      CSV quoting and delimiter detection.
+- [x] `tst_books_io_bank_import` (28): amount edge cases, date-format
+      detection (day > 12, month names, 2-digit years), both CSV fixtures,
+      explicit mapping with `invertSign`, per-row errors, OFX 1.x SGML,
+      QFX 2.x XML credit card, QIF; each fixture imported twice through
+      `Banking::importLines` adds nothing the second time.
+- [x] `tst_books_io_export` (7): journal CSV balances; list CSV
+      export → import round trip; IIF headers, account types and every
+      TRNS…ENDTRNS block summing to zero; timestamped backups keep the
+      newest N and each opens clean.
+- [x] Grabs looked at (validation gallery inbox, `M46-books-*.png`):
+      invoice, invoice page 2, statement, Profit and Loss, Balance Sheet.
+
+- [ ] On the desktop (M47 app lane): print an invoice to a real printer
+      and compare with its PDF; open an IIF export in an accountant's
+      QuickBooks.
+
 ### M39 gates (floating images) and the parity close-out
 
 Automated by `tst_calc_io_images`, `tst_calc_window` and `tst_calc_sample`.

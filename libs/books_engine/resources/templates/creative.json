@@ -1,0 +1,249 @@
+{
+ "SPDX-License-Identifier": "GPL-3.0-or-later",
+ "id": "creative",
+ "title": "Creative studio",
+ "description": "Design, media and software studios: project fees, licensing and digital products, production costs and the gear and subscriptions the work runs on.",
+ "accounts": [
+  {
+   "number": "1000",
+   "name": "Checking",
+   "type": "bank"
+  },
+  {
+   "number": "1010",
+   "name": "Savings",
+   "type": "bank"
+  },
+  {
+   "number": "1100",
+   "name": "Accounts Receivable",
+   "type": "accounts_receivable",
+   "role": "accounts_receivable"
+  },
+  {
+   "number": "1200",
+   "name": "Undeposited Funds",
+   "type": "other_current_asset",
+   "role": "undeposited_funds",
+   "description": "Payments received but not yet deposited"
+  },
+  {
+   "number": "1300",
+   "name": "Prepaid Expenses",
+   "type": "other_current_asset"
+  },
+  {
+   "number": "1350",
+   "name": "Payment Processor Clearing",
+   "type": "other_current_asset",
+   "description": "Stripe, PayPal and marketplace balances not yet paid out"
+  },
+  {
+   "number": "1500",
+   "name": "Computer Equipment",
+   "type": "fixed_asset"
+  },
+  {
+   "number": "1510",
+   "name": "Camera and Audio Gear",
+   "type": "fixed_asset"
+  },
+  {
+   "number": "1590",
+   "name": "Accumulated Depreciation",
+   "type": "fixed_asset"
+  },
+  {
+   "number": "2000",
+   "name": "Accounts Payable",
+   "type": "accounts_payable",
+   "role": "accounts_payable"
+  },
+  {
+   "number": "2100",
+   "name": "Business Credit Card",
+   "type": "credit_card"
+  },
+  {
+   "number": "2200",
+   "name": "Sales Tax Payable",
+   "type": "other_current_liability",
+   "role": "sales_tax_payable"
+  },
+  {
+   "number": "2400",
+   "name": "Client Deposits",
+   "type": "other_current_liability"
+  },
+  {
+   "number": "2700",
+   "name": "Equipment Loan",
+   "type": "long_term_liability"
+  },
+  {
+   "number": "3000",
+   "name": "Opening Balance Equity",
+   "type": "equity",
+   "role": "opening_balance_equity"
+  },
+  {
+   "number": "3100",
+   "name": "Owner's Equity",
+   "type": "equity"
+  },
+  {
+   "number": "3110",
+   "name": "Owner Contributions",
+   "type": "equity",
+   "parent": "3100"
+  },
+  {
+   "number": "3120",
+   "name": "Owner Draws",
+   "type": "equity",
+   "parent": "3100"
+  },
+  {
+   "number": "3900",
+   "name": "Retained Earnings",
+   "type": "equity",
+   "role": "retained_earnings"
+  },
+  {
+   "number": "4000",
+   "name": "Project Fees",
+   "type": "income"
+  },
+  {
+   "number": "4100",
+   "name": "Licensing and Royalties",
+   "type": "income"
+  },
+  {
+   "number": "4200",
+   "name": "Digital Product Sales",
+   "type": "income"
+  },
+  {
+   "number": "4300",
+   "name": "Subscriptions and Memberships",
+   "type": "income"
+  },
+  {
+   "number": "4400",
+   "name": "Workshops and Teaching",
+   "type": "income"
+  },
+  {
+   "number": "4900",
+   "name": "Discounts Given",
+   "type": "income",
+   "role": "sales_discounts"
+  },
+  {
+   "number": "5000",
+   "name": "Production Costs",
+   "type": "cost_of_goods_sold"
+  },
+  {
+   "number": "5100",
+   "name": "Stock Assets and Licenses",
+   "type": "cost_of_goods_sold"
+  },
+  {
+   "number": "5200",
+   "name": "Subcontracted Talent",
+   "type": "cost_of_goods_sold"
+  },
+  {
+   "number": "5300",
+   "name": "Marketplace and Platform Fees",
+   "type": "cost_of_goods_sold"
+  },
+  {
+   "number": "6000",
+   "name": "Marketing and Portfolio",
+   "type": "expense"
+  },
+  {
+   "number": "6100",
+   "name": "Bank and Payment Fees",
+   "type": "expense"
+  },
+  {
+   "number": "6200",
+   "name": "Insurance",
+   "type": "expense"
+  },
+  {
+   "number": "6300",
+   "name": "Software and Subscriptions",
+   "type": "expense"
+  },
+  {
+   "number": "6350",
+   "name": "Cloud Hosting and Storage",
+   "type": "expense"
+  },
+  {
+   "number": "6400",
+   "name": "Small Equipment and Gear",
+   "type": "expense"
+  },
+  {
+   "number": "6450",
+   "name": "Office Supplies",
+   "type": "expense"
+  },
+  {
+   "number": "6500",
+   "name": "Studio Rent",
+   "type": "expense"
+  },
+  {
+   "number": "6600",
+   "name": "Education and Training",
+   "type": "expense"
+  },
+  {
+   "number": "6700",
+   "name": "Legal and Professional Fees",
+   "type": "expense"
+  },
+  {
+   "number": "6800",
+   "name": "Travel",
+   "type": "expense"
+  },
+  {
+   "number": "6900",
+   "name": "Internet and Phone",
+   "type": "expense"
+  },
+  {
+   "number": "6950",
+   "name": "Taxes and Licenses",
+   "type": "expense"
+  },
+  {
+   "number": "6960",
+   "name": "Depreciation",
+   "type": "expense"
+  },
+  {
+   "number": "6990",
+   "name": "Uncategorized Expense",
+   "type": "expense"
+  },
+  {
+   "number": "7000",
+   "name": "Interest Income",
+   "type": "other_income"
+  },
+  {
+   "number": "8000",
+   "name": "Interest Expense",
+   "type": "other_expense"
+  }
+ ]
+}

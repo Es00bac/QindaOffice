@@ -1,0 +1,10 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/qindaoffice/books">
+        <file>templates/general.json</file>
+        <file>templates/services.json</file>
+        <file>templates/nonprofit.json</file>
+        <file>templates/creative.json</file>
+    </qresource>
+</RCC>

@@ -5,6 +5,92 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-046: Bookkeeping I/O: one page painter for PDF and paper, bank files in, accountant files out
+
+**Date:** 2026-09-25 · **Status:** accepted (M46)
+
+**Context.** QindaBooks has to print and e-mail invoices and statements,
+hand reports to people, read what banks actually let you download, and
+give an accountant something their software opens. office_quick already
+prints through one render callback shared by Print, Preview and Export PDF
+(plan §5.2); the bookkeeping forms must not grow a second layout.
+
+**Decision.**
+
+1. **Forms and reports are painted once.** `books_io` builds a value
+   (`PrintableDocument`, `ReportTable`) and paints its pages onto any
+   `QPagedPaintDevice` through a `PagePainter`
+   (`std::function<void(QPagedPaintDevice*, QPainter*)>`). QPdfWriter
+   uses it for PDF; the app wraps the same painter as office_quick's
+   `PrintRenderCallback` for paper and preview — so paper and PDF cannot
+   drift. Paper rule D-004 holds: white page, black ink, one accent colour
+   from the company settings.
+2. **Bank files in, in their own conventions, out as one sign.** CSV
+   (column and date-format detection with an explicit mapping override,
+   single amount or debit/credit columns), OFX/QFX (SGML 1.x and XML 2.x)
+   and QIF parse into `BankLine`s signed as a debit to the account; the
+   engine alone dedups (FITID, else content hash + occurrence) so every
+   format behaves the same on re-import. Online bank connections are out
+   of scope.
+3. **Accountant files out.** General-journal and list CSV, and QuickBooks
+   IIF for lists and journal entries (the one format most accountants'
+   tools still import); CSV import of customers, vendors, items and the
+   chart goes through the engine's validating APIs, so imports are audited
+   like typing.
+
+**Consequences.** The app lane gets print/preview/PDF of every form and
+report by wrapping one callback. Amounts in every file are parsed and
+written exactly (minor units, no floating point). IIF export is
+one-way; importing IIF or QBO/QBW files is not offered.
+
+## D-045: Bookkeeping model: one company file, integer money, immutable postings
+
+**Date:** 2026-09-25 · **Status:** accepted (M45)
+
+**Context.** The user runs more than one business (a nonprofit-style
+centre and a creative studio) and wants QuickBooks-scope bookkeeping —
+records, invoices, reporting, analysis — with the businesses' records
+never mixed. Bookkeeping is unforgiving in exactly the places office
+documents are relaxed: a cent lost to rounding, an edited posting or a
+silently overwritten period is a defect with legal weight.
+
+**Decision.**
+
+1. **One company = one `.qbooks` SQLite file = one window.** The file
+   carries its identity (`application_id` "QBKS") and schema version
+   (`user_version`); older files are backed up and migrated forward,
+   newer ones refused; `journal_mode = DELETE` keeps it one copyable file;
+   backups are `VACUUM INTO`. Everything commits immediately, so the
+   `Core::Document` adapter is never dirty and needs no recovery journal
+   (SQLite's journal already rolls a crash back to the last commit); Save
+   As means "save a copy and switch to it".
+2. **Money is integer minor units** of the company's one ISO 4217
+   currency; factors are decimal strings; rounding happens only where a
+   call names its mode (half-up, half-even per tax agency); allocation is
+   largest-remainder. No floating point exists in the engine — a test
+   scans the sources — and report ratios are fixed-point.
+3. **Postings are immutable.** A document (invoice, bill, …) is what the
+   user edits; its posting is a balanced journal transaction written in
+   the same SQL transaction. SQL triggers refuse changes to posted
+   amounts, accounts, dates and parties, deletes, un-voids and any edit of
+   the audit log. Edit = void + repost (the document keeps its id);
+   void = zero effect with the lines kept; every change is in
+   `audit_log` with before/after JSON.
+4. **A lock date closes periods**: posting or voiding on/before it needs
+   an explicit override with a reason, which is stored and audited.
+5. **Reports are pure functions over one aggregation primitive**
+   (`LedgerQuery`): SQL `GROUP BY` for accrual; for cash, deferred
+   documents are recognised cumulatively in proportion to what has been
+   applied to them, so both bases balance and a fully paid document
+   recognises exactly its lines.
+
+**Consequences.** Corrections are visible forever (void/edit history,
+audit log) — the point. A reconciled transaction cannot be voided until
+its reconciliation is undone. Payroll, inventory quantities,
+multi-currency revaluation and online bank connections are explicitly out
+of scope (docs/books.md). 50,000 journal lines report in well under a
+second.
+
 ## D-040: Pictures keep the author's bytes
 
 **Date:** 2026-09-19 · **Status:** accepted (M39)

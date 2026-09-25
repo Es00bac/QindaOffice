@@ -1,0 +1,196 @@
+{
+ "SPDX-License-Identifier": "GPL-3.0-or-later",
+ "id": "services",
+ "title": "Services and consulting",
+ "description": "Consultancies, agencies and freelancers billing time and expenses.",
+ "accounts": [
+  {
+   "number": "1000",
+   "name": "Checking",
+   "type": "bank"
+  },
+  {
+   "number": "1010",
+   "name": "Savings",
+   "type": "bank"
+  },
+  {
+   "number": "1100",
+   "name": "Accounts Receivable",
+   "type": "accounts_receivable",
+   "role": "accounts_receivable"
+  },
+  {
+   "number": "1200",
+   "name": "Undeposited Funds",
+   "type": "other_current_asset",
+   "role": "undeposited_funds",
+   "description": "Payments received but not yet deposited"
+  },
+  {
+   "number": "1300",
+   "name": "Prepaid Expenses",
+   "type": "other_current_asset"
+  },
+  {
+   "number": "1500",
+   "name": "Computer Equipment",
+   "type": "fixed_asset"
+  },
+  {
+   "number": "1590",
+   "name": "Accumulated Depreciation",
+   "type": "fixed_asset"
+  },
+  {
+   "number": "2000",
+   "name": "Accounts Payable",
+   "type": "accounts_payable",
+   "role": "accounts_payable"
+  },
+  {
+   "number": "2100",
+   "name": "Business Credit Card",
+   "type": "credit_card"
+  },
+  {
+   "number": "2200",
+   "name": "Sales Tax Payable",
+   "type": "other_current_liability",
+   "role": "sales_tax_payable"
+  },
+  {
+   "number": "2400",
+   "name": "Customer Deposits",
+   "type": "other_current_liability"
+  },
+  {
+   "number": "2700",
+   "name": "Loans Payable",
+   "type": "long_term_liability"
+  },
+  {
+   "number": "3000",
+   "name": "Opening Balance Equity",
+   "type": "equity",
+   "role": "opening_balance_equity"
+  },
+  {
+   "number": "3100",
+   "name": "Owner's Equity",
+   "type": "equity"
+  },
+  {
+   "number": "3900",
+   "name": "Retained Earnings",
+   "type": "equity",
+   "role": "retained_earnings"
+  },
+  {
+   "number": "4000",
+   "name": "Consulting Income",
+   "type": "income"
+  },
+  {
+   "number": "4100",
+   "name": "Retainer Income",
+   "type": "income"
+  },
+  {
+   "number": "4200",
+   "name": "Reimbursable Expense Income",
+   "type": "income"
+  },
+  {
+   "number": "4900",
+   "name": "Discounts Given",
+   "type": "income",
+   "role": "sales_discounts"
+  },
+  {
+   "number": "5000",
+   "name": "Subcontractors",
+   "type": "cost_of_goods_sold"
+  },
+  {
+   "number": "5100",
+   "name": "Reimbursable Expenses",
+   "type": "cost_of_goods_sold"
+  },
+  {
+   "number": "6000",
+   "name": "Advertising and Marketing",
+   "type": "expense"
+  },
+  {
+   "number": "6100",
+   "name": "Bank and Payment Fees",
+   "type": "expense"
+  },
+  {
+   "number": "6200",
+   "name": "Insurance",
+   "type": "expense"
+  },
+  {
+   "number": "6300",
+   "name": "Meals",
+   "type": "expense"
+  },
+  {
+   "number": "6400",
+   "name": "Software Subscriptions",
+   "type": "expense"
+  },
+  {
+   "number": "6450",
+   "name": "Office Supplies",
+   "type": "expense"
+  },
+  {
+   "number": "6500",
+   "name": "Rent and Coworking",
+   "type": "expense"
+  },
+  {
+   "number": "6600",
+   "name": "Professional Development",
+   "type": "expense"
+  },
+  {
+   "number": "6700",
+   "name": "Legal and Professional Fees",
+   "type": "expense"
+  },
+  {
+   "number": "6800",
+   "name": "Travel",
+   "type": "expense"
+  },
+  {
+   "number": "6900",
+   "name": "Phone and Internet",
+   "type": "expense"
+  },
+  {
+   "number": "6950",
+   "name": "Taxes and Licenses",
+   "type": "expense"
+  },
+  {
+   "number": "6990",
+   "name": "Uncategorized Expense",
+   "type": "expense"
+  },
+  {
+   "number": "7000",
+   "name": "Interest Income",
+   "type": "other_income"
+  },
+  {
+   "number": "8000",
+   "name": "Interest Expense",
+   "type": "other_expense"
+  }
+ ]
+}
