@@ -8,3 +8,5 @@ add_subdirectory(qindacalc)
 add_subdirectory(qindawrite)
 add_subdirectory(qindashow)
 add_subdirectory(qindalauncher)
+# QindaBooks (M47, D-047): one company file per window over books_*.
+add_subdirectory(qindabooks)

@@ -5,6 +5,58 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-047: Bookkeeping app: one company per window, a service over the engine, one print source
+
+**Date:** 2026-09-25 · **Status:** accepted (M47)
+
+**Context.** The engine (D-045) and its I/O (D-046) are C++ values and
+functions; the QindaBooks window is QML written in parallel by another
+lane. The user keeps several businesses strictly apart, prints and
+e-mails invoices, and prints whatever report is on screen. The app needed
+one boundary the QML could be written against before either side
+existed, and it had to hold the suite's rules (1: one document per
+window, 5: stable command ids) and the engine's (integer money).
+
+**Decision.**
+
+1. **One company file per window.** `BooksHost : DocumentHost` owns one
+   `BooksDocument`; File ▸ New opens a new window whose host asks for the
+   setup wizard (`companySetupRequested`) once it reaches the event loop
+   still without a company; Open into a pristine window loads there. A
+   window never switches to a different company except through Save As
+   (copy and switch). Company-dependent commands are disabled until a
+   company is open.
+2. **A QVariant service over the engine.** `BooksService` (the host's
+   `books`) is the whole QML API — lists, documents, payments, journal,
+   banking, reconciliation, reports, dashboard, housekeeping — as maps
+   and lists with fixed key names, `{ok, id, error}` results and
+   `changed()` after every commit. It holds no engine state and never
+   caches the `CompanyFile*` (Save As replaces it). Money crosses as
+   integer minor units plus formatted text; input is text or minor units;
+   the only doubles are chart series named `…Chart`.
+3. **Commands only request.** Every command is a `books…Action` whose
+   handler emits a request signal (`documentEditorRequested`,
+   `paymentDialogRequested`, `exportRequested`, …); dialogs and views are
+   QML. The workspace is a radio group mirrored by `currentView`.
+4. **One print source.** QML names what is printable now
+   (`setPrintSource("report" | "document", …)`); Print, Print Preview and
+   Export PDF render it through books_io's page painter wrapped as
+   office_quick's `PrintRenderCallback`, so screen preview, paper and PDF
+   are the same pages. No source, no print commands.
+5. **E-mail through QindaMail, honestly.** An invoice goes out as a
+   `qindamail mailto:` draft with the subject filled in and its PDF
+   written to a per-user outbox; QindaMail takes no attachment argument
+   yet, so the app says where the PDF is rather than pretending.
+
+**Consequences.** The QML and C++ lanes met on names alone (the host and
+service headers carry the contract). The C++ side is tested headless
+over real company files without any QML. `register(…)` from the brief is
+`accountRegister(…)` (a C++ keyword). Engine limits show through as
+honest refusals: only invoices keep drafts; only invoices, bills,
+estimates and journal entries edit in place; rules and tax rates are
+replaced rather than edited. The QSQLITE driver is a run-time
+dependency packaging must declare.
+
 ## D-046: Bookkeeping I/O: one page painter for PDF and paper, bank files in, accountant files out
 
 **Date:** 2026-09-25 · **Status:** accepted (M46)

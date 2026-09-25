@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- QindaBooks: a ledger whose columns just balanced, with the coin that
+     made it so tucked in front. Suite icon family: chunky ink outline,
+     flat fills, dot eyes + arc smile + blush, a few degrees off square. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g transform="rotate(3 32 32)" fill="none" stroke="#3a3347" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="11" y="9" width="38" height="46" rx="7" fill="#f2a65a"/>
+    <path d="M17 9 V55" stroke-width="2"/>
+    <rect x="21" y="14" width="23" height="18" rx="3" fill="#fffaf0"/>
+    <path d="M21 20 H44 M21 26 H44 M36 14 V32" stroke="#a9bad4" stroke-width="1.4"/>
+    <path d="M38 22.5 l1.8 1.8 l3.4 -3.6" stroke="#4fa37a" stroke-width="1.8"/>
+    <rect x="21" y="14" width="23" height="18" rx="3"/>
+    <circle cx="23.5" cy="45" r="2.8" fill="#ff8fa3" opacity="0.5" stroke="none"/>
+    <circle cx="44.5" cy="45" r="2.8" fill="#ff8fa3" opacity="0.5" stroke="none"/>
+    <circle cx="28" cy="40.5" r="2.2" fill="#3a3347" stroke="none"/>
+    <circle cx="40" cy="40.5" r="2.2" fill="#3a3347" stroke="none"/>
+    <path d="M30.6 45.8 Q34 49 37.4 45.8" stroke-width="2"/>
+    <circle cx="50" cy="51" r="7" fill="#ffd97d"/>
+    <path d="M50 47.2 V54.8 M52.2 48.8 Q50 47.4 48.2 48.6 Q47 50.6 50 51 Q53 51.4 51.8 53.4 Q50 54.6 47.8 53.2" stroke-width="1.5"/>
+  </g>
+</svg>

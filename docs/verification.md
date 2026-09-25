@@ -245,6 +245,71 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M47 gates (the QindaBooks app)
+
+Automated by `ctest -R qindabooks` (headless, temp dirs and XDG dirs,
+"today" pinned to 2026-03-31). Rationale in D-047; the API in
+[books.md](books.md#qindabooks-app).
+
+- [x] `tst_qindabooks_service`: create from a template (one company per
+      window: a second create is refused), templates and currencies;
+      settings round trip incl. fiscal July, cash basis, prefixes, notes,
+      accent (bad month/currency refused); money text both ways (locale
+      form, parentheses, excess decimals refused); customers/vendors
+      (address, deactivate), items (`price` text, `type`), a bank account
+      with an opening balance, payment/expense/income account lists,
+      system accounts cannot be deactivated, classes, tax rates reusing
+      their agency; an invoice with a 10% discount and 10% tax on the
+      taxable line (900.00 − 90.00 + 36.00 = 846.00, due date from Net
+      30, one totals entry per input row) saved as INV-1001, read back,
+      listed/filtered/searched, edited in place (940.00); drafts only for
+      invoices, draft → posted, estimate → invoice (estimate closed), void
+      (zero balance, audit rows); bills (overdue status), an expense on
+      the card (edit refused), two bills paid in one run (one payment per
+      vendor, 50.00 left); a payment across two invoices (paid +
+      partial, 200.00 open); unbalanced journal entry refused with the
+      difference, balanced posted; transfer; deposit from Undeposited
+      Funds; lock date refuses an earlier invoice; `changed()` fires on a
+      commit and not on a refusal.
+- [x] `tst_qindabooks_banking`: CSV import (3 lines, re-import 0 + 3
+      duplicates), categorize, exclude/restore, a rule applied and
+      accepted, rule edit replaces, a recorded payment offered and
+      accepted as a match; OFX card statement; a CSV the detector cannot
+      read returns `needsMapping` with its header, and imports with an
+      explicit mapping; reconciliation refuses to finish at 800.00
+      difference, finishes at zero, register shows reconciled lines with
+      deposit/payment text and running balance, report, undo; P&L map
+      (section/account/total rows, `total:net_income`, cash basis, month
+      columns) with account drill-down to the invoice, Balance Sheet
+      balances, A/R aging `party:<id>` drill-down, unknown report and
+      reversed period refused; range presets for a calendar and a July
+      fiscal year (two different "todays"); KPIs equal the P&L, trends
+      with `…Chart` doubles, expense mix, 7 ratios (net margin 73.3%);
+      report PDF/CSV, invoice PDF, IIF, journal CSV, customer list CSV
+      imported into another company; timestamped backup and Backup…
+      never over a file; e-mail launches `qindamail mailto:` with the
+      subject and says the PDF is not attached; monthly recurring from
+      Jan 31 generates 3 invoices once.
+- [x] `tst_qindabooks_host`: all 38 command ids exist with icons and
+      labels, Ctrl+I and Ctrl+1…6, New reads "New Company…"; no shortcut
+      is shared; commands disabled until a company exists and the setup
+      request fires once; the workspace radio group keeps exactly one
+      checked from the menu and from `currentView`; every command emits
+      its request; Save As switches the window and the service to the
+      copy (original untouched) and Save is a successful no-op; report
+      and document print sources export PDFs (twelve month columns
+      prefer landscape), clearing disables Print, Print Document prints
+      the selection; the (stub) `BooksWindow.qml` instantiates.
+- [x] `tst_qindabooks_menu_export`: the exported tree (with and without a
+      company) passes the desktop's validator — File Edit View Sales
+      Expenses Banking Accounting Reports AI Settings Help — every books
+      command appears exactly once, every exported id resolves and fires.
+
+Remaining for the lead's QML merge: fixtures and grabs of the real
+window at 1280/520, the ribbon over these ids (squeeze), the launcher
+card, and the on-desktop checklist (open two companies side by side,
+print an invoice and a report, e-mail an invoice into QindaMail).
+
 ### M45/M46 gates (bookkeeping engine and I/O)
 
 Automated by `ctest -R books` (headless, temp dirs). Rationale in D-045

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-# QindaBooks engine: `books_engine`, `books_document`, `books_io`
+# QindaBooks: `books_engine`, `books_document`, `books_io` and the app
 
 Bookkeeping for small businesses — proper double-entry records, invoices,
 bills, banking, reconciliation, sales tax, reports and financial analysis
@@ -367,6 +367,81 @@ download); e-filing of tax returns and 1099s (vendors carry a 1099 flag
 and Expenses by Vendor gives the totals); multi-user concurrent editing of
 one company file.
 
+## QindaBooks (app)
+
+`apps/qindabooks` (binary `qindabooks`, desktop id
+`org.qindaqt.QindaBooks`, MIME `application/x-qindabooks`, M47,
+[D-047](decisions.md#d-047-bookkeeping-app-one-company-per-window-a-service-over-the-engine-one-print-source)):
+a static QML module `QindaOffice.Books.App` over `office_quick`, like the
+other apps. One window = one `BooksHost` = one `BooksDocument` = one
+company file.
+
+- **`BooksHost : DocumentHost`** owns the document, the commands and the
+  menus (File ▸ New Company… / Open… / Backup… / Import and Export ▸ /
+  Company Settings… / Close the Books…; Sales, Expenses, Banking,
+  Accounting and Reports menus; View ▸ the six workspaces, Ctrl+1…6).
+  Every command is an `ActionEntry` with a `books…Action` id
+  (`books_host_actions.cpp` lists them) whose handler only **emits a
+  request** (`documentEditorRequested(kind, id)`,
+  `paymentDialogRequested("receive" | "payBills")`,
+  `partyDialogRequested(kind, id)`, `exportRequested(what)`, …) that the
+  QML answers. `currentView` mirrors the workspace radio group;
+  `selectedDocumentId` is what Void / E-mail / Print Document act on. A
+  window still without a company when it reaches the event loop emits
+  `companySetupRequested()` once — the setup wizard — so File ▸ New
+  Company is "a new window that asks"; Open into that pristine window
+  loads instead. Save is a no-op on an open company, Save As copies and
+  switches (the books_document contract).
+- **`BooksService`** (`BooksHost.books`) is the QVariant API the views
+  call. It never caches the `CompanyFile*`: every call asks the document,
+  so after Save As it works on the copy without being re-created, and
+  `companyChanged()` tells the views. `changed()` fires after every
+  committed mutation (forwarded `CompanyFile::changed`), `revision`
+  increments with it. Money crosses as **integer minor units plus text**
+  (`amount` + `amountText`); inputs are typed text (company locale, then
+  C locale; excess decimals refused, never rounded) or minor units. The
+  only doubles are the dashboard's `…Chart` series (major units, for
+  drawing). Dates are ISO strings; "today" comes from a clock tests pin
+  (`setToday`, or `QQO_BOOKS_TODAY=yyyy-MM-dd` for grabs). Every mutating
+  call returns `{ok, id, error}`.
+
+| Area | Calls |
+| --- | --- |
+| Company | `hasCompany`, `companyName`, `settings` / `saveSettings` (keys: name, legalName, tradeName, address, email, phone, website, taxId, currency, locale, fiscalYearStartMonth, basis, invoicePrefix, nextInvoiceNumber, …, invoiceNotes, paymentInstructions, accentColor, lockDate read-only), `currency`, `currencies()`, `formatMoney`, `formatPlain`, `parseMoney`, `templates()`, `createCompany(url, settings, templateId)` (empty url = untitled scratch company), `setLockDate`, `lockDate`, `today`, `revision` |
+| Lists | `accounts`, `accountTypes`, `saveAccount` (+ `openingBalance`/`openingDate`), `setAccountActive`, `paymentAccounts`, `expenseAccounts`, `incomeAccounts`, `parties`, `party`, `saveParty`, `setPartyActive`, `items` (`type` service/product/other, `price` plain text, `priceMinor`), `saveItem`, `terms`, `classes`, `saveClass`, `taxRates`, `taxAgencies`, `saveTaxRate` (creates or reuses the agency by name) |
+| Documents | `documents(filter)` (kind or group sales/purchases/journal/all; status open/overdue/paid/draft/void/pending/closed/all; from, to, partyId, search), `document(id)`, `computeTotals(draft)` (live editor totals, due date, one line entry per input row), `saveDocument(draft)` (drafts only for invoices; invoices, bills and estimates edit in place, other kinds are voided and re-entered), `postDraft`, `convertEstimate`, `voidDocument(id, reason, overrideLock)` |
+| Money in/out | `receivePayment`, `payBills` (one payment per vendor), `openInvoices`, `unpaidBills(0 = all)`, `exportDocumentPdf`, `emailDocument`, `recurringTemplates`, `saveRecurring`, `generateDueRecurring`, `dueRecurringCount` |
+| Journal | `postJournalEntry` (id = replace), `checkJournalEntry` (balance check, posts nothing), `transfer`, `deposit`, `undepositedPayments`, `auditTrail` |
+| Banking | `bankAccounts`, `accountRegister` (the brief's `register`: a C++ keyword), `importStatement(account, url, mapping?)` (CSV/OFX/QFX/QIF; an unsure CSV returns `needsMapping` + `columns`; rules run on new lines), `feed(account, status)` with a rule or match `suggestion`, `acceptSuggestion`, `categorize`, `exclude`, `restore`, `rules`, `saveRule` (edit = replace), `deleteRule`, `applyRules` |
+| Reconcile | `startReconciliation`, `reconciliationInProgress`, `reconcileCandidates`, `markCleared`, `reconcileState`, `finishReconciliation`, `cancelReconciliation`, `undoLastReconciliation` |
+| Reports | `reportCatalog()` (with the option words each report takes), `runReport(id, options)` (the `ReportTable` as a map: typed columns, rows with kind/depth/key/cells/drill), `drillDown(drill)`, `exportReport(id, options, url, "pdf" \| "csv")`, `rangePreset(name)` (fiscal-year aware) |
+| Dashboard | `kpis(asOf)` (MTD/YTD income, expenses, net; open/overdue invoices, unpaid bills, cash), `monthlyTrends(months)`, `expenseBreakdown(from, to)`, `ratios(asOf)` (value text, definition, `good`) |
+| Housekeeping | `backupNow()` (timestamped copies in `$XDG_DATA_HOME/qindaoffice/books/backups`, newest 20 kept), `backupTo(url)`, `exportIif`, `exportJournalCsv`, `exportListCsv`, `importListCsv` |
+
+**Printing the current source.** Print, Print Preview and File ▸ Export
+PDF render whatever the QML named with
+`BooksHost.setPrintSource("report", reportId, options)` (the report on
+screen) or `setPrintSource("document", id)` (the selected invoice,
+estimate, sales receipt or credit memo). The host builds the value when
+the job is created and hands office_quick one `PrintRenderCallback` —
+books_io's painter wrapped by `asPrintCallback<QPrinter>` — so paper,
+preview and PDF are the same pages. `printLandscape` says when a report
+reads better wide. With no source the print commands are disabled.
+
+**E-mailing an invoice.** `emailDocument(id)` writes the form's PDF to
+`$XDG_CACHE_HOME/qindaoffice/books/outbox/<number>.pdf` and starts
+`qindamail mailto:<customer>?subject=Invoice INV-1001 from <company>&body=…`.
+QindaMail's `mailto:` handling reads to/cc/bcc/subject/body only, so the
+PDF is **not attached**: the service says so through `notify()` and names
+the file to attach. When QindaMail takes an attachment argument, pass
+the path there.
+
+**Runtime requirement.** The company file is SQLite through Qt Sql's
+**QSQLITE driver plugin**, which is loaded at run time: a Qt without it
+builds and links fine and fails on the first open. The ebuild must
+depend on `dev-qt/qtbase[sql,sqlite]` (in addition to what the suite
+already needs).
+
 ## Tests
 
 `tests/books_engine/` (M45): `tst_books_money`, `tst_books_company`,
@@ -375,3 +450,7 @@ one company file.
 `tst_books_perf` (50,000 journal lines; P&L and Balance Sheet each under
 one second), `tst_books_document`. `tests/books_io/` (M46): see
 [verification](verification.md#m45m46-gates-bookkeeping-engine-and-io).
+`tests/qindabooks/` (M47): `tst_qindabooks_service`,
+`tst_qindabooks_banking`, `tst_qindabooks_host`,
+`tst_qindabooks_menu_export` — see
+[verification](verification.md#m47-gates-the-qindabooks-app).
