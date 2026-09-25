@@ -1,0 +1,218 @@
+{
+ "SPDX-License-Identifier": "GPL-3.0-or-later",
+ "id": "general",
+ "title": "General small business",
+ "description": "A compact chart for most small businesses selling products or services.",
+ "accounts": [
+  {
+   "number": "1000",
+   "name": "Checking",
+   "type": "bank"
+  },
+  {
+   "number": "1010",
+   "name": "Savings",
+   "type": "bank"
+  },
+  {
+   "number": "1100",
+   "name": "Accounts Receivable",
+   "type": "accounts_receivable",
+   "role": "accounts_receivable"
+  },
+  {
+   "number": "1200",
+   "name": "Undeposited Funds",
+   "type": "other_current_asset",
+   "role": "undeposited_funds",
+   "description": "Payments received but not yet deposited"
+  },
+  {
+   "number": "1300",
+   "name": "Prepaid Expenses",
+   "type": "other_current_asset"
+  },
+  {
+   "number": "1500",
+   "name": "Equipment",
+   "type": "fixed_asset"
+  },
+  {
+   "number": "1590",
+   "name": "Accumulated Depreciation",
+   "type": "fixed_asset"
+  },
+  {
+   "number": "1900",
+   "name": "Security Deposits",
+   "type": "other_asset"
+  },
+  {
+   "number": "2000",
+   "name": "Accounts Payable",
+   "type": "accounts_payable",
+   "role": "accounts_payable"
+  },
+  {
+   "number": "2100",
+   "name": "Business Credit Card",
+   "type": "credit_card"
+  },
+  {
+   "number": "2200",
+   "name": "Sales Tax Payable",
+   "type": "other_current_liability",
+   "role": "sales_tax_payable"
+  },
+  {
+   "number": "2300",
+   "name": "Payroll Liabilities",
+   "type": "other_current_liability"
+  },
+  {
+   "number": "2700",
+   "name": "Loans Payable",
+   "type": "long_term_liability"
+  },
+  {
+   "number": "3000",
+   "name": "Opening Balance Equity",
+   "type": "equity",
+   "role": "opening_balance_equity"
+  },
+  {
+   "number": "3100",
+   "name": "Owner's Equity",
+   "type": "equity"
+  },
+  {
+   "number": "3110",
+   "name": "Owner Contributions",
+   "type": "equity",
+   "parent": "3100"
+  },
+  {
+   "number": "3120",
+   "name": "Owner Draws",
+   "type": "equity",
+   "parent": "3100"
+  },
+  {
+   "number": "3900",
+   "name": "Retained Earnings",
+   "type": "equity",
+   "role": "retained_earnings"
+  },
+  {
+   "number": "4000",
+   "name": "Sales",
+   "type": "income"
+  },
+  {
+   "number": "4100",
+   "name": "Service Income",
+   "type": "income"
+  },
+  {
+   "number": "4900",
+   "name": "Discounts Given",
+   "type": "income",
+   "role": "sales_discounts"
+  },
+  {
+   "number": "5000",
+   "name": "Cost of Goods Sold",
+   "type": "cost_of_goods_sold"
+  },
+  {
+   "number": "5100",
+   "name": "Shipping and Delivery",
+   "type": "cost_of_goods_sold"
+  },
+  {
+   "number": "6000",
+   "name": "Advertising and Marketing",
+   "type": "expense"
+  },
+  {
+   "number": "6100",
+   "name": "Bank and Payment Fees",
+   "type": "expense"
+  },
+  {
+   "number": "6150",
+   "name": "Contractors",
+   "type": "expense"
+  },
+  {
+   "number": "6200",
+   "name": "Insurance",
+   "type": "expense"
+  },
+  {
+   "number": "6300",
+   "name": "Meals",
+   "type": "expense"
+  },
+  {
+   "number": "6400",
+   "name": "Office Supplies and Software",
+   "type": "expense"
+  },
+  {
+   "number": "6500",
+   "name": "Rent and Lease",
+   "type": "expense"
+  },
+  {
+   "number": "6600",
+   "name": "Repairs and Maintenance",
+   "type": "expense"
+  },
+  {
+   "number": "6700",
+   "name": "Legal and Professional Fees",
+   "type": "expense"
+  },
+  {
+   "number": "6800",
+   "name": "Travel",
+   "type": "expense"
+  },
+  {
+   "number": "6900",
+   "name": "Utilities",
+   "type": "expense"
+  },
+  {
+   "number": "6950",
+   "name": "Taxes and Licenses",
+   "type": "expense"
+  },
+  {
+   "number": "6960",
+   "name": "Depreciation",
+   "type": "expense"
+  },
+  {
+   "number": "6990",
+   "name": "Uncategorized Expense",
+   "type": "expense"
+  },
+  {
+   "number": "7000",
+   "name": "Interest Income",
+   "type": "other_income"
+  },
+  {
+   "number": "7100",
+   "name": "Other Income",
+   "type": "other_income"
+  },
+  {
+   "number": "8000",
+   "name": "Interest Expense",
+   "type": "other_expense"
+  }
+ ]
+}

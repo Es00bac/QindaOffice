@@ -469,6 +469,176 @@ behaviour in [mail.md](mail.md#exchange-and-microsoft-365-calendars).
       `InstanceIndex` addressing, the Graph `$filter`, all-day events created
       in Outlook, attendee notifications from Graph edits.
 
+### M47 gates (the QindaBooks app)
+
+- **UI** (`tst_qindabooks_ui`): the real `BooksWindow.qml` over a seeded
+  company (customers, products, four invoices — one overdue, one paid —
+  a bill, an expense, an imported bank statement): the dashboard's
+  figures, every workspace renders, the invoice editor opens with totals
+  the service computed, the ribbon gate at 1320 and 520 px (edit commands
+  and Save As menu-only), structural fixtures `qindabooks_{1280,520}.txt`.
+  Grabs reviewed: `M47-iter2-*` (dashboard, sales, expenses, banking
+  review feed, accounting, reports, invoice editor).
+
+Automated by `ctest -R qindabooks` (headless, temp dirs and XDG dirs,
+"today" pinned to 2026-03-31). Rationale in D-047; the API in
+[books.md](books.md#qindabooks-app).
+
+- [x] `tst_qindabooks_service`: create from a template (one company per
+      window: a second create is refused), templates and currencies;
+      settings round trip incl. fiscal July, cash basis, prefixes, notes,
+      accent (bad month/currency refused); money text both ways (locale
+      form, parentheses, excess decimals refused); customers/vendors
+      (address, deactivate), items (`price` text, `type`), a bank account
+      with an opening balance, payment/expense/income account lists,
+      system accounts cannot be deactivated, classes, tax rates reusing
+      their agency; an invoice with a 10% discount and 10% tax on the
+      taxable line (900.00 − 90.00 + 36.00 = 846.00, due date from Net
+      30, one totals entry per input row) saved as INV-1001, read back,
+      listed/filtered/searched, edited in place (940.00); drafts only for
+      invoices, draft → posted, estimate → invoice (estimate closed), void
+      (zero balance, audit rows); bills (overdue status), an expense on
+      the card (edit refused), two bills paid in one run (one payment per
+      vendor, 50.00 left); a payment across two invoices (paid +
+      partial, 200.00 open); unbalanced journal entry refused with the
+      difference, balanced posted; transfer; deposit from Undeposited
+      Funds; lock date refuses an earlier invoice; `changed()` fires on a
+      commit and not on a refusal.
+- [x] `tst_qindabooks_banking`: CSV import (3 lines, re-import 0 + 3
+      duplicates), categorize, exclude/restore, a rule applied and
+      accepted, rule edit replaces, a recorded payment offered and
+      accepted as a match; OFX card statement; a CSV the detector cannot
+      read returns `needsMapping` with its header, and imports with an
+      explicit mapping; reconciliation refuses to finish at 800.00
+      difference, finishes at zero, register shows reconciled lines with
+      deposit/payment text and running balance, report, undo; P&L map
+      (section/account/total rows, `total:net_income`, cash basis, month
+      columns) with account drill-down to the invoice, Balance Sheet
+      balances, A/R aging `party:<id>` drill-down, unknown report and
+      reversed period refused; range presets for a calendar and a July
+      fiscal year (two different "todays"); KPIs equal the P&L, trends
+      with `…Chart` doubles, expense mix, 7 ratios (net margin 73.3%);
+      report PDF/CSV, invoice PDF, IIF, journal CSV, customer list CSV
+      imported into another company; timestamped backup and Backup…
+      never over a file; e-mail launches `qindamail mailto:` with the
+      subject and says the PDF is not attached; monthly recurring from
+      Jan 31 generates 3 invoices once.
+- [x] `tst_qindabooks_host`: all 38 command ids exist with icons and
+      labels, Ctrl+I and Ctrl+1…6, New reads "New Company…"; no shortcut
+      is shared; commands disabled until a company exists and the setup
+      request fires once; the workspace radio group keeps exactly one
+      checked from the menu and from `currentView`; every command emits
+      its request; Save As switches the window and the service to the
+      copy (original untouched) and Save is a successful no-op; report
+      and document print sources export PDFs (twelve month columns
+      prefer landscape), clearing disables Print, Print Document prints
+      the selection; the (stub) `BooksWindow.qml` instantiates.
+- [x] `tst_qindabooks_menu_export`: the exported tree (with and without a
+      company) passes the desktop's validator — File Edit View Sales
+      Expenses Banking Accounting Reports AI Settings Help — every books
+      command appears exactly once, every exported id resolves and fires.
+
+Remaining for the lead's QML merge: fixtures and grabs of the real
+window at 1280/520, the ribbon over these ids (squeeze), the launcher
+card, and the on-desktop checklist (open two companies side by side,
+print an invoice and a report, e-mail an invoice into QindaMail).
+
+### M45/M46 gates (bookkeeping engine and I/O)
+
+Automated by `ctest -R books` (headless, temp dirs). Rationale in D-045
+and D-046; the worked example is in [books.md](books.md).
+
+M45 — `books_engine`, `books_document`:
+
+- [x] `tst_books_money`: 0.1 + 0.2 = 0.30 exactly; overflow detected
+      (never wraps); INT64_MIN prints; JPY/KWD exponents; half-up vs
+      half-even vs toward/away from zero; allocation sums exactly and each
+      part is within one minor unit; locale parse (grouping, symbol,
+      parentheses, trailing minus, German decimal comma) refuses excess
+      fraction digits; **no `double`/`float`/`qreal` in the engine
+      sources** (scanned).
+- [x] `tst_books_company`: create/reopen (one file, no `-wal`); refuse a
+      foreign file, a newer schema ("newer version"), a missing file;
+      migrate a v1 file to v2 with a `.pre-v2.bak` copy and an audit row;
+      `VACUUM INTO` backup never overwrites; settings, counters, logo;
+      currency fixed once posted; all four templates name every system
+      role and balance (also with opening balances); nonprofit functional
+      groups; chart rules (duplicate, cross-class parent, delete with
+      postings refused, deactivate only at zero balance, inactive account
+      refused).
+- [x] `tst_books_ledger`: balanced/unbalanced/one-line/unknown-account/
+      currency-mismatch; lock date refused, override without reason
+      refused, with reason stored + audited; void = zero effect with lines
+      and trail kept; edit = void + repost with the same document id and a
+      failed edit changing nothing; triggers refuse UPDATE/DELETE of
+      posted lines, un-void and audit edits; opening balances.
+- [x] `tst_books_sales`: estimate → invoice (10% discount, 6% + 1.25%
+      two-agency tax on 1,800.00 = 130.50, total 2,065.50) → partial
+      payment → over-applications refused → overpayment credit → credit
+      applied → taxed credit memo → two refunds: A/R 0, Sales Tax Payable
+      123.25 (State 102.00, City 21.25), statement of 7 lines closing at 0;
+      drafts, edits under payments, voided payment reopens the invoice;
+      sales receipt to Undeposited Funds; recurring Jan 31 monthly → Feb 28,
+      Mar 31, Apr 30, re-run creates nothing.
+- [x] `tst_books_purchases`: bills with vendor terms, vendor credit
+      applied, two bills paid in one run (one payment per vendor), card
+      charge and check, edit below payments refused.
+- [x] `tst_books_banking`: transfers and registers (bank and card sign);
+      deposits from Undeposited Funds, no double deposit, void returns
+      them; bank feed dedup (hash + occurrence keeps two identical
+      coffees, FITID beats text), rules by priority/direction/amount,
+      accept suggestions, match suggestions ranked by date and payee,
+      exclude/restore/categorize as Check; reconciliation refuses to
+      finish at a non-zero difference, report numbers, reconciled lines
+      block void, next session starts at the reconciled balance, undo.
+- [x] `tst_books_reports` (fixture Q1 2026): P&L accrual (net −200.00)
+      and cash (−720.00); months, classes, prior year and prior period
+      with % change; Balance Sheet balances on both bases at four dates;
+      net income rolls into Retained Earnings next year; cash flow ties to
+      the change in cash on both bases and for February alone; trial
+      balance debits = credits (11,720.00); aging exactly 30 days late in
+      1–30, 31 in 31–60, 91 in 91+; balances, open invoices/unpaid bills
+      as of dates; sales by customer/item on both bases; expenses by
+      vendor/category; sales tax liability; budget vs actual; GL, journal,
+      transaction list; cash recognition of a 3-way split payment is exact.
+- [x] `tst_books_analysis`: the seven ratios against hand arithmetic,
+      unavailable ratios, expense mix, monthly trends with month-end cash,
+      trailing-average forecast.
+- [x] `tst_books_perf`: 50,000 journal lines; P&L and Balance Sheet each
+      < 1 s (measured ~0.5 s and ~0.07 s in a Debug build).
+- [x] `tst_books_document`: never dirty, own commits refresh the byte
+      revision, Save no-op, Save As copies and switches (and replaces an
+      existing target), recovery refused, untitled scratch company dirty
+      until saved.
+
+M46 — `books_io`: see the list below (tests `tst_books_io_*`).
+
+- [x] `tst_books_io_forms` (8): invoice PDF is one page and its Poppler
+      text holds company, number, customer, address, total, balance due,
+      discount/tax labels and "Page 1 of 1"; an 80-line invoice runs to 5
+      pages with the header repeated and every line printed once;
+      estimate, sales receipt, credit memo, statement (aging strip); void
+      refused; a QPrinter through `asPrintCallback` paints the same page.
+- [x] `tst_books_io_reports` (10): P&L PDF text; CSV round trip of P&L,
+      Balance Sheet, Trial Balance, A/R aging detail to the minor unit;
+      12-month P&L goes landscape; multi-page journal repeats its header;
+      CSV quoting and delimiter detection.
+- [x] `tst_books_io_bank_import` (28): amount edge cases, date-format
+      detection (day > 12, month names, 2-digit years), both CSV fixtures,
+      explicit mapping with `invertSign`, per-row errors, OFX 1.x SGML,
+      QFX 2.x XML credit card, QIF; each fixture imported twice through
+      `Banking::importLines` adds nothing the second time.
+- [x] `tst_books_io_export` (7): journal CSV balances; list CSV
+      export → import round trip; IIF headers, account types and every
+      TRNS…ENDTRNS block summing to zero; timestamped backups keep the
+      newest N and each opens clean.
+- [x] Grabs looked at (validation gallery inbox, `M46-books-*.png`):
+      invoice, invoice page 2, statement, Profit and Loss, Balance Sheet.
+
+- [ ] On the desktop (M47 app lane): print an invoice to a real printer
+      and compare with its PDF; open an IIF export in an accountant's
+      QuickBooks.
+
 ### M39 gates (floating images) and the parity close-out
 
 Automated by `tst_calc_io_images`, `tst_calc_window` and `tst_calc_sample`.

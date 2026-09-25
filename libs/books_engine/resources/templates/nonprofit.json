@@ -1,0 +1,307 @@
+{
+ "SPDX-License-Identifier": "GPL-3.0-or-later",
+ "id": "nonprofit",
+ "title": "Nonprofit organization",
+ "description": "Net assets instead of owner's equity, contributions and grants, and expenses grouped by function (program, management and general, fundraising) for the statement of functional expenses.",
+ "accounts": [
+  {
+   "number": "1000",
+   "name": "Checking",
+   "type": "bank"
+  },
+  {
+   "number": "1010",
+   "name": "Savings",
+   "type": "bank"
+  },
+  {
+   "number": "1100",
+   "name": "Accounts Receivable",
+   "type": "accounts_receivable",
+   "role": "accounts_receivable"
+  },
+  {
+   "number": "1200",
+   "name": "Undeposited Funds",
+   "type": "other_current_asset",
+   "role": "undeposited_funds",
+   "description": "Payments received but not yet deposited"
+  },
+  {
+   "number": "1300",
+   "name": "Prepaid Expenses",
+   "type": "other_current_asset"
+  },
+  {
+   "number": "1400",
+   "name": "Grants Receivable",
+   "type": "other_current_asset"
+  },
+  {
+   "number": "1410",
+   "name": "Pledges Receivable",
+   "type": "other_current_asset"
+  },
+  {
+   "number": "1500",
+   "name": "Furniture and Equipment",
+   "type": "fixed_asset"
+  },
+  {
+   "number": "1590",
+   "name": "Accumulated Depreciation",
+   "type": "fixed_asset"
+  },
+  {
+   "number": "2000",
+   "name": "Accounts Payable",
+   "type": "accounts_payable",
+   "role": "accounts_payable"
+  },
+  {
+   "number": "2100",
+   "name": "Business Credit Card",
+   "type": "credit_card"
+  },
+  {
+   "number": "2200",
+   "name": "Sales Tax Payable",
+   "type": "other_current_liability",
+   "role": "sales_tax_payable"
+  },
+  {
+   "number": "2300",
+   "name": "Payroll Liabilities",
+   "type": "other_current_liability"
+  },
+  {
+   "number": "2400",
+   "name": "Deferred Revenue",
+   "type": "other_current_liability"
+  },
+  {
+   "number": "2700",
+   "name": "Notes Payable",
+   "type": "long_term_liability"
+  },
+  {
+   "number": "3000",
+   "name": "Opening Balance Equity",
+   "type": "equity",
+   "role": "opening_balance_equity"
+  },
+  {
+   "number": "3100",
+   "name": "Net Assets Without Donor Restrictions",
+   "type": "equity",
+   "role": "retained_earnings",
+   "description": "Accumulated surplus of unrestricted activity"
+  },
+  {
+   "number": "3200",
+   "name": "Net Assets With Donor Restrictions",
+   "type": "equity"
+  },
+  {
+   "number": "4000",
+   "name": "Contributions",
+   "type": "income"
+  },
+  {
+   "number": "4010",
+   "name": "Individual Contributions",
+   "type": "income",
+   "parent": "4000"
+  },
+  {
+   "number": "4020",
+   "name": "Corporate Contributions",
+   "type": "income",
+   "parent": "4000"
+  },
+  {
+   "number": "4030",
+   "name": "In-Kind Contributions",
+   "type": "income",
+   "parent": "4000"
+  },
+  {
+   "number": "4100",
+   "name": "Grants",
+   "type": "income"
+  },
+  {
+   "number": "4110",
+   "name": "Foundation Grants",
+   "type": "income",
+   "parent": "4100"
+  },
+  {
+   "number": "4120",
+   "name": "Government Grants",
+   "type": "income",
+   "parent": "4100"
+  },
+  {
+   "number": "4200",
+   "name": "Program Service Revenue",
+   "type": "income"
+  },
+  {
+   "number": "4300",
+   "name": "Special Events Revenue",
+   "type": "income"
+  },
+  {
+   "number": "4400",
+   "name": "Membership Dues",
+   "type": "income"
+  },
+  {
+   "number": "4900",
+   "name": "Discounts Given",
+   "type": "income",
+   "role": "sales_discounts"
+  },
+  {
+   "number": "7000",
+   "name": "Program Services",
+   "type": "expense",
+   "group": "program"
+  },
+  {
+   "number": "7010",
+   "name": "Program Salaries and Wages",
+   "type": "expense",
+   "parent": "7000",
+   "group": "program"
+  },
+  {
+   "number": "7020",
+   "name": "Program Supplies",
+   "type": "expense",
+   "parent": "7000",
+   "group": "program"
+  },
+  {
+   "number": "7030",
+   "name": "Program Occupancy",
+   "type": "expense",
+   "parent": "7000",
+   "group": "program"
+  },
+  {
+   "number": "7040",
+   "name": "Program Travel",
+   "type": "expense",
+   "parent": "7000",
+   "group": "program"
+  },
+  {
+   "number": "7050",
+   "name": "Client Assistance",
+   "type": "expense",
+   "parent": "7000",
+   "group": "program"
+  },
+  {
+   "number": "8000",
+   "name": "Management and General",
+   "type": "expense",
+   "group": "management"
+  },
+  {
+   "number": "8010",
+   "name": "Administrative Salaries",
+   "type": "expense",
+   "parent": "8000",
+   "group": "management"
+  },
+  {
+   "number": "8020",
+   "name": "Accounting and Legal",
+   "type": "expense",
+   "parent": "8000",
+   "group": "management"
+  },
+  {
+   "number": "8030",
+   "name": "Office Supplies and Software",
+   "type": "expense",
+   "parent": "8000",
+   "group": "management"
+  },
+  {
+   "number": "8040",
+   "name": "Insurance",
+   "type": "expense",
+   "parent": "8000",
+   "group": "management"
+  },
+  {
+   "number": "8050",
+   "name": "Bank Fees",
+   "type": "expense",
+   "parent": "8000",
+   "group": "management"
+  },
+  {
+   "number": "8060",
+   "name": "Administrative Occupancy",
+   "type": "expense",
+   "parent": "8000",
+   "group": "management"
+  },
+  {
+   "number": "8070",
+   "name": "Depreciation",
+   "type": "expense",
+   "parent": "8000",
+   "group": "management"
+  },
+  {
+   "number": "9000",
+   "name": "Fundraising",
+   "type": "expense",
+   "group": "fundraising"
+  },
+  {
+   "number": "9010",
+   "name": "Fundraising Salaries",
+   "type": "expense",
+   "parent": "9000",
+   "group": "fundraising"
+  },
+  {
+   "number": "9020",
+   "name": "Event Expenses",
+   "type": "expense",
+   "parent": "9000",
+   "group": "fundraising"
+  },
+  {
+   "number": "9030",
+   "name": "Printing and Postage",
+   "type": "expense",
+   "parent": "9000",
+   "group": "fundraising"
+  },
+  {
+   "number": "9040",
+   "name": "Donor Management Software",
+   "type": "expense",
+   "parent": "9000",
+   "group": "fundraising"
+  },
+  {
+   "number": "9500",
+   "name": "Investment Income",
+   "type": "other_income"
+  },
+  {
+   "number": "9600",
+   "name": "Interest Expense",
+   "type": "other_expense"
+  }
+ ]
+}

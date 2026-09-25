@@ -1,0 +1,150 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+import QtQuick
+import QtQuick.Dialogs as Dialogs
+import QindaTK as Tk
+import QindaOffice.Shell
+import QindaOffice.Books.App
+
+// The QindaBooks window (D-047): one company file per window. A rail picks
+// the workspace — Dashboard, Sales, Expenses, Banking, Accounting, Reports
+// — and the window answers the host's requests with the editors and
+// dialogs. A brand-new window with no company opens the setup wizard.
+//
+// AGENT-NOTE: every amount arrives from BooksService as minor units plus
+// formatted text; this QML never does arithmetic on money.
+OfficeWindow {
+    id: window
+
+    readonly property BooksHost booksHost: host as BooksHost
+    readonly property BooksService books: booksHost !== null ? booksHost.books : null
+    readonly property string view: booksHost !== null ? booksHost.currentView : "dashboard"
+
+    width: 1320
+    height: 840
+
+    function trigger(id) { window.host.actions.trigger(id) }
+    function fileLocal(url) { return decodeURIComponent(String(url).replace(/^file:\/\//, "")) }
+
+    readonly property BooksRibbonLayout ribbonLayout: BooksRibbonLayout { }
+    ribbonTabs: ribbonLayout.tabs
+
+    // AGENT-GUARD: the window seats exactly one Item; a Flex keeps its own
+    // implicit size, so the row fills a plain Item.
+    Item {
+      objectName: "booksContent"
+      Tk.Flex {
+        objectName: "booksRoot"
+        anchors.fill: parent
+        direction: Tk.Flex.Row
+        gap: 0
+        Tk.NavigationRail {
+            objectName: "booksRail"
+            Tk.Flex.shrink: 0
+            expanded: true
+            expandedWidth: Tk.Theme.size.panelMinWidth * 0.85
+            currentId: window.view
+            tooltip: qsTr("Workspaces")
+            groups: [{ id: "books", label: window.books !== null ? window.books.companyName : "", entries: [
+                { id: "dashboard", label: qsTr("Dashboard"), destination: "booksViewDashboardAction", iconName: "layout-dashboard" },
+                { id: "sales", label: qsTr("Sales"), destination: "booksViewSalesAction", iconName: "receipt" },
+                { id: "expenses", label: qsTr("Expenses"), destination: "booksViewExpensesAction", iconName: "wallet" },
+                { id: "banking", label: qsTr("Banking"), destination: "booksViewBankingAction", iconName: "landmark" },
+                { id: "accounting", label: qsTr("Accounting"), destination: "booksViewAccountingAction", iconName: "book-text" },
+                { id: "reports", label: qsTr("Reports"), destination: "booksViewReportsAction", iconName: "chart-line" }] }]
+            onDestinationRequested: function(id, destination) { window.trigger(destination) }
+        }
+        Tk.Divider { vertical: true }
+        Item {
+            Tk.Flex.grow: 1
+            Tk.Flex.basis: 0
+            Tk.Toast { id: toast; objectName: "booksToast"; z: 10; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: Tk.Theme.space.lg }
+            DashboardView { anchors.fill: parent; visible: window.view === "dashboard"; books: window.books; host: window.booksHost }
+            SalesView { anchors.fill: parent; visible: window.view === "sales"; books: window.books; host: window.booksHost }
+            ExpensesView { anchors.fill: parent; visible: window.view === "expenses"; books: window.books; host: window.booksHost }
+            BankingView { id: banking; anchors.fill: parent; visible: window.view === "banking"; books: window.books; host: window.booksHost }
+            AccountsView { anchors.fill: parent; visible: window.view === "accounting"; books: window.books; host: window.booksHost }
+            ReportsView { id: reports; anchors.fill: parent; visible: window.view === "reports"; books: window.books; host: window.booksHost }
+            Tk.EmptyState {
+                anchors.centerIn: parent
+                visible: window.books === null || !window.books.hasCompany
+                iconName: "building"
+                title: qsTr("No company open")
+                text: qsTr("Create a company file for your business, or open an existing one.")
+                Tk.Button { variant: "accent"; text: qsTr("Set up a company…"); onClicked: setup.open() }
+                Tk.Button { variant: "outline"; text: qsTr("Open…"); onClicked: window.trigger("fileOpenAction") }
+            }
+        }
+      }
+    }
+
+    // ---- editors and dialogs ----
+    CompanySetupDialog { id: setup; books: window.books }
+    DocumentEditor { id: editor; books: window.books; host: window.booksHost }
+    PaymentDialog { id: payment; books: window.books }
+    PartyDialog { id: partyDialog; books: window.books }
+    ItemDialog { id: itemDialog; books: window.books }
+    AccountDialog { id: accountDialog; books: window.books }
+    JournalEntryDialog { id: journalDialog; books: window.books }
+    Tk.PromptDialog {
+        id: closeBooks
+        objectName: "closeBooksDialog"
+        title: qsTr("Close the books")
+        label: qsTr("Lock every transaction on or before this date (yyyy-mm-dd). Changing a locked period needs an explicit reason.")
+        primaryText: qsTr("Lock")
+        onAccepted: window.books.setLockDate(text, qsTr("Period closed"))
+    }
+    Dialogs.FileDialog {
+        id: exportDialog
+        property string what: ""
+        title: qsTr("Export")
+        fileMode: Dialogs.FileDialog.SaveFile
+        nameFilters: what === "reportPdf" ? [qsTr("PDF (*.pdf)")] : what === "iif" ? [qsTr("QuickBooks IIF (*.iif)")] : [qsTr("CSV (*.csv)")]
+        onAccepted: {
+            if (what === "reportPdf" || what === "reportCsv") reports.exportTo(selectedFile, what === "reportPdf" ? "pdf" : "csv")
+            else if (what === "iif") window.books.exportIif(selectedFile)
+            else if (what === "journalCsv") window.books.exportJournalCsv(selectedFile)
+        }
+    }
+    Dialogs.FileDialog {
+        id: importListsDialog
+        property string kind: "customer"
+        title: qsTr("Import a list (CSV)")
+        fileMode: Dialogs.FileDialog.OpenFile
+        nameFilters: [qsTr("CSV (*.csv)")]
+        onAccepted: window.books.importListCsv(kind, selectedFile)
+    }
+
+    Connections {
+        target: window.booksHost
+        function onCompanySetupRequested() { setup.open() }
+        function onCompanySettingsRequested() { window.trigger("settingsPreferencesAction") }
+        function onDocumentEditorRequested(kind, id) { editor.openFor(kind, id) }
+        function onPaymentDialogRequested(kind) { payment.openFor(kind) }
+        function onPartyDialogRequested(kind, id) { partyDialog.openFor(kind, id) }
+        function onItemDialogRequested(id) { itemDialog.openFor(id) }
+        function onAccountDialogRequested(id) { accountDialog.openFor(id) }
+        function onJournalEntryRequested() { journalDialog.openFor("journal") }
+        function onTransferRequested() { journalDialog.openFor("transfer") }
+        function onDepositRequested() { journalDialog.openFor("deposit") }
+        function onImportStatementRequested() { window.trigger("booksViewBankingAction"); banking.importStatement() }
+        function onReconcileRequested() { window.trigger("booksViewBankingAction"); banking.startReconcile() }
+        function onCloseBooksRequested() { closeBooks.text = window.books.lockDate; closeBooks.open() }
+        function onReportRequested(reportId) { window.trigger("booksViewReportsAction"); if (reportId.length > 0) reports.reportId = reportId }
+        function onBankRulesRequested() { window.trigger("booksViewBankingAction"); banking.tab = 2 }
+        function onVoidRequested(id) { editor.openFor("", id) }
+        function onExportRequested(what) {
+            if (what === "backup") { const r = window.books.backupNow(); return }
+            exportDialog.what = what
+            exportDialog.open()
+        }
+        function onImportListsRequested() { importListsDialog.open() }
+    }
+    Connections {
+        target: window.books
+        function onNotify(title, text, variant) { toast.title = title; toast.message = text; toast.variant = variant; toast.show() }
+    }
+    Component.onCompleted: {
+        window.booksHost.preferencesPageUrl = Qt.resolvedUrl("BooksPreferencesPage.qml")
+        // (BooksHost.companySetupRequested opens the wizard for a new window.)
+    }
+}

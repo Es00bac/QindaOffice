@@ -45,6 +45,11 @@ QList<AppEntry> officeApps()
          QObject::tr("Mail and calendar"),
          QObject::tr("Every inbox and calendar you have, and your tasks, in one place."),
          QObject::tr("New message")},
+        {QStringLiteral("QindaBooks"), QStringLiteral("org.qindaqt.QindaBooks"),
+         QStringLiteral("qindabooks"), QStringLiteral("QindaBooks"),
+         QObject::tr("Bookkeeping"),
+         QObject::tr("Invoices, bills, the bank and the reports that add it all up."),
+         QObject::tr("New company")},
     };
 }
 
@@ -72,10 +77,12 @@ QString iconSourceFor(const AppEntry &app)
 QStringList openNameFilters()
 {
     return {QObject::tr("All office documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt "
-                        "*.xlsx *.ods *.xls *.xlsm *.csv *.tsv *.odp *.pptx *.fodp)"),
+                        "*.xlsx *.ods *.xls *.xlsm *.csv *.tsv *.odp *.pptx *.fodp *.qbooks *.ics *.eml)"),
             QObject::tr("Documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt)"),
             QObject::tr("Spreadsheets (*.xlsx *.ods *.xls *.xlsm *.csv *.tsv)"),
             QObject::tr("Presentations (*.odp *.pptx *.fodp)"),
+            QObject::tr("Company books (*.qbooks)"),
+            QObject::tr("Calendars and messages (*.ics *.eml)"),
             QObject::tr("All files (*)")};
 }
 
@@ -102,6 +109,9 @@ QString appIdForPath(const QString &path)
         {QStringLiteral("odp"), QStringLiteral("QindaShow")},
         {QStringLiteral("pptx"), QStringLiteral("QindaShow")},
         {QStringLiteral("fodp"), QStringLiteral("QindaShow")},
+        {QStringLiteral("qbooks"), QStringLiteral("QindaBooks")},
+        {QStringLiteral("ics"), QStringLiteral("QindaMail")},
+        {QStringLiteral("eml"), QStringLiteral("QindaMail")},
     };
     // A notebook is a DIRECTORY, so anything without a known suffix that is
     // not a file at all belongs to QindaNote.

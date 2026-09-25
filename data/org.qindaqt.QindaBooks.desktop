@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=QindaBooks
+GenericName=Bookkeeping
+Comment=Books, invoices, banking and reports for one company per window — part of QindaQt Office
+Exec=qindabooks %F
+Icon=org.qindaqt.QindaBooks
+Terminal=false
+Categories=Office;Finance;
+Keywords=accounting;bookkeeping;invoice;ledger;quickbooks;
+MimeType=application/x-qindabooks;
+StartupNotify=true
+StartupWMClass=qindabooks

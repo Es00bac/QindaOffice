@@ -1,0 +1,559 @@
+QQuickRootItem#BooksWindow
+  MenuBarFromModel#officeMenuBar
+  QQuickControl#ApplicationWindowContentControl
+    QQuickContentItem#ApplicationWindow
+      QQuickItem#appContent
+        QQuickItem#booksContent
+          Flex#booksRoot
+            Button#accountsNew [hidden]
+            Button#dashNewExpense
+            Button#dashNewInvoice
+            Button#dashReceivePayment
+            Button#expensesNew [hidden]
+            Button#expensesNewBill [hidden]
+            Button#expensesPay [hidden]
+            Button#salesNew [hidden]
+            Button#salesReceive [hidden]
+            Caption#emptyText [hidden]
+            Card#dashBreakdown
+              QQuickRectangle#boxFocusRing [hidden]
+            Card#dashRatios
+              Caption#keyLabel
+              Caption#keyLabel
+              Caption#keyLabel
+              Caption#keyLabel
+              Caption#keyLabel
+              Caption#keyLabel
+              Caption#keyLabel
+              Label#valueLabel
+              Label#valueLabel
+              Label#valueLabel
+              Label#valueLabel
+              Label#valueLabel
+              Label#valueLabel
+              Label#valueLabel
+              QQuickRectangle#boxFocusRing [hidden]
+            Card#dashTrend
+              Graph#dashTrendGraph
+              QQuickRectangle#boxFocusRing [hidden]
+            DataTable#chartOfAccounts [hidden]
+              Box#tableHeader [hidden]
+                QQuickItem#headerCell_balance [hidden]
+                  QQuickRectangle#headerFocusRing_balance [hidden]
+                QQuickItem#headerCell_name [hidden]
+                  QQuickRectangle#headerFocusRing_name [hidden]
+                QQuickItem#headerCell_number [hidden]
+                  QQuickRectangle#headerFocusRing_number [hidden]
+                QQuickItem#headerCell_typeLabel [hidden]
+                  QQuickRectangle#headerFocusRing_typeLabel [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Caption#emptyText [hidden]
+              Overline#emptyTitle [hidden]
+              Scroll#tableBody [hidden]
+            DataTable#expenseVendors [hidden]
+              Box#tableHeader [hidden]
+                QQuickItem#headerCell_balance [hidden]
+                  QQuickRectangle#headerFocusRing_balance [hidden]
+                QQuickItem#headerCell_email [hidden]
+                  QQuickRectangle#headerFocusRing_email [hidden]
+                QQuickItem#headerCell_name [hidden]
+                  QQuickRectangle#headerFocusRing_name [hidden]
+                QQuickItem#headerCell_phone [hidden]
+                  QQuickRectangle#headerFocusRing_phone [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Caption#emptyText [hidden]
+              Overline#emptyTitle [hidden]
+              Scroll#tableBody [hidden]
+            DataTable#salesCustomers [hidden]
+              Box#tableHeader [hidden]
+                QQuickItem#headerCell_balance [hidden]
+                  QQuickRectangle#headerFocusRing_balance [hidden]
+                QQuickItem#headerCell_email [hidden]
+                  QQuickRectangle#headerFocusRing_email [hidden]
+                QQuickItem#headerCell_name [hidden]
+                  QQuickRectangle#headerFocusRing_name [hidden]
+                QQuickItem#headerCell_overdueCount [hidden]
+                  QQuickRectangle#headerFocusRing_overdueCount [hidden]
+                QQuickItem#headerCell_phone [hidden]
+                  QQuickRectangle#headerFocusRing_phone [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Caption#emptyText [hidden]
+              Overline#emptyTitle [hidden]
+              Scroll#tableBody [hidden]
+            DataTable#salesItems [hidden]
+              Box#tableHeader [hidden]
+                QQuickItem#headerCell_description [hidden]
+                  QQuickRectangle#headerFocusRing_description [hidden]
+                QQuickItem#headerCell_name [hidden]
+                  QQuickRectangle#headerFocusRing_name [hidden]
+                QQuickItem#headerCell_price [hidden]
+                  QQuickRectangle#headerFocusRing_price [hidden]
+                QQuickItem#headerCell_typeLabel [hidden]
+                  QQuickRectangle#headerFocusRing_typeLabel [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Caption#emptyText [hidden]
+              Overline#emptyTitle [hidden]
+              Scroll#tableBody [hidden]
+            DataTable#taxRates [hidden]
+              Box#tableHeader [hidden]
+                QQuickItem#headerCell_agencyName [hidden]
+                  QQuickRectangle#headerFocusRing_agencyName [hidden]
+                QQuickItem#headerCell_name [hidden]
+                  QQuickRectangle#headerFocusRing_name [hidden]
+                QQuickItem#headerCell_rateText [hidden]
+                  QQuickRectangle#headerFocusRing_rateText [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Caption#emptyText [hidden]
+              Overline#emptyTitle [hidden]
+              Scroll#tableBody [hidden]
+            DocumentTable#expenseDocuments [hidden]
+              Box#tableHeader [hidden]
+                QQuickItem#headerCell_balance [hidden]
+                  QQuickRectangle#headerFocusRing_balance [hidden]
+                QQuickItem#headerCell_date [hidden]
+                  QQuickRectangle#headerFocusRing_date [hidden]
+                QQuickItem#headerCell_dueDate [hidden]
+                  QQuickRectangle#headerFocusRing_dueDate [hidden]
+                QQuickItem#headerCell_kindLabel [hidden]
+                  QQuickRectangle#headerFocusRing_kindLabel [hidden]
+                QQuickItem#headerCell_number [hidden]
+                  QQuickRectangle#headerFocusRing_number [hidden]
+                QQuickItem#headerCell_partyName [hidden]
+                  QQuickRectangle#headerFocusRing_partyName [hidden]
+                QQuickItem#headerCell_status [hidden]
+                  QQuickRectangle#headerFocusRing_status [hidden]
+                QQuickItem#headerCell_total [hidden]
+                  QQuickRectangle#headerFocusRing_total [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Caption#emptyText [hidden]
+              Overline#emptyTitle [hidden]
+              Scroll#tableBody [hidden]
+            DocumentTable#journalEntries [hidden]
+              Box#tableHeader [hidden]
+                QQuickItem#headerCell_balance [hidden]
+                  QQuickRectangle#headerFocusRing_balance [hidden]
+                QQuickItem#headerCell_date [hidden]
+                  QQuickRectangle#headerFocusRing_date [hidden]
+                QQuickItem#headerCell_kindLabel [hidden]
+                  QQuickRectangle#headerFocusRing_kindLabel [hidden]
+                QQuickItem#headerCell_number [hidden]
+                  QQuickRectangle#headerFocusRing_number [hidden]
+                QQuickItem#headerCell_partyName [hidden]
+                  QQuickRectangle#headerFocusRing_partyName [hidden]
+                QQuickItem#headerCell_status [hidden]
+                  QQuickRectangle#headerFocusRing_status [hidden]
+                QQuickItem#headerCell_total [hidden]
+                  QQuickRectangle#headerFocusRing_total [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Caption#emptyText [hidden]
+              Overline#emptyTitle [hidden]
+              Scroll#tableBody [hidden]
+            DocumentTable#salesDocuments [hidden]
+              Box#tableHeader [hidden]
+                QQuickItem#headerCell_balance [hidden]
+                  QQuickRectangle#headerFocusRing_balance [hidden]
+                QQuickItem#headerCell_date [hidden]
+                  QQuickRectangle#headerFocusRing_date [hidden]
+                QQuickItem#headerCell_dueDate [hidden]
+                  QQuickRectangle#headerFocusRing_dueDate [hidden]
+                QQuickItem#headerCell_kindLabel [hidden]
+                  QQuickRectangle#headerFocusRing_kindLabel [hidden]
+                QQuickItem#headerCell_number [hidden]
+                  QQuickRectangle#headerFocusRing_number [hidden]
+                QQuickItem#headerCell_partyName [hidden]
+                  QQuickRectangle#headerFocusRing_partyName [hidden]
+                QQuickItem#headerCell_status [hidden]
+                  QQuickRectangle#headerFocusRing_status [hidden]
+                QQuickItem#headerCell_total [hidden]
+                  QQuickRectangle#headerFocusRing_total [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Caption#emptyText [hidden]
+              Overline#emptyTitle [hidden]
+              Scroll#tableBody [hidden]
+            Grid#dashKpis
+              KpiCard#kpiBills
+                Heading#kpiValue
+                QQuickRectangle#boxFocusRing [hidden]
+              KpiCard#kpiCash
+                Heading#kpiValue
+                QQuickRectangle#boxFocusRing [hidden]
+              KpiCard#kpiExpenses
+                Heading#kpiValue
+                QQuickRectangle#boxFocusRing [hidden]
+              KpiCard#kpiIncome
+                Heading#kpiValue
+                QQuickRectangle#boxFocusRing [hidden]
+              KpiCard#kpiNet
+                Heading#kpiValue
+                QQuickRectangle#boxFocusRing [hidden]
+              KpiCard#kpiOpen
+                Heading#kpiValue
+                QQuickRectangle#boxFocusRing [hidden]
+              KpiCard#kpiOverdue
+                Heading#kpiValue
+                QQuickRectangle#boxFocusRing [hidden]
+            IconButton#noticeDismiss [hidden]
+            Label#noticeText [hidden]
+            Label#noticeTitle [hidden]
+            NavigationRail#booksRail
+              QQuickItem#navigationGroup_books
+                QQuickButton#navigationButton_books [hidden]
+              QQuickItem#navigationItem_accounting
+                QQuickButton#navigationButton_accounting
+              QQuickItem#navigationItem_banking
+                QQuickButton#navigationButton_banking
+              QQuickItem#navigationItem_dashboard
+                QQuickButton#navigationButton_dashboard
+              QQuickItem#navigationItem_expenses
+                QQuickButton#navigationButton_expenses
+              QQuickItem#navigationItem_reports
+                QQuickButton#navigationButton_reports
+              QQuickItem#navigationItem_sales
+                QQuickButton#navigationButton_sales
+            Overline#emptyTitle [hidden]
+            QQuickAbstractButton#segment_0 [hidden]
+              QQuickRectangle#segmentFocus_0 [hidden]
+            QQuickAbstractButton#segment_0 [hidden]
+              QQuickRectangle#segmentFocus_0 [hidden]
+            QQuickAbstractButton#segment_1 [hidden]
+              QQuickRectangle#segmentFocus_1 [hidden]
+            QQuickAbstractButton#segment_1 [hidden]
+              QQuickRectangle#segmentFocus_1 [hidden]
+            QQuickAbstractButton#segment_2 [hidden]
+              QQuickRectangle#segmentFocus_2 [hidden]
+            QQuickAbstractButton#segment_2 [hidden]
+              QQuickRectangle#segmentFocus_2 [hidden]
+            QQuickAbstractButton#segment_3 [hidden]
+              QQuickRectangle#segmentFocus_3 [hidden]
+            QQuickAbstractButton#segment_3 [hidden]
+              QQuickRectangle#segmentFocus_3 [hidden]
+            QQuickAbstractButton#segment_4 [hidden]
+              QQuickRectangle#segmentFocus_4 [hidden]
+            QQuickContentItem#Splitter [hidden]
+              Box#bankAccountsPane [hidden]
+                Button#bankImport [hidden]
+                Button#bankReconcile [hidden]
+                Caption#sectionCount_Accounts [hidden]
+                Overline#sectionTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#reconcileDifference [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Button#bankNewRule [hidden]
+              Button#reconcileCancel [hidden]
+              Button#reconcileFinish [hidden]
+              Caption#keyLabel [hidden]
+              Caption#keyLabel [hidden]
+              Caption#keyLabel [hidden]
+              DataTable#bankFeed [hidden]
+                Box#tableHeader [hidden]
+                  QQuickItem#headerCell_amount [hidden]
+                    QQuickRectangle#headerFocusRing_amount [hidden]
+                  QQuickItem#headerCell_date [hidden]
+                    QQuickRectangle#headerFocusRing_date [hidden]
+                  QQuickItem#headerCell_id [hidden]
+                    QQuickRectangle#headerFocusRing_id [hidden]
+                  QQuickItem#headerCell_memo [hidden]
+                    QQuickRectangle#headerFocusRing_memo [hidden]
+                  QQuickItem#headerCell_payee [hidden]
+                    QQuickRectangle#headerFocusRing_payee [hidden]
+                  QQuickItem#headerCell_suggestion [hidden]
+                    QQuickRectangle#headerFocusRing_suggestion [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Caption#emptyText [hidden]
+                Overline#emptyTitle [hidden]
+                Scroll#tableBody [hidden]
+              DataTable#bankRegister [hidden]
+                Box#tableHeader [hidden]
+                  QQuickItem#headerCell_balanceText [hidden]
+                    QQuickRectangle#headerFocusRing_balanceText [hidden]
+                  QQuickItem#headerCell_date [hidden]
+                    QQuickRectangle#headerFocusRing_date [hidden]
+                  QQuickItem#headerCell_depositText [hidden]
+                    QQuickRectangle#headerFocusRing_depositText [hidden]
+                  QQuickItem#headerCell_memo [hidden]
+                    QQuickRectangle#headerFocusRing_memo [hidden]
+                  QQuickItem#headerCell_number [hidden]
+                    QQuickRectangle#headerFocusRing_number [hidden]
+                  QQuickItem#headerCell_payee [hidden]
+                    QQuickRectangle#headerFocusRing_payee [hidden]
+                  QQuickItem#headerCell_paymentText [hidden]
+                    QQuickRectangle#headerFocusRing_paymentText [hidden]
+                  QQuickItem#headerCell_reconciled [hidden]
+                    QQuickRectangle#headerFocusRing_reconciled [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Caption#emptyText [hidden]
+                Overline#emptyTitle [hidden]
+                Scroll#tableBody [hidden]
+              DataTable#bankRules [hidden]
+                Box#tableHeader [hidden]
+                  QQuickItem#headerCell_accountName [hidden]
+                    QQuickRectangle#headerFocusRing_accountName [hidden]
+                  QQuickItem#headerCell_name [hidden]
+                    QQuickRectangle#headerFocusRing_name [hidden]
+                  QQuickItem#headerCell_payeeContains [hidden]
+                    QQuickRectangle#headerFocusRing_payeeContains [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Caption#emptyText [hidden]
+                Overline#emptyTitle [hidden]
+                Scroll#tableBody [hidden]
+              DataTable#reconcileLines [hidden]
+                Box#tableHeader [hidden]
+                  QQuickItem#headerCell_amount [hidden]
+                    QQuickRectangle#headerFocusRing_amount [hidden]
+                  QQuickItem#headerCell_cleared [hidden]
+                    QQuickRectangle#headerFocusRing_cleared [hidden]
+                  QQuickItem#headerCell_date [hidden]
+                    QQuickRectangle#headerFocusRing_date [hidden]
+                  QQuickItem#headerCell_number [hidden]
+                    QQuickRectangle#headerFocusRing_number [hidden]
+                  QQuickItem#headerCell_payee [hidden]
+                    QQuickRectangle#headerFocusRing_payee [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Caption#emptyText [hidden]
+                Overline#emptyTitle [hidden]
+                Scroll#tableBody [hidden]
+              Label#valueLabel [hidden]
+              Label#valueLabel [hidden]
+              Label#valueLabel [hidden]
+              QQuickRectangle#boxFocusRing [hidden]
+              TabStrip#bankTabs [hidden]
+                QQuickTabButton#tab_0 [hidden]
+                  IconButton#tabClose_0 [hidden]
+                  QQuickRectangle#tabFocus_0 [hidden]
+                QQuickTabButton#tab_1 [hidden]
+                  IconButton#tabClose_1 [hidden]
+                  QQuickRectangle#tabFocus_1 [hidden]
+                QQuickTabButton#tab_2 [hidden]
+                  IconButton#tabClose_2 [hidden]
+                  QQuickRectangle#tabFocus_2 [hidden]
+            QQuickContentItem#Splitter [hidden]
+              Box#reportCatalog [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Flex#reportOptions [hidden]
+                ComboBox#reportPreset [hidden]
+                  QQuickText#comboDisplayText [hidden]
+                IconButton#fieldClear [hidden]
+                IconButton#fieldClear [hidden]
+                IconButton#fieldClear [hidden]
+                QQuickAbstractButton#segment_0 [hidden]
+                  QQuickRectangle#segmentFocus_0 [hidden]
+                QQuickAbstractButton#segment_1 [hidden]
+                  QQuickRectangle#segmentFocus_1 [hidden]
+                QQuickText#comboDisplayText [hidden]
+                QQuickText#comboDisplayText [hidden]
+              QQuickRectangle#boxFocusRing [hidden]
+              ReportTableView#reportTable [hidden]
+                Caption#reportCompany [hidden]
+                Caption#reportSubtitle [hidden]
+                Flex#reportHeader [hidden]
+                Heading#reportTitle [hidden]
+                QQuickListView#reportRows [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+            QQuickRectangle#boxFocusRing [hidden]
+            QQuickRectangle#boxFocusRing [hidden]
+            QQuickRectangle#boxFocusRing [hidden]
+            QQuickRectangle#boxFocusRing [hidden]
+            QQuickRectangle#splitterHandle [hidden]
+              QQuickMouseArea#splitterHitTarget [hidden]
+              QQuickRectangle#splitterFocusRing [hidden]
+            QQuickRectangle#splitterHandle [hidden]
+              QQuickMouseArea#splitterHitTarget [hidden]
+              QQuickRectangle#splitterFocusRing [hidden]
+            SearchField#expensesSearch [hidden]
+              IconButton#fieldClear [hidden]
+            SearchField#salesSearch [hidden]
+              IconButton#fieldClear [hidden]
+            TabStrip#accountingTabs [hidden]
+              QQuickTabButton#tab_0 [hidden]
+                IconButton#tabClose_0 [hidden]
+                QQuickRectangle#tabFocus_0 [hidden]
+              QQuickTabButton#tab_1 [hidden]
+                IconButton#tabClose_1 [hidden]
+                QQuickRectangle#tabFocus_1 [hidden]
+              QQuickTabButton#tab_2 [hidden]
+                IconButton#tabClose_2 [hidden]
+                QQuickRectangle#tabFocus_2 [hidden]
+            TabStrip#expensesTabs [hidden]
+              QQuickTabButton#tab_0 [hidden]
+                IconButton#tabClose_0 [hidden]
+                QQuickRectangle#tabFocus_0 [hidden]
+              QQuickTabButton#tab_1 [hidden]
+                IconButton#tabClose_1 [hidden]
+                QQuickRectangle#tabFocus_1 [hidden]
+            TabStrip#salesTabs [hidden]
+              QQuickTabButton#tab_0 [hidden]
+                IconButton#tabClose_0 [hidden]
+                QQuickRectangle#tabFocus_0 [hidden]
+              QQuickTabButton#tab_1 [hidden]
+                IconButton#tabClose_1 [hidden]
+                QQuickRectangle#tabFocus_1 [hidden]
+              QQuickTabButton#tab_2 [hidden]
+                IconButton#tabClose_2 [hidden]
+                QQuickRectangle#tabFocus_2 [hidden]
+              QQuickTabButton#tab_3 [hidden]
+                IconButton#tabClose_3 [hidden]
+                QQuickRectangle#tabFocus_3 [hidden]
+            Toast#booksToast [hidden]
+              Notice#toastNotice [hidden]
+                Button#toastAction [hidden]
+                IconButton#noticeDismiss [hidden]
+                Label#noticeText [hidden]
+                Label#noticeTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+  QQuickItem#appFooter
+    Flex#appFindBar [hidden]
+    Flex#appStatusBar
+      OfficeStatusBar#officeStatusBar
+        QQuickRectangle#boxFocusRing [hidden]
+        StatusField#statusInfo [hidden]
+          QQuickAbstractButton#statusAction [hidden]
+          QQuickRectangle#statusFocusRing [hidden]
+        StatusField#statusMessage [hidden]
+          QQuickAbstractButton#statusAction [hidden]
+          QQuickRectangle#statusFocusRing [hidden]
+  QQuickItem#appHeader
+    Flex#appToolBars
+      RibbonFromModel#officeRibbon
+        Flex#ribbonTabRow
+          IconButton#ribbonCollapseButton
+          QQuickItem#ribbonTrailing
+            CommandSearch#ribbonCommandSearch
+              IconButton#fieldClear [hidden]
+          QQuickTabButton#ribbonTab_accounting
+          QQuickTabButton#ribbonTab_banking
+          QQuickTabButton#ribbonTab_file
+          QQuickTabButton#ribbonTab_home
+          QQuickTabButton#ribbonTab_reports
+          QQuickTabButton#ribbonTab_view
+        QQuickItem#ribbonGroupViewport
+          Flex#ribbonGroups
+            RibbonGroup#ribbonGroup_customers
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_booksNewCreditMemoAction
+                RibbonButton#ribbonAction_booksNewCreditMemoAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksNewCustomerAction
+                RibbonButton#ribbonAction_booksNewCustomerAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksNewEstimateAction
+                RibbonButton#ribbonAction_booksNewEstimateAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksNewInvoiceAction
+                RibbonButton#ribbonAction_booksNewInvoiceAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksNewSalesReceiptAction
+                RibbonButton#ribbonAction_booksNewSalesReceiptAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksReceivePaymentAction
+                RibbonButton#ribbonAction_booksReceivePaymentAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_document
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_booksEmailDocumentAction
+                RibbonButton#ribbonAction_booksEmailDocumentAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksPrintDocumentAction
+                RibbonButton#ribbonAction_booksPrintDocumentAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksVoidAction
+                RibbonButton#ribbonAction_booksVoidAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_history
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_editRedoAction
+                RibbonButton#ribbonAction_editRedoAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editUndoAction
+                RibbonButton#ribbonAction_editUndoAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_lists
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_booksNewAccountAction
+                RibbonButton#ribbonAction_booksNewAccountAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksNewItemAction
+                RibbonButton#ribbonAction_booksNewItemAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_vendors
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_booksNewBillAction
+                RibbonButton#ribbonAction_booksNewBillAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksNewCheckAction
+                RibbonButton#ribbonAction_booksNewCheckAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksNewExpenseAction
+                RibbonButton#ribbonAction_booksNewExpenseAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksNewVendorAction
+                RibbonButton#ribbonAction_booksNewVendorAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksNewVendorCreditAction
+                RibbonButton#ribbonAction_booksNewVendorCreditAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksPayBillsAction
+                RibbonButton#ribbonAction_booksPayBillsAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+        QQuickRectangle#ribbonBackground

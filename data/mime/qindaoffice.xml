@@ -6,4 +6,17 @@
     <glob pattern="*.qnotebook"/>
     <glob pattern="notebook.json" weight="10"/>
   </mime-type>
+  <mime-type type="application/x-qindabooks">
+    <comment>QindaBooks company file</comment>
+    <comment xml:lang="en">QindaBooks company file</comment>
+    <sub-class-of type="application/vnd.sqlite3"/>
+    <glob pattern="*.qbooks"/>
+    <!-- SQLite header, and PRAGMA application_id "QBKS" (0x51424B53) at
+         offset 68 — what tells a company file from any other SQLite file. -->
+    <magic priority="80">
+      <match type="string" value="SQLite format 3\000" offset="0">
+        <match type="big32" value="0x51424B53" offset="68"/>
+      </match>
+    </magic>
+  </mime-type>
 </mime-info>
