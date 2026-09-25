@@ -40,6 +40,7 @@ const QStringList kCommandIds{
     QStringLiteral("booksViewDashboardAction"),    QStringLiteral("booksViewSalesAction"),
     QStringLiteral("booksViewExpensesAction"),     QStringLiteral("booksViewBankingAction"),
     QStringLiteral("booksViewAccountingAction"),   QStringLiteral("booksViewReportsAction"),
+    QStringLiteral("booksSyncBankAction"),         QStringLiteral("booksConnectionsAction"),
 };
 
 // A host with a company at `dir/name`.
@@ -79,6 +80,11 @@ private slots:
         QCOMPARE(host.action(QStringLiteral("booksNewInvoiceAction"))->shortcut(), QKeySequence(QStringLiteral("Ctrl+I")));
         QCOMPARE(host.action(QStringLiteral("booksViewReportsAction"))->shortcut(), QKeySequence(QStringLiteral("Ctrl+6")));
         QCOMPARE(host.action(QStringLiteral("fileNewAction"))->plainText(), QStringLiteral("New Company…"));
+        // M48: the Lucide names QindaTK ships (qtk-preview --list-icons).
+        QCOMPARE(host.action(QStringLiteral("booksSyncBankAction"))->shortcut(), QKeySequence(QStringLiteral("F5")));
+        QCOMPARE(host.action(QStringLiteral("booksSyncBankAction"))->iconName(), QStringLiteral("refresh-cw"));
+        QCOMPARE(host.action(QStringLiteral("booksSyncBankAction"))->plainText(), QStringLiteral("Sync Mercury & Stripe"));
+        QCOMPARE(host.action(QStringLiteral("booksConnectionsAction"))->iconName(), QStringLiteral("link"));
     }
 
     void noTwoCommandsShareAShortcut()
@@ -180,6 +186,7 @@ private slots:
             {QStringLiteral("booksTransferAction"), SIGNAL(transferRequested())},
             {QStringLiteral("booksDepositAction"), SIGNAL(depositRequested())},
             {QStringLiteral("booksImportStatementAction"), SIGNAL(importStatementRequested())},
+            {QStringLiteral("booksConnectionsAction"), SIGNAL(connectionsRequested())},
             {QStringLiteral("booksReconcileAction"), SIGNAL(reconcileRequested())},
             {QStringLiteral("booksBankRulesAction"), SIGNAL(bankRulesRequested())},
             {QStringLiteral("booksRunReportAction"), SIGNAL(reportRequested(QString))},

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "mail_host.h"
 
+#include "launch_arguments.h"
 #include "mail_service.h"
 
 #include <QFileInfo>
@@ -86,6 +87,15 @@ bool MailHost::openWithoutDocument(const QString &path)
 {
     if (m_service == nullptr) return false;
     const QString lower = path.trimmed().toLower();
+    if (lower.startsWith(QString::fromLatin1(Launch::kComposeScheme))) {
+        // `qindamail --attach <file> mailto:…` (launch_arguments.h, M48).
+        const Launch::ComposeRequest request = Launch::parseComposeToken(path.trimmed());
+        const QVariantMap base =
+            request.mailto.isEmpty() ? m_service->newDraft() : m_service->mailtoDraft(request.mailto);
+        const QVariantMap draft = m_service->attachFiles(base, request.attachments);
+        QTimer::singleShot(0, this, [this, draft] { emit composeRequested(draft); });
+        return request.ok;
+    }
     if (lower.startsWith(QStringLiteral("mailto:"))) {
         // Queued: the window's QML is connected by the time it runs, also
         // for the first window a `qindamail mailto:…` launch creates.

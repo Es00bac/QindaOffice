@@ -69,6 +69,10 @@ struct PrintableDocument {
 
     QString message;             // printed note to the customer
     QString paymentInstructions;
+    // M48: the invoice's online payment link (Stripe), printed as
+    // "Pay online: <url>" under the payment instructions; empty when the
+    // invoice has none or the link no longer charges the balance due.
+    QString payOnlineUrl;
     QString footer;
     QLocale locale;
 };

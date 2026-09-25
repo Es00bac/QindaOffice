@@ -469,6 +469,84 @@ behaviour in [mail.md](mail.md#exchange-and-microsoft-365-calendars).
       `InstanceIndex` addressing, the Graph `$filter`, all-day events created
       in Outlook, attendee notifications from Graph edits.
 
+### M48 gates (Mercury and Stripe connections)
+
+Automated by `ctest -R 'books_connect|qindabooks_connections'` against a
+fake Mercury + Stripe API on 127.0.0.1 (`tests/books_connect/
+fake_bank_api.h`, the documented response shapes; the fake checks the
+Bearer credential and echoes a refused key in its error, as Stripe does),
+an in-memory keyring, `TZ=UTC`, "today" 2026-03-31. No real network.
+Rationale in D-048; the model in
+[books.md](books.md#bank-and-payment-connections-mercury-stripe).
+
+- [x] `tst_books_connect_mercury`: v3 storage — the company uuid is
+      stable, `Connections::save` refuses token-shaped values and unknown
+      providers, a payment link is current only at the open balance; a
+      refused token (401) is not stored and not echoed; the accepted one
+      is stored under `<uuid>/mercury`, sent as `Bearer`, never in the
+      file; linking creates "Mercury Checking ••1234" or reuses a bank
+      account (not an expense account), unlinks; sync over three pages
+      (offset paging, `start` 90 days back, `order=asc`) imports the
+      three `sent` transactions and skips pending/failed, dates on
+      `postedAt`, payee/memo/FITID/cents exact; a second sync imports 0
+      and starts from the cursor; the pending one imports once when it
+      posts; rules suggest on synced lines; http to a non-loopback host
+      is refused before any request; disconnect removes the token and
+      keeps the feed; a lost token reports "needs its API token again";
+      no token in captured logs.
+- [x] `tst_books_connect_stripe`: a refused key is not stored and the
+      echoed key is redacted; connect creates "Stripe (USD)" (bank) and
+      "Merchant Fees" (expense), payouts default to the Mercury-linked
+      account, reconnecting creates nothing new; a six-transaction
+      history over three pages (`starting_after`, `expand[]=data.source`):
+      charge with invoice metadata → invoice Paid and the gross line
+      matched, fees categorized to Merchant Fees (3.20 + 1.75 + 15.00 +
+      0.05), a plain sale, refund and dispute left New, the payout booked
+      as a transfer and matched, the Mercury "STRIPE TRANSFER" deposit
+      matched to it — **Mercury first and Stripe first** — never income;
+      re-sync imports and applies nothing; after reviewing the rest the
+      clearing account = Stripe available + pending (35.00) and the trial
+      balance balances with no integrity problems; another company's
+      invoice metadata is left for review with a note; a payment link
+      sends `unit_amount` = open balance, `currency`, `product_data[name]`,
+      metadata and `payment_intent_data[metadata]` (invoice, company uuid,
+      number), `restrictions[completed_sessions][limit]=1`, form-encoded,
+      with Idempotency-Keys per invoice + amount; a second request for the
+      same amount reuses the link without a request; after a partial
+      payment a new link for the new balance with a new key.
+- [x] `tst_books_io_forms::payOnlineLinkIsPrinted`: a stale link is not
+      printed; a current one prints "Pay online: <url>" under PAYMENT
+      INSTRUCTIONS (PDF text via Poppler).
+- [x] `tst_qindabooks_connections`: the QML API end to end —
+      `connections()` states, `connectMercury` (refused, then accounts
+      with `balanceText`), `linkMercuryAccount`/`mercuryLinks`,
+      `connectStripe`/`stripeSettings`/`saveStripeSettings` (a non-bank
+      clearing account refused), `createPaymentLink` →
+      `paymentLinkFinished` and `document(id).paymentLinkUrl`,
+      `emailDocument` launches `qindamail --attach <pdf> mailto:…` with
+      "Pay online: <url>" in the body, `syncConnections` →
+      `connectionSyncFinished` (status `syncing` meanwhile; a second
+      request fails fast with its own id), `disconnect` removes the
+      keyring entry; no token in any result, log or the company file; a
+      company without connections never asks the keyring.
+- [x] `tst_qindabooks_host`: `booksSyncBankAction` (F5, `refresh-cw`,
+      "Sync Mercury & Stripe") and `booksConnectionsAction` (`link`,
+      emits `connectionsRequested`) exist, first in the Banking menu;
+      `tst_qindabooks_menu_export` passes the validator with them.
+- [x] `tst_qindamail_host::attachHandOff`: `--attach` (both spellings,
+      repeatable, relative paths made absolute) folds into one
+      `qindamail-compose:` token; the draft has the mailto: fields and the
+      files imported into the attachment store (a PDF's bytes and MIME
+      type); a missing file is named in `missingAttachments`; a mailto:
+      `attach=` is ignored.
+
+Remaining for the lead: `ConnectionsDialog.qml` (a registered stub), the
+two commands on the ribbon's Banking tab (the ribbon gate exempts them
+until then — remove the exemption in `tst_qindabooks_ui` with that
+change), and the on-desktop checks: connect a real read-only Mercury token
+and a Stripe test-mode restricted key, sync, pay a test-mode payment link
+with Stripe's test card and see the invoice turn Paid on the next sync.
+
 ### M47 gates (the QindaBooks app)
 
 - **UI** (`tst_qindabooks_ui`): the real `BooksWindow.qml` over a seeded
@@ -520,10 +598,10 @@ Automated by `ctest -R qindabooks` (headless, temp dirs and XDG dirs,
       with `…Chart` doubles, expense mix, 7 ratios (net margin 73.3%);
       report PDF/CSV, invoice PDF, IIF, journal CSV, customer list CSV
       imported into another company; timestamped backup and Backup…
-      never over a file; e-mail launches `qindamail mailto:` with the
-      subject and says the PDF is not attached; monthly recurring from
+      never over a file; e-mail launches `qindamail --attach <pdf>
+      mailto:` with the subject (M48: the PDF is attached); monthly recurring from
       Jan 31 generates 3 invoices once.
-- [x] `tst_qindabooks_host`: all 38 command ids exist with icons and
+- [x] `tst_qindabooks_host`: all 40 command ids (38 + the two M48 ones) exist with icons and
       labels, Ctrl+I and Ctrl+1…6, New reads "New Company…"; no shortcut
       is shared; commands disabled until a company exists and the setup
       request fires once; the workspace radio group keeps exactly one

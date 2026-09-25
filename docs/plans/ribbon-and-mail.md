@@ -35,6 +35,7 @@ and in QindaTK's `AGENTS.md` apply unchanged and outrank anything here.
 | M45 | `books_engine`: double-entry ledger in a SQLite company file, sales/purchases, banking, tax, reports | QindaOffice |
 | M46 | `books_io`: invoice/statement PDF, CSV/OFX/QFX/QIF bank import, CSV/IIF export, backups | QindaOffice |
 | M47 | QindaBooks app (`apps/qindabooks`, `org.qindaqt.QindaBooks`), launcher card | QindaOffice |
+| M48 | `books_connect`: Mercury bank sync, Stripe balance history + payouts + payment links, keyring tokens; `qindamail --attach` | QindaOffice |
 
 ## Ribbon design (M40, D-041 here; QindaTK D-297)
 
@@ -163,6 +164,7 @@ look or file format:
 | OM-accounts | QindaOffice `work/mail-accounts` | `office_mail`: accounts, presets, autoconfig, OAuth, secrets + tests |
 | OM-exchange | QindaOffice `work/mail-exchange` | `office_mail`: EWS + Graph calendar adapters + tests |
 | OB-engine | QindaOffice `work/books-engine` | `books_engine` + `books_io` + tests |
+| OB-connect | QindaOffice `work/books-connect` | `books_connect` + service wiring + `qindamail --attach` + tests (M48) |
 | app | QindaOffice `main` (lead) | ribbons in the four apps, QindaMail, QindaBooks |
 
 Decision numbers are reserved so parallel lanes never collide: QindaTK
@@ -170,7 +172,7 @@ D-297 ribbon, D-298 POP3, D-299 IMAP folders/APPEND/mUTF-7, D-300 ICS
 feeds, D-301 calendar grid; QindaOffice D-041 ribbon, D-042 mail app
 shape, D-043 hosted accounts and OAuth, D-044 Exchange/Graph calendars,
 D-045 bookkeeping model (company file, integer money, immutable postings),
-D-046 bookkeeping I/O.
+D-046 bookkeeping I/O, D-048 bank and payment connections.
 
 ## Gates
 

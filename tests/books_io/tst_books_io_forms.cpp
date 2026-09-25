@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // M46: printed forms (invoice, estimate, sales receipt, credit memo,
 // statement) through the one PagePainter, to PDF and to a QPrinter.
+// M48: an invoice with a current payment link prints "Pay online: <url>".
 #include "books_io_fixture.h"
 
+#include "connections.h"
 #include "documents.h"
 #include "form_renderer.h"
 #include "journal.h"
@@ -20,6 +22,7 @@ class TestBooksIoForms : public QObject {
 private slots:
     void initTestCase();
     void invoicePdfRenders();
+    void payOnlineLinkIsPrinted();
     void longInvoicePaginatesWithRepeatedHeader();
     void otherFormsRender();
     void statementRenders();
@@ -61,6 +64,33 @@ void TestBooksIoForms::invoicePdfRenders()
     }
     const QString png = saveGalleryPng(pdf, QStringLiteral("M46-books-invoice.png"));
     qInfo("gallery: %s", qPrintable(png));
+}
+
+void TestBooksIoForms::payOnlineLinkIsPrinted()
+{
+    CompanyFile &f = *m_company.file;
+    Documents documents(f);
+    const qint64 open = documents.openBalance(m_company.invoice).minor();
+    QVERIFY(open > 0);
+    const QString url = QStringLiteral("https://buy.stripe.com/test_payonline42");
+    // A link for another amount is stale and never printed.
+    PaymentLinkRecord stale{0, m_company.invoice, Provider::Stripe, open + 1, f.currency(), url + QStringLiteral("stale"),
+                            QStringLiteral("plink_old"), {}};
+    QVERIFY(Connections(f).recordPaymentLink(stale).ok);
+    PrintableDocument printable;
+    QVERIFY(buildPrintableDocument(f, m_company.invoice, &printable));
+    QVERIFY(printable.payOnlineUrl.isEmpty());
+    PaymentLinkRecord link{0, m_company.invoice, Provider::Stripe, open, f.currency(), url, QStringLiteral("plink_42"), {}};
+    QVERIFY(Connections(f).recordPaymentLink(link).ok);
+    QVERIFY(buildPrintableDocument(f, m_company.invoice, &printable));
+    QCOMPARE(printable.payOnlineUrl, url);
+    const QString pdf = m_dir.filePath(QStringLiteral("invoice-pay-online.pdf"));
+    QString error;
+    QVERIFY2(FormRenderer::writeDocumentPdf(f, m_company.invoice, pdf, &error), qPrintable(error));
+    const QString text = pdfPages(pdf).join(QLatin1Char('\n'));
+    QVERIFY2(text.contains(QStringLiteral("Pay online:")), qPrintable(text));
+    QVERIFY2(text.simplified().remove(QLatin1Char(' ')).contains(url), qPrintable(text));
+    QVERIFY(text.indexOf(QStringLiteral("PAYMENT INSTRUCTIONS")) < text.indexOf(QStringLiteral("Pay online:")));
 }
 
 void TestBooksIoForms::longInvoicePaginatesWithRepeatedHeader()

@@ -128,6 +128,7 @@ inline bool writeFile(const QString &path, const QByteArray &bytes)
     {                                                                                      \
         qputenv("QT_QPA_PLATFORM", "offscreen");                                           \
         qputenv("QT_QUICK_BACKEND", "software");                                           \
+        qputenv("QQO_BOOKS_SECRET_BACKEND", "memory");                                     \
         QTemporaryDir home;                                                                \
         qputenv("XDG_CONFIG_HOME", home.filePath(QStringLiteral("config")).toUtf8());      \
         qputenv("XDG_STATE_HOME", home.filePath(QStringLiteral("state")).toUtf8());        \

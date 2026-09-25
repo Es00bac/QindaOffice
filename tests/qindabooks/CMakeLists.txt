@@ -5,14 +5,18 @@
 # the panel export through the desktop's own validator
 # (tst_qindabooks_menu_export). Every test links the app's static QML
 # module, so a source added to apps/qindabooks/CMakeLists.txt is in all.
-foreach(name IN ITEMS tst_qindabooks_service tst_qindabooks_banking tst_qindabooks_host tst_qindabooks_menu_export tst_qindabooks_ui)
+# tst_qindabooks_connections (M48) drives the Mercury/Stripe API against
+# tests/books_connect/fake_bank_api.h; every test runs with the in-memory
+# keyring (QQO_BOOKS_SECRET_BACKEND=memory), never the user's.
+foreach(name IN ITEMS tst_qindabooks_service tst_qindabooks_banking tst_qindabooks_host tst_qindabooks_menu_export
+                      tst_qindabooks_ui tst_qindabooks_connections)
     add_executable(${name} ${name}.cpp books_app_test_support.h)
-    target_link_libraries(${name} PRIVATE qindabooks_app qindabooks_appplugin Qt6::Test)
+    target_link_libraries(${name} PRIVATE qindabooks_app qindabooks_appplugin Qt6::Test Qt6::Network)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)
     target_compile_definitions(${name} PRIVATE QQO_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/qml_fixtures")
     qqo_set_strict_warnings(${name})
     qqo_desktop_runtime(${name})
     add_test(NAME ${name} COMMAND ${name})
     set_tests_properties(${name} PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QQO_BOOKS_SECRET_BACKEND=memory;TZ=UTC")
 endforeach()

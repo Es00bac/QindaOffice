@@ -385,13 +385,16 @@ private slots:
         const QVariantMap mail = c.service.emailDocument(inv);
         QVERIFY2(ok(mail), qPrintable(mail.value(QStringLiteral("error")).toString()));
         QCOMPARE(program, QStringLiteral("qindamail"));
-        QCOMPARE(arguments.size(), 1);
-        QVERIFY(arguments.first().startsWith(QStringLiteral("mailto:ap@acme.test?subject=")));
-        QVERIFY(arguments.first().contains(QStringLiteral("Invoice%20INV-1001%20from%20Test%20Books%20LLC")));
+        // M48: the PDF travels as `--attach <path>` before the mailto: URL.
+        QCOMPARE(arguments.size(), 3);
+        QCOMPARE(arguments.at(0), QStringLiteral("--attach"));
+        QCOMPARE(arguments.at(1), mail.value(QStringLiteral("path")).toString());
+        QVERIFY(arguments.at(2).startsWith(QStringLiteral("mailto:ap@acme.test?subject=")));
+        QVERIFY(arguments.at(2).contains(QStringLiteral("Invoice%20INV-1001%20from%20Test%20Books%20LLC")));
         QCOMPARE(mail.value(QStringLiteral("subject")).toString(), QStringLiteral("Invoice INV-1001 from Test Books LLC"));
-        QVERIFY(!mail.value(QStringLiteral("attached")).toBool());
+        QVERIFY(mail.value(QStringLiteral("attached")).toBool());
         QVERIFY(size(mail.value(QStringLiteral("path")).toString()) > 1000);
-        QCOMPARE(notified.count(), 1); // "attach the PDF yourself"
+        QCOMPARE(notified.count(), 1); // "INV-1001.pdf is attached"
     }
 
     void recurringInvoicesGenerateOnce()

@@ -5,6 +5,67 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-048: Bank and payment connections: feed lines first, tokens in the keyring
+
+**Date:** 2026-09-25 · **Status:** accepted (M48)
+
+**Context.** The user banks at Mercury (Mercury Business Checking) and
+takes card payments through Stripe, and asked for both to flow into
+QindaBooks "super easy". D-045 had put online bank connections out of
+scope. Three risks shaped the design: a credential ending up in a company
+file that gets copied and backed up; card income booked twice (once from
+Stripe, once when the payout lands in the bank); and one business's
+Stripe payment landing on another business's invoice.
+
+**Decision.**
+
+1. **Everything enters through the bank feed.** Mercury transactions go
+   to the linked bank account's feed, Stripe's balance history to a
+   bank-type **clearing account** ("Stripe (USD)") — FITID = the
+   provider's id, so re-syncing adds nothing and rules, matching, review
+   and reconciliation behave exactly as for imported statements. Only
+   Mercury transactions with status `sent` and a `postedAt` are imported.
+2. **Stripe's accounting model**: charges at gross, fees as separate
+   lines booked to Merchant Fees, refunds and disputes left for review,
+   payouts as transfers clearing → the payout bank account. The bank's
+   STRIPE deposit is **matched** to the payout transfer (same amount,
+   ≤ 7 days), never categorized — in either import order. The clearing
+   account's balance equals Stripe's available + pending balance.
+3. **Payment links, not Checkout**: a Price for the open balance plus a
+   Payment Link (no expiry, one completed session) carrying
+   `qindabooks_invoice` / `qindabooks_company` / `invoice_number` in its
+   and its payment intent's metadata, with an Idempotency-Key per invoice
+   and amount. A charge with this company's metadata becomes a customer
+   payment applied to the invoice; another company's uuid is never looked
+   up. A link is printed and mailed only while it charges the open
+   balance.
+4. **Tokens only in the keyring** (QtKeychain, service
+   `qindaoffice-books`, key `<companyUuid>/<provider>`; in-memory for
+   tests via `QQO_BOOKS_SECRET_BACKEND=memory`), stored only after the
+   provider accepted them; the company file refuses token-shaped values;
+   error text is redacted. `companyUuid` is a stable per-company id in the
+   file's settings. HTTPS only (http to loopback for tests), no redirects.
+5. **A small library of its own.** `books_connect` (Qt Core/Network +
+   `books_engine` + qt6keychain) with its own `SecretBackend` equivalent,
+   rather than linking `office_mail`, which would drag the QML/QindaTK
+   mail stack into the bookkeeping libraries. Schema v3 adds
+   `connections` and `payment_links`.
+6. **QindaMail takes attachments from the command line**:
+   `qindamail --attach <path> mailto:…` (folded into one private
+   `qindamail-compose:` positional so the single-instance hand-off carries
+   it); a mailto: URL still never attaches a file. Invoices are e-mailed
+   with their PDF attached.
+
+**Consequences.** Mercury and Stripe need no bank-file downloads; every
+other bank still does. Read-only Mercury tokens suffice; Stripe needs a
+restricted key with read permissions, plus write on Products, Prices and
+Payment Links only for payment links. Multi-currency Stripe balances are
+reported and skipped. `connectMercury` / `connectStripe` / `disconnect`
+are synchronous for QML (a local event loop with input excluded, ≤ 30 s);
+sync and payment links answer through signals. The Stripe permission
+labels and the live API behaviour were checked against the published
+documentation only, not a live account (docs/books.md).
+
 ## D-047: Bookkeeping app: one company per window, a service over the engine, one print source
 
 **Date:** 2026-09-25 · **Status:** accepted (M47)

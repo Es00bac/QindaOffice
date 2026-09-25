@@ -16,7 +16,7 @@
 namespace QindaOffice::Books::Schema {
 
 inline constexpr int kApplicationId = 0x51424B53; // "QBKS"
-inline constexpr int kCurrentVersion = 2;
+inline constexpr int kCurrentVersion = 3;
 
 // Creates the schema at exactly `version` on an empty database (version
 // < kCurrentVersion exists for the migration tests). Runs inside the

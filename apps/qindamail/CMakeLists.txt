@@ -41,6 +41,7 @@ qt_add_qml_module(qindamail_app
         src/account_runtime_credentials.cpp
         src/draft_builder.cpp src/draft_builder.h
         src/folder_model.cpp src/folder_model.h
+        src/launch_arguments.cpp src/launch_arguments.h
         src/mail_host.cpp src/mail_host.h
         src/mail_host_commands.cpp
         src/mail_service.cpp src/mail_service.h

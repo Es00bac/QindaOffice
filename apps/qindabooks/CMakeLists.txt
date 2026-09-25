@@ -32,6 +32,7 @@ set(qindabooks_qml
     qml/ReportsView.qml
     qml/ReportTableView.qml
     qml/BooksPreferencesPage.qml
+    qml/ConnectionsDialog.qml
 )
 foreach(qml_file IN LISTS qindabooks_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -53,6 +54,7 @@ qt_add_qml_module(qindabooks_app
         src/books_service.cpp src/books_service.h
         src/books_service_analysis.cpp
         src/books_service_banking.cpp
+        src/books_service_connections.cpp
         src/books_service_documents.cpp
         src/books_service_journal.cpp
         src/books_service_lists.cpp
@@ -64,7 +66,7 @@ qt_add_qml_module(qindabooks_app
 )
 target_include_directories(qindabooks_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(qindabooks_app PUBLIC
-    office_quick office_quickplugin books_document books_io Qt6::Sql Qt6::PrintSupport)
+    office_quick office_quickplugin books_document books_io books_connect Qt6::Sql Qt6::PrintSupport)
 target_compile_definitions(qindabooks_app PRIVATE QT_NO_CAST_FROM_ASCII)
 qqo_set_strict_warnings(qindabooks_app)
 

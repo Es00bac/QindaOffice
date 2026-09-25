@@ -2,6 +2,7 @@
 #include "printable_document.h"
 
 #include "company_file.h"
+#include "connections.h"
 #include "documents.h"
 #include "lists.h"
 #include "sales.h"
@@ -182,6 +183,9 @@ bool buildPrintableDocument(CompanyFile &file, qint64 docId, PrintableDocument *
         p.totals << PrintableTotal{QStringLiteral("Balance due"), due.format(loc), true};
         p.highlightLabel = QStringLiteral("Balance due");
         p.highlightAmount = due.format(loc);
+        if (const std::optional<PaymentLinkRecord> link = Connections(file).currentPaymentLink(docId)) {
+            p.payOnlineUrl = link->url;
+        }
         break;
     }
     case DocKind::Estimate:

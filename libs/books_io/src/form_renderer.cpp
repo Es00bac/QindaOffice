@@ -246,7 +246,12 @@ qreal drawTrailing(QPainter *p, const PrintableDocument &d, const QRectF &c, qre
         n += h + 14;
     };
     note(QStringLiteral("NOTES"), d.message);
-    note(QStringLiteral("PAYMENT INSTRUCTIONS"), d.paymentInstructions);
+    // "Pay online: <url>" sits under the instructions (docs/books.md, M48).
+    const QString payOnline = d.payOnlineUrl.isEmpty() ? QString() : QStringLiteral("Pay online: ") + d.payOnlineUrl;
+    note(QStringLiteral("PAYMENT INSTRUCTIONS"),
+         d.paymentInstructions.trimmed().isEmpty() ? payOnline
+         : payOnline.isEmpty()                    ? d.paymentInstructions
+                                                  : d.paymentInstructions + QLatin1Char('\n') + payOnline);
     qreal bottom = qMax(y, n);
     if (!d.strip.isEmpty()) {
         bottom += 16;

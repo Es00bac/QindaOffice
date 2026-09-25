@@ -169,8 +169,14 @@ private slots:
                 scene.window, scene.host.menuTree(),
                 // Edit commands act on the focused field; Save is a no-op on an
                 // open company (D-047) — menus and the command search reach them.
+                // AGENT-NOTE (M48 lane): booksSyncBankAction and
+                // booksConnectionsAction are exempt only until the lead adds
+                // them to BooksRibbonLayout.qml (Banking tab, a "Connections"
+                // group) — the lane may not edit the lead's QML. Remove both
+                // exemptions with that change; a stale exemption is a defect.
                 {str("editCutAction"), str("editCopyAction"), str("editPasteAction"), str("editSelectAllAction"),
-                 str("editFindAction"), str("editReplaceAction"), str("fileSaveAsAction")});
+                 str("editFindAction"), str("editReplaceAction"), str("fileSaveAsAction"),
+                 str("booksSyncBankAction"), str("booksConnectionsAction")});
             QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
         }
     }
