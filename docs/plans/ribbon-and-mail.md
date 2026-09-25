@@ -35,6 +35,10 @@ and in QindaTK's `AGENTS.md` apply unchanged and outrank anything here.
 | M45 | `books_engine`: double-entry ledger in a SQLite company file, sales/purchases, banking, tax, reports | QindaOffice |
 | M46 | `books_io`: invoice/statement PDF, CSV/OFX/QFX/QIF bank import, CSV/IIF export, backups | QindaOffice |
 | M47 | QindaBooks app (`apps/qindabooks`, `org.qindaqt.QindaBooks`), launcher card | QindaOffice |
+| M48 | QindaBooks connections: Mercury bank feed, Stripe charges/fees/payouts, payment links; PDF hand-off to QindaMail | QindaOffice |
+| M49 | QindaBase (Access): a `.qbase` SQLite database with tables, queries, forms and reports | QindaOffice |
+| M50 | QindaDiagram (Visio): flowcharts, org charts and network diagrams on the toolkit's diagram canvas | QindaOffice |
+| M51 | QindaPlan (Project): tasks, dependencies, working calendars, Gantt, resources, baselines | QindaOffice |
 
 ## Ribbon design (M40, D-041 here; QindaTK D-297)
 
@@ -152,6 +156,14 @@ look or file format:
   schema versioned with forward migrations, every posting in one
   transaction, an audit log table, and `VACUUM INTO` backups.
 
+## Scope boundary (user decision, 2026-09-25)
+
+Publisher and Clipchamp are NOT built here: QindaStudio Paper / Sloom
+Studio Paper cover desktop publishing and the Studio video workspaces
+cover video. The suite adds Access, Visio and Project equivalents
+(M49–M51), each on the QindaTK components that already exist for them
+(forms/reports/query engine; diagram canvas; Gantt/resource planning).
+
 ## Lanes and branches
 
 | Lane | Branch / worktree | Deliverable |
@@ -170,7 +182,8 @@ D-297 ribbon, D-298 POP3, D-299 IMAP folders/APPEND/mUTF-7, D-300 ICS
 feeds, D-301 calendar grid; QindaOffice D-041 ribbon, D-042 mail app
 shape, D-043 hosted accounts and OAuth, D-044 Exchange/Graph calendars,
 D-045 bookkeeping model (company file, integer money, immutable postings),
-D-046 bookkeeping I/O.
+D-046 bookkeeping I/O, D-047 bookkeeping app, D-048 bank/payment
+connections, D-049 QindaBase, D-050 QindaDiagram, D-051 QindaPlan.
 
 ## Gates
 
