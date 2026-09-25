@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Shaped like the Mozilla ISPDB entry for fastmail.fm (2026). Test fixture. -->
+<clientConfig version="1.1">
+  <emailProvider id="fastmail.fm">
+    <domain>fastmail.fm</domain>
+    <domain>fastmail.com</domain>
+    <domain>fastmail.cn</domain>
+    <domain>fastmail.co.uk</domain>
+    <displayName>FastMail</displayName>
+    <displayShortName>FastMail</displayShortName>
+    <incomingServer type="imap">
+      <hostname>imap.fastmail.com</hostname>
+      <port>993</port>
+      <socketType>SSL</socketType>
+      <username>%EMAILADDRESS%</username>
+      <authentication>password-cleartext</authentication>
+    </incomingServer>
+    <incomingServer type="pop3">
+      <hostname>pop.fastmail.com</hostname>
+      <port>995</port>
+      <socketType>SSL</socketType>
+      <username>%EMAILADDRESS%</username>
+      <authentication>password-cleartext</authentication>
+    </incomingServer>
+    <outgoingServer type="smtp">
+      <hostname>smtp.fastmail.com</hostname>
+      <port>465</port>
+      <socketType>SSL</socketType>
+      <username>%EMAILADDRESS%</username>
+      <authentication>password-cleartext</authentication>
+    </outgoingServer>
+    <documentation url="https://www.fastmail.com/help/technical/servernamesandports.html">
+      <descr lang="en">Server names and ports</descr>
+    </documentation>
+  </emailProvider>
+</clientConfig>
