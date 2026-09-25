@@ -5,6 +5,46 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-052: Bring your own key — the user chooses every provider
+
+**Date:** 2026-09-25 · **Status:** accepted (owner's product principle)
+
+**Context.** The suite now reaches outside the machine: mail and calendar
+accounts (D-042–D-044), the AI assistant (office_ai), bank and payment
+connections for QindaBooks (D-048), and more integrations are being
+researched (`plans/integrations-research.md`). The owner's stated
+philosophy: users bring their own keys and pick whichever providers meet
+their needs — often far cheaper — instead of being locked into the
+Microsoft or Intuit ecosystems.
+
+**Decision.**
+
+1. **Every external service is reached with the user's own credentials**:
+   a personal or read-only API token, a restricted key, or an OAuth client
+   ID the user registers (loopback redirect, PKCE). The suite ships no
+   vendor client IDs and runs no relay or backend of its own; nothing the
+   user connects passes through us.
+2. **Providers are interchangeable.** An integration is an adapter behind
+   the same contract as its peers (the toolkit's provider result contract
+   for mail/calendar; `Banking::importLines` + rules for bank feeds; the
+   chat provider interface for AI). Removing one never strands data: what
+   was imported stays in the user's files.
+3. **Ranking new integrations**: a token or key the user creates in the
+   provider's dashboard beats OAuth with a user-registered app, which beats
+   anything needing partner approval or a hosted callback; for the last
+   kind we ship a BYOK alternative that reaches the same data.
+4. **Secrets live only in the desktop keyring**, keyed per account or per
+   company; never in documents, settings files, logs or results (D-043,
+   D-048).
+5. **Open formats in and out** (ODF/OOXML, iCalendar, MSPDI, IIF/CSV,
+   SQLite): leaving is as easy as arriving.
+
+**Consequences.** Setup asks the user for a key or client ID with plain
+instructions and a link to the provider's page, and says clearly when one
+is missing (as the mail account dialog does). Integration research reports
+a BYOK rating per candidate. Features that only work through a vendor's
+partner programme are optional adapters, never the only way in.
+
 ## D-047: Bookkeeping app: one company per window, a service over the engine, one print source
 
 **Date:** 2026-09-25 · **Status:** accepted (M47)
