@@ -296,7 +296,7 @@ and `decodeErrorChallenge` reads a server's JSON error challenge.
 MX-record discovery; CalDAV principal/home-set discovery (the presets give
 the CalDAV root where one is published); SPECIAL-USE folder detection; the
 Exchange/Graph calendar adapters (exchange lane); the account dialog and
-the mail host (M44). Real hosted accounts are not exercised by the
+the mail host ([QindaMail (app)](#qindamail-app), M44). Real hosted accounts are not exercised by the
 automated tests (QindaTK WP-089/WP-090, deferred).
 
 ## Exchange and Microsoft 365 calendars
@@ -474,3 +474,122 @@ Tests (`ctest -R exchange`, local servers on 127.0.0.1 only):
 `tst_mail_exchange_ews_writes`, `tst_mail_exchange_graph`,
 `tst_mail_exchange_graph_writes`; gates in
 [verification.md](verification.md#m43-gates-exchange).
+
+## QindaMail (app)
+
+`apps/qindamail` (M44, [D-042](decisions.md#d-042-qindamail-is-a-document-less-window-over-one-mail-service-per-process)):
+binary `qindamail`, desktop id `org.qindaqt.QindaMail`
+(`Exec=qindamail %U`, MIME `message/rfc822`, `text/calendar`,
+`x-scheme-handler/mailto`, `x-scheme-handler/webcal`). Static QML module
+`QindaOffice.Mail.App` (its QML imports `QindaOffice.Shell`,
+`QindaOffice.Mail`, `QindaTK`); namespace `QindaOffice::Apps::Mail`.
+
+```
+MailHost (one per main window, DocumentHost without a document)
+   └─ MailService (one per process: MailService::shared())
+        ├─ LocalProductivityStore   $XDG_DATA_HOME/qindaoffice/mail/store.json
+        ├─ LocalAttachmentStore     $XDG_DATA_HOME/qindaoffice/mail/attachments
+        ├─ folders.json             last IMAP LIST per account (offline folder pane)
+        ├─ view.json (config dir)   conversations, collapsed folders, hidden calendars
+        ├─ AccountStore, MailSecrets, AutoConfig          (office_mail)
+        └─ AccountRuntime per account
+             ├─ ImapMailProvider per mailbox | Pop3MailProvider
+             ├─ SmtpMailProvider
+             ├─ CalDavProvider | IcsCalendarProvider | EwsCalendarProvider |
+             │  GraphCalendarProvider per enabled calendar
+             └─ OAuth2Session (OAuth accounts)
+```
+
+### Account runtime
+
+`AccountRuntime::run(service, provider, start, done)` starts every remote
+request. Before it, the credential is applied to the provider's write-only
+`setSecret`: a keyring secret (`<accountId>/<imap|pop3|smtp|caldav|ews|ics>`;
+SMTP with `sameCredentialsAsIncoming` reads the incoming key) or an OAuth
+access token (`ensureToken(resource)` → `applyAccessToken`; resources `mail`
+for IMAP/POP3/SMTP, `calendar` for Google CalDAV and Graph, `ews` for EWS).
+An authentication rejection (`authRejected`, or the providers' refusal texts:
+IMAP `AUTHENTICATIONFAILED`, POP3 `-ERR [AUTH]`, SMTP 535, HTTP 401/403) is
+retried once with a forced token refresh or a fresh keyring read; a second one,
+a missing password, a dead refresh token or an unconfigured OAuth client sets
+the account's `status` to `needsSignIn` (the request never reaches the server
+without a credential). Account `status` is `idle | syncing | offline | error |
+needsSignIn`. `syncAccount` lists IMAP mailboxes, then syncs INBOX and the
+folder on screen, POP3 downloads, and every calendar syncs; each account has a
+timer (`syncIntervalMinutes`, 0 = manual), and the service syncs all accounts
+at start and when the network comes back (`QNetworkInformation`).
+
+### Folder keys
+
+| Key | Row |
+| --- | --- |
+| `all:inbox` | unified inboxes, first row |
+| `acct:<accountId>` | account header (`isAccount`, not selectable, collapsible) |
+| `acct:<accountId>:<mailbox>` | a folder: the IMAP mailbox name as records carry it in `remoteMailbox` (decoded UTF-8, hierarchy by the LIST delimiter); POP3 `INBOX`, `Archive` (`localMailbox`); local `Inbox`, `Drafts`, `Outbox`, `Sent`, `Archive`, `Trash` |
+
+Special folders come from SPECIAL-USE first, then the account's
+`specialFolders`; siblings sort inbox, drafts, outbox, sent, archive, …, junk,
+trash. Deleting in an IMAP folder moves to Trash (a real delete in Trash);
+archive is `UID MOVE` to the archive mailbox; POP3 read/flag/archive are local
+edits and delete also removes the server copy; local mail goes to Trash first.
+
+### The local account and the Sent copy
+
+"On this computer" (id `local`, not in `accounts.json`) always exists: its
+Inbox holds opened `.eml` files, Drafts and Outbox are the store's `drafts`
+(Outbox = `queued: true`, sent when the network is back), Sent holds local
+copies. After an accepted send the copy is filed once: Gmail and Microsoft 365
+file it themselves; other IMAP accounts APPEND `composeMessage(draft)` to their
+Sent mailbox with `\Seen`; POP3 accounts (or a failed APPEND, with a warning)
+keep it in the local Sent folder. Only then is the draft removed. An offline
+send keeps the draft queued; a rejected one keeps it with `lastError`.
+
+### Drafts and mailto
+
+Drafts keep `to`/`cc`/`bcc` as address-list strings, `subject`, plain `body`,
+`richDocumentJson` (composer), `attachments`, `inReplyTo` (bare id),
+`references` and `accountId`. Replies use `Re:` unless a reply prefix (Re, RE,
+Re[n], AW, SV, Antw) is present, forwards `Fwd:` unless Fwd/Fw/WG/Tr/RV is;
+the signature goes above the quotation; reply-all drops every own address.
+A forward copies the attachment bytes it can read into its own ids.
+`mailtoDraft(url)` follows RFC 6068 (addresses and `to`, `cc`, `bcc`,
+`subject`, `body`, `in-reply-to`; other headers ignored). `qindamail
+mailto:…`, a `webcal:` URL, an `.ics` or `.eml` path — on the command line or
+handed to the running instance — reach `MailHost::openWithoutDocument`.
+
+### QML API
+
+`MailHost` (`host` in `MailWindow.qml`): `service`, `preferencesPageUrl`
+(RW), `view` (`mail|calendar|tasks`, RW), `calendarMode`
+(`day|workweek|week|month`, RW), `readingPaneVisible`; `compose(draft)`;
+signals `composeRequested(draft)`, `accountDialogRequested(accountId)` (empty
+= Add Account), `eventDialogRequested()`, `calendarImportRequested()`,
+`calendarExportRequested()`, `calendarSubscribeRequested()`,
+`searchRequested()`, `moveRequested()`, `taskNewRequested()`. Commands (ids
+listed in `mail_host.h`): mail*, cal*, `taskNewAction`; radio groups
+`mailView` and `calendarMode`.
+
+`MailService` (`host.service`):
+
+| Kind | Names |
+| --- | --- |
+| properties | `accounts` [{id, kind, displayName, emailAddress, color, enabled, status, lastError, lastSync, hasMail, hasCalendar, canSend, usesOAuth}], `accountStore`, `autoConfig`, `secrets`, `store`, `attachmentStore`, `busy`, `statusText`, `online`, `autoSync` (RW), `defaultAccountId`, `ownAddresses`, `sendableAccounts` [{id, displayName, emailAddress}], `folderModel`, `currentFolderKey` (RW), `currentFolderName`, `unreadTotal`, `messageModel`, `searchText` (RW), `filter` (RW: all/unread/flagged/attachments), `threaded` (RW), `selectedMessageId` (RW), `selectedMessage`, `markReadDelayMs` (RW, 500; <0 never), `calendars` [{id, accountId, name, color, visible, readOnly, service}], `writableCalendars`, `events`, `eventsError`, `taskColumns` |
+| folders / messages | `toggleFolderExpanded(key)`, `folderTargets(accountId)` → [{key, name, depth, iconName, specialUse, accountId}], `conversation(threadId)`, `messageById(id)`, `markRead(ids, read)`, `setFlagged(ids, flagged)`, `archive(ids)`, `deleteMessages(ids)`, `moveTo(ids, folderKey)`, `fetchAttachment(messageId, attachmentId)`, `openAttachment(…)`, `saveAttachmentAs(…, url)`, `importMessageFile(path)` |
+| sync | `syncAll()`, `syncAccount(id)`, `syncFolder(key)` |
+| drafts | `newDraft(accountId)`, `replyDraft(messageId, replyAll)`, `forwardDraft(messageId)`, `mailtoDraft(url)`, `saveDraft(draft)` → {ok, id, error}, `discardDraft(id)` → bool, `send(draft)` → requestId |
+| accounts | `addAccount(map, password)`, `updateAccount(map, password)`, `removeAccount(id)` (→ AccountStore results; remove adds `purgedRecords`), `signIn(id)`, `testAccount(requestId, map, password)`, `discoverCalendars(requestId, url, userName, password)`, `accountById(id)` |
+| calendar | `setCalendarVisible(id, visible)`, `projectRange(startDate, endDate)` (local dates, half-open), `createEvent(map)`, `updateEvent(map)` (with `occurrenceId` + `scope: "occurrence"` an override), `deleteEvent(eventId, occurrenceId, scope)`, `applyChange(requestId, eventId, proposal)`, `eventById(id)`, `importIcs(url, calendarId)`, `exportIcs(url, calendarId)`, `subscribeFeed(url, name, color)`, `recurrencePreview(eventId, rule)` |
+| tasks | `addTask(title)` → id, `moveTask(requestId, taskId, toStatus, index)`, `updateTask(map)`, `deleteTask(id)` |
+| signals | `operationFinished(requestId, state, message)` (message actions, sync, sign-in, attachments, iCalendar, tasks), `sendFinished(requestId, result)` (+ `draftId`, `sentCopy` server/imap/local, `queued`), `eventChangeFinished(requestId, state, message)`, `accountTestFinished(requestId, result)` (+ `steps`, `mailboxes`, `calendars`), `calendarsDiscovered(requestId, result)`, `notify(title, text, variant)` and the `…Changed` notifiers |
+
+Request-id answers always arrive on a later event-loop turn. `folderModel`
+roles: `key, accountId, name, path, depth, specialUse, iconName, unread, total,
+selectable, isAccount, expanded` (+ `get(row)`, `indexOfKey(key)`).
+`messageModel` roles: `messageId, threadId, threadCount, threadMessageIds,
+sender, senderAddress, recipients, subject, snippet, date, dateText, dayGroup,
+unread, flagged, hasAttachments, accountId, accountColor, isDraft` (+ `count`,
+`get(row)`, `indexOfMessage(id)`). Account and calendar colours are user data
+(`""` when unset: the QML picks a theme role).
+
+Tests: `ctest -R qindamail`; gates in
+[verification.md](verification.md#m44-gates-qindamail-core--appsqindamail-c).

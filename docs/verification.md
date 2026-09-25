@@ -245,6 +245,76 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M44 gates (QindaMail core — `apps/qindamail` C++)
+
+Automated by `tst_qindamail_drafts`, `tst_qindamail_service`,
+`tst_qindamail_accounts`, `tst_qindamail_calendar`, `tst_qindamail_host` and
+`tst_qindamail_flow` (`ctest -R qindamail`). Each test runs a `MailService`
+over its own temp tree with an in-memory keyring, `autoSync` off and the
+network watcher off; the only servers are the tests' own POP3/SMTP fakes on
+127.0.0.1. Rationale in D-042; reference in [mail.md](mail.md#qindamail-app).
+
+- [x] Drafts: address lists, Re:/Fwd: rules (Re, RE, Re[2], AW / Fwd, FW),
+      quoting, reply / reply-all (own addresses in any case and duplicates
+      removed; a reply to one's own message goes to its recipients), forward
+      header block, In-Reply-To and References.
+- [x] `mailto:` — every example of RFC 6068 §6 (percent-encoded `%`, `?`,
+      `&`, quotes, UTF-8 subject, IDN domain to ACE, `to=` merged with the
+      path, `+` kept), other schemes refused.
+- [x] Message list rules: dateText (time today, weekday this week, date
+      before), day groups, multi-word search, unread / flagged / attachment
+      filters.
+- [x] The local account and its folders exist with no account; folder
+      counts (per folder, all inboxes, `unreadTotal`); collapse/expand;
+      account headers not selectable; conversations, filters and search
+      through the service; the conversations setting survives a restart.
+- [x] Selecting an unread message marks it read after `markReadDelayMs`,
+      and not when the selection moves on first; `selectedMessage` carries
+      `accountId`, `to`, `bodyTruncated`, `attachments`.
+- [x] Local actions (flag, archive, move, delete → Trash → gone) answer
+      `operationFinished` on a later turn; cross-account moves and unknown
+      ids are refused.
+- [x] Reply / forward / mailto drafts from the service; a forward owns
+      copies of the attachment bytes (discarding it never deletes the
+      message's); drafts persist; sending from the local account is refused
+      and keeps the draft.
+- [x] An opened `.eml` lands once in the local Inbox with its attachment
+      bytes; opening an attachment writes only store bytes to a private file.
+- [x] Accounts: add writes the password to the keyring only (never to
+      `accounts.json`); remove wipes every secret, purges the account's
+      cached messages/events and keeps its drafts; secret-named fields are
+      refused.
+- [x] Protocol objects per kind (gmail, imap preset, microsoft365, pop3,
+      exchange): host, port, security, user, mechanism, the secret key SMTP
+      shares, the calendar provider type and URL, the OAuth resource, the
+      sent-mail rule; one IMAP provider per mailbox.
+- [x] Credentials before every request: a stored password reaches the
+      provider (a closed loopback port answers `offline`); no stored password
+      is `needsSignIn` without a connection; the auth-rejection
+      classification (IMAP, POP3, SMTP 535, HTTP 401, not TLS policy).
+- [x] Calendar: create / update / delete (series, occurrence, following),
+      the projection of a weekly rule with an exception clipped to the
+      requested days, grid `shift-local` / `resize-local` in occurrence,
+      series and following scopes (a second split included), refusals,
+      visibility (persisted), recurrence preview, `.ics` export → import
+      round trip (rule and EXDATE kept, re-import idempotent).
+- [x] Tasks: add, move between columns, update, delete, persisted.
+- [x] Host: 30 command ids with shipped Lucide icons, unique shortcuts, the
+      `mailView` and `calendarMode` radio groups, enabled state from view and
+      selection, the panel export accepted by the desktop's validator with
+      every exported id resolving and every command in a menu, `mailto:` and
+      `.ics` paths handed to the window, `MailWindow.qml` instantiates.
+- [x] Flow against local servers: POP3 sync with the keyring password, a
+      reply sent over SMTP and filed in the local Sent folder (draft gone),
+      a wrong password retried once and then `needsSignIn` (cleared by a new
+      password), an unreachable SMTP server leaves the message in the
+      Outbox; no password in results, `store.json` or `accounts.json`.
+- [ ] Lead lane: QindaMail fixtures and grabs (1280/520), ribbon squeeze,
+      the launcher card.
+- [ ] On the desktop: a real IMAP account (and Gmail/Microsoft 365 with a
+      registered client ID, WP-089/WP-090), `qindamail mailto:…` from a
+      browser, a `webcal:` link, the panel menu.
+
 ### M43 gates (mail accounts, autoconfig, OAuth, secrets — `office_mail`)
 
 Automated by `tst_mail_accounts`, `tst_mail_autoconfig` and `tst_mail_oauth`

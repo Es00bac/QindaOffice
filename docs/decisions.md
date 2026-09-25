@@ -5,6 +5,59 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-042: QindaMail is a document-less window over one mail service per process
+
+**Date:** 2026-09-25 · **Status:** accepted (M44, `apps/qindamail`)
+
+**Context.** Every suite app so far is one `Core::Document` per ordinary
+window (rule 1, ADR-0110). Mail, calendar and tasks are not documents: they
+are one local store and a set of accounts that every window of the app shows
+at the same time, and they must work with no account at all. Protocol
+exchanges (IMAP, POP3, SMTP, CalDAV, iCalendar feeds, EWS, Graph) are
+asynchronous and need credentials applied before each request and refreshed
+after an authentication failure (QindaTK D-189, D-043 here).
+
+**Decision.**
+
+1. **A main window is a `MailHost : DocumentHost` without a document.**
+   Save/Save As/Print stay disabled (D-011); the menu, the panel export, the
+   fail-closed menu bar and the per-window `ActionModel` are the shell's.
+   `fileNewAction` keeps its id and becomes *New Window* (Ctrl+Shift+N);
+   *New Message* takes Ctrl+N. `DocumentHost` gained two protected hooks for
+   such hosts, `openWithoutDocument(path)` and `reusableWithoutDocument()`,
+   and a virtual `title()`, so `mailto:`/`webcal:`/`.ics`/`.eml` paths (also
+   those a second launch hands over) reach the open window instead of a
+   document loader.
+2. **One `MailService` per process**, shared by every main window
+   (`MailHost.service`): the `LocalProductivityStore` file, the attachment
+   store, `AccountStore`, `MailSecrets`, `AutoConfig` and one
+   `AccountRuntime` per configured account. Folder, selection and search
+   state live on the service, so all main windows show the same mailbox.
+3. **One credential path.** `AccountRuntime::run(service, provider, start,
+   done)` is the only way a remote request starts: keyring secret or OAuth
+   token first, then the request, then one retry with a refreshed credential
+   after an authentication rejection; a missing or dead sign-in is status
+   `needsSignIn` and never reaches the server. IMAP gets one provider per
+   mailbox (the provider applies results to its `mailbox`).
+4. **Composers are secondary `Window`s** owned by the main window's QML, one
+   draft each, reached through `MailHost.composeRequested(draft)`; drafts are
+   store records, sending is `MailService.send(draft)`.
+5. **"On this computer" always exists** (id `local`, not in
+   `accounts.json`): Inbox (opened `.eml` files), Drafts, Outbox, Sent,
+   Archive, Trash, the default calendar and the task board — the app is
+   useful with no account, and POP3 accounts file their Sent copies there.
+6. **The Sent copy is filed exactly once**: Gmail and Microsoft 365 file it
+   themselves; other IMAP accounts APPEND to their Sent mailbox; POP3 (or a
+   failed APPEND) keeps a local copy.
+
+**Consequences.** QindaMail reuses the shell unchanged apart from the three
+hooks, and every account kind goes through one tested credential path.
+Main windows cannot show different folders at once (a second window is a
+second view of the same mailbox). Calendar/tasks views read service state
+too, so a second window's calendar follows the first's range. The launcher
+card, the QML (ribbon, panes, dialogs, composer) and the fixtures are the
+app lead's part of M44.
+
 ## D-044: Exchange and Microsoft 365 calendars are host adapters over the store
 
 **Date:** 2026-09-25 · **Status:** accepted (M43)

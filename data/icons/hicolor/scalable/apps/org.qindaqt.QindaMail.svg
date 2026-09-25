@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- QindaMail: an envelope that has just been stamped and cannot wait to be
+     opened. Suite icon family: chunky ink outline, flat fills, dot eyes +
+     arc smile + blush, one signature prop (the stamp), a few degrees off
+     square. No tile, no gradients — the colour block carries the icon at
+     panel sizes. Yellow is the one suite accent no other app wears. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g fill="none" stroke="#3a3347" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">
+    <g transform="rotate(-3 31 34)">
+      <rect x="8" y="17" width="46" height="34" rx="5" fill="#ffd97d"/>
+      <path d="M10.5 19 L31 34.5 L51.5 19 Z" fill="#fffaf0"/>
+      <circle cx="18.5" cy="44.5" r="2.7" fill="#ff8fa3" opacity="0.5" stroke="none"/>
+      <circle cx="43.5" cy="44.5" r="2.7" fill="#ff8fa3" opacity="0.5" stroke="none"/>
+      <circle cx="24.5" cy="40.5" r="2.2" fill="#3a3347" stroke="none"/>
+      <circle cx="37.5" cy="40.5" r="2.2" fill="#3a3347" stroke="none"/>
+      <path d="M27.8 45 Q31 48.2 34.2 45" stroke-width="1.9"/>
+    </g>
+    <g transform="rotate(9 50 16)">
+      <rect x="43" y="7.5" width="14" height="16" rx="1.8" fill="#ff8fa3"/>
+      <rect x="46" y="10.5" width="8" height="10" rx="1" fill="#fffaf0" stroke-width="1.4"/>
+      <path d="M48 17.5 L50 14 L52 17.5" stroke="#6ea8fe" stroke-width="1.4"/>
+    </g>
+  </g>
+</svg>

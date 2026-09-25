@@ -102,7 +102,9 @@ public:
     [[nodiscard]] bool isPristineUntitled() const;
 
     // ---- status ----
-    [[nodiscard]] QString title() const;
+    // Virtual for hosts without a Core::Document (QindaMail's MailHost names
+    // the view it shows instead of "No document").
+    [[nodiscard]] virtual QString title() const;
     [[nodiscard]] QString windowTitle() const;
     [[nodiscard]] bool isDirty() const;
     [[nodiscard]] QString statusInfo() const { return m_statusInfo; }
@@ -150,6 +152,18 @@ protected:
     // (plan 5.2: one callback, so paper and PDF cannot drift). Empty means
     // the app does not print; the commands stay disabled.
     [[nodiscard]] virtual PrintRenderCallback printRenderCallback() const { return {}; }
+    // AGENT-CONTRACT (OfficeApplication::openPaths, D-042): a host WITHOUT a
+    // document (MailHost) receives the paths and URLs the app is launched
+    // or handed with here (mailto:, webcal:, .ics, .eml) instead of
+    // loadPath's document load; true when it took the path.
+    [[nodiscard]] virtual bool openWithoutDocument(const QString &path)
+    {
+        Q_UNUSED(path)
+        return false;
+    }
+    // Whether such a host may absorb paths like a pristine untitled window
+    // (so a hand-off reaches the open window instead of opening another).
+    [[nodiscard]] virtual bool reusableWithoutDocument() const { return false; }
     // Runs applyPreferences() once the subclass exists and enables the
     // print commands when printRenderCallback() is non-empty; subclass
     // ctors call it last (the base ctor cannot reach the overrides).
