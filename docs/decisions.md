@@ -5,6 +5,52 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-043: Hosted accounts sign in with PKCE over loopback and keep secrets in the keyring
+
+**Date:** 2026-09-25 · **Status:** accepted (M43, `office_mail`)
+
+**Context.** QindaMail needs Gmail and Microsoft 365 / Outlook.com, which
+sign in with OAuth 2.0 (Microsoft refuses passwords for IMAP/SMTP), plus the
+password and app-password services. The toolkit implements only the
+protocols and leaves sign-in, discovery and the keyring to the host (QindaTK
+D-189). A native app cannot keep a client secret, the suite has no client ID
+it could ship, and a password or refresh token in a config file or a log is
+a credential leak.
+
+**Decision.**
+
+1. **Authorization Code + PKCE over a loopback redirect** (RFC 8252 §7.3,
+   RFC 7636 S256): a one-shot `QTcpServer` on `127.0.0.1` with an ephemeral
+   port, a CSPRNG verifier and `state`, and a flow that ends on a state
+   mismatch without exchanging the code. The browser gets a static page;
+   the query is never echoed.
+2. **Tokens per resource.** Microsoft issues one token per resource, so the
+   session consents to every resource at authorization and fetches the Graph
+   (or EWS) token by a refresh-token grant with that resource's scopes;
+   Google's one token covers mail and calendar. `invalid_grant` means the
+   refresh token is dead: it is wiped and the host must re-authorize.
+3. **No shipped client IDs.** `OAuthClientRegistry` reads the account's own
+   ID, then `$XDG_CONFIG_HOME/qindaoffice/mail/oauth-clients.json`, then a
+   distributor's `/usr/share/qindaoffice/oauth-clients.json`; with none it
+   says so and the dialog offers an app password for Gmail mail.
+4. **Secrets live only in the keyring** (QtKeychain, service
+   `qindaoffice-mail`, key `<accountId>/<service>`). No file backend, no
+   `insecureFallback`; a missing secret service is an honest error. The
+   account file refuses secret-looking keys, and no QML-visible call or
+   result carries a secret: QML hands them to the providers' write-only
+   `setSecret` through `MailSecrets.applySecret` and
+   `OAuth2Session.applyAccessToken`.
+5. **Discovery is https-only**: presets, then autoconfig.&lt;domain&gt;,
+   .well-known, the Mozilla ISPDB (Thunderbird's order without its http and
+   MX steps); only the provider's own server sees the full address.
+
+**Consequences.** Every hosted sign-in needs a client ID the user or the
+distribution registers (documented in `docs/mail.md`). Tests run the whole
+flow against local fake servers and assert that tokens appear in no log
+output, result or file. Accounts on unusual servers without autoconfig
+are entered by hand; MX-based detection and CalDAV principal discovery are
+later work.
+
 ## D-040: Pictures keep the author's bytes
 
 **Date:** 2026-09-19 · **Status:** accepted (M39)

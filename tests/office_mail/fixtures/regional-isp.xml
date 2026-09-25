@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- A small ISP's self-hosted autoconfig: STARTTLS, local-part user names,
+     a plain-text server listed first (must be skipped). Test fixture. -->
+<clientConfig version="1.1">
+  <emailProvider id="example.net">
+    <domain>%EMAILDOMAIN%</domain>
+    <displayName>Example Net Mail</displayName>
+    <incomingServer type="imap">
+      <hostname>mail.%EMAILDOMAIN%</hostname>
+      <port>143</port>
+      <socketType>plain</socketType>
+      <username>%EMAILLOCALPART%</username>
+      <authentication>password-cleartext</authentication>
+    </incomingServer>
+    <incomingServer type="imap">
+      <hostname>mail.%EMAILDOMAIN%</hostname>
+      <port>143</port>
+      <socketType>STARTTLS</socketType>
+      <username>%EMAILLOCALPART%</username>
+      <authentication>password-cleartext</authentication>
+    </incomingServer>
+    <outgoingServer type="smtp">
+      <hostname>smtp.%EMAILDOMAIN%</hostname>
+      <port>587</port>
+      <socketType>STARTTLS</socketType>
+      <username>%EMAILLOCALPART%</username>
+      <authentication>password-cleartext</authentication>
+    </outgoingServer>
+  </emailProvider>
+</clientConfig>

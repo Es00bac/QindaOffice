@@ -245,6 +245,68 @@ skip with a message where `soffice` is unavailable.
 - office_ai: `configFor()` resolves every id `modelIds()` hands out; a
   corrupt `providers.json` is moved to `.corrupt` and the picker still works.
 
+### M43 gates (mail accounts, autoconfig, OAuth, secrets — `office_mail`)
+
+Automated by `tst_mail_accounts`, `tst_mail_autoconfig` and `tst_mail_oauth`
+(`ctest -R mail`). Offline: every server is a `FakeHttpServer` on
+127.0.0.1 and the keyring is in memory (`QQO_MAIL_SECRET_BACKEND=memory` in
+the ctest environment). Rationale in D-043; reference in `docs/mail.md`.
+
+- [x] `jsonRoundTripKeepsUnknownFields`: unknown keys at the root, in an
+      account, in `incoming` and in a calendar entry survive load → update →
+      save; the typed fields round-trip exactly.
+- [x] `validation` (12 rows): kind, address, host, port, clear text to a
+      non-loopback host, `xoauth2` without a provider, a calendar on POP3,
+      `http:` CalDAV, Microsoft with a password, sync interval, and a
+      secret-named key nested or at the top — each refused with its field
+      path, and nothing written.
+- [x] `noSecretOnDisk`: with a password in the (in-memory) keyring, the
+      written `accounts.json` contains neither the password nor the word.
+- [x] `removeWipesSecrets`: removing an account removes every service's
+      secret for it and leaves another account's alone.
+- [x] `corruptFileIsMovedAside`, `newerSchemaIsReadOnly`: never overwrite
+      what cannot be read or what a newer build wrote.
+- [x] `presets` (14 rows) and `everyPresetMakesAValidAccount`; `draftFor`.
+- [x] `clientRegistryOrder`: account → user file → system file; a
+      secret borrowed for a matching ID; a broken file reported; the
+      "no client ID" text with the Gmail app-password hint.
+- [x] `secretsInMemory`: `check` never returns the value, `applySecret`
+      reaches `setSecret`, unknown services and bad ids refused, a missing
+      secret service reported (`unavailable`) with nothing stored.
+- [x] `qmlTypesRegistered`: `import QindaOffice.Mail` creates all four
+      types and wires them.
+- [x] `parseGmail` / `parseOutlook` / `parseFastmail` /
+      `parsePlaceholdersAndSkipPlainText` over ISPDB-shaped fixtures
+      (`tests/office_mail/fixtures`), `parseRejectsGarbage` (5 rows).
+- [x] `presetNeedsNoNetwork`, `fallbackOrder` (preset → autoconfig →
+      well-known → ISPDB, the address sent only to step 2),
+      `firstSourceWins`, `invalidDocumentFallsThrough`, `nothingFound`,
+      `unreachableIsOffline`, `httpsOnly`, `oversizedAndSlowAnswers`,
+      `cancelAndBadInput`.
+- [x] `pkceMatchesRfc7636AppendixB` (the RFC's verifier → challenge
+      vector) and verifier/state shape.
+- [x] `authorizationRequest`, `fullFlowMicrosoft`,
+      `googleOneTokenAndClientSecret`: the test plays the browser; the
+      fake token server checks code, verifier against the challenge,
+      redirect URI and client; the refresh token lands in the keyring and
+      the loopback port closes.
+- [x] `secondResourceSameRefreshToken`: the Graph token comes from a
+      refresh-token grant with `offline_access Calendars.ReadWrite` and the
+      same refresh token (`+/=` intact); a rotated refresh token is stored.
+- [x] `stateMismatchRejected` (no code exchange), `deniedConsent` (nothing
+      reflected into the page), `refreshFromKeyringThenCached`,
+      `concurrentRefreshesShareOneGrant`, `invalidGrantNeedsReauthorization`
+      (token forgotten and wiped), `serverTroubleIsOffline`,
+      `timeoutAndCancel`, `applyAccessToken`, `configureFromRegistry`,
+      `xoauth2Format` (Google's published example).
+- [x] `tokensNeverLogged`: every message of a full flow with all debug
+      categories enabled, and every result, is free of the tokens.
+- [ ] On the desktop (needs a registered client ID; QindaTK WP-089/WP-090):
+      sign in to a real Gmail and Microsoft 365 account from the account
+      dialog (M44), confirm the browser page, the keyring entry (service
+      `qindaoffice-mail` in Seahorse or KWalletManager) and a mail sync
+      with the token.
+
 ### M39 gates (floating images) and the parity close-out
 
 Automated by `tst_calc_io_images`, `tst_calc_window` and `tst_calc_sample`.

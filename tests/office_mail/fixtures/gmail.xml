@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Shaped like the Mozilla ISPDB entry for gmail.com (2026). Test fixture. -->
+<clientConfig version="1.1">
+  <emailProvider id="googlemail.com">
+    <domain>gmail.com</domain>
+    <domain>googlemail.com</domain>
+    <domain>google.com</domain>
+    <displayName>Google Mail</displayName>
+    <displayShortName>GMail</displayShortName>
+    <incomingServer type="imap">
+      <hostname>imap.gmail.com</hostname>
+      <port>993</port>
+      <socketType>SSL</socketType>
+      <username>%EMAILADDRESS%</username>
+      <authentication>OAuth2</authentication>
+      <authentication>password-cleartext</authentication>
+    </incomingServer>
+    <incomingServer type="pop3">
+      <hostname>pop.gmail.com</hostname>
+      <port>995</port>
+      <socketType>SSL</socketType>
+      <username>%EMAILADDRESS%</username>
+      <authentication>OAuth2</authentication>
+      <authentication>password-cleartext</authentication>
+      <pop3>
+        <leaveMessagesOnServer>true</leaveMessagesOnServer>
+      </pop3>
+    </incomingServer>
+    <outgoingServer type="smtp">
+      <hostname>smtp.gmail.com</hostname>
+      <port>465</port>
+      <socketType>SSL</socketType>
+      <username>%EMAILADDRESS%</username>
+      <authentication>OAuth2</authentication>
+      <authentication>password-cleartext</authentication>
+    </outgoingServer>
+    <documentation url="http://mail.google.com/support/bin/answer.py?answer=13273">
+      <descr>How to enable IMAP/POP3 in GMail</descr>
+    </documentation>
+    <documentation url="http://mail.google.com/support/bin/topic.py?topic=12806">
+      <descr>How to configure email clients for IMAP</descr>
+    </documentation>
+  </emailProvider>
+  <oAuth2>
+    <issuer>accounts.google.com</issuer>
+    <scope>https://mail.google.com/ https://www.googleapis.com/auth/contacts https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/carddav</scope>
+    <authURL>https://accounts.google.com/o/oauth2/auth</authURL>
+    <tokenURL>https://www.googleapis.com/oauth2/v3/token</tokenURL>
+  </oAuth2>
+</clientConfig>
