@@ -114,6 +114,9 @@ Tk.Dialog {
             visible: tabs.currentIndex === 2 && dialog.hasAppPage
             active: dialog.hasAppPage
             source: dialog.hasAppPage ? dialog.host.preferencesPage : ""
+            // A page that declares `host` gets the window's host (QindaMail's
+            // account list reaches its service through it).
+            onLoaded: if (item.host !== undefined) item.host = dialog.host
         }
     }
 }
