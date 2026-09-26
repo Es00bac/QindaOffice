@@ -12,9 +12,6 @@ QtObject {
                                   "planViewResourceUsageAction", "planViewCalendarAction", "planViewReportsAction"]
     readonly property var tables: ["planTableEntryAction", "planTableTrackingAction", "planTableVarianceAction",
                                    "planTableCostAction", "planTableScheduleAction"]
-    readonly property var timescale: { "id": "timescale", "label": qsTr("Timescale"), "items": [
-        { action: "planTimescaleDaysAction", size: "large" }, "planTimescaleWeeksAction", "planTimescaleMonthsAction",
-        "planGoToTodayAction"] }
 
     readonly property var tabs: [
         StandardRibbon.fileTab([
@@ -70,25 +67,25 @@ QtObject {
         { id: "project", label: qsTr("Project"), keyTip: "J", groups: [
             { id: "projectProperties", label: qsTr("Properties"), items: [
                 { action: "planProjectInfoAction", size: "large" }, "planWorkingTimeAction"] },
+            { id: "projectSchedule", label: qsTr("Schedule"), items: [
+                { action: "planShowCriticalAction", size: "large" }, "planRecalculateAction"] },
             { id: "status", label: qsTr("Status"), items: [
-                { action: "planStatusDateAction", size: "large" }, "planUpdateProjectAction", "planRecalculateAction"] },
+                { action: "planStatusDateAction", size: "large" }, "planUpdateProjectAction"] },
             { id: "baseline", label: qsTr("Baseline"), items: [
                 { action: "planSetBaselineAction", size: "large" }, "planClearBaselineAction"] }
         ] },
         StandardRibbon.viewTab([
-            { id: "taskViews", label: qsTr("Task views"), items: [
-                { action: "planViewGanttAction", size: "large" }, "planViewTaskSheetAction", "planViewCalendarAction",
-                "planViewReportsAction"] },
-            { id: "resourceViews", label: qsTr("Resource views"), items: [
-                { action: "planViewResourceSheetAction", size: "large" }, "planViewResourceUsageAction"] },
+            { id: "views", label: qsTr("Views"), items: [
+                { action: "planViewGanttAction", size: "large", split: true, menu: views }] },
             { id: "data", label: qsTr("Data"), items: [
                 { id: "planTables", label: qsTr("Tables"), iconName: "table", size: "large", menu: tables }] },
-            timescale,
-            { id: "outline", label: qsTr("Outline"), items: [
-                { action: "planToggleSubtasksAction", size: "large" }, "planExpandAllAction"] },
+            { id: "timescale", label: qsTr("Timescale"), items: [
+                { id: "planTimescale", label: qsTr("Timescale"), iconName: "calendar-range", size: "large",
+                  menu: ["planTimescaleDaysAction", "planTimescaleWeeksAction", "planTimescaleMonthsAction"] },
+                "planGoToTodayAction"] },
+            { id: "outline", label: qsTr("Outline"), items: ["planToggleSubtasksAction", "planExpandAllAction"] },
             { id: "show", label: qsTr("Show"), items: [
-                { action: "planShowTimelineAction", size: "large" }, "planShowCriticalAction", "planShowBaselineAction",
-                "planShowBarTextAction"] },
+                { action: "planShowTimelineAction", size: "large" }, "planShowCriticalAction", "planShowBaselineAction"] },
             StandardRibbon.assistantGroup([])
         ]),
         { id: "ganttFormat", label: qsTr("Gantt Chart Format"), keyTip: "G", contextId: "ganttFormat", groups: [

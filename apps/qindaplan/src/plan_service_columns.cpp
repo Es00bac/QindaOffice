@@ -27,7 +27,7 @@ const QList<TableDef> &tables()
         {"cost", "Cost",
          {"indicators", "name", "fixedCost", "cost", "baselineCost", "costVariance", "actualCost", "remainingCost"}},
         {"schedule", "Schedule",
-         {"indicators", "name", "start", "finish", "lateStart", "lateFinish", "freeSlack", "totalSlack"}},
+         {"indicators", "wbs", "name", "start", "finish", "lateStart", "lateFinish", "freeSlack", "totalSlack"}},
     };
     return defs;
 }
@@ -50,7 +50,7 @@ double widthFactor(const QString &field)
     if (field == QLatin1String("percent")) {
         return 1.0;
     }
-    if (field == QLatin1String("id")) {
+    if (field == QLatin1String("id") || field == QLatin1String("wbs")) {
         return 0.8;
     }
     if (field == QLatin1String("predecessors") || field == QLatin1String("duration")) {

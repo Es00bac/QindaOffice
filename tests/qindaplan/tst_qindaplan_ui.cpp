@@ -169,6 +169,23 @@ private slots:
         QCOMPARE(dialog->property("info").toMap().value(s("name")).toString(), s("Book entertainment"));
     }
 
+    void ribbonTabsForReview()
+    {
+        // Every tab at a desktop width, saved for review (QQO_GRAB_DIR).
+        Scene scene(QSize(1320, 800));
+        QVERIFY2(scene.window != nullptr, qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        QQuickItem *ribbon = scene.item(s("officeRibbon"));
+        QVERIFY(ribbon != nullptr);
+        for (const QString &tab : QindaOffice::Test::callStrings(ribbon, "layoutTabIds")) {
+            QVariant shown;
+            QMetaObject::invokeMethod(ribbon, "activateTab", Q_RETURN_ARG(QVariant, shown), Q_ARG(QVariant, tab));
+            QVERIFY2(shown.toBool(), qPrintable(tab));
+            QTest::qWait(120);
+            QindaOffice::Test::saveGrab(scene.window, s("qindaplan_tab_%1").arg(tab));
+        }
+    }
+
     void ribbonGateHolds()
     {
         for (const int width : {1320, 520}) {
