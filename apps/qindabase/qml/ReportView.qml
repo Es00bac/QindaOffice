@@ -181,7 +181,11 @@ Item {
                             anchors.fill: parent
                             document: output.document
                             readOnly: true
-                            zoom: view.window !== null ? view.window.baseHost.zoom * Math.min(1, Math.max(0.45, (pagesHost.width - Tk.Theme.space.xl * 2) / (Tk.Theme.size.panelMinWidth * 3.3))) : 1
+                            // Fit the page's width to the pane (never above 100 %), then
+                            // apply View ▸ Zoom; pageSize is in unzoomed units.
+                            zoom: view.window !== null ? view.window.baseHost.zoom * Math.min(1, Math.max(0.3,
+                                (pagesHost.width - reportPages.area.padding * 2 - Tk.Theme.size.scrollbar)
+                                / Math.max(1, reportPages.area.pageSize.width))) : 1
                             tooltip: qsTr("Report pages")
                         }
                     }

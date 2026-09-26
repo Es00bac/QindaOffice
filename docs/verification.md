@@ -714,7 +714,14 @@ the file, types and API in [qindabase.md](qindabase.md).
       Grabs reviewed: `M49-iter*` (start, home, datasheet, pivot, table
       design, query design and result, form, report and design,
       relationships, SQL, plan dialog, import, report wizard; 1280 and
-      520).
+      520). `M49-iter3-tkbranch-*` are the same run against QindaTK
+      `work/base-db-controls` (money in reports, aligned form labels, the
+      schema badge as a file name).
+- [ ] When QindaTK `work/base-db-controls` lands: rerun
+      `tst_qindabase_ui` with `QQO_UPDATE_FIXTURES=1` — the toolkit adds
+      `formStatus`, `formType_*` and `schemaDatabase` object names, so
+      `qindabase_1280.txt` changes at its FormDesigner lines (every other
+      QindaBase gate already passes against that branch).
 
 Still on the desktop: open a real Access file with mdb-tools installed;
 print a report to a real printer; two databases side by side.

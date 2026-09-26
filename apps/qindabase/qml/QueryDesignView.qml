@@ -329,6 +329,9 @@ Item {
                     visible: view.mode === "design"
                     width: body.width - Tk.Theme.space.md * 2
                     implicitHeight: gridRow.implicitHeight + Tk.Theme.size.scrollbar
+                    // Columns keep their width and the grid scrolls sideways
+                    // in a narrow window (Access's grid does the same).
+                    overflowX: Tk.Scroll.Auto
                     overflowY: Tk.Scroll.Hidden
                     accessibleName: qsTr("Design grid")
                     Tk.Flex {
