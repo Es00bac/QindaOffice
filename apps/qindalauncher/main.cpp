@@ -43,6 +43,10 @@ int main(int argc, char *argv[])
     // when the .desktop file is not installed (a build-tree run).
     QGuiApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral(QQO_DESKTOP_ID)));
 
+    // AGENT-GUARD: the engine owns LauncherWindow.qml. It must be destroyed
+    // before the controller that fills the window's required property, or
+    // its bindings briefly read a null launcher during normal shutdown.
+    QindaOffice::Launcher::LauncherController controller;
     QQmlApplicationEngine engine;
 #ifdef QQO_QINDATK_QML_ROOT
     engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_ROOT));
@@ -51,7 +55,6 @@ int main(int argc, char *argv[])
     if (!QindaOffice::Quick::DesktopAppearance::publishDesktopTheme(engine, &appearanceError)) {
         qInfo("QindaOffice: desktop theme not published (%s)", qPrintable(appearanceError));
     }
-    QindaOffice::Launcher::LauncherController controller;
     engine.setInitialProperties({{QStringLiteral("launcher"), QVariant::fromValue(&controller)}});
     engine.load(QUrl(QStringLiteral("qrc:/qt/qml/QindaOffice/Launcher/LauncherWindow.qml")));
     if (engine.rootObjects().isEmpty()) {

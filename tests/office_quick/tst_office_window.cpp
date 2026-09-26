@@ -8,6 +8,8 @@
 #include <QQmlComponent>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QPointer>
+#include <QRegularExpression>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -35,6 +37,31 @@ class OfficeWindowTest final : public QObject {
     }
 
 private slots:
+    void hostTeardownDestroysWindowBeforeBindingsLoseHost()
+    {
+        QQmlApplicationEngine engine;
+        engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_ROOT));
+        auto *host = new DocumentHost;
+        QQmlComponent component(&engine);
+        component.setData(R"qml(
+import QtQuick
+import QindaOffice.Shell
+OfficeWindow { width: 400; height: 300
+    Rectangle { objectName: "content" }
+}
+)qml", QUrl(QStringLiteral("teardown.qml")));
+        QVERIFY2(!component.isError(), qPrintable(component.errorString()));
+        QObject *object = component.createWithInitialProperties(
+            {{QStringLiteral("host"), QVariant::fromValue(host)}});
+        auto *window = qobject_cast<QQuickWindow *>(object);
+        QVERIFY2(window != nullptr, qPrintable(component.errorString()));
+        host->attachWindow(window);
+        QPointer<QQuickWindow> observed(window);
+        QTest::failOnWarning(QRegularExpression(QStringLiteral("Cannot read property .* of null")));
+        delete host;
+        QVERIFY(observed.isNull());
+    }
+
     void windowBuildsFromTheHost()
     {
         QQmlApplicationEngine engine;

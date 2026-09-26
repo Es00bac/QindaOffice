@@ -7,6 +7,7 @@ lists what exists today.
 - [Verification](verification.md) — build/test gates and the on-desktop
   manual checklist.
 - [Decisions](decisions.md) — ADR-lite log of durable cross-cutting choices.
+- [Window lifetime](decisions.md#d-056-destroy-qml-windows-before-their-required-c-objects) — why QML windows are destroyed before their host or controller.
 - [Bookkeeping](books.md) — the QindaBooks engine, company file, posting
   rules, reports and I/O formats, and the app's service API.
 - [Diagrams](diagram.md) — the QindaDiagram drawing model, stencils,

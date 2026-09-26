@@ -5,6 +5,26 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-056: Destroy QML windows before their required C++ objects
+
+**Date:** 2026-09-26 · **Status:** accepted (owner-reported shutdown warnings)
+
+**Context.** Closing Calc and then the launcher logged many QML `TypeError`
+messages about a null `host`, `controller`, or `launcher`. The bindings
+worked while the windows were open. During shutdown, the Calc host left its
+window for later deletion and the launcher destroyed its controller before
+the QML engine destroyed its root window.
+
+**Decision.** A `DocumentHost` deletes its owned window in its destructor
+while the host and its action model still exist. The launcher constructs
+its controller before its QML engine so the engine and its windows are
+destroyed first. Required QML properties remain valid for the whole QML
+window lifetime.
+
+**Consequences.** Normal window closure no longer emits null-property
+warnings. A headless shell test checks that host teardown destroys the
+window synchronously without those warnings.
+
 ## D-055: Recovered documents are offered in one dialog; a dismissal sticks
 
 **Date:** 2026-09-26 · **Status:** accepted (owner request)

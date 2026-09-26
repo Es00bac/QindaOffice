@@ -55,7 +55,10 @@ DocumentHost::~DocumentHost()
     delete m_menuExport;
     m_menuExport = nullptr;
     if (m_window != nullptr) {
-        m_window->deleteLater();
+        // AGENT-GUARD: destroy the QML window while its required host is
+        // still alive. Leaving it for QObject child cleanup clears the
+        // host binding first and makes every dependent binding warn on exit.
+        delete m_window.data();
     }
 }
 

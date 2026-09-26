@@ -14,6 +14,10 @@ windows, `QT_QUICK_BACKEND=software` (pinned via ctest `ENVIRONMENT`; each
 test's `main` also sets both defensively). A build against a QindaTK
 development prefix needs `-DCMAKE_PREFIX_PATH=<QindaTK>/install`.
 
+The shell lifetime check in `tst_office_window` destroys a document host
+while its QML window is still bound to it. It checks that the window dies
+first and that no null-property warning is emitted (D-056).
+
 The UI tests also write what a reviewer looks at: the structural fixtures
 in `tests/qml_fixtures/` (`QQO_UPDATE_FIXTURES=1` rewrites them) and, with
 `QQO_GRAB_DIR=<dir>`, a PNG of each window at 1280x800 and 520x700 — saved
