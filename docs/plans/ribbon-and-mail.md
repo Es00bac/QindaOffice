@@ -208,3 +208,22 @@ hubs, update the QindaGentoo overlay ebuilds (`dev-libs/qindatk`,
 QSQLITE, qtkeychain, Qt Network, poppler-qt6, …), and install through
 Portage on **qinda-top** (the laptop): sync the overlay, fast-forward the
 laptop's `~/git/*.git` mirrors, then `emerge` — never overriding MAKEOPTS.
+
+**Delivered 2026-09-26** as `dev-libs/qindatk-0.1.0-r7` (QindaTK 6cd0482d)
+and `gui-apps/qindaoffice-0.1.0_p20260925` (QindaOffice 0b86d23, tarball
+from `tools/make-dist.sh`, published with `qinda-sync publish`; overlay
+bd5090a, pins 89fcb2b). Installed on qinda-top with `qinda-sync packages
+'=dev-libs/qindatk-0.1.0-r7' '=gui-apps/qindaoffice-0.1.0_p20260925'`
+(quote the atoms: zsh expands a leading `=`); every installed app builds
+its command set headless (`--list-commands`, offscreen). Lessons paid for:
+
+- AGENT-NOTE: git-r3 fetches the laptop mirror's `HEAD`, and `qinda-sync`
+  only adds the pinned commit on a side branch — fast-forward
+  `~/git/QindaTK.git`'s `main` from qinda first, or the unpack phase dies
+  with "Referencing <commit> failed".
+- Run the install detached on the laptop (`setsid nohup … > log`): emerge
+  dies on its next status write when the ssh session that started it goes
+  away, and the laptop farms compiles to qinda over distcc (QindaTK units
+  take ~1.8 GB each), so qinda's memory is shared with its own builds.
+- Never replace QindaTK while another emerge on the same host is building
+  a package that compiles against it (qindaqt-desktop, qindastudio, …).
