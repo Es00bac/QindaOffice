@@ -73,6 +73,9 @@ Tk.AppWindow {
                                 visible: card.modelData.iconSource.length === 0
                                 color: Tk.Theme.color.accentSubtle
                                 radius: Tk.Theme.radius.md
+                                // Keep the letter centred: a filling Box
+                                // would stretch it over the tile, flush left.
+                                fill: false
                                 Tk.Heading {
                                     anchors.centerIn: parent
                                     text: card.modelData.name.substring(5, 6)

@@ -10,6 +10,7 @@
 #include "qindalauncher/src/launcher_controller.h"
 
 #include "paths.h"
+#include "support/quick_dump.h"
 
 #include <QAccessible>
 #include <QGuiApplication>
@@ -191,10 +192,7 @@ void LauncherTest::windowShowsACardPerAppAndTheRecentList()
     QQuickItem *empty = findItem(window->contentItem(), QStringLiteral("launcherRecentEmpty"));
     QVERIFY(empty != nullptr && !empty->isVisible());
     QVERIFY(findItem(window->contentItem(), QStringLiteral("launcherOpenButton")) != nullptr);
-    const QString grabDir = qEnvironmentVariable("QQO_GRAB_DIR");
-    if (!grabDir.isEmpty()) {
-        window->grabWindow().save(grabDir + QStringLiteral("/qindaoffice_launcher.png"));
-    }
+    QindaOffice::Test::saveGrab(window, QStringLiteral("qindaoffice_launcher"));
 }
 
 int main(int argc, char *argv[])
