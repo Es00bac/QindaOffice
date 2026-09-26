@@ -15,6 +15,7 @@ QQuickRootItem#NoteWindow
                   DockTabStrip#dockTabStrip_navigator [hidden]
                   QQuickItem#dockContent_navigator
                     QQuickItem#dockPanelContent_navigator
+                      Button#navigatorNewPage
                       Scroll#navigatorScroll
                         TreeRow#navPage_<id>
                           Caption#rowSecondary [hidden]
