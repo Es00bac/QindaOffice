@@ -156,6 +156,10 @@ private slots:
         QQuickItem *checkB = findNamed(window->contentItem(), QStringLiteral("recoveryCheck_b"));
         QQuickItem *recover = findNamed(window->contentItem(), QStringLiteral("recoveryRecover"));
         QVERIFY(checkB != nullptr && recover != nullptr);
+        if (qEnvironmentVariableIsSet("QQO_GRAB_DIR")) {
+            window->grabWindow().save(qEnvironmentVariable("QQO_GRAB_DIR")
+                                      + QStringLiteral("/recovery_dialog.png"));
+        }
         click(window, checkB); // untick letter.odt
         QTRY_COMPARE(recover->property("text").toString(), QStringLiteral("Recover Selected"));
         click(window, recover);
