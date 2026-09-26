@@ -57,11 +57,11 @@ bool renameIn(QVariantMap &def, const QString &kind, const QString &from, const 
                 changed = true;
                 if (!aliased) {
                     // Unaliased references use the table name as their ref.
-                    for (const QString key : {QStringLiteral("joins"), QStringLiteral("columns")}) {
+                    for (const QString &key : {QStringLiteral("joins"), QStringLiteral("columns")}) {
                         QVariantList items = def.value(key).toList();
                         for (QVariant &item : items) {
                             QVariantMap im = item.toMap();
-                            for (const QString field : {QStringLiteral("leftTable"), QStringLiteral("rightTable"),
+                            for (const QString &field : {QStringLiteral("leftTable"), QStringLiteral("rightTable"),
                                                         QStringLiteral("table")}) {
                                 if (same(im.value(field))) {
                                     im.insert(field, to);

@@ -231,7 +231,7 @@ CompiledQuery compileQuery(const BaseFile &file, const QueryDesign &design)
             if (!e.ok()) {
                 return fail(QStringLiteral("Column %1: %2").arg(i + 1).arg(e.error));
             }
-            col = {e.sql, e.type, e.aggregate, c.alias.isEmpty() ? QStringLiteral("Expr%1").arg(i + 1) : c.alias};
+            col = {e.sql, e.type, e.aggregate, c.alias.isEmpty() ? QStringLiteral("Expr%1").arg(i + 1) : c.alias, {}, {}};
         } else if (c.field == QLatin1String("*")) {
             col.sql = c.table.isEmpty() ? QStringLiteral("*") : QStringLiteral("%1.*").arg(q(c.table));
             col.name = QStringLiteral("*");
