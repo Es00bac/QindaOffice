@@ -35,6 +35,10 @@ public:
     [[nodiscard]] static bool probe(QString *diagnostic = nullptr);
     [[nodiscard]] bool isAvailable() const;
 
+    // The environment every soffice child runs in: the caller's, with the
+    // VCL backend pinned to the headless one (see the AGENT-GUARD in the .cpp).
+    [[nodiscard]] static QProcessEnvironment headlessEnvironment();
+
     // Queues a conversion; returns a job id >= 1, or 0 when the queue is
     // rejected (unavailable converter or unreadable input).
     int convert(const QString &inputPath, const QString &targetExtension,

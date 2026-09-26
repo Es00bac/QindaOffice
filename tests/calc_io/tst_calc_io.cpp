@@ -6,6 +6,7 @@
 
 #include "xlsx_bridge.h"
 #include "xlsx_package.h"
+#include "support/soffice_env.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -169,8 +170,7 @@ void CalcIoTest::opensInLibreOffice()
 {
     {
         QProcess probe;
-        probe.start(QStringLiteral("soffice"),
-                    {QStringLiteral("--headless"), QStringLiteral("--version")});
+        QindaOffice::Test::startSoffice(probe, {QStringLiteral("--headless"), QStringLiteral("--version")});
         if (!probe.waitForFinished(15000) || probe.exitCode() != 0) {
             QSKIP("LibreOffice unavailable in this environment");
         }
@@ -184,12 +184,12 @@ void CalcIoTest::opensInLibreOffice()
 
     // Convert to CSV and confirm LibreOffice evaluates the formula.
     QProcess soffice;
-    soffice.start(QStringLiteral("soffice"),
-                  {QStringLiteral("--headless"), QStringLiteral("--norestore"),
-                   QStringLiteral("--nologo"),
-                   QStringLiteral("-env:UserInstallation=file://%1/profile").arg(dir.path()),
-                   QStringLiteral("--convert-to"), QStringLiteral("csv"),
-                   QStringLiteral("--outdir"), dir.path(), xlsx});
+    QindaOffice::Test::startSoffice(
+        soffice, {QStringLiteral("--headless"), QStringLiteral("--norestore"),
+                  QStringLiteral("--nologo"),
+                  QStringLiteral("-env:UserInstallation=file://%1/profile").arg(dir.path()),
+                  QStringLiteral("--convert-to"), QStringLiteral("csv"),
+                  QStringLiteral("--outdir"), dir.path(), xlsx});
     QVERIFY(soffice.waitForFinished(120000));
     QFile csv(dir.path() + QStringLiteral("/sample.csv"));
     if (!csv.exists()) {

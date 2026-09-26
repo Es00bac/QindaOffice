@@ -203,6 +203,14 @@ Manual (QindaQt desktop, tablet):
   ownership (some sandboxed/elevated contexts).
 - `tst_libre_office_converter` — live txt→pdf conversion against the
   installed soffice; skipped when the conversion pipeline is unavailable.
+  Every soffice child — the converter's and the ones tests start through
+  `tests/support/soffice_env.h` — runs with `SAL_USE_VCLPLUGIN=svp` and
+  without `QT_QPA_PLATFORM`: a QindaQt session exports
+  `SAL_USE_VCLPLUGIN=qt6`, and with the tests' offscreen platform soffice
+  aborted before converting, which turned the live cases into failures or
+  silent skips. Layout probes compare against laid-out line heights, never
+  a literal, because the session's platform theme (`qindaqt`) picks the
+  default font even under `offscreen`.
 - `tst_office_application` — canonical-path uniqueness (duplicate open
   activates), pristine-untitled reuse, recents bookkeeping, 32-window bound.
 - `tst_recovery_journal` / `tst_restore_inventory` / `tst_recent_files` /

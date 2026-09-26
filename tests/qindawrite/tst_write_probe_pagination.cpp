@@ -58,12 +58,17 @@ void WriteProbePagination::pagedModeBasics()
     setupPaged(&doc, 96);
     doc.setPlainText(QStringLiteral("hello"));
 
-    // Content height includes the per-page margins: 96 + 14 + 96.
-    QCOMPARE(doc.documentLayout()->documentSize().height(), 206.0);
+    // Content height includes the per-page margins: 96 + one line + 96.
+    // AGENT-NOTE: the line height comes from the default font, which the
+    // session's platform theme picks (QT_QPA_PLATFORMTHEME=qindaqt reaches
+    // offscreen tests too), so the probe compares against the laid-out line
+    // instead of a literal - 206 held only for a 14 px default line.
+    const QRectF first = doc.documentLayout()->blockBoundingRect(doc.begin());
+    QVERIFY(first.height() > 0);
+    QCOMPARE(doc.documentLayout()->documentSize().height(), 96.0 + first.height() + 96.0);
     QCOMPARE(pageCountOf(&doc), 1);
 
     // documentMargin acts per page on all four sides.
-    const QRectF first = doc.documentLayout()->blockBoundingRect(doc.begin());
     QVERIFY(first.top() >= 96 - 1);
     QVERIFY(first.left() >= 96 - 1);
     QVERIFY(first.right() <= kPageW - 96 + 1);

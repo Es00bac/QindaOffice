@@ -10,6 +10,7 @@
 #include "presentation.h"
 #include "shape_json.h"
 #include "slide_renderer.h"
+#include "support/soffice_env.h"
 
 #include <QGuiApplication>
 #include <QPainter>
@@ -114,8 +115,9 @@ void ShowModelTest::fodpRoundTrip()
 void ShowModelTest::fodpConvertsToPptx()
 {
     QProcess probe;
-    probe.start(QStringLiteral("soffice"), {QStringLiteral("--headless"),
-                                            QStringLiteral("--version")});
+    QindaOffice::Test::startSoffice(
+        probe, {QStringLiteral("--headless"),
+                QStringLiteral("--version")});
     if (!probe.waitForFinished(15000) || probe.exitCode() != 0) {
         QSKIP("LibreOffice unavailable in this environment");
     }
@@ -129,12 +131,12 @@ void ShowModelTest::fodpConvertsToPptx()
     }
     auto convert = [&](const QString &from, const QString &to) -> QString {
         QProcess soffice;
-        soffice.start(QStringLiteral("soffice"),
-                      {QStringLiteral("--headless"), QStringLiteral("--norestore"),
-                       QStringLiteral("--nologo"),
-                       QStringLiteral("-env:UserInstallation=file://%1/profile").arg(dir.path()),
-                       QStringLiteral("--convert-to"), to, QStringLiteral("--outdir"),
-                       dir.path(), from});
+        QindaOffice::Test::startSoffice(
+            soffice, {QStringLiteral("--headless"), QStringLiteral("--norestore"),
+                      QStringLiteral("--nologo"),
+                      QStringLiteral("-env:UserInstallation=file://%1/profile").arg(dir.path()),
+                      QStringLiteral("--convert-to"), to, QStringLiteral("--outdir"),
+                      dir.path(), from});
         if (!soffice.waitForFinished(120000)) {
             return {};
         }

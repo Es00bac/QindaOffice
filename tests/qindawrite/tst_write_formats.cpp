@@ -7,6 +7,7 @@
 #include "qindawrite/src/format_io.h"
 #include "qindawrite/src/spell_checker.h"
 #include "qindawrite/src/style_catalog.h"
+#include "support/soffice_env.h"
 
 #include <QGuiApplication>
 #include <QProcess>
@@ -64,8 +65,9 @@ void WriteFormatsTest::nativeRoundTrips()
 void WriteFormatsTest::docxKeepsHeadingsAndTables()
 {
     QProcess probe;
-    probe.start(QStringLiteral("soffice"), {QStringLiteral("--headless"),
-                                            QStringLiteral("--version")});
+    QindaOffice::Test::startSoffice(
+        probe, {QStringLiteral("--headless"),
+                QStringLiteral("--version")});
     if (!probe.waitForFinished(15000) || probe.exitCode() != 0) {
         QSKIP("LibreOffice unavailable in this environment");
     }
@@ -84,12 +86,12 @@ void WriteFormatsTest::docxKeepsHeadingsAndTables()
 
     // LibreOffice reads it back: convert to HTML and inspect structure.
     QProcess soffice;
-    soffice.start(QStringLiteral("soffice"),
-                  {QStringLiteral("--headless"), QStringLiteral("--norestore"),
-                   QStringLiteral("--nologo"),
-                   QStringLiteral("-env:UserInstallation=file://%1/profile").arg(dir.path()),
-                   QStringLiteral("--convert-to"), QStringLiteral("html"),
-                   QStringLiteral("--outdir"), dir.path(), docx});
+    QindaOffice::Test::startSoffice(
+        soffice, {QStringLiteral("--headless"), QStringLiteral("--norestore"),
+                  QStringLiteral("--nologo"),
+                  QStringLiteral("-env:UserInstallation=file://%1/profile").arg(dir.path()),
+                  QStringLiteral("--convert-to"), QStringLiteral("html"),
+                  QStringLiteral("--outdir"), dir.path(), docx});
     QVERIFY(soffice.waitForFinished(120000));
     QFile html(dir.path() + QStringLiteral("/m5.html"));
     if (!html.exists()) {

@@ -39,9 +39,27 @@ LibreOfficeConverter::~LibreOfficeConverter()
     }
 }
 
+QProcessEnvironment LibreOfficeConverter::headlessEnvironment()
+{
+    // AGENT-GUARD: soffice must use its headless "svp" VCL backend whatever
+    // the session asks for. A QindaQt session exports SAL_USE_VCLPLUGIN=qt6
+    // (environment.d, so LibreOffice's own menu joins the global menu), and
+    // our apps and tests often carry QT_QPA_PLATFORM=offscreen; soffice
+    // inherited both, loaded its Qt VCL plugin on the offscreen platform and
+    // aborted ("Unspecified Application Error", exit 134) before converting.
+    // Pinning svp and dropping the Qt platform variables keeps every
+    // conversion independent of how the calling app was started.
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert(QStringLiteral("SAL_USE_VCLPLUGIN"), QStringLiteral("svp"));
+    env.remove(QStringLiteral("QT_QPA_PLATFORM"));
+    env.remove(QStringLiteral("QT_QUICK_BACKEND"));
+    return env;
+}
+
 bool LibreOfficeConverter::probe(QString *diagnostic)
 {
     QProcess check;
+    check.setProcessEnvironment(headlessEnvironment());
     check.start(QStringLiteral("soffice"),
                 {QStringLiteral("--headless"), QStringLiteral("--version")});
     if (!check.waitForStarted(5000)) {
@@ -155,6 +173,7 @@ void LibreOfficeConverter::runNext()
 
     // AGENT-GUARD: one job at a time, private profile per run (probe #8);
     // --norestore keeps a crashed instance from blocking this run.
+    process->setProcessEnvironment(headlessEnvironment());
     process->start(QStringLiteral("soffice"),
                    {QStringLiteral("--headless"), QStringLiteral("--norestore"),
                     QStringLiteral("--nologo"),

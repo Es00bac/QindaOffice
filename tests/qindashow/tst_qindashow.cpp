@@ -11,6 +11,7 @@
 #include "qindashow/src/presentation_controller.h"
 #include "qindashow/src/show_ai.h"
 #include "qindashow/src/text_bridge.h"
+#include "support/soffice_env.h"
 
 #include <QProcess>
 #include <QSignalSpy>
@@ -58,7 +59,7 @@ void QindaShowTest::documentRoundTrip()
 void QindaShowTest::documentPptxSave()
 {
     QProcess probe;
-    probe.start(QStringLiteral("soffice"), {QStringLiteral("--headless"), QStringLiteral("--version")});
+    QindaOffice::Test::startSoffice(probe, {QStringLiteral("--headless"), QStringLiteral("--version")});
     if (!probe.waitForFinished(15000) || probe.exitCode() != 0) {
         QSKIP("LibreOffice unavailable in this environment");
     }
@@ -157,7 +158,7 @@ void QindaShowTest::controllerAdvancesBuildsBeforeSlides()
     build.animation = ShowModel::ShapeAnimation::Fade;
     build.animationMs = 400;
     first.shapes.append(build);
-    deck.addSlide(QStringLiteral("Two"));
+    Q_UNUSED(deck.addSlide(QStringLiteral("Two")));
     PresentationController controller(&deck);
     QCOMPARE(controller.buildCap(0), 2);
     QCOMPARE(controller.slideCount(), 2);
@@ -202,7 +203,7 @@ void QindaShowTest::pdfExportWritesSlidesAndNotes()
 {
     ShowModel::Presentation deck;
     deck.addSlide(QStringLiteral("One")).notes = QStringLiteral("First notes");
-    deck.addSlide(QStringLiteral("Two"));
+    Q_UNUSED(deck.addSlide(QStringLiteral("Two")));
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     const QString path = dir.path() + QStringLiteral("/deck.pdf");
