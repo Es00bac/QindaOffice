@@ -87,7 +87,38 @@ void drawCard(QPainter *painter, const QString &text, const TextStyle &style, co
     muted.setAlphaF(style.color.alphaF() * 0.75);
     restStyle.color = muted;
     const double nameHeight = lineHeight(nameStyle);
-    const double restHeight = rest.isEmpty() ? 0 : lineHeight(restStyle) * double(rest.count(QLatin1Char('\n')) + 1);
+    // The name is one line (elided); the title may wrap onto a second line
+    // before it elides, so "Volunteer Coordinator" fits a standard card.
+    const QFontMetricsF nameMetrics(referenceFont(nameStyle, true));
+    const QString nameLine = nameMetrics.elidedText(name, Qt::ElideRight, box.width() / pageScale(nameStyle));
+    QString restText;
+    int restLines = 0;
+    if (!rest.isEmpty()) {
+        const double k = pageScale(restStyle);
+        const QFontMetricsF metrics(referenceFont(restStyle, restStyle.bold));
+        QStringList out;
+        for (const QString &line : rest.split(QLatin1Char('\n'))) {
+            const QRectF wrapped = metrics.boundingRect(QRectF(0, 0, box.width() / k, 1e6), Qt::TextWordWrap, line);
+            if (wrapped.height() <= metrics.lineSpacing() * 1.5 || out.size() + 2 > 2) {
+                out.append(metrics.elidedText(line, Qt::ElideRight, box.width() / k));
+            } else {
+                // Two lines: break at the last space that fits, elide the rest.
+                qsizetype cut = line.size();
+                while (cut > 0 && metrics.horizontalAdvance(line.left(cut)) > box.width() / k) {
+                    cut = line.lastIndexOf(QLatin1Char(' '), cut - 1);
+                }
+                if (cut <= 0) {
+                    out.append(metrics.elidedText(line, Qt::ElideRight, box.width() / k));
+                } else {
+                    out.append(line.left(cut));
+                    out.append(metrics.elidedText(line.mid(cut + 1), Qt::ElideRight, box.width() / k));
+                }
+            }
+        }
+        restLines = int(out.size());
+        restText = out.join(QLatin1Char('\n'));
+    }
+    const double restHeight = lineHeight(restStyle) * restLines;
     const double total = nameHeight + restHeight;
     double top = box.top();
     if (style.align & Qt::AlignVCenter) {
@@ -95,21 +126,9 @@ void drawCard(QPainter *painter, const QString &text, const TextStyle &style, co
     } else if (style.align & Qt::AlignBottom) {
         top = box.bottom() - total;
     }
-    // A card is one line per field: long names and titles elide rather than
-    // wrap into the next line.
-    const auto elided = [&](const QString &text, const TextStyle &style) {
-        const double k = pageScale(style);
-        const QFontMetricsF metrics(referenceFont(style, style.bold));
-        QStringList lines;
-        for (const QString &line : text.split(QLatin1Char('\n'))) {
-            lines.append(metrics.elidedText(line, Qt::ElideRight, box.width() / k));
-        }
-        return lines.join(QLatin1Char('\n'));
-    };
-    drawBlock(painter, elided(name, nameStyle), nameStyle, QRectF(box.left(), top, box.width(), nameHeight + 1));
-    if (!rest.isEmpty()) {
-        drawBlock(painter, elided(rest, restStyle), restStyle,
-                  QRectF(box.left(), top + nameHeight, box.width(), restHeight + 1));
+    drawBlock(painter, nameLine, nameStyle, QRectF(box.left(), top, box.width() * 1.01, nameHeight + 1));
+    if (!restText.isEmpty()) {
+        drawBlock(painter, restText, restStyle, QRectF(box.left(), top + nameHeight, box.width() * 1.01, restHeight + 1));
     }
 }
 

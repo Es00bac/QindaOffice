@@ -11,3 +11,5 @@ add_subdirectory(qindalauncher)
 add_subdirectory(qindamail)
 # QindaBooks (M47, D-047): one company file per window over books_*.
 add_subdirectory(qindabooks)
+# QindaDiagram (M50, D-050): one drawing per window over diagram_engine.
+add_subdirectory(qindadiagram)

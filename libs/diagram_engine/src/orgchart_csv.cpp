@@ -9,6 +9,7 @@
 
 #include <QCoreApplication>
 #include <QHash>
+#include <QSet>
 
 namespace QindaOffice::Diagram {
 
@@ -166,6 +167,17 @@ bool importOrgChartCsv(Drawing &drawing, Page &page, const QByteArray &csv, OrgC
         options.nodeGap = 28;
         options.rankGap = 48;
         autoLayout(page, out.shapeIds, options);
+    }
+    // Centre the chart across the page when it fits (a chart hugging the
+    // left margin reads as unfinished).
+    const QRectF chart = itemsBounds(page, QSet<QString>(out.shapeIds.begin(), out.shapeIds.end()));
+    if (!chart.isNull() && chart.width() < page.size.width()) {
+        const double dx = (page.size.width() - chart.width()) / 2 - chart.left();
+        for (Shape &shape : page.shapes) {
+            if (out.shapeIds.contains(shape.id)) {
+                shape.rect.translate(dx, 0);
+            }
+        }
     }
     if (result != nullptr) {
         *result = out;

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- QindaDiagram: a cheerful process box holding hands with a decision
+     diamond through a connector. Same family as the suite: chunky ink
+     outline, flat fills, dot eyes + arc smile + blush, a little off square. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g fill="none" stroke="#3a3347" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M30 22 H40 V40 H46" stroke-width="2.2"/>
+    <path d="M42.5 36.6 L46.4 40 L42.5 43.4" stroke-width="2.2"/>
+    <g transform="rotate(-4 17 22)">
+      <rect x="4" y="11" width="27" height="22" rx="5" fill="#7ab8f5"/>
+      <circle cx="10.5" cy="26" r="2.2" fill="#ff8fa3" opacity="0.5" stroke="none"/>
+      <circle cx="24.5" cy="26" r="2.2" fill="#ff8fa3" opacity="0.5" stroke="none"/>
+      <circle cx="13.5" cy="21.5" r="2" fill="#3a3347" stroke="none"/>
+      <circle cx="21.5" cy="21.5" r="2" fill="#3a3347" stroke="none"/>
+      <path d="M15.4 26 Q17.5 28.6 19.6 26" stroke-width="1.8"/>
+    </g>
+    <path d="M52 27 L61 40 L52 53 L43 40 Z" fill="#ffd97d"/>
+    <circle cx="49.5" cy="39" r="1.6" fill="#3a3347" stroke="none"/>
+    <circle cx="54.5" cy="39" r="1.6" fill="#3a3347" stroke="none"/>
+    <path d="M50.4 43 Q52 44.6 53.6 43" stroke-width="1.6"/>
+    <path d="M9 48 H26 M9 54 H20" stroke="#a9bad4" stroke-width="2.2"/>
+    <circle cx="33" cy="51" r="4.5" fill="#8fd6a8"/>
+  </g>
+</svg>

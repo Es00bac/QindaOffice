@@ -78,6 +78,29 @@ void paintShapeText(QPainter *painter, const Shape &shape)
     painter->restore();
 }
 
+bool labelBelow(const Shape &shape)
+{
+    const Stencil *stencil = Diagram::stencil(shape.type);
+    return stencil != nullptr && stencil->text == TextPlacement::Below && !shape.text.isEmpty();
+}
+
+// An icon's caption sits on a plate of the page colour, painted after the
+// connectors, so a line leaving the icon never runs through its words.
+void paintBelowLabel(QPainter *painter, const Shape &shape, const QColor &plate)
+{
+    const QSizeF size = TextPaint::measure(shape.text, shape.textStyle);
+    const QRectF box = textBox(shape);
+    const double w = std::min(box.width(), size.width() + 8);
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    painter->setOpacity(painter->opacity() * std::clamp(shape.style.opacity, 0.0, 1.0));
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(plate);
+    painter->drawRoundedRect(QRectF(box.center().x() - w / 2, box.top() - 1, w, size.height() + 3), 3, 3);
+    paintShapeText(painter, shape);
+    painter->restore();
+}
+
 } // namespace
 
 double arrowInset(ArrowStyle style, double lineWidth)
@@ -238,7 +261,7 @@ void paintPage(QPainter *painter, const Page &page, const PaintOptions &options)
     const auto included = [&](const QString &id) { return options.only.isEmpty() || options.only.contains(id); };
     for (const Shape &shape : page.shapes) {
         if (included(shape.id)) {
-            paintShape(painter, shape, !options.hideTextOf.contains(shape.id));
+            paintShape(painter, shape, !options.hideTextOf.contains(shape.id) && !labelBelow(shape));
         }
     }
     QHash<QString, Route> local;
@@ -252,6 +275,11 @@ void paintPage(QPainter *painter, const Page &page, const PaintOptions &options)
             const auto it = routes.constFind(connector.id);
             const Route route = it != routes.constEnd() ? *it : routeConnector(page, connector);
             paintConnector(painter, connector, route, labelBackground, !options.hideTextOf.contains(connector.id));
+        }
+    }
+    for (const Shape &shape : page.shapes) {
+        if (included(shape.id) && labelBelow(shape) && !options.hideTextOf.contains(shape.id)) {
+            paintBelowLabel(painter, shape, labelBackground);
         }
     }
     painter->restore();
