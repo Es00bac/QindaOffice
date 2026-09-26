@@ -547,6 +547,82 @@ change), and the on-desktop checks: connect a real read-only Mercury token
 and a Stripe test-mode restricted key, sync, pay a test-mode payment link
 with Stripe's test card and see the invoice turn Paid on the next sync.
 
+### M50 gates (QindaDiagram, D-050)
+
+Automated by `ctest -R diagram` (headless, temp dirs and XDG dirs).
+Rationale in D-050; the model and API in [diagram.md](diagram.md).
+QindaDiagram builds against a QindaTK prefix that has D-302
+(`ShapePalette` tiles, category menu, drag reports — QindaTK branch
+`work/diagram-shape-palette`).
+
+- [x] `tst_diagram_model` (12): ids never reused (a hand-edited file's
+      next id is skipped); the catalogue has every stencil the brief names
+      in seven categories, each with a non-empty outline and a thumbnail;
+      paper names both ways; case-insensitive shape data; the `.qdiagram`
+      round trip keeps every field and unknown members on the root, a page
+      and a shape (written back out); newer, foreign, malformed and
+      page-less files refused; atomic save/load (a missing directory
+      fails with a message); clipboard fragments carry connectors between
+      copied shapes only; `DrawingDocument` — one undo step per real edit,
+      no step for a no-op, merged nudges, dirty follows the clean state,
+      recovery is exact and dirty; save/load resets the stack; themes
+      restyle colours and fonts, keep widths and label sizes.
+- [x] `tst_diagram_ops` (13): deleting a shape frees its connectors in
+      place; a lane carries the shape inside it and a free end follows
+      its shape, locked shapes stay; align/distribute (equal gaps,
+      outermost stay); rotate/flip about the selection; z-order in both
+      directions; one-level groups expand selections; duplicate and paste
+      re-glue copies (ports kept) and free foreign ends; shape/text/
+      connector patches, format painter, data; find (text and data) and
+      replace; pages (add, duplicate with fresh ids, move, rename, the
+      last page stays) and fit-to-contents; glue picks a port, then the
+      outline, else free.
+- [x] `tst_diagram_output` (10): orthogonal routes are Manhattan, leave
+      along their port and detour round a blocker; dynamic glue faces the
+      other end; straight meets the outline; curved is a cubic; line jumps
+      hop the later connector only; layered layout ranks a flowchart with
+      a loop down one axis and re-glues bottom → top, left-to-right too;
+      the org chart from CSV (quoted names, data columns, an unknown
+      manager reported, a hanging team of four); draw.io import (lane
+      children in page coordinates, HTML labels, `UserObject` data, edge
+      style/dash/labels, a free end; compressed and non-draw.io files
+      refused); PNG (page size, selection with transparency), SVG, the
+      paged print painter, bounds including icon captions; the stencil
+      sheet grab.
+- [x] `tst_qindadiagram_host` (9): 101 `diagram…` commands with labels
+      and icons, no shared shortcut; enablement and the Shape/Connector
+      ribbon contexts follow the selection; the tool radio group mirrors
+      the service; pages, paper and orientation checks, themes; styles,
+      grow font, format painter (refused without a source), data; the
+      canvas adapter's proxies, a move and a resize each one undo step,
+      stale edits refused; copy in one window, paste in another (glue
+      kept), Copy as Picture; CSV and draw.io import through the service;
+      PNG/SVG export; the print callback's PDF; save and reopen.
+- [x] `tst_qindadiagram_menu_export` (2): the exported tree — File Edit
+      View Insert Format Arrange Design AI Settings Help — passes the
+      desktop's validator with and without a selection; every `diagram…`
+      command appears exactly once and every exported id resolves and
+      fires (90+ pulled).
+- [x] `tst_qindadiagram_ui` (6): the real `DiagramWindow.qml` over three
+      seeded drawings — a volunteer-onboarding flowchart across three
+      swimlanes, a nonprofit's org chart built from CSV, an office network
+      in a container — at 1320 and 520 px (drawers below 900 px, minimap
+      over the network page); a decision's inspector (geometry, fill,
+      line, effects, quick styles) and a server's shape data; typed search
+      across stencils; a panel drop lands (centre-snapped) where released;
+      the connector tool glues both ends; arrow-key nudges merge and undo;
+      F2 edits text in place and Escape stores it; the ribbon gate at 1320
+      and 520 (the assistant menu-only: nothing to offer a drawing yet);
+      structural fixtures `qindadiagram_{1280,520}.txt`.
+      Grabs reviewed: `M50-iter1…4-*` (flowchart, org chart, network at
+      1320/520, inspector, shape data, stencil search and the Network
+      stencil, new drawing, text editing, ribbons, the stencil sheet).
+
+Remaining for the lead: the launcher card; the on-desktop checklist
+(drag shapes with a real pointer and tablet, print a page and preview
+it, open two drawings side by side and paste between them, the panel
+menu, dark and light themes).
+
 ### M47 gates (the QindaBooks app)
 
 - **UI** (`tst_qindabooks_ui`): the real `BooksWindow.qml` over a seeded

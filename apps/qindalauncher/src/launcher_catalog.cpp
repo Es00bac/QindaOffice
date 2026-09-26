@@ -50,6 +50,11 @@ QList<AppEntry> officeApps()
          QObject::tr("Bookkeeping"),
          QObject::tr("Invoices, bills, the bank and the reports that add it all up."),
          QObject::tr("New company")},
+        {QStringLiteral("QindaDiagram"), QStringLiteral("org.qindaqt.QindaDiagram"),
+         QStringLiteral("qindadiagram"), QStringLiteral("QindaDiagram"),
+         QObject::tr("Diagrams"),
+         QObject::tr("Flowcharts, org charts and network maps whose lines stay attached."),
+         QObject::tr("New diagram")},
     };
 }
 
@@ -77,11 +82,12 @@ QString iconSourceFor(const AppEntry &app)
 QStringList openNameFilters()
 {
     return {QObject::tr("All office documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt "
-                        "*.xlsx *.ods *.xls *.xlsm *.csv *.tsv *.odp *.pptx *.fodp *.qbooks *.ics *.eml)"),
+                        "*.xlsx *.ods *.xls *.xlsm *.csv *.tsv *.odp *.pptx *.fodp *.qbooks *.qdiagram *.drawio *.ics *.eml)"),
             QObject::tr("Documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt)"),
             QObject::tr("Spreadsheets (*.xlsx *.ods *.xls *.xlsm *.csv *.tsv)"),
             QObject::tr("Presentations (*.odp *.pptx *.fodp)"),
             QObject::tr("Company books (*.qbooks)"),
+            QObject::tr("Diagrams (*.qdiagram *.drawio)"),
             QObject::tr("Calendars and messages (*.ics *.eml)"),
             QObject::tr("All files (*)")};
 }
@@ -110,6 +116,8 @@ QString appIdForPath(const QString &path)
         {QStringLiteral("pptx"), QStringLiteral("QindaShow")},
         {QStringLiteral("fodp"), QStringLiteral("QindaShow")},
         {QStringLiteral("qbooks"), QStringLiteral("QindaBooks")},
+        {QStringLiteral("qdiagram"), QStringLiteral("QindaDiagram")},
+        {QStringLiteral("drawio"), QStringLiteral("QindaDiagram")},
         {QStringLiteral("ics"), QStringLiteral("QindaMail")},
         {QStringLiteral("eml"), QStringLiteral("QindaMail")},
     };

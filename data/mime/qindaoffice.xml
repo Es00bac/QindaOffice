@@ -19,4 +19,14 @@
       </match>
     </magic>
   </mime-type>
+  <mime-type type="application/x-qindadiagram">
+    <comment>QindaDiagram drawing</comment>
+    <comment xml:lang="en">QindaDiagram drawing</comment>
+    <sub-class-of type="application/json"/>
+    <glob pattern="*.qdiagram"/>
+    <!-- JSON whose first member is "format": "qindadiagram" (drawing_io.cpp). -->
+    <magic priority="60">
+      <match type="string" value="&quot;format&quot;: &quot;qindadiagram&quot;" offset="0:64"/>
+    </magic>
+  </mime-type>
 </mime-info>
