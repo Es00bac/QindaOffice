@@ -6,7 +6,8 @@ import QindaOffice.Shell
 
 // Sections and pages: a filter field over Tk.TreeRows from the host's
 // NavigatorModel. Click opens a page (or folds a section), double-click
-// renames a page inline, right-click shows the Page menu.
+// renames a page inline, right-click shows the Page menu; New Page sits
+// under the list.
 Tk.Flex {
     id: navigator
 
@@ -60,6 +61,16 @@ Tk.Flex {
                 }
             }
         }
+    }
+
+    // The obvious way to grow the notebook, where the pages are.
+    Tk.Button {
+        objectName: "navigatorNewPage"
+        small: true
+        iconName: "plus"
+        text: qsTr("New Page")
+        tooltip: qsTr("Add a page to this section")
+        onClicked: navigator.note.actions.trigger("notePageNew")
     }
 
     MenuFromNode {
