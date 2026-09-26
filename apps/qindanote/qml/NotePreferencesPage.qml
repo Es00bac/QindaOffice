@@ -12,16 +12,23 @@ Tk.Flex {
 
     function apply() {
         Preferences.notePressureEnabled = pressure.checked
+        Preferences.noteTouchDrawing = touchDrawing.checked
         Preferences.noteSmoothing = ["off", "light", "strong"][smoothing.currentIndex]
     }
     Component.onCompleted: {
         pressure.checked = Preferences.notePressureEnabled
+        touchDrawing.checked = Preferences.noteTouchDrawing
         smoothing.currentIndex = Math.max(0, ["off", "light", "strong"].indexOf(Preferences.noteSmoothing))
     }
 
     Tk.PropertyRow {
         label: qsTr("Pen")
         Tk.Switch { id: pressure; objectName: "prefNotePressure"; text: qsTr("Pen pressure changes the width") }
+    }
+    Tk.PropertyRow {
+        label: qsTr("Touch")
+        hint: qsTr("Off: one finger scrolls the page. Two fingers always zoom and scroll.")
+        Tk.Switch { id: touchDrawing; objectName: "prefNoteTouchDrawing"; text: qsTr("Draw with a finger") }
     }
     Tk.PropertyRow {
         label: qsTr("Smoothing")

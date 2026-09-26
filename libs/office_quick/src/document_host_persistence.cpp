@@ -130,17 +130,29 @@ bool DocumentHost::restoreFromJournal(const QString &path, bool untitled,
     if (m_document == nullptr) {
         return false;
     }
+    // AGENT-GUARD: loadRecovery() emits contentChanged. Before this guard
+    // that reached scheduleJournalSnapshot() while m_journalKey was still
+    // empty, so every restore allocated a NEW untitled key and wrote a copy
+    // of the entry it was restoring. Discard then cleared only the original
+    // key and the copy came back on the next launch — every launch doubled
+    // the pile until the 32-window cap. The entry on disk already holds this
+    // payload, so no snapshot is needed while it loads (m_loading silences
+    // scheduleJournalSnapshot), and the key is adopted before any later edit
+    // can schedule one.
     QString error;
-    if (!m_document->loadRecovery(payload, &error)) {
+    m_loading = true;
+    const bool ok = m_document->loadRecovery(payload, &error);
+    m_loading = false;
+    if (!ok) {
         emit messageRequested(tr("Recovery failed"),
                               tr("Could not restore the document:\n%1").arg(error),
                               QStringLiteral("danger"));
         return false;
     }
+    m_journalKey = journalKey;
     if (!path.isEmpty()) {
         m_document->adoptPath(path);
     }
-    m_journalKey = journalKey;
     syncTitle();
     documentReplaced();
     return true;

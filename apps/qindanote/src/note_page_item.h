@@ -6,8 +6,10 @@
 // approaches the bottom, bounded at 64 page heights) painted in DOCUMENT
 // units — a Tk.Viewport scales it (D-009: zoom is a view transform; ink
 // stays in page coordinates). Ink comes from a Tk.StylusHandler (pen
-// pressure and tilt, the eraser end, the mouse fallback; touch never
-// reaches it — the palm-rejection baseline). Text, checklist and image
+// pressure and tilt, the eraser end, the mouse fallback, and one finger
+// when `touchDrawing` is on and an ink tool is active — NotePage.qml opts
+// the handler into touch; a second finger turns the gesture into the
+// Viewport's pinch/pan and the finger's stroke is dropped). Text, checklist and image
 // blocks are PAINTED under the ink (D-027: ink over typed notes is the
 // point); one live editor at a time is a QML control the window places at
 // `editorRect`. One QUndoStack (note_page_history.h) is the whole history.
@@ -47,6 +49,8 @@ class NotePageItem : public QQuickPaintedItem {
     Q_PROPERTY(QString eraserMode READ eraserModeName WRITE setEraserModeName NOTIFY presentationChanged)
     Q_PROPERTY(bool pressureEnabled READ pressureEnabled WRITE setPressureEnabled NOTIFY presentationChanged)
     Q_PROPERTY(qreal smoothing READ smoothing WRITE setStrokeSmoothing NOTIFY presentationChanged)
+    // Preferences note/touchDrawing: a finger inks with the ink tools.
+    Q_PROPERTY(bool touchDrawing READ touchDrawing WRITE setTouchDrawing NOTIFY presentationChanged)
     // The hosting viewport's zoom, for the eraser ring cursor only.
     Q_PROPERTY(qreal viewZoom READ viewZoom WRITE setViewZoom NOTIFY presentationChanged)
     Q_PROPERTY(bool hasPage READ hasPage NOTIFY pageChanged)
@@ -60,6 +64,10 @@ class NotePageItem : public QQuickPaintedItem {
     Q_PROPERTY(bool editingChecked READ editingChecked NOTIFY editingChanged)
     Q_PROPERTY(QRectF editorRect READ editorRect NOTIFY editingChanged)
     Q_PROPERTY(QFont pageFont READ pageFontValue CONSTANT)
+    // AGENT-CONTRACT: the live editor's padding (NotePage.qml) equals the
+    // painted text inset (note_blocks.h kTextPadding), so text does not jump
+    // when a block opens or closes.
+    Q_PROPERTY(qreal textPadding READ textPadding CONSTANT)
 public:
     explicit NotePageItem(QQuickItem *parent = nullptr);
     ~NotePageItem() override;
@@ -98,6 +106,8 @@ public:
     void setPressureEnabled(bool on);
     [[nodiscard]] qreal smoothing() const { return m_smoothing; }
     void setStrokeSmoothing(qreal factor);
+    [[nodiscard]] bool touchDrawing() const { return m_touchDrawing; }
+    void setTouchDrawing(bool on);
     [[nodiscard]] qreal viewZoom() const { return m_viewZoom; }
     void setViewZoom(qreal zoom);
     [[nodiscard]] QindaTK::StylusHandler *stylus() const { return m_stylus; }
@@ -136,6 +146,7 @@ public:
     [[nodiscard]] bool editingChecked() const;
     [[nodiscard]] QRectF editorRect() const;
     [[nodiscard]] QFont pageFontValue() const { return pageFont(); }
+    [[nodiscard]] qreal textPadding() const { return kTextPadding; }
 
     // Test seam: the stroke builder's stroke while inking.
     [[nodiscard]] bool isInking() const { return m_inking; }
@@ -159,6 +170,7 @@ private:
     void onStylusMoved(const QindaTK::StylusSample &sample);
     void onStylusEnded(const QindaTK::StylusSample &sample);
     void commitStroke();
+    void onStylusCanceled();
     void beginEraseGesture(const QPointF &pagePos);
     void eraseAtPagePos(const QPointF &pagePos);
     void endEraseGesture();
@@ -186,6 +198,8 @@ private:
     qreal m_eraserRadius = 12.0;
     bool m_pressureEnabled = true;
     qreal m_smoothing = 0.25;
+    bool m_touchDrawing = true;
+    bool m_touchGesture = false; // the current ink gesture is a finger's
     qreal m_viewZoom = 1.0;
     QindaTK::StylusHandler *m_stylus = nullptr;
     Ink::StrokeBuilder m_builder;

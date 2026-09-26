@@ -62,6 +62,8 @@ void NoteHost::insertMenus()
         MenuNode::action(QStringLiteral("noteEraserTool")),
         MenuNode::action(QStringLiteral("noteTextTool")),
         MenuNode::separator(),
+        MenuNode::action(QStringLiteral("noteTouchDrawAction")),
+        MenuNode::separator(),
         MenuNode::submenu(QStringLiteral("noteInkPenColorMenu"), tr("Pen &Colour")),
         MenuNode::submenu(QStringLiteral("noteInkPenWidthMenu"), tr("Pen &Width")),
         MenuNode::submenu(QStringLiteral("noteInkHighlighterColorMenu"), tr("&Highlighter Colour")),
@@ -91,8 +93,10 @@ void NoteHost::insertMenus()
             }
         }
     }
-    ink.children[5].children.append(MenuNode::separator());
-    ink.children[5].children.append(MenuNode::action(QStringLiteral("notePenColorAction")));
+    // children[7] is Pen Colour (tools 0-3, separator, Draw with Finger,
+    // separator).
+    ink.children[7].children.append(MenuNode::separator());
+    ink.children[7].children.append(MenuNode::action(QStringLiteral("notePenColorAction")));
     menuTree()->insertMenuBefore(QStringLiteral("aiMenu"), ink);
 
     MenuNode page = MenuNode::submenu(
@@ -371,6 +375,8 @@ void NoteHost::applyPreferences()
     }
     const Quick::Preferences &prefs = Quick::Preferences::instance();
     m_pageItem->setPressureEnabled(prefs.notePressureEnabled());
+    m_pageItem->setTouchDrawing(prefs.noteTouchDrawing());
+    actions()->setChecked(QStringLiteral("noteTouchDrawAction"), prefs.noteTouchDrawing());
     const QString smoothing = prefs.noteSmoothing();
     m_pageItem->setStrokeSmoothing(smoothing == QLatin1String("off") ? 0.0
                                    : smoothing == QLatin1String("strong") ? 0.5

@@ -4,11 +4,14 @@
 // Split out of note_page_item.cpp to keep both inside the line budget.
 //
 // Pointer rules (plan section 3.3), in order:
-//  1. Touch never arrives: Tk.StylusHandler accepts pens and the mouse
-//     only (the palm-rejection baseline).
+//  1. Touch arrives only while `touchDrawing` is on and an ink tool is
+//     active (NotePage.qml binds the handler's accepted devices). A finger
+//     stroke that a second finger interrupts is a pinch/pan, not ink: the
+//     handler cancels it and the stroke (or the erase) is undone.
 //  2. The stylus eraser end and a held barrel MiddleButton borrow the
 //     Eraser for one gesture; both revert at the end.
-//  3. Pan and zoom are the Viewport's (middle-drag, Ctrl+wheel).
+//  3. Pan and zoom are the Viewport's (middle-drag, Ctrl+wheel, two-finger
+//     pinch/pan, one-finger pan when the finger does not ink).
 //  4. Ink tools ink over blocks — blocks are painted, not widgets.
 //  5. The mouse inks with the handler's fixed pressure — laptops without a
 //     pen must work, and the tests drive that path.
@@ -50,16 +53,52 @@ void NotePageItem::setStylus(QindaTK::StylusHandler *handler)
         connect(m_stylus, &QindaTK::StylusHandler::began, this, &NotePageItem::onStylusBegan);
         connect(m_stylus, &QindaTK::StylusHandler::moved, this, &NotePageItem::onStylusMoved);
         connect(m_stylus, &QindaTK::StylusHandler::ended, this, &NotePageItem::onStylusEnded);
-        connect(m_stylus, &QindaTK::StylusHandler::canceled, this, [this] {
-            if (m_erasing) {
-                endEraseGesture();
-            } else if (m_inking) {
-                commitStroke();
-            }
-            restoreTemporaryTool();
-        });
+        connect(m_stylus, &QindaTK::StylusHandler::canceled, this,
+                &NotePageItem::onStylusCanceled);
     }
     emit stylusChanged();
+}
+
+void NotePageItem::setTouchDrawing(bool on)
+{
+    if (m_touchDrawing == on) {
+        return;
+    }
+    m_touchDrawing = on;
+    emit presentationChanged();
+}
+
+void NotePageItem::onStylusCanceled()
+{
+    if (!m_touchGesture) {
+        // A pen whose grab was taken keeps what it drew.
+        if (m_erasing) {
+            endEraseGesture();
+        } else if (m_inking) {
+            commitStroke();
+        }
+        restoreTemporaryTool();
+        return;
+    }
+    // AGENT-NOTE: a second finger landed — the first finger's few
+    // samples were the start of a pinch or pan, never meant as ink. Leave
+    // no dot and no undo step behind.
+    m_touchGesture = false;
+    if (m_erasing) {
+        m_erasing = false;
+        if (m_eraseChanged && m_page != nullptr) {
+            m_page->envelope.ink = m_eraseSnapshot;
+            rebuildGrid();
+            update();
+        }
+        m_eraseSnapshot = Ink::StrokeLayer{};
+    } else if (m_inking) {
+        const Stroke dropped = m_builder.end();
+        m_inking = false;
+        const qreal margin = repaintMargin(dropped);
+        update(dropped.bounds().adjusted(-margin, -margin, margin, margin).toAlignedRect());
+    }
+    restoreTemporaryTool();
 }
 
 void NotePageItem::updateCursor()
@@ -206,6 +245,7 @@ void NotePageItem::onStylusBegan(const QindaTK::StylusSample &sample)
     }
     // The stylus eraser end, or a held barrel MiddleButton, borrows the
     // eraser until the gesture ends (plan section 3.3 rule 2).
+    m_touchGesture = sample.type == QPointingDevice::PointerType::Finger;
     const bool eraserEnd = sample.type == QPointingDevice::PointerType::Eraser;
     if (eraserEnd || (Qt::MouseButtons(sample.buttons) & Qt::MiddleButton)) {
         beginTemporaryTool(NoteTool::Eraser);

@@ -114,6 +114,19 @@ inline void tabletStroke(QWindow *window, const QPointingDevice *device, const Q
     tabletAt(window, device, to, Qt::NoButton, 0.0);
 }
 
+// One finger dragged from `from` to `to` in WINDOW coordinates (a real
+// touchscreen sequence through QWindowSystemInterface).
+inline void fingerStroke(QWindow *window, QPointingDevice *touch, const QPointF &from,
+                         const QPointF &to)
+{
+    QTest::touchEvent(window, touch).press(0, from.toPoint(), window);
+    for (int i = 1; i <= 4; ++i) {
+        QTest::touchEvent(window, touch).move(0, (from + (to - from) * i / 4.0).toPoint(), window);
+    }
+    QTest::touchEvent(window, touch).release(0, to.toPoint(), window);
+    QCoreApplication::processEvents();
+}
+
 // Mouse fallback stroke in WINDOW coordinates (QTest's mouse helpers).
 inline void mouseStroke(QWindow *window, const QPointF &from, const QPointF &to)
 {

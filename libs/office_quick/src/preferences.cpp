@@ -23,6 +23,7 @@ constexpr QLatin1StringView kFontFamily("document.fontFamily");
 constexpr QLatin1StringView kFontSize("document.fontSize");
 constexpr QLatin1StringView kSpellCheck("write.spellCheck");
 constexpr QLatin1StringView kNotePressure("note/pressure");
+constexpr QLatin1StringView kNoteTouchDrawing("note/touchDrawing");
 constexpr QLatin1StringView kNoteSmoothing("note/smoothing");
 
 } // namespace
@@ -148,6 +149,16 @@ bool Preferences::notePressureEnabled() const
 void Preferences::setNotePressureEnabled(bool on)
 {
     put(kNotePressure, on);
+}
+
+bool Preferences::noteTouchDrawing() const
+{
+    return m_settings->value(kNoteTouchDrawing, true).toBool();
+}
+
+void Preferences::setNoteTouchDrawing(bool on)
+{
+    put(kNoteTouchDrawing, on);
 }
 
 QString Preferences::noteSmoothing() const

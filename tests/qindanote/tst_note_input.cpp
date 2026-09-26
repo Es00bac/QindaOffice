@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Pen input over the real window: a tablet pen inks and touch never does,
+// Pen input over the real window: a tablet pen inks, a finger inks only
+// with Draw with Finger on, two fingers zoom and pan without ink,
 // the eraser acts DURING the drag as one undo step, the barrel button
 // borrows the eraser, zoom scales the view and not the document, tool
 // shortcuts switch tools but lose to a text field, the page is paper under
@@ -20,6 +21,7 @@ class NoteInputTest final : public QObject {
 
     QPointingDevice *m_pen = nullptr;
     QPointingDevice *m_finger = nullptr;
+    QPointingDevice *m_touch = nullptr; // a real touchscreen (QTest)
 
     static int strokes(const Scene &scene) { return scene.host.currentPage()->envelope.ink.strokes().size(); }
 
@@ -38,9 +40,10 @@ private slots:
                            QPointingDevice::PointerType::Pen);
         m_finger = makeDevice(QStringLiteral("test-finger"), 2, QInputDevice::DeviceType::TouchScreen,
                               QPointingDevice::PointerType::Finger);
+        m_touch = QTest::createTouchDevice();
     }
 
-    void penInksAndTouchIsIgnored()
+    void penInks()
     {
         Scene scene;
         QVERIFY2(scene.ready(), qPrintable(scene.error));
@@ -61,11 +64,66 @@ private slots:
         // Samples are DOCUMENT coordinates, not window pixels.
         QVERIFY(qAbs(stroke.samples.first().pos.x() - 200.0) < 2.0);
         QVERIFY(qAbs(stroke.samples.first().pos.y() - 200.0) < 2.0);
-
-        // A resting palm (touch device) is consumed without inking.
-        tabletStroke(scene.window, m_finger, scene.at(QPointF(100, 300)), scene.at(QPointF(300, 300)));
-        QCOMPARE(strokes(scene), 1);
         QVERIFY(scene.host.isDirty());
+    }
+
+    void aFingerInksOnlyWhenAllowed()
+    {
+        Scene scene;
+        QVERIFY2(scene.ready(), qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        liftPen(scene);
+        scene.page->setStrokeSmoothing(0.0);
+        QVERIFY(scene.page->touchDrawing()); // Preferences note/touchDrawing default
+        fingerStroke(scene.window, m_touch, scene.at(QPointF(200, 300)), scene.at(QPointF(400, 300)));
+        QCOMPARE(strokes(scene), 1);
+        const QPointF first = scene.host.currentPage()->envelope.ink.strokes().first().samples.first().pos;
+        QVERIFY2(qAbs(first.x() - 200.0) < 3.0, qPrintable(QString::number(first.x())));
+
+        // Draw with Finger off (the ribbon toggle writes the preference):
+        // the finger scrolls instead and a resting palm draws nothing.
+        scene.host.actions()->entry(QStringLiteral("noteTouchDrawAction"))->setChecked(false);
+        QTRY_VERIFY(!scene.page->touchDrawing());
+        fingerStroke(scene.window, m_touch, scene.at(QPointF(200, 400)), scene.at(QPointF(400, 400)));
+        QCOMPARE(strokes(scene), 1);
+        scene.host.actions()->entry(QStringLiteral("noteTouchDrawAction"))->setChecked(true);
+        QTRY_VERIFY(scene.page->touchDrawing());
+
+        // The Text tool never inks with a finger; a tap opens a block.
+        scene.page->setTool(NoteTool::Text);
+        QTest::touchEvent(scene.window, m_touch).press(0, scene.at(QPointF(200, 600)).toPoint(), scene.window);
+        QTest::touchEvent(scene.window, m_touch).release(0, scene.at(QPointF(200, 600)).toPoint(), scene.window);
+        QTRY_VERIFY(scene.page->editingBlock() >= 0);
+        QCOMPARE(strokes(scene), 1);
+    }
+
+    void twoFingersZoomWithoutInk()
+    {
+        Scene scene;
+        QVERIFY2(scene.ready(), qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        liftPen(scene);
+        QQuickItem *viewport = findItem(scene.window->contentItem(), QStringLiteral("noteViewport"));
+        QVERIFY(viewport != nullptr);
+        const qreal before = viewport->property("zoom").toReal();
+        QWindow *w = scene.window;
+        const QPoint a = scene.at(QPointF(300, 300)).toPoint();
+        const QPoint b = scene.at(QPointF(420, 300)).toPoint();
+        // One finger starts a stroke, the second finger turns it into a
+        // pinch: the stroke is dropped, not committed.
+        QTest::touchEvent(w, m_touch).press(0, a, w);
+        QTest::touchEvent(w, m_touch).move(0, a + QPoint(2, 0), w);
+        QTest::touchEvent(w, m_touch).stationary(0).press(1, b, w);
+        for (int i = 1; i <= 10; ++i) {
+            QTest::touchEvent(w, m_touch).move(0, a - QPoint(i * 8, 0), w).move(1, b + QPoint(i * 8, 0), w);
+            QTest::qWait(5);
+        }
+        QTest::touchEvent(w, m_touch).release(0, a - QPoint(80, 0), w).release(1, b + QPoint(80, 0), w);
+        QCoreApplication::processEvents();
+        QCOMPARE(strokes(scene), 0);
+        QVERIFY(!scene.page->isInking());
+        QVERIFY2(viewport->property("zoom").toReal() > before * 1.3,
+                 qPrintable(QString::number(viewport->property("zoom").toReal())));
     }
 
     void undoAndRedoReplayStrokes()

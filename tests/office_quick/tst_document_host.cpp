@@ -2,7 +2,9 @@
 #include "document_host.h"
 #include "standard_actions.h"
 
+#include "app_services.h"
 #include "document.h"
+#include "recovery_journal.h"
 
 #include <QFile>
 #include <QGuiApplication>
@@ -51,6 +53,7 @@ public:
     {
         text = QString::fromUtf8(snapshot);
         setDirty(true);
+        notifyContentChanged(); // as the real engines do (WriteDocument)
         return true;
     }
     void edit(const QString &value)
@@ -75,6 +78,30 @@ protected:
     {
         return QStringLiteral("Text (*.txt);;All files (*)");
     }
+};
+
+// Just enough application for the journal flows.
+class JournalServices final : public AppServices {
+public:
+    explicit JournalServices(const QString &dir) : journalStore(dir)
+    {
+        journalStore.setDebounceInterval(10);
+    }
+    QindaOffice::Core::RecoveryJournal journalStore;
+    QindaOffice::Core::RecoveryJournal *journal() override { return &journalStore; }
+    QindaOffice::Core::RecentFiles *recentFiles() override { return nullptr; }
+    bool isPathOpenInAnotherWindow(const QString &, const DocumentHost *) const override
+    {
+        return false;
+    }
+    QString allocateUntitledJournalKey() override { return journalStore.allocateUntitledKey(); }
+    QString journalKeyForPath(const QString &path) const override
+    {
+        return QindaOffice::Core::RecoveryJournal::keyForPath(path);
+    }
+    void documentSaved(const QString &) override {}
+    bool restorePreviousDocuments() const override { return false; }
+    void setRestorePreviousDocuments(bool) override {}
 };
 
 } // namespace
@@ -207,6 +234,35 @@ private slots:
                               QUrl(QStringLiteral("https://example.invalid/y"))});
         QCOMPARE(requested.count(), 1);
         QCOMPARE(requested.first().first().toStringList(), QStringList{QStringLiteral("/tmp/x.txt")});
+    }
+
+    void restoringAnEntryDoesNotCopyItAndDiscardRemovesIt()
+    {
+        // Regression: a restore used to journal the recovered document
+        // under a fresh untitled key, so Discard left a copy that came back
+        // on every launch.
+        QTemporaryDir dir;
+        JournalServices services(dir.path());
+        services.journalStore.writeNow(QStringLiteral("untitled-1-1"), QString(), true,
+                                       QByteArray("unsaved words"));
+        QCOMPARE(services.journalStore.pendingKeys(), QStringList{QStringLiteral("untitled-1-1")});
+        {
+            TextHost host;
+            host.setAppServices(&services);
+            QVERIFY(host.restoreFromJournal(QString(), true, QByteArray("unsaved words"),
+                                            QStringLiteral("untitled-1-1")));
+            QCOMPARE(host.stub()->text, QStringLiteral("unsaved words"));
+            QVERIFY(host.isDirty());
+            // A later edit re-journals under the SAME key.
+            host.stub()->edit(QStringLiteral("unsaved words, edited"));
+            QTest::qWait(100); // past the journal's debounce
+            QCOMPARE(services.journalStore.pendingKeys(),
+                     QStringList{QStringLiteral("untitled-1-1")});
+            QVERIFY(!host.requestClose());
+            host.resolveClose(QStringLiteral("discard"));
+            QVERIFY(host.closeAuthorized());
+        }
+        QVERIFY(services.journalStore.pendingKeys().isEmpty());
     }
 
     void loadFailureIsReportedNotSwallowed()

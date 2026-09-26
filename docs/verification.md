@@ -121,7 +121,15 @@ Manual (QindaQt desktop, tablet):
 - [ ] Pressure looks right (thin at a light touch, swelling under
       pressure); Settings ▸ Preferences ▸ Notes ▸ "Pen pressure changes
       width" off → uniform width; smoothing Off/Light/Strong felt.
-- [ ] No lag at 5 000 strokes; a palm resting on the screen does nothing.
+- [ ] No lag at 5 000 strokes; with Draw with Finger OFF a palm resting
+      on the screen does nothing and one finger scrolls the page.
+- [ ] Touchscreen (D-053): one finger inks with Pen/Highlighter/Eraser;
+      two fingers pinch-zoom about the fingers and pan, leaving no dot
+      where the first finger landed; with the Text tool a finger tap opens
+      or places a block and a drag scrolls; a touchpad pinch zooms.
+- [ ] Typing in a text or checklist block on a DARK theme: dark ink on the
+      page with a thin outline, text does not jump when the block opens
+      or closes, selection readable.
 - [ ] Highlighter sits under pen ink; the eraser ring cursor tracks
       radius × zoom; the stylus eraser end and the barrel button erase
       while held and revert on release.
@@ -1315,8 +1323,9 @@ QtQuick tests run under `QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software`
       across unopened pages, replace all), `tst_note_blocks` (layout,
       placed blocks, checklist state and nesting, merged typing undo, image
       bytes, tap-to-type), `tst_note_input` (pen through
-      `QWindowSystemInterface`: inks with pressure in document units, touch
-      ignored, undo/redo, live eraser as one undo step, barrel-button
+      `QWindowSystemInterface`: inks with pressure in document units, a
+      finger inks only with Draw with Finger on, two fingers zoom with no
+      ink, a Text-tool tap opens a block, undo/redo, live eraser as one undo step, barrel-button
       eraser, zoom is a view transform, tool shortcuts lose to a text
       field, paper white under the dark preset, debounced page writes),
       `tst_note_ui` (icon-only addressable strip, slots follow the tool,

@@ -4,10 +4,15 @@ import QindaTK as Tk
 import QindaOffice.Note
 
 // The page inside a zoomable viewport: the NotePageItem paints paper, ink
-// and blocks in document units; a Tk.StylusHandler feeds it pen samples;
-// the one live editor (a Tk.TextArea for text, a Tk.TextField for a
-// checklist item) sits over the block being edited and scales with the
-// page, so typed text zooms like everything else.
+// and blocks in document units; a Tk.StylusHandler feeds it pen samples
+// (and a finger's, with Draw with Finger on and an ink tool active); the
+// one live editor (a Tk.TextArea for text, a Tk.TextField for a checklist
+// item) sits over the block being edited and scales with the page, so
+// typed text zooms like everything else.
+//
+// Touch: two fingers pinch-zoom and pan (Tk.Viewport); one finger inks
+// when the handler takes it, otherwise it pans the page, and a tap with
+// the Text tool places or opens a block.
 Tk.Viewport {
     id: viewport
 
@@ -17,6 +22,9 @@ Tk.Viewport {
     objectName: "noteViewport"
     fitMode: "width"
     focus: true
+    touchPan: true   // a finger the ink handler does not take scrolls the page
+
+    readonly property bool fingerInks: page.touchDrawing && page.tool !== "text"
 
     NotePageItem {
         id: page
@@ -27,6 +35,22 @@ Tk.Viewport {
         Tk.StylusHandler {
             id: stylus
             objectName: "noteStylus"
+            acceptedDevices: viewport.fingerInks
+                ? (PointerDevice.Stylus | PointerDevice.Mouse | PointerDevice.Airbrush
+                   | PointerDevice.Puck | PointerDevice.TouchScreen)
+                : (PointerDevice.Stylus | PointerDevice.Mouse | PointerDevice.Airbrush
+                   | PointerDevice.Puck)
+            acceptedPointerTypes: PointerDevice.Pen | PointerDevice.Eraser
+                                  | PointerDevice.Generic | PointerDevice.Finger
+        }
+
+        // A finger tap with the Text tool (the stylus handler does not take
+        // fingers then, so a drag stays free to pan the page).
+        TapHandler {
+            objectName: "noteTouchTap"
+            enabled: page.tool === "text"
+            acceptedDevices: PointerDevice.TouchScreen
+            onTapped: function(eventPoint) { page.tapAt(eventPoint.position) }
         }
 
         Component.onCompleted: {
@@ -81,6 +105,11 @@ Tk.Viewport {
         }
 
         // ---- the live editor ----
+        // AGENT-GUARD: the editors sit ON the paper, so they are paper too
+        // (D-004: the document surface is the one allowed literal): no
+        // chrome inputBg behind the ink — the theme's dark field under
+        // "#202028" ink was black-on-black on every dark theme. The painted
+        // block is skipped while it is edited, so the page shows through.
         Tk.TextArea {
             id: textEditor
             objectName: "noteTextEditor"
@@ -89,9 +118,23 @@ Tk.Viewport {
             y: page.editorRect.y
             width: page.editorRect.width
             rows: 1
+            padding: page.textPadding
+            leftPadding: page.textPadding
+            rightPadding: page.textPadding
             font: page.pageFont
             color: "#202028"          // paper ink (D-004)
+            selectionColor: "#b4d2ff"
+            selectedTextColor: "#202028"
+            placeholderText: qsTr("Type a note")
+            placeholderTextColor: "#8a8a94"
+            renderType: Text.QtRendering
             wrapMode: TextEdit.Wrap
+            background: Rectangle {
+                color: "transparent"
+                radius: 2
+                border.width: 1
+                border.color: Tk.Theme.color.focus
+            }
             onSelectedTextChanged: if (visible) viewport.note.editorSelection = selectedText
             onTextChanged: if (visible) page.updateEdit(text)
             onActiveFocusChanged: if (!activeFocus && visible) page.commitEdit()
@@ -104,8 +147,23 @@ Tk.Viewport {
             x: page.editorRect.x
             y: page.editorRect.y + (page.editorRect.height - height) / 2
             width: page.editorRect.width
+            // editorRect starts where the painted item text starts
+            // (note_page_render.cpp); the outline reaches out past it.
+            leftPadding: 0
+            leftInset: -page.textPadding
             font: page.pageFont
             color: "#202028"
+            selectionColor: "#b4d2ff"
+            selectedTextColor: "#202028"
+            placeholderText: qsTr("To do")
+            placeholderTextColor: "#8a8a94"
+            renderType: Text.QtRendering
+            background: Rectangle {
+                color: "transparent"
+                radius: 2
+                border.width: 1
+                border.color: Tk.Theme.color.focus
+            }
             onSelectedTextChanged: if (visible) viewport.note.editorSelection = selectedText
             onTextChanged: if (visible) page.updateEdit(text)
             onActiveFocusChanged: if (!activeFocus && visible) page.commitEdit()

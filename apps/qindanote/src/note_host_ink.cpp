@@ -16,6 +16,7 @@
 
 #include "json_settings.h"
 #include "paths.h"
+#include "preferences.h"
 
 #include <QKeySequence>
 
@@ -142,6 +143,16 @@ void NoteHost::createInkActions()
         });
     }
     model->entry(QStringLiteral("notePenTool"))->setChecked(true);
+
+    // Draw with Finger mirrors Preferences note/touchDrawing (the
+    // preferences page writes the same key; applyPreferences syncs both).
+    ActionEntry *touch = model->add(QStringLiteral("noteTouchDrawAction"), tr("Draw with &Finger"),
+                                    {}, QStringLiteral("hand"));
+    touch->setCheckable(true);
+    touch->setChecked(Quick::Preferences::instance().noteTouchDrawing());
+    connect(touch, &ActionEntry::toggled, this, [](bool on) {
+        Quick::Preferences::instance().setNoteTouchDrawing(on);
+    });
 
     for (const NamedColor &entry : kPenColors) {
         ActionEntry *action = model->add(QStringLiteral("notePenColor_") + QString::fromLatin1(entry.id),

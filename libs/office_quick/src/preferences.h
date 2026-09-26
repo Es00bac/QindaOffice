@@ -45,6 +45,7 @@ class Preferences final : public QObject {
     Q_PROPERTY(bool spellCheckEnabled READ spellCheckEnabled WRITE setSpellCheckEnabled NOTIFY changed)
     Q_PROPERTY(bool notePressureEnabled READ notePressureEnabled WRITE setNotePressureEnabled NOTIFY changed)
     Q_PROPERTY(QString noteSmoothing READ noteSmoothing WRITE setNoteSmoothing NOTIFY changed)
+    Q_PROPERTY(bool noteTouchDrawing READ noteTouchDrawing WRITE setNoteTouchDrawing NOTIFY changed)
     Q_PROPERTY(QString density READ density WRITE setDensity NOTIFY changed)
     Q_PROPERTY(QString themePreset READ themePreset WRITE setThemePreset NOTIFY changed)
 public:
@@ -101,6 +102,10 @@ public:
     // "off" | "light" (default) | "strong" — anything else reads as light.
     [[nodiscard]] QString noteSmoothing() const;
     void setNoteSmoothing(const QString &mode);
+    // A finger on a touchscreen inks with the pen, highlighter and eraser
+    // (default on); off, one finger pans and a resting palm draws nothing.
+    [[nodiscard]] bool noteTouchDrawing() const;
+    void setNoteTouchDrawing(bool on);
 
     // Toolkit density ("compact" | "comfortable"; Tk.Density.modeName) and
     // the theme preset used when the QindaQt desktop's tokens are absent

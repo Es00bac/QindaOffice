@@ -5,6 +5,47 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-053: QindaNote takes touch — a finger inks, two fingers zoom and pan
+
+**Date:** 2026-09-26 · **Status:** accepted (owner request)
+
+**Context.** QindaNote ignored touch entirely (D-027's V2 baseline: "touch
+never reaches it"), so a touchscreen could neither draw nor zoom, and the
+live text editor was unreadable on dark themes: it was a chrome
+`Tk.TextField`/`Tk.TextArea` whose theme `inputBg` sat under the paper ink
+colour. Separately, a recovered QindaWrite window re-journalled itself
+under a fresh untitled key on every launch (the restore's own
+`contentChanged` ran before the window knew its key), so Discard removed
+only the original entry and the copies came back, doubling each launch.
+
+**Decision.**
+
+1. **Toolkit first** (QindaTK D-entry of the same date): `Tk.StylusHandler`
+   inks with one finger when the consumer lists `TouchScreen` in
+   `acceptedDevices`, reports `pointerType: "touch"`, and cancels when a
+   second finger lands; `Tk.Viewport` pinch-zooms about the fingers'
+   centroid and pans with two fingers (touchpad pinch too) and, with
+   `touchPan`, pans with one.
+2. **QindaNote** opts the handler into touch only while an ink tool is
+   active and *Draw with Finger* (`noteTouchDrawAction`, Preferences
+   `note/touchDrawing`, default on) is checked. A finger stroke that a
+   second finger interrupts is dropped (or its erase undone) — no dot, no
+   undo step. With the Text tool, or Draw with Finger off, one finger pans
+   and a tap places or opens a block.
+3. **The live editor is paper** (D-004 extended): transparent over the
+   page, `#202028` ink, a light selection, and a focus-role outline; its
+   padding is the painted text inset (`NotePageItem.textPadding`) so text
+   does not jump when a block opens.
+4. **Recovery keeps its key**: `DocumentHost::restoreFromJournal` adopts the
+   journal key and silences snapshots while the payload loads; the startup
+   sweep drops untitled entries byte-identical to one already restored
+   (the duplicates earlier builds left behind).
+
+**Consequences.** A palm resting on the screen inks while Draw with Finger
+is on — the toggle is on the Home ribbon and in Ink ▸ for pen users.
+`tst_note_input` drives real touch sequences; `tst_document_host` pins the
+one-key restore.
+
 ## D-052: Bring your own key — the user chooses every provider
 
 **Date:** 2026-09-25 · **Status:** accepted (owner's product principle)
@@ -1308,7 +1349,8 @@ the host and never owns state. QindaNote is the first app on it.
   through the platform path; plain items and QML handlers see synthesised
   mouse events with no pressure. Hence `Tk.StylusHandler` (a QindaTK
   addition) and `NotePageItem` as a `QQuickPaintedItem` in document units
-  under a `Tk.Viewport`. Touch never reaches it: the palm baseline.
+  under a `Tk.Viewport`. Touch never reaches it: the palm baseline
+  (superseded by D-053: a finger inks when Draw with Finger is on).
 - *V3 — the desktop's `AppShell::ActionRegistry`* refuses commands without
   a shortcut and models flat menus only, so the suite keeps its own
   exporter over the desktop's toolkit-neutral `Exporter::MenuSource`
