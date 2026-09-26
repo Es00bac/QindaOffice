@@ -244,12 +244,29 @@ QVariantMap BaseService::openReport(const QString &name, const QVariantMap &para
         const QString field = t.value(s("field")).toString();
         return words.value(t.value(s("function"), s("sum")).toString(), s("%1")).arg(captions.value(field, field));
     };
+    // Money prints as money: currency columns (REAL units in the snapshot)
+    // and their sums/averages/extremes carry the file's symbol and decimals.
+    // AGENT-CONTRACT: QindaTK local_report_spec "format" {decimals, grouping,
+    // prefix}; a toolkit without number formats ignores the key and prints
+    // the plain number, so this is safe either way.
+    QSet<QString> money;
+    for (const Engine::SnapshotColumn &col : columns) {
+        if (col.type == Engine::FieldType::Currency) {
+            money.insert(col.name);
+        }
+    }
+    const Engine::CurrencyFormat currency = f->currency();
+    const QVariantMap moneyFormat{{s("decimals"), currency.decimals}, {s("grouping"), true}, {s("prefix"), currency.symbol}};
     const auto labelTotals = [&](const QVariantList &totals) {
         QVariantList out;
         for (const QVariant &t : totals) {
             QVariantMap tm = t.toMap();
             if (tm.value(s("label")).toString().isEmpty()) {
                 tm.insert(s("label"), totalLabel(tm));
+            }
+            if (money.contains(tm.value(s("field")).toString()) && tm.value(s("function")).toString() != s("countValues")
+                && !tm.contains(s("format"))) {
+                tm.insert(s("format"), moneyFormat);
             }
             out.append(tm);
         }
@@ -262,7 +279,11 @@ QVariantMap BaseService::openReport(const QString &name, const QVariantMap &para
         const QVariantMap m = v.toMap();
         const QString field = m.value(s("field")).toString();
         bound.append(field);
-        labelled.append(QVariantMap{{s("field"), field}, {s("label"), labelOf(field, m.value(s("label")).toString())}});
+        QVariantMap column{{s("field"), field}, {s("label"), labelOf(field, m.value(s("label")).toString())}};
+        if (money.contains(field)) {
+            column.insert(s("format"), moneyFormat);
+        }
+        labelled.append(column);
     }
     QVariantList groups;
     for (const QVariant &g : def.value(s("groups")).toList()) {

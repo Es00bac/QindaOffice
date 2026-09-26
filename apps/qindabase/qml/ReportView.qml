@@ -45,7 +45,7 @@ Item {
         truncated = r.truncated
         notice = r.notice || ""
         rebuild()
-        Qt.callLater(function() { reportPages.goToPage(0) })
+        toTop.restart()
         window.baseHost.setReportOutput(output)
         syncHost()
         return true
@@ -96,6 +96,11 @@ Item {
     Binding { target: reportPages.area; property: "pageColor"; value: "#ffffff" }
     Binding { target: reportPages.area; property: "inkColor"; value: "#000000" }
     Binding { target: reportPages.area; property: "borderColor"; value: "#8c8c8c" }
+
+    // AGENT-NOTE: the pages fit the pane once it has its width, and a zoom
+    // change keeps the view's centre (RichTextArea) — so a freshly opened
+    // report is sent to its first page after that settles.
+    Timer { id: toTop; interval: Tk.Theme.motion.slow; onTriggered: reportPages.goToPage(0) }
 
     Tk.DocumentManager { id: manager }
     Tk.LocalDatabaseProvider { id: snapshot }

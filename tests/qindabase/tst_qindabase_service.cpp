@@ -228,7 +228,17 @@ private slots:
                                                       {str("totals"), QVariantList{QVariantMap{{str("field"), str("amount")},
                                                                                              {str("function"), str("sum")}}}}}}}});
         QVERIFY(ok(wizard));
-        QVERIFY(ok(f.service.openReport(str("Gifts by Method"), {})));
+        const QVariantMap gifts = f.service.openReport(str("Gifts by Method"), {});
+        QVERIFY(ok(gifts));
+        // Money prints as money: the currency column and its group sum carry
+        // the file's symbol and decimals (QindaTK report number formats).
+        QindaTK::DocumentSession *giftsSession = manager.openDocument(gifts.value(str("designPath")).toString());
+        QVERIFY2(giftsSession != nullptr, qPrintable(manager.lastError()));
+        QFile giftsFile(gifts.value(str("designPath")).toString());
+        QVERIFY(giftsFile.open(QIODevice::ReadOnly));
+        const QByteArray giftsDesign = giftsFile.readAll();
+        QVERIFY2(giftsDesign.count("\"prefix\": \"$\"") + giftsDesign.count("\"prefix\":\"$\"") >= 2,
+                 giftsDesign.constData());
         QVERIFY(f.service.reportParameters(str("Gifts by Method")).isEmpty());
         QVERIFY(ok(f.service.createForm(str("Quick Donor"), str("donors"), str("Donor"), {str("name"), str("email")})));
     }

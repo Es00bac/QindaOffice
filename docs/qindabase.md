@@ -195,9 +195,15 @@ pages. Reports read at most 4,000 records (the toolkit's snapshot bound)
 and say so when there are more. The **report wizard** picks the source,
 columns, one grouping with a total, title and paper.
 
-Known limits (toolkit): report cells print numbers without trailing
-zeros (825 rather than 825.00), and report totals are double-precision
-sums.
+Money prints as money: a generated report gives every currency column,
+and every sum, average, lowest and highest of one, a number format with
+the file's symbol, decimals and thousands grouping ("$1,293.75"). That
+format is QindaTK's report `format` key (QindaTK branch
+`work/base-db-controls`); a toolkit without it ignores the key and prints
+the plain number (825 rather than $825.00), so the design is valid on
+both. Report totals are double-precision sums in the toolkit — exact to
+the cent within double's 15–16 significant digits; the datasheet's totals
+row and queries total in integer minor units.
 
 ## Import and export
 
