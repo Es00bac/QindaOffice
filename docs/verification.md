@@ -630,6 +630,72 @@ Remaining for the lead: the launcher card; the on-desktop checklist
 (drag shapes with a real pointer and tablet, print a page and preview
 it, open two drawings side by side and paste between them, the panel
 menu, dark and light themes).
+### M51 gates (QindaPlan)
+
+Automated by `ctest -R "plan"` (headless; the app tests pin "today" to
+Monday 30 March 2026 and seed the "Spring fundraiser gala": 4 phases, 36
+subtasks, 7 milestones, 6 resources with one overallocation, a baseline
+and three days of slippage). Rationale in D-051; the model in
+[plan.md](plan.md).
+
+- [x] `tst_plan_calendar` (7): working-time arithmetic on the standard
+      calendar (a day ends 17:00 the same day, lunch, weekends, negative
+      spans), exceptions and a resource calendar over its base (holidays
+      inherited, a working Sunday, a vacation), degenerate calendars;
+      duration, date and money text both ways.
+- [x] `tst_plan_schedule` (15): hand-computed dates for FS chains, parallel
+      paths with slack, SS/FF/SF with lag, lead and 50% lag, all eight
+      constraints (an FNLT conflict reported and honoured, negative slack
+      upstream), ALAP by free slack, summaries and summary links, milestones,
+      inactive/manual/started tasks, cycles and dangling links ignored with
+      issues, the link checks, resource calendars, work and integer cost;
+      2,000 tasks schedule in ~30 ms (< 1 s gate).
+- [x] `tst_plan_edit` (9): sheet fields as text with Project's typing
+      semantics, the predecessor and resource-name languages, outline
+      edits, link/unlink, % complete and actuals, manual/auto, respect
+      links, Gantt moves, Update Project, assignments.
+- [x] `tst_plan_file` (8): byte-identical `.qplan` round trip, unknown
+      fields kept at every level, newer version refused, repairs with
+      warnings, atomic save, the task clipboard, CSV.
+- [x] `tst_plan_resources` (9): per-day overallocation and the usage table
+      (days and weeks), leveling within slack (finish unmoved) and beyond
+      it, started and pinned tasks untouched, baselines and variances, the
+      four reports (late vs slipped).
+- [x] `tst_plan_mspdi` (6): a Project 2016-shaped file imported field by
+      field and scheduled (both exception forms, all link types with lag,
+      lead and %, a resource calendar, material, baseline, manual and
+      inactive tasks), export → import identical, well-formed schema order,
+      malformed input refused with a line number.
+- [x] `tst_plan_output` (6): Gantt pagination (pages wide × row pages,
+      hidden subtasks), Gantt and report PDFs, a report table that repeats
+      its header across pages, the Timeline PNG.
+- [x] `tst_qindaplan_service` (10): the gala schedules as documented
+      (gala night Thu 14 May, three days behind its baseline, inside its
+      Finish No Later Than; Marcus overallocated from 7 April); sheet edits
+      and the blank-row commit as single undo steps with dirty tracking;
+      ribbon operations; assign/level/clear; calendars, baselines, Update
+      Project, reports; `.qplan`, MSPDI, CSV, PNG and PDF out and back; the
+      Gantt/sheet/calendar/usage projections; a Gantt drag previewed and
+      committed through the engine and undone.
+- [x] `tst_qindaplan_menu_export` (4): the panel export passes the
+      desktop's validator with and without a project; every `plan…Action`
+      appears exactly once and every exported command resolves and fires.
+- [x] `tst_qindaplan_ui` (7): the real `PlanWindow.qml` at 1280 and 520 px
+      — Gantt (critical bars, summaries, milestones, baselines, today and
+      status markers, the Timeline strip), in-place sheet editing committed
+      through the engine, resource sheet, usage with the overallocation
+      banner, calendar, overview report; Task Information opens on the
+      selected task; the ribbon gate at 1320 and 520 px (no menu-only
+      commands beyond the shared ones); structural fixtures
+      `qindaplan_{1280,520}.txt`.
+- [x] Grabs looked at (validation gallery, `M51-*`): the Gantt with the
+      critical path and baselines, sheet editing, resource sheet, usage
+      with the overallocation, calendar, overview report and Task
+      Information at 1280 and 520; the printed Gantt, reports and Timeline
+      (`M51-iter*-output-*`); the toolkit's Gantt example (`M51-tk-*`).
+- [ ] On the desktop: print the Gantt two pages wide to a real printer;
+      open an exported `.xml` in Microsoft Project and in ProjectLibre;
+      import a real Project-saved XML with resource calendars.
 
 ### M47 gates (the QindaBooks app)
 

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=QindaPlan
+GenericName=Project Planner
+Comment=Tasks, schedules, Gantt charts, resources and baselines — part of QindaQt Office
+Exec=qindaplan %F
+Icon=org.qindaqt.QindaPlan
+Terminal=false
+Categories=Qt;Office;ProjectManagement;
+Keywords=project;gantt;schedule;tasks;critical path;resources;microsoft project;mspdi;
+MimeType=application/x-qindaplan;
+StartupNotify=true
+StartupWMClass=qindaplan

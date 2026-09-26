@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- A hand-written file in the shape Microsoft Project 2016 saves as XML
+     (element order, blank UID 0 resource, project summary task, legacy and
+     2007 calendar exceptions, unassigned assignment). tst_plan_mspdi.cpp
+     documents every expected value. -->
+<Project xmlns="http://schemas.microsoft.com/project">
+ <SaveVersion>14</SaveVersion>
+ <BuildNumber>16.0.4266.1001</BuildNumber>
+ <Name>Spring catalogue.xml</Name>
+ <GUID>2E0C2F2B-7C53-4B8F-9D0B-6A1E5B2D8F11</GUID>
+ <Title>Spring catalogue</Title>
+ <Company>Sloom Studio</Company>
+ <Manager>Jarrod</Manager>
+ <CreationDate>2026-02-20T09:00:00</CreationDate>
+ <ScheduleFromStart>1</ScheduleFromStart>
+ <StartDate>2026-03-02T08:00:00</StartDate>
+ <FinishDate>2026-03-17T17:00:00</FinishDate>
+ <FYStartDate>1</FYStartDate>
+ <CriticalSlackLimit>0</CriticalSlackLimit>
+ <CurrencyDigits>2</CurrencyDigits>
+ <CurrencySymbol>$</CurrencySymbol>
+ <CurrencyCode>USD</CurrencyCode>
+ <CurrencySymbolPosition>0</CurrencySymbolPosition>
+ <CalendarUID>1</CalendarUID>
+ <DefaultStartTime>08:00:00</DefaultStartTime>
+ <DefaultFinishTime>17:00:00</DefaultFinishTime>
+ <MinutesPerDay>480</MinutesPerDay>
+ <MinutesPerWeek>2400</MinutesPerWeek>
+ <DaysPerMonth>20</DaysPerMonth>
+ <DefaultTaskType>0</DefaultTaskType>
+ <StatusDate>2026-03-06T17:00:00</StatusDate>
+ <CurrentDate>2026-03-06T08:00:00</CurrentDate>
+ <ExtendedAttributes/>
+ <Calendars>
+  <Calendar>
+   <UID>1</UID>
+   <Name>Standard</Name>
+   <IsBaseCalendar>1</IsBaseCalendar>
+   <IsBaselineCalendar>0</IsBaselineCalendar>
+   <BaseCalendarUID>-1</BaseCalendarUID>
+   <WeekDays>
+    <WeekDay><DayType>1</DayType><DayWorking>0</DayWorking></WeekDay>
+    <WeekDay><DayType>2</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>3</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>4</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>5</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>6</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>7</DayType><DayWorking>0</DayWorking></WeekDay>
+    <WeekDay>
+     <DayType>0</DayType>
+     <DayWorking>0</DayWorking>
+     <TimePeriod><FromDate>2026-03-20T00:00:00</FromDate><ToDate>2026-03-20T23:59:00</ToDate></TimePeriod>
+    </WeekDay>
+   </WeekDays>
+   <Exceptions>
+    <Exception>
+     <EnteredByOccurrences>0</EnteredByOccurrences>
+     <TimePeriod><FromDate>2026-03-20T00:00:00</FromDate><ToDate>2026-03-20T23:59:00</ToDate></TimePeriod>
+     <Occurrences>1</Occurrences>
+     <Name>Studio day</Name>
+     <Type>1</Type>
+     <DayWorking>0</DayWorking>
+    </Exception>
+    <Exception>
+     <EnteredByOccurrences>0</EnteredByOccurrences>
+     <TimePeriod><FromDate>2026-04-03T00:00:00</FromDate><ToDate>2026-04-03T23:59:00</ToDate></TimePeriod>
+     <Occurrences>1</Occurrences>
+     <Name>Good Friday</Name>
+     <Type>1</Type>
+     <DayWorking>0</DayWorking>
+    </Exception>
+    <Exception>
+     <EnteredByOccurrences>1</EnteredByOccurrences>
+     <TimePeriod><FromDate>2026-03-02T00:00:00</FromDate><ToDate>2026-06-29T23:59:00</ToDate></TimePeriod>
+     <Occurrences>18</Occurrences>
+     <Name>Monday stand-up</Name>
+     <Type>6</Type>
+     <Period>1</Period>
+     <DaysOfWeek>2</DaysOfWeek>
+     <DayWorking>1</DayWorking>
+     <WorkingTimes><WorkingTime><FromTime>09:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes>
+    </Exception>
+   </Exceptions>
+   <WorkWeeks/>
+  </Calendar>
+  <Calendar>
+   <UID>2</UID>
+   <Name>Ana Ruiz</Name>
+   <IsBaseCalendar>0</IsBaseCalendar>
+   <IsBaselineCalendar>0</IsBaselineCalendar>
+   <BaseCalendarUID>1</BaseCalendarUID>
+   <Exceptions>
+    <Exception>
+     <EnteredByOccurrences>0</EnteredByOccurrences>
+     <TimePeriod><FromDate>2026-03-09T00:00:00</FromDate><ToDate>2026-03-11T23:59:00</ToDate></TimePeriod>
+     <Occurrences>1</Occurrences>
+     <Name>Vacation</Name>
+     <Type>1</Type>
+     <DayWorking>0</DayWorking>
+    </Exception>
+   </Exceptions>
+  </Calendar>
+  <Calendar>
+   <UID>3</UID>
+   <Name>Ben Okafor</Name>
+   <IsBaseCalendar>0</IsBaseCalendar>
+   <IsBaselineCalendar>0</IsBaselineCalendar>
+   <BaseCalendarUID>1</BaseCalendarUID>
+  </Calendar>
+ </Calendars>
+ <Tasks>
+  <Task>
+   <UID>0</UID><ID>0</ID><Name>Spring catalogue</Name><Type>1</Type><IsNull>0</IsNull>
+   <WBS>0</WBS><OutlineNumber>0</OutlineNumber><OutlineLevel>0</OutlineLevel>
+   <Start>2026-03-02T08:00:00</Start><Finish>2026-03-17T17:00:00</Finish>
+   <Duration>PT96H0M0S</Duration><DurationFormat>53</DurationFormat><Summary>1</Summary>
+   <Notes>Catalogue for the spring season.</Notes>
+  </Task>
+  <Task>
+   <UID>1</UID><GUID>0B6F3A10-1111-4C11-8A11-000000000001</GUID><ID>1</ID><Name>Phase 1: Design</Name><Type>1</Type><IsNull>0</IsNull>
+   <WBS>1</WBS><OutlineNumber>1</OutlineNumber><OutlineLevel>1</OutlineLevel><Priority>500</Priority>
+   <Start>2026-03-02T08:00:00</Start><Finish>2026-03-13T17:00:00</Finish><Duration>PT80H0M0S</Duration>
+   <DurationFormat>53</DurationFormat><Summary>1</Summary>
+   <PercentComplete>40</PercentComplete><ActualStart>2026-03-02T08:00:00</ActualStart>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <Active>1</Active><Manual>0</Manual>
+  </Task>
+  <Task>
+   <UID>2</UID><GUID>0B6F3A10-1111-4C11-8A11-000000000002</GUID><ID>2</ID><Name>Brief</Name><Type>0</Type><IsNull>0</IsNull>
+   <WBS>1.1</WBS><OutlineNumber>1.1</OutlineNumber><OutlineLevel>2</OutlineLevel><Priority>500</Priority>
+   <Start>2026-03-02T08:00:00</Start><Finish>2026-03-03T17:00:00</Finish><Duration>PT16H0M0S</Duration>
+   <DurationFormat>7</DurationFormat><Estimated>0</Estimated><Milestone>0</Milestone><Summary>0</Summary>
+   <FixedCost>0</FixedCost><PercentComplete>100</PercentComplete>
+   <ActualStart>2026-03-02T08:00:00</ActualStart><ActualFinish>2026-03-03T17:00:00</ActualFinish>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <Notes>Agree scope, page count and paper stock.</Notes>
+   <Active>1</Active><Manual>0</Manual>
+   <Baseline><Number>0</Number><Start>2026-03-02T08:00:00</Start><Finish>2026-03-03T17:00:00</Finish><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat><Work>PT8H0M0S</Work><Cost>38500</Cost></Baseline>
+   <Baseline><Number>1</Number><Start>2026-03-02T08:00:00</Start><Finish>2026-03-04T17:00:00</Finish><Duration>PT24H0M0S</Duration><Work>PT12H0M0S</Work><Cost>56500</Cost></Baseline>
+   <Baseline><Number>5</Number><Start>2026-03-02T08:00:00</Start><Finish>2026-03-02T17:00:00</Finish></Baseline>
+  </Task>
+  <Task>
+   <UID>3</UID><GUID>0B6F3A10-1111-4C11-8A11-000000000003</GUID><ID>3</ID><Name>Concepts</Name><Type>0</Type><IsNull>0</IsNull>
+   <WBS>1.2</WBS><OutlineNumber>1.2</OutlineNumber><OutlineLevel>2</OutlineLevel>
+   <Start>2026-03-06T08:00:00</Start><Finish>2026-03-13T17:00:00</Finish><Duration>PT24H0M0S</Duration>
+   <DurationFormat>7</DurationFormat><Milestone>0</Milestone><Summary>0</Summary>
+   <PercentComplete>50</PercentComplete><ActualStart>2026-03-06T08:00:00</ActualStart>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <PredecessorLink><PredecessorUID>2</PredecessorUID><Type>1</Type><CrossProject>0</CrossProject><LinkLag>9600</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+   <Active>1</Active><Manual>0</Manual>
+   <Baseline><Number>0</Number><Start>2026-03-04T08:00:00</Start><Finish>2026-03-06T17:00:00</Finish><Duration>PT24H0M0S</Duration><Work>PT24H0M0S</Work><Cost>144000</Cost></Baseline>
+  </Task>
+  <Task>
+   <UID>4</UID><GUID>0B6F3A10-1111-4C11-8A11-000000000004</GUID><ID>4</ID><Name>Review</Name><Type>0</Type><IsNull>0</IsNull>
+   <WBS>1.3</WBS><OutlineNumber>1.3</OutlineNumber><OutlineLevel>2</OutlineLevel>
+   <Start>2026-03-13T08:00:00</Start><Finish>2026-03-13T17:00:00</Finish><Duration>PT8H0M0S</Duration>
+   <DurationFormat>7</DurationFormat><Milestone>0</Milestone><Summary>0</Summary>
+   <FixedCost>15000</FixedCost><PercentComplete>0</PercentComplete>
+   <ConstraintType>4</ConstraintType><CalendarUID>-1</CalendarUID><ConstraintDate>2026-03-12T08:00:00</ConstraintDate>
+   <PredecessorLink><PredecessorUID>3</PredecessorUID><Type>0</Type><CrossProject>0</CrossProject><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+   <Active>1</Active><Manual>0</Manual>
+  </Task>
+  <Task>
+   <UID>5</UID><GUID>0B6F3A10-1111-4C11-8A11-000000000005</GUID><ID>5</ID><Name>Design approved</Name><Type>0</Type><IsNull>0</IsNull>
+   <WBS>1.4</WBS><OutlineNumber>1.4</OutlineNumber><OutlineLevel>2</OutlineLevel>
+   <Start>2026-03-13T17:00:00</Start><Finish>2026-03-13T17:00:00</Finish><Duration>PT0H0M0S</Duration>
+   <DurationFormat>7</DurationFormat><Milestone>1</Milestone><Summary>0</Summary>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <PredecessorLink><PredecessorUID>4</PredecessorUID><Type>1</Type><CrossProject>0</CrossProject><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+   <Active>1</Active><Manual>0</Manual>
+  </Task>
+  <Task>
+   <UID>6</UID><GUID>0B6F3A10-1111-4C11-8A11-000000000006</GUID><ID>6</ID><Name>Phase 2: Production</Name><Type>1</Type><IsNull>0</IsNull>
+   <WBS>2</WBS><OutlineNumber>2</OutlineNumber><OutlineLevel>1</OutlineLevel>
+   <Start>2026-03-13T08:00:00</Start><Finish>2026-03-17T17:00:00</Finish><Duration>PT24H0M0S</Duration>
+   <DurationFormat>53</DurationFormat><Summary>1</Summary>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <Active>1</Active><Manual>0</Manual>
+  </Task>
+  <Task>
+   <UID>7</UID><GUID>0B6F3A10-1111-4C11-8A11-000000000007</GUID><ID>7</ID><Name>Print run</Name><Type>0</Type><IsNull>0</IsNull>
+   <WBS>2.1</WBS><OutlineNumber>2.1</OutlineNumber><OutlineLevel>2</OutlineLevel>
+   <Start>2026-03-13T08:00:00</Start><Finish>2026-03-16T17:00:00</Finish><Duration>PT16H0M0S</Duration>
+   <DurationFormat>7</DurationFormat><Milestone>0</Milestone><Summary>0</Summary>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <PredecessorLink><PredecessorUID>5</PredecessorUID><Type>1</Type><CrossProject>0</CrossProject><LinkLag>-4800</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+   <Active>1</Active><Manual>0</Manual>
+  </Task>
+  <Task>
+   <UID>8</UID><GUID>0B6F3A10-1111-4C11-8A11-000000000008</GUID><ID>8</ID><Name>Proofing</Name><Type>0</Type><IsNull>0</IsNull>
+   <WBS>2.2</WBS><OutlineNumber>2.2</OutlineNumber><OutlineLevel>2</OutlineLevel>
+   <Start>2026-03-16T08:00:00</Start><Finish>2026-03-16T17:00:00</Finish><Duration>PT8H0M0S</Duration>
+   <DurationFormat>39</DurationFormat><Estimated>1</Estimated><Milestone>0</Milestone><Summary>0</Summary>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <PredecessorLink><PredecessorUID>7</PredecessorUID><Type>3</Type><CrossProject>0</CrossProject><LinkLag>500</LinkLag><LagFormat>19</LagFormat></PredecessorLink>
+   <Active>1</Active><Manual>0</Manual>
+  </Task>
+  <Task>
+   <UID>9</UID><GUID>0B6F3A10-1111-4C11-8A11-000000000009</GUID><ID>9</ID><Name>Pack</Name><Type>0</Type><IsNull>0</IsNull>
+   <WBS>2.3</WBS><OutlineNumber>2.3</OutlineNumber><OutlineLevel>2</OutlineLevel>
+   <Start>2026-03-13T08:00:00</Start><Finish>2026-03-13T17:00:00</Finish><Duration>PT8H0M0S</Duration>
+   <DurationFormat>5</DurationFormat><Milestone>0</Milestone><Summary>0</Summary>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <PredecessorLink><PredecessorUID>8</PredecessorUID><Type>2</Type><CrossProject>0</CrossProject><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+   <PredecessorLink><PredecessorUID>99</PredecessorUID><Type>1</Type><CrossProject>0</CrossProject><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+   <Active>1</Active><Manual>0</Manual>
+  </Task>
+  <Task>
+   <UID>10</UID><GUID>0B6F3A10-1111-4C11-8A11-000000000010</GUID><ID>10</ID><Name>Vendor call</Name><Type>0</Type><IsNull>0</IsNull>
+   <WBS>2.4</WBS><OutlineNumber>2.4</OutlineNumber><OutlineLevel>2</OutlineLevel>
+   <Start>2026-03-16T08:00:00</Start><Finish>2026-03-17T17:00:00</Finish><Duration>PT16H0M0S</Duration>
+   <ManualStart>2026-03-16T08:00:00</ManualStart><ManualFinish>2026-03-17T17:00:00</ManualFinish><ManualDuration>PT16H0M0S</ManualDuration>
+   <DurationFormat>7</DurationFormat><Milestone>0</Milestone><Summary>0</Summary>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <Active>1</Active><Manual>1</Manual>
+  </Task>
+  <Task>
+   <UID>11</UID><GUID>0B6F3A10-1111-4C11-8A11-000000000011</GUID><ID>11</ID><Name>Foil cover (dropped)</Name><Type>0</Type><IsNull>0</IsNull>
+   <WBS>2.5</WBS><OutlineNumber>2.5</OutlineNumber><OutlineLevel>2</OutlineLevel>
+   <Start>2026-03-02T08:00:00</Start><Finish>2026-03-03T17:00:00</Finish><Duration>PT16H0M0S</Duration>
+   <DurationFormat>8</DurationFormat><Milestone>0</Milestone><Summary>0</Summary>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <Active>0</Active><Manual>0</Manual>
+  </Task>
+  <Task>
+   <UID>12</UID><ID>12</ID><IsNull>1</IsNull>
+  </Task>
+ </Tasks>
+ <Resources>
+  <Resource>
+   <UID>0</UID><ID>0</ID><Type>1</Type><IsNull>0</IsNull><WorkGroup>0</WorkGroup><MaxUnits>1.00</MaxUnits>
+   <StandardRate>0</StandardRate><StandardRateFormat>2</StandardRateFormat><CalendarUID>-1</CalendarUID>
+  </Resource>
+  <Resource>
+   <UID>1</UID><ID>1</ID><Name>Ana Ruiz</Name><Type>1</Type><IsNull>0</IsNull><Initials>AR</Initials>
+   <Group>Design</Group><WorkGroup>0</WorkGroup><EmailAddress>ana@example.com</EmailAddress><MaxUnits>1.00</MaxUnits>
+   <StandardRate>60</StandardRate><StandardRateFormat>2</StandardRateFormat><CostPerUse>0</CostPerUse><CalendarUID>2</CalendarUID>
+  </Resource>
+  <Resource>
+   <UID>2</UID><ID>2</ID><Name>Ben Okafor</Name><Type>1</Type><IsNull>0</IsNull><Initials>BO</Initials>
+   <Group>Production</Group><WorkGroup>0</WorkGroup><MaxUnits>0.50</MaxUnits>
+   <StandardRate>45</StandardRate><StandardRateFormat>2</StandardRateFormat><CostPerUse>2500</CostPerUse><CalendarUID>3</CalendarUID>
+  </Resource>
+  <Resource>
+   <UID>3</UID><ID>3</ID><Name>Paper</Name><Type>0</Type><IsNull>0</IsNull><Initials>P</Initials>
+   <MaterialLabel>reams</MaterialLabel><MaxUnits>1.00</MaxUnits>
+   <StandardRate>12.5</StandardRate><StandardRateFormat>2</StandardRateFormat><CostPerUse>0</CostPerUse><CalendarUID>-1</CalendarUID>
+  </Resource>
+ </Resources>
+ <Assignments>
+  <Assignment><UID>1</UID><TaskUID>2</TaskUID><ResourceUID>2</ResourceUID><Units>0.5</Units><Work>PT8H0M0S</Work></Assignment>
+  <Assignment><UID>2</UID><TaskUID>3</TaskUID><ResourceUID>1</ResourceUID><Units>1</Units><Work>PT24H0M0S</Work></Assignment>
+  <Assignment><UID>3</UID><TaskUID>7</TaskUID><ResourceUID>3</ResourceUID><Units>40</Units></Assignment>
+  <Assignment><UID>4</UID><TaskUID>10</TaskUID><ResourceUID>-65535</ResourceUID><Units>1</Units></Assignment>
+  <Assignment><UID>5</UID><TaskUID>42</TaskUID><ResourceUID>1</ResourceUID><Units>1</Units></Assignment>
+ </Assignments>
+</Project>

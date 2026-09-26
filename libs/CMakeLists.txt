@@ -14,3 +14,6 @@ add_subdirectory(books_io)
 add_subdirectory(books_connect)
 # QindaDiagram's engine (M50, D-050): drawings, stencils, routing, painter.
 add_subdirectory(diagram_engine)
+# QindaPlan (M51, D-051): the scheduling engine and its paged output.
+add_subdirectory(plan_engine)
+add_subdirectory(plan_output)

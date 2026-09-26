@@ -160,6 +160,9 @@ protected:
     // (plan 5.2: one callback, so paper and PDF cannot drift). Empty means
     // the app does not print; the commands stay disabled.
     [[nodiscard]] virtual PrintRenderCallback printRenderCallback() const { return {}; }
+    // The orientation a new print job (and Export PDF) starts in (M51: a
+    // Gantt chart prints landscape).
+    [[nodiscard]] virtual bool printPrefersLandscape() const { return false; }
     // AGENT-CONTRACT (OfficeApplication::openPaths, D-042): a host WITHOUT a
     // document (MailHost) receives the paths and URLs the app is launched
     // or handed with here (mailto:, webcal:, .ics, .eml) instead of

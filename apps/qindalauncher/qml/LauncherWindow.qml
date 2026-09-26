@@ -5,7 +5,7 @@ import QindaTK as Tk
 import QindaOffice.Launcher
 
 // The suite's front door (plan §5.5): a card per app over the recent
-// documents of all four. No menus and no document — it starts the apps
+// documents of all of them. No menus and no document — it starts the apps
 // detached and never edits their state.
 Tk.AppWindow {
     id: window
@@ -169,7 +169,7 @@ Tk.AppWindow {
         onAccepted: window.launcher.openPathChosen(selectedFile)
     }
 
-    // The recents are four other processes' state: re-read them when the
+    // The recents are other processes' state: re-read them when the
     // front door comes back to the front.
     onActiveChanged: if (active) window.launcher.refresh()
 }

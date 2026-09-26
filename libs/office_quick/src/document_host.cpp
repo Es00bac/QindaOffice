@@ -92,6 +92,9 @@ PrintJob *DocumentHost::createPrintJob()
     delete m_printJob;
     m_printJob = new PrintJob(this);
     m_printJob->setRender(std::move(render));
+    // The app's preferred orientation is the job's default; the print
+    // dialog can still change it.
+    m_printJob->setLandscape(printPrefersLandscape());
     return m_printJob;
 }
 

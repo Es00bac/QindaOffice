@@ -55,6 +55,11 @@ QList<AppEntry> officeApps()
          QObject::tr("Diagrams"),
          QObject::tr("Flowcharts, org charts and network maps whose lines stay attached."),
          QObject::tr("New diagram")},
+        {QStringLiteral("QindaPlan"), QStringLiteral("org.qindaqt.QindaPlan"),
+         QStringLiteral("qindaplan"), QStringLiteral("QindaPlan"),
+         QObject::tr("Project plans"),
+         QObject::tr("Tasks, dates and people on a Gantt chart that reschedules itself."),
+         QObject::tr("New project")},
     };
 }
 
@@ -63,7 +68,7 @@ QString iconSourceFor(const AppEntry &app)
     // The mascots live in hicolor, which is where a theme lookup would
     // have found them; a run from a build tree has no installed theme at
     // all, so the data directory beside the binary is tried too rather
-    // than showing four blank squares.
+    // than showing blank squares.
     const QString leaf = QStringLiteral("icons/hicolor/scalable/apps/%1.svg").arg(app.desktopId);
     QStringList candidates = QStandardPaths::locateAll(QStandardPaths::GenericDataLocation, leaf);
     const QDir here(QCoreApplication::applicationDirPath());
@@ -77,17 +82,19 @@ QString iconSourceFor(const AppEntry &app)
     return {};
 }
 
-// Every document type any of the four apps can open, so "Open a
+// Every document type any of the suite's apps can open, so "Open a
 // document…" means what it says and the launcher picks the right app.
 QStringList openNameFilters()
 {
     return {QObject::tr("All office documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt "
-                        "*.xlsx *.ods *.xls *.xlsm *.csv *.tsv *.odp *.pptx *.fodp *.qbooks *.qdiagram *.drawio *.ics *.eml)"),
+                        "*.xlsx *.ods *.xls *.xlsm *.csv *.tsv *.odp *.pptx *.fodp *.qbooks "
+                        "*.qdiagram *.drawio *.qplan *.ics *.eml)"),
             QObject::tr("Documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt)"),
             QObject::tr("Spreadsheets (*.xlsx *.ods *.xls *.xlsm *.csv *.tsv)"),
             QObject::tr("Presentations (*.odp *.pptx *.fodp)"),
             QObject::tr("Company books (*.qbooks)"),
             QObject::tr("Diagrams (*.qdiagram *.drawio)"),
+            QObject::tr("Project plans (*.qplan)"),
             QObject::tr("Calendars and messages (*.ics *.eml)"),
             QObject::tr("All files (*)")};
 }
@@ -118,6 +125,7 @@ QString appIdForPath(const QString &path)
         {QStringLiteral("qbooks"), QStringLiteral("QindaBooks")},
         {QStringLiteral("qdiagram"), QStringLiteral("QindaDiagram")},
         {QStringLiteral("drawio"), QStringLiteral("QindaDiagram")},
+        {QStringLiteral("qplan"), QStringLiteral("QindaPlan")},
         {QStringLiteral("ics"), QStringLiteral("QindaMail")},
         {QStringLiteral("eml"), QStringLiteral("QindaMail")},
     };
@@ -132,7 +140,7 @@ QString resolveBinary(const AppEntry &app)
     if (!installed.isEmpty()) {
         return installed;
     }
-    // A build tree: the four binaries sit beside (or near) the launcher, so
+    // A build tree: the app binaries sit beside (or near) the launcher, so
     // the suite is runnable before it is installed.
     const QDir here(QCoreApplication::applicationDirPath());
     for (const QString &candidate :
@@ -186,7 +194,7 @@ QList<RecentEntry> recentDocuments(int limit)
         }
     }
     // Newest first across the suite: the files' own modification times are
-    // the only ordering the four separate lists can be merged on.
+    // the only ordering the separate per-app lists can be merged on.
     std::sort(entries.begin(), entries.end(), [](const RecentEntry &a, const RecentEntry &b) {
         return QFileInfo(a.path).lastModified() > QFileInfo(b.path).lastModified();
     });

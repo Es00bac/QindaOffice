@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// The launcher's QML seam (conversion plan §5.5): the four apps and the
+// The launcher's QML seam (conversion plan §5.5): the suite's apps and the
 // suite's recent documents as plain maps, plus the three things the window
 // can do — start an app, open a recent document, open a chosen path.
 //
@@ -40,7 +40,7 @@ public:
     [[nodiscard]] QString status() const { return m_status; }
     [[nodiscard]] QStringList openNameFilters() const { return Launcher::openNameFilters(); }
 
-    // Re-reads the four recent lists (the window does it when it shows).
+    // Re-reads the per-app recent lists (the window does it when it shows).
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void launchApp(int index);
     Q_INVOKABLE void openRecent(int index);

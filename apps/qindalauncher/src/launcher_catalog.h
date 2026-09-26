@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// What the launcher knows about the suite: the four apps, and the recent
+// What the launcher knows about the suite: its apps, and the recent
 // documents each of them has kept.
 //
 // AGENT-CONTRACT: the launcher READS the other apps' state and never writes
 // it. Recents live in each app's own config dir (rule 7: bounded
-// persistence, per app, never shared), so this walks four files rather than
+// persistence, per app, never shared), so this walks one file per app rather than
 // introducing a shared one — a shared list would be a new cross-app store
 // that rule exists to prevent.
 
@@ -33,7 +33,7 @@ struct RecentEntry {
     QString appId;
 };
 
-// The four apps, in suite order.
+// The suite's apps, in suite order.
 [[nodiscard]] QList<AppEntry> officeApps();
 
 // A URL for the app's mascot, or empty when it is not installed (the
