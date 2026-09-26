@@ -8,6 +8,7 @@
 #include <QPointer>
 #include <QStringList>
 #include <QUrl>
+#include <QVariant>
 
 #include <functional>
 #include <memory>
@@ -40,11 +41,13 @@ using HostFactory = std::function<DocumentHost *()>;
 // restore inventory (default off), crash-recovery journal (default on,
 // cleared on save/discard).
 //
-// AGENT-NOTE: crash recovery no longer asks Restore/Discard in a modal box
-// before the first window exists (there is no window to host a QML dialog
-// yet). Every pending entry is restored into its own window, marked dirty,
-// with the journal entry kept until the user saves or closes with Discard —
-// the same two outcomes, one launch step less (plan D-027).
+// AGENT-NOTE (D-055, replacing D-027's one-window-per-entry restore): the
+// pending entries are offered in ONE RecoveryDialog.qml window before the
+// first document window; the recovered ones open marked dirty (the journal
+// entry kept until the user saves or closes with Discard), every other
+// entry is discarded for good — including when the dialog is just closed.
+// Restoring each entry into its own window put up to 32 windows on screen
+// at every launch.
 class OfficeApplication final : public QObject, public AppServices {
     Q_OBJECT
 public:
@@ -58,8 +61,17 @@ public:
     void setWindowComponent(QQmlEngine *engine, const QUrl &url);
 
     [[nodiscard]] bool acquirePrimary(const QStringList &initialPaths, bool *handedOff);
-    // Journal sweep: restores every pending entry into a window.
-    void offerRecovery();
+    // Recovered documents (office_application_recovery.cpp, D-055): the
+    // journal's entries as rows for RecoveryDialog.qml — {key, title,
+    // detail, preview} — with byte-identical untitled duplicates dropped.
+    [[nodiscard]] QVariantList pendingRecovery();
+    // Restores each key into its own window (up to kMaxWindows).
+    void recoverEntries(const QStringList &keys);
+    // Dismissed: the entries never come back (RecoveryJournal::discard).
+    void discardEntries(const QStringList &keys);
+    // RecoveryDialog.qml's answer: recover, discard, then recoveryResolved.
+    Q_INVOKABLE void resolveRecovery(const QStringList &recoverKeys,
+                                     const QStringList &discardKeys);
 
     [[nodiscard]] DocumentHost *newWindow(const QString &path = {});
     // `requestingHost` is the window the Open came from; a pristine
@@ -85,6 +97,8 @@ public:
     void documentSaved(const QString &canonicalPath) override;
 
 signals:
+    // The recovered-documents question is answered; startup continues.
+    void recoveryResolved(bool anyRecovered);
     void hostCreated(DocumentHost *host);
     void diagnosticReported(const QString &message);
 

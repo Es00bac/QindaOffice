@@ -135,6 +135,33 @@ void RecoveryJournal::clear(const QString &key)
     QFile::remove(fileFor(key));
 }
 
+void RecoveryJournal::discard(const QString &key)
+{
+    const auto it = m_pending.find(key);
+    if (it != m_pending.end()) {
+        it->timer->deleteLater();
+        m_pending.erase(it);
+    }
+    const QString source = fileFor(key);
+    if (!QFile::exists(source)) {
+        return;
+    }
+    QDir().mkpath(discardedDir());
+    const QString target = discardedDir() + QLatin1Char('/') + key + QStringLiteral(".json");
+    QFile::remove(target);
+    if (!QFile::rename(source, target)) {
+        // AGENT-GUARD: a dismissal must stick even when the backup cannot
+        // be written — the entry is removed either way.
+        QFile::remove(source);
+    }
+    QDir dir(discardedDir());
+    const QFileInfoList kept = dir.entryInfoList({QStringLiteral("*.json")}, QDir::Files,
+                                                 QDir::Time); // newest first
+    for (qsizetype i = kDiscardedKeep; i < kept.size(); ++i) {
+        QFile::remove(kept.at(i).absoluteFilePath());
+    }
+}
+
 QStringList RecoveryJournal::pendingKeys() const
 {
     const QStringList files = QDir(m_dir).entryList({QStringLiteral("*.json")},
@@ -164,6 +191,8 @@ std::optional<RecoveryJournal::Entry> RecoveryJournal::entry(const QString &key)
     result.untitled = object.value(QStringLiteral("untitled")).toBool(false);
     result.payload = QByteArray::fromBase64(
         object.value(QStringLiteral("payload")).toString().toLatin1());
+    result.savedAt = QDateTime::fromString(object.value(QStringLiteral("savedAt")).toString(),
+                                           Qt::ISODate);
     return result;
 }
 

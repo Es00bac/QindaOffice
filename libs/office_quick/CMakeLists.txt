@@ -65,6 +65,7 @@ set(office_quick_qml
     qml/PreferencesDialog.qml
     qml/PrintDialog.qml
     qml/PrintPreview.qml
+    qml/RecoveryDialog.qml
     qml/CommandSearch.qml
     qml/RibbonFromModel.qml
     qml/StandardRibbon.js
@@ -97,6 +98,7 @@ qt_add_qml_module(office_quick
         src/menu_source.cpp src/menu_source.h
         src/menu_tree.cpp src/menu_tree.h
         src/office_application.cpp src/office_application.h
+        src/office_application_recovery.cpp
         src/preferences.cpp src/preferences.h
         src/print_service.cpp src/print_service.h
         src/single_instance.cpp src/single_instance.h

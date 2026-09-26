@@ -8,11 +8,13 @@
 #include "office_application.h"
 
 #include <QCommandLineParser>
+#include <QCoreApplication>
 #include <QFileInfo>
 #include <QGuiApplication>
 
 #include <memory>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
 #include <QQuickStyle>
 #include <QTextStream>
 #include <QUrl>
@@ -118,20 +120,58 @@ int runOfficeApp(int &argc, char *argv[], const QString &desktopId, const QUrl &
         // Not acquired and not handed off (no session bus): run standalone.
     }
 
-    office.offerRecovery();
-    const bool recovered = office.windowCount() > 0;
-    if (!paths.isEmpty()) {
-        QString diagnostic;
-        if (!office.openPaths(paths, &diagnostic)) {
-            qWarning().noquote() << diagnostic;
+    // The documents the launch asked for, the restore inventory, or a blank
+    // window — after the recovered-documents question, when there is one.
+    const auto openStartDocuments = [&office, paths](bool recovered) {
+        if (!paths.isEmpty()) {
+            QString diagnostic;
+            if (!office.openPaths(paths, &diagnostic)) {
+                qWarning().noquote() << diagnostic;
+            }
+        } else if (!recovered && office.restorePreviousDocuments()) {
+            office.restoreFromInventory();
         }
-    } else if (!recovered && office.restorePreviousDocuments()) {
-        office.restoreFromInventory();
+        if (office.windowCount() == 0 && office.newWindow() == nullptr) {
+            qWarning().noquote() << "could not create the first window";
+            return false;
+        }
+        return true;
+    };
+
+    // AGENT-NOTE (D-055): unsaved documents from an earlier run are offered
+    // in ONE dialog instead of one window each (up to 32 windows at once).
+    const QVariantList pending = office.pendingRecovery();
+    if (pending.isEmpty()) {
+        if (!openStartDocuments(false)) {
+            return 1;
+        }
+        return QGuiApplication::exec();
     }
-    if (office.windowCount() == 0 && office.newWindow() == nullptr) {
-        qWarning().noquote() << "could not create the first window";
-        return 1;
+    QQmlComponent component(&engine,
+                            QUrl(QStringLiteral("qrc:/qt/qml/QindaOffice/Shell/RecoveryDialog.qml")));
+    QObject *dialog = component.createWithInitialProperties(
+        {{QStringLiteral("entries"), pending},
+         {QStringLiteral("office"), QVariant::fromValue(static_cast<QObject *>(&office))}});
+    if (dialog == nullptr) {
+        // Fail visibly but keep the work: without the dialog, reopen them.
+        qWarning().noquote() << "recovered-documents dialog failed:" << component.errorString();
+        QStringList keys;
+        for (const QVariant &row : pending) {
+            keys.append(row.toMap().value(QStringLiteral("key")).toString());
+        }
+        office.recoverEntries(keys);
+        if (!openStartDocuments(office.windowCount() > 0)) {
+            return 1;
+        }
+        return QGuiApplication::exec();
     }
+    QObject::connect(&office, &OfficeApplication::recoveryResolved, &office,
+                     [openStartDocuments, dialog](bool recovered) {
+                         if (!openStartDocuments(recovered)) {
+                             QCoreApplication::exit(1);
+                         }
+                         dialog->deleteLater();
+                     });
     return QGuiApplication::exec();
 }
 

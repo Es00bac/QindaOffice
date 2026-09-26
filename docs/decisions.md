@@ -5,6 +5,30 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-055: Recovered documents are offered in one dialog; a dismissal sticks
+
+**Date:** 2026-09-26 · **Status:** accepted (owner request)
+
+**Context.** Since D-027 every pending recovery-journal entry reopened in
+its own window at launch — up to 32 windows — and the owner found that
+"spamming me with a million open windows". Discarding had to work window by
+window, and (before the D-053 fixes) did not even stick.
+
+**Decision.** `runOfficeApp` asks `OfficeApplication::pendingRecovery()`
+before the first window; when entries exist it shows `RecoveryDialog.qml`
+alone: one ticked row per document (title, path or "Never saved", when it
+changed, a line of its text), "Recover Selected/All" and "Discard All".
+The answer goes to `resolveRecovery(recover, discard)` BEFORE the dialog
+closes (so the application never loses its last window), then the normal
+start (paths, inventory, blank window) continues. Closing the dialog is a
+dismissal: everything is discarded. `RecoveryJournal::discard` moves the
+envelope to `<recovery>-discarded/` (newest 20 kept), so a dismissal never
+comes back but a mistake can still be dug out by hand.
+
+**Consequences.** One launch step when there is something to recover and
+none otherwise. Tests: `tst_recovery_flow` (rows, merge, apply, dialog
+clicks, close = discard), `tst_recovery_journal` (discard, bounded backup).
+
 ## D-054: The global menu export holds changes while its window is inactive
 
 **Date:** 2026-09-26 · **Status:** accepted (owner-reported regression)

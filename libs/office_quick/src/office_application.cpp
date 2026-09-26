@@ -10,12 +10,10 @@
 #include "recovery_journal.h"
 #include "restore_inventory.h"
 
-#include <QCryptographicHash>
 #include <QFileInfo>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickWindow>
-#include <QSet>
 
 #include <algorithm>
 
@@ -79,60 +77,6 @@ bool OfficeApplication::acquirePrimary(const QStringList &initialPaths, bool *ha
         return true;
     }
     return false;
-}
-
-void OfficeApplication::offerRecovery()
-{
-    // AGENT-GUARD: build the stores HERE — runOfficeApp calls this before
-    // any window exists, and a lazily built journal was never consulted.
-    ensureStores();
-    const QStringList keys = m_journal->pendingKeys();
-    QSet<QByteArray> restoredUntitled;
-    for (const QString &key : keys) {
-        const auto entry = m_journal->entry(key);
-        if (!entry.has_value()) {
-            m_journal->clear(key);
-            continue;
-        }
-        // AGENT-NOTE: builds before the restoreFromJournal key fix copied
-        // every recovered untitled entry under a fresh key on each launch,
-        // leaving byte-identical duplicates on disk. An untitled entry whose
-        // payload matches one already restored in this sweep is such a copy:
-        // drop it instead of opening the same document twice.
-        if (entry->untitled || entry->path.isEmpty()) {
-            const QByteArray digest =
-                QCryptographicHash::hash(entry->payload, QCryptographicHash::Sha256);
-            if (restoredUntitled.contains(digest)) {
-                m_journal->clear(key);
-                continue;
-            }
-            restoredUntitled.insert(digest);
-        }
-        if (m_hosts.size() >= kMaxWindows) {
-            emit diagnosticReported(
-                tr("Window limit reached: %1 documents are already open in this process.")
-                    .arg(kMaxWindows));
-            break; // remaining entries stay on disk
-        }
-        DocumentHost *host = createHost();
-        if (host == nullptr) {
-            break;
-        }
-        // AGENT-GUARD: the journal entry is cleared ONLY by a save or an
-        // explicit Discard on close (plan section 2.7); a restore that the
-        // engine refuses keeps the entry (the user saw the reason).
-        if (!host->restoreFromJournal(entry->path, entry->untitled, entry->payload, key)) {
-            host->deleteLater();
-            pruneClosed();
-            continue;
-        }
-        present(host);
-        host->showStatusMessage(
-            tr("Recovered unsaved changes to %1")
-                .arg(entry->untitled || entry->path.isEmpty() ? tr("an untitled document")
-                                                              : entry->path),
-            0);
-    }
 }
 
 DocumentHost *OfficeApplication::newWindow(const QString &path)

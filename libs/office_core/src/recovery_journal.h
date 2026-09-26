@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <QDateTime>
 #include <QHash>
 #include <QObject>
 #include <QString>
@@ -47,6 +48,13 @@ public:
                   const QByteArray &payload, qint64 maxPayloadBytes = kMaxTextPayload);
 
     void clear(const QString &key);
+    // The user dismissed this entry: it leaves the journal for good (never
+    // offered again), but its envelope is MOVED to <dir>-discarded/, which
+    // keeps the newest kDiscardedKeep, so a mistaken dismissal can still be
+    // dug out by hand. Nothing in the suite reads that folder.
+    void discard(const QString &key);
+    static constexpr int kDiscardedKeep = 20;
+    [[nodiscard]] QString discardedDir() const { return m_dir + QStringLiteral("-discarded"); }
     [[nodiscard]] QStringList pendingKeys() const;
 
     struct Entry {
@@ -54,6 +62,7 @@ public:
         QString path;
         bool untitled = false;
         QByteArray payload;
+        QDateTime savedAt; // invalid when the envelope has none
     };
     [[nodiscard]] std::optional<Entry> entry(const QString &key) const;
 

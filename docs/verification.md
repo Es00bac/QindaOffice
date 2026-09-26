@@ -127,6 +127,10 @@ Manual (QindaQt desktop, tablet):
       two fingers pinch-zoom about the fingers and pan, leaving no dot
       where the first finger landed; with the Text tool a finger tap opens
       or places a block and a drag scrolls; a touchpad pinch zooms.
+- [ ] Recovered documents (D-055): kill an app with unsaved edits in two
+      windows, relaunch — ONE dialog lists both with a line of text; untick
+      one, Recover Selected opens the other; relaunch again — the unticked
+      one is not offered. Closing the dialog discards everything listed.
 - [ ] Global menu (D-054), in every Office app: click a panel menu — it
       stays open, items are clickable, and it still opens after copying
       text in another app and after editing a note block.

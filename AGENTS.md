@@ -83,7 +83,8 @@ stock Qt 6, ADR-0117 resize veto, window-containers wiki) live in
    QML and remember sizes only for new windows.
 7. **Bounded persistence, per app, never shared**: ≤32-path restore
    inventory (default off), crash-recovery journal (default on) under
-   `$XDG_STATE_HOME/qindaoffice/<app>/`; fail honestly, stay visible.
+   `$XDG_STATE_HOME/qindaoffice/<app>/`, offered at launch in ONE
+   recovered-documents dialog whose dismissals stick (D-055); fail honestly, stay visible.
 8. **Only `office_quick` links the desktop's static archives**
    (`qindaqt_global_menu_*`, the design-token and theme libraries). Every
    other library and every test must build without the desktop installed;

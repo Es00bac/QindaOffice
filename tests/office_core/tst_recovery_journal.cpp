@@ -17,6 +17,7 @@ private slots:
     void debounceCoalescesAndCapturesLatest();
     void oversizedPayloadIsSkippedNotTruncated();
     void emptySnapshotIsNotARecoveryPoint();
+    void discardRemovesForGoodButKeepsABoundedBackup();
 };
 
 void RecoveryJournalTest::pathKeysAreStableAndDistinct()
@@ -118,6 +119,27 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     RecoveryJournalTest test;
     return QTest::qExec(&test, argc, argv);
+}
+
+void RecoveryJournalTest::discardRemovesForGoodButKeepsABoundedBackup()
+{
+    QTemporaryDir dir;
+    RecoveryJournal journal(dir.path() + QStringLiteral("/recovery"));
+    journal.writeNow(QStringLiteral("untitled-1-1"), QString(), true, QByteArray("words"));
+    QVERIFY(journal.entry(QStringLiteral("untitled-1-1"))->savedAt.isValid());
+    journal.discard(QStringLiteral("untitled-1-1"));
+    QVERIFY(journal.pendingKeys().isEmpty());
+    QVERIFY(QFile::exists(journal.discardedDir() + QStringLiteral("/untitled-1-1.json")));
+
+    // The backup is bounded: only the newest kDiscardedKeep survive.
+    for (int i = 0; i < RecoveryJournal::kDiscardedKeep + 5; ++i) {
+        const QString key = QStringLiteral("untitled-2-%1").arg(i);
+        journal.writeNow(key, QString(), true, QByteArray("more words"));
+        journal.discard(key);
+    }
+    QVERIFY(journal.pendingKeys().isEmpty());
+    QCOMPARE(QDir(journal.discardedDir()).entryList({QStringLiteral("*.json")}, QDir::Files).size(),
+             RecoveryJournal::kDiscardedKeep);
 }
 
 #include "tst_recovery_journal.moc"
