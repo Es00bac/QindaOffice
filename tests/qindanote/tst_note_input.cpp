@@ -91,8 +91,8 @@ private slots:
 
         // The Text tool never inks with a finger; a tap opens a block.
         scene.page->setTool(NoteTool::Text);
-        QTest::touchEvent(scene.window, m_touch).press(0, scene.at(QPointF(200, 600)).toPoint(), scene.window);
-        QTest::touchEvent(scene.window, m_touch).release(0, scene.at(QPointF(200, 600)).toPoint(), scene.window);
+        QTest::touchEvent(scene.window, m_touch).press(0, scene.at(QPointF(550, 150)).toPoint(), scene.window);
+        QTest::touchEvent(scene.window, m_touch).release(0, scene.at(QPointF(550, 150)).toPoint(), scene.window);
         QTRY_VERIFY(scene.page->editingBlock() >= 0);
         QCOMPARE(strokes(scene), 1);
     }

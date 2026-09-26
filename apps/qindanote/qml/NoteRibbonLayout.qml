@@ -34,7 +34,7 @@ QtObject {
             { id: "tools", label: qsTr("Tools"), items: [
                 { action: "notePenTool", size: "large" }, { action: "noteHighlighterTool", size: "large" },
                 { action: "noteEraserTool", size: "large" }, { action: "noteTextTool", size: "large" },
-                { action: "noteTouchDrawAction", size: "large" }] },
+                "noteTouchDrawAction"] },
             { id: "ink", label: qsTr("Ink"), rows: [
                 [{ id: "inkColour", component: colorSlot }, { id: "inkWidth", component: widthSlot }],
                 [{ id: "penColours", label: qsTr("Pen"), iconName: "pen-tool", menu: penColours.concat(["|"]).concat(penWidths) },
