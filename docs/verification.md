@@ -697,6 +697,102 @@ and three days of slippage). Rationale in D-051; the model in
       open an exported `.xml` in Microsoft Project and in ProjectLibre;
       import a real Project-saved XML with resource calendars.
 
+### M49 gates (QindaBase — `libs/base_engine`, `apps/qindabase`)
+
+Automated by `ctest -R "base_|qindabase"` (headless; temp dirs and XDG
+dirs per test, so backups never touch the user's). Rationale in D-049;
+the file, types and API in [qindabase.md](qindabase.md).
+
+- [x] `tst_base_types` (3): type ids and declared types round-trip; foreign
+      affinities map; currency parses and prints exactly (grouping,
+      parentheses, too many decimals refused, INT64_MIN, 0.10 + 0.20 =
+      $0.30, QML doubles, zero-decimal currencies); every type parses what
+      people type and refuses the rest with a reason.
+- [x] `tst_base_file` (10): the `.qbase` identity (application_id at
+      offset 68 = "QBAS", journal DELETE); a plain SQLite file opens
+      byte-for-byte untouched until consent, then keeps its user_version;
+      non-databases refused; orphans reported by the integrity check;
+      backups never over a file, automatic backups named and kept; compact;
+      settings and unknown keys survive; captured changes undo and redo a
+      cascaded delete exactly; a changed record refuses a stale undo;
+      whole-database images restore; statement splitting.
+- [x] `tst_base_schema` (9): create/read back (captions, defaults, Date(),
+      indexes); refused designs (clashes, reserved names, two AutoNumbers,
+      bad defaults, dropping a referenced table); a table rename keeps
+      relationships; renames and added fields by plain ALTER; type changes
+      through the rebuild convert exactly (REAL 19.99 → 1999 cents, text
+      that does not fit kept and counted in the preview, date-time → date
+      backed up) and undo/redo as images; required/unique checked against
+      the data; dropping a field backs up and keeps enforcement; a
+      relationship refused while an orphan exists, then SET NULL works;
+      a foreign file's declared types survive a rebuild without adding
+      system tables.
+- [x] `tst_base_records` (6): sort, filter (every operator, OR filters via
+      the app), truncation; typed cell edits with named refusals, lookups
+      by display name, multi-cell steps; required fields on new records;
+      delete impact (blocked / cascades) and undo of a cascade; tab-separated
+      paste (quotes, updates + appends, one step, bad cell names its row);
+      exact totals (sum $158.46, average $39.62, count, max date).
+- [x] `tst_base_query` (7): criteria convert by type (> 20 on currency =
+      2000), Between/In/Like/Is Null/Not, bare words, quotes stay literal;
+      Or rows and cross-field criteria; joins + totals + Where + HAVING,
+      money expressions in minor units; parameters typed by their field;
+      hand-written SQL inspected (DDL and PRAGMA refused); update/delete/
+      append previewed, refused on a changed count, run and undone;
+      unknown design members round-trip.
+- [x] `tst_base_io` (5): saved objects (case-blind clash, rename, delete +
+      undo, a table rename rewrites their sources); CSV detection (`;`,
+      BOM, quoted delimiters, leading-zero codes, currency, dates, Yes/No)
+      and all-or-nothing import, skip-bad-rows, keyed ids, no half-imported
+      table; every template builds and its queries run; form mirror and
+      report snapshot shapes; Access import through fake mdb-tools, and
+      the message when they are missing.
+- [x] `tst_qindabase_service` (7): templates and navigation; table design
+      plan (readable SQL, bookkeeping summarised) → apply → undo/redo; a new
+      table and a relationship; renames carry forms and reports along;
+      queries (select into the datasheet, parameters asked, update with a
+      confirmed count and undo, saved drafts, SQL console); forms and
+      reports open as toolkit design files (DocumentManager), records saved
+      through the form exactly, wizards; CSV import as one step, CSV and
+      XLSX export of what is shown; maintenance; plain SQLite consent.
+- [x] `tst_qindabase_host` (5): 52 command ids with icons and labels, no
+      shared shortcut, all disabled without a database; enablement follows
+      the view and selection, contextual tabs; Undo/Redo over recorded
+      steps with the text of the step, a stale step clears the history
+      with a message, the designer's history while one is open; a dirty
+      design dirties the window and Save flushes it; Save As copies and
+      switches; a report is the print source (PDF export), leaving it
+      clears the source.
+- [x] `tst_qindabase_menu_export` (2): the exported tree passes the
+      desktop's validator with and without a database — File Edit View
+      Records Create External Data Design Database Tools AI Settings Help —
+      every `base` command appears exactly once, every exported id resolves
+      and fires.
+- [x] `tst_qindabase_ui` (10): the real `BaseWindow.qml` over the Donors &
+      Donations starter seeded with 40 donors, 4 campaigns and 120
+      donations: the start gallery and an untitled database; the datasheet
+      (lookup names, totals row, an edit undone from the Edit menu, filter by
+      selection, the PivotTable); the table designer with the relationship
+      and a pending plan; the query designer with a join and totals, run;
+      a form over 120 records; a report (120 rows, printable, PDF); the
+      relationships diagram and the SQL console; the plan dialog, CSV import
+      proposal, report wizard; the ribbon gate at 1280 and 520 px (Replace
+      menu-only); structural fixtures `qindabase_{1280,520}.txt`.
+      Grabs reviewed: `M49-iter*` (start, home, datasheet, pivot, table
+      design, query design and result, form, report and design,
+      relationships, SQL, plan dialog, import, report wizard; 1280 and
+      520). `M49-iter3-tkbranch-*` are the same run against QindaTK
+      `work/base-db-controls` (money in reports, aligned form labels, the
+      schema badge as a file name).
+- [ ] When QindaTK `work/base-db-controls` lands: rerun
+      `tst_qindabase_ui` with `QQO_UPDATE_FIXTURES=1` — the toolkit adds
+      `formStatus`, `formType_*` and `schemaDatabase` object names, so
+      `qindabase_1280.txt` changes at its FormDesigner lines (every other
+      QindaBase gate already passes against that branch).
+
+Still on the desktop: open a real Access file with mdb-tools installed;
+print a report to a real printer; two databases side by side.
+
 ### M47 gates (the QindaBooks app)
 
 - **UI** (`tst_qindabooks_ui`): the real `BooksWindow.qml` over a seeded

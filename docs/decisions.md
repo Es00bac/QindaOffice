@@ -219,6 +219,71 @@ Leveling can leave a day unresolved and says so. Durations are working
 time only (no elapsed durations; MSPDI elapsed lags import as working time
 with a warning).
 
+## D-049: QindaBase: one SQLite file, exact money, every change previewed and undoable
+
+**Date:** 2026-09-25 · **Status:** accepted (M49, `libs/base_engine`, `apps/qindabase`)
+
+**Context.** The user runs a community centre and a creative studio and
+wants an Access-class tool for their own records (donors, volunteers,
+clients, projects, stock) next to QindaBooks — without coupling the two
+file formats. QindaTK already has the database pieces an Access needs:
+`LocalDatabaseProvider`, `FormDesigner`, `ReportDesigner` +
+`LocalReportDocumentModel`, `DatabaseSchemaView`, `QueryBuilder` /
+`PivotView`, `EditableGrid`, `DiagramCanvas`. What it does not have is a
+file format, exact money, a query language people know, or undo for
+database changes. Small-office data is irreplaceable and rarely backed up.
+
+**Decision.**
+
+1. **One `.qbase` = one SQLite file = one window.** An ordinary SQLite 3
+   database (`application_id` "QBAS", journal `DELETE`) with the user's
+   tables plus `qb_meta`, `qb_objects` (queries, forms, reports as JSON;
+   unknown members kept) and `qb_fields` (captions, lookups, type ids). A
+   plain SQLite file opens as it is and is written to only after the user
+   agrees to add the system tables. Everything commits immediately (Access
+   semantics); Save is a no-op, Save As is copy-and-switch.
+2. **Types have fixed storage.** Currency is integer minor units parsed
+   digit by digit (no floating point in the engine's money path);
+   Decimal number is REAL; dates are ISO text; Yes/No is 0/1. The declared
+   type is the source of truth so other tools see sensible types.
+3. **Schema changes are plans.** Every design, relationship or DDL change
+   is an ordered list of single statements, shown with its SQL, previewed
+   against the data in a rolled-back transaction, applied in one
+   transaction with a foreign-key check before commit. Renames are plain
+   `ALTER … RENAME` (so references follow); everything else uses SQLite's
+   12-step table rebuild with the engine's own value conversion. A backup
+   (`VACUUM INTO`) precedes anything that drops or narrows data.
+4. **Undo is recorded, not reconstructed.** The engine talks to SQLite's C
+   API directly (not Qt Sql) for its session extension: a data edit's
+   changeset — cascades included — is the undo step, replayed with foreign
+   keys off; a schema step swaps whole-database images
+   (`sqlite3_serialize` + backup API; none over 64 MB, then a backup
+   instead). A replay that no longer applies clears the history and says
+   why. Action queries run only with the count the user confirmed.
+5. **Access's query grid, compiled to plain SQL.** Criteria and
+   expressions are Access-style text compiled by a small typed parser:
+   literals converted by the field they meet and quoted, `[unknown]`
+   becomes an asked-for parameter; the output is core SQLite only.
+   QindaTK's `QueryBuilder`/`PivotView` serve the PivotTable view (their
+   engine is a typed in-memory aggregator, not a SQL designer).
+6. **The toolkit renders, the engine owns the data.** Forms and reports
+   use QindaTK's designers over scratch *presentation databases* the
+   service writes (a form mirror with lookups as text; a report snapshot
+   with lookups as names, money as units) and design files the window
+   opens with `Tk.DocumentManager` — so the toolkit's pages, designers and
+   print path are reused unchanged while every record write goes through
+   the engine.
+
+**Consequences.** A `.qbase` opens in any SQLite tool, and any SQLite file
+opens in QindaBase. Money is exact in datasheets, totals rows and saved
+queries; QindaTK's report and pivot engines total in double precision, so
+money there is exact to ~15 significant digits (documented in
+qindabase.md). Reports read at most 4,000 rows. Undo does not survive
+closing the window or Compact and Repair. Access import depends on
+mdb-tools at run time and brings tables only. Toolkit follow-ups noted:
+report number formats per column, `FormDesigner` label alignment,
+`DatabaseSchemaView`'s path badge crowding its table picker.
+
 ## D-047: Bookkeeping app: one company per window, a service over the engine, one print source
 
 **Date:** 2026-09-25 · **Status:** accepted (M47)

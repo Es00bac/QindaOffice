@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- QindaBase: a stack of records, pleased that every one of them fits,
+     with the primary key it keeps close. Suite icon family: chunky ink
+     outline, flat fills, dot eyes + arc smile + blush, one signature prop
+     (the key), a few degrees off square. Teal is its own suite colour. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g fill="none" stroke="#3a3347" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">
+    <g transform="rotate(-3 30 32)">
+      <path d="M11 15 V47 A19 6.5 0 0 0 49 47 V15" fill="#5cc8c0"/>
+      <ellipse cx="30" cy="15" rx="19" ry="6.5" fill="#fffaf0"/>
+      <path d="M11 26 A19 6.5 0 0 0 49 26" stroke-width="2"/>
+      <path d="M16 15 H44" stroke="#a9bad4" stroke-width="1.4"/>
+      <circle cx="18.5" cy="42" r="2.8" fill="#ff8fa3" opacity="0.5" stroke="none"/>
+      <circle cx="41.5" cy="42" r="2.8" fill="#ff8fa3" opacity="0.5" stroke="none"/>
+      <circle cx="24" cy="37.5" r="2.2" fill="#3a3347" stroke="none"/>
+      <circle cx="36" cy="37.5" r="2.2" fill="#3a3347" stroke="none"/>
+      <path d="M26.8 42.6 Q30 45.8 33.2 42.6" stroke-width="2"/>
+    </g>
+    <g transform="rotate(14 51 50)">
+      <circle cx="48.5" cy="47" r="5.2" fill="#ffd97d"/>
+      <circle cx="48.5" cy="47" r="1.6" fill="#fffaf0" stroke-width="1.4"/>
+      <path d="M52.5 50.5 L58 56 M55.6 53.6 L54 55.2 M57 55 L55.6 56.4" stroke-width="2"/>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,331 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// BaseHost: the QindaBase commands (ActionEntries), menus and enablement.
+//
+// AGENT-CONTRACT (rule 5): every id below is the command's activation
+// identity for the panel export, the ribbon and the keyboard — never rename
+// or reuse one; add new ids for new commands. An id appears in the menu
+// tree exactly once (the desktop validator rejects duplicates).
+#include "base_document.h"
+#include "base_host.h"
+
+#include "standard_actions.h"
+
+#include <QKeySequence>
+#include <QUndoStack>
+
+#include <iterator>
+
+namespace QindaOffice::Apps::Base {
+
+using Quick::ActionEntry;
+using Quick::MenuNode;
+namespace ActionId = Quick::ActionId;
+
+namespace {
+
+struct Command {
+    const char *id;
+    const char *text;
+    const char *shortcut;
+    const char *icon;
+};
+
+// Every command the QML answers (actionRequested(id)).
+constexpr Command kCommands[] = {
+    // Views and objects
+    {"baseOpenObjectAction", QT_TRANSLATE_NOOP("BaseHost", "&Open"), "", "external-link"},
+    {"baseViewDesignAction", QT_TRANSLATE_NOOP("BaseHost", "&Design View"), "", "square-pen"},
+    {"baseViewSqlAction", QT_TRANSLATE_NOOP("BaseHost", "S&QL View"), "", "code"},
+    {"baseRenameObjectAction", QT_TRANSLATE_NOOP("BaseHost", "Re&name…"), "F2", "text-cursor-input"},
+    {"baseDeleteObjectAction", QT_TRANSLATE_NOOP("BaseHost", "De&lete Object…"), "", "trash-2"},
+    // Records
+    {"baseNewRecordAction", QT_TRANSLATE_NOOP("BaseHost", "&New Record"), "Ctrl+Shift+N", "list-plus"},
+    {"baseSaveRecordAction", QT_TRANSLATE_NOOP("BaseHost", "Sa&ve Record"), "Shift+Return", "check"},
+    {"baseDeleteRecordAction", QT_TRANSLATE_NOOP("BaseHost", "&Delete Record…"), "Ctrl+Delete", "list-minus"},
+    {"baseRefreshAction", QT_TRANSLATE_NOOP("BaseHost", "Re&fresh"), "F5", "refresh-cw"},
+    // Sort and filter
+    {"baseSortAscendingAction", QT_TRANSLATE_NOOP("BaseHost", "Sort &Ascending"), "", "arrow-up-a-z"},
+    {"baseSortDescendingAction", QT_TRANSLATE_NOOP("BaseHost", "Sort D&escending"), "", "arrow-down-z-a"},
+    {"baseFilterBySelectionAction", QT_TRANSLATE_NOOP("BaseHost", "Filter by &Selection"), "", "funnel"},
+    {"baseFilterExcludingAction", QT_TRANSLATE_NOOP("BaseHost", "Filter &Excluding Selection"), "", "circle-off"},
+    {"baseClearFiltersAction", QT_TRANSLATE_NOOP("BaseHost", "&Clear Sort and Filters"), "", "eraser"},
+    // Create
+    {"baseNewTableAction", QT_TRANSLATE_NOOP("BaseHost", "&Table…"), "", "table"},
+    {"baseTableDesignAction", QT_TRANSLATE_NOOP("BaseHost", "Table &Design"), "", "table-2"},
+    {"baseQueryDesignAction", QT_TRANSLATE_NOOP("BaseHost", "&Query Design"), "", "funnel"},
+    {"baseNewFormAction", QT_TRANSLATE_NOOP("BaseHost", "&Form"), "", "layout-template"},
+    {"baseFormWizardAction", QT_TRANSLATE_NOOP("BaseHost", "Form &Wizard…"), "", "wand-sparkles"},
+    {"baseNewReportAction", QT_TRANSLATE_NOOP("BaseHost", "&Report"), "", "scroll-text"},
+    {"baseReportWizardAction", QT_TRANSLATE_NOOP("BaseHost", "Report Wi&zard…"), "", "wand"},
+    // External data
+    {"baseImportCsvAction", QT_TRANSLATE_NOOP("BaseHost", "Import &Text or CSV…"), "", "file-input"},
+    {"baseImportAccessAction", QT_TRANSLATE_NOOP("BaseHost", "Import &Access Database…"), "", "import"},
+    {"baseExportCsvAction", QT_TRANSLATE_NOOP("BaseHost", "Export as &CSV…"), "", "file-output"},
+    {"baseExportXlsxAction", QT_TRANSLATE_NOOP("BaseHost", "Export as E&xcel Workbook…"), "", "file-spreadsheet"},
+    {"baseExportPdfAction", QT_TRANSLATE_NOOP("BaseHost", "Export Report as &PDF…"), "", "file-down"},
+    // Database tools
+    {"baseRelationshipsAction", QT_TRANSLATE_NOOP("BaseHost", "&Relationships"), "", "git-branch"},
+    {"baseSqlConsoleAction", QT_TRANSLATE_NOOP("BaseHost", "&SQL"), "", "terminal"},
+    {"baseCompactRepairAction", QT_TRANSLATE_NOOP("BaseHost", "&Compact and Repair…"), "", "wrench"},
+    {"baseCheckIntegrityAction", QT_TRANSLATE_NOOP("BaseHost", "Check &Integrity"), "", "circle-check"},
+    {"baseBackupAction", QT_TRANSLATE_NOOP("BaseHost", "&Back Up Database"), "", "archive"},
+    {"baseDatabasePropertiesAction", QT_TRANSLATE_NOOP("BaseHost", "Database &Properties…"), "", "database"},
+    // Table design (contextual)
+    {"baseDesignAddFieldAction", QT_TRANSLATE_NOOP("BaseHost", "&Add Field"), "", "plus"},
+    {"baseDesignDeleteFieldAction", QT_TRANSLATE_NOOP("BaseHost", "D&elete Field"), "", "minus"},
+    {"baseDesignMoveUpAction", QT_TRANSLATE_NOOP("BaseHost", "Move Field &Up"), "", "arrow-up"},
+    {"baseDesignMoveDownAction", QT_TRANSLATE_NOOP("BaseHost", "Move Field Do&wn"), "", "arrow-down"},
+    {"baseDesignPrimaryKeyAction", QT_TRANSLATE_NOOP("BaseHost", "&Primary Key"), "", "key-round"},
+    {"baseDesignApplyAction", QT_TRANSLATE_NOOP("BaseHost", "&Preview and Apply…"), "", "check-check"},
+    {"baseDesignDiscardAction", QT_TRANSLATE_NOOP("BaseHost", "&Discard Changes"), "", "undo"},
+    // Query design (contextual)
+    {"baseQueryRunAction", QT_TRANSLATE_NOOP("BaseHost", "&Run"), "Ctrl+R", "play"},
+    {"baseQueryAddTableAction", QT_TRANSLATE_NOOP("BaseHost", "Add &Table…"), "", "table"},
+    {"baseQueryClearAction", QT_TRANSLATE_NOOP("BaseHost", "&Clear Grid"), "", "eraser"},
+    // Form and report design (contextual)
+    {"baseFormPreviewAction", QT_TRANSLATE_NOOP("BaseHost", "Pre&view Layout"), "", "eye"},
+    {"baseReportRefreshAction", QT_TRANSLATE_NOOP("BaseHost", "Refresh Re&port"), "", "refresh-ccw"},
+};
+
+// Toggles.
+constexpr Command kToggles[] = {
+    {"baseTotalsRowAction", QT_TRANSLATE_NOOP("BaseHost", "&Totals Row"), "", "sigma"},
+    {"baseFilterAction", QT_TRANSLATE_NOOP("BaseHost", "&Filter Bar"), "Ctrl+Shift+L", "sliders-horizontal"},
+    {"baseQueryTotalsAction", QT_TRANSLATE_NOOP("BaseHost", "&Totals"), "", "sigma"},
+    {"baseShowNavigationAction", QT_TRANSLATE_NOOP("BaseHost", "&Navigation Pane"), "F11", "panel-left"},
+};
+
+// The query type, a radio group mirrored from the designer's design.
+constexpr Command kQueryTypes[] = {
+    {"baseQueryTypeSelectAction", QT_TRANSLATE_NOOP("BaseHost", "&Select Query"), "", "table-2"},
+    {"baseQueryTypeUpdateAction", QT_TRANSLATE_NOOP("BaseHost", "&Update Query"), "", "pencil"},
+    {"baseQueryTypeDeleteAction", QT_TRANSLATE_NOOP("BaseHost", "&Delete Query"), "", "trash"},
+    {"baseQueryTypeAppendAction", QT_TRANSLATE_NOOP("BaseHost", "&Append Query"), "", "copy-plus"},
+};
+
+QString id(const char *raw)
+{
+    return QString::fromLatin1(raw);
+}
+
+MenuNode a(const char *raw)
+{
+    return MenuNode::action(QString::fromLatin1(raw));
+}
+
+} // namespace
+
+void BaseHost::createActions()
+{
+    for (const Command &c : kCommands) {
+        ActionEntry *entry = actions()->add(id(c.id), tr(c.text), QKeySequence(QString::fromLatin1(c.shortcut)), id(c.icon));
+        connect(entry, &ActionEntry::triggered, this, [this, raw = c.id] { emit actionRequested(id(raw)); });
+    }
+    for (const Command &c : kToggles) {
+        ActionEntry *entry = actions()->add(id(c.id), tr(c.text), QKeySequence(QString::fromLatin1(c.shortcut)), id(c.icon));
+        entry->setCheckable(true);
+        connect(entry, &ActionEntry::triggered, this, [this, raw = c.id] { emit actionRequested(id(raw)); });
+    }
+    action(id("baseShowNavigationAction"))->setChecked(true);
+    connect(action(id("baseShowNavigationAction")), &ActionEntry::toggled, this, [this](bool on) {
+        m_navigationVisible = on;
+        emit navigationChanged();
+    });
+    for (const Command &c : kQueryTypes) {
+        ActionEntry *entry = actions()->add(id(c.id), tr(c.text), QKeySequence(QString::fromLatin1(c.shortcut)), id(c.icon));
+        entry->setCheckable(true);
+        entry->setRadioGroup(QStringLiteral("baseQueryType"));
+        connect(entry, &ActionEntry::triggered, this, [this, raw = c.id] { emit actionRequested(id(raw)); });
+    }
+    action(id("baseQueryTypeSelectAction"))->setChecked(true);
+    action(id(ActionId::kFileNew))->setText(tr("&New Database…"));
+
+    // Standard commands QindaBase answers.
+    const auto on = [this](const char *raw, auto &&slot) {
+        connect(action(id(raw)), &ActionEntry::triggered, this, std::forward<decltype(slot)>(slot));
+    };
+    on(ActionId::kEditUndo, [this] {
+        if (m_designHistory) {
+            emit actionRequested(id(ActionId::kEditUndo));
+        } else {
+            m_document->undoStack()->undo();
+        }
+    });
+    on(ActionId::kEditRedo, [this] {
+        if (m_designHistory) {
+            emit actionRequested(id(ActionId::kEditRedo));
+        } else {
+            m_document->undoStack()->redo();
+        }
+    });
+    for (const char *raw : {ActionId::kEditCut, ActionId::kEditCopy, ActionId::kEditPaste, ActionId::kEditSelectAll,
+                            ActionId::kEditFind, ActionId::kEditFindNext, ActionId::kEditFindPrevious}) {
+        on(raw, [this, raw] { emit actionRequested(id(raw)); });
+    }
+    on(ActionId::kViewZoomIn, [this] {
+        m_zoom = std::min(3.0, m_zoom * 1.25);
+        emit zoomChanged();
+    });
+    on(ActionId::kViewZoomOut, [this] {
+        m_zoom = std::max(0.25, m_zoom / 1.25);
+        emit zoomChanged();
+    });
+    on(ActionId::kViewZoomReset, [this] {
+        m_zoom = 1.0;
+        emit zoomChanged();
+    });
+}
+
+void BaseHost::insertMenus()
+{
+    Quick::MenuTree *tree = menuTree();
+    const QString close = id(ActionId::kFileCloseWindow);
+    tree->insertInto(QStringLiteral("fileMenu"), close, a("baseBackupAction"));
+    tree->insertInto(QStringLiteral("fileMenu"), close, a("baseDatabasePropertiesAction"));
+    tree->insertInto(QStringLiteral("fileMenu"), close, MenuNode::separator());
+    const QString before = QStringLiteral("aiMenu");
+    tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("baseRecordsMenu"), tr("&Records"),
+                                                     {a("baseNewRecordAction"), a("baseSaveRecordAction"),
+                                                      a("baseDeleteRecordAction"), a("baseRefreshAction"),
+                                                      a("baseTotalsRowAction"), MenuNode::separator(),
+                                                      a("baseSortAscendingAction"), a("baseSortDescendingAction"),
+                                                      a("baseFilterBySelectionAction"), a("baseFilterExcludingAction"),
+                                                      a("baseFilterAction"), a("baseClearFiltersAction")}));
+    tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("baseCreateMenu"), tr("&Create"),
+                                                     {a("baseNewTableAction"), a("baseTableDesignAction"),
+                                                      MenuNode::separator(), a("baseQueryDesignAction"),
+                                                      MenuNode::separator(), a("baseNewFormAction"),
+                                                      a("baseFormWizardAction"), MenuNode::separator(),
+                                                      a("baseNewReportAction"), a("baseReportWizardAction")}));
+    tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("baseExternalMenu"), tr("E&xternal Data"),
+                                                     {a("baseImportCsvAction"), a("baseImportAccessAction"),
+                                                      MenuNode::separator(), a("baseExportCsvAction"),
+                                                      a("baseExportXlsxAction"), a("baseExportPdfAction")}));
+    tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("baseDesignMenu"), tr("&Design"),
+                                                     {a("baseDesignAddFieldAction"), a("baseDesignDeleteFieldAction"),
+                                                      a("baseDesignMoveUpAction"), a("baseDesignMoveDownAction"),
+                                                      a("baseDesignPrimaryKeyAction"), a("baseDesignApplyAction"),
+                                                      a("baseDesignDiscardAction"), MenuNode::separator(),
+                                                      a("baseQueryRunAction"), a("baseQueryAddTableAction"),
+                                                      a("baseQueryTotalsAction"), a("baseQueryTypeSelectAction"),
+                                                      a("baseQueryTypeUpdateAction"), a("baseQueryTypeDeleteAction"),
+                                                      a("baseQueryTypeAppendAction"), a("baseQueryClearAction"),
+                                                      MenuNode::separator(), a("baseFormPreviewAction"),
+                                                      a("baseReportRefreshAction")}));
+    tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("baseToolsMenu"), tr("Database &Tools"),
+                                                     {a("baseRelationshipsAction"), a("baseSqlConsoleAction"),
+                                                      MenuNode::separator(), a("baseCompactRepairAction"),
+                                                      a("baseCheckIntegrityAction")}));
+    // View: the object views first, then the standard chrome toggles.
+    const QString firstView = id(ActionId::kViewZoomIn);
+    for (const char *raw : {"baseOpenObjectAction", "baseViewDesignAction", "baseViewSqlAction"}) {
+        tree->insertInto(QStringLiteral("viewMenu"), firstView, a(raw));
+    }
+    tree->insertInto(QStringLiteral("viewMenu"), firstView, MenuNode::separator());
+    tree->insertInto(QStringLiteral("viewMenu"), firstView, a("baseShowNavigationAction"));
+    tree->insertInto(QStringLiteral("viewMenu"), firstView, a("baseRenameObjectAction"));
+    tree->insertInto(QStringLiteral("viewMenu"), firstView, a("baseDeleteObjectAction"));
+    tree->insertInto(QStringLiteral("viewMenu"), firstView, MenuNode::separator());
+}
+
+void BaseHost::syncEnablement()
+{
+    const bool db = m_service != nullptr && m_service->hasDatabase();
+    const bool writable = db && !m_service->readOnly();
+    for (const Command &c : kCommands) {
+        actions()->setEnabled(id(c.id), db);
+    }
+    for (const Command &c : kToggles) {
+        actions()->setEnabled(id(c.id), db);
+    }
+    const DatasheetModel *sheet = m_service != nullptr ? m_service->datasheet() : nullptr;
+    const bool datasheet = db && m_view == QLatin1String("datasheet") && sheet != nullptr && !sheet->sourceKind().isEmpty();
+    const bool tableSheet = datasheet && sheet->sourceKind() == QLatin1String("table");
+    const bool editable = tableSheet && sheet->editable();
+    const bool form = db && m_view == QLatin1String("form");
+    const bool selected = db && !m_selectedName.isEmpty();
+    const bool dataObject = selected && (m_selectedKind == QLatin1String("table") || m_selectedKind == QLatin1String("query"));
+    actions()->setEnabled({id("baseOpenObjectAction"), id("baseViewDesignAction"), id("baseRenameObjectAction"),
+                           id("baseDeleteObjectAction")},
+                          selected && writable);
+    actions()->setEnabled(id("baseOpenObjectAction"), selected);
+    actions()->setEnabled(id("baseViewSqlAction"),
+                          db && (m_selectedKind == QLatin1String("query") || m_view == QLatin1String("queryDesign")));
+    actions()->setEnabled({id("baseNewRecordAction"), id("baseDeleteRecordAction")}, (editable || form) && writable);
+    actions()->setEnabled(id("baseSaveRecordAction"), (editable || form) && writable);
+    actions()->setEnabled({id("baseSortAscendingAction"), id("baseSortDescendingAction"), id("baseTotalsRowAction")},
+                          datasheet);
+    actions()->setEnabled({id("baseFilterBySelectionAction"), id("baseFilterExcludingAction"), id("baseFilterAction"),
+                           id("baseClearFiltersAction")},
+                          tableSheet);
+    actions()->setEnabled(id("baseRefreshAction"), datasheet || form || m_view == QLatin1String("report"));
+    actions()->setEnabled({id("baseNewFormAction"), id("baseNewReportAction")}, dataObject && writable);
+    actions()->setEnabled({id("baseExportCsvAction"), id("baseExportXlsxAction")}, datasheet || dataObject);
+    actions()->setEnabled(id("baseExportPdfAction"), printable());
+    for (const char *raw : {"baseNewTableAction", "baseTableDesignAction", "baseQueryDesignAction", "baseFormWizardAction",
+                            "baseReportWizardAction", "baseImportCsvAction", "baseImportAccessAction",
+                            "baseCompactRepairAction", "baseDatabasePropertiesAction"}) {
+        actions()->setEnabled(id(raw), writable);
+    }
+    const bool tableDesign = db && m_view == QLatin1String("tableDesign");
+    for (const char *raw : {"baseDesignAddFieldAction", "baseDesignDeleteFieldAction", "baseDesignMoveUpAction",
+                            "baseDesignMoveDownAction", "baseDesignPrimaryKeyAction", "baseDesignApplyAction",
+                            "baseDesignDiscardAction"}) {
+        actions()->setEnabled(id(raw), tableDesign && writable);
+    }
+    const bool queryDesign = db && m_view == QLatin1String("queryDesign");
+    for (const char *raw : {"baseQueryRunAction", "baseQueryAddTableAction", "baseQueryClearAction",
+                            "baseQueryTotalsAction"}) {
+        actions()->setEnabled(id(raw), queryDesign);
+    }
+    for (const Command &c : kQueryTypes) {
+        actions()->setEnabled(id(c.id), queryDesign && writable);
+    }
+    actions()->setEnabled(id("baseFormPreviewAction"), form);
+    actions()->setEnabled(id("baseReportRefreshAction"), db && m_view == QLatin1String("report"));
+    // Undo/redo: the designer's history while one is active, else the database's.
+    QUndoStack *stack = m_document->undoStack();
+    actions()->setEnabled(id(ActionId::kEditUndo), m_designHistory ? m_designCanUndo : stack->canUndo());
+    actions()->setEnabled(id(ActionId::kEditRedo), m_designHistory ? m_designCanRedo : stack->canRedo());
+    if (ActionEntry *undo = action(id(ActionId::kEditUndo)); undo != nullptr && !m_designHistory) {
+        undo->setText(stack->canUndo() ? tr("&Undo %1").arg(stack->undoText()) : tr("&Undo"));
+    }
+    actions()->setEnabled({id(ActionId::kEditCut), id(ActionId::kEditPaste)}, editable && writable);
+    actions()->setEnabled({id(ActionId::kEditCopy), id(ActionId::kEditSelectAll), id(ActionId::kEditFind),
+                           id(ActionId::kEditFindNext), id(ActionId::kEditFindPrevious)},
+                          datasheet);
+    actions()->setEnabled(id(ActionId::kEditReplace), false);
+    const bool zoomable = db && m_view == QLatin1String("report");
+    actions()->setEnabled({id(ActionId::kViewZoomIn), id(ActionId::kViewZoomOut), id(ActionId::kViewZoomReset)},
+                          zoomable);
+    actions()->setEnabled({id(ActionId::kFilePrint), id(ActionId::kFilePrintPreview)}, printable());
+    updateStatus();
+}
+
+void BaseHost::setChecked(const QString &commandId, bool checked)
+{
+    if (ActionEntry *entry = action(commandId)) {
+        entry->setChecked(checked);
+    }
+}
+
+void BaseHost::updateStatus()
+{
+    const DatasheetModel *sheet = m_service != nullptr ? m_service->datasheet() : nullptr;
+    if (m_view == QLatin1String("datasheet") && sheet != nullptr && !sheet->sourceKind().isEmpty()) {
+        QString text = tr("%1 · %n record(s)", nullptr, sheet->recordCount()).arg(sheet->sourceName());
+        if (!sheet->filters().isEmpty()) {
+            text += tr(" · filtered");
+        }
+        if (sheet->truncated()) {
+            text += tr(" · showing the first %1 of %2").arg(sheet->recordCount()).arg(sheet->totalRows());
+        }
+        setStatusInfo(text);
+    } else if (!m_name.isEmpty()) {
+        setStatusInfo(m_name);
+    } else {
+        setStatusInfo(m_service != nullptr ? m_service->databaseName() : QString());
+    }
+}
+
+} // namespace QindaOffice::Apps::Base

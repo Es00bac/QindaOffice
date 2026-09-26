@@ -60,6 +60,11 @@ QList<AppEntry> officeApps()
          QObject::tr("Project plans"),
          QObject::tr("Tasks, dates and people on a Gantt chart that reschedules itself."),
          QObject::tr("New project")},
+        {QStringLiteral("QindaBase"), QStringLiteral("org.qindaqt.QindaBase"),
+         QStringLiteral("qindabase"), QStringLiteral("QindaBase"),
+         QObject::tr("Database"),
+         QObject::tr("Tables, queries, forms and reports, all in one file."),
+         QObject::tr("New database")},
     };
 }
 
@@ -88,13 +93,14 @@ QStringList openNameFilters()
 {
     return {QObject::tr("All office documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt "
                         "*.xlsx *.ods *.xls *.xlsm *.csv *.tsv *.odp *.pptx *.fodp *.qbooks "
-                        "*.qdiagram *.drawio *.qplan *.ics *.eml)"),
+                        "*.qdiagram *.drawio *.qplan *.qbase *.ics *.eml)"),
             QObject::tr("Documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt)"),
             QObject::tr("Spreadsheets (*.xlsx *.ods *.xls *.xlsm *.csv *.tsv)"),
             QObject::tr("Presentations (*.odp *.pptx *.fodp)"),
             QObject::tr("Company books (*.qbooks)"),
             QObject::tr("Diagrams (*.qdiagram *.drawio)"),
             QObject::tr("Project plans (*.qplan)"),
+            QObject::tr("Databases (*.qbase)"),
             QObject::tr("Calendars and messages (*.ics *.eml)"),
             QObject::tr("All files (*)")};
 }
@@ -126,6 +132,7 @@ QString appIdForPath(const QString &path)
         {QStringLiteral("qdiagram"), QStringLiteral("QindaDiagram")},
         {QStringLiteral("drawio"), QStringLiteral("QindaDiagram")},
         {QStringLiteral("qplan"), QStringLiteral("QindaPlan")},
+        {QStringLiteral("qbase"), QStringLiteral("QindaBase")},
         {QStringLiteral("ics"), QStringLiteral("QindaMail")},
         {QStringLiteral("eml"), QStringLiteral("QindaMail")},
     };

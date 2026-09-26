@@ -92,8 +92,8 @@ void LauncherTest::initTestCase()
 void LauncherTest::catalogNamesFourDistinctApps()
 {
     const QList<AppEntry> apps = officeApps();
-    // Write, Calc, Show, Note, Mail (M44), Books (M47), Diagram (M50) and
-    // Plan (M51).
+    // Write, Calc, Show, Note, Mail (M44), Books (M47), Base (M49),
+    // Diagram (M50) and Plan (M51).
     QVERIFY(apps.size() >= 5);
     QSet<QString> ids;
     QSet<QString> binaries;

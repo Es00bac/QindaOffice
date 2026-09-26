@@ -37,4 +37,18 @@
     <!-- No magic: QJsonDocument writes keys sorted, so "format" has no
          fixed offset; the glob identifies the file (plan_file.h). -->
   </mime-type>
+  <mime-type type="application/x-qindabase">
+    <comment>QindaBase database</comment>
+    <comment xml:lang="en">QindaBase database</comment>
+    <sub-class-of type="application/vnd.sqlite3"/>
+    <glob pattern="*.qbase"/>
+    <!-- SQLite header, and PRAGMA application_id "QBAS" (0x51424153) at
+         offset 68 — what tells a QindaBase database from any other SQLite
+         file (which QindaBase also opens, as application/vnd.sqlite3). -->
+    <magic priority="80">
+      <match type="string" value="SQLite format 3\000" offset="0">
+        <match type="big32" value="0x51424153" offset="68"/>
+      </match>
+    </magic>
+  </mime-type>
 </mime-info>

@@ -15,3 +15,5 @@ add_subdirectory(qindabooks)
 add_subdirectory(qindadiagram)
 # QindaPlan (M51, D-051): one project per window over plan_engine/plan_output.
 add_subdirectory(qindaplan)
+# QindaBase (M49, D-049): one database per window over base_engine.
+add_subdirectory(qindabase)
