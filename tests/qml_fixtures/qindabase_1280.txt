@@ -1773,10 +1773,10 @@ QQuickRootItem#BaseWindow
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_editPasteAction
                 RibbonButton#ribbonAction_editPasteAction
-                  Icon#ribbonButtonIcon [hidden]
+                  Icon#ribbonButtonIcon
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel [hidden]
+                  QQuickText#ribbonButtonLabel
             RibbonGroup#ribbonGroup_find
               Overline#ribbonGroupCaption
               QQuickRectangle#ribbonGroupCard
@@ -1833,10 +1833,10 @@ QQuickRootItem#BaseWindow
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_baseNewRecordAction
                 RibbonButton#ribbonAction_baseNewRecordAction
-                  Icon#ribbonButtonIcon [hidden]
+                  Icon#ribbonButtonIcon
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel [hidden]
+                  QQuickText#ribbonButtonLabel
               RibbonSlot#ribbonItem_baseRefreshAction
                 RibbonButton#ribbonAction_baseRefreshAction
                   Icon#ribbonButtonIcon [hidden]
@@ -1899,10 +1899,10 @@ QQuickRootItem#BaseWindow
               QQuickRectangle#ribbonGroupCard
               RibbonSlot#ribbonItem_baseOpenObjectAction
                 RibbonButton#ribbonAction_baseOpenObjectAction
-                  Icon#ribbonButtonIcon [hidden]
+                  Icon#ribbonButtonIcon
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel [hidden]
+                  QQuickText#ribbonButtonLabel
               RibbonSlot#ribbonItem_baseViewDesignAction
                 RibbonButton#ribbonAction_baseViewDesignAction
                   Icon#ribbonButtonIcon [hidden]
