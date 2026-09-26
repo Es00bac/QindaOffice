@@ -13,3 +13,5 @@ add_subdirectory(qindamail)
 add_subdirectory(qindabooks)
 # QindaDiagram (M50, D-050): one drawing per window over diagram_engine.
 add_subdirectory(qindadiagram)
+# QindaBase (M49, D-049): one database per window over base_engine.
+add_subdirectory(qindabase)

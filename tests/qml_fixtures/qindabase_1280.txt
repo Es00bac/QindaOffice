@@ -1,0 +1,1916 @@
+QQuickRootItem#BaseWindow
+  MenuBarFromModel#officeMenuBar
+  QQuickControl#ApplicationWindowContentControl
+    QQuickContentItem#ApplicationWindow
+      QQuickItem#appContent
+        QQuickItem#baseContent
+          Flex#baseRoot
+            NavigationPane#navigationPane
+              IconButton#navigationCreate
+              Label#navigationTitle
+              QQuickRectangle#boxFocusRing [hidden]
+              SearchField#navigationSearch
+                IconButton#fieldClear [hidden]
+              SectionHeader#navigationSection_form
+                Caption#sectionCount_Forms [hidden]
+                Overline#sectionTitle
+              SectionHeader#navigationSection_query
+                Caption#sectionCount_Queries [hidden]
+                Overline#sectionTitle
+              SectionHeader#navigationSection_report
+                Caption#sectionCount_Reports [hidden]
+                Overline#sectionTitle
+              SectionHeader#navigationSection_table
+                Caption#sectionCount_Tables [hidden]
+                Overline#sectionTitle
+              TreeRow#navigationItem_form_Donation Entry
+                Caption#rowSecondary
+                Label#rowText
+                QQuickItem#treeChevron
+                QQuickRectangle#rowFocusRing [hidden]
+                QQuickRectangle#treeFocusRing [hidden]
+                TextField#treeEditor [hidden]
+                  IconButton#fieldClear [hidden]
+              TreeRow#navigationItem_form_Donor
+                Caption#rowSecondary
+                Label#rowText
+                QQuickItem#treeChevron
+                QQuickRectangle#rowFocusRing [hidden]
+                QQuickRectangle#treeFocusRing [hidden]
+                TextField#treeEditor [hidden]
+                  IconButton#fieldClear [hidden]
+              TreeRow#navigationItem_query_Donation Details
+                Caption#rowSecondary
+                Label#rowText
+                QQuickItem#treeChevron
+                QQuickRectangle#rowFocusRing [hidden]
+                QQuickRectangle#treeFocusRing [hidden]
+                TextField#treeEditor [hidden]
+                  IconButton#fieldClear [hidden]
+              TreeRow#navigationItem_query_Donations in a Period
+                Caption#rowSecondary
+                Label#rowText
+                QQuickItem#treeChevron
+                QQuickRectangle#rowFocusRing [hidden]
+                QQuickRectangle#treeFocusRing [hidden]
+                TextField#treeEditor [hidden]
+                  IconButton#fieldClear [hidden]
+              TreeRow#navigationItem_query_Totals by Donor
+                Caption#rowSecondary
+                Label#rowText
+                QQuickItem#treeChevron
+                QQuickRectangle#rowFocusRing [hidden]
+                QQuickRectangle#treeFocusRing [hidden]
+                TextField#treeEditor [hidden]
+                  IconButton#fieldClear [hidden]
+              TreeRow#navigationItem_report_Donations by Donor
+                Caption#rowSecondary
+                Label#rowText
+                QQuickItem#treeChevron
+                QQuickRectangle#rowFocusRing [hidden]
+                QQuickRectangle#treeFocusRing [hidden]
+                TextField#treeEditor [hidden]
+                  IconButton#fieldClear [hidden]
+              TreeRow#navigationItem_table_campaigns
+                Caption#rowSecondary
+                Label#rowText
+                QQuickItem#treeChevron
+                QQuickRectangle#rowFocusRing [hidden]
+                QQuickRectangle#treeFocusRing [hidden]
+                TextField#treeEditor [hidden]
+                  IconButton#fieldClear [hidden]
+              TreeRow#navigationItem_table_donations
+                Caption#rowSecondary
+                Label#rowText
+                QQuickItem#treeChevron
+                QQuickRectangle#rowFocusRing [hidden]
+                QQuickRectangle#treeFocusRing [hidden]
+                TextField#treeEditor [hidden]
+                  IconButton#fieldClear [hidden]
+              TreeRow#navigationItem_table_donors
+                Caption#rowSecondary
+                Label#rowText
+                QQuickItem#treeChevron
+                QQuickRectangle#rowFocusRing [hidden]
+                QQuickRectangle#treeFocusRing [hidden]
+                TextField#treeEditor [hidden]
+                  IconButton#fieldClear [hidden]
+            QQuickItem#baseMain
+              Box#datasheetHeader
+                Heading#datasheetTitle
+                QQuickRectangle#boxFocusRing [hidden]
+                SearchField#datasheetFind [hidden]
+                  IconButton#fieldClear [hidden]
+                Segmented#datasheetMode
+                  QQuickAbstractButton#segment_0
+                    QQuickRectangle#segmentFocus_0 [hidden]
+                  QQuickAbstractButton#segment_1
+                    QQuickRectangle#segmentFocus_1 [hidden]
+              Box#formHeader [hidden]
+                Heading#formName [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#formNavigator [hidden]
+                IconButton#formDelete [hidden]
+                IconButton#formFirst [hidden]
+                IconButton#formLast [hidden]
+                IconButton#formNew [hidden]
+                IconButton#formNext [hidden]
+                IconButton#formPrevious [hidden]
+                Label#formPosition [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#propertyEditor [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                TextField#fieldCaption [hidden]
+                  IconButton#fieldClear [hidden]
+              Box#propertyEditor [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                Switch#fieldRequired [hidden]
+              Box#propertyEditor [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                TextField#fieldDefault [hidden]
+                  IconButton#fieldClear [hidden]
+              Box#propertyEditor [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                Segmented#fieldIndexed [hidden]
+                  QQuickAbstractButton#segment_0 [hidden]
+                    QQuickRectangle#segmentFocus_0 [hidden]
+                  QQuickAbstractButton#segment_1 [hidden]
+                    QQuickRectangle#segmentFocus_1 [hidden]
+                  QQuickAbstractButton#segment_2 [hidden]
+                    QQuickRectangle#segmentFocus_2 [hidden]
+              Box#propertyEditor [hidden]
+                IconButton#fieldClear [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#propertyEditor [hidden]
+                ComboBox#fieldRelatedTable [hidden]
+                  QQuickText#comboDisplayText [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#propertyEditor [hidden]
+                ComboBox#fieldOnDelete [hidden]
+                  QQuickText#comboDisplayText [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#propertyEditor [hidden]
+                ComboBox#fieldLookupTable [hidden]
+                  QQuickText#comboDisplayText [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#propertyEditor [hidden]
+                ComboBox#fieldLookupDisplay [hidden]
+                  QQuickText#comboDisplayText [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#queryDesignHeader [hidden]
+                Button#queryRun [hidden]
+                Heading#queryDesignName [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                QQuickText#comboDisplayText [hidden]
+                Segmented#queryMode [hidden]
+                  QQuickAbstractButton#segment_0 [hidden]
+                    QQuickRectangle#segmentFocus_0 [hidden]
+                  QQuickAbstractButton#segment_1 [hidden]
+                    QQuickRectangle#segmentFocus_1 [hidden]
+              Box#recordNavigator
+                IconButton#recordFirst
+                IconButton#recordLast
+                IconButton#recordNew
+                IconButton#recordNext
+                IconButton#recordPrevious
+                Label#recordPosition
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#relationshipsList [hidden]
+                Button#relationshipAdd [hidden]
+                Caption#emptyText [hidden]
+                Overline#emptyTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#reportHeader [hidden]
+                Button#reportPrint [hidden]
+                Caption#reportStats [hidden]
+                Heading#reportName [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                Segmented#reportMode [hidden]
+                  QQuickAbstractButton#segment_0 [hidden]
+                    QQuickRectangle#segmentFocus_0 [hidden]
+                  QQuickAbstractButton#segment_1 [hidden]
+                    QQuickRectangle#segmentFocus_1 [hidden]
+              Box#tableDesignHeader [hidden]
+                Button#tableDesignApply [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                TextField#tableDesignName [hidden]
+                  IconButton#fieldClear [hidden]
+              Button#queryAddTable [hidden]
+              Button#startOpen [hidden]
+              Caption#emptyText [hidden]
+              Caption#emptyText [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#rowSecondary [hidden]
+              Caption#rowSecondary [hidden]
+              Caption#rowSecondary [hidden]
+              Caption#sectionCount_Field properties ·  [hidden]
+              Caption#sectionCount_Lookup [hidden]
+              Caption#sectionCount_Relationship [hidden]
+              Caption#sectionCount_Tables [hidden]
+              Card#designChanges [hidden]
+                IconButton#noticeDismiss [hidden]
+                IconButton#noticeDismiss [hidden]
+                IconButton#noticeDismiss [hidden]
+                Label#noticeText [hidden]
+                Label#noticeText [hidden]
+                Label#noticeText [hidden]
+                Label#noticeTitle [hidden]
+                Label#noticeTitle [hidden]
+                Label#noticeTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                TextArea#designSql [hidden]
+              Card#fieldGrid [hidden]
+                Button#designAddField [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Card#startCount_form [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Card#startCount_query [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Card#startCount_report [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Card#startCount_table [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              DiagramCanvas#relationshipsCanvas [hidden]
+                NodeGraph#diagramGraph [hidden]
+                  NodeGraphToolbar#nodeGraphToolbar [hidden]
+                    IconButton#nodeGraphAddButton [hidden]
+                    IconButton#nodeGraphGroupButton [hidden]
+                    IconButton#nodeGraphUngroupButton [hidden]
+                    SearchField#nodeGraphSearch [hidden]
+                      IconButton#fieldClear [hidden]
+                  QQuickCanvasItem#nodeGraphLinkPreview [hidden]
+                  QQuickCanvasItem#nodeGraphWires [hidden]
+                  QQuickRectangle#nodeGraphFocusRing [hidden]
+                  QQuickRectangle#nodeGraphStatus [hidden]
+                    Label#nodeGraphStatusText [hidden]
+                QQuickRectangle#diagramInspector [hidden]
+                  Button#diagramAddInput [hidden]
+                  Button#diagramAddOutput [hidden]
+                  Label#diagramInspectorLabel [hidden]
+                  NumberField#diagramFlowEditor [hidden]
+                    Caption#numberLabel [hidden]
+                    QQuickItem#numberStepDown [hidden]
+                    QQuickItem#numberStepUp [hidden]
+                    QQuickText#numberMixedPlaceholder [hidden]
+                    QQuickTextInput#numberInput [hidden]
+                  TextField#diagramTitleEditor [hidden]
+                    IconButton#fieldClear [hidden]
+              EditableGrid#datasheetGrid
+                HeaderView#gridColumnHeaders
+                  QQuickItem#gridColumnHeader_address
+                    QQuickMouseArea#gridColumnResize_address
+                  QQuickItem#gridColumnHeader_city
+                    QQuickMouseArea#gridColumnResize_city
+                  QQuickItem#gridColumnHeader_donor_type
+                    QQuickMouseArea#gridColumnResize_donor_type
+                  QQuickItem#gridColumnHeader_email
+                    QQuickMouseArea#gridColumnResize_email
+                  QQuickItem#gridColumnHeader_id
+                    QQuickMouseArea#gridColumnResize_id
+                  QQuickItem#gridColumnHeader_name
+                    QQuickMouseArea#gridColumnResize_name
+                  QQuickItem#gridColumnHeader_phone
+                    QQuickMouseArea#gridColumnResize_phone
+                HeaderView#gridRowHeaders
+                  QQuickItem#gridRowHeader_r1
+                    QQuickMouseArea#gridRowResize_r1
+                  QQuickItem#gridRowHeader_r10
+                    QQuickMouseArea#gridRowResize_r10
+                  QQuickItem#gridRowHeader_r11
+                    QQuickMouseArea#gridRowResize_r11
+                  QQuickItem#gridRowHeader_r12
+                    QQuickMouseArea#gridRowResize_r12
+                  QQuickItem#gridRowHeader_r13
+                    QQuickMouseArea#gridRowResize_r13
+                  QQuickItem#gridRowHeader_r14
+                    QQuickMouseArea#gridRowResize_r14
+                  QQuickItem#gridRowHeader_r15
+                    QQuickMouseArea#gridRowResize_r15
+                  QQuickItem#gridRowHeader_r16
+                    QQuickMouseArea#gridRowResize_r16
+                  QQuickItem#gridRowHeader_r17
+                    QQuickMouseArea#gridRowResize_r17
+                  QQuickItem#gridRowHeader_r18
+                    QQuickMouseArea#gridRowResize_r18
+                  QQuickItem#gridRowHeader_r19
+                    QQuickMouseArea#gridRowResize_r19
+                  QQuickItem#gridRowHeader_r2
+                    QQuickMouseArea#gridRowResize_r2
+                  QQuickItem#gridRowHeader_r20
+                    QQuickMouseArea#gridRowResize_r20
+                  QQuickItem#gridRowHeader_r21
+                    QQuickMouseArea#gridRowResize_r21
+                  QQuickItem#gridRowHeader_r22
+                    QQuickMouseArea#gridRowResize_r22
+                  QQuickItem#gridRowHeader_r23
+                    QQuickMouseArea#gridRowResize_r23
+                  QQuickItem#gridRowHeader_r24
+                    QQuickMouseArea#gridRowResize_r24
+                  QQuickItem#gridRowHeader_r25
+                    QQuickMouseArea#gridRowResize_r25
+                  QQuickItem#gridRowHeader_r26
+                    QQuickMouseArea#gridRowResize_r26
+                  QQuickItem#gridRowHeader_r27
+                    QQuickMouseArea#gridRowResize_r27
+                  QQuickItem#gridRowHeader_r3
+                    QQuickMouseArea#gridRowResize_r3
+                  QQuickItem#gridRowHeader_r4
+                    QQuickMouseArea#gridRowResize_r4
+                  QQuickItem#gridRowHeader_r5
+                    QQuickMouseArea#gridRowResize_r5
+                  QQuickItem#gridRowHeader_r6
+                    QQuickMouseArea#gridRowResize_r6
+                  QQuickItem#gridRowHeader_r7
+                    QQuickMouseArea#gridRowResize_r7
+                  QQuickItem#gridRowHeader_r8
+                    QQuickMouseArea#gridRowResize_r8
+                  QQuickItem#gridRowHeader_r9
+                    QQuickMouseArea#gridRowResize_r9
+                QQuickItem#gridCellViewport
+                  GridCellDelegate#gridCell_r10_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r10_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r10_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r10_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r10_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r10_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r10_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r11_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r11_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r11_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r11_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r11_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r11_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r11_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r12_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r12_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r12_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r12_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r12_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r12_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r12_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r13_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r13_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r13_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r13_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r13_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r13_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r13_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r14_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r14_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r14_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r14_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r14_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r14_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r14_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r15_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r15_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r15_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r15_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r15_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r15_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r15_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r16_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r16_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r16_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r16_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r16_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r16_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r16_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r17_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r17_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r17_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r17_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r17_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r17_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r17_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r18_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r18_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r18_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r18_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r18_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r18_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r18_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r19_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r19_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r19_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r19_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r19_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r19_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r19_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r1_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r1_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r1_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r1_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r1_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r1_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r1_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r20_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r20_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r20_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r20_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r20_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r20_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r20_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r21_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r21_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r21_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r21_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r21_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r21_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r21_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r22_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r22_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r22_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r22_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r22_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r22_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r22_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r23_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r23_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r23_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r23_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r23_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r23_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r23_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r24_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r24_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r24_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r24_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r24_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r24_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r24_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r25_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r25_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r25_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r25_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r25_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r25_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r25_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r26_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r26_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r26_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r26_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r26_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r26_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r26_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r27_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r27_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r27_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r27_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r27_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r27_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r27_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r2_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r2_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r2_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r2_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r2_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r2_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r2_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r3_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r3_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r3_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r3_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r3_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r3_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r3_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r4_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r4_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r4_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r4_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r4_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r4_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r4_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r5_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r5_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r5_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r5_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r5_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r5_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r5_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r6_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r6_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r6_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r6_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r6_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r6_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r6_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r7_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r7_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r7_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r7_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r7_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r7_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r7_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r8_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r8_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r8_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r8_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r8_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r8_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r8_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r9_address
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r9_city
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r9_donor_type
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r9_email
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r9_id
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r9_name
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridCellDelegate#gridCell_r9_phone
+                    Icon#gridCellIcon [hidden]
+                    Label#gridCellText
+                    QQuickLoader#gridCellHashes
+                    QQuickRectangle#gridCellBackground
+                    QQuickRectangle#gridCellDataBar [hidden]
+                  GridFillHandle#gridFillHandle [hidden]
+                  QQuickItem#gridEditorPane
+                    TextField#gridCellEditor [hidden]
+                      IconButton#fieldClear [hidden]
+                  QQuickRectangle#gridFillPreview [hidden]
+                  RangeSelectionOverlay#gridRangeOverlay
+                    QQuickItem#gridRangeSelection_0
+                      QQuickItem#gridRangePane_0
+                        QQuickRectangle#gridRangeBorder_0
+                QQuickRectangle#gridCornerHeader
+              FilterBar#datasheetFilterBar [hidden]
+                Button#filterAdd [hidden]
+                ComboBox#filterConjunction [hidden]
+                  QQuickText#comboDisplayText [hidden]
+                Label#filterValidation [hidden]
+              Flex#queryGrid [hidden]
+                Button#queryAddColumn [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Flex#templateGallery [hidden]
+                Card#template_blank [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Card#template_contacts [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Card#template_donors [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Card#template_inventory [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Card#template_projects [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Card#template_volunteers [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+              FormDesigner#baseFormDesigner [hidden]
+                Button#formSaveDesign [hidden]
+                Button#formSaveRecord [hidden]
+                IconButton#formRedo [hidden]
+                IconButton#formUndo [hidden]
+                IconButton#noticeDismiss [hidden]
+                Label#noticeText [hidden]
+                Label#noticeTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                TextField#formTitle [hidden]
+                  IconButton#fieldClear [hidden]
+              Heading#startDatabaseName [hidden]
+              IconButton#noticeDismiss [hidden]
+              IconButton#noticeDismiss [hidden]
+              IconButton#noticeDismiss [hidden]
+              IconButton#noticeDismiss [hidden]
+              Label#noticeText [hidden]
+              Label#noticeText [hidden]
+              Label#noticeText [hidden]
+              Label#noticeText [hidden]
+              Label#noticeTitle [hidden]
+              Label#noticeTitle [hidden]
+              Label#noticeTitle [hidden]
+              Label#noticeTitle [hidden]
+              Label#rowText [hidden]
+              Label#rowText [hidden]
+              Label#rowText [hidden]
+              Notice#datasheetNotice [hidden]
+                IconButton#noticeDismiss [hidden]
+                Label#noticeText [hidden]
+                Label#noticeTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Notice#queryProblem [hidden]
+                IconButton#noticeDismiss [hidden]
+                Label#noticeText [hidden]
+                Label#noticeTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Notice#startSystemTables [hidden]
+                IconButton#noticeDismiss [hidden]
+                Label#noticeText [hidden]
+                Label#noticeTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Overline#emptyTitle [hidden]
+              Overline#emptyTitle [hidden]
+              Overline#sectionTitle [hidden]
+              Overline#sectionTitle [hidden]
+              Overline#sectionTitle [hidden]
+              Overline#sectionTitle [hidden]
+              QQuickContentItem#Splitter [hidden]
+                PivotView#pivotView [hidden]
+                  Box#pivotStatus [hidden]
+                    QQuickRectangle#boxFocusRing [hidden]
+                  Flex#pivotPaging [hidden]
+                    Button#pivotColumnsNext [hidden]
+                    Button#pivotColumnsPrevious [hidden]
+                    Button#pivotRowsNext [hidden]
+                    Button#pivotRowsPrevious [hidden]
+                    Label#pivotColumnsPage [hidden]
+                    Label#pivotRowsPage [hidden]
+                  Scroll#pivotViewport [hidden]
+                    QQuickItem#pivotColumnHeaders [hidden]
+                      Box#pivotCornerHeader [hidden]
+                        QQuickRectangle#boxFocusRing [hidden]
+                QueryBuilder#pivotBuilder [hidden]
+                  Box#queryAxisPanel [hidden]
+                    Button#queryCancel [hidden]
+                    Button#queryMeasureAdd [hidden]
+                    Button#queryPreview [hidden]
+                    Label#queryDiagnostic [hidden]
+                    QQuickRectangle#boxFocusRing [hidden]
+                  FilterBar#queryFilterBar [hidden]
+                    Button#filterAdd [hidden]
+                    ComboBox#filterConjunction [hidden]
+                      QQuickText#comboDisplayText [hidden]
+                    Label#filterValidation [hidden]
+                  QueryTransformPanel#queryTransformPanel [hidden]
+                    CheckBox#queryDetailMode [hidden]
+                    CheckBox#queryJoinEnabled [hidden]
+                    CheckBox#queryJoinLeftOuter [hidden]
+                    CheckBox#querySortAscending [hidden]
+                    CheckBox#querySortNullsLast [hidden]
+                    ComboBox#queryJoinLeftField [hidden]
+                      QQuickText#comboDisplayText [hidden]
+                    ComboBox#queryJoinRightField [hidden]
+                      QQuickText#comboDisplayText [hidden]
+                    ComboBox#querySortField [hidden]
+                      QQuickText#comboDisplayText [hidden]
+              QQuickContentItem#Splitter [hidden]
+                Caption#pageNavigatorStatus [hidden]
+                IconButton#pageNavigatorMoveDown [hidden]
+                IconButton#pageNavigatorMoveUp [hidden]
+                QQuickListView#pageNavigatorList [hidden]
+                  ScrollBar#pageNavigatorScrollBar [hidden]
+                QQuickListView#pageNavigatorOutline [hidden]
+                ReportDesigner#baseReportDesigner [hidden]
+                  Button#reportRequestExport [hidden]
+                  Button#reportRunPreview [hidden]
+                  CheckBox#reportDetail [hidden]
+                  CheckBox#reportPageBreak [hidden]
+                  ComboBox#reportFilterField [hidden]
+                    QQuickText#comboDisplayText [hidden]
+                  ComboBox#reportGroupField [hidden]
+                    QQuickText#comboDisplayText [hidden]
+                  ComboBox#reportSumField [hidden]
+                    QQuickText#comboDisplayText [hidden]
+                  ComboBox#reportTable [hidden]
+                    QQuickText#comboDisplayText [hidden]
+                  ComboBox#reportTotalFunction [hidden]
+                    QQuickText#comboDisplayText [hidden]
+                  IconButton#noticeDismiss [hidden]
+                  IconButton#reportRedo [hidden]
+                  IconButton#reportUndo [hidden]
+                  Label#noticeText [hidden]
+                  Label#noticeTitle [hidden]
+                  NumberField#reportPageSize [hidden]
+                    Caption#numberLabel [hidden]
+                    QQuickItem#numberStepDown [hidden]
+                    QQuickItem#numberStepUp [hidden]
+                    QQuickText#numberMixedPlaceholder [hidden]
+                    QQuickTextInput#numberInput [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                  TextField#reportFilterValue [hidden]
+                    IconButton#fieldClear [hidden]
+                  TextField#reportFooter [hidden]
+                    IconButton#fieldClear [hidden]
+                  TextField#reportHeader [hidden]
+                    IconButton#fieldClear [hidden]
+                  TextField#reportPageFooter [hidden]
+                    IconButton#fieldClear [hidden]
+                  TextField#reportPageHeader [hidden]
+                    IconButton#fieldClear [hidden]
+                RichDocumentView#reportPages [hidden]
+                  Caption#richDocumentPagination [hidden]
+                  RichTextArea#richDocumentArea [hidden]
+                  ScrollBar#richDocumentHorizontalScrollBar [hidden]
+                  ScrollBar#richDocumentVerticalScrollBar [hidden]
+                Segmented#pageNavigatorMode [hidden]
+                  QQuickAbstractButton#segment_0 [hidden]
+                    QQuickRectangle#segmentFocus_0 [hidden]
+                  QQuickAbstractButton#segment_1 [hidden]
+                    QQuickRectangle#segmentFocus_1 [hidden]
+              QQuickContentItem#Splitter [hidden]
+                Button#sqlRun [hidden]
+                DataTable#sqlResults [hidden]
+                  Box#tableHeader [hidden]
+                    QQuickRectangle#boxFocusRing [hidden]
+                  Caption#emptyText [hidden]
+                  Overline#emptyTitle [hidden]
+                  Scroll#tableBody [hidden]
+                DatabaseSchemaView#baseSchemaView [hidden]
+                  Button#schemaPreviewMigration [hidden]
+                  Button#schemaRequestMigration [hidden]
+                  ComboBox#schemaTablePicker [hidden]
+                    QQuickText#comboDisplayText [hidden]
+                  IconButton#noticeDismiss [hidden]
+                  Label#noticeText [hidden]
+                  Label#noticeTitle [hidden]
+                  Notice#schemaMigrationFailed [hidden]
+                    IconButton#noticeDismiss [hidden]
+                    Label#noticeText [hidden]
+                    Label#noticeTitle [hidden]
+                    QQuickRectangle#boxFocusRing [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                  TextArea#schemaMigrationSql [hidden]
+                IconButton#noticeDismiss [hidden]
+                Label#noticeText [hidden]
+                Label#noticeTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                TextArea#sqlEditor [hidden]
+              QQuickItem#datasheetTotals [hidden]
+                Box#datasheetTotal_address [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Box#datasheetTotal_city [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Box#datasheetTotal_donor_type [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Box#datasheetTotal_email [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Box#datasheetTotal_first_gift [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Box#datasheetTotal_id [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Box#datasheetTotal_name [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Box#datasheetTotal_notes [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Box#datasheetTotal_phone [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+              QQuickRectangle#boxFocusRing [hidden]
+              QQuickRectangle#boxFocusRing [hidden]
+              QQuickRectangle#boxFocusRing [hidden]
+              QQuickRectangle#boxFocusRing [hidden]
+              QQuickRectangle#boxFocusRing [hidden]
+              QQuickRectangle#boxFocusRing [hidden]
+              QQuickRectangle#rowFocusRing [hidden]
+              QQuickRectangle#rowFocusRing [hidden]
+              QQuickRectangle#rowFocusRing [hidden]
+              QQuickRectangle#splitterHandle [hidden]
+                QQuickMouseArea#splitterHitTarget [hidden]
+                QQuickRectangle#splitterFocusRing [hidden]
+              QQuickRectangle#splitterHandle [hidden]
+                QQuickMouseArea#splitterHitTarget [hidden]
+                QQuickRectangle#splitterFocusRing [hidden]
+              QQuickRectangle#splitterHandle [hidden]
+                QQuickMouseArea#splitterHitTarget [hidden]
+                QQuickRectangle#splitterFocusRing [hidden]
+              TextArea#querySql [hidden]
+              Toast#baseToast [hidden]
+                Notice#toastNotice [hidden]
+                  Button#toastAction [hidden]
+                  IconButton#noticeDismiss [hidden]
+                  Label#noticeText [hidden]
+                  Label#noticeTitle [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+  QQuickItem#appFooter
+    Flex#appFindBar [hidden]
+    Flex#appStatusBar
+      OfficeStatusBar#officeStatusBar
+        QQuickRectangle#boxFocusRing [hidden]
+        StatusField#statusInfo
+          QQuickAbstractButton#statusAction
+          QQuickRectangle#statusFocusRing [hidden]
+        StatusField#statusMessage [hidden]
+          QQuickAbstractButton#statusAction [hidden]
+          QQuickRectangle#statusFocusRing [hidden]
+  QQuickItem#appHeader
+    Flex#appToolBars
+      RibbonFromModel#officeRibbon
+        Flex#ribbonTabRow
+          IconButton#ribbonCollapseButton
+          QQuickItem#ribbonTrailing
+            CommandSearch#ribbonCommandSearch
+              IconButton#fieldClear [hidden]
+          QQuickTabButton#ribbonTab_create
+          QQuickTabButton#ribbonTab_external
+          QQuickTabButton#ribbonTab_file
+          QQuickTabButton#ribbonTab_home
+          QQuickTabButton#ribbonTab_tools
+          QQuickTabButton#ribbonTab_view
+        QQuickItem#ribbonGroupViewport
+          Flex#ribbonGroups
+            RibbonGroup#ribbonGroup_clipboard
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_editCopyAction
+                RibbonButton#ribbonAction_editCopyAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editCutAction
+                RibbonButton#ribbonAction_editCutAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editPasteAction
+                RibbonButton#ribbonAction_editPasteAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_find
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_editFindAction
+                RibbonButton#ribbonAction_editFindAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editSelectAllAction
+                RibbonButton#ribbonAction_editSelectAllAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_history
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_editRedoAction
+                RibbonButton#ribbonAction_editRedoAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editUndoAction
+                RibbonButton#ribbonAction_editUndoAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_object
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_baseDeleteObjectAction
+                RibbonButton#ribbonAction_baseDeleteObjectAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseRenameObjectAction
+                RibbonButton#ribbonAction_baseRenameObjectAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_records
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_baseDeleteRecordAction
+                RibbonButton#ribbonAction_baseDeleteRecordAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseNewRecordAction
+                RibbonButton#ribbonAction_baseNewRecordAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseRefreshAction
+                RibbonButton#ribbonAction_baseRefreshAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseSaveRecordAction
+                RibbonButton#ribbonAction_baseSaveRecordAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseTotalsRowAction
+                RibbonButton#ribbonAction_baseTotalsRowAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_sortFilter
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_baseClearFiltersAction
+                RibbonButton#ribbonAction_baseClearFiltersAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseFilterAction
+                RibbonButton#ribbonAction_baseFilterAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseFilterBySelectionAction
+                RibbonButton#ribbonAction_baseFilterBySelectionAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseFilterExcludingAction
+                RibbonButton#ribbonAction_baseFilterExcludingAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseSortAscendingAction
+                RibbonButton#ribbonAction_baseSortAscendingAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseSortDescendingAction
+                RibbonButton#ribbonAction_baseSortDescendingAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_views
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_baseOpenObjectAction
+                RibbonButton#ribbonAction_baseOpenObjectAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseViewDesignAction
+                RibbonButton#ribbonAction_baseViewDesignAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseViewSqlAction
+                RibbonButton#ribbonAction_baseViewSqlAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+        QQuickRectangle#ribbonBackground

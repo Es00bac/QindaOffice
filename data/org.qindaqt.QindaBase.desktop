@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=QindaBase
+GenericName=Database
+Comment=Tables, queries, forms and reports in one database file per window — part of QindaQt Office
+Exec=qindabase %F
+Icon=org.qindaqt.QindaBase
+Terminal=false
+Categories=Office;Database;
+Keywords=database;access;tables;forms;reports;query;sql;sqlite;records;
+MimeType=application/x-qindabase;application/vnd.sqlite3;
+StartupNotify=true
+StartupWMClass=qindabase

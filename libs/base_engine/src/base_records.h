@@ -36,6 +36,7 @@ struct FilterClause {
 struct RowQuery {
     QList<SortKey> sort;
     QList<FilterClause> filters;
+    bool matchAny = false; // filters joined with OR instead of AND
     int limit = 100000;
 };
 
@@ -79,14 +80,15 @@ public:
     // SQL (" WHERE …" or "") and bindings for the filters; `error` on a
     // value that does not fit its field.
     [[nodiscard]] static QString whereClause(const QList<ColumnInfo> &columns, const QList<FilterClause> &filters,
-                                             const CurrencyFormat &currency, QVariantList *bindings, QString *error);
+                                             const CurrencyFormat &currency, QVariantList *bindings, QString *error,
+                                             bool matchAny = false);
 
     // Aggregates over the filtered rows: sum | average | count | min | max.
     // Returns the storage value (currency sums stay integer minor units;
     // averages are doubles) and `display` text.
     [[nodiscard]] static QVariant total(const BaseFile &file, const QString &table, const QString &field,
                                         const QString &function, const QList<FilterClause> &filters,
-                                        QString *display, QString *error = nullptr);
+                                        QString *display, QString *error = nullptr, bool matchAny = false);
 
     // Lookup choices: value → display text (at most `limit`, sorted by display).
     [[nodiscard]] static QList<QPair<QVariant, QString>> lookupChoices(const BaseFile &file, const LookupDef &lookup,

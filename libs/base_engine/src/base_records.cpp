@@ -96,7 +96,7 @@ QList<ColumnInfo> Records::columns(const BaseFile &file, const QString &table)
 }
 
 QString Records::whereClause(const QList<ColumnInfo> &columns, const QList<FilterClause> &filters,
-                             const CurrencyFormat &currency, QVariantList *bindings, QString *error)
+                             const CurrencyFormat &currency, QVariantList *bindings, QString *error, bool matchAny)
 {
     QStringList parts;
     for (const FilterClause &f : filters) {
@@ -144,7 +144,11 @@ QString Records::whereClause(const QList<ColumnInfo> &columns, const QList<Filte
         parts.append(QStringLiteral("%1 %2 ?").arg(field, ops.value(f.op)));
         bindings->append(parsed.value);
     }
-    return parts.isEmpty() ? QString() : QStringLiteral(" WHERE ") + parts.join(QStringLiteral(" AND "));
+    if (parts.isEmpty()) {
+        return {};
+    }
+    return matchAny ? QStringLiteral(" WHERE (") + parts.join(QStringLiteral(") OR (")) + QLatin1Char(')')
+                    : QStringLiteral(" WHERE ") + parts.join(QStringLiteral(" AND "));
 }
 
 RowSet Records::read(const BaseFile &file, const QString &table, const RowQuery &query)
@@ -160,7 +164,7 @@ RowSet Records::read(const BaseFile &file, const QString &table, const RowQuery 
     set.editable = def && !def->withoutRowid && !file.readOnly();
     QVariantList bindings;
     QString error;
-    const QString where = whereClause(set.columns, query.filters, file.currency(), &bindings, &error);
+    const QString where = whereClause(set.columns, query.filters, file.currency(), &bindings, &error, query.matchAny);
     if (!error.isEmpty()) {
         set.error = error;
         return set;
@@ -223,7 +227,7 @@ std::optional<QVariantList> Records::readRow(const BaseFile &file, const QString
 }
 
 QVariant Records::total(const BaseFile &file, const QString &table, const QString &field, const QString &function,
-                        const QList<FilterClause> &filters, QString *display, QString *error)
+                        const QList<FilterClause> &filters, QString *display, QString *error, bool matchAny)
 {
     const QList<ColumnInfo> cols = columns(file, table);
     const auto column = std::find_if(cols.cbegin(), cols.cend(), [&](const ColumnInfo &c) { return c.name == field; });
@@ -248,7 +252,7 @@ QVariant Records::total(const BaseFile &file, const QString &table, const QStrin
     QVariantList bindings;
     QString problem;
     const CurrencyFormat currency = file.currency();
-    const QString where = whereClause(cols, filters, currency, &bindings, &problem);
+    const QString where = whereClause(cols, filters, currency, &bindings, &problem, matchAny);
     // AGENT-NOTE: sum() over integer storage (currency minor units, whole
     // numbers) is exact 64-bit arithmetic in SQLite; only average divides.
     const QVariant value = file.db().scalar(

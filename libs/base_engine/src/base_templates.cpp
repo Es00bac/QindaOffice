@@ -49,6 +49,12 @@ TableDef makeTable(const char *name, std::initializer_list<F> fields, std::initi
         d.required = f.required;
         d.defaultValue = s(f.defaultValue);
         d.caption = s(f.caption);
+        if (d.caption.isEmpty()) {
+            // "first_gift" reads "First gift" in datasheets, forms and reports.
+            d.caption = d.name;
+            d.caption.replace(QLatin1Char('_'), QLatin1Char(' '));
+            d.caption[0] = d.caption.at(0).toUpper();
+        }
         t.fields.append(d);
     }
     for (const Link &l : links) {
@@ -123,18 +129,6 @@ QueryColumn col(const char *table, const char *field, int sort = 0, const char *
     return c;
 }
 
-QueryColumn expr(const char *expression, const char *alias, TotalKind total = TotalKind::GroupBy, int sort = 0,
-                 const char *criteria = "")
-{
-    QueryColumn c;
-    c.expression = s(expression);
-    c.alias = s(alias);
-    c.total = total;
-    c.sort = sort;
-    c.criteria = s(criteria);
-    return c;
-}
-
 QVariantMap query(std::initializer_list<const char *> tables, std::initializer_list<QueryJoin> joins,
                   std::initializer_list<QueryColumn> columns, bool totals = false, const char *description = "")
 {
@@ -177,8 +171,9 @@ QList<Template> all()
                     C = FieldType::Currency, Y = FieldType::YesNo, D = FieldType::Date;
     QList<Template> out;
 
-    Template contacts{{s("contacts"), s("Contacts"), s("People and organizations, with categories and notes."),
-                       s("contact")}};
+    Template contacts;
+    contacts.info = TemplateInfo{s("contacts"), s("Contacts"), s("People and organizations, with categories and notes."),
+                       s("contact")};
     contacts.tables = {makeTable("contacts", {{"first_name", T, true, "", "First name"}, {"last_name", T, true, "", "Last name"},
                                               {"organization", T}, {"email", T}, {"phone", T}, {"street", T},
                                               {"city", T}, {"region", T}, {"postal_code", T, false, "", "Postal code"},
@@ -198,8 +193,9 @@ QList<Template> all()
                                 "category", "")}};
     out.append(contacts);
 
-    Template donors{{s("donors"), s("Donors & Donations"),
-                     s("Donors, campaigns and every gift, with totals by donor and by campaign."), s("hand-coins")}};
+    Template donors;
+    donors.info = TemplateInfo{s("donors"), s("Donors & Donations"),
+                     s("Donors, campaigns and every gift, with totals by donor and by campaign."), s("hand-coins")};
     donors.tables = {
         makeTable("donors", {{"name", T, true}, {"email", T}, {"phone", T}, {"address", T}, {"city", T},
                              {"donor_type", T, false, "Individual", "Donor type"}, {"first_gift", D, false, "", "First gift"},
@@ -238,8 +234,9 @@ QList<Template> all()
                               {{"given", "Date"}, {"amount", "Amount"}, {"method", "Method"}}, "Donor", "amount")}};
     out.append(donors);
 
-    Template volunteers{{s("volunteers"), s("Volunteers & Shifts"),
-                         s("Volunteers, the shifts you need covered, and who signed up."), s("users")}};
+    Template volunteers;
+    volunteers.info = TemplateInfo{s("volunteers"), s("Volunteers & Shifts"),
+                         s("Volunteers, the shifts you need covered, and who signed up."), s("users")};
     volunteers.tables = {
         makeTable("volunteers", {{"name", T, true}, {"email", T}, {"phone", T}, {"skills", L},
                                  {"active", Y, false, "Yes"}, {"joined", D, false, "Date()"}}),
@@ -270,8 +267,9 @@ QList<Template> all()
                                   "Shift", "")}};
     out.append(volunteers);
 
-    Template inventory{{s("inventory"), s("Inventory"),
-                        s("Items, suppliers and stock movements, with a reorder list."), s("package")}};
+    Template inventory;
+    inventory.info = TemplateInfo{s("inventory"), s("Inventory"),
+                        s("Items, suppliers and stock movements, with a reorder list."), s("package")};
     inventory.tables = {
         makeTable("suppliers", {{"name", T, true}, {"contact", T}, {"email", T}, {"phone", T}}),
         makeTable("items", {{"sku", T, true, "", "SKU"}, {"name", T, true}, {"category", T},
@@ -297,8 +295,9 @@ QList<Template> all()
                                  "on_hand")}};
     out.append(inventory);
 
-    Template projects{{s("projects"), s("Projects & Tasks"),
-                       s("Clients, their projects, and the tasks that finish them."), s("list-checks")}};
+    Template projects;
+    projects.info = TemplateInfo{s("projects"), s("Projects & Tasks"),
+                       s("Clients, their projects, and the tasks that finish them."), s("list-checks")};
     projects.tables = {
         makeTable("clients", {{"name", T, true}, {"contact", T}, {"email", T}, {"phone", T}}),
         makeTable("projects", {{"name", T, true}, {"client_id", I, false, "", "Client"}, {"status", T, false, "Planned"},
