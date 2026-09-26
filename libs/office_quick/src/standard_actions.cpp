@@ -45,7 +45,7 @@ void addStandardActions(ActionModel *model, const QString &appDisplayName)
                QStringLiteral("clipboard-paste"));
     model->add(id(kEditSelectAll), tr("Select &All"), QKeySequence::SelectAll);
     model->add(id(kEditFind), tr("&Find…"), QKeySequence::Find, QStringLiteral("search"));
-    model->add(id(kEditReplace), tr("Replace…"), QKeySequence::Replace);
+    model->add(id(kEditReplace), tr("Replace…"), QKeySequence::Replace, QStringLiteral("replace"));
     model->add(id(kEditFindNext), tr("Find &Next"), QKeySequence::FindNext);
     model->add(id(kEditFindPrevious), tr("Find &Previous"), QKeySequence::FindPrevious);
 

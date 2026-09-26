@@ -69,7 +69,9 @@ bool OfficeApplication::acquirePrimary(const QStringList &initialPaths, bool *ha
         serviceName(), QStringLiteral("/org/qindaqt/") + Core::appLeaf(), this);
     const bool acquired = m_single->acquireOrHandOff(initialPaths, handedOff);
     if (acquired) {
-        m_single->publish();
+        // A failed publish warns by itself and costs only the hand-off: a
+        // second launch then opens its own window instead of this one's.
+        static_cast<void>(m_single->publish());
         connect(m_single.get(), &SingleInstance::openPathsRequested, this,
                 [this](const QStringList &paths) { static_cast<void>(openPaths(paths)); });
         return true;
