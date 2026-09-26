@@ -21,3 +21,5 @@ add_subdirectory(qindabooks)
 # QindaDiagram (M50, D-050).
 add_subdirectory(diagram_engine)
 add_subdirectory(qindadiagram)
+# QindaBase (M49, D-049).
+add_subdirectory(base_engine)
