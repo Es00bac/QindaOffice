@@ -1,0 +1,1737 @@
+QQuickRootItem#PlanWindow
+  MenuBarFromModel#officeMenuBar
+  QQuickControl#ApplicationWindowContentControl
+    QQuickContentItem#ApplicationWindow
+      QQuickItem#appContent
+        QQuickItem#planContent
+          Flex#planRoot
+            Button#planUsageLevel [hidden]
+            CalendarGridView#planCalendar [hidden]
+              Notice#calendarGridNotice [hidden]
+                IconButton#noticeDismiss [hidden]
+                Label#noticeText [hidden]
+                Label#noticeTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              QQuickItem#calendarGridHeader [hidden]
+              QQuickItem#calendarGridMonthCell_2026-02-23 [hidden]
+                CalendarGridMore#calendarGridMore_2026-02-23 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-02-24 [hidden]
+                CalendarGridMore#calendarGridMore_2026-02-24 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-02-25 [hidden]
+                CalendarGridMore#calendarGridMore_2026-02-25 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-02-26 [hidden]
+                CalendarGridMore#calendarGridMore_2026-02-26 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-02-27 [hidden]
+                CalendarGridMore#calendarGridMore_2026-02-27 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-02-28 [hidden]
+                CalendarGridMore#calendarGridMore_2026-02-28 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-01 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-01 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-02 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-02 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-03 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-03 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-04 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-04 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-05 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-05 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-06 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-06 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-07 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-07 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-08 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-08 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-09 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-09 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-10 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-10 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-11 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-11 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-12 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-12 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-13 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-13 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-14 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-14 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-15 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-15 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-16 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-16 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-17 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-17 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-18 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-18 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-19 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-19 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-20 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-20 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-21 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-21 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-22 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-22 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-23 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-23 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-24 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-24 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-25 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-25 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-26 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-26 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-27 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-27 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-28 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-28 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-29 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-29 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-30 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-30 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-03-31 [hidden]
+                CalendarGridMore#calendarGridMore_2026-03-31 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-04-01 [hidden]
+                CalendarGridMore#calendarGridMore_2026-04-01 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-04-02 [hidden]
+                CalendarGridMore#calendarGridMore_2026-04-02 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-04-03 [hidden]
+                CalendarGridMore#calendarGridMore_2026-04-03 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-04-04 [hidden]
+                CalendarGridMore#calendarGridMore_2026-04-04 [hidden]
+              QQuickItem#calendarGridMonthCell_2026-04-05 [hidden]
+                CalendarGridMore#calendarGridMore_2026-04-05 [hidden]
+            EditableGrid#planResourceSheet [hidden]
+              HeaderView#gridColumnHeaders [hidden]
+                QQuickItem#gridColumnHeader_indicators [hidden]
+                  QQuickMouseArea#gridColumnResize_indicators [hidden]
+                QQuickItem#gridColumnHeader_name [hidden]
+                  QQuickMouseArea#gridColumnResize_name [hidden]
+              HeaderView#gridRowHeaders [hidden]
+                QQuickItem#gridRowHeader_r1 [hidden]
+                  QQuickMouseArea#gridRowResize_r1 [hidden]
+                QQuickItem#gridRowHeader_r2 [hidden]
+                  QQuickMouseArea#gridRowResize_r2 [hidden]
+                QQuickItem#gridRowHeader_r3 [hidden]
+                  QQuickMouseArea#gridRowResize_r3 [hidden]
+                QQuickItem#gridRowHeader_r4 [hidden]
+                  QQuickMouseArea#gridRowResize_r4 [hidden]
+              QQuickItem#gridCellViewport [hidden]
+                GridCellDelegate#gridCell_r1_indicators [hidden]
+                  Icon#gridCellIcon [hidden]
+                  Label#gridCellText [hidden]
+                  QQuickLoader#gridCellHashes [hidden]
+                  QQuickRectangle#gridCellBackground [hidden]
+                  QQuickRectangle#gridCellDataBar [hidden]
+                GridCellDelegate#gridCell_r1_name [hidden]
+                  Icon#gridCellIcon [hidden]
+                  Label#gridCellText [hidden]
+                  QQuickLoader#gridCellHashes [hidden]
+                  QQuickRectangle#gridCellBackground [hidden]
+                  QQuickRectangle#gridCellDataBar [hidden]
+                GridCellDelegate#gridCell_r2_indicators [hidden]
+                  Icon#gridCellIcon [hidden]
+                  Label#gridCellText [hidden]
+                  QQuickLoader#gridCellHashes [hidden]
+                  QQuickRectangle#gridCellBackground [hidden]
+                  QQuickRectangle#gridCellDataBar [hidden]
+                GridCellDelegate#gridCell_r2_name [hidden]
+                  Icon#gridCellIcon [hidden]
+                  Label#gridCellText [hidden]
+                  QQuickLoader#gridCellHashes [hidden]
+                  QQuickRectangle#gridCellBackground [hidden]
+                  QQuickRectangle#gridCellDataBar [hidden]
+                GridCellDelegate#gridCell_r3_indicators [hidden]
+                  Icon#gridCellIcon [hidden]
+                  Label#gridCellText [hidden]
+                  QQuickLoader#gridCellHashes [hidden]
+                  QQuickRectangle#gridCellBackground [hidden]
+                  QQuickRectangle#gridCellDataBar [hidden]
+                GridCellDelegate#gridCell_r3_name [hidden]
+                  Icon#gridCellIcon [hidden]
+                  Label#gridCellText [hidden]
+                  QQuickLoader#gridCellHashes [hidden]
+                  QQuickRectangle#gridCellBackground [hidden]
+                  QQuickRectangle#gridCellDataBar [hidden]
+                GridCellDelegate#gridCell_r4_indicators [hidden]
+                  Icon#gridCellIcon [hidden]
+                  Label#gridCellText [hidden]
+                  QQuickLoader#gridCellHashes [hidden]
+                  QQuickRectangle#gridCellBackground [hidden]
+                  QQuickRectangle#gridCellDataBar [hidden]
+                GridCellDelegate#gridCell_r4_name [hidden]
+                  Icon#gridCellIcon [hidden]
+                  Label#gridCellText [hidden]
+                  QQuickLoader#gridCellHashes [hidden]
+                  QQuickRectangle#gridCellBackground [hidden]
+                  QQuickRectangle#gridCellDataBar [hidden]
+                GridFillHandle#gridFillHandle [hidden]
+                QQuickItem#gridEditorPane [hidden]
+                  TextField#gridCellEditor [hidden]
+                    IconButton#fieldClear [hidden]
+                QQuickRectangle#gridFillPreview [hidden]
+                RangeSelectionOverlay#gridRangeOverlay [hidden]
+              QQuickRectangle#gridCornerHeader [hidden]
+            Heading#planCalendarTitle [hidden]
+            IconButton#planCalendarNext [hidden]
+            IconButton#planCalendarPrevious [hidden]
+            NavigationRail#planRail
+              QQuickItem#navigationGroup_views
+                QQuickButton#navigationButton_views [hidden]
+              QQuickItem#navigationItem_calendar
+                QQuickButton#navigationButton_calendar
+              QQuickItem#navigationItem_gantt
+                QQuickButton#navigationButton_gantt
+              QQuickItem#navigationItem_reports
+                QQuickButton#navigationButton_reports
+              QQuickItem#navigationItem_resources
+                QQuickButton#navigationButton_resources
+              QQuickItem#navigationItem_sheet
+                QQuickButton#navigationButton_sheet
+              QQuickItem#navigationItem_usage
+                QQuickButton#navigationButton_usage
+            Notice#planUsageNotice [hidden]
+              IconButton#noticeDismiss [hidden]
+              Label#noticeText [hidden]
+              Label#noticeTitle [hidden]
+              QQuickRectangle#boxFocusRing [hidden]
+            ReportsView#planReports [hidden]
+              Button#planReportPdf [hidden]
+              Caption#planReportSubtitle [hidden]
+              Grid#planReportKpis [hidden]
+              Heading#planReportTitle [hidden]
+              Segmented#planReportPicker [hidden]
+                QQuickAbstractButton#segment_0 [hidden]
+                  QQuickRectangle#segmentFocus_0 [hidden]
+                QQuickAbstractButton#segment_1 [hidden]
+                  QQuickRectangle#segmentFocus_1 [hidden]
+                QQuickAbstractButton#segment_2 [hidden]
+                  QQuickRectangle#segmentFocus_2 [hidden]
+                QQuickAbstractButton#segment_3 [hidden]
+                  QQuickRectangle#segmentFocus_3 [hidden]
+            ResourceTable#planUsageTable [hidden]
+              QQuickItem#resourceBucketHeaders [hidden]
+              QQuickItem#resourceCellViewport [hidden]
+                QQuickRectangle#resourceActiveCell [hidden]
+                TextField#resourceAllocationEditor [hidden]
+                  IconButton#fieldClear [hidden]
+              QQuickItem#resourceRowHeaders [hidden]
+                QQuickRectangle#resourceRowHeader_a:1 [hidden]
+                  Label#resourceRowSummary [hidden]
+                QQuickRectangle#resourceRowHeader_a:3 [hidden]
+                  Label#resourceRowSummary [hidden]
+                QQuickRectangle#resourceRowHeader_a:6 [hidden]
+                  Label#resourceRowSummary [hidden]
+                QQuickRectangle#resourceRowHeader_a:7 [hidden]
+                  Label#resourceRowSummary [hidden]
+                QQuickRectangle#resourceRowHeader_r:1 [hidden]
+                  Label#resourceRowSummary [hidden]
+              QQuickRectangle#resourceCornerHeader [hidden]
+            Segmented#planCalendarMode [hidden]
+              QQuickAbstractButton#segment_0 [hidden]
+                QQuickRectangle#segmentFocus_0 [hidden]
+              QQuickAbstractButton#segment_1 [hidden]
+                QQuickRectangle#segmentFocus_1 [hidden]
+            Segmented#planUsageScale [hidden]
+              QQuickAbstractButton#segment_0 [hidden]
+                QQuickRectangle#segmentFocus_0 [hidden]
+              QQuickAbstractButton#segment_1 [hidden]
+                QQuickRectangle#segmentFocus_1 [hidden]
+            Splitter#planSplit
+              QQuickContentItem#Splitter
+                GanttView#planGantt
+                  GanttLinks#ganttDependencies
+                  GanttRuler#ganttHeader
+                    QQuickItem#ganttRulerMajor
+                    QQuickItem#ganttRulerMajor
+                    QQuickItem#ganttRulerMajor
+                    QQuickItem#ganttRulerMinor
+                    QQuickItem#ganttRulerMinor
+                    QQuickItem#ganttRulerMinor
+                    QQuickItem#ganttRulerMinor
+                    QQuickItem#ganttRulerMinor
+                    QQuickItem#ganttRulerMinor
+                    QQuickItem#ganttRulerMinor
+                    QQuickItem#ganttRulerMinor
+                    QQuickRectangle#ganttMarkerLabel_0
+                    QQuickRectangle#ganttMarkerLabel_1
+                  QQuickListView#ganttRows
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText [hidden]
+                        QQuickItem#ganttSummaryBar
+                          QQuickRectangle#ganttSummaryProgress
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar [hidden]
+                          QQuickRectangle#ganttProgress [hidden]
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone
+                        QQuickRectangle#ganttTaskBar [hidden]
+                          QQuickRectangle#ganttProgress [hidden]
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText [hidden]
+                        QQuickItem#ganttSummaryBar
+                          QQuickRectangle#ganttSummaryProgress
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar [hidden]
+                          QQuickRectangle#ganttProgress [hidden]
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone
+                        QQuickRectangle#ganttTaskBar [hidden]
+                          QQuickRectangle#ganttProgress [hidden]
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone
+                        QQuickRectangle#ganttTaskBar [hidden]
+                          QQuickRectangle#ganttProgress [hidden]
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText [hidden]
+                        QQuickItem#ganttSummaryBar
+                          QQuickRectangle#ganttSummaryProgress
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar [hidden]
+                          QQuickRectangle#ganttProgress [hidden]
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone
+                        QQuickRectangle#ganttTaskBar [hidden]
+                          QQuickRectangle#ganttProgress [hidden]
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText [hidden]
+                        QQuickItem#ganttSummaryBar
+                          QQuickRectangle#ganttSummaryProgress
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar [hidden]
+                          QQuickRectangle#ganttProgress [hidden]
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone
+                        QQuickRectangle#ganttTaskBar [hidden]
+                          QQuickRectangle#ganttProgress [hidden]
+                      QQuickRectangle#ganttRowSelection [hidden]
+                    GanttRow#ganttRow
+                      Label#ganttTaskLabel [hidden]
+                      QQuickItem#ganttTrack
+                        Caption#ganttBarText
+                        QQuickItem#ganttSummaryBar [hidden]
+                          QQuickRectangle#ganttSummaryProgress [hidden]
+                        QQuickRectangle#ganttAllocation [hidden]
+                        QQuickRectangle#ganttBaseline
+                        QQuickRectangle#ganttBaseline [hidden]
+                        QQuickRectangle#ganttMilestone [hidden]
+                        QQuickRectangle#ganttTaskBar
+                          QQuickRectangle#ganttProgress
+                      QQuickRectangle#ganttRowSelection [hidden]
+                  QQuickRectangle#ganttLabelDivider [hidden]
+                  QQuickRectangle#ganttMarker_0
+                  QQuickRectangle#ganttMarker_1
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttNonWorking [hidden]
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                  QQuickRectangle#ganttStripe
+                TaskSheet#planTaskSheet
+                  HeaderView#gridColumnHeaders
+                    QQuickItem#gridColumnHeader_duration
+                      QQuickMouseArea#gridColumnResize_duration
+                    QQuickItem#gridColumnHeader_indicators
+                      QQuickMouseArea#gridColumnResize_indicators
+                    QQuickItem#gridColumnHeader_mode
+                      QQuickMouseArea#gridColumnResize_mode
+                    QQuickItem#gridColumnHeader_name
+                      QQuickMouseArea#gridColumnResize_name
+                    QQuickItem#gridColumnHeader_start
+                      QQuickMouseArea#gridColumnResize_start
+                  HeaderView#gridRowHeaders
+                    QQuickItem#gridRowHeader_<id>-5040-aa9a-c7c900beab8a
+                      QQuickMouseArea#gridRowResize_<id>-5040-aa9a-c7c900beab8a
+                    QQuickItem#gridRowHeader_<id>-50bf-9cbc-2c58fe9ac5a1
+                      QQuickMouseArea#gridRowResize_<id>-50bf-9cbc-2c58fe9ac5a1
+                    QQuickItem#gridRowHeader_<id>-50e1-be80-a2ab17924fb0
+                      QQuickMouseArea#gridRowResize_<id>-50e1-be80-a2ab17924fb0
+                    QQuickItem#gridRowHeader_<id>-5284-a03c-cf9168859c74
+                      QQuickMouseArea#gridRowResize_<id>-5284-a03c-cf9168859c74
+                    QQuickItem#gridRowHeader_<id>-5307-8db4-ca254d0e6b42
+                      QQuickMouseArea#gridRowResize_<id>-5307-8db4-ca254d0e6b42
+                    QQuickItem#gridRowHeader_<id>-5459-a3bf-675c483206c5
+                      QQuickMouseArea#gridRowResize_<id>-5459-a3bf-675c483206c5
+                    QQuickItem#gridRowHeader_<id>-5519-b782-4aa848688749
+                      QQuickMouseArea#gridRowResize_<id>-5519-b782-4aa848688749
+                    QQuickItem#gridRowHeader_<id>-5556-924c-0e292a4fa9d0
+                      QQuickMouseArea#gridRowResize_<id>-5556-924c-0e292a4fa9d0
+                    QQuickItem#gridRowHeader_<id>-5660-b6ce-9fbeab2cb56c
+                      QQuickMouseArea#gridRowResize_<id>-5660-b6ce-9fbeab2cb56c
+                    QQuickItem#gridRowHeader_<id>-5762-b447-a5d373b45b85
+                      QQuickMouseArea#gridRowResize_<id>-5762-b447-a5d373b45b85
+                    QQuickItem#gridRowHeader_<id>-5832-bb52-e33d122fe317
+                      QQuickMouseArea#gridRowResize_<id>-5832-bb52-e33d122fe317
+                    QQuickItem#gridRowHeader_<id>-585d-8259-95eb1fb2780e
+                      QQuickMouseArea#gridRowResize_<id>-585d-8259-95eb1fb2780e
+                    QQuickItem#gridRowHeader_<id>-5876-aa3b-e75f090459d1
+                      QQuickMouseArea#gridRowResize_<id>-5876-aa3b-e75f090459d1
+                    QQuickItem#gridRowHeader_<id>-589e-a6d5-fcbcc78d8e9d
+                      QQuickMouseArea#gridRowResize_<id>-589e-a6d5-fcbcc78d8e9d
+                    QQuickItem#gridRowHeader_<id>-58d3-a7ca-bbe1c1d58bcd
+                      QQuickMouseArea#gridRowResize_<id>-58d3-a7ca-bbe1c1d58bcd
+                    QQuickItem#gridRowHeader_<id>-58d5-8e55-54a536ff3558
+                      QQuickMouseArea#gridRowResize_<id>-58d5-8e55-54a536ff3558
+                    QQuickItem#gridRowHeader_<id>-59a5-9fab-cb8a9e06171e
+                      QQuickMouseArea#gridRowResize_<id>-59a5-9fab-cb8a9e06171e
+                    QQuickItem#gridRowHeader_<id>-5c16-b107-ebb9e9d2c0ed
+                      QQuickMouseArea#gridRowResize_<id>-5c16-b107-ebb9e9d2c0ed
+                    QQuickItem#gridRowHeader_<id>-5db2-a010-4b2adaad32ed
+                      QQuickMouseArea#gridRowResize_<id>-5db2-a010-4b2adaad32ed
+                    QQuickItem#gridRowHeader_<id>-5e04-b67d-2049fe0d4295
+                      QQuickMouseArea#gridRowResize_<id>-5e04-b67d-2049fe0d4295
+                    QQuickItem#gridRowHeader_<id>-5f63-8cc7-e45fadfa1a60
+                      QQuickMouseArea#gridRowResize_<id>-5f63-8cc7-e45fadfa1a60
+                  QQuickItem#gridCellViewport
+                    GridCellDelegate#gridCell_<id>-5040-aa9a-c7c900beab8a_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5040-aa9a-c7c900beab8a_indicators
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5040-aa9a-c7c900beab8a_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5040-aa9a-c7c900beab8a_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5040-aa9a-c7c900beab8a_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-50bf-9cbc-2c58fe9ac5a1_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-50bf-9cbc-2c58fe9ac5a1_indicators
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-50bf-9cbc-2c58fe9ac5a1_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-50bf-9cbc-2c58fe9ac5a1_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-50bf-9cbc-2c58fe9ac5a1_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-50e1-be80-a2ab17924fb0_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-50e1-be80-a2ab17924fb0_indicators
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-50e1-be80-a2ab17924fb0_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-50e1-be80-a2ab17924fb0_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-50e1-be80-a2ab17924fb0_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5284-a03c-cf9168859c74_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5284-a03c-cf9168859c74_indicators
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5284-a03c-cf9168859c74_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5284-a03c-cf9168859c74_name
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5284-a03c-cf9168859c74_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5307-8db4-ca254d0e6b42_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5307-8db4-ca254d0e6b42_indicators
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5307-8db4-ca254d0e6b42_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5307-8db4-ca254d0e6b42_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5307-8db4-ca254d0e6b42_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5459-a3bf-675c483206c5_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5459-a3bf-675c483206c5_indicators
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5459-a3bf-675c483206c5_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5459-a3bf-675c483206c5_name
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5459-a3bf-675c483206c5_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5519-b782-4aa848688749_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5519-b782-4aa848688749_indicators
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5519-b782-4aa848688749_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5519-b782-4aa848688749_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5519-b782-4aa848688749_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5556-924c-0e292a4fa9d0_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5556-924c-0e292a4fa9d0_indicators
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5556-924c-0e292a4fa9d0_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5556-924c-0e292a4fa9d0_name
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5556-924c-0e292a4fa9d0_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5660-b6ce-9fbeab2cb56c_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5660-b6ce-9fbeab2cb56c_indicators
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5660-b6ce-9fbeab2cb56c_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5660-b6ce-9fbeab2cb56c_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5660-b6ce-9fbeab2cb56c_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5762-b447-a5d373b45b85_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5762-b447-a5d373b45b85_indicators
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5762-b447-a5d373b45b85_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5762-b447-a5d373b45b85_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5762-b447-a5d373b45b85_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5832-bb52-e33d122fe317_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5832-bb52-e33d122fe317_indicators
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5832-bb52-e33d122fe317_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5832-bb52-e33d122fe317_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5832-bb52-e33d122fe317_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-585d-8259-95eb1fb2780e_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-585d-8259-95eb1fb2780e_indicators
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-585d-8259-95eb1fb2780e_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-585d-8259-95eb1fb2780e_name
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-585d-8259-95eb1fb2780e_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5876-aa3b-e75f090459d1_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5876-aa3b-e75f090459d1_indicators
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5876-aa3b-e75f090459d1_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5876-aa3b-e75f090459d1_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5876-aa3b-e75f090459d1_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-589e-a6d5-fcbcc78d8e9d_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-589e-a6d5-fcbcc78d8e9d_indicators
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-589e-a6d5-fcbcc78d8e9d_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-589e-a6d5-fcbcc78d8e9d_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-589e-a6d5-fcbcc78d8e9d_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-58d3-a7ca-bbe1c1d58bcd_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-58d3-a7ca-bbe1c1d58bcd_indicators
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-58d3-a7ca-bbe1c1d58bcd_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-58d3-a7ca-bbe1c1d58bcd_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-58d3-a7ca-bbe1c1d58bcd_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-58d5-8e55-54a536ff3558_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-58d5-8e55-54a536ff3558_indicators
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-58d5-8e55-54a536ff3558_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-58d5-8e55-54a536ff3558_name
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-58d5-8e55-54a536ff3558_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-59a5-9fab-cb8a9e06171e_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-59a5-9fab-cb8a9e06171e_indicators
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-59a5-9fab-cb8a9e06171e_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-59a5-9fab-cb8a9e06171e_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-59a5-9fab-cb8a9e06171e_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5c16-b107-ebb9e9d2c0ed_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5c16-b107-ebb9e9d2c0ed_indicators
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5c16-b107-ebb9e9d2c0ed_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5c16-b107-ebb9e9d2c0ed_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5c16-b107-ebb9e9d2c0ed_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5db2-a010-4b2adaad32ed_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5db2-a010-4b2adaad32ed_indicators
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5db2-a010-4b2adaad32ed_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5db2-a010-4b2adaad32ed_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5db2-a010-4b2adaad32ed_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5e04-b67d-2049fe0d4295_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5e04-b67d-2049fe0d4295_indicators
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5e04-b67d-2049fe0d4295_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5e04-b67d-2049fe0d4295_name
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5e04-b67d-2049fe0d4295_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5f63-8cc7-e45fadfa1a60_duration
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5f63-8cc7-e45fadfa1a60_indicators
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5f63-8cc7-e45fadfa1a60_mode
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5f63-8cc7-e45fadfa1a60_name
+                      Icon#gridCellIcon
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridCellDelegate#gridCell_<id>-5f63-8cc7-e45fadfa1a60_start
+                      Icon#gridCellIcon [hidden]
+                      Label#gridCellText
+                      QQuickLoader#gridCellHashes
+                      QQuickRectangle#gridCellBackground
+                      QQuickRectangle#gridCellDataBar [hidden]
+                    GridFillHandle#gridFillHandle [hidden]
+                    QQuickItem#gridEditorPane
+                      TextField#gridCellEditor [hidden]
+                        IconButton#fieldClear [hidden]
+                    QQuickRectangle#gridFillPreview [hidden]
+                    RangeSelectionOverlay#gridRangeOverlay
+                  QQuickRectangle#gridCornerHeader
+              QQuickRectangle#splitterHandle
+                QQuickMouseArea#splitterHitTarget
+                QQuickRectangle#splitterFocusRing [hidden]
+            TimelineStrip#planTimelineStrip
+              PlanTimelineItem#planTimelinePaper
+            Toast#planToast [hidden]
+              Notice#toastNotice [hidden]
+                Button#toastAction [hidden]
+                IconButton#noticeDismiss [hidden]
+                Label#noticeText [hidden]
+                Label#noticeTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+  QQuickItem#appFooter
+    Flex#appFindBar [hidden]
+    Flex#appStatusBar
+      OfficeStatusBar#officeStatusBar
+        QQuickRectangle#boxFocusRing [hidden]
+        StatusField#statusInfo
+          QQuickAbstractButton#statusAction
+          QQuickRectangle#statusFocusRing [hidden]
+        StatusField#statusMessage
+          QQuickAbstractButton#statusAction
+          QQuickRectangle#statusFocusRing [hidden]
+  QQuickItem#appHeader
+    Flex#appToolBars
+      RibbonFromModel#officeRibbon
+        Flex#ribbonTabRow
+          IconButton#ribbonCollapseButton
+          QQuickItem#ribbonTrailing
+            CommandSearch#ribbonCommandSearch
+              IconButton#fieldClear [hidden]
+          QQuickTabButton#ribbonTab_file
+          QQuickTabButton#ribbonTab_ganttFormat
+          QQuickTabButton#ribbonTab_home
+          QQuickTabButton#ribbonTab_project
+          QQuickTabButton#ribbonTab_report
+          QQuickTabButton#ribbonTab_resource
+          QQuickTabButton#ribbonTab_view
+        QQuickItem#ribbonGroupViewport
+          Flex#ribbonGroups
+            RibbonGroup#ribbonGroup_clipboard
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_editCopyAction
+                RibbonButton#ribbonAction_editCopyAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editCutAction
+                RibbonButton#ribbonAction_editCutAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editPasteAction
+                RibbonButton#ribbonAction_editPasteAction
+                  Icon#ribbonButtonIcon
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel
+            RibbonGroup#ribbonGroup_editing
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_editFindAction
+                RibbonButton#ribbonAction_editFindAction
+                  Icon#ribbonButtonIcon
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel
+              RibbonSlot#ribbonItem_editReplaceAction
+                RibbonButton#ribbonAction_editReplaceAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editSelectAllAction
+                RibbonButton#ribbonAction_editSelectAllAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_history
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_editRedoAction
+                RibbonButton#ribbonAction_editRedoAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_editUndoAction
+                RibbonButton#ribbonAction_editUndoAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_insert
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_planDeleteTaskAction
+                RibbonButton#ribbonAction_planDeleteTaskAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planInsertMilestoneAction
+                RibbonButton#ribbonAction_planInsertMilestoneAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planInsertSummaryAction
+                RibbonButton#ribbonAction_planInsertSummaryAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planInsertTaskAction
+                RibbonButton#ribbonAction_planInsertTaskAction
+                  Icon#ribbonButtonIcon
+                  QQuickItem#ribbonButtonMenuArea
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel
+            RibbonGroup#ribbonGroup_mode
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_planAutoScheduleAction
+                RibbonButton#ribbonAction_planAutoScheduleAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planManualScheduleAction
+                RibbonButton#ribbonAction_planManualScheduleAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_properties
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_planScrollToTaskAction
+                RibbonButton#ribbonAction_planScrollToTaskAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planTaskInfoAction
+                RibbonButton#ribbonAction_planTaskInfoAction
+                  Icon#ribbonButtonIcon
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel
+              RibbonSlot#ribbonItem_planTaskNotesAction
+                RibbonButton#ribbonAction_planTaskNotesAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_schedule
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_planInactivateAction
+                RibbonButton#ribbonAction_planInactivateAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planIndentAction
+                RibbonButton#ribbonAction_planIndentAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planLinkAction
+                RibbonButton#ribbonAction_planLinkAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planMark0Action
+                RibbonButton#ribbonAction_planMark0Action
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planMark100Action
+                RibbonButton#ribbonAction_planMark100Action
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planMark25Action
+                RibbonButton#ribbonAction_planMark25Action
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planMark50Action
+                RibbonButton#ribbonAction_planMark50Action
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planMark75Action
+                RibbonButton#ribbonAction_planMark75Action
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planMoveDownAction
+                RibbonButton#ribbonAction_planMoveDownAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planMoveUpAction
+                RibbonButton#ribbonAction_planMoveUpAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planOutdentAction
+                RibbonButton#ribbonAction_planOutdentAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planRespectLinksAction
+                RibbonButton#ribbonAction_planRespectLinksAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planUnlinkAction
+                RibbonButton#ribbonAction_planUnlinkAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_taskView
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_planViewGanttAction
+                RibbonButton#ribbonAction_planViewGanttAction
+                  Icon#ribbonButtonIcon
+                  QQuickItem#ribbonButtonMenuArea
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel
+        QQuickRectangle#ribbonBackground

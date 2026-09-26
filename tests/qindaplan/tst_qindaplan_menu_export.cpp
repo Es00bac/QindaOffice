@@ -1,0 +1,109 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// The panel export of a QindaPlan host must pass the desktop's own
+// validator, and EVERY exported command must resolve in the host's
+// ActionModel and fire (the same gate as the other apps' menu-export tests).
+
+#include "plan_app_test_support.h"
+
+#include "menu_source.h"
+
+#include <qindaqt/shell/global_menu/protocol/menu_validation.h>
+
+#include <QSignalSpy>
+#include <QUuid>
+
+using namespace PlanAppTest;
+using QindaOffice::Quick::ActionEntry;
+using QindaOffice::Quick::ActionModel;
+using QindaOffice::Quick::ActionModelMenuSource;
+namespace Protocol = QindaQt::Shell::GlobalMenu::Protocol;
+
+class QindaPlanMenuExportTest final : public QObject {
+    Q_OBJECT
+
+    static void collectActions(const Protocol::MenuItem &item, QStringList &ids)
+    {
+        if (item.kind == Protocol::MenuItemKind::Action) {
+            ids.append(item.id);
+        }
+        for (const Protocol::MenuItem &child : item.children) {
+            collectActions(child, ids);
+        }
+    }
+
+private slots:
+    void exportedTreeIsCompleteAndValid()
+    {
+        for (const bool loaded : {false, true}) {
+            QTemporaryDir dir;
+            PlanHost host;
+            if (loaded) {
+                QVERIFY(host.loadPath(writeGala(dir)));
+                host.plan()->setCurrentTaskId(host.plan()->idOfRow(2));
+            }
+            ActionModelMenuSource source(host.menuTree(), host.actions(), QUuid::createUuid());
+            const auto snapshot = source.snapshot();
+            QVERIFY2(snapshot.complete, qPrintable(QStringLiteral("incomplete: ") + snapshot.defectCode));
+            const Protocol::ValidationResult result = Protocol::validateMenuTree(snapshot.tree);
+            QVERIFY2(result.accepted,
+                     qPrintable(QStringLiteral("rejected: %1 at %2").arg(result.reasonCode, result.path)));
+            QStringList titles;
+            for (const Protocol::MenuItem &item : snapshot.tree.items) {
+                titles.append(item.text);
+            }
+            QCOMPARE(titles, (QStringList{s("File"), s("Edit"), s("View"), s("Task"), s("Resource"), s("Project"),
+                                          s("Report"), s("AI"), s("Settings"), s("Help")}));
+        }
+    }
+
+    void everyExportedCommandResolvesAndFires()
+    {
+        QTemporaryDir dir;
+        PlanHost host;
+        QVERIFY(host.loadPath(writeGala(dir)));
+        PlanService *plan = host.plan();
+        plan->setSelectedTaskIds({plan->idOfRow(9), plan->idOfRow(10)});
+        plan->setCurrentResourceUid(plan->project().resources.first().uid);
+        ActionModel *actions = host.actions();
+        ActionModelMenuSource source(host.menuTree(), actions, QUuid::createUuid());
+        const auto snapshot = source.snapshot();
+        QStringList ids;
+        for (const Protocol::MenuItem &item : snapshot.tree.items) {
+            collectActions(item, ids);
+        }
+        QVERIFY2(ids.size() > 90, qPrintable(QString::number(ids.size())));
+        // Every plan command is in the tree exactly once.
+        for (ActionEntry *e : actions->entries()) {
+            if (e->id().startsWith(s("plan"))) {
+                QVERIFY2(ids.count(e->id()) == 1, qPrintable(e->id()));
+            }
+        }
+        QSignalSpy triggered(actions, &ActionModel::triggered);
+        QStringList unresolved;
+        int fired = 0;
+        for (const QString &id : ids) {
+            ActionEntry *entry = actions->entry(id);
+            if (entry == nullptr) {
+                unresolved.append(id);
+                continue;
+            }
+            // Commands that close, quit, open system dialogs or delete what
+            // the rest of the loop needs resolve but are not pulled here.
+            if (!entry->isEnabled() || id.startsWith(s("file")) || id.startsWith(s("help"))
+                || id.startsWith(s("settings")) || id.startsWith(s("ai")) || id == s("planDeleteTaskAction")
+                || id == s("planDeleteResourceAction") || id == s("editCutAction")) {
+                continue;
+            }
+            const int before = triggered.count();
+            QVERIFY2(actions->trigger(id), qPrintable(id));
+            QCOMPARE(triggered.count(), before + 1);
+            ++fired;
+        }
+        QVERIFY2(unresolved.isEmpty(), qPrintable(unresolved.join(QLatin1Char(' '))));
+        QVERIFY(fired > 60);
+    }
+};
+
+PLAN_APP_TEST_MAIN(QindaPlanMenuExportTest)
+
+#include "tst_qindaplan_menu_export.moc"

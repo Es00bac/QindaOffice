@@ -207,9 +207,13 @@ void paintTimeline(QPainter *painter, const QRectF &rect, const Project &project
     for (int i : std::as_const(milestones)) {
         const Task &t = project.tasks.at(i);
         const qreal x = xOf(t.start);
-        const QString name = elideText(nameFont, t.name, maxLabel);
+        QString name = elideText(nameFont, t.name, maxLabel);
         const QString date = l.toString(dateOf(t.start), dateFormat);
-        const qreal w = std::max(textWidth(nameFont, name), textWidth(dateFont, date)) + 8;
+        qreal w = std::max(textWidth(nameFont, name), textWidth(dateFont, date)) + 8;
+        // Where the label wants to start: at its diamond, pulled inside the
+        // strip at either end. Lanes are tested against THAT position, so a
+        // label pulled left at the right edge never lands on its neighbour.
+        const qreal desired = std::max(rect.left() + kPad, std::min(x, rect.right() - kPad - w));
         // Alternate the side we try first (above for the 1st, 3rd, …
         // milestone, below for the 2nd, …) so the strip stays balanced.
         const bool preferUp = placed++ % 2 == 0;
@@ -218,13 +222,13 @@ void paintTimeline(QPainter *painter, const QRectF &rect, const Project &project
             for (const bool up : {preferUp, !preferUp}) {
                 for (int k = 0; chosen < 0 && k < calloutLanes.size(); ++k) {
                     const Lane &lane = calloutLanes.at(k);
-                    if (lane.up == up && lane.depth == depth && lane.right + kGap <= x) {
+                    if (lane.up == up && lane.depth == depth && lane.right + kGap <= desired) {
                         chosen = k;
                     }
                 }
             }
         }
-        qreal left = x;
+        qreal left = desired;
         if (chosen < 0) {
             chosen = 0;
             for (int k = 1; k < calloutLanes.size(); ++k) {
@@ -233,11 +237,18 @@ void paintTimeline(QPainter *painter, const QRectF &rect, const Project &project
                 }
             }
             left = calloutLanes.at(chosen).right + kGap;
+            // AGENT-GUARD: no free lane — shorten the label to the room
+            // left before the edge rather than overlap a neighbour; with
+            // too little room only the diamond is drawn.
+            const qreal room = rect.right() - kPad - left;
+            if (room < w) {
+                name = elideText(nameFont, t.name, room - 8);
+                w = room;
+            }
         }
-        left = std::min(left, rect.right() - kPad - w);
-        left = std::max(left, rect.left() + kPad);
         Lane &lane = calloutLanes[chosen];
-        lane.right = left + w;
+        const bool labelled = w >= 36;
+        lane.right = labelled ? left + w : lane.right;
         const qreal top = lane.up ? bandTop - 4 - (lane.depth + 1) * kCalloutHeight
                                   : bandBottom + 4 + lane.depth * kCalloutHeight + 2;
         const qreal edge = lane.up ? bandTop : bandBottom;
@@ -248,11 +259,13 @@ void paintTimeline(QPainter *painter, const QRectF &rect, const Project &project
             leader.lineTo(left, lane.up ? anchorY + 2 : anchorY - 2);
         }
         leader.lineTo(left, lane.up ? top + 2 : top + kCalloutHeight - 4);
-        painter->setPen(QPen(s.muted, 0.8));
-        painter->setBrush(Qt::NoBrush);
-        painter->drawPath(leader);
-        drawTextAt(painter, left + 5, top, name, nameFont, s.ink);
-        drawTextAt(painter, left + 5, top + QFontMetricsF(nameFont).height() - 1, date, dateFont, s.muted);
+        if (labelled) {
+            painter->setPen(QPen(s.muted, 0.8));
+            painter->setBrush(Qt::NoBrush);
+            painter->drawPath(leader);
+            drawTextAt(painter, left + 5, top, name, nameFont, s.ink);
+            drawTextAt(painter, left + 5, top + QFontMetricsF(nameFont).height() - 1, date, dateFont, s.muted);
+        }
         painter->setPen(QPen(s.paper, 1.2));
         painter->setBrush(t.percentComplete >= 100 ? s.good : s.ink);
         painter->drawPolygon(QPolygonF({QPointF(x, edge - kDiamond), QPointF(x + kDiamond, edge), QPointF(x, edge + kDiamond),

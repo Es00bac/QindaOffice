@@ -13,3 +13,5 @@ add_subdirectory(qindamail)
 add_subdirectory(qindabooks)
 # QindaDiagram (M50, D-050): one drawing per window over diagram_engine.
 add_subdirectory(qindadiagram)
+# QindaPlan (M51, D-051): one project per window over plan_engine/plan_output.
+add_subdirectory(qindaplan)

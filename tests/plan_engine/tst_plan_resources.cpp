@@ -181,8 +181,17 @@ private slots:
         QCOMPARE(kpi(QStringLiteral("complete")).percent, 0);
         QVERIFY(kpi(QStringLiteral("cost")).detail.contains(QStringLiteral("over budget")));
         // Late as of Wed 4 Mar 17:00: A and B should be under way (nothing
-        // was marked), B, C and the milestone slipped.
-        QCOMPARE(kpi(QStringLiteral("late")).value, QStringLiteral("4"));
+        // was marked); B, C and the milestone slipped past the baseline.
+        QCOMPARE(kpi(QStringLiteral("late")).value, QStringLiteral("2"));
+        QCOMPARE(kpi(QStringLiteral("late")).detail, QStringLiteral("as of Wed 4 Mar 26 · 3 slipped"));
+        const PlanReport late = buildReport(p, QStringLiteral("late"), QDate(2026, 3, 4), QLocale::c());
+        QCOMPARE(late.tables.first().rows.size(), 4);
+        QCOMPARE(late.tables.first().rows.at(0).last(), QStringLiteral("Behind"));   // A
+        QCOMPARE(late.tables.first().rows.at(1).last(), QStringLiteral("Behind"));   // B
+        QCOMPARE(late.tables.first().rows.at(2).last(), QStringLiteral("Slipped"));  // C
+        QCOMPARE(late.kpis.first().value, QStringLiteral("2"));
+        QVERIFY(!isLate(p, p.tasks.at(x.c), reportReference(p, QDate(2026, 3, 4))));
+        QVERIFY(isSlipped(p, p.tasks.at(x.c)));
         const ReportTable &milestones = overview.tables.at(1);
         QCOMPARE(milestones.rows.size(), 1);
         QVERIFY(milestones.rows.first().at(3).startsWith(QStringLiteral("Slipped")));

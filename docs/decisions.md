@@ -166,6 +166,58 @@ QindaDiagram depends on the canvas boundary instead, like Show's
 per-connector z among shapes). Text is one run per shape. The app builds
 against a QindaTK prefix with D-302 until that branch is merged and
 installed.
+## D-051: QindaPlan: a deterministic scheduling engine behind a Project-shaped window
+
+**Date:** 2026-09-25 · **Status:** accepted (M51)
+
+**Context.** The suite adds a Microsoft Project equivalent for small teams
+(the user's scope decision, docs/plans/ribbon-and-mail.md). QindaTK already
+had a `GanttView`, `ResourceTable`, `EditableGrid` and `CalendarGridView`,
+but the Gantt drew only FS links over one single-shift working calendar and
+could not sit beside a table. A plan's numbers — dates, slack, the critical
+path, cost — must be the same in the sheet, the chart, the reports, the
+printout, the PDF and Microsoft Project XML, and a Project user expects
+Project's semantics (typing a start pins it, % complete records actuals,
+hard constraints win over links).
+
+**Decision.**
+
+1. **One engine computes; every view paints.** `plan_engine` (Qt Core) owns
+   the model and a deterministic critical-path pass (summaries as entry and
+   exit nodes; FS/SS/FF/SF with lag, lead and percentage lag; the eight
+   constraints, conflicts reported; ALAP by free slack; resource calendars;
+   cycles from files ignored per strongly connected component). Views,
+   printouts and MSPDI read its computed fields; QML never computes a date,
+   a span or an amount.
+2. **Undo is whole-project snapshots.** Every edit runs on a copy, is
+   rescheduled, and swaps in through one `QUndoCommand` holding before and
+   after (100 steps; a 2,000-task plan is a few hundred KB). Undo and redo
+   can never disagree with the scheduler, and refusals change nothing.
+3. **The toolkit draws a host's schedule** (QindaTK D-303, branch
+   `work/plan-gantt`): Gantt rows carry the engine's exact
+   `finishUtc`/baselines, kinds, critical/inactive flags, outline levels,
+   bar text and link types; the view gains a calendar time scale, markers
+   (today, status date), row/header sizing and `contentY` for a table beside
+   it; the grid gains an `indent` style; `ResourceTable` gains `showZeros`
+   and `summaryMode`. Instants cross as wall-clock minutes × 60,000 with a
+   UTC `GanttCalendar`, so no time-zone arithmetic exists anywhere.
+4. **Leveling is a documented heuristic**, not an optimiser: delay within
+   slack first, beyond it only when nothing else fixes the day; started and
+   pinned tasks never move (docs/plan.md "Leveling").
+5. **Files**: `.qplan` is versioned JSON of inputs only (unknown keys kept,
+   newer versions refused); Microsoft Project XML is read and written in
+   full (`.mpp` is out of scope); CSV and a Timeline PNG are exports.
+6. **One print source** per view (the Gantt, or the report on screen)
+   through `plan_output`'s painters for paper, preview and PDF. `DocumentHost`
+   gains one general hook, `printPrefersLandscape()` (default false), so a
+   job and Export PDF start in the orientation the app's pages need.
+
+**Consequences.** The Gantt, the sheets, reports, printouts and exports
+cannot drift apart. The network diagram is not built (a readable automatic
+layout is a project of its own; the Gantt's links carry the same facts).
+Leveling can leave a day unresolved and says so. Durations are working
+time only (no elapsed durations; MSPDI elapsed lags import as working time
+with a warning).
 
 ## D-047: Bookkeeping app: one company per window, a service over the engine, one print source
 

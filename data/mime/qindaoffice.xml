@@ -29,4 +29,12 @@
       <match type="string" value="&quot;format&quot;: &quot;qindadiagram&quot;" offset="0:64"/>
     </magic>
   </mime-type>
+  <mime-type type="application/x-qindaplan">
+    <comment>QindaPlan project</comment>
+    <comment xml:lang="en">QindaPlan project</comment>
+    <sub-class-of type="application/json"/>
+    <glob pattern="*.qplan"/>
+    <!-- No magic: QJsonDocument writes keys sorted, so "format" has no
+         fixed offset; the glob identifies the file (plan_file.h). -->
+  </mime-type>
 </mime-info>

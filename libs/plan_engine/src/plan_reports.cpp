@@ -18,6 +18,7 @@ struct Totals {
     int complete = 0;
     int critical = 0;
     int late = 0;
+    int slipped = 0;
     int milestones = 0;
     Minutes duration = 0;
     Minutes weighted = 0;
@@ -51,6 +52,7 @@ Totals totalsOf(const Project &project, Minutes reference)
         t.critical += task.critical ? 1 : 0;
         t.milestones += task.isMilestone() ? 1 : 0;
         t.late += isLate(project, task, reference) ? 1 : 0;
+        t.slipped += isSlipped(project, task) ? 1 : 0;
         t.duration += task.duration;
         t.weighted += task.duration * task.percentComplete;
     }
@@ -128,9 +130,10 @@ PlanReport overview(const Project &project, Minutes reference, const QLocale &lo
         costTone = over > 0 ? QStringLiteral("warning") : QStringLiteral("good");
     }
     kpi("cost", QStringLiteral("Cost"), formatMoney(t.cost, cur, locale), costDetail, -1, costTone);
-    kpi("work", QStringLiteral("Work"), formatWork(t.work, locale), QString());
     kpi("late", QStringLiteral("Late tasks"), locale.toString(t.late),
-        QStringLiteral("as of %1").arg(formatDate(reference, locale)), -1, t.late > 0 ? QStringLiteral("danger") : QString());
+        t.slipped > 0 ? QStringLiteral("as of %1 · %2 slipped").arg(formatDate(reference, locale)).arg(t.slipped)
+                      : QStringLiteral("as of %1").arg(formatDate(reference, locale)),
+        -1, t.late > 0 ? QStringLiteral("danger") : QString());
     kpi("critical", QStringLiteral("Critical tasks"), locale.toString(t.critical), QString());
 
     ReportTable phases;
@@ -185,7 +188,7 @@ PlanReport overview(const Project &project, Minutes reference, const QLocale &lo
     r.tables.append(milestones);
 
     const QStringList lateFields{QStringLiteral("id"), QStringLiteral("name"), QStringLiteral("finish"),
-                                 QStringLiteral("finishVariance"), QStringLiteral("percent"), QStringLiteral("resources")};
+                                 QStringLiteral("percent"), QStringLiteral("resources")};
     ReportTable late = taskTable(QStringLiteral("late"), QStringLiteral("Late tasks"), lateFields,
                                  QStringLiteral("Nothing is behind schedule."));
     for (int i = 0; i < project.tasks.size(); ++i) {
@@ -223,14 +226,19 @@ Minutes reportReference(const Project &project, const QDate &today)
     return project.info.statusDate != kNoDate ? project.info.statusDate : toMinutes(today, project.info.defaultFinishMinute);
 }
 
+bool isSlipped(const Project &project, const Task &task)
+{
+    if (task.summary || !task.effectiveActive || task.percentComplete >= 100) {
+        return false;
+    }
+    const Variance v = variance(project, task, 0);
+    return v.valid && v.finish > 0;
+}
+
 bool isLate(const Project &project, const Task &task, Minutes reference)
 {
     if (task.summary || !task.effectiveActive || task.percentComplete >= 100 || task.start == kNoDate) {
         return false;
-    }
-    const Variance v = variance(project, task, 0);
-    if (v.valid && v.finish > 0) {
-        return true;
     }
     if (task.start >= reference) {
         return false;
@@ -263,17 +271,31 @@ PlanReport buildReport(const Project &project, const QString &id, const QDate &t
                                       fields,
                                       critical ? QStringLiteral("No unfinished task is critical.")
                                                : QStringLiteral("Nothing is behind schedule."));
+        if (!critical) {
+            table.columns.append(QStringLiteral("Status"));
+        }
+        int lateCount = 0;
         for (int i = 0; i < project.tasks.size(); ++i) {
             const Task &t = project.tasks.at(i);
-            const bool take = critical ? (!t.summary && t.effectiveActive && t.critical && t.percentComplete < 100)
-                                       : isLate(project, t, reference);
-            if (take) {
-                addTaskRow(table, project, i, fields, locale, critical ? QString() : QStringLiteral("danger"));
+            if (critical) {
+                if (!t.summary && t.effectiveActive && t.critical && t.percentComplete < 100) {
+                    addTaskRow(table, project, i, fields, locale);
+                }
+                continue;
             }
+            const bool late = isLate(project, t, reference);
+            if (!late && !isSlipped(project, t)) {
+                continue;
+            }
+            lateCount += late ? 1 : 0;
+            addTaskRow(table, project, i, fields, locale, late ? QStringLiteral("danger") : QStringLiteral("warning"));
+            table.rows.last().append(late ? QStringLiteral("Behind") : QStringLiteral("Slipped"));
         }
+        const int count = critical ? int(table.rows.size()) : lateCount;
         r.kpis.append({QStringLiteral("count"), critical ? QStringLiteral("Critical tasks") : QStringLiteral("Late tasks"),
-                       locale.toString(table.rows.size()), QString(), -1,
-                       table.rows.isEmpty() ? QStringLiteral("good") : QStringLiteral("danger")});
+                       locale.toString(count),
+                       critical ? QString() : QStringLiteral("%1 more slipped past their baseline").arg(table.rows.size() - count),
+                       -1, count == 0 ? QStringLiteral("good") : QStringLiteral("danger")});
         r.kpis.append({QStringLiteral("finish"), QStringLiteral("Finish"), formatDate(project.finish, locale), QString(), -1, {}});
         r.tables.append(table);
     } else {
