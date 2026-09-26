@@ -279,6 +279,38 @@ private slots:
         QVERIFY(shot.pixelColor(statusCentre.toPoint()).lightness() < 128);
     }
 
+    void typedTextIsInkOnPaperUnderTheDarkPreset()
+    {
+        // Regression: the live editor was a chrome field — the dark
+        // preset's inputBg under "#202028" ink, so typing was invisible.
+        QindaOffice::Quick::Preferences::instance().setThemePreset(QStringLiteral("sloom-dark"));
+        Scene scene;
+        QVERIFY2(scene.ready(), qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        QTRY_VERIFY(scene.page->width() > 0);
+        scene.page->addTextBlock();
+        QTRY_VERIFY(scene.page->editingBlock() >= 0);
+        QQuickItem *editor = findItem(scene.window->contentItem(), QStringLiteral("noteTextEditor"));
+        QVERIFY(editor != nullptr);
+        QTRY_VERIFY(editor->hasActiveFocus());
+        QTest::keyClicks(scene.window, QStringLiteral("WWWWWWWWWW"));
+        QTRY_COMPARE(scene.page->editingText(), QStringLiteral("WWWWWWWWWW"));
+        const QImage shot = scene.window->grabWindow();
+        if (qEnvironmentVariableIsSet("QQO_GRAB_DIR")) {
+            shot.save(qEnvironmentVariable("QQO_GRAB_DIR") + QStringLiteral("/qindanote_typing.png"));
+        }
+        // The field is paper (white behind the text) and the text is ink.
+        const QRectF box = editor->mapRectToScene(QRectF(0, 0, editor->width(), editor->height()));
+        const QPoint blank(int(box.right()) - 12, int(box.center().y()));
+        QVERIFY2(shot.pixelColor(blank).lightness() > 230,
+                 qPrintable(shot.pixelColor(blank).name()));
+        int darkest = 255;
+        for (int x = int(box.left()) + 4; x < int(box.left()) + 80; ++x) {
+            darkest = qMin(darkest, shot.pixelColor(x, int(box.center().y())).lightness());
+        }
+        QVERIFY2(darkest < 100, qPrintable(QString::number(darkest)));
+    }
+
     void persistIsDebounced()
     {
         QTemporaryDir dir;
