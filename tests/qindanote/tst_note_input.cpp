@@ -293,7 +293,9 @@ private slots:
         QQuickItem *editor = findItem(scene.window->contentItem(), QStringLiteral("noteTextEditor"));
         QVERIFY(editor != nullptr);
         QTRY_VERIFY(editor->hasActiveFocus());
-        QTest::keyClicks(scene.window, QStringLiteral("WWWWWWWWWW"));
+        for (int i = 0; i < 10; ++i) {
+            QTest::keyClick(scene.window, 'W'); // QTest has no keyClicks(QWindow *)
+        }
         QTRY_COMPARE(scene.page->editingText(), QStringLiteral("WWWWWWWWWW"));
         const QImage shot = scene.window->grabWindow();
         if (qEnvironmentVariableIsSet("QQO_GRAB_DIR")) {
