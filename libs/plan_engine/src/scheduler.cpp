@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The scheduler's graph and its forward/backward passes (scheduler.h has
-// the method; scheduler_rollup.cpp the slack, ALAP, roll-ups and costs).
+// The scheduler's forward and backward passes (scheduler.h has the method;
+// scheduler_graph.cpp the node graph and cycle handling; scheduler_rollup.cpp
+// the slack, ALAP, roll-ups and costs).
 #include "scheduler.h"
 
 #include "outline.h"
