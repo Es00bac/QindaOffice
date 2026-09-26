@@ -56,6 +56,8 @@ public:
         notifyContentChanged(); // as the real engines do (WriteDocument)
         return true;
     }
+    // A content signal with nothing unsaved (a window being built).
+    void touchWithoutEdit() { notifyContentChanged(); }
     void edit(const QString &value)
     {
         text = value;
@@ -263,6 +265,41 @@ private slots:
             QVERIFY(host.closeAuthorized());
         }
         QVERIFY(services.journalStore.pendingKeys().isEmpty());
+    }
+
+    void aKeyTakenBeforeTheRestoreDoesNotSurviveIt()
+    {
+        // Regression (QindaWrite, 2026-09-26): the window reported a content
+        // change while it was being built, before offerRecovery restored
+        // into it. That allocated a second untitled key whose snapshot fired
+        // after the restore, so the recovered text was saved twice and
+        // Discard removed only one copy.
+        QTemporaryDir dir;
+        JournalServices services(dir.path());
+        services.journalStore.writeNow(QStringLiteral("untitled-1-1"), QString(), true,
+                                       QByteArray("unsaved words"));
+        {
+            TextHost host;
+            host.setAppServices(&services);
+            host.stub()->touchWithoutEdit(); // before the restore
+            QVERIFY(host.restoreFromJournal(QString(), true, QByteArray("unsaved words"),
+                                            QStringLiteral("untitled-1-1")));
+            QTest::qWait(100); // past the debounce
+            QCOMPARE(services.journalStore.pendingKeys(),
+                     QStringList{QStringLiteral("untitled-1-1")});
+            QVERIFY(!host.requestClose());
+            host.resolveClose(QStringLiteral("discard"));
+        }
+        QVERIFY(services.journalStore.pendingKeys().isEmpty());
+
+        // And a window that never had unsaved text leaves no entry at all.
+        {
+            TextHost host;
+            host.setAppServices(&services);
+            host.stub()->touchWithoutEdit();
+            QTest::qWait(100);
+            QVERIFY(services.journalStore.pendingKeys().isEmpty());
+        }
     }
 
     void loadFailureIsReportedNotSwallowed()

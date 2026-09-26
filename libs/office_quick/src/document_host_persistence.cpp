@@ -139,6 +139,17 @@ bool DocumentHost::restoreFromJournal(const QString &path, bool untitled,
     // payload, so no snapshot is needed while it loads (m_loading silences
     // scheduleJournalSnapshot), and the key is adopted before any later edit
     // can schedule one.
+    // AGENT-GUARD: the window may already have journalled under a key of
+    // its own before this restore ran — QindaWrite's document reports a
+    // content change while its window is still being built, which
+    // allocated a fresh untitled key and scheduled a snapshot whose payload
+    // is read when the timer fires, i.e. AFTER this restore: the recovered
+    // text landed under that second key, Discard cleared only `journalKey`,
+    // and the copy came back on every launch. Drop the stray key first.
+    if (!m_journalKey.isEmpty() && m_journalKey != journalKey) {
+        clearJournalEntry();
+        m_journalKey.clear();
+    }
     QString error;
     m_loading = true;
     const bool ok = m_document->loadRecovery(payload, &error);
@@ -383,9 +394,13 @@ void DocumentHost::scheduleJournalSnapshot()
         m_journalKey = m_services->allocateUntitledJournalKey();
     }
     const QPointer<Core::Document> doc = m_document;
+    // A document with nothing unsaved is not a recovery point: the payload
+    // is read when the debounce fires, and an empty one removes the entry
+    // (RecoveryJournal::writeNow), so a pristine window never leaves one.
     journal->schedule(m_journalKey, m_document->canonicalPath(),
-                      m_document->canonicalPath().isEmpty(),
-                      [doc] { return doc ? doc->recoverySnapshot() : QByteArray(); });
+                      m_document->canonicalPath().isEmpty(), [doc] {
+                          return doc && doc->isDirty() ? doc->recoverySnapshot() : QByteArray();
+                      });
 }
 
 void DocumentHost::clearJournalEntry()
