@@ -5,6 +5,31 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-054: The global menu export holds changes while its window is inactive
+
+**Date:** 2026-09-26 · **Status:** accepted (owner-reported regression)
+
+**Context.** Clicking an Office app's menu on the QindaQt panel showed it
+for an instant and closed it; other apps were fine. The panel dismisses an
+open menu whenever the app publishes a changed tree (container-wm
+fc6b1468 — no gesture may reach a retired item), and opening that menu
+moves keyboard focus to the panel, which is exactly when the suite changed
+state: Wayland re-announces the clipboard on focus changes, so the
+Paste-enabled check flipped (QindaWrite, QindaCalc, QindaShow), and an
+inline editor losing focus commits, so Undo flipped (QindaNote,
+QindaCalc). `GlobalMenuExport` republished within one event-loop pass.
+
+**Decision.** `GlobalMenuExport` coalesces changes over 120 ms (long enough
+for the queued focus-out to land) and publishes only while its window is
+active; changes made while inactive are published once when the window is
+active again. The panel only shows the focused window's menu, so a held
+change is never a stale menu the user can act on — the state the user left
+is what the open menu shows.
+
+**Consequences.** Menu state reaches the panel up to 120 ms after a change.
+`tst_global_menu_hold` pins both orders (change then focus-out, focus-out
+then change).
+
 ## D-053: QindaNote takes touch — a finger inks, two fingers zoom and pan
 
 **Date:** 2026-09-26 · **Status:** accepted (owner request)

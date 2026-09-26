@@ -56,8 +56,16 @@ GlobalMenuExport::GlobalMenuExport(MenuTree *tree, ActionModel *actions, QWindow
       m_windowUuid(QUuid::createUuid()),
       m_objectPath(endpointPath())
 {
-    // Every change to the tree or to any entry re-snapshots, coalesced to
-    // one publish per event-loop pass; Unchanged snapshots cost nothing.
+    // Every change to the tree or to any entry re-snapshots, coalesced over
+    // kCoalesceMs; Unchanged snapshots cost nothing. Held while the window
+    // is inactive (header AGENT-GUARD).
+    m_refreshTimer = new QTimer(this);
+    m_refreshTimer->setSingleShot(true);
+    m_refreshTimer->setInterval(kCoalesceMs);
+    connect(m_refreshTimer, &QTimer::timeout, this, &GlobalMenuExport::coalescedRefresh);
+    if (m_window != nullptr) {
+        connect(m_window, &QWindow::activeChanged, this, &GlobalMenuExport::windowActiveChanged);
+    }
     connect(m_tree, &MenuTree::menusChanged, this, &GlobalMenuExport::scheduleRefresh);
     connect(m_actions, &ActionModel::entryChanged, this, &GlobalMenuExport::scheduleRefresh);
     connect(m_actions, &ActionModel::entryAdded, this, &GlobalMenuExport::scheduleRefresh);
@@ -135,14 +143,34 @@ void GlobalMenuExport::stop()
 
 void GlobalMenuExport::scheduleRefresh()
 {
-    if (m_refreshPending) {
+    if (!m_refreshTimer->isActive()) {
+        m_refreshTimer->start();
+    }
+}
+
+void GlobalMenuExport::coalescedRefresh()
+{
+    if (m_window != nullptr && !m_window->isActive()) {
+        m_heldWhileInactive = true;
         return;
     }
-    m_refreshPending = true;
-    QTimer::singleShot(0, this, [this] {
-        m_refreshPending = false;
+    ++m_refreshPasses;
+    refresh();
+}
+
+void GlobalMenuExport::windowActiveChanged()
+{
+    if (m_window == nullptr || !m_window->isActive()) {
+        return;
+    }
+    // Back in focus: whatever changed meanwhile is published now, when the
+    // panel is about to show this window's menu again.
+    if (m_heldWhileInactive || m_refreshTimer->isActive()) {
+        m_heldWhileInactive = false;
+        m_refreshTimer->stop();
+        ++m_refreshPasses;
         refresh();
-    });
+    }
 }
 
 void GlobalMenuExport::refresh()

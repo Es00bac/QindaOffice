@@ -18,6 +18,15 @@
 // QDesktopUnixServices (no X11 id, no XWayland), or the canonical
 // registrar under xcb.
 //
+// AGENT-GUARD: publication is HELD while the window is not active. The
+// panel dismisses an open menu whenever the app publishes a changed tree
+// (container-wm fc6b1468: a gesture must never reach a retired item), and
+// opening that menu moves keyboard focus to the panel — which is exactly
+// when the suite changes state (Wayland re-announces the clipboard, so
+// Paste flips; an inline editor loses focus and commits, so Undo flips).
+// Publishing then closed every Office menu the instant it opened. Changes
+// made while inactive are published once, when the window is active again.
+//
 // AGENT-GUARD: an activation resolves by id IN THE ACTION MODEL. The
 // Widgets-era export resolved it with menuBar()->findChild<QAction*>(), and
 // because the suite parented its actions to the window, 71 of 72 panel
@@ -28,6 +37,7 @@
 
 #include <QDBusConnection>
 #include <QObject>
+#include <QTimer>
 #include <QUuid>
 
 class QWindow;
@@ -66,6 +76,15 @@ public:
     void refresh();
     // The stable object path of this window's endpoint (tests, diagnostics).
     [[nodiscard]] QString objectPath() const { return m_objectPath; }
+    // Test seams: coalesced refresh passes that ran, and whether a change is
+    // waiting for the window to become active again.
+    [[nodiscard]] int refreshPasses() const { return m_refreshPasses; }
+    [[nodiscard]] bool isHoldingChanges() const { return m_heldWhileInactive; }
+
+    // How long changes coalesce before a publish: long enough that the
+    // window's focus-out (a queued window-system event) has landed when a
+    // focus-driven change is checked against isActive().
+    static constexpr int kCoalesceMs = 120;
 
 signals:
     void exportedChanged(bool exported);
@@ -90,6 +109,8 @@ private:
     };
 
     void scheduleRefresh();
+    void coalescedRefresh();
+    void windowActiveChanged();
     [[nodiscard]] bool announce();
     void withdraw();
 
@@ -101,7 +122,9 @@ private:
     QString m_objectPath;
     QindaQt::Shell::GlobalMenu::DbusMenu::DbusMenuServer *m_server = nullptr;
     std::unique_ptr<ActionModelMenuSource> m_source;
-    bool m_refreshPending = false;
+    QTimer *m_refreshTimer = nullptr;
+    bool m_heldWhileInactive = false;
+    int m_refreshPasses = 0;
     LineageSource m_lineage;
     std::unique_ptr<QindaQt::Shell::GlobalMenu::Exporter::MenuExporter> m_exporter;
     bool m_exported = false;

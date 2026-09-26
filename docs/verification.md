@@ -127,6 +127,9 @@ Manual (QindaQt desktop, tablet):
       two fingers pinch-zoom about the fingers and pan, leaving no dot
       where the first finger landed; with the Text tool a finger tap opens
       or places a block and a drag scrolls; a touchpad pinch zooms.
+- [ ] Global menu (D-054), in every Office app: click a panel menu — it
+      stays open, items are clickable, and it still opens after copying
+      text in another app and after editing a note block.
 - [ ] Typing in a text or checklist block on a DARK theme: dark ink on the
       page with a thin outline, text does not jump when the block opens
       or closes, selection readable.
