@@ -6,6 +6,7 @@
 // and the dialogs open, and the structural fixtures. QQO_GRAB_DIR saves
 // PNGs of each workspace for review (docs/verification.md).
 
+#include "qindamail/src/message_list_model.h"
 #include "mail_test_support.h"
 
 #include "qindamail/src/mail_host.h"
@@ -51,7 +52,11 @@ struct Scene {
     void seedMail()
     {
         auto *store = env.service->store();
-        const QDateTime now = QDateTime::currentDateTime();
+        // A fixed "now": the list's day headings (Today, Yesterday, This
+        // week, Earlier) depend on the weekday and the hour, so seeding from
+        // the wall clock made the structural fixtures fail on some days.
+        const QDateTime now(QDate(2026, 9, 24), QTime(12, 0));
+        env.service->messageModel()->setReferenceTime(now);
         struct Seed { const char *id; const char *sender; const char *subject; int daysAgo; bool unread; bool flagged; bool attachment; };
         const Seed seeds[] = {
             {"m1", "Maya Okafor", "Spring menu proofs are ready", 0, true, false, true},
