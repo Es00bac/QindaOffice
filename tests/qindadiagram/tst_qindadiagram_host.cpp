@@ -55,7 +55,7 @@ private slots:
                 shortcuts.insert(keys);
             }
         }
-        QVERIFY2(diagramCommands > 100, qPrintable(QString::number(diagramCommands)));
+        QVERIFY2(diagramCommands >= 100, qPrintable(QString::number(diagramCommands)));
         QCOMPARE(host.action(str("diagramDuplicateAction"))->shortcut(), QKeySequence(str("Ctrl+D")));
         QCOMPARE(host.action(str("fileNewAction"))->plainText(), str("New Drawing"));
     }

@@ -5,6 +5,67 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-050: QindaDiagram: a drawing model of its own on the toolkit's canvas stack
+
+**Date:** 2026-09-25 · **Status:** accepted (M50)
+
+**Context.** The suite needed a Visio replacement for everyday diagrams:
+flowcharts across swimlanes, org charts, office networks — stencils of
+different shapes and sizes, connectors glued to connection points or
+outlines that follow their shapes, containers, text in shapes, shape
+data, pages, auto-layout, print/PDF/PNG/SVG. The plan named QindaTK's
+`DiagramCanvas` + `DiagramDocument` as the base. Reading them settles it:
+they are a *dataflow node editor* — uniform cards ("cards share one
+size"), typed input/output port rows, output→input edges only, routes
+computed for that card geometry. A Visio shape is none of those. Growing
+that control into a general diagram editor would have rewritten it, not
+extended it.
+
+**Decision.**
+
+1. **The model is the app's own** (`libs/diagram_engine`, Qt Core/Gui/Svg,
+   no Quick): a `Drawing` of pages, shapes (stencil id, unrotated rect,
+   rotation, flips, one-run text, style, shape data, one-level group) and
+   connectors (two endpoints glued to a connection point, the outline, or
+   free; routing; arrows; label). Stencil geometry, routing (orthogonal
+   with obstacle avoidance, straight, curved, line jumps), layout
+   (layered, tree), themes (document palettes), edits and importers are
+   pure functions over it and unit-tested without a UI.
+2. **One painter** draws everything — the canvas, the Shapes panel
+   thumbnails, Print / Print Preview / Export PDF (one
+   `PrintRenderCallback`), PNG, SVG, Copy as Picture. Text lays out at a
+   fixed reference size and scales, so breaks match on every device.
+3. **The editor is QindaTK's canvas stack, used as designed**:
+   `DiagramCanvasAdapter` (the `SlideCanvasDocument` pattern) projects a
+   page onto `CanvasView` as *pick proxies* — a shape an invisible image
+   object on its rotated box, a connector a polyline on its route — so
+   `ToolController` (selection, marquee), `SpatialTransform` (move,
+   eight-handle resize, rotate, aspect lock, numeric entry through
+   `SpatialTransformEditor`), `SnapModel`, `SelectionOverlay`, hover
+   outlines, `NavigatorView` (minimap) and `Ruler` work unchanged. The
+   pixels come from `DiagramPageView`, painted under the transparent
+   canvas by the engine's painter — which is also what makes a drag
+   preview live (shapes follow the handles, connectors re-route) and keeps
+   the screen identical to print. A gesture's `commit()` is one undo step.
+4. **Undo is snapshots**: `DrawingDocument::edit` pushes (before, after)
+   onto the `Core::Document`'s `QUndoStack` only when the drawing really
+   changed; implicit sharing makes a step cost one page. Nudges merge.
+5. **The file is versioned JSON** (`.qdiagram`, `application/x-qindadiagram`),
+   saved atomically, with unknown members kept per object and newer
+   versions refused. draw.io (uncompressed) and org-chart CSV import;
+   Visio `.vsdx` is out of scope.
+6. **The toolkit grew where a control was missing**: `ShapePalette`
+   thumbnail tiles, a category menu, search across categories and drag
+   reports (QindaTK D-302, branch `work/diagram-shape-palette`) — the
+   Shapes panel needed all four and they are general.
+
+**Consequences.** `DiagramCanvas` stays what it is (dataflow graphs);
+QindaDiagram depends on the canvas boundary instead, like Show's
+`SlideCanvas`. Connectors paint above all shapes (Visio's default; no
+per-connector z among shapes). Text is one run per shape. The app builds
+against a QindaTK prefix with D-302 until that branch is merged and
+installed.
+
 ## D-047: Bookkeeping app: one company per window, a service over the engine, one print source
 
 **Date:** 2026-09-25 · **Status:** accepted (M47)

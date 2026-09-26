@@ -112,7 +112,9 @@ QtObject {
                 "diagramRotateRightAction", "diagramRotateLeftAction", "diagramFlipHorizontalAction",
                 "diagramFlipVerticalAction", "diagramLockAspectAction"] },
             { id: "autoLayout", label: qsTr("Auto-layout"), items: [
-                { action: "diagramLayoutTopDownAction", size: "large" }, "diagramLayoutLeftRightAction", "diagramLayoutTreeAction"] }
+                { action: "diagramLayoutTopDownAction", size: "large", label: qsTr("Top to bottom") },
+                { action: "diagramLayoutLeftRightAction", label: qsTr("Left to right") },
+                { action: "diagramLayoutTreeAction", label: qsTr("Org chart") }] }
         ] },
         StandardRibbon.viewTab([
             { id: "panels", label: qsTr("Panels"), items: [
@@ -137,7 +139,9 @@ QtObject {
         ] },
         { id: "connector", label: qsTr("Connector"), keyTip: "C", contextId: "connector", groups: [
             { id: "routing", label: qsTr("Routing"), items: [
-                { action: "diagramRouteOrthogonalAction", size: "large" }, "diagramRouteStraightAction", "diagramRouteCurvedAction"] },
+                { action: "diagramRouteOrthogonalAction", size: "large", label: qsTr("Right angle") },
+                { action: "diagramRouteStraightAction", label: qsTr("Straight") },
+                { action: "diagramRouteCurvedAction", label: qsTr("Curved") }] },
             { id: "arrows", label: qsTr("Arrows"), items: [
                 { action: "diagramArrowEndAction", size: "large" }, "diagramArrowStartAction", "diagramArrowBothAction",
                 "diagramArrowNoneAction"] },

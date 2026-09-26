@@ -249,6 +249,19 @@ private slots:
                 // dropdown entries the gate counts through their menus.
                 {str("aiAssistantAction")});
             QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+            if (width != 1320) {
+                continue;
+            }
+            // The other tabs, for review; Shape with a shape selected.
+            scene.host.diagram()->selectAll();
+            QQuickItem *ribbon = scene.item(str("officeRibbon"));
+            for (const char *tab : {"insert", "design", "arrange", "shape", "connector"}) {
+                QVariant ok;
+                QMetaObject::invokeMethod(ribbon, "activateTab", Q_RETURN_ARG(QVariant, ok), Q_ARG(QVariant, str(tab)));
+                QVERIFY2(ok.toBool(), tab);
+                QTest::qWait(100);
+                QindaOffice::Test::saveGrab(scene.window, str("qindadiagram_tab_%1_1320").arg(str(tab)));
+            }
         }
     }
 
