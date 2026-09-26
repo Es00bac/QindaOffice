@@ -42,7 +42,8 @@ only the original entry and the copies came back, doubling each launch.
    (the duplicates earlier builds left behind).
 
 **Consequences.** A palm resting on the screen inks while Draw with Finger
-is on — the toggle is on the Home ribbon and in Ink ▸ for pen users.
+is on — the toggle is on View ▸ Touch, in Ink ▸ and in Preferences for pen
+users (not on Home: Home fills 1280 px exactly at squeeze level 0).
 `tst_note_input` drives real touch sequences; `tst_document_host` pins the
 one-key restore.
 

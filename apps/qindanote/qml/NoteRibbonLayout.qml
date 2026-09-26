@@ -33,8 +33,7 @@ QtObject {
             StandardRibbon.clipboardGroup(),
             { id: "tools", label: qsTr("Tools"), items: [
                 { action: "notePenTool", size: "large" }, { action: "noteHighlighterTool", size: "large" },
-                { action: "noteEraserTool", size: "large" }, { action: "noteTextTool", size: "large" },
-                "noteTouchDrawAction"] },
+                { action: "noteEraserTool", size: "large" }, { action: "noteTextTool", size: "large" }] },
             { id: "ink", label: qsTr("Ink"), rows: [
                 [{ id: "inkColour", component: colorSlot }, { id: "inkWidth", component: widthSlot }],
                 [{ id: "penColours", label: qsTr("Pen"), iconName: "pen-tool", menu: penColours.concat(["|"]).concat(penWidths) },
@@ -63,6 +62,9 @@ QtObject {
         ] },
         StandardRibbon.viewTab([
             { id: "panes", label: qsTr("Panes"), items: [{ action: "noteShowNavigatorAction", size: "large" }] },
+            // AGENT-NOTE: on View, not Home: Home fills 1280 px exactly at
+            // squeeze level 0, and one more item there drops it to icons.
+            { id: "touch", label: qsTr("Touch"), items: [{ action: "noteTouchDrawAction", size: "large" }] },
             StandardRibbon.assistantGroup([])
         ])
     ]
