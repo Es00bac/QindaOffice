@@ -153,7 +153,7 @@ OfficeWindow {
         function onZoomRequested(zoom) { if (Math.abs(zoom - 1.0) > 1e-6) canvasView.setZoom(zoom); else canvasView.fitPage() }
         function onFindRequested() { findBar.open() }
         function onReplaceRequested() { replaceDialog.open() }
-        function onAssistantToggleRequested(visible) { if (visible) dock.showPanel("assistant"); else dock.hidePanel("assistant") }
+        function onAssistantToggleRequested(visible) { if (visible === dock.hiddenPanels.includes("assistant")) { if (visible) dock.showPanel("assistant"); else dock.hidePanel("assistant") } }
         function onFillColorRequested(current) { colorDialog.stroke = false; colorDialog.selectedColor = current; colorDialog.open() }
         function onStrokeColorRequested(current) { colorDialog.stroke = true; colorDialog.selectedColor = current; colorDialog.open() }
         function onImageDialogRequested() { imageDialog.open() }

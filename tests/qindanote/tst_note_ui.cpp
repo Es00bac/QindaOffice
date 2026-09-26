@@ -4,6 +4,7 @@
 // hidden when squeezed), the colour and width slots follow the active tool,
 // and the navigator lists the notebook.
 
+#include <QRegularExpression>
 #include "note_test_support.h"
 
 #include "support/quick_dump.h"
@@ -16,6 +17,9 @@ class NoteUiTest final : public QObject {
     Q_OBJECT
 
 private slots:
+    // Every case fails on a QML binding loop: the dock panel toggles used to
+    // bounce between the View action and DockHost.hiddenPanels.
+    void init() { QTest::failOnWarning(QRegularExpression(QStringLiteral("Binding loop detected"))); }
     void ribbonToolsAreAddressableAndExclusive()
     {
         Scene scene;

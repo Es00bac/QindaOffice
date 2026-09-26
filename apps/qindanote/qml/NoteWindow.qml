@@ -177,10 +177,10 @@ OfficeWindow {
     Connections {
         target: window.note
         function onNavigatorToggleRequested(visible) {
-            if (visible) dock.showPanel("navigator"); else dock.hidePanel("navigator")
+            if (visible === dock.hiddenPanels.includes("navigator")) { if (visible) dock.showPanel("navigator"); else dock.hidePanel("navigator") }
         }
         function onAssistantToggleRequested(visible) {
-            if (visible) dock.showPanel("assistant"); else dock.hidePanel("assistant")
+            if (visible === dock.hiddenPanels.includes("assistant")) { if (visible) dock.showPanel("assistant"); else dock.hidePanel("assistant") }
         }
         function onFindRequested() { findBar.open() }
         function onNewSectionRequested() { sectionPrompt.text = qsTr("Section"); sectionPrompt.open() }

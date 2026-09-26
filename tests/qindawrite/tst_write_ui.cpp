@@ -6,6 +6,7 @@
 // renders as paper under any theme; zoom is the viewport's; the strip
 // wraps instead of hiding; page setup round-trips; structural fixtures.
 
+#include <QRegularExpression>
 #include "write_test_support.h"
 
 #include "qindawrite/src/format_controller.h"
@@ -56,6 +57,9 @@ QString sid(const char *id)
 class WriteUiTest : public QObject {
     Q_OBJECT
 private slots:
+    // Every case fails on a QML binding loop: the dock panel toggles used to
+    // bounce between the View action and DockHost.hiddenPanels.
+    void init() { QTest::failOnWarning(QRegularExpression(QStringLiteral("Binding loop detected"))); }
     // D-041: the ribbon draws the host's own entries — the named buttons
     // exist, bind live, and the font widgets ride in the Font group.
     void ribbonExposesNamedCommands()

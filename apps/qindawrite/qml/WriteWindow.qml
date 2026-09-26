@@ -147,7 +147,7 @@ OfficeWindow {
         target: window.write
         function onZoomRequested(zoom) { pageHost.setZoom(zoom) }
         function onFindRequested(replace) { if (replace) findBar.openReplace(); else findBar.open() }
-        function onAssistantToggleRequested(visible) { if (visible) dock.showPanel("assistant"); else dock.hidePanel("assistant") }
+        function onAssistantToggleRequested(visible) { if (visible === dock.hiddenPanels.includes("assistant")) { if (visible) dock.showPanel("assistant"); else dock.hidePanel("assistant") } }
         function onTextColorRequested(current) { colorDialog.highlight = false; colorDialog.selectedColor = current; colorDialog.open() }
         function onHighlightRequested() { colorDialog.highlight = true; colorDialog.open() }
         function onTableDialogRequested() { tableDialog.columnsMode = false; tableDialog.open() }

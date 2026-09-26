@@ -226,7 +226,7 @@ OfficeWindow {
         target: window.calc
         function onFindRequested(replace) { if (replace) findBar.openReplace(); else findBar.open() }
         function onImageDialogRequested() { imageDialog.open() }
-        function onAssistantToggleRequested(visible) { if (visible) dock.showPanel("assistant"); else dock.hidePanel("assistant") }
+        function onAssistantToggleRequested(visible) { if (visible === dock.hiddenPanels.includes("assistant")) { if (visible) dock.showPanel("assistant"); else dock.hidePanel("assistant") } }
         function onRowHeightRequested(current) { sizeDialog.forRows = true; sizeDialog.value = current; sizeDialog.open() }
         function onColumnWidthRequested(current) { sizeDialog.forRows = false; sizeDialog.value = current; sizeDialog.open() }
         function onRenameSheetRequested(index, name) { renameSheet.sheetIndex = index; renameSheet.text = name; renameSheet.open() }
