@@ -17,3 +17,5 @@ add_subdirectory(qindamail)
 add_subdirectory(books_engine)
 add_subdirectory(books_io)
 add_subdirectory(qindabooks)
+# QindaDiagram (M50, D-050).
+add_subdirectory(diagram_engine)

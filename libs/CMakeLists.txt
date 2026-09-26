@@ -11,3 +11,5 @@ add_subdirectory(mail_exchange)
 add_subdirectory(books_engine)
 add_subdirectory(books_document)
 add_subdirectory(books_io)
+# QindaDiagram's engine (M50, D-050): drawings, stencils, routing, painter.
+add_subdirectory(diagram_engine)
