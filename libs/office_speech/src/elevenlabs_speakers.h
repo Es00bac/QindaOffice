@@ -66,6 +66,7 @@ public:
     void feed(const QByteArray &pcm) override;
     void finish() override;
     void cancel() override;
+    [[nodiscard]] qint64 billedAudioMs() const override { return m_billedMs; }
 
     struct Word {
         qint64 startMs = 0;
@@ -109,6 +110,7 @@ private:
     qint64 m_prefixMs = 0;           // its samples' total length
     int m_nextSpeaker = 1;
     QPointer<QNetworkReply> m_reply;
+    qint64 m_billedMs = 0;
     bool m_finishing = false;
     bool m_cancelled = false;
 };

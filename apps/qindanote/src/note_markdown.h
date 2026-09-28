@@ -26,5 +26,9 @@ namespace QindaOffice::Apps::Notes {
 void paintMarkdown(QPainter *painter, const QRectF &box, const QString &markdown);
 // Plain text of the rendered markdown (search, the assistant's context).
 [[nodiscard]] QString markdownPlainText(const QString &markdown);
+// The [mm:ss] / [h:mm:ss] time under `point` (block coordinates, padding
+// included) in the rendered text, in ms; -1 when there is none (M56:
+// Ctrl+click replays the recording there).
+[[nodiscard]] qint64 markdownTimestampAt(const QString &markdown, qreal width, const QPointF &point);
 
 } // namespace QindaOffice::Apps::Notes

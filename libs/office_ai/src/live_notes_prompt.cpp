@@ -14,11 +14,11 @@ bool isSection(const QString &line, const char *name)
         && line.mid(3).trimmed().startsWith(QLatin1String(name), Qt::CaseInsensitive);
 }
 
-QString tailOf(const QList<TranscriptLine> &lines, int chars)
+QString tailOf(const QList<TranscriptLine> &lines, int chars, const QHash<QString, QString> &names)
 {
     QString out;
     for (qsizetype i = lines.size() - 1; i >= 0 && out.size() < chars; --i) {
-        out.prepend(formatLines({lines.at(i)}) + QLatin1Char('\n'));
+        out.prepend(formatLines({lines.at(i)}, names) + QLatin1Char('\n'));
     }
     return out.trimmed();
 }
@@ -64,7 +64,7 @@ QString detailBrief(int detail)
     }
 }
 
-QString systemPrompt(int detail, const NotesBriefing &briefing)
+QString systemPrompt(int detail, const NotesBriefing &briefing, const SessionContext &context)
 {
     QStringList format;
     format << QStringLiteral("- One `#` title naming the session's subject (improve it as the "
@@ -91,7 +91,14 @@ QString systemPrompt(int detail, const NotesBriefing &briefing)
                                : QStringLiteral("- No quotes: paraphrase everything."))
            << QStringLiteral("- Your own annotations in italics in parentheses: *(connects to "
                              "the earlier point on X)*, *(speaker corrects the earlier "
-                             "figure)*. Mark doubtful recognition as *(unclear: …?)*.");
+                             "figure)*. Mark doubtful recognition as *(unclear at mm:ss: …?)* with the "
+                             "transcript time, so the user can replay it.");
+    if (briefing.explainJargon) {
+        format << QStringLiteral("- Right after a technical term or name the audience may not "
+                                 "know, add a one-line plain-language explanation as "
+                                 "[[ai: …]] (shown as an AI note, so keep it short and "
+                                 "factual; only for terms that need it).");
+    }
     if (briefing.definitions) {
         format << QStringLiteral("- A `## Definitions` section near the end: every key term "
                                  "with a one-line definition, alphabetical.");
@@ -120,6 +127,8 @@ QString systemPrompt(int detail, const NotesBriefing &briefing)
         "wording.\n"
         "Transcript lines marked ★ were flagged as important; ⤷ marks where a new topic "
         "probably starts; (filler) lines are probably noise — use them only if they matter.\n"
+        "‼ marks a moment the USER flagged as important while listening: it must be in the "
+        "notes, ==highlighted==.\n"
         "Lines may start with a speaker label (Speaker 1, Speaker 2, …). Attribute decisions, "
         "claims, questions and quotes to whoever made them when it matters; once the "
         "transcript shows who a speaker is (\"thanks, Maria\"), write \"Maria (Speaker 2)\" "
@@ -135,6 +144,7 @@ QString systemPrompt(int detail, const NotesBriefing &briefing)
     if (!session.isEmpty()) {
         prompt += QStringLiteral("\n\n") + session;
     }
+    prompt += LiveNotesBriefing::renderContext(context);
     return prompt;
 }
 
@@ -152,7 +162,7 @@ QString formatTime(qint64 ms)
         .arg(seconds % 60, 2, 10, QLatin1Char('0'));
 }
 
-QString formatLines(const QList<TranscriptLine> &lines)
+QString formatLines(const QList<TranscriptLine> &lines, const QHash<QString, QString> &names)
 {
     QStringList out;
     for (const TranscriptLine &line : lines) {
@@ -160,13 +170,19 @@ QString formatLines(const QList<TranscriptLine> &lines)
         if (line.newTopic) {
             marks += QStringLiteral("⤷ ");
         }
+        if (line.flagged) {
+            marks += QStringLiteral("‼ ");
+        }
         if (line.key) {
             marks += QStringLiteral("★ ");
         }
         if (line.filler) {
             marks += QStringLiteral("(filler) ");
         }
-        const QString who = line.speaker.isEmpty() ? QString() : line.speaker + QStringLiteral(": ");
+        const QString name = names.value(line.speaker);
+        const QString who = line.speaker.isEmpty() ? QString()
+            : name.isEmpty() ? line.speaker + QStringLiteral(": ")
+                             : QStringLiteral("%1 (%2): ").arg(name, line.speaker);
         out.append(QStringLiteral("[%1] %2%3%4").arg(formatTime(line.ms), marks, who, line.text));
     }
     return out.join(QLatin1Char('\n'));
@@ -213,24 +229,26 @@ QString userMessage(const Request &request)
                                                           : request.notes.trimmed());
     }
     if (request.restyle && request.fresh.isEmpty()) {
-        out += QStringLiteral("The user changed the detail level. Rewrite the notes to fit it "
-                              "exactly (condense or expand), keeping every fact the level "
-                              "calls for and the user's own additions.");
+        out += request.restyleReason.isEmpty()
+            ? QStringLiteral("The user changed the detail level. Rewrite the notes to fit it "
+                             "exactly (condense or expand), keeping every fact the level "
+                             "calls for and the user's own additions.")
+            : request.restyleReason;
         return out;
     }
     if (request.fullRevision) {
-        out += QStringLiteral("FULL TRANSCRIPT:\n%1\n\n").arg(formatLines(request.fresh));
+        out += QStringLiteral("FULL TRANSCRIPT:\n%1\n\n").arg(formatLines(request.fresh, request.speakerNames));
         out += QStringLiteral("Rewrite the notes from the full transcript: reorganise, correct "
                               "and complete them, keeping the user's own additions.");
         return out;
     }
-    const QString context = tailOf(request.context, kContextChars);
+    const QString context = tailOf(request.context, kContextChars, request.speakerNames);
     if (!context.isEmpty()) {
         out += QStringLiteral("EARLIER TRANSCRIPT (already in the notes; context only):\n%1\n\n")
                    .arg(context);
     }
     out += QStringLiteral("NEW TRANSCRIPT (not yet in the notes):\n%1\n\n")
-               .arg(formatLines(request.fresh));
+               .arg(formatLines(request.fresh, request.speakerNames));
     out += tail ? QStringLiteral("Reply with exactly: the `## Summary` section (covering the whole "
                                  "session), then the revised last sections and any new sections, "
                                  "then `## Action items` if there are any. Do not repeat the "

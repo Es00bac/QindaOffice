@@ -94,6 +94,28 @@ Tk.Dialog {
             Tk.TextField { objectName: "liveLanguage"; text: dialog.session.language; onEditingFinished: dialog.session.language = text }
         }
 
+        Tk.Overline { title: qsTr("Silence") }
+        Tk.PropertyRow {
+            label: qsTr("Pause")
+            Tk.Switch {
+                objectName: "liveAutoPause"
+                text: qsTr("Stop sending audio after 20 s of quiet (resumes by itself)")
+                checked: dialog.session.autoPause
+                onToggled: dialog.session.autoPause = checked
+            }
+        }
+        Tk.PropertyRow {
+            label: qsTr("Stop")
+            hint: qsTr("End the session (with its final revision) after this long without sound.")
+            Tk.ComboBox {
+                objectName: "liveAutoStop"
+                readonly property var minutes: [0, 5, 10, 15, 30, 60]
+                model: [qsTr("Never"), qsTr("5 minutes"), qsTr("10 minutes"), qsTr("15 minutes"), qsTr("30 minutes"), qsTr("1 hour")]
+                currentIndex: Math.max(0, minutes.indexOf(dialog.session.autoStopMinutes))
+                onActivated: function(index) { dialog.session.autoStopMinutes = minutes[index] }
+            }
+        }
+
         Tk.Overline { title: qsTr("Notes") }
         Tk.PropertyRow {
             label: qsTr("Model")

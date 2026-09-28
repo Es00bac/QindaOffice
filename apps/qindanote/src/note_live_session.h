@@ -20,10 +20,18 @@
 // on every read and write (note_host_live.cpp).
 //
 // Files: note_live_session.cpp (lifecycle and pipeline),
-// note_live_settings.cpp (settings, persistence, keys).
+// note_live_settings.cpp (settings, persistence, keys), note_live_extras.cpp
+// (M56, D-061: the flag, catch-up, speaker names, learned key terms, prep
+// material and series memory, the recording, silence handling, screen
+// capture, the usage meter, study pages and action items).
 
 #include "api_key_resolver.h"
 #include "live_notes_engine.h"
+#include "live_notes_extras.h"
+
+#include <QImage>
+#include <QTimer>
+#include <QUrl>
 
 #include <QObject>
 #include <QPointer>
@@ -42,6 +50,7 @@ class SystemOneClient;
 namespace QindaOffice::Speech {
 class PcmCapture;
 class SpeechRecognizer;
+class WavRecorder;
 }
 
 namespace QindaOffice::Apps::Notes {
@@ -109,6 +118,30 @@ class LiveNotesSession : public QObject {
     Q_PROPERTY(bool updating READ updating NOTIFY updatingChanged)
     Q_PROPERTY(int updateCount READ updateCount NOTIFY statusChanged)
     Q_PROPERTY(int segmentCount READ segmentCount NOTIFY transcriptChanged)
+    // ---- M56 (D-061) ----
+    // Session options kept with the setup: keep the recording, capture the
+    // screen for the model, continue from earlier pages of the section,
+    // split a long session into pages by topic when it stops.
+    Q_PROPERTY(bool keepRecording READ keepRecording WRITE setKeepRecording NOTIFY settingsChanged)
+    Q_PROPERTY(bool captureScreen READ captureScreen WRITE setCaptureScreen NOTIFY settingsChanged)
+    Q_PROPERTY(bool continueSeries READ continueSeries WRITE setContinueSeries NOTIFY settingsChanged)
+    Q_PROPERTY(bool splitLongSessions READ splitLongSessions WRITE setSplitLongSessions NOTIFY settingsChanged)
+    // Silence: pause sending audio after 20 s of quiet (resumes by itself),
+    // stop the session after autoStopMinutes of it (0 = never).
+    Q_PROPERTY(bool autoPause READ autoPause WRITE setAutoPause NOTIFY settingsChanged)
+    Q_PROPERTY(int autoStopMinutes READ autoStopMinutes WRITE setAutoStopMinutes NOTIFY settingsChanged)
+    // Prep material for the next session (files: .txt .md .pdf .html).
+    Q_PROPERTY(QStringList prepFiles READ prepFiles WRITE setPrepFiles NOTIFY settingsChanged)
+    Q_PROPERTY(bool silencePaused READ silencePaused NOTIFY statusChanged)
+    Q_PROPERTY(int flagCount READ flagCount NOTIFY transcriptChanged)
+    // [{label, name}] for the speakers heard so far (speaker labels on).
+    Q_PROPERTY(QVariantList speakers READ speakers NOTIFY transcriptChanged)
+    Q_PROPERTY(QString catchUpText READ catchUpText NOTIFY catchUpChanged)
+    Q_PROPERTY(bool catchingUp READ catchingUp NOTIFY catchUpChanged)
+    // {audioMinutes, requests, inputTokens, outputTokens, gateCalls, screens, terms}
+    Q_PROPERTY(QVariantMap usage READ usage NOTIFY usageChanged)
+    // A study page or the action-items hand-off is being made.
+    Q_PROPERTY(bool working READ working NOTIFY workingChanged)
 public:
     LiveNotesSession(NoteHost *host, Ai::ModelCatalog *catalog, QString settingsPath,
                      QObject *parent = nullptr);
@@ -176,6 +209,44 @@ public:
     Q_INVOKABLE void checkKeys();
     Q_INVOKABLE void copyTranscript() const;
 
+    // M56 (note_live_extras.cpp)
+    [[nodiscard]] bool keepRecording() const { return m_keepRecording; }
+    void setKeepRecording(bool on);
+    [[nodiscard]] bool captureScreen() const { return m_captureScreen; }
+    void setCaptureScreen(bool on);
+    [[nodiscard]] bool continueSeries() const { return m_continueSeries; }
+    void setContinueSeries(bool on);
+    [[nodiscard]] bool splitLongSessions() const { return m_splitLongSessions; }
+    void setSplitLongSessions(bool on);
+    [[nodiscard]] bool autoPause() const { return m_autoPause; }
+    void setAutoPause(bool on);
+    [[nodiscard]] int autoStopMinutes() const { return m_autoStopMinutes; }
+    void setAutoStopMinutes(int minutes);
+    [[nodiscard]] QStringList prepFiles() const { return m_prepFiles; }
+    void setPrepFiles(const QStringList &files);
+    Q_INVOKABLE void addPrepFile(const QUrl &file);
+    Q_INVOKABLE void removePrepFile(int index);
+    [[nodiscard]] bool silencePaused() const { return m_silencePaused; }
+    [[nodiscard]] int flagCount() const { return m_flagCount; }
+    [[nodiscard]] QVariantList speakers() const;
+    [[nodiscard]] QString catchUpText() const { return m_catchUp; }
+    [[nodiscard]] bool catchingUp() const { return m_catchingUp; }
+    [[nodiscard]] QVariantMap usage() const;
+    [[nodiscard]] bool working() const { return m_working; }
+    // "This matters": the moment being heard is flagged for the notes.
+    Q_INVOKABLE void flag();
+    Q_INVOKABLE void setSpeakerName(const QString &label, const QString &name);
+    // A few bullets on the last `minutes` of the session.
+    Q_INVOKABLE void catchUp(int minutes = 5);
+    // From the current page's notes (any time, session or not):
+    Q_INVOKABLE void makeStudyPage();
+    Q_INVOKABLE void sendActionItemsToMail();
+    // Text of a prep file (tests; .txt .md .pdf .html).
+    [[nodiscard]] static QString readPrepFile(const QString &path, QString *error = nullptr);
+    // Test seams: feed the silence logic a level; run its 1 s tick now.
+    void observeLevel(qreal level);
+    void silenceTick();
+
     // Test seams: skip PipeWire and the recognizer (segments then come in
     // through injectSegment), and read the engine.
     void setAudioEnabled(bool enabled) { m_audioEnabled = enabled; }
@@ -192,6 +263,9 @@ signals:
     void transcriptChanged();
     void statusChanged();
     void updatingChanged();
+    void catchUpChanged();
+    void usageChanged();
+    void workingChanged();
 
 private:
     // note_live_session.cpp
@@ -208,6 +282,18 @@ private:
     void saveSettings();
     [[nodiscard]] Ai::KeySources speechKeySources() const;
     [[nodiscard]] Ai::KeySources gateKeySources() const;
+    // note_live_extras.cpp
+    [[nodiscard]] Ai::SessionContext buildContext() const;
+    void learnTerms(const QString &material);
+    void startRecording();
+    void stopRecording();
+    void onPcm(const QByteArray &pcm);
+    void captureScreenNow();
+    void onScreenCaptured(const QString &path);
+    // Resolves the notes model's key and hands a provider to `use` (or
+    // reports why not); the provider is parented to this session.
+    void withModel(const std::function<void(Ai::ChatProvider *provider)> &use);
+    void setWorking(bool on);
 
     NoteHost *m_host;
     Ai::ModelCatalog *m_catalog;
@@ -242,6 +328,28 @@ private:
     QPointer<Ai::LiveNotesEngine> m_engineCore;
     QPointer<Ai::ChatProvider> m_provider;
     QPointer<Ai::SystemOneClient> m_gateClient;
+    // M56
+    bool m_keepRecording = true;
+    bool m_captureScreen = false;
+    bool m_continueSeries = false;
+    bool m_splitLongSessions = false;
+    bool m_autoPause = true;
+    int m_autoStopMinutes = 15;
+    QStringList m_prepFiles;
+    bool m_silencePaused = false;
+    qint64 m_quietMs = 0;            // continuous quiet so far
+    int m_flagCount = 0;
+    QHash<QString, QString> m_speakerNames;
+    QString m_catchUp;
+    bool m_catchingUp = false;
+    bool m_working = false;
+    bool m_learnedFromTranscript = false;
+    int m_learnedTerms = 0;
+    std::unique_ptr<Speech::WavRecorder> m_recorder;
+    QString m_recordingPath;
+    QTimer m_silenceTimer;
+    QTimer m_screenTimer;
+    QImage m_lastScreen;             // 32×18 grey thumbnail of the last one sent
 };
 
 } // namespace QindaOffice::Apps::Notes

@@ -15,6 +15,8 @@ set(QINDANOTE_ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_host_ai.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_host_ink.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_host_live.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_host_session.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_live_extras.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_live_session.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_live_session.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_live_settings.cpp
@@ -41,6 +43,7 @@ set(qindanote_qml
     qml/NoteLiveSettingsDialog.qml
     qml/NoteLiveSetupDialog.qml
     qml/NoteNavigator.qml
+    qml/NoteSessionPanel.qml
     qml/NotePage.qml
     qml/NotePreferencesPage.qml
     qml/NoteWindow.qml
@@ -67,6 +70,8 @@ qt_add_qml_module(qindanote_app
         src/note_host_ai.cpp
         src/note_host_ink.cpp
         src/note_host_live.cpp
+        src/note_host_session.cpp
+        src/note_live_extras.cpp
         src/note_live_session.cpp src/note_live_session.h
         src/note_live_settings.cpp
         src/note_markdown.cpp src/note_markdown.h
@@ -82,8 +87,11 @@ qt_add_qml_module(qindanote_app
     QML_FILES ${qindanote_qml}
 )
 target_include_directories(qindanote_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+find_package(Qt6 REQUIRED COMPONENTS Multimedia)
+# poppler-qt6 reads prep-material PDFs (M56); QtMultimedia plays the session
+# recording in the Session panel.
 target_link_libraries(qindanote_app PUBLIC office_quick office_quickplugin office_ai office_aiplugin office_ink
-    office_speech)
+    office_speech Qt6::Multimedia PkgConfig::POPPLER_QT6)
 target_compile_definitions(qindanote_app PRIVATE QT_NO_CAST_FROM_ASCII)
 qqo_set_strict_warnings(qindanote_app)
 

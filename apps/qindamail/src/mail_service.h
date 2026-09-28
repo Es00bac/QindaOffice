@@ -236,6 +236,8 @@ public:
     Q_INVOKABLE void applyChange(const QString &requestId, const QString &eventId, const QVariantMap &proposal);
     Q_INVOKABLE QVariantMap eventById(const QString &eventId) const;
     Q_INVOKABLE QString importIcs(const QUrl &url, const QString &calendarId = {});
+    // The file's VTODOs as tasks on the board; returns how many (M56).
+    int importIcsTasks(const QString &path);
     Q_INVOKABLE QString exportIcs(const QUrl &url, const QString &calendarId = {});
     Q_INVOKABLE QString subscribeFeed(const QString &url, const QString &name = {}, const QString &color = {});
     Q_INVOKABLE QVariantList recurrencePreview(const QString &eventId, const QVariantMap &rule);

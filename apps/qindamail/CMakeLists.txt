@@ -49,6 +49,7 @@ qt_add_qml_module(qindamail_app
         src/mail_service_calendar.cpp
         src/mail_service_compose.cpp
         src/mail_service_ical.cpp
+        src/ics_tasks.cpp src/ics_tasks.h
         src/mail_service_folders.cpp
         src/mail_service_messages.cpp
         src/mail_service_sync.cpp

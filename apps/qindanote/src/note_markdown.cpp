@@ -25,23 +25,26 @@ const QColor kHighlight(0xff, 0xee, 0x6e);
 // Private-use sentinels that survive the Markdown parser.
 const QChar kMarkOpen(0xE000);
 const QChar kMarkClose(0xE001);
+// [[ai: …]] — an AI-added explanation (M56), painted as a teal aside.
+const QChar kAiOpen(0xE002);
+const QChar kAiClose(0xE003);
+const QColor kAiNote(0x0f, 0x6e, 0x7a);
 constexpr int kCacheLimit = 24;
 
-void applyHighlights(QTextDocument *document)
+// Formats the text between each open/close sentinel pair and removes the
+// sentinels (close first, so the open's position holds).
+void applySpans(QTextDocument *document, QChar openChar, QChar closeChar, const QTextCharFormat &format)
 {
-    QTextCursor open = document->find(QString(kMarkOpen));
+    QTextCursor open = document->find(QString(openChar));
     while (!open.isNull()) {
-        const QTextCursor close = document->find(QString(kMarkClose), open.position());
+        const QTextCursor close = document->find(QString(closeChar), open.position());
         if (close.isNull()) {
             break;
         }
         QTextCursor span(document);
         span.setPosition(open.position());
         span.setPosition(close.position() - 1, QTextCursor::KeepAnchor);
-        QTextCharFormat marker;
-        marker.setBackground(kHighlight);
-        span.mergeCharFormat(marker);
-        // Remove the sentinels, closing one first so positions hold.
+        span.mergeCharFormat(format);
         QTextCursor removeClose(document);
         removeClose.setPosition(close.position() - 1);
         removeClose.setPosition(close.position(), QTextCursor::KeepAnchor);
@@ -50,7 +53,7 @@ void applyHighlights(QTextDocument *document)
         removeOpen.setPosition(open.position() - 1);
         removeOpen.setPosition(open.position(), QTextCursor::KeepAnchor);
         removeOpen.removeSelectedText();
-        open = document->find(QString(kMarkOpen));
+        open = document->find(QString(openChar));
     }
 }
 
@@ -95,12 +98,21 @@ std::shared_ptr<QTextDocument> build(const QString &markdown, qreal width)
     static const QRegularExpression highlight(QStringLiteral("==([^=\\n](?:[^\\n]*?[^=\\n])?)=="));
     QString source = markdown;
     source.replace(highlight, QString(kMarkOpen) + QStringLiteral("\\1") + QString(kMarkClose));
+    static const QRegularExpression aiNote(QStringLiteral("\\[\\[ai:\\s*(.*?)\\]\\]"));
+    source.replace(aiNote, QString(kAiOpen) + QStringLiteral("ⓘ \\1") + QString(kAiClose));
 
     auto document = std::make_shared<QTextDocument>();
     document->setDefaultFont(pageFont());
     document->setDocumentMargin(0);
     document->setMarkdown(source, QTextDocument::MarkdownDialectGitHub);
-    applyHighlights(document.get());
+    QTextCharFormat marker;
+    marker.setBackground(kHighlight);
+    applySpans(document.get(), kMarkOpen, kMarkClose, marker);
+    QTextCharFormat aside;
+    aside.setForeground(kAiNote);
+    aside.setFontItalic(true);
+    aside.setFontPointSize(pageFont().pointSizeF() * 0.9);
+    applySpans(document.get(), kAiOpen, kAiClose, aside);
     applyPaperStyle(document.get());
     document->setTextWidth(qMax<qreal>(20, width - 2 * kTextPadding));
     if (cache.size() >= kCacheLimit) {
@@ -131,6 +143,32 @@ void paintMarkdown(QPainter *painter, const QRectF &box, const QString &markdown
     context.clip = QRectF(0, 0, box.width(), box.height());
     document->documentLayout()->draw(painter, context);
     painter->restore();
+}
+
+qint64 markdownTimestampAt(const QString &markdown, qreal width, const QPointF &point)
+{
+    const auto document = build(markdown, width);
+    const int position = document->documentLayout()->hitTest(point - QPointF(kTextPadding, kTextPadding),
+                                                            Qt::FuzzyHit);
+    if (position < 0) {
+        return -1;
+    }
+    const QTextBlock block = document->findBlock(position);
+    const QString text = block.text();
+    const int offset = position - block.position();
+    static const QRegularExpression stamp(QStringLiteral("\\[((?:\\d{1,2}:)?\\d{1,2}:\\d{2})\\]"));
+    for (auto it = stamp.globalMatch(text); it.hasNext();) {
+        const QRegularExpressionMatch m = it.next();
+        if (offset >= m.capturedStart() - 1 && offset <= m.capturedEnd() + 1) {
+            const QStringList parts = m.captured(1).split(QLatin1Char(':'));
+            qint64 total = 0;
+            for (const QString &part : parts) {
+                total = total * 60 + part.toInt();
+            }
+            return total * 1000;
+        }
+    }
+    return -1;
 }
 
 QString markdownPlainText(const QString &markdown)

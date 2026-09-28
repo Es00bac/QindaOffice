@@ -44,6 +44,18 @@ Tk.Viewport {
                                   | PointerDevice.Generic | PointerDevice.Finger
         }
 
+        // M56: Ctrl+click on a [12:40] in live notes plays the recording there.
+        TapHandler {
+            objectName: "noteTimestampTap"
+            acceptedModifiers: Qt.ControlModifier
+            acceptedButtons: Qt.LeftButton
+            grabPermissions: PointerHandler.CanTakeOverFromAnything
+            onTapped: function(eventPoint) {
+                const ms = page.timestampAt(eventPoint.position)
+                if (ms >= 0) viewport.note.playRecordingAt(ms)
+            }
+        }
+
         // A finger tap with the Text tool (the stylus handler does not take
         // fingers then, so a drag stays free to pan the page).
         TapHandler {

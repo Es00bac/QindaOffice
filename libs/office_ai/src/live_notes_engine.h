@@ -56,6 +56,7 @@ public:
         QStringList glossary; // correct spellings of names and terms
         int detail = LiveNotesPrompt::kDefaultDetail; // 1 (key points) .. 5
         NotesBriefing briefing; // the pre-session setup (D-059)
+        SessionContext context; // prep material, earlier sessions (M56)
     };
 
     using Reader = std::function<QString()>;
@@ -76,6 +77,29 @@ public:
     void setDetail(int detail);
     // The setup edited mid-session: applies from the next update on.
     void setBriefing(const NotesBriefing &briefing) { m_options.briefing = briefing; }
+    // M56 (D-061):
+    // "This matters": marks the line being heard now and the next one ‼.
+    void flagMoment();
+    // Names for speaker labels; the notes are rewritten to use them.
+    void setSpeakerNames(const QHash<QString, QString> &names);
+    [[nodiscard]] const QHash<QString, QString> &speakerNames() const { return m_speakerNames; }
+    // Terms learned during the session join the spelling glossary.
+    void addGlossary(const QStringList &terms);
+    struct Usage {
+        int requests = 0;
+        qint64 inputTokens = 0;
+        qint64 outputTokens = 0;
+        int gateCalls = 0;
+        int screens = 0;      // screen captures sent to the model
+    };
+    [[nodiscard]] const Usage &usage() const { return m_usage; }
+    // Model calls made beside the engine (terms, catch-up) count too.
+    void addUsage(const ChatUsage &usage);
+    // A screen capture that changed (slides, code): rides with the next
+    // update (at most kMaxScreens; the newest win). Only for providers
+    // that read images — the session decides.
+    static constexpr int kMaxScreens = 2;
+    void addScreen(const QImage &image);
 
     // Starts the cadence clock. Segments before start() are kept.
     void start();
@@ -99,6 +123,7 @@ signals:
     void status(const QString &text);
     void failed(const QString &message);
     void notesApplied(int updateCount);
+    void usageChanged();
     void finalized();
 
 private:
@@ -127,6 +152,11 @@ private:
     bool m_runTail = false;
     bool m_runRestyle = false;
     bool m_restylePending = false;
+    QString m_restyleReason;
+    bool m_flagNext = false;
+    QHash<QString, QString> m_speakerNames;
+    Usage m_usage;
+    QList<QImage> m_screens;
     QString m_sentNotes;
     QString m_pending;           // an answer waiting for the writer
     int m_pendingRetries = 0;

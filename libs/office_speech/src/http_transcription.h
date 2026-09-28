@@ -36,6 +36,8 @@ public:
     void feed(const QByteArray &pcm) override;
     void finish() override;
     void cancel() override;
+    // Only the clips are uploaded, not the silence between them.
+    [[nodiscard]] qint64 billedAudioMs() const override { return offMachine() ? m_billedMs : 0; }
 
     // A RIFF/WAVE header + the PCM (16 kHz mono s16le).
     [[nodiscard]] static QByteArray wavFile(const QByteArray &pcm);
@@ -52,6 +54,7 @@ private:
     QList<AudioClip> m_queue;
     QPointer<QNetworkReply> m_reply;
     QString m_lastText;
+    qint64 m_billedMs = 0;
     bool m_finishing = false;
     bool m_cancelled = false;
 };

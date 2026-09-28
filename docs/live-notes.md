@@ -80,6 +80,41 @@ The model is asked for GitHub-flavoured Markdown with a fixed shape:
 Editing the block shows its Markdown source. Closing the editor paints it
 again.
 
+## During and after a session (M56, D-061)
+
+- **This matters (F9):** flags the moment; it will be highlighted. The
+  button in the live panel shows how many you flagged.
+- **Catch me up:** a few bullets on the last five minutes.
+- **Speakers:** with *Who said what* on, type a name next to "Speaker 2".
+  The notes switch to the name.
+- **Prep material** (setup): attach slides, a syllabus or an agenda.
+  **Continue from the earlier pages in this section** gives the
+  note-taker the previous sessions' notes, so it refers back instead of
+  repeating. Names and jargon from all of it, and from the first three
+  minutes of speech, are learned as key terms automatically.
+- **Explain jargon** (setup): short AI explanations in teal, marked ⓘ.
+- **Capture the screen** (setup, desktop audio, a model that reads
+  images): changed slides and code go to the model with the next update.
+- **Keep the recording** (setup, on by default): saved beside the
+  notebook. Ctrl+click any `[12:40]` in the notes to play from there.
+- **Silence:** after 20 s of quiet, audio stops being sent until there is
+  sound again. The session stops after 15 minutes of silence
+  (Settings ▸ Silence).
+- **Session Review** panel (Live tab ▸ Review), for the open page:
+  - the player, and the sections with their times;
+  - **Check these**: every *(unclear at 1:42: …?)* spot, with Listen and
+    a correction box;
+  - **Study page**: flashcards and practice questions on a new page;
+  - **Tasks → QindaMail**: action items become tasks, and dated ones also
+    calendar entries;
+  - **Pages by topic**: one page per topic after an index, also automatic
+    at Stop if chosen in the setup;
+  - **Export**: Markdown, QindaWrite, Anki.
+- The **usage** line in the live panel shows audio minutes sent, model
+  calls and tokens, gate calls, screens and terms learned.
+- Ask the **assistant** about the session ("what did she say about the
+  exam?"). It reads the transcript and answers with times.
+
 ## The pipeline
 
 ```

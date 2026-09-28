@@ -84,6 +84,51 @@ void NoteHost::createLiveNotes()
     connect(model->add(QStringLiteral("noteLiveStopAction"), tr("S&top Live Notes"), {},
                        QStringLiteral("square")),
             &ActionEntry::triggered, m_live, &LiveNotesSession::stop);
+    // M56 (D-061): the flag hotkey, catch-up, the Session panel and its
+    // page commands.
+    connect(model->add(QStringLiteral("noteLiveFlagAction"), tr("&This Matters"),
+                       QKeySequence(Qt::Key_F9), QStringLiteral("star")),
+            &ActionEntry::triggered, m_live, &LiveNotesSession::flag);
+    connect(model->add(QStringLiteral("noteLiveCatchUpAction"), tr("&Catch Me Up"), {},
+                       QStringLiteral("history")),
+            &ActionEntry::triggered, this, [this] {
+                emit liveNotesToggleRequested(true);
+                m_live->catchUp(5);
+            });
+    ActionEntry *sessionPanel = model->add(QStringLiteral("noteSessionPanelAction"), tr("Session &Review"),
+                                           {}, QStringLiteral("clipboard-list"));
+    sessionPanel->setCheckable(true);
+    connect(sessionPanel, &ActionEntry::toggled, this,
+            [this](bool visible) { emit sessionPanelToggleRequested(visible); });
+    connect(model->add(QStringLiteral("noteStudyPageAction"), tr("Make a &Study Page"), {},
+                       QStringLiteral("book-open")),
+            &ActionEntry::triggered, m_live, &LiveNotesSession::makeStudyPage);
+    connect(model->add(QStringLiteral("noteActionItemsToMailAction"), tr("Send Action Items to &QindaMail"),
+                       {}, QStringLiteral("list-todo")),
+            &ActionEntry::triggered, m_live, &LiveNotesSession::sendActionItemsToMail);
+    connect(model->add(QStringLiteral("noteSplitByTopicAction"), tr("Split into Pages by &Topic"), {},
+                       QStringLiteral("split")),
+            &ActionEntry::triggered, this, &NoteHost::splitCurrentPage);
+    connect(model->add(QStringLiteral("noteExportMarkdownAction"), tr("Export &Markdown…"), {},
+                       QStringLiteral("file-text")),
+            &ActionEntry::triggered, this, [this] {
+                emit exportMarkdownRequested(QStringLiteral("%1.md").arg(currentPageTitle()));
+            });
+    connect(model->add(QStringLiteral("noteOpenInWriteAction"), tr("Open in Qinda&Write"), {},
+                       QStringLiteral("square-pen")),
+            &ActionEntry::triggered, this, &NoteHost::openInWrite);
+    connect(model->add(QStringLiteral("noteExportAnkiAction"), tr("Export Flashcards for &Anki…"), {},
+                       QStringLiteral("layers")),
+            &ActionEntry::triggered, this, [this] {
+                emit exportAnkiRequested(QStringLiteral("%1.txt").arg(currentPageTitle()));
+            });
+    // The Session panel re-reads the page after edits, coalesced.
+    m_sessionTimer = new QTimer(this);
+    m_sessionTimer->setSingleShot(true);
+    m_sessionTimer->setInterval(300);
+    connect(m_sessionTimer, &QTimer::timeout, this, &NoteHost::sessionChanged);
+    connect(this, &NoteHost::currentPageChanged, m_sessionTimer, qOverload<>(&QTimer::start));
+    connect(m_document, &Core::Document::contentChanged, m_sessionTimer, qOverload<>(&QTimer::start));
     connect(model->add(QStringLiteral("aiProvidersAction"), tr("AI &Providers…"), {},
                        QStringLiteral("key-round")),
             &ActionEntry::triggered, this, [this] { emit providersRequested(); });
@@ -92,11 +137,21 @@ void NoteHost::createLiveNotes()
 
     menuTree()->appendTo(QStringLiteral("aiMenu"), MenuNode::separator());
     for (const char *id : {"noteLiveNotesAction", "noteLiveStartAction", "noteLivePauseAction",
-                           "noteLiveStopAction"}) {
+                           "noteLiveStopAction", "noteLiveFlagAction", "noteLiveCatchUpAction"}) {
+        menuTree()->appendTo(QStringLiteral("aiMenu"), MenuNode::action(QString::fromLatin1(id)));
+    }
+    menuTree()->appendTo(QStringLiteral("aiMenu"), MenuNode::separator());
+    menuTree()->appendTo(QStringLiteral("aiMenu"), MenuNode::separator());
+    for (const char *id : {"noteSessionPanelAction", "noteStudyPageAction", "noteActionItemsToMailAction",
+                           "noteSplitByTopicAction"}) {
         menuTree()->appendTo(QStringLiteral("aiMenu"), MenuNode::action(QString::fromLatin1(id)));
     }
     menuTree()->appendTo(QStringLiteral("aiMenu"), MenuNode::separator());
     menuTree()->appendTo(QStringLiteral("aiMenu"), MenuNode::action(QStringLiteral("aiProvidersAction")));
+    // Export sits with Export PDF in the Page menu.
+    for (const char *id : {"noteExportMarkdownAction", "noteOpenInWriteAction", "noteExportAnkiAction"}) {
+        menuTree()->insertInto(QStringLiteral("notePageMenu"), QString(), MenuNode::action(QString::fromLatin1(id)));
+    }
 }
 
 void NoteHost::syncLiveActions()
@@ -108,6 +163,8 @@ void NoteHost::syncLiveActions()
     actions()->setEnabled(QStringLiteral("noteLivePauseAction"), state == QLatin1String("listening"));
     actions()->setEnabled(QStringLiteral("noteLiveStopAction"),
                           !idle && state != QLatin1String("finishing"));
+    actions()->setEnabled(QStringLiteral("noteLiveFlagAction"), state == QLatin1String("listening"));
+    actions()->setEnabled(QStringLiteral("noteLiveCatchUpAction"), !idle);
 }
 
 LiveTarget NoteHost::beginLiveNotes(const QString &topic)

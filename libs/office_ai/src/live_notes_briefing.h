@@ -28,10 +28,22 @@ struct NotesBriefing {
     bool quotes = true;         // > "exact wording"
     bool openQuestions = false; // ## Open questions
     bool definitions = false;   // ## Definitions glossary
+    bool explainJargon = false; // [[ai: …]] explanations after hard terms (M56)
 
     [[nodiscard]] QVariantMap toMap() const;
     [[nodiscard]] static NotesBriefing fromMap(const QVariantMap &map);
     bool operator==(const NotesBriefing &) const = default;
+};
+
+// What the note-taker is given to read before and during a session (M56):
+// prep material the user attached (slides, a syllabus, an agenda — as
+// text) and the notes of earlier sessions in the same notebook section
+// (series memory). Not persisted with the setup: rebuilt per session.
+struct SessionContext {
+    QString reference;
+    QString previousNotes;
+    static constexpr int kReferenceBudget = 24000;
+    static constexpr int kPreviousBudget = 12000;
 };
 
 namespace LiveNotesBriefing {
@@ -48,6 +60,8 @@ struct Scenario {
 [[nodiscard]] QString scenarioBrief(const QString &id);
 // The SESSION BRIEFING section: scenario, focus, skip, custom.
 [[nodiscard]] QString render(const NotesBriefing &briefing);
+// The REFERENCE MATERIAL / EARLIER SESSIONS sections ("" when empty).
+[[nodiscard]] QString renderContext(const SessionContext &context);
 
 } // namespace LiveNotesBriefing
 

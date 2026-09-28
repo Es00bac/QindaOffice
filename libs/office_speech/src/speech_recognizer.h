@@ -58,6 +58,10 @@ public:
 
     // Milliseconds of audio fed so far.
     [[nodiscard]] qint64 audioMs() const { return m_fedBytes / kBytesPerMs; }
+    // Milliseconds of audio sent to a paid service (the usage meter, M56):
+    // what was streamed or uploaded, overlaps and voice samples included;
+    // 0 for a local engine.
+    [[nodiscard]] virtual qint64 billedAudioMs() const { return offMachine() ? audioMs() : 0; }
 
 signals:
     void ready();

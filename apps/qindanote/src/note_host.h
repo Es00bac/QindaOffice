@@ -65,6 +65,10 @@ class NoteHost : public Quick::DocumentHost {
     Q_PROPERTY(QindaOffice::Apps::Notes::LiveNotesSession *live READ live CONSTANT)
     Q_PROPERTY(QindaOffice::Ai::ProviderSettings *providerSettings READ providerSettings CONSTANT)
     Q_MOC_INCLUDE("provider_settings.h")
+    // The Session panel's view of the open page (M56, note_host_session.cpp):
+    // {hasNotes, audioUrl, sections: [{heading, ms}], unclear: [{text,
+    // guess, ms}], hasCards}.
+    Q_PROPERTY(QVariantMap pageSession READ pageSession NOTIFY sessionChanged)
 public:
     NoteHost();
     ~NoteHost() override;
@@ -136,6 +140,25 @@ public:
     void storeLiveTranscript(const LiveTarget &target, const QString &transcript);
     void endLiveNotes(const LiveTarget &target, bool wroteNotes);
 
+    // Session review and page commands (note_host_session.cpp, M56).
+    [[nodiscard]] QVariantMap pageSession() const;
+    [[nodiscard]] QString currentPageNotes() const;
+    [[nodiscard]] QString recordingPathFor(const LiveTarget &target) const;
+    void setLiveRecording(const LiveTarget &target, const QString &path);
+    // Notes of the pages before the open one in its section (series memory).
+    [[nodiscard]] QString earlierNotesInSection(int budget) const;
+    // A new page right after the open one, holding one markdown block.
+    QString addNotesPage(const QString &title, const QString &markdown);
+    // Long notes → an index page plus one page per topic.
+    void splitLiveNotes(const LiveTarget &target);
+    Q_INVOKABLE void splitCurrentPage();
+    Q_INVOKABLE bool resolveUnclear(const QString &annotation, const QString &replacement);
+    Q_INVOKABLE bool exportMarkdownTo(const QUrl &url);
+    Q_INVOKABLE void openInWrite();
+    Q_INVOKABLE bool exportAnkiTo(const QUrl &url);
+    // Ctrl+click on a [12:40] in the notes, or a section in the panel.
+    Q_INVOKABLE void playRecordingAt(qint64 ms) { emit playRecordingRequested(ms); }
+
 signals:
     void currentPageChanged();
     // The window opens the matching dialog and answers through the
@@ -162,6 +185,13 @@ signals:
     // Start with "ask before every session" on: the window opens the setup.
     void liveNotesSetupRequested();
     void providersRequested();
+    // M56: the Session panel's data changed; play the recording from `ms`;
+    // the export dialogs.
+    void sessionChanged();
+    void playRecordingRequested(qint64 ms);
+    void sessionPanelToggleRequested(bool visible);
+    void exportMarkdownRequested(const QString &suggestedPath);
+    void exportAnkiRequested(const QString &suggestedPath);
 
 protected:
     [[nodiscard]] QString filterString() const override;
@@ -214,6 +244,7 @@ private:
     QString m_editorSelection;
     LiveNotesSession *m_live = nullptr;
     Ai::ProviderSettings *m_providerSettings = nullptr;
+    QTimer *m_sessionTimer = nullptr;
 };
 
 } // namespace QindaOffice::Apps::Notes

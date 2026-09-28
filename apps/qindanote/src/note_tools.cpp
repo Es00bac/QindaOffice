@@ -89,8 +89,18 @@ QString NoteTools::snapshot(int budget)
     if (m_snapshot.isEmpty()) {
         return out + QStringLiteral("(the page has no typed content)\n");
     }
+    QString transcripts;
     for (qsizetype i = 0; i < m_snapshot.size(); ++i) {
         const QJsonObject block = m_snapshot.at(i).toObject();
+        // M56 (#4): a live-notes block carries its session's transcript —
+        // the assistant answers "what did she say about X?" from it.
+        const QString transcript = block.value(QStringLiteral("transcript")).toString();
+        if (!transcript.isEmpty()) {
+            transcripts += QStringLiteral("\n\nTRANSCRIPT of the live session behind block [%1] (answer "
+                                          "questions about what was said from it, citing [mm:ss]):\n%2")
+                               .arg(i)
+                               .arg(transcript.right(qMax(4000, budget / 2)));
+        }
         if (block.value(QStringLiteral("type")).toString() == QLatin1String("image")) {
             out += QStringLiteral("\n[%1] image (not editable)\n").arg(i);
             continue;
@@ -106,7 +116,7 @@ QString NoteTools::snapshot(int budget)
             break;
         }
     }
-    return out;
+    return out + transcripts;
 }
 
 QString NoteTools::operationGuide() const

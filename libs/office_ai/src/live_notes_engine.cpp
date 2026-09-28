@@ -94,6 +94,61 @@ void LiveNotesEngine::setDetail(int detail)
     m_restylePending = true;
 }
 
+void LiveNotesEngine::flagMoment()
+{
+    // Recognition lags speech: the words being said as the key goes down
+    // are usually in the NEXT committed line, so mark both.
+    if (!m_lines.isEmpty() && elapsedMs() - m_lines.last().ms < 20000) {
+        m_lines.last().flagged = true;
+    }
+    m_flagNext = true;
+    m_topicChangePending = true; // a flag deserves a prompt update
+}
+
+void LiveNotesEngine::setSpeakerNames(const QHash<QString, QString> &names)
+{
+    if (names == m_speakerNames) {
+        return;
+    }
+    m_speakerNames = names;
+    QStringList pairs;
+    for (auto it = names.begin(); it != names.end(); ++it) {
+        if (!it.value().trimmed().isEmpty()) {
+            pairs.append(QStringLiteral("%1 = %2").arg(it.key(), it.value().trimmed()));
+        }
+    }
+    m_restyleReason = QStringLiteral("The user named the speakers: %1. Replace those speaker "
+                                     "labels in the notes with the names (keep everything else).")
+                          .arg(pairs.join(QStringLiteral("; ")));
+    m_restylePending = true;
+}
+
+void LiveNotesEngine::addGlossary(const QStringList &terms)
+{
+    for (const QString &term : terms) {
+        if (!term.trimmed().isEmpty() && !m_options.glossary.contains(term, Qt::CaseInsensitive)
+            && m_options.glossary.size() < 80) {
+            m_options.glossary.append(term.trimmed());
+        }
+    }
+}
+
+void LiveNotesEngine::addUsage(const ChatUsage &usage)
+{
+    ++m_usage.requests;
+    m_usage.inputTokens += usage.inputTokens;
+    m_usage.outputTokens += usage.outputTokens;
+    emit usageChanged();
+}
+
+void LiveNotesEngine::addScreen(const QImage &image)
+{
+    m_screens.append(image);
+    while (m_screens.size() > kMaxScreens) {
+        m_screens.removeFirst();
+    }
+}
+
 void LiveNotesEngine::start()
 {
     m_started = true;
@@ -110,6 +165,8 @@ void LiveNotesEngine::addSegment(const QString &text, qint64 ms, const QString &
     }
     TranscriptLine line{ms, clean};
     line.speaker = speaker;
+    line.flagged = m_flagNext;
+    m_flagNext = false;
     m_lines.append(line);
     maybeGate();
 }
@@ -165,6 +222,7 @@ void LiveNotesEngine::maybeGate()
         {QStringLiteral("recent_context"), recent.join(QLatin1Char(' ')).right(300)},
         {QStringLiteral("passage"), passage.join(QLatin1Char(' ')).left(1200)}};
     m_gateBusy = true;
+    ++m_usage.gateCalls;
     QPointer<LiveNotesEngine> self(this);
     m_gate->ask(state, gateQuestions(),
                 [self, from, to](const QHash<QString, SystemOneAnswer> &answers,
@@ -274,6 +332,9 @@ void LiveNotesEngine::runUpdate(bool full, bool restyle)
     request.elapsedMs = m_lines.isEmpty() ? elapsedMs() : m_lines.last().ms;
     request.fullRevision = full;
     request.restyle = restyle;
+    request.restyleReason = restyle ? m_restyleReason : QString();
+    m_restyleReason.clear(); // a later restyle is the detail level's unless re-set
+    request.speakerNames = m_speakerNames;
     if (full) {
         request.fresh = m_lines;
     } else {
@@ -286,8 +347,17 @@ void LiveNotesEngine::runUpdate(bool full, bool restyle)
     m_runRestyle = restyle;
 
     ChatRequest chat;
-    chat.systemPrompt = LiveNotesPrompt::systemPrompt(m_options.detail, m_options.briefing);
+    chat.systemPrompt = LiveNotesPrompt::systemPrompt(m_options.detail, m_options.briefing,
+                                                      m_options.context);
     chat.messages.append({QStringLiteral("user"), LiveNotesPrompt::userMessage(request), {}});
+    if (!m_screens.isEmpty()) {
+        chat.messages.last().text += QStringLiteral(
+            "\n\nThe attached images are what was on screen during the new transcript (slides, "
+            "code, a whiteboard): use their text, figures and structure in the notes.");
+        chat.messages.last().images = m_screens;
+        m_usage.screens += int(m_screens.size());
+        m_screens.clear();
+    }
     chat.maxTokens = m_options.maxOutputTokens;
     chat.temperature = 0.3;
     m_lastUpdateMs = elapsedMs();
@@ -297,6 +367,7 @@ void LiveNotesEngine::runUpdate(bool full, bool restyle)
                 : full  ? tr("Revising the whole set of notes…")
                         : tr("Updating the notes…"));
     connect(m_run, &ChatRun::finished, this, [this](const ChatResult &result) {
+        addUsage(result.usage);
         m_run->deleteLater();
         m_run = nullptr;
         emit busyChanged(false);

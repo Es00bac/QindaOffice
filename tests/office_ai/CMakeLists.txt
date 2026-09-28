@@ -10,7 +10,7 @@ add_test(NAME tst_office_ai COMMAND tst_office_ai)
 set_tests_properties(tst_office_ai PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # Live notes and the OpenCode-style provider plumbing (D-057).
-foreach(name IN ITEMS tst_live_notes tst_ai_providers)
+foreach(name IN ITEMS tst_live_notes tst_ai_providers tst_live_notes_extras)
     add_executable(${name} ${name}.cpp)
     target_link_libraries(${name} PRIVATE office_ai Qt6::Test)
     qqo_set_strict_warnings(${name})

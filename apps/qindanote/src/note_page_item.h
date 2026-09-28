@@ -75,6 +75,16 @@ public:
 
     // ---- page ----
     void setPage(NotePage *page);
+    // The SAME page moved in memory (its section's QVector grew or was
+    // reordered): swap the pointer, keep the history and the editor.
+    // AGENT-GUARD: any code that adds or moves pages while one is open must
+    // call this (or setPage) — the old pointer dangles, and the next paint
+    // reads freed memory (it crashed in the ink renderer).
+    void rebindPage(NotePage *page)
+    {
+        m_page = page;
+        update();
+    }
     [[nodiscard]] NotePage *page() const { return m_page; }
     [[nodiscard]] bool hasPage() const { return m_page != nullptr; }
     [[nodiscard]] QString background() const;
@@ -129,6 +139,9 @@ public:
     Q_INVOKABLE void addCheckItem();
     // A rendered markdown block under the lowest block (assistant replies).
     Q_INVOKABLE void addMarkdownBlock(const QString &text);
+    // The [mm:ss] time under `pos` (page coordinates) in a markdown block,
+    // in ms, or -1 (M56: Ctrl+click replays the recording there).
+    Q_INVOKABLE qint64 timestampAt(const QPointF &pos) const;
     void addImageBlock(const QByteArray &imageData);
     Q_INVOKABLE bool addImageFile(const QUrl &url);
     Q_INVOKABLE int blockAt(const QPointF &pos) const;

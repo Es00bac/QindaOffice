@@ -169,6 +169,22 @@ OfficeWindow {
                 onProvidersRequested: providersDialog.open()
             }
         }
+        // Session review (M56): the open page's recording, sections, unclear
+        // spots and what to make of its notes.
+        Tk.DockPanel {
+            panelId: "session"
+            title: qsTr("Session Review")
+            iconName: "clipboard-list"
+            zone: "right"
+            mode: "hidden"
+            extent: 320
+            minWidth: 260
+            closable: true
+            NoteSessionPanel {
+                objectName: "sessionPanel"
+                note: window.note
+            }
+        }
         // Keeps the two toggles honest when a panel is closed from its own
         // header (the list carries panel ids).
         onHiddenPanelsChanged: {
@@ -176,6 +192,7 @@ OfficeWindow {
             window.host.actions.setChecked("noteShowNavigatorAction", !hidden.includes("navigator"))
             window.host.actions.setChecked("aiAssistantAction", !hidden.includes("assistant"))
             window.host.actions.setChecked("noteLiveNotesAction", !hidden.includes("live"))
+            window.host.actions.setChecked("noteSessionPanelAction", !hidden.includes("session"))
         }
     }
 
@@ -206,6 +223,14 @@ OfficeWindow {
             if (visible === dock.hiddenPanels.includes("live")) { if (visible) dock.showPanel("live"); else dock.hidePanel("live") }
         }
         function onProvidersRequested() { providersDialog.open() }
+        function onSessionPanelToggleRequested(visible) {
+            if (visible === dock.hiddenPanels.includes("session")) { if (visible) dock.showPanel("session"); else dock.hidePanel("session") }
+        }
+        function onPlayRecordingRequested(ms) {
+            if (dock.hiddenPanels.includes("session")) dock.showPanel("session")
+        }
+        function onExportMarkdownRequested(name) { markdownDialog.selectedFile = "file://" + name; markdownDialog.open() }
+        function onExportAnkiRequested(name) { ankiDialog.selectedFile = "file://" + name; ankiDialog.open() }
         function onLiveNotesSetupRequested() { liveSetup.starting = true; liveSetup.open() }
         function onFindRequested() { findBar.open() }
         function onNewSectionRequested() { sectionPrompt.text = qsTr("Section"); sectionPrompt.open() }
@@ -258,6 +283,16 @@ OfficeWindow {
             Tk.PropertyRow { label: qsTr("Find"); Tk.TextField { id: findField; objectName: "replaceFind" } }
             Tk.PropertyRow { label: qsTr("Replace with"); Tk.TextField { id: replaceField; objectName: "replaceWith" } }
         }
+    }
+    Dialogs.FileDialog {
+        id: markdownDialog; title: qsTr("Export Markdown"); fileMode: Dialogs.FileDialog.SaveFile
+        nameFilters: [qsTr("Markdown (*.md)")]
+        onAccepted: window.note.exportMarkdownTo(selectedFile)
+    }
+    Dialogs.FileDialog {
+        id: ankiDialog; title: qsTr("Export flashcards for Anki"); fileMode: Dialogs.FileDialog.SaveFile
+        nameFilters: [qsTr("Anki text import (*.txt)")]
+        onAccepted: window.note.exportAnkiTo(selectedFile)
     }
     Dialogs.FileDialog {
         id: exportDialog; title: qsTr("Export PDF"); fileMode: Dialogs.FileDialog.SaveFile

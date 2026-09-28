@@ -14,6 +14,7 @@
 #include "model_catalog.h"
 #include "pcm_capture.h"
 #include "system_one_client.h"
+#include "wav_recorder.h"
 #include "whisper_local.h"
 
 #include <QClipboard>
@@ -158,6 +159,7 @@ void LiveNotesSession::launch(const QString &modelKey, const QString &speechKey,
     options.glossary = glossary;
     options.detail = m_detail;
     options.briefing = m_briefing;
+    options.context = buildContext(); // prep material, earlier sessions (M56)
     m_engineCore->setOptions(options);
     m_engineCore->setProvider(m_provider);
     m_engineCore->setGate(m_gateClient);
@@ -180,6 +182,32 @@ void LiveNotesSession::launch(const QString &modelKey, const QString &speechKey,
     });
     connect(m_engineCore, &Ai::LiveNotesEngine::finalized, this,
             &LiveNotesSession::onEngineFinalized);
+    connect(m_engineCore, &Ai::LiveNotesEngine::usageChanged, this, &LiveNotesSession::usageChanged);
+    m_speakerNames.clear();
+    m_flagCount = 0;
+    m_learnedTerms = 0;
+    m_learnedFromTranscript = false;
+    m_catchUp.clear();
+    m_quietMs = 0;
+    m_silencePaused = false;
+    m_lastScreen = QImage();
+    // Teach the recognizer and the notes the vocabulary of the prep
+    // material and the earlier sessions (M56).
+    learnTerms(options.context.reference + QStringLiteral("\n") + options.context.previousNotes);
+    startRecording();
+    m_silenceTimer.start();
+    const auto config = m_catalog->configFor(m_modelId);
+    const bool readsImages = config.has_value()
+        && (config->kind == QLatin1String("openai") || config->kind == QLatin1String("anthropic"));
+    if (m_captureScreen && m_source != QLatin1String("microphone")) {
+        if (readsImages) {
+            m_screenTimer.start();
+            QTimer::singleShot(3000, this, &LiveNotesSession::captureScreenNow);
+        } else {
+            setStatus(m_status, tr("Screen capture needs a model that reads images (an HTTP provider "
+                                   "such as Claude, GPT or Gemini); it is off for this session."));
+        }
+    }
 
     if (m_audioEnabled) {
         m_recognizer = createRecognizer(speechKey);
@@ -207,11 +235,10 @@ void LiveNotesSession::launch(const QString &modelKey, const QString &speechKey,
         connect(m_recognizer, &SpeechRecognizer::finished, this,
                 &LiveNotesSession::onRecognizerFinished);
         m_capture = new Speech::PcmCapture(this);
-        connect(m_capture, &Speech::PcmCapture::pcm, m_recognizer, &SpeechRecognizer::feed);
-        connect(m_capture, &Speech::PcmCapture::level, this, [this](qreal value) {
-            m_level = value;
-            emit levelChanged();
-        });
+        // The session sits between capture and recognizer: it keeps the
+        // recording and holds back audio while silence-paused (M56).
+        connect(m_capture, &Speech::PcmCapture::pcm, this, &LiveNotesSession::onPcm);
+        connect(m_capture, &Speech::PcmCapture::level, this, &LiveNotesSession::observeLevel);
         connect(m_capture, &Speech::PcmCapture::failed, this, [this](const QString &message) {
             setStatus(m_status, message);
             stop();
@@ -307,6 +334,10 @@ void LiveNotesSession::onRecognizerFinished()
 void LiveNotesSession::onEngineFinalized()
 {
     storeTranscript();
+    stopRecording();
+    if (m_splitLongSessions && m_host->liveNotesText(m_target).size() >= Ai::LiveNotesPrompt::kTailModeChars) {
+        m_host->splitLiveNotes(m_target); // one page per topic, an index page (M56)
+    }
     const int updates = updateCount();
     m_host->endLiveNotes(m_target, updates > 0);
     teardown();
@@ -334,6 +365,7 @@ void LiveNotesSession::cancel()
         m_engineCore->cancel();
     }
     storeTranscript();
+    stopRecording();
     m_host->endLiveNotes(m_target, updateCount() > 0);
     teardown();
     setState(QStringLiteral("idle"));
@@ -342,6 +374,9 @@ void LiveNotesSession::cancel()
 
 void LiveNotesSession::teardown()
 {
+    m_silenceTimer.stop();
+    m_screenTimer.stop();
+    m_silencePaused = false;
     for (QObject *object : std::initializer_list<QObject *>{
              m_capture.data(), m_recognizer.data(), m_engineCore.data(), m_provider.data(),
              m_gateClient.data()}) {

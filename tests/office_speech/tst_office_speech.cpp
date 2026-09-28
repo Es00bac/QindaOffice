@@ -7,6 +7,7 @@
 #include "pcm_capture.h"
 #include "pcm_mixer.h"
 #include "speech_segmenter.h"
+#include "wav_recorder.h"
 #include "whisper_local.h"
 
 #include <QFile>
@@ -76,6 +77,7 @@ private slots:
     void whisperRealHelperRefusesAMissingModel();
     void httpTranscriptionPostsClips();
     void speakersStitchAcrossWindows();
+    void wavRecorderWritesAPlayableFile();
 };
 
 void OfficeSpeechTest::mixerSumsAndSaturates()
@@ -476,6 +478,35 @@ void OfficeSpeechTest::speakersStitchAcrossWindows()
     }
     QCOMPARE(got, (QStringList{QStringLiteral("Speaker 1: Hello there"), QStringLiteral("Speaker 2: hi"),
                                QStringLiteral("Speaker 1: how are you")}));
+}
+
+// M56: the session recording is a valid WAV at every moment (the header
+// is patched as it grows) and exactly the audio that was appended.
+void OfficeSpeechTest::wavRecorderWritesAPlayableFile()
+{
+    QTemporaryDir dir;
+    const QString path = dir.filePath(QStringLiteral("deep/dir/live.wav"));
+    WavRecorder recorder;
+    QVERIFY(recorder.open(path));
+    const QByteArray second = tone(1000, 0.2);
+    for (int i = 0; i < 6; ++i) {
+        recorder.append(second);
+    }
+    // Mid-session: the header already covers the first 5 s.
+    QFile partial(path);
+    QVERIFY(partial.open(QIODevice::ReadOnly));
+    const QByteArray head = partial.read(44);
+    QCOMPARE(qFromLittleEndian<quint32>(head.constData() + 40), quint32(5 * second.size()));
+    partial.close();
+    QCOMPARE(recorder.durationMs(), 6000);
+    recorder.close();
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    const QByteArray wav = file.readAll();
+    QCOMPARE(wav.size(), 44 + 6 * second.size());
+    QCOMPARE(qFromLittleEndian<quint32>(wav.constData() + 40), quint32(6 * second.size()));
+    QCOMPARE(qFromLittleEndian<quint32>(wav.constData() + 4), quint32(36 + 6 * second.size()));
+    QCOMPARE(wav.mid(44, second.size()), second);
 }
 
 QTEST_GUILESS_MAIN(OfficeSpeechTest)

@@ -5,6 +5,82 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-061: Live notes, round two — flag, prep, recording, review, hand-offs
+
+**Date:** 2026-09-27 · **Status:** accepted (owner request; M56)
+
+**Context.** From a list of twenty ranked ideas for better notes, the
+owner chose fifteen: 1–10, 14, 17, 18, 19 and 20.
+
+**Decision.**
+1. **"This matters" (F9).** The line being heard and the next one are
+   marked ‼. The prompt requires them in the notes, highlighted.
+   Recognition lags speech, so both lines are marked.
+2. **Prep material and series memory.** Files (.pdf through poppler,
+   .txt, .md, .html) and, optionally, the notes of the earlier pages in
+   the section are added to the system prompt as REFERENCE MATERIAL and
+   EARLIER SESSIONS (`SessionContext`, 24k and 12k characters).
+3. **Audio-linked notes.** `WavRecorder` keeps the session as
+   16 kHz mono WAV beside the notebook (`assets/live-<uid>.wav`,
+   relative), and the block stores the path. The header is patched every
+   5 s, so a crash leaves a playable file. Ctrl+click on a `[12:40]` in
+   the notes, or a section in the **Session Review** panel, plays from
+   there. The QtMultimedia player is created on first play, not with the
+   panel.
+4. **Ask the session.** The assistant's QindaNote snapshot carries the
+   transcript of a live block, so the assistant answers "what did she say
+   about X?" with times.
+5. **Screen capture.** Only for sessions using desktop audio and with a
+   model that reads images: `spectacle -b -n -f` (KWin ScreenShot2, no
+   portal prompt) every 20 s. A capture is sent only when a 32×18 thumbnail
+   differs from the last one sent. At most two images ride with an update.
+6. **Learned key terms.** One model call over the prep material and
+   earlier notes at start, and one over the first 3 minutes of transcript.
+   The terms join the notes' spelling glossary and the recognizer's
+   keyterms; realtime ElevenLabs picks them up on its next connection.
+7. **Speaker names.** Named in the live panel. Transcript lines read
+   "Maria (Speaker 2):", and naming triggers a restyle that replaces the
+   labels in the notes.
+8. **Unclear spots.** The prompt asks for `*(unclear at mm:ss: …?)*`. The
+   Session panel lists them with Listen and a correction field; a fix
+   replaces the annotation as one undo step.
+9. **Action items → QindaMail.** A model call extracts
+   `[{title, owner, due, notes}]` with dates resolved against today. An
+   .ics file (a VTODO per item, plus a VEVENT on each due date) is handed
+   to `qindamail`. QindaMail now imports the VTODOs of any .ics as tasks
+   (`parseIcsTasks`, `MailService::importIcsTasks`); QindaTK's calendar
+   import keeps taking only events.
+10. **Study pages.** Flashcards as a `| Front | Back |` table, plus
+    practice questions, go on a new page after the notes.
+14. **Silence.** After 20 s below the level floor, audio stops going to
+    the recognizer and resumes with sound (the recording keeps
+    everything). Auto-stop comes after N minutes (default 15, 0 = never).
+    Music is not detected.
+17. **Jargon notes.** `[[ai: …]]` after hard terms, painted as a small
+    teal italic ⓘ aside so it is never mistaken for what was said.
+18. **Export.** Markdown (file), QindaWrite (a hand-off .md opened in
+    `qindawrite`), and Anki (a tab-separated import of the flashcard
+    tables).
+19. **Split into pages by topic.** On demand, or automatically at Stop
+    for long notes. Each `##` topic becomes a page after the index; the
+    summary, definitions, open questions and action items stay on the
+    index.
+20. **Usage meter.** Billed audio minutes (per recognizer: streamed,
+    uploaded clips, or diarization windows including overlaps and voice
+    samples), model calls and tokens, gate calls, screens sent, and terms
+    learned.
+
+**Consequences.**
+- QindaNote links Qt6::Multimedia (playback) and poppler-qt6 (PDF prep).
+- The recordings are ordinary files beside the notebook; deleting a page
+  does not remove its recording yet.
+- Global hotkeys depend on the desktop: F9 works while the window has
+  focus, and the panel can activate `noteLiveFlagAction` by id.
+- Found and fixed while building this: Move Page Up/Down left the page
+  item's pointer on the neighbouring QVector element, so the next edit
+  landed on the wrong page (`NotePageItem::rebindPage`, with a regression
+  test).
+
 ## D-060: Who said what — speaker labels through ElevenLabs batch diarization
 
 **Date:** 2026-09-27 · **Status:** accepted (owner request; M55)

@@ -11,6 +11,7 @@
 #include "json_settings.h"
 #include "model_catalog.h"
 #include "secret_store.h"
+#include "wav_recorder.h"
 
 #include <QUrl>
 
@@ -46,6 +47,10 @@ LiveNotesSession::LiveNotesSession(NoteHost *host, Ai::ModelCatalog *catalog,
     , m_settings(std::make_unique<Core::JsonSettings>(settingsPath))
 {
     loadSettings();
+    m_silenceTimer.setInterval(1000);
+    connect(&m_silenceTimer, &QTimer::timeout, this, &LiveNotesSession::silenceTick);
+    m_screenTimer.setInterval(20000);
+    connect(&m_screenTimer, &QTimer::timeout, this, &LiveNotesSession::captureScreenNow);
     if (m_catalog != nullptr) {
         connect(m_catalog, &Ai::ModelCatalog::changed, this, [this] {
             if (!m_catalog->configFor(m_modelId).has_value() && !m_catalog->modelIds().isEmpty()) {
@@ -86,6 +91,15 @@ void LiveNotesSession::loadSettings()
     m_briefing = Ai::NotesBriefing::fromMap(m_settings->value(QStringLiteral("setup")).toMap());
     m_askBeforeStart = m_settings->value(QStringLiteral("askBeforeStart"), true).toBool();
     m_speakerLabels = m_settings->value(QStringLiteral("speakerLabels"), false).toBool();
+    const auto flag = [this](const char *key, bool fallback) {
+        return m_settings->value(QLatin1String(key), fallback).toBool();
+    };
+    m_keepRecording = flag("keepRecording", m_keepRecording);
+    m_captureScreen = flag("captureScreen", m_captureScreen);
+    m_continueSeries = flag("continueSeries", m_continueSeries);
+    m_splitLongSessions = flag("splitLongSessions", m_splitLongSessions);
+    m_autoPause = flag("autoPause", m_autoPause);
+    m_autoStopMinutes = m_settings->value(QStringLiteral("autoStopMinutes"), m_autoStopMinutes).toInt();
     m_detail = Ai::LiveNotesPrompt::clampDetail(
         m_settings->value(QStringLiteral("detail"), m_detail).toInt());
     if (m_catalog != nullptr && !m_catalog->configFor(m_modelId).has_value()) {
@@ -112,6 +126,12 @@ void LiveNotesSession::saveSettings()
     m_settings->setValue(QStringLiteral("setup"), m_briefing.toMap());
     m_settings->setValue(QStringLiteral("askBeforeStart"), m_askBeforeStart);
     m_settings->setValue(QStringLiteral("speakerLabels"), m_speakerLabels);
+    m_settings->setValue(QStringLiteral("keepRecording"), m_keepRecording);
+    m_settings->setValue(QStringLiteral("captureScreen"), m_captureScreen);
+    m_settings->setValue(QStringLiteral("continueSeries"), m_continueSeries);
+    m_settings->setValue(QStringLiteral("splitLongSessions"), m_splitLongSessions);
+    m_settings->setValue(QStringLiteral("autoPause"), m_autoPause);
+    m_settings->setValue(QStringLiteral("autoStopMinutes"), m_autoStopMinutes);
     static_cast<void>(m_settings->save(nullptr));
     emit settingsChanged();
 }

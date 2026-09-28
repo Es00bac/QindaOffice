@@ -281,6 +281,11 @@ void NoteHost::movePage(int delta)
     m_document->setDirty(true);
     m_navigator->rebuild();
     m_navigator->setCurrent(sectionId, pageId);
+    // The move swapped QVector elements: the item's pointer now addressed
+    // the NEIGHBOUR, and the next edit landed on the wrong page.
+    if (m_pageItem != nullptr) {
+        m_pageItem->rebindPage(currentPage());
+    }
     syncStructureEnablement();
     updatePageStatus();
 }

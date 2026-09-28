@@ -63,7 +63,14 @@ QtObject {
         // Live notes (D-057): capture on its own tab — Home is full at 1280 px.
         { id: "live", label: qsTr("Live"), keyTip: "L", groups: [
             { id: "liveSession", label: qsTr("Session"), items: [
-                { action: "noteLiveStartAction", size: "large" }, "noteLivePauseAction", "noteLiveStopAction"] },
+                { action: "noteLiveStartAction", size: "large" }, "noteLivePauseAction", "noteLiveStopAction",
+                { action: "noteLiveFlagAction", size: "large" }, "noteLiveCatchUpAction"] },
+            // M56: after (or during) a session.
+            { id: "liveReview", label: qsTr("Review"), items: [
+                { action: "noteSessionPanelAction", size: "large" }, "noteStudyPageAction",
+                "noteActionItemsToMailAction", "noteSplitByTopicAction"] },
+            { id: "liveExport", label: qsTr("Export"), items: [
+                "noteExportMarkdownAction", "noteOpenInWriteAction", "noteExportAnkiAction"] },
             { id: "livePanes", label: qsTr("Panel"), items: [
                 { action: "noteLiveNotesAction", size: "large" }, "aiProvidersAction"] }
         ] },

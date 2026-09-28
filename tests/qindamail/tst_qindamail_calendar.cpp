@@ -6,6 +6,7 @@
 // IcsCalendarProvider; recurrence preview; the task board.
 
 #include "mail_test_support.h"
+#include "qindamail/src/ics_tasks.h"
 
 #include <qindatk/local_productivity_store.h>
 
@@ -263,6 +264,44 @@ private slots:
         const QString removed = service->deleteTask(a);
         QCOMPARE(MailTest::waitState(finished, removed).first, QStringLiteral("accepted"));
         QCOMPARE(env.reopen()->store()->tasks().size(), 1);
+    }
+
+    // M56 (D-061): QindaNote hands action items over as an .ics of VTODOs;
+    // they land on the task board with their due dates and notes (the
+    // calendar import alone skips tasks).
+    void icsTasksBecomeTasks()
+    {
+        const QByteArray ics =
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+            "BEGIN:VTODO\r\nUID:a\r\nSUMMARY:Read\\, carefully\\; chapter 4\r\nDUE;VALUE=DATE:20261002\r\n"
+            "DESCRIPTION:for the quiz\\nFrom: Biology\r\nPRIORITY:1\r\nEND:VTODO\r\n"
+            "BEGIN:VTODO\r\nUID:b\r\nSUMMARY:Send the sli\r\n des\r\nEND:VTODO\r\n"
+            "BEGIN:VEVENT\r\nUID:c\r\nSUMMARY:Not a task\r\nDTSTART;VALUE=DATE:20261002\r\nEND:VEVENT\r\n"
+            "END:VCALENDAR\r\n";
+        const auto parsed = QindaOffice::Apps::Mail::parseIcsTasks(ics);
+        QCOMPARE(parsed.size(), 2);
+        QCOMPARE(parsed.first().title, QStringLiteral("Read, carefully; chapter 4"));
+        QCOMPARE(parsed.first().due, QDate(2026, 10, 2));
+        QCOMPARE(parsed.first().description, QStringLiteral("for the quiz\nFrom: Biology"));
+        QCOMPARE(parsed.first().priority, QStringLiteral("High"));
+        QCOMPARE(parsed.at(1).title, QStringLiteral("Send the slides")); // folded line
+        MailTest::Env env;
+        QTemporaryDir dir;
+        QFile file(dir.filePath(QStringLiteral("items.ics")));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(ics);
+        file.close();
+        QCOMPARE(env.service->importIcsTasks(file.fileName()), 2);
+        bool found = false;
+        for (const QVariant &value : env.service->store()->tasks()) {
+            const QVariantMap task = value.toMap();
+            if (task.value(QStringLiteral("title")).toString() == QLatin1String("Read, carefully; chapter 4")) {
+                found = true;
+                QCOMPARE(task.value(QStringLiteral("dueDate")).toString(), QStringLiteral("2026-10-02"));
+                QCOMPARE(task.value(QStringLiteral("priority")).toString(), QStringLiteral("High"));
+            }
+        }
+        QVERIFY(found);
     }
 };
 

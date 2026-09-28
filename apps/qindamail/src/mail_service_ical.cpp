@@ -3,6 +3,7 @@
 // of one calendar), feed subscriptions (an `ics` account per feed) and the
 // recurrence editor's preview.
 #include "mail_service.h"
+#include "ics_tasks.h"
 
 #include "provider_calls.h"
 
@@ -10,6 +11,8 @@
 #include <qindatk/local_productivity_store.h>
 #include <qindatk/recurrence_service.h>
 
+#include <QFile>
+#include <QFileInfo>
 #include <QTimeZone>
 #include <QUrl>
 
@@ -33,6 +36,9 @@ QVariantMap findIn(const QVariantList &rows, const QString &id)
 
 QString MailService::importIcs(const QUrl &url, const QString &calendarId)
 {
+    // M56 (D-061): VTODOs become tasks on the board (the calendar import
+    // below takes only the events — QindaNote's action items carry both).
+    importIcsTasks(url.isLocalFile() ? url.toLocalFile() : url.toString());
     const QString calendar = calendarId.isEmpty() ? QString::fromLatin1(kLocalCalendarId) : calendarId;
     const QString batch = beginBatch(QStringLiteral("import"), 1);
     if (calendarReadOnly(calendar)) {
@@ -71,6 +77,42 @@ QString MailService::importIcs(const QUrl &url, const QString &calendarId)
     });
     static_cast<void>(m_ics->importFile(rid, url.isLocalFile() ? url.toLocalFile() : url.toString(), calendar));
     return batch;
+}
+
+int MailService::importIcsTasks(const QString &path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return 0;
+    }
+    int added = 0;
+    for (const IcsTask &task : parseIcsTasks(file.read(4 * 1024 * 1024))) {
+        const QString id = addTask(task.title);
+        if (id.isEmpty()) {
+            continue;
+        }
+        QVariantMap update{{QStringLiteral("id"), id}};
+        if (task.due.isValid()) {
+            update.insert(QStringLiteral("dueDate"), task.due.toString(Qt::ISODate));
+        }
+        if (!task.description.isEmpty()) {
+            update.insert(QStringLiteral("description"), task.description);
+        }
+        if (!task.priority.isEmpty()) {
+            update.insert(QStringLiteral("priority"), task.priority);
+        }
+        if (task.done) {
+            update.insert(QStringLiteral("status"), QStringLiteral("done"));
+        }
+        if (update.size() > 1) {
+            static_cast<void>(updateTask(update));
+        }
+        ++added;
+    }
+    if (added > 0) {
+        emit notify(tr("%n task(s) added", "", added), QFileInfo(path).fileName(), QStringLiteral("info"));
+    }
+    return added;
 }
 
 QString MailService::exportIcs(const QUrl &url, const QString &calendarId)

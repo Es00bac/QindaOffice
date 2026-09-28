@@ -73,6 +73,40 @@ app-side requirements above are the parts the suite owns):
 
 ## Milestone-specific gates
 
+### M56 gates (flag, prep, recording, review, hand-offs; D-061)
+
+- `tst_live_notes_extras`:
+  - key terms and action items parse;
+  - action items become .ics (a VTODO each, a VEVENT only for dated
+    items, escaping);
+  - split by topic keeps the index's summary, definitions and actions;
+  - Anki cards come only from Front/Back tables;
+  - unclear spots with and without times;
+  - section times;
+  - the prompt's ‼, named speakers, `[[ai:]]`, reference material and
+    earlier sessions;
+  - the engine: flags on the heard and the next line, two screens per
+    update, usage, a speaker-names restyle, the glossary deduplicated.
+- `tst_office_speech::wavRecorderWritesAPlayableFile`: the header is
+  patched mid-session, and the data is exact.
+- `tst_qindamail_calendar::icsTasksBecomeTasks`: VTODO parsing (folded
+  lines, escapes, priority), then tasks with due dates in the store.
+- `tst_note_session`:
+  - **duringASession:** F9 flags; speaker names reach the engine; usage;
+    silence auto-pause and resume; the recording kept and exposed as
+    `audioUrl`; grab `qindanote_live_session_m56`.
+  - **reviewAndPageCommands:** sections and unclear spots from the notes;
+    a Ctrl+click target on `[01:30]`; the transcript in the assistant's
+    snapshot; fix an unclear spot; export Markdown; Anki refused without
+    cards; a study page from the model placed after the notes; Anki
+    export; split by topic (+2 pages, index); grab
+    `qindanote_session_panel`.
+  - **prepMaterialAndSeriesMemory:** .md and PDF prep read; earlier
+    section notes; both reach the engine context; terms learned from them.
+  - **movingAPageKeepsTheViewOnIt:** the Move Page regression.
+- The QindaNote fixtures, ribbon squeeze and panel export include the new
+  commands.
+
 ### M55 gates (speaker labels, D-060)
 
 - `tst_office_speech::speakersStitchAcrossWindows`:

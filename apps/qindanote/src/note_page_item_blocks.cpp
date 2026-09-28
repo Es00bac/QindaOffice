@@ -11,6 +11,7 @@
 #include "note_page_item.h"
 
 #include "note_page_history.h"
+#include "note_markdown.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -389,6 +390,16 @@ bool NotePageItem::setBlockFields(int index, const QJsonObject &fields, const QS
     blocks.replace(index, block);
     writeBlocks(blocks, undoText);
     return true;
+}
+
+qint64 NotePageItem::timestampAt(const QPointF &pos) const
+{
+    for (const PageBlock &block : m_blocks) {
+        if (block.kind == PageBlock::Kind::Markdown && block.rect.contains(pos)) {
+            return markdownTimestampAt(block.text, block.rect.width(), pos - block.rect.topLeft());
+        }
+    }
+    return -1;
 }
 
 void NotePageItem::addMarkdownBlock(const QString &text)

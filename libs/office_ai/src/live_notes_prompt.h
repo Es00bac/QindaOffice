@@ -21,6 +21,7 @@
 
 #include "live_notes_briefing.h"
 
+#include <QHash>
 #include <QString>
 #include <QStringList>
 
@@ -33,6 +34,7 @@ struct TranscriptLine {
     bool key = false;      // the gate judged it important (★)
     bool newTopic = false; // the gate saw a topic change here (⤷)
     QString speaker{};     // "Speaker 2" when the recognizer labels speakers
+    bool flagged = false;  // the user pressed "this matters" here (‼, M56)
 };
 
 // Markdown notes split at level-2 headings.
@@ -59,10 +61,13 @@ inline constexpr int kDefaultDetail = Concise;
 [[nodiscard]] QString detailBrief(int detail);
 
 // The rules, the detail level's brief and the user's session briefing.
-[[nodiscard]] QString systemPrompt(int detail = kDefaultDetail, const NotesBriefing &briefing = {});
+[[nodiscard]] QString systemPrompt(int detail = kDefaultDetail, const NotesBriefing &briefing = {},
+                                   const SessionContext &context = {});
 [[nodiscard]] QString formatTime(qint64 ms);
 // "[mm:ss] ★ text" lines (fillers marked "(filler)").
-[[nodiscard]] QString formatLines(const QList<TranscriptLine> &lines);
+// `names` maps a speaker label to the name the user gave it (M56).
+[[nodiscard]] QString formatLines(const QList<TranscriptLine> &lines,
+                                  const QHash<QString, QString> &names = {});
 
 struct Request {
     QString notes;                          // current notes (may carry user edits)
@@ -75,6 +80,10 @@ struct Request {
     // The detail level changed: rewrite the existing notes to the new
     // level even if nothing new was said.
     bool restyle = false;
+    // Why a restyle runs when it is not the detail level ("the user named
+    // the speakers: …").
+    QString restyleReason;
+    QHash<QString, QString> speakerNames;
 };
 [[nodiscard]] bool useTailMode(const QString &notes);
 [[nodiscard]] QString userMessage(const Request &request);

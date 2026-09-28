@@ -104,6 +104,7 @@ void HttpTranscription::pump()
         return;
     }
     const AudioClip clip = m_queue.takeFirst();
+    m_billedMs += clip.pcm.size() / kBytesPerMs;
     auto *multipart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
     QHttpPart file;
     file.setHeader(QNetworkRequest::ContentDispositionHeader,

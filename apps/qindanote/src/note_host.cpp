@@ -41,8 +41,9 @@ NoteHost::NoteHost()
     createInkActions();
     createStructureActions();
     createAssistant();
-    createLiveNotes();
     insertMenus();
+    // After insertMenus: live notes add to the Page menu too.
+    createLiveNotes();
     wireEditCommands();
     rebuildNavigator();
     finalizeHost();

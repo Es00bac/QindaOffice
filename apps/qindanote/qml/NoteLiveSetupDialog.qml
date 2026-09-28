@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import QtQuick
+import QtQuick.Dialogs as Dialogs
 import QindaTK as Tk
 import QindaOffice.Note
 
@@ -36,6 +37,11 @@ Tk.Dialog {
         openQuestions.checked = s.openQuestions
         definitions.checked = s.definitions
         askAgain.checked = dialog.session.askBeforeStart
+        jargon.checked = s.explainJargon
+        recording.checked = dialog.session.keepRecording
+        screen.checked = dialog.session.captureScreen
+        series.checked = dialog.session.continueSeries
+        split.checked = dialog.session.splitLongSessions
         speakers.checked = dialog.session.speakerLabels
     }
 
@@ -46,8 +52,13 @@ Tk.Dialog {
             scenario: dialog.session.scenarios[scenario.currentIndex].id,
             focus: focus.text, skip: skip.text, custom: custom.text,
             timestamps: timestamps.checked, quotes: quotes.checked, actionItems: actionItems.checked,
-            openQuestions: openQuestions.checked, definitions: definitions.checked
+            openQuestions: openQuestions.checked, definitions: definitions.checked,
+            explainJargon: jargon.checked
         }
+        dialog.session.keepRecording = recording.checked
+        dialog.session.captureScreen = screen.checked
+        dialog.session.continueSeries = series.checked
+        dialog.session.splitLongSessions = split.checked
         dialog.session.askBeforeStart = askAgain.checked
         dialog.session.speakerLabels = speakers.checked
         if (dialog.starting) dialog.session.start()
@@ -107,6 +118,7 @@ Tk.Dialog {
                 Tk.CheckBox { id: actionItems; objectName: "liveSetupActionItems"; text: qsTr("Action items and deadlines") }
                 Tk.CheckBox { id: openQuestions; objectName: "liveSetupOpenQuestions"; text: qsTr("Open questions") }
                 Tk.CheckBox { id: definitions; objectName: "liveSetupDefinitions"; text: qsTr("A definitions glossary") }
+                Tk.CheckBox { id: jargon; objectName: "liveSetupJargon"; text: qsTr("Explain jargon (short AI notes, marked as such)") }
                 Tk.CheckBox {
                     id: speakers
                     objectName: "liveSetupSpeakers"
@@ -128,6 +140,58 @@ Tk.Dialog {
                 wrapMode: TextEdit.Wrap
                 placeholderText: qsTr("e.g. write the notes in Spanish; use my course's terms; tag anything about Project Atlas")
             }
+        }
+        // M56: what the note-taker reads first, and what the session keeps.
+        Tk.PropertyRow {
+            label: qsTr("Prep material")
+            alignTop: true
+            hint: qsTr("Slides, a syllabus, an agenda (.pdf .txt .md .html): the notes follow its structure and spellings.")
+            Tk.Flex {
+                direction: Tk.Flex.Column
+                gap: Tk.Theme.space.xs
+                Repeater {
+                    model: dialog.session.prepFiles
+                    Tk.Flex {
+                        id: prepRow
+                        required property var modelData
+                        required property int index
+                        direction: Tk.Flex.Row
+                        gap: Tk.Theme.space.xs
+                        align: Tk.Flex.Center
+                        Tk.Label { Tk.Flex.grow: 1; elide: Text.ElideMiddle; text: String(prepRow.modelData).split("/").pop() }
+                        Tk.IconButton { iconName: "x"; small: true; tooltip: qsTr("Remove"); onClicked: dialog.session.removePrepFile(prepRow.index) }
+                    }
+                }
+                Tk.Button { objectName: "liveSetupAddPrep"; small: true; iconName: "plus"; text: qsTr("Add a file…"); onClicked: prepDialog.open() }
+                Tk.CheckBox {
+                    id: series
+                    objectName: "liveSetupSeries"
+                    text: qsTr("Continue from the earlier pages in this section")
+                    tooltip: qsTr("A course or a meeting series: the note-taker reads the previous sessions' notes and refers back instead of repeating.")
+                }
+            }
+        }
+        Tk.PropertyRow {
+            label: qsTr("Session")
+            alignTop: true
+            Tk.Flex {
+                direction: Tk.Flex.Column
+                gap: Tk.Theme.space.xs
+                Tk.CheckBox { id: recording; objectName: "liveSetupRecording"; text: qsTr("Keep the recording (replay any moment from the notes)") }
+                Tk.CheckBox {
+                    id: screen
+                    objectName: "liveSetupScreen"
+                    text: qsTr("Capture the screen for the model (desktop audio)")
+                    tooltip: qsTr("Every 20 s, when the screen changed, a screenshot goes with the next update — slides and code land exactly. Needs a model that reads images (Claude, GPT, Gemini over HTTP).")
+                }
+                Tk.CheckBox { id: split; objectName: "liveSetupSplit"; text: qsTr("Split a long session into pages by topic when it stops") }
+            }
+        }
+        Dialogs.FileDialog {
+            id: prepDialog
+            title: qsTr("Prep material")
+            nameFilters: [qsTr("Documents (*.pdf *.txt *.md *.html *.htm)"), qsTr("All files (*)")]
+            onAccepted: dialog.session.addPrepFile(selectedFile)
         }
         Tk.CheckBox {
             id: askAgain

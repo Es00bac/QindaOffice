@@ -77,6 +77,38 @@ Tk.Flex {
         }
     }
 
+    // M56: during a session — flag the moment, catch up.
+    Tk.Flex {
+        direction: Tk.Flex.Row
+        gap: Tk.Theme.space.xs
+        visible: !panel.idle
+        Tk.Button {
+            objectName: "liveFlag"
+            Tk.Flex.grow: 1
+            iconName: "star"
+            text: panel.session.flagCount > 0 ? qsTr("This matters (%1)").arg(panel.session.flagCount) : qsTr("This matters")
+            tooltip: qsTr("Flag this moment (F9): it will be highlighted in the notes.")
+            available: panel.session.state === "listening"
+            onClicked: panel.session.flag()
+        }
+        Tk.Button {
+            objectName: "liveCatchUp"
+            iconName: "history"
+            text: qsTr("Catch me up")
+            busy: panel.session.catchingUp
+            tooltip: qsTr("What was said in the last five minutes")
+            onClicked: panel.session.catchUp(5)
+        }
+    }
+    Tk.Notice {
+        objectName: "liveCatchUpText"
+        Tk.Flex.alignSelf: Tk.Flex.Stretch
+        visible: panel.session.catchUpText.length > 0
+        title: qsTr("The last five minutes")
+        text: panel.session.catchUpText
+        dismissible: true
+    }
+
     Tk.TextField {
         objectName: "liveTopic"
         Tk.Flex.alignSelf: Tk.Flex.Stretch
@@ -180,6 +212,28 @@ Tk.Flex {
         }
     }
 
+    // ---- speakers (M56): name them once, the notes use the names ----
+    Tk.Overline { title: qsTr("Speakers"); visible: panel.session.speakers.length > 0 }
+    Repeater {
+        model: panel.session.speakers
+        Tk.Flex {
+            id: speakerRow
+            required property var modelData
+            Tk.Flex.alignSelf: Tk.Flex.Stretch
+            direction: Tk.Flex.Row
+            gap: Tk.Theme.space.xs
+            align: Tk.Flex.Center
+            Tk.Label { text: speakerRow.modelData.label; muted: true; Tk.Flex.basis: 80 }
+            Tk.TextField {
+                Tk.Flex.grow: 1
+                small: true
+                placeholderText: qsTr("Name")
+                text: speakerRow.modelData.name
+                onEditingFinished: panel.session.setSpeakerName(speakerRow.modelData.label, text)
+            }
+        }
+    }
+
     // ---- where each stage runs ----
     Tk.Overline { title: qsTr("Pipeline") }
     Tk.Flex {
@@ -224,6 +278,24 @@ Tk.Flex {
             text: panel.session.gate === "jev" ? qsTr("TypeSafe Jev") : qsTr("Laya (%1)").arg(panel.session.gateBaseUrl)
         }
         Tk.Badge { visible: panel.session.gateOffMachine; text: qsTr("Leaves this machine"); variant: "warning" }
+    }
+    // Usage (M56): what this session has used so far.
+    Tk.Label {
+        objectName: "liveUsage"
+        Tk.Flex.alignSelf: Tk.Flex.Stretch
+        visible: !panel.idle || panel.session.usage.requests > 0
+        muted: true
+        wrapMode: Text.Wrap
+        text: {
+            const u = panel.session.usage
+            let parts = [qsTr("%1 min of audio sent").arg(u.audioMinutes.toFixed(1)),
+                         qsTr("%1 model calls").arg(u.requests),
+                         qsTr("%1k tokens in / %2k out").arg((u.inputTokens / 1000).toFixed(1)).arg((u.outputTokens / 1000).toFixed(1))]
+            if (u.gateCalls > 0) parts.push(qsTr("%1 gate calls").arg(u.gateCalls))
+            if (u.screens > 0) parts.push(qsTr("%1 screens").arg(u.screens))
+            if (u.terms > 0) parts.push(qsTr("%1 terms learned").arg(u.terms))
+            return qsTr("Used: ") + parts.join(" · ")
+        }
     }
     Tk.Flex {
         direction: Tk.Flex.Row

@@ -32,6 +32,8 @@ qt_add_library(office_ai STATIC
     src/live_notes_briefing.cpp
     src/live_notes_briefing.h
     src/live_notes_engine.h
+    src/live_notes_extras.cpp
+    src/live_notes_extras.h
     src/live_notes_prompt.cpp
     src/live_notes_prompt.h
     src/model_catalog.cpp

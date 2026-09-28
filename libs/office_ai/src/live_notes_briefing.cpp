@@ -15,7 +15,8 @@ QVariantMap NotesBriefing::toMap() const
             {QStringLiteral("actionItems"), actionItems},
             {QStringLiteral("quotes"), quotes},
             {QStringLiteral("openQuestions"), openQuestions},
-            {QStringLiteral("definitions"), definitions}};
+            {QStringLiteral("definitions"), definitions},
+            {QStringLiteral("explainJargon"), explainJargon}};
 }
 
 NotesBriefing NotesBriefing::fromMap(const QVariantMap &map)
@@ -36,6 +37,7 @@ NotesBriefing NotesBriefing::fromMap(const QVariantMap &map)
     b.quotes = flag("quotes", b.quotes);
     b.openQuestions = flag("openQuestions", b.openQuestions);
     b.definitions = flag("definitions", b.definitions);
+    b.explainJargon = flag("explainJargon", b.explainJargon);
     return b;
 }
 
@@ -125,6 +127,25 @@ QString render(const NotesBriefing &briefing)
     return QStringLiteral("SESSION BRIEFING (from the user; where it conflicts with the rules "
                           "above, it wins):\n")
         + parts.join(QStringLiteral("\n"));
+}
+
+QString renderContext(const SessionContext &context)
+{
+    QString out;
+    if (!context.reference.trimmed().isEmpty()) {
+        out += QStringLiteral(
+                   "\n\nREFERENCE MATERIAL (the user attached it before the session — slides, "
+                   "a syllabus, an agenda. Follow its structure and use its spellings; note what "
+                   "it says only when the session covers it):\n<<<\n%1\n>>>")
+                   .arg(context.reference.left(SessionContext::kReferenceBudget));
+    }
+    if (!context.previousNotes.trimmed().isEmpty()) {
+        out += QStringLiteral(
+                   "\n\nEARLIER SESSIONS in this series (their notes, for continuity: refer back "
+                   "— \"(see session 3)\" — instead of repeating them):\n<<<\n%1\n>>>")
+                   .arg(context.previousNotes.right(SessionContext::kPreviousBudget));
+    }
+    return out;
 }
 
 } // namespace LiveNotesBriefing

@@ -112,6 +112,7 @@ void ElevenLabsSpeakers::send(qint64 fromMs, qint64 toMs)
     QNetworkRequest request(m_endpoint);
     request.setRawHeader("xi-api-key", m_apiKey.toUtf8());
     request.setTransferTimeout(120000);
+    m_billedMs += window.size() / kBytesPerMs;
     QNetworkReply *reply = m_nam.post(request, multipart);
     multipart->setParent(reply);
     m_reply = reply;

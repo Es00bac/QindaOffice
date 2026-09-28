@@ -143,6 +143,9 @@ inline void mouseStroke(QWindow *window, const QPointF &from, const QPointF &to)
     {                                                                                      \
         qputenv("QT_QPA_PLATFORM", "offscreen");                                           \
         qputenv("QT_QUICK_BACKEND", "software");                                           \
+        /* never launch QindaWrite/QindaMail, never touch the real keyring */             \
+        qputenv("QQO_NO_HANDOFF", "1");                                                    \
+        qputenv("QQO_NO_SECRET_SERVICE", "1");                                             \
         QTemporaryDir config;                                                              \
         qputenv("XDG_CONFIG_HOME", config.path().toUtf8());                                \
         qputenv("XDG_STATE_HOME", config.path().toUtf8());                                 \

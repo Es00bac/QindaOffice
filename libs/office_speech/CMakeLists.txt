@@ -27,6 +27,8 @@ qt_add_library(office_speech STATIC
     src/speech_segmenter.cpp
     src/speech_segmenter.h
     src/whisper_local.cpp
+    src/wav_recorder.cpp
+    src/wav_recorder.h
     src/whisper_local.h
 )
 
