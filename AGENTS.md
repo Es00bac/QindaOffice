@@ -136,14 +136,15 @@ apps/qinda{write,calc,show,note}  → office_quick → office_core
 apps/qindalauncher (qindaoffice)  → office_quick (theme bridge only)
 qindacalc → calc_io → calc_engine
 qindashow → show_model
-qindanote → office_ink
+qindanote → office_ink, office_speech (live notes, D-057)
 ```
 
 Every app is a static QML module (`QindaOffice.Write`, `.Calc`, `.Show`,
 `.Note`, `.Launcher`) plus a thin `main()` over `runOfficeApp`, so the
 tests instantiate the real window. Libraries never depend on apps.
 `office_core`, `calc_engine`, `calc_io`, `show_model` and `office_ink` are
-Qt Core/Gui only — no Quick, no desktop archives, cheap offscreen tests.
+Qt Core/Gui only, and `office_speech` is Qt Core/Network/WebSockets — no
+Quick, no desktop archives, cheap offscreen tests.
 `libQt6Widgets` is still loaded at run time because QtPrintSupport links
 it; the suite itself contains no `QApplication` and no `QWidget`.
 

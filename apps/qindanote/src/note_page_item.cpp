@@ -307,6 +307,7 @@ void NotePageItem::paint(QPainter *painter)
     paintNoteBackground(painter, m_page->envelope.background, page.size());
     paintNoteBlocks(painter, m_blocks, PageBlock::Kind::Image, m_editingBlock);
     paintNoteBlocks(painter, m_blocks, PageBlock::Kind::Text, m_editingBlock);
+    paintNoteBlocks(painter, m_blocks, PageBlock::Kind::Markdown, m_editingBlock);
     paintNoteBlocks(painter, m_blocks, PageBlock::Kind::Check, m_editingBlock);
     // Only the strokes touching the dirty region: the spatial grid indexes
     // page coordinates, which are the item's coordinates.

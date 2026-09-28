@@ -3,7 +3,8 @@
 
 // The layout of a note page's content blocks.
 //
-// A page carries typed text, checklist items and images in the envelope's
+// A page carries typed text, checklist items, images and markdown (the
+// live notes, D-057; note_markdown.h) in the envelope's
 // blocksJson. Where each one SITS has to be computed identically by the
 // screen item (which paints it and places the one live editor there) and
 // by the pure page renderer (which prints it) — a layout computed twice is
@@ -28,7 +29,7 @@
 namespace QindaOffice::Apps::Notes {
 
 struct PageBlock {
-    enum class Kind { Text, Check, Image };
+    enum class Kind { Text, Check, Image, Markdown };
 
     Kind kind = Kind::Text;
     int index = 0;      // position in the blocksJson array
@@ -36,6 +37,7 @@ struct PageBlock {
     bool checked = false;
     int level = 0;        // Kind::Check: indent level 0–3
     QByteArray imageData; // Kind::Image: the picked file's bytes, verbatim
+    QString uid;          // Kind::Markdown: stable id (live notes find their block by it)
     QRectF rect;          // page coordinates
     bool floating = false; // true when the JSON carried a rect
 };

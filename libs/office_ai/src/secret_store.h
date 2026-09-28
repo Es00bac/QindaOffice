@@ -8,6 +8,8 @@
 #include <QObject>
 #include <QString>
 
+#include <functional>
+
 namespace QKeychain {
 class ReadPasswordJob;
 class WritePasswordJob;
@@ -20,7 +22,9 @@ class SecretStore : public QObject {
 public:
     explicit SecretStore(QObject *parent = nullptr);
 
-    void store(const QString &key, const QString &value);
+    // `done` (optional) runs when the keyring has answered.
+    void store(const QString &key, const QString &value,
+               const std::function<void(bool ok)> &done = {});
     void retrieve(const QString &key, const std::function<void(const QString &value)> &cb);
     void remove(const QString &key);
 };

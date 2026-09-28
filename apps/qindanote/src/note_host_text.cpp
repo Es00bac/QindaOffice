@@ -29,7 +29,8 @@ QString pageText(const NotePage &page)
     for (const QJsonValue &value : blocksArray(page.envelope.blocksJson)) {
         const QJsonObject object = value.toObject();
         const QString type = object.value(QStringLiteral("type")).toString();
-        if (type == QLatin1String("text") || type == QLatin1String("check")) {
+        if (type == QLatin1String("text") || type == QLatin1String("check")
+            || type == QLatin1String("markdown")) {
             text += QLatin1Char('\n') + object.value(QStringLiteral("text")).toString();
         }
     }
@@ -51,7 +52,8 @@ int replaceInPage(NotePage &page, const QString &needle, const QString &replacem
     for (int i = 0; i < blocks.size(); ++i) {
         QJsonObject object = blocks.at(i).toObject();
         const QString type = object.value(QStringLiteral("type")).toString();
-        if (type != QLatin1String("text") && type != QLatin1String("check")) {
+        if (type != QLatin1String("text") && type != QLatin1String("check")
+            && type != QLatin1String("markdown")) {
             continue;
         }
         QString text = object.value(QStringLiteral("text")).toString();

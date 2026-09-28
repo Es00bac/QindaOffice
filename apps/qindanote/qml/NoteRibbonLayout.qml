@@ -3,7 +3,7 @@ import QtQuick
 import QindaOffice.Shell
 
 // QindaNote's ribbon (D-041): File · Home (the ink tools and blocks) ·
-// Page · View. Every string is an ActionEntry id (AGENTS.md rule 5); the
+// Page · Live (live notes, D-057) · View. Every string is an ActionEntry id (AGENTS.md rule 5); the
 // slots are the window's colour, width and background widgets that follow
 // the active tool.
 QtObject {
@@ -59,6 +59,13 @@ QtObject {
                 { action: "noteSectionDelete", iconName: "trash-2" }] },
             { id: "paper", label: qsTr("Paper"), items: [
                 { id: "backgroundMenu", label: qsTr("Background"), iconName: "grid-3x3", size: "large", menu: backgrounds }] }
+        ] },
+        // Live notes (D-057): capture on its own tab — Home is full at 1280 px.
+        { id: "live", label: qsTr("Live"), keyTip: "L", groups: [
+            { id: "liveSession", label: qsTr("Session"), items: [
+                { action: "noteLiveStartAction", size: "large" }, "noteLivePauseAction", "noteLiveStopAction"] },
+            { id: "livePanes", label: qsTr("Panel"), items: [
+                { action: "noteLiveNotesAction", size: "large" }, "aiProvidersAction"] }
         ] },
         StandardRibbon.viewTab([
             { id: "panes", label: qsTr("Panes"), items: [{ action: "noteShowNavigatorAction", size: "large" }] },

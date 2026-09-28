@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "note_page_render.h"
 
+#include "note_markdown.h"
+
 #include "ink_persistence.h"
 
 #include <QImage>
@@ -49,6 +51,9 @@ void paintNoteBlocks(QPainter *painter, const QList<PageBlock> &blocks, PageBloc
         }
         const QRectF box = block.rect;
         switch (block.kind) {
+        case PageBlock::Kind::Markdown:
+            paintMarkdown(painter, box, block.text);
+            break;
         case PageBlock::Kind::Text:
             painter->drawText(box.adjusted(kTextPadding, kTextPadding, -kTextPadding, -kTextPadding),
                               Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop, block.text);
@@ -107,6 +112,7 @@ void renderNotePage(QPainter *painter, const NotePage &page, const QSizeF &pageS
     const QList<PageBlock> blocks = layoutBlocks(page.envelope.blocksJson, pageSize.width());
     paintNoteBlocks(painter, blocks, PageBlock::Kind::Image);
     paintNoteBlocks(painter, blocks, PageBlock::Kind::Text);
+    paintNoteBlocks(painter, blocks, PageBlock::Kind::Markdown);
     paintNoteBlocks(painter, blocks, PageBlock::Kind::Check);
     Ink::renderStrokes(painter, page.envelope.ink.strokes());
     painter->restore();

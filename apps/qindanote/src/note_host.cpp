@@ -2,6 +2,7 @@
 #include "note_host.h"
 
 #include "navigator_model.h"
+#include "note_live_session.h"
 #include "note_blocks.h"
 #include "note_page_item.h"
 #include "note_page_render.h"
@@ -40,6 +41,7 @@ NoteHost::NoteHost()
     createInkActions();
     createStructureActions();
     createAssistant();
+    createLiveNotes();
     insertMenus();
     wireEditCommands();
     rebuildNavigator();
@@ -48,6 +50,11 @@ NoteHost::NoteHost()
 
 NoteHost::~NoteHost()
 {
+    // AGENT-GUARD: end a running session while this host is still whole —
+    // as a QObject child it would be destroyed after ~NoteHost, and its
+    // destructor writes the transcript through the host.
+    delete m_live;
+    m_live = nullptr;
     // A debounced write that never fired would silently drop the last
     // half second of edits; land it while the notebook is still alive.
     flushPersist();

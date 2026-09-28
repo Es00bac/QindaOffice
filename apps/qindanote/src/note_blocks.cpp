@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "note_blocks.h"
 
+#include "note_markdown.h"
+
 #include <QFontMetricsF>
 #include <QGuiApplication>
 #include <QImage>
@@ -103,6 +105,11 @@ QList<PageBlock> layoutBlocks(const QByteArray &blocksJson, qreal pageWidth)
             block.imageData =
                 QByteArray::fromBase64(object.value(QStringLiteral("data")).toString().toLatin1());
             height = imageBlockHeight(block.imageData, width);
+        } else if (type == QLatin1String("markdown")) {
+            block.kind = PageBlock::Kind::Markdown;
+            block.text = object.value(QStringLiteral("text")).toString();
+            block.uid = object.value(QStringLiteral("uid")).toString();
+            height = markdownBlockHeight(block.text, width);
         } else if (type == QLatin1String("text")) {
             block.kind = PageBlock::Kind::Text;
             block.text = object.value(QStringLiteral("text")).toString();

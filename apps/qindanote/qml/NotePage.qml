@@ -113,7 +113,8 @@ Tk.Viewport {
         Tk.TextArea {
             id: textEditor
             objectName: "noteTextEditor"
-            visible: page.editingBlock >= 0 && page.editingKind === "text"
+            // A markdown block (live notes, D-057) is edited as its source.
+            visible: page.editingBlock >= 0 && (page.editingKind === "text" || page.editingKind === "markdown")
             x: page.editorRect.x
             y: page.editorRect.y
             width: page.editorRect.width

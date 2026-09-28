@@ -359,12 +359,58 @@ void NotePageItem::indentCheckItem(int index, int delta)
     writeBlocks(blocks, tr("Indent Checklist Item"));
 }
 
+int NotePageItem::blockIndexForUid(const QString &uid) const
+{
+    if (m_page == nullptr || uid.isEmpty()) {
+        return -1;
+    }
+    const QJsonArray blocks = blocksArray(m_page->envelope.blocksJson);
+    for (qsizetype i = 0; i < blocks.size(); ++i) {
+        if (blocks.at(i).toObject().value(QStringLiteral("uid")).toString() == uid) {
+            return int(i);
+        }
+    }
+    return -1;
+}
+
+bool NotePageItem::setBlockFields(int index, const QJsonObject &fields, const QString &undoText)
+{
+    if (m_page == nullptr || index < 0 || index == m_editingBlock) {
+        return false; // never pull text out from under the live editor
+    }
+    QJsonArray blocks = blocksArray(m_page->envelope.blocksJson);
+    if (index >= blocks.size()) {
+        return false;
+    }
+    QJsonObject block = blocks.at(index).toObject();
+    for (auto it = fields.begin(); it != fields.end(); ++it) {
+        block.insert(it.key(), it.value());
+    }
+    blocks.replace(index, block);
+    writeBlocks(blocks, undoText);
+    return true;
+}
+
+void NotePageItem::appendMarkdownBlock(const QString &uid, const QString &text)
+{
+    qreal y = kBlockTop;
+    for (const PageBlock &block : m_blocks) {
+        y = qMax(y, block.rect.bottom() + kBlockGap);
+    }
+    QJsonObject block{{QStringLiteral("type"), QStringLiteral("markdown")},
+                      {QStringLiteral("uid"), uid},
+                      {QStringLiteral("text"), text}};
+    setBlockRect(&block, QRectF(kPageMargin, y, m_pageWidth - 2 * kPageMargin, 0));
+    appendBlock(block, tr("Start Live Notes"));
+}
+
 QString NotePageItem::editingKind() const
 {
     for (const PageBlock &block : m_blocks) {
         if (block.index == m_editingBlock) {
-            return block.kind == PageBlock::Kind::Check ? QStringLiteral("check")
-                                                        : QStringLiteral("text");
+            return block.kind == PageBlock::Kind::Check      ? QStringLiteral("check")
+                : block.kind == PageBlock::Kind::Markdown ? QStringLiteral("markdown")
+                                                          : QStringLiteral("text");
         }
     }
     return {};

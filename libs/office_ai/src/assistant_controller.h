@@ -25,7 +25,7 @@ class AssistantController : public QObject {
     QML_ELEMENT
     QML_UNCREATABLE("Created by the application over its catalog and document seams.")
     // [{id, name, offMachine}] in catalog order.
-    Q_PROPERTY(QVariantList models READ models CONSTANT)
+    Q_PROPERTY(QVariantList models READ models NOTIFY modelsChanged)
     Q_PROPERTY(QString modelId READ modelId WRITE setModelId NOTIFY modelIdChanged)
     Q_PROPERTY(bool offMachine READ offMachine NOTIFY modelIdChanged)
     // 0 = no context, 1 = selection, 2 = whole document.
@@ -58,6 +58,7 @@ public:
     Q_INVOKABLE void clearConversation();
 
 signals:
+    void modelsChanged();
     void modelIdChanged();
     void scopeChanged();
     void conversationChanged();

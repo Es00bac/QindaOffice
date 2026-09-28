@@ -14,6 +14,12 @@ set(QINDANOTE_ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_host.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_host_ai.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_host_ink.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_host_live.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_live_session.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_live_session.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_live_settings.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_markdown.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_markdown.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_host_structure.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_host_text.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_page_history.cpp
@@ -29,6 +35,8 @@ set(QINDANOTE_ENGINE_SOURCES
     PARENT_SCOPE)
 
 set(qindanote_qml
+    qml/NoteLivePanel.qml
+    qml/NoteLiveSettingsDialog.qml
     qml/NoteNavigator.qml
     qml/NotePage.qml
     qml/NotePreferencesPage.qml
@@ -55,6 +63,10 @@ qt_add_qml_module(qindanote_app
         src/note_host.cpp src/note_host.h
         src/note_host_ai.cpp
         src/note_host_ink.cpp
+        src/note_host_live.cpp
+        src/note_live_session.cpp src/note_live_session.h
+        src/note_live_settings.cpp
+        src/note_markdown.cpp src/note_markdown.h
         src/note_host_structure.cpp
         src/note_host_text.cpp
         src/note_page_history.cpp src/note_page_history.h
@@ -66,7 +78,8 @@ qt_add_qml_module(qindanote_app
     QML_FILES ${qindanote_qml}
 )
 target_include_directories(qindanote_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(qindanote_app PUBLIC office_quick office_quickplugin office_ai office_aiplugin office_ink)
+target_link_libraries(qindanote_app PUBLIC office_quick office_quickplugin office_ai office_aiplugin office_ink
+    office_speech)
 target_compile_definitions(qindanote_app PRIVATE QT_NO_CAST_FROM_ASCII)
 qqo_set_strict_warnings(qindanote_app)
 

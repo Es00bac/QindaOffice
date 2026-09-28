@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Local speech-to-text for QindaOffice live notes (D-057).
+
+A long-lived helper that the office_speech library (whisper_local.cpp)
+spawns: it loads a faster-whisper (CTranslate2) model ONCE and then
+transcribes clips as they arrive, so each utterance costs only inference.
+
+AGENT-CONTRACT (both sides: libs/office_speech/src/whisper_local.cpp):
+  stdin   repeated frames: one JSON header line {"id": n, "bytes": N,
+          "prompt": "..."} followed by exactly N bytes of 16 kHz mono
+          signed 16-bit little-endian PCM.
+  stdout  one JSON object per line:
+          {"ready": true, "model": "<dir>"}        once, after loading
+          {"id": n, "text": "..."}                 per clip
+          {"id": n, "error": "..."}                per failed clip
+          {"fatal": "..."}                         then exit(1)
+  Closing stdin ends the process after the queued clips are answered.
+
+Models are found the same way Gabbee finds them: a directory given with
+--model, else $XDG_DATA_HOME/faster-whisper/<name>, else each
+$XDG_DATA_DIRS entry's faster-whisper/<name> (Portage installs
+app-accessibility/faster-whisper-models into /usr/share/faster-whisper).
+Nothing is ever downloaded (HF_HUB_OFFLINE=1, local_files_only=True).
+"""
+
+import argparse
+import json
+import os
+import sys
+
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
+
+def emit(obj):
+    sys.stdout.write(json.dumps(obj) + "\n")
+    sys.stdout.flush()
+
+
+def find_model(name):
+    if os.path.isdir(name):
+        return name
+    data_home = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    data_dirs = os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share"
+    for root in [data_home] + [d for d in data_dirs.split(":") if d]:
+        candidate = os.path.join(root, "faster-whisper", name)
+        if os.path.isfile(os.path.join(candidate, "model.bin")):
+            return candidate
+    return None
+
+
+def physical_cores():
+    try:
+        return max(1, len(os.sched_getaffinity(0)) // 2)
+    except (AttributeError, OSError):
+        return max(1, (os.cpu_count() or 2) // 2)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--model", default="distil-small.en")
+    parser.add_argument("--language", default="")
+    parser.add_argument("--threads", type=int, default=0)
+    parser.add_argument("--beam-size", type=int, default=5)
+    args = parser.parse_args()
+
+    try:
+        import numpy as np
+        from faster_whisper import WhisperModel
+    except ImportError as error:
+        emit({"fatal": "faster-whisper is not installed (dev-python/faster-whisper): %s" % error})
+        return 1
+
+    model_dir = find_model(args.model)
+    if model_dir is None:
+        emit({"fatal": "No faster-whisper model named '%s' (looked in $XDG_DATA_HOME and "
+                       "$XDG_DATA_DIRS under faster-whisper/; Portage package "
+                       "app-accessibility/faster-whisper-models)" % args.model})
+        return 1
+    try:
+        model = WhisperModel(model_dir, device="cpu", compute_type="int8",
+                             cpu_threads=args.threads or physical_cores(),
+                             local_files_only=True)
+    except Exception as error:  # noqa: BLE001 - reported to the app verbatim
+        emit({"fatal": "Cannot load %s: %s" % (model_dir, error)})
+        return 1
+    emit({"ready": True, "model": model_dir})
+
+    stdin = sys.stdin.buffer
+    while True:
+        header = stdin.readline()
+        if not header:
+            return 0
+        try:
+            frame = json.loads(header)
+            size = int(frame["bytes"])
+            clip_id = frame["id"]
+        except (ValueError, KeyError, TypeError):
+            emit({"fatal": "bad frame header"})
+            return 1
+        pcm = stdin.read(size)
+        if len(pcm) != size:
+            return 0
+        try:
+            audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+            segments, _info = model.transcribe(
+                audio,
+                language=args.language or None,
+                beam_size=args.beam_size,
+                condition_on_previous_text=False,
+                initial_prompt=frame.get("prompt") or None,
+                without_timestamps=True,
+                vad_filter=False,
+            )
+            text = " ".join(segment.text.strip() for segment in segments).strip()
+            emit({"id": clip_id, "text": text})
+        except Exception as error:  # noqa: BLE001
+            emit({"id": clip_id, "error": str(error)})
+
+
+if __name__ == "__main__":
+    sys.exit(main())

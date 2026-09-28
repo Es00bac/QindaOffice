@@ -12,7 +12,7 @@
 // was use-after-free (and once wrote garbage-named page files).
 //
 // Files: note_host.cpp (document, pages, status), note_host_text.cpp
-// (find/replace, Export PDF, print),
+// (find/replace, Export PDF, print), note_host_live.cpp (live notes),
 // note_host_structure.cpp (the Page menu: new/rename/delete/move,
 // background), note_host_ink.cpp (the Ink menu: tools, pickers, tools.json).
 
@@ -20,9 +20,11 @@
 #include "document_host.h"
 #include "json_settings.h"
 #include "note_document.h"
+#include "note_live_session.h"
 #include "note_page_item.h"
 
 #include <QColor>
+#include <QJsonObject>
 #include <QPointer>
 #include <QtQml/qqmlregistration.h>
 
@@ -30,6 +32,7 @@ class QTimer;
 
 namespace QindaOffice::Ai {
 class ModelCatalog;
+class ProviderSettings;
 }
 
 namespace QindaOffice::Apps::Notes {
@@ -58,6 +61,10 @@ class NoteHost : public Quick::DocumentHost {
     // editor's selection flows in through editorSelection.
     Q_PROPERTY(QindaOffice::Ai::AssistantController *assistant READ assistant CONSTANT)
     Q_PROPERTY(QString editorSelection READ editorSelection WRITE setEditorSelection NOTIFY editorSelectionChanged)
+    // Live notes (note_host_live.cpp, D-057) and the AI providers dialog.
+    Q_PROPERTY(QindaOffice::Apps::Notes::LiveNotesSession *live READ live CONSTANT)
+    Q_PROPERTY(QindaOffice::Ai::ProviderSettings *providerSettings READ providerSettings CONSTANT)
+    Q_MOC_INCLUDE("provider_settings.h")
 public:
     NoteHost();
     ~NoteHost() override;
@@ -115,6 +122,20 @@ public:
     // scope; ink is not text and is never sent.
     [[nodiscard]] QString currentPageText() const;
 
+    // Live notes: the page side of a session (note_host_live.cpp).
+    [[nodiscard]] LiveNotesSession *live() const { return m_live; }
+    [[nodiscard]] Ai::ProviderSettings *providerSettings() const { return m_providerSettings; }
+    // Opens (or reuses an empty current) page titled after `topic` and
+    // appends the markdown block the notes go into.
+    LiveTarget beginLiveNotes(const QString &topic);
+    // The notes as they are on the page now ("" before the first update).
+    [[nodiscard]] QString liveNotesText(const LiveTarget &target) const;
+    [[nodiscard]] QString liveTranscript(const LiveTarget &target) const;
+    // One undo step; false while the block is open in the editor.
+    bool applyLiveNotes(const LiveTarget &target, const QString &notes);
+    void storeLiveTranscript(const LiveTarget &target, const QString &transcript);
+    void endLiveNotes(const LiveTarget &target, bool wroteNotes);
+
 signals:
     void currentPageChanged();
     // The window opens the matching dialog and answers through the
@@ -135,6 +156,10 @@ signals:
     void assistantToggleRequested(bool visible);
     void assistantInsertRequested(const QString &text);
     void assistantReplaceRequested(const QString &text);
+    // AI ▸ Live Notes toggles the live-notes panel; AI ▸ AI Providers…
+    // opens the providers dialog.
+    void liveNotesToggleRequested(bool visible);
+    void providersRequested();
 
 protected:
     [[nodiscard]] QString filterString() const override;
@@ -165,6 +190,11 @@ private:
     void saveToolState();
     // note_host_ai.cpp
     void createAssistant();
+    // note_host_live.cpp
+    void createLiveNotes();
+    void syncLiveActions();
+    [[nodiscard]] QString liveBlockField(const LiveTarget &target, const QString &field) const;
+    bool writeLiveBlock(const LiveTarget &target, const QJsonObject &fields, bool undoable);
 
     NoteDocument *m_document = nullptr;
     NavigatorModel *m_navigator = nullptr;
@@ -179,6 +209,8 @@ private:
     std::unique_ptr<Ai::DocumentContextProvider> m_aiContext;
     std::unique_ptr<Ai::EditApplier> m_aiApplier;
     QString m_editorSelection;
+    LiveNotesSession *m_live = nullptr;
+    Ai::ProviderSettings *m_providerSettings = nullptr;
 };
 
 } // namespace QindaOffice::Apps::Notes

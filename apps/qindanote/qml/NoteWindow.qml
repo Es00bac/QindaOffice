@@ -10,7 +10,8 @@ import QindaOffice.Note
 // NoteHost, with the ribbon (NoteRibbonLayout.qml: tools, the colour and
 // width buttons that follow the active tool, blocks, pages, background),
 // the navigator in a dock on the left, the page in a zoomable viewport with
-// a zoom island, the find bar, and the dialogs the host asks for.
+// a zoom island, the assistant and live-notes docks on the right (D-057),
+// the find bar, and the dialogs the host asks for.
 OfficeWindow {
     id: window
 
@@ -150,12 +151,30 @@ OfficeWindow {
                 controller: window.note.assistant
             }
         }
+        // Live notes (D-057): the session's controls; the notes are on the page.
+        Tk.DockPanel {
+            panelId: "live"
+            title: qsTr("Live Notes")
+            iconName: "audio-lines"
+            zone: "right"
+            mode: "hidden"
+            extent: 320
+            minWidth: 260
+            closable: true
+            NoteLivePanel {
+                objectName: "livePanel"
+                session: window.note.live
+                onSettingsRequested: liveSettings.open()
+                onProvidersRequested: providersDialog.open()
+            }
+        }
         // Keeps the two toggles honest when a panel is closed from its own
         // header (the list carries panel ids).
         onHiddenPanelsChanged: {
             const hidden = dock.hiddenPanels.map(function(e) { return typeof e === "string" ? e : e.panelId })
             window.host.actions.setChecked("noteShowNavigatorAction", !hidden.includes("navigator"))
             window.host.actions.setChecked("aiAssistantAction", !hidden.includes("assistant"))
+            window.host.actions.setChecked("noteLiveNotesAction", !hidden.includes("live"))
         }
     }
 
@@ -182,6 +201,10 @@ OfficeWindow {
         function onAssistantToggleRequested(visible) {
             if (visible === dock.hiddenPanels.includes("assistant")) { if (visible) dock.showPanel("assistant"); else dock.hidePanel("assistant") }
         }
+        function onLiveNotesToggleRequested(visible) {
+            if (visible === dock.hiddenPanels.includes("live")) { if (visible) dock.showPanel("live"); else dock.hidePanel("live") }
+        }
+        function onProvidersRequested() { providersDialog.open() }
         function onFindRequested() { findBar.open() }
         function onNewSectionRequested() { sectionPrompt.text = qsTr("Section"); sectionPrompt.open() }
         function onRenamePageRequested(sectionId, pageId, title) {
@@ -202,6 +225,9 @@ OfficeWindow {
         function onAddImageRequested() { imageDialog.open() }
         function onCustomPenColorRequested(current) { colorDialog.selectedColor = current; colorDialog.open() }
     }
+
+    NoteLiveSettingsDialog { id: liveSettings; session: window.note.live; onProvidersRequested: providersDialog.open() }
+    Ai.ProviderSettingsDialog { id: providersDialog; settings: window.note.providerSettings }
 
     Tk.PromptDialog { id: sectionPrompt; objectName: "newSectionDialog"; title: qsTr("New section"); label: qsTr("Section name"); onAccepted: window.note.createSection(text) }
     Tk.PromptDialog {

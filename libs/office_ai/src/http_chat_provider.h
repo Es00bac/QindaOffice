@@ -9,12 +9,27 @@
 #include "chat_types.h"
 #include "sse_parser.h"
 
+#include <QHash>
+#include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QPointer>
 
 namespace QindaOffice::Ai {
 
 class OpenAiChatRun;
+
+// Per-provider wire quirks, from the catalog row's "options" (D-057; the
+// same idea as OpenCode's provider `options`).
+struct OpenAiOptions {
+    // OpenAI's reasoning models refuse "max_tokens" on chat/completions.
+    QString maxTokensField = QStringLiteral("max_tokens");
+    bool sendTemperature = true;
+    // Merged into every request body — e.g. llama-server's
+    // {"chat_template_kwargs": {"enable_thinking": false}} to skip a
+    // reasoning model's thinking where speed matters.
+    QJsonObject extraBody;
+    QHash<QByteArray, QByteArray> headers; // e.g. OpenRouter's X-Title
+};
 
 class OpenAiChatProvider final : public ChatProvider {
     Q_OBJECT
@@ -28,6 +43,7 @@ public:
     void fetchModels(const std::function<void(const QStringList &models, const QString &error)> &cb);
 
     [[nodiscard]] QString model() const { return m_model; }
+    void setOptions(const OpenAiOptions &options) { m_options = options; }
     void setModel(const QString &model) { m_model = model; }
 
 private:
@@ -37,6 +53,7 @@ private:
     QString m_baseUrl;
     QString m_apiKey;
     QString m_model;
+    OpenAiOptions m_options;
     QNetworkAccessManager m_nam;
 };
 

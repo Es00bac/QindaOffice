@@ -6,6 +6,7 @@
 #include "http_chat_provider.h"
 
 #include <QDebug>
+#include <QUrl>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -109,16 +110,7 @@ bool ModelCatalog::load(QString *error)
     const QJsonObject root = document.object();
     m_providers.clear();
     for (const QJsonValue &value : root.value(QStringLiteral("providers")).toArray()) {
-        const QJsonObject object = value.toObject();
-        ProviderConfig config;
-        config.id = object.value(QStringLiteral("id")).toString();
-        config.displayName = object.value(QStringLiteral("displayName")).toString();
-        config.kind = object.value(QStringLiteral("kind")).toString();
-        config.baseUrl = object.value(QStringLiteral("baseUrl")).toString();
-        config.model = object.value(QStringLiteral("model")).toString();
-        config.secretKey = object.value(QStringLiteral("secretKey")).toString();
-        config.extra = object.value(QStringLiteral("extra")).toObject();
-        m_providers.append(config);
+        m_providers.append(ProviderConfig::fromJson(value.toObject()));
     }
     return true;
 }
@@ -127,15 +119,7 @@ bool ModelCatalog::save(QString *error) const
 {
     QJsonArray providers;
     for (const ProviderConfig &config : m_providers) {
-        providers.append(QJsonObject{
-            {QStringLiteral("id"), config.id},
-            {QStringLiteral("displayName"), config.displayName},
-            {QStringLiteral("kind"), config.kind},
-            {QStringLiteral("baseUrl"), config.baseUrl},
-            {QStringLiteral("model"), config.model},
-            {QStringLiteral("secretKey"), config.secretKey},
-            {QStringLiteral("extra"), config.extra},
-        });
+        providers.append(config.toJson());
     }
     QFile file(m_path);
     if (!file.open(QIODevice::WriteOnly)) {
@@ -179,8 +163,7 @@ std::optional<ModelSpec> ModelCatalog::specFor(const QString &modelId) const
             spec.caps.vision = config.kind == QLatin1String("openai")
                 || config.kind == QLatin1String("anthropic");
             spec.caps.jsonSchema = config.kind != QLatin1String("kimi-cli");
-            spec.offMachine = config.kind == QLatin1String("openai")
-                || config.kind == QLatin1String("anthropic");
+            spec.offMachine = isOffMachine(config);
             return spec;
         }
     }
@@ -204,7 +187,20 @@ ChatProvider *ModelCatalog::createProvider(const QString &modelId, const QString
             return new CliChatProvider(CliKind::Kimi, config.model, QString(), parent);
         }
         if (config.kind == QLatin1String("openai")) {
-            return new OpenAiChatProvider(config.baseUrl, secret, config.model, parent);
+            auto *provider = new OpenAiChatProvider(config.baseUrl, secret, config.model, parent);
+            OpenAiOptions options;
+            const QJsonObject o = config.options;
+            if (o.contains(QStringLiteral("maxTokensField"))) {
+                options.maxTokensField = o.value(QStringLiteral("maxTokensField")).toString();
+            }
+            options.sendTemperature = o.value(QStringLiteral("sendTemperature")).toBool(true);
+            options.extraBody = o.value(QStringLiteral("body")).toObject();
+            const QJsonObject headers = o.value(QStringLiteral("headers")).toObject();
+            for (auto it = headers.begin(); it != headers.end(); ++it) {
+                options.headers.insert(it.key().toUtf8(), it.value().toString().toUtf8());
+            }
+            provider->setOptions(options);
+            return provider;
         }
         if (config.kind == QLatin1String("anthropic")) {
             return new AnthropicProvider(config.baseUrl, secret, config.model, parent);
@@ -212,6 +208,116 @@ ChatProvider *ModelCatalog::createProvider(const QString &modelId, const QString
         return nullptr;
     }
     return nullptr;
+}
+
+} // namespace QindaOffice::Ai
+
+namespace QindaOffice::Ai {
+
+QJsonObject ProviderConfig::toJson() const
+{
+    QJsonObject object{
+        {QStringLiteral("id"), id},
+        {QStringLiteral("displayName"), displayName},
+        {QStringLiteral("kind"), kind},
+        {QStringLiteral("baseUrl"), baseUrl},
+        {QStringLiteral("model"), model},
+        {QStringLiteral("secretKey"), secretKey},
+        {QStringLiteral("extra"), extra},
+    };
+    // The D-057 fields are written only when set, so a file written by
+    // this build still reads cleanly in an older one.
+    if (!apiKeyRef.isEmpty()) {
+        object.insert(QStringLiteral("apiKey"), apiKeyRef);
+    }
+    if (!env.isEmpty()) {
+        object.insert(QStringLiteral("env"), QJsonArray::fromStringList(env));
+    }
+    if (!openCodeId.isEmpty()) {
+        object.insert(QStringLiteral("openCodeId"), openCodeId);
+    }
+    if (!options.isEmpty()) {
+        object.insert(QStringLiteral("options"), options);
+    }
+    return object;
+}
+
+ProviderConfig ProviderConfig::fromJson(const QJsonObject &object)
+{
+    ProviderConfig config;
+    config.id = object.value(QStringLiteral("id")).toString();
+    config.displayName = object.value(QStringLiteral("displayName")).toString();
+    config.kind = object.value(QStringLiteral("kind")).toString();
+    config.baseUrl = object.value(QStringLiteral("baseUrl")).toString();
+    config.model = object.value(QStringLiteral("model")).toString();
+    config.secretKey = object.value(QStringLiteral("secretKey")).toString();
+    config.extra = object.value(QStringLiteral("extra")).toObject();
+    // AGENT-GUARD (D-052): only a reference is ever honoured here; a
+    // literal key typed into the file is ignored rather than sent.
+    const QString ref = object.value(QStringLiteral("apiKey")).toString();
+    config.apiKeyRef = ApiKeyResolver::isReference(ref) ? ref : QString();
+    for (const QJsonValue &value : object.value(QStringLiteral("env")).toArray()) {
+        config.env.append(value.toString());
+    }
+    config.openCodeId = object.value(QStringLiteral("openCodeId")).toString();
+    config.options = object.value(QStringLiteral("options")).toObject();
+    return config;
+}
+
+KeySources ModelCatalog::keySources(const ProviderConfig &config)
+{
+    KeySources sources;
+    sources.keyringKey = config.secretKey;
+    sources.reference = config.apiKeyRef;
+    sources.envVars = config.env;
+    sources.openCodeId = config.openCodeId;
+    return sources;
+}
+
+bool ModelCatalog::isOffMachine(const ProviderConfig &config)
+{
+    if (config.kind != QLatin1String("openai") && config.kind != QLatin1String("anthropic")) {
+        return false; // the CLI providers are the user's own subscription tools
+    }
+    const QString host = QUrl(config.baseUrl).host();
+    return host != QLatin1String("localhost") && host != QLatin1String("127.0.0.1")
+        && host != QLatin1String("::1");
+}
+
+QString ModelCatalog::addProvider(ProviderConfig config)
+{
+    // Rows of one provider share its keyring id (the preset's
+    // "<provider>-api-key"), so a second model needs no second key.
+    const QString base = config.id.isEmpty() ? QStringLiteral("provider") : config.id;
+    QString id = base;
+    for (int n = 2; configFor(id).has_value(); ++n) {
+        id = QStringLiteral("%1-%2").arg(base).arg(n);
+    }
+    config.id = id;
+    m_providers.append(config);
+    emit changed();
+    return id;
+}
+
+bool ModelCatalog::updateProvider(const ProviderConfig &config)
+{
+    for (ProviderConfig &existing : m_providers) {
+        if (existing.id == config.id) {
+            existing = config;
+            emit changed();
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ModelCatalog::removeProvider(const QString &id)
+{
+    if (m_providers.removeIf([&id](const ProviderConfig &c) { return c.id == id; }) == 0) {
+        return false;
+    }
+    emit changed();
+    return true;
 }
 
 } // namespace QindaOffice::Ai

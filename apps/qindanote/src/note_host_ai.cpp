@@ -99,7 +99,8 @@ QString NoteHost::currentPageText() const
     for (const QJsonValue &value : blocksArray(page->envelope.blocksJson)) {
         const QJsonObject object = value.toObject();
         const QString type = object.value(QStringLiteral("type")).toString();
-        if (type == QLatin1String("text") || type == QLatin1String("check")) {
+        if (type == QLatin1String("text") || type == QLatin1String("check")
+            || type == QLatin1String("markdown")) {
             blocks.append(object.value(QStringLiteral("text")).toString());
         }
     }

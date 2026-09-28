@@ -10,11 +10,16 @@ SecretStore::SecretStore(QObject *parent)
 {
 }
 
-void SecretStore::store(const QString &key, const QString &value)
+void SecretStore::store(const QString &key, const QString &value,
+                        const std::function<void(bool)> &done)
 {
     auto *job = new QKeychain::WritePasswordJob(QStringLiteral("qindaoffice"), this);
     job->setKey(key);
     job->setTextData(value);
+    if (done) {
+        QObject::connect(job, &QKeychain::Job::finished, this,
+                         [done](QKeychain::Job *finished) { done(finished->error() == QKeychain::NoError); });
+    }
     job->start();
 }
 

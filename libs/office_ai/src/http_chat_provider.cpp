@@ -36,8 +36,11 @@ public:
         body.insert(QStringLiteral("stream"), true);
         body.insert(QStringLiteral("stream_options"),
                     QJsonObject{{QStringLiteral("include_usage"), true}});
-        body.insert(QStringLiteral("max_tokens"), request.maxTokens);
-        body.insert(QStringLiteral("temperature"), request.temperature);
+        const OpenAiOptions &options = provider->m_options;
+        body.insert(options.maxTokensField, request.maxTokens);
+        if (options.sendTemperature) {
+            body.insert(QStringLiteral("temperature"), request.temperature);
+        }
         if (!request.effort.isEmpty()) {
             body.insert(QStringLiteral("reasoning_effort"), request.effort);
         }
@@ -71,6 +74,9 @@ public:
             messages.append(entry);
         }
         body.insert(QStringLiteral("messages"), messages);
+        for (auto it = options.extraBody.begin(); it != options.extraBody.end(); ++it) {
+            body.insert(it.key(), it.value());
+        }
 
         QNetworkReply *reply = m_provider->m_nam.post(m_provider->buildRequest(),
                                                       QJsonDocument(body).toJson(QJsonDocument::Compact));
@@ -170,6 +176,9 @@ QNetworkRequest OpenAiChatProvider::buildRequest() const
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     if (!m_apiKey.isEmpty()) {
         request.setRawHeader("Authorization", "Bearer " + m_apiKey.toUtf8());
+    }
+    for (auto it = m_options.headers.begin(); it != m_options.headers.end(); ++it) {
+        request.setRawHeader(it.key(), it.value());
     }
     return request;
 }

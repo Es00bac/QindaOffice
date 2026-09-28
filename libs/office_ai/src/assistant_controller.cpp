@@ -2,7 +2,7 @@
 #include "assistant_controller.h"
 
 #include "model_catalog.h"
-#include "secret_store.h"
+#include "api_key_resolver.h"
 
 #include <QClipboard>
 #include <QGuiApplication>
@@ -41,6 +41,17 @@ AssistantController::AssistantController(ModelCatalog *catalog, DocumentContextP
     const QStringList ids = m_catalog != nullptr ? m_catalog->modelIds() : QStringList();
     if (!ids.isEmpty()) {
         m_modelId = ids.first();
+    }
+    if (m_catalog != nullptr) {
+        // Providers added in the settings dialog appear in the picker now.
+        connect(m_catalog, &ModelCatalog::changed, this, [this] {
+            const QStringList current = m_catalog->modelIds();
+            if (!current.contains(m_modelId) && !current.isEmpty()) {
+                m_modelId = current.first();
+                emit modelIdChanged();
+            }
+            emit modelsChanged();
+        });
     }
 }
 
@@ -182,17 +193,15 @@ void AssistantController::runRequest(const ChatRequest &request)
         });
     };
     const auto config = m_catalog != nullptr ? m_catalog->configFor(modelId) : std::nullopt;
-    if (!config.has_value() || config->secretKey.isEmpty()) {
+    if (!config.has_value()) {
         startWith(QString());
         return;
     }
-    // Resolve through the keychain-backed store (async but near-instant on
-    // the session bus; an empty secret surfaces as an auth error later).
-    auto *store = new SecretStore(this);
-    store->retrieve(config->secretKey, [store, startWith](const QString &value) {
-        startWith(value);
-        store->deleteLater();
-    });
+    // D-057: keyring first, then the row's {env:}/{file:} reference, the
+    // provider's conventional env variables and OpenCode's auth.json. An
+    // empty result surfaces as an auth error from the provider.
+    ApiKeyResolver::resolve(ModelCatalog::keySources(*config), this,
+                            [startWith](const QString &value, const QString &) { startWith(value); });
 }
 
 void AssistantController::stop()

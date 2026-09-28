@@ -2,7 +2,7 @@
 #include "inline_action_flow.h"
 
 #include "model_catalog.h"
-#include "secret_store.h"
+#include "api_key_resolver.h"
 
 #include <QPointer>
 #include <QRegularExpression>
@@ -122,10 +122,11 @@ void InlineActionFlow::execute(const InlineAction &action)
     // default-constructed and the provider's API key was never fetched:
     // every inline AI action against a key-based endpoint failed on auth.
     const ProviderConfig config = m_catalog->configFor(modelId).value_or(ProviderConfig{});
-    auto *store = new SecretStore(this);
-    store->retrieve(config.secretKey, [this, action, request, modelId, store,
-                                       context](const QString &secret) {
-        store->deleteLater();
+    // D-057: keyring, then the row's {env:}/{file:} reference, the
+    // provider's env variables and OpenCode's auth.json.
+    ApiKeyResolver::resolve(ModelCatalog::keySources(config), this,
+                            [this, action, request, modelId, context](const QString &secret,
+                                                                      const QString &) {
         ChatProvider *provider = m_catalog->createProvider(modelId, secret, this);
         if (provider == nullptr) {
             return;

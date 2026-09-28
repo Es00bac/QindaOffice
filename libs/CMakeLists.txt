@@ -4,6 +4,8 @@ add_subdirectory(calc_io)
 add_subdirectory(office_core)
 add_subdirectory(office_quick)
 add_subdirectory(office_ai)
+# Live audio to text for QindaNote's live notes (D-057).
+add_subdirectory(office_speech)
 add_subdirectory(office_mail)
 add_subdirectory(office_ink)
 add_subdirectory(show_model)

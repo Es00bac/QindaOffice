@@ -5,6 +5,80 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-057: Live notes — speech to markdown notes, revised as the session goes
+
+**Date:** 2026-09-27 · **Status:** accepted (owner request; M52, [live-notes.md](live-notes.md))
+
+**Context.** The owner asked for QindaNote to take notes by itself from any
+live audio source: a lecture, a meeting, or desktop audio such as a
+YouTube video. The notes should stay well formatted, highlighted and
+annotated, and should be revised as more information arrives. Speech
+recognition had to match the desktop's own dictation (Gabbee: ElevenLabs
+Scribe realtime, with local faster-whisper as fallback). The notes had to
+come from the self-hosted model on qinda (Ornith on llama-server over
+Tailscale) or any hosted provider, and the owner suggested borrowing how
+OpenCode connects to many providers. Jev and Laya (Jev-compatible System
+One decision models) were welcome if they helped speed.
+
+**Decision.**
+
+1. **A speech library of its own.** `office_speech` (Qt
+   Core/Network/WebSockets) has three recognizers behind one contract
+   (16 kHz mono s16le in; partial and committed text out):
+   - ElevenLabs realtime, using server-side VAD because live notes are
+     continuous, plus a forced commit after 25 s;
+   - local Whisper, through a `tools/qindaoffice-whisper` helper around
+     faster-whisper, which is what Portage installs; whisper.cpp is not on
+     these machines;
+   - OpenAI-compatible `/audio/transcriptions`.
+
+   Capture is `pw-record`, like Gabbee. QtMultimedia cannot open a sink
+   monitor, and desktop audio needs one. It does not reuse
+   `org.qindaqt.Voice1`: that contract is push-to-talk with a 512-byte
+   transcript cap, and extending it would need a desktop ADR.
+2. **Notes are one markdown block.** A new block type, `markdown`, is
+   painted through QTextDocument by the same code for screen and print.
+   `==highlight==` is painted as a marker stroke. Older builds skip the
+   unknown type and keep its index (§5 of the overhaul plan). The live
+   block has a `uid` and carries its `transcript`.
+3. **Full rewrites while the notes are short, tail rewrites when long.**
+   The model returns complete revised notes until they pass about 9000
+   characters. After that it revises only the last sections, the summary
+   and the action items, and the engine splices them back around the
+   untouched middle. Only one request runs at a time, and user edits
+   always win: a reply is dropped if the notes changed since the request.
+4. **A System One gate is optional and fails open.** Jev (hosted) or Laya
+   (self-hosted) judges each stretch as filler or not, as a new topic, and
+   for importance. Filler costs no big-model calls, and a topic change
+   triggers an update promptly.
+5. **OpenCode's provider model, adopted.**
+   - Compiled-in presets distilled from models.dev by a checked-in script.
+   - `{env:}`/`{file:}` key references.
+   - Conventional env variables.
+   - OpenCode's `auth.json` and `opencode.json` import.
+   - Per-row wire options.
+
+   This extends D-052 without breaking it. Keys typed into the suite go
+   only to the keyring. A reference is a pointer to a secret the user
+   already keeps, never a copy, and a literal key in a settings file is
+   ignored. The assistant and inline actions use the same resolver, so
+   every app benefits.
+6. **Nothing is captured or sent before Start.** The panel badges every
+   stage that leaves the machine.
+
+**Consequences.**
+- Live notes need PipeWire's `pw-record`, and they say so when it is
+  missing.
+- Local Whisper needs `dev-python/faster-whisper` and a model package.
+  The ebuild should list them as optional run-time dependencies and
+  install the helper into libexec (`CMakeLists` already does).
+- Laya is not packaged yet. It needs an overlay ebuild before it can run
+  locally, per the Portage-only rule.
+- The real pipeline (Whisper, then Ornith) was run end to end on
+  2026-09-27 (live-notes.md). The automated gates use a local SSE model
+  server, a WebSocket mock of ElevenLabs, fake `pw-record` and Whisper
+  helpers, and a local System One server.
+
 ## D-056: Destroy QML windows before their required C++ objects
 
 **Date:** 2026-09-26 · **Status:** accepted (owner-reported shutdown warnings)

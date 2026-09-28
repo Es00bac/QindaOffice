@@ -86,6 +86,36 @@ QQuickRootItem#NoteWindow
                   QQuickRectangle#segmentFocus_2 [hidden]
               TextField#assistantPrompt [hidden]
                 IconButton#fieldClear [hidden]
+          QQuickItem#dockPanelContent_live [hidden]
+            NoteLivePanel#livePanel [hidden]
+              Button#liveCopyTranscript [hidden]
+              Button#liveProviders [hidden]
+              Button#liveStart [hidden]
+              IconButton#liveSettings [hidden]
+              IconButton#liveStop [hidden]
+              Label#liveGate [hidden]
+              Label#liveModel [hidden]
+              Label#liveSpeechEngine [hidden]
+              Label#liveStatus [hidden]
+              Notice#liveError [hidden]
+                IconButton#noticeDismiss [hidden]
+                Label#noticeText [hidden]
+                Label#noticeTitle [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              ProgressBar#liveLevel [hidden]
+              Scroll#liveTranscript [hidden]
+                Caption#emptyText [hidden]
+                Overline#emptyTitle [hidden]
+                QQuickTextEdit#selectableText [hidden]
+              Segmented#liveSource [hidden]
+                QQuickAbstractButton#segment_0 [hidden]
+                  QQuickRectangle#segmentFocus_0 [hidden]
+                QQuickAbstractButton#segment_1 [hidden]
+                  QQuickRectangle#segmentFocus_1 [hidden]
+                QQuickAbstractButton#segment_2 [hidden]
+                  QQuickRectangle#segmentFocus_2 [hidden]
+              TextField#liveTopic [hidden]
+                IconButton#fieldClear [hidden]
   QQuickItem#appFooter
     Flex#appFindBar
       FindBar#findBar [hidden]
@@ -120,6 +150,7 @@ QQuickRootItem#NoteWindow
               IconButton#fieldClear [hidden]
           QQuickTabButton#ribbonTab_file
           QQuickTabButton#ribbonTab_home
+          QQuickTabButton#ribbonTab_live
           QQuickTabButton#ribbonTab_page
           QQuickTabButton#ribbonTab_view
         QQuickItem#ribbonGroupViewport

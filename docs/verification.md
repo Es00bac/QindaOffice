@@ -73,6 +73,71 @@ app-side requirements above are the parts the suite owns):
 
 ## Milestone-specific gates
 
+### M52 gates (live notes, D-057)
+
+Automated:
+
+- `tst_office_speech` (15 cases). It covers:
+  - the mixer (sum, saturation, a lagging stream treated as silence);
+  - the segmenter (onset with pre-roll, 700 ms tail, clicks dropped, 20 s
+    monologue cuts);
+  - the WAV header;
+  - capture through a fake `pw-record` (arguments for the sink monitor,
+    100 ms chunks, pause keeps the meter);
+  - a missing recorder;
+  - ElevenLabs realtime against a local WebSocket server (query, key
+    header, buffering before `session_started`, partial/committed, the
+    final commit), a fatal `auth_error`, and no key at all;
+  - the Whisper helper protocol with a fake helper (glossary prompt on
+    every clip);
+  - the real helper refusing a missing model;
+  - HTTP transcription against a local server.
+- `tst_live_notes` (13 cases) and `tst_ai_providers` (4). They cover:
+  - the prompt (notes, context, ★/⤷ marks, glossary);
+  - reply clean-up;
+  - the TAIL splice (untouched middle, kept action items);
+  - the plausibility guard;
+  - the engine's cadence, never two runs at once, user edits winning,
+    retry while the editor holds the block, and the final full revision;
+  - the gate against a local System One server (filler not counted, a
+    new important topic marked and triggering), and the gate failing open;
+  - System One parsing;
+  - key references, env and OpenCode's `auth.json`;
+  - presets from the resource;
+  - catalog round trip (a literal key refused);
+  - `opencode.json(c)` import with a relative `{file:}`.
+- `tst_note_live` (4 + 1 manual). It covers:
+  - markdown blocks laid out and printed, with the highlight painted;
+  - a whole session in the real window against a local SSE model
+    (page titled from the topic, placeholder not treated as notes, a
+    revision as an undo step, no write under the open editor, Stop with
+    the final revision and the transcript stored on the block, action
+    enablement);
+  - the panel from AI ▸ Live Notes, with its grabs.
+- `tst_note_ui` fixtures and the ribbon squeeze gate include the Live tab
+  and the hidden panel. `tst_note_menu_export` validates the new AI-menu
+  ids.
+
+Manual, real pipeline:
+
+- `QQO_LIVE_E2E_PCM=<16 kHz mono s16le> QQO_LIVE_E2E_BASE=… QQO_LIVE_E2E_MODEL=…
+  QQO_LIVE_E2E_KEYREF='{file:…}' QQO_LIVE_E2E_BODY='{…}' tst_note_live
+  realPipelineEndToEnd`.
+- Run on 2026-09-27 with four minutes of podcast speech, local
+  `distil-small.en` and Ornith on qinda. It passed (see live-notes.md).
+
+On the desktop (not run yet, asks first):
+
+- [ ] Microphone lecture.
+- [ ] Desktop audio from a browser video.
+- [ ] Both during a call.
+- [ ] ElevenLabs with Gabbee's key found automatically.
+- [ ] Pause/Resume.
+- [ ] Edit the notes mid-session (your edit is kept).
+- [ ] Stop (final revision).
+- [ ] Export PDF shows the formatted notes.
+- [ ] AI ▸ AI Providers… import from OpenCode.
+
 ### M40 gates (the ribbon, D-041)
 
 - **Ribbon gate** (`tests/support/ribbon_gate.h`, one test per app,

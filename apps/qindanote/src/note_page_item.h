@@ -27,6 +27,7 @@
 #include <qindatk/stylus_handler.h>
 
 #include <QColor>
+#include <QJsonObject>
 #include <QQuickPaintedItem>
 #include <QtQml/qqmlregistration.h>
 
@@ -140,6 +141,12 @@ public:
     Q_INVOKABLE void toggleCheck(int index);
     Q_INVOKABLE void insertCheckItemAfter(int index);
     Q_INVOKABLE void indentCheckItem(int index, int delta);
+    // Live notes (D-057): the markdown block they write, found by its uid.
+    [[nodiscard]] int blockIndexForUid(const QString &uid) const;
+    // Merges `fields` into block `index` as one undo step; false while
+    // that block is open in the editor (the caller retries).
+    bool setBlockFields(int index, const QJsonObject &fields, const QString &undoText);
+    void appendMarkdownBlock(const QString &uid, const QString &text);
     [[nodiscard]] int editingBlock() const { return m_editingBlock; }
     [[nodiscard]] QString editingKind() const;
     [[nodiscard]] QString editingText() const { return m_editingText; }
