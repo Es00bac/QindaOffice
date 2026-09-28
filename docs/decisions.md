@@ -72,8 +72,9 @@ One decision models) were welcome if they helped speed.
 - Local Whisper needs `dev-python/faster-whisper` and a model package.
   The ebuild should list them as optional run-time dependencies and
   install the helper into libexec (`CMakeLists` already does).
-- Laya is not packaged yet. It needs an overlay ebuild before it can run
-  locally, per the Portage-only rule.
+- Laya runs locally from the overlay's `sci-ml/laya` and `sci-ml/laya-models`
+  (Portage-only rule): the checkpoints are pinned data under
+  /usr/share/laya, and a patch lets `laya-serve` serve them offline.
 - The real pipeline (Whisper, then Ornith) was run end to end on
   2026-09-27 (live-notes.md). The automated gates use a local SSE model
   server, a WebSocket mock of ElevenLabs, fake `pw-record` and Whisper

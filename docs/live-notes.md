@@ -194,11 +194,26 @@ fields.
 
 ### Laya (self-hosted gate)
 
-Laya is served by `laya-serve` (Python, torch). It is **not packaged** for
-these machines yet, and the Portage-only rule means it must arrive as a
-`qindaqt` overlay ebuild with its weights as a separate data package, not
-through `pip`. Until then, choose **TypeSafe Jev** (a key from typesafe.ai,
-`$JEV_API_KEY`) or leave the gate off.
+Laya is packaged in the `qindaqt` overlay as `sci-ml/laya` (the library
+and `laya-serve`, USE=serve) and `sci-ml/laya-models` (the checkpoints,
+pinned, under `/usr/share/laya`; `english` by default, `multilingual` and
+`typed-decisions` optional). Every dependency, including a CPU-only
+PyTorch, comes from `::gentoo`.
+
+A Gentoo patch adds `LAYA_MODEL_DIR` to `laya-serve`, so it serves the
+installed checkpoints and never downloads anything. The unit sets
+`HF_HUB_OFFLINE=1`.
+
+```sh
+sudo emerge sci-ml/laya            # pulls sci-ml/laya-models[english]
+sudo systemctl enable --now laya-serve.service
+```
+
+It listens on `127.0.0.1:8000` (`/etc/laya/serve.env`, which also takes
+`LAYA_API_KEY` if you expose it). In QindaNote, open **Live Notes ▸
+Settings ▸ Gate ▸ Laya (self-hosted)**; the defaults are
+`http://127.0.0.1:8000` and model `english`. TypeSafe **Jev** is the hosted
+alternative (a key from typesafe.ai, `$JEV_API_KEY`).
 
 ## Settings
 
