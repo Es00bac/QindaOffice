@@ -6,6 +6,7 @@
 // for. Privacy contract unchanged: nothing leaves the machine until Send.
 
 #include "show_host.h"
+#include "show_tools.h"
 
 #include "show_ai.h"
 #include "standard_actions.h"
@@ -29,6 +30,9 @@ void ShowHost::createAssistant()
     m_aiContext = std::make_unique<ShowContext>(this);
     m_aiApplier = std::make_unique<ShowApplier>(this);
     m_assistant = new Ai::AssistantController(m_catalog, m_aiContext.get(), m_aiApplier.get(), this);
+    // D-058: the assistant rewrites, adds and reorders slides itself.
+    m_aiTools = std::make_unique<ShowTools>(this);
+    m_assistant->setDocumentTools(m_aiTools.get());
     ActionEntry *toggle = action(QString::fromLatin1(ActionId::kAiAssistant));
     toggle->setEnabled(true);
     toggle->setCheckable(true);

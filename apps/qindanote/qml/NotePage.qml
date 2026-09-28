@@ -69,12 +69,15 @@ Tk.Viewport {
         }
 
         // The assistant's replies land in the live editor; with none open,
-        // a fresh text block takes them (Insert is never a silent no-op).
+        // they become a rendered markdown block (a reply is markdown — as a
+        // plain text block it showed its raw syntax). Insert is never a
+        // silent no-op.
         Connections {
             target: viewport.note
             function onAssistantInsertRequested(text) {
                 if (page.editingBlock < 0) {
-                    page.addTextBlock()
+                    page.addMarkdownBlock(text)
+                    return
                 }
                 const editor = page.editingKind === "check" ? checkEditor : textEditor
                 editor.insert(editor.cursorPosition, text)

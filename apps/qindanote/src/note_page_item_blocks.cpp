@@ -391,6 +391,23 @@ bool NotePageItem::setBlockFields(int index, const QJsonObject &fields, const QS
     return true;
 }
 
+void NotePageItem::addMarkdownBlock(const QString &text)
+{
+    appendMarkdownBlock(QString(), text);
+}
+
+bool NotePageItem::replaceBlocks(const QJsonArray &blocks, const QString &undoText)
+{
+    if (m_page == nullptr) {
+        return false;
+    }
+    if (m_editingBlock >= 0) {
+        commitEdit();
+    }
+    writeBlocks(blocks, undoText);
+    return true;
+}
+
 void NotePageItem::appendMarkdownBlock(const QString &uid, const QString &text)
 {
     qreal y = kBlockTop;

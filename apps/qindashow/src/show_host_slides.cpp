@@ -5,6 +5,7 @@
 // the PDF export. Split from show_host.cpp for the line budget.
 
 #include "show_host.h"
+#include "slide_factory.h"
 
 #include "pdf_export.h"
 #include "presentation_controller.h"
@@ -17,9 +18,9 @@
 
 namespace QindaOffice::Apps::Show {
 
-namespace {
-
 // Build a fresh slide for one of the six layouts (plan section 6.3).
+// Declared in slide_factory.h: the assistant's add_slide (show_tools.cpp)
+// builds the same slides the Slide menu does.
 ShowModel::Slide makeSlide(const QString &title, const QString &layout, const QSizeF &size)
 {
     ShowModel::Slide slide;
@@ -58,6 +59,8 @@ ShowModel::Slide makeSlide(const QString &title, const QString &layout, const QS
     }
     return slide; // "blank" gets no shapes
 }
+
+namespace {
 
 // All searchable text of one slide: title, every run of every shape, notes.
 QString slideText(const ShowModel::Slide &slide)

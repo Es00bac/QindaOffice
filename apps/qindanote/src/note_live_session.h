@@ -78,6 +78,10 @@ class LiveNotesSession : public QObject {
     Q_PROPERTY(QString gate READ gate WRITE setGate NOTIFY settingsChanged)
     Q_PROPERTY(QString gateBaseUrl READ gateBaseUrl WRITE setGateBaseUrl NOTIFY settingsChanged)
     Q_PROPERTY(QString gateModel READ gateModel WRITE setGateModel NOTIFY settingsChanged)
+    // The Detail slider: 1 key points, 2 concise (default), 3 balanced,
+    // 4 detailed, 5 comprehensive (LiveNotesPrompt::Detail). Live: a change
+    // during a session rewrites the notes at the new level.
+    Q_PROPERTY(int detail READ detail WRITE setDetail NOTIFY settingsChanged)
     // Per session: what the user says this is ("Biology 101, lecture 4").
     Q_PROPERTY(QString topic READ topic WRITE setTopic NOTIFY settingsChanged)
     Q_PROPERTY(bool audioOffMachine READ audioOffMachine NOTIFY settingsChanged)
@@ -124,6 +128,8 @@ public:
     void setGateBaseUrl(const QString &value);
     [[nodiscard]] QString gateModel() const { return m_gateModel; }
     void setGateModel(const QString &value);
+    [[nodiscard]] int detail() const { return m_detail; }
+    void setDetail(int value);
     [[nodiscard]] QString topic() const { return m_topic; }
     void setTopic(const QString &value);
     [[nodiscard]] bool audioOffMachine() const;
@@ -201,6 +207,7 @@ private:
     QString m_gateBaseUrl;
     QString m_gateModel;
     QString m_topic;
+    int m_detail = Ai::LiveNotesPrompt::kDefaultDetail;
     QVariantMap m_keyOrigins;
     qreal m_level = 0;
     QString m_partial;

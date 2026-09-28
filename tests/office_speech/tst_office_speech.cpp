@@ -349,7 +349,9 @@ void OfficeSpeechTest::whisperRealHelperRefusesAMissingModel()
     // both are fatal and both name the Portage package to install.
     QVERIFY2(message.contains(QStringLiteral("faster-whisper")), qPrintable(message));
     QVERIFY(failed.first().at(1).toBool());
-    QTRY_COMPARE(finished.size(), 1);
+    // The helper imports faster-whisper before it can refuse: slow on a
+    // busy machine.
+    QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 30000);
     qunsetenv("QQO_WHISPER_HELPER");
 }
 

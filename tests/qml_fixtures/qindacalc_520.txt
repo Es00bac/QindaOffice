@@ -39,6 +39,7 @@ QQuickRootItem#CalcWindow
               Button#assistantInsert [hidden]
               Button#assistantReplace [hidden]
               Button#assistantSend [hidden]
+              Button#assistantUndoEdit [hidden]
               ComboBox#assistantModel [hidden]
                 QQuickText#comboDisplayText [hidden]
               IconButton#assistantClear [hidden]
@@ -55,6 +56,7 @@ QQuickRootItem#CalcWindow
                   QQuickRectangle#segmentFocus_1 [hidden]
                 QQuickAbstractButton#segment_2 [hidden]
                   QQuickRectangle#segmentFocus_2 [hidden]
+              Switch#assistantEditMode [hidden]
               TextField#assistantPrompt [hidden]
                 IconButton#fieldClear [hidden]
   QQuickItem#appFooter

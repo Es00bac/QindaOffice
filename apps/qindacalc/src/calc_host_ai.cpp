@@ -6,6 +6,7 @@
 // Privacy contract unchanged: nothing leaves the machine until Send.
 
 #include "calc_host.h"
+#include "calc_tools.h"
 
 #include "spreadsheet_item.h"
 #include "standard_actions.h"
@@ -100,6 +101,9 @@ void CalcHost::createAssistant()
     m_aiContext = std::make_unique<CalcContext>(m_document, this);
     m_aiApplier = std::make_unique<CalcApplier>(m_document, this);
     m_assistant = new Ai::AssistantController(m_catalog, m_aiContext.get(), m_aiApplier.get(), this);
+    // D-058: the assistant fills and fixes cells itself (one undo step).
+    m_aiTools = std::make_unique<CalcTools>(m_document, this);
+    m_assistant->setDocumentTools(m_aiTools.get());
     ActionEntry *toggle = action(QString::fromLatin1(ActionId::kAiAssistant));
     toggle->setEnabled(true);
     toggle->setCheckable(true);

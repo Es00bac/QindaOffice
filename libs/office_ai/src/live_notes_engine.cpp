@@ -84,6 +84,16 @@ qint64 LiveNotesEngine::elapsedMs() const
     return m_clock.isValid() ? m_clock.elapsed() : 0;
 }
 
+void LiveNotesEngine::setDetail(int detail)
+{
+    detail = LiveNotesPrompt::clampDetail(detail);
+    if (m_options.detail == detail) {
+        return;
+    }
+    m_options.detail = detail;
+    m_restylePending = true;
+}
+
 void LiveNotesEngine::start()
 {
     m_started = true;
@@ -227,6 +237,10 @@ void LiveNotesEngine::tick()
         }
         return;
     }
+    if (m_restylePending && m_read && !m_read().trimmed().isEmpty()) {
+        runUpdate(false, true); // fresh = what is new, if anything
+        return;
+    }
     const bool due = (words >= m_options.minWords && since >= m_options.minIntervalMs)
         || (words > 0 && since >= m_options.maxIntervalMs)
         || (m_topicChangePending && words >= m_options.topicChangeMinWords && since >= 8000);
@@ -238,7 +252,7 @@ void LiveNotesEngine::tick()
     runUpdate(full);
 }
 
-void LiveNotesEngine::runUpdate(bool full)
+void LiveNotesEngine::runUpdate(bool full, bool restyle)
 {
     if (m_provider == nullptr) {
         emit failed(tr("No model is available for live notes."));
@@ -249,6 +263,7 @@ void LiveNotesEngine::runUpdate(bool full)
         return;
     }
     m_topicChangePending = false;
+    m_restylePending = false;
     m_sentNotes = m_read ? m_read() : QString();
     LiveNotesPrompt::Request request;
     request.notes = m_sentNotes;
@@ -256,6 +271,7 @@ void LiveNotesEngine::runUpdate(bool full)
     request.glossary = m_options.glossary;
     request.elapsedMs = m_lines.isEmpty() ? elapsedMs() : m_lines.last().ms;
     request.fullRevision = full;
+    request.restyle = restyle;
     if (full) {
         request.fresh = m_lines;
     } else {
@@ -264,17 +280,20 @@ void LiveNotesEngine::runUpdate(bool full)
     }
     m_requestEnd = m_lines.size();
     m_runFull = full;
-    m_runTail = !full && LiveNotesPrompt::useTailMode(m_sentNotes);
+    m_runTail = !full && !restyle && LiveNotesPrompt::useTailMode(m_sentNotes);
+    m_runRestyle = restyle;
 
     ChatRequest chat;
-    chat.systemPrompt = LiveNotesPrompt::systemPrompt();
+    chat.systemPrompt = LiveNotesPrompt::systemPrompt(m_options.detail);
     chat.messages.append({QStringLiteral("user"), LiveNotesPrompt::userMessage(request), {}});
     chat.maxTokens = m_options.maxOutputTokens;
     chat.temperature = 0.3;
     m_lastUpdateMs = elapsedMs();
     m_run = m_provider->start(chat);
     emit busyChanged(true);
-    emit status(full ? tr("Revising the whole set of notes…") : tr("Updating the notes…"));
+    emit status(restyle ? tr("Rewriting the notes at the new detail level…")
+                : full  ? tr("Revising the whole set of notes…")
+                        : tr("Updating the notes…"));
     connect(m_run, &ChatRun::finished, this, [this](const ChatResult &result) {
         m_run->deleteLater();
         m_run = nullptr;
@@ -313,7 +332,8 @@ void LiveNotesEngine::onReply(const QString &text)
         }
     }
     QString why;
-    if (!LiveNotesPrompt::plausibleRevision(m_sentNotes, notes, &why)) {
+    // A restyle to a lower level is SUPPOSED to shrink the notes.
+    if (!m_runRestyle && !LiveNotesPrompt::plausibleRevision(m_sentNotes, notes, &why)) {
         emit failed(tr("Kept the previous notes: %1.").arg(why));
         m_covered = m_requestEnd; // do not loop on the same material
         return;

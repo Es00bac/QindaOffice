@@ -127,6 +127,8 @@ public:
     [[nodiscard]] const QList<PageBlock> &blocks() const { return m_blocks; }
     Q_INVOKABLE void addTextBlock();
     Q_INVOKABLE void addCheckItem();
+    // A rendered markdown block under the lowest block (assistant replies).
+    Q_INVOKABLE void addMarkdownBlock(const QString &text);
     void addImageBlock(const QByteArray &imageData);
     Q_INVOKABLE bool addImageFile(const QUrl &url);
     Q_INVOKABLE int blockAt(const QPointF &pos) const;
@@ -147,6 +149,9 @@ public:
     // that block is open in the editor (the caller retries).
     bool setBlockFields(int index, const QJsonObject &fields, const QString &undoText);
     void appendMarkdownBlock(const QString &uid, const QString &text);
+    // The assistant's edits (D-058, note_tools.cpp): the whole block list
+    // at once, one undo step. Closes the editor first.
+    bool replaceBlocks(const QJsonArray &blocks, const QString &undoText);
     [[nodiscard]] int editingBlock() const { return m_editingBlock; }
     [[nodiscard]] QString editingKind() const;
     [[nodiscard]] QString editingText() const { return m_editingText; }

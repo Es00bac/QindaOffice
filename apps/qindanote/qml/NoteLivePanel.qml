@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import QtQuick
+import QtQuick.Templates as T
 import QindaTK as Tk
 import QindaOffice.Note
 
@@ -74,6 +75,33 @@ Tk.Flex {
         placeholderText: qsTr("What is it? e.g. “Biology 101 — lecture 4” (optional)")
         text: panel.session.topic
         onEditingFinished: panel.session.topic = text
+    }
+
+    // Detail (D-057): how much the notes keep. Live — moving it during a
+    // session rewrites the notes at the new level.
+    Tk.Flex {
+        direction: Tk.Flex.Row
+        gap: Tk.Theme.space.sm
+        align: Tk.Flex.Center
+        readonly property var names: [qsTr("Key points"), qsTr("Concise"), qsTr("Balanced"), qsTr("Detailed"), qsTr("Comprehensive")]
+        Tk.Label { text: qsTr("Detail"); muted: true }
+        Tk.Slider {
+            objectName: "liveDetail"
+            Tk.Flex.grow: 1
+            small: true
+            from: 1
+            to: 5
+            stepSize: 1
+            snapMode: T.Slider.SnapAlways
+            value: panel.session.detail
+            tooltip: qsTr("How much the notes keep. Changing it during a session rewrites the notes.")
+            onMoved: panel.session.detail = Math.round(value)
+        }
+        Tk.Label {
+            objectName: "liveDetailName"
+            Tk.Flex.basis: 92
+            text: parent.names[panel.session.detail - 1]
+        }
     }
 
     Tk.Segmented {

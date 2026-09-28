@@ -46,7 +46,16 @@ inline constexpr int kTailModeChars = 9000;
 inline constexpr int kTailSections = 2;
 inline constexpr int kContextChars = 1500;
 
-[[nodiscard]] QString systemPrompt();
+// How much the notes keep (the panel's Detail slider). AGENT-CONTRACT: the
+// numbers are persisted (live-notes.json "detail") and shown by
+// NoteLivePanel.qml; keep 1..5 and their order.
+enum Detail { KeyPoints = 1, Concise = 2, Balanced = 3, Detailed = 4, Comprehensive = 5 };
+inline constexpr int kDefaultDetail = Concise;
+[[nodiscard]] int clampDetail(int detail);
+// The detail level's writing brief, spliced into the system prompt.
+[[nodiscard]] QString detailBrief(int detail);
+
+[[nodiscard]] QString systemPrompt(int detail = kDefaultDetail);
 [[nodiscard]] QString formatTime(qint64 ms);
 // "[mm:ss] ★ text" lines (fillers marked "(filler)").
 [[nodiscard]] QString formatLines(const QList<TranscriptLine> &lines);
@@ -59,6 +68,9 @@ struct Request {
     QStringList glossary;                   // correct spellings (mishearings)
     qint64 elapsedMs = 0;
     bool fullRevision = false;              // all lines in `fresh`, rewrite
+    // The detail level changed: rewrite the existing notes to the new
+    // level even if nothing new was said.
+    bool restyle = false;
 };
 [[nodiscard]] bool useTailMode(const QString &notes);
 [[nodiscard]] QString userMessage(const Request &request);

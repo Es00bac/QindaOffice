@@ -8,9 +8,16 @@
 // actions (Insert / Replace selection / Copy) through the EditApplier
 // seam. Privacy contract unchanged from the Widgets panel it replaces:
 // nothing is sent without an explicit send(); off-machine models say so.
+//
+// D-058: with a DocumentTools (setDocumentTools) and editMode on, every
+// request carries the document snapshot and the edit protocol, and a
+// reply's ```qinda-edits block is applied to the document at once as one
+// undo step; the conversation shows what changed and undoLastEdit()
+// reverts it.
 
 #include "chat_types.h"
 #include "document_context.h"
+#include "document_tools.h"
 
 #include <QObject>
 #include <QVariantList>
@@ -34,6 +41,12 @@ class AssistantController : public QObject {
     Q_PROPERTY(bool streaming READ streaming NOTIFY streamingChanged)
     Q_PROPERTY(bool hasReply READ hasReply NOTIFY replyChanged)
     Q_PROPERTY(QString lastReply READ lastReply NOTIFY replyChanged)
+    // D-058: the assistant can edit this document (the app gave it tools).
+    Q_PROPERTY(bool canEdit READ canEdit CONSTANT)
+    // "Let the assistant edit" (on by default where it can).
+    Q_PROPERTY(bool editMode READ editMode WRITE setEditMode NOTIFY editModeChanged)
+    // What the last applied reply changed ("" when nothing / undone).
+    Q_PROPERTY(QString lastEditSummary READ lastEditSummary NOTIFY lastEditChanged)
 public:
     AssistantController(ModelCatalog *catalog, DocumentContextProvider *context,
                         EditApplier *applier, QObject *parent = nullptr);
@@ -48,6 +61,13 @@ public:
     [[nodiscard]] bool streaming() const { return m_run != nullptr; }
     [[nodiscard]] bool hasReply() const { return !m_lastReply.isEmpty(); }
     [[nodiscard]] QString lastReply() const { return m_lastReply; }
+    // Not owned; set once, before the panel binds. nullptr = paste-only.
+    void setDocumentTools(DocumentTools *tools);
+    [[nodiscard]] bool canEdit() const { return m_tools != nullptr; }
+    [[nodiscard]] DocumentTools *documentTools() const { return m_tools; }
+    [[nodiscard]] bool editMode() const { return m_tools != nullptr && m_editMode; }
+    void setEditMode(bool on);
+    [[nodiscard]] QString lastEditSummary() const { return m_lastEditSummary; }
 
     // The explicit user action: nothing leaves the machine before it.
     Q_INVOKABLE void send(const QString &prompt);
@@ -56,6 +76,7 @@ public:
     Q_INVOKABLE void replaceSelection();
     Q_INVOKABLE void copy();
     Q_INVOKABLE void clearConversation();
+    Q_INVOKABLE void undoLastEdit();
 
 signals:
     void modelsChanged();
@@ -64,12 +85,17 @@ signals:
     void conversationChanged();
     void streamingChanged();
     void replyChanged();
+    void editModeChanged();
+    void lastEditChanged();
 
 private:
     void appendMessage(const QString &role, const QString &text);
     void runRequest(const ChatRequest &request);
     // Bounds the rolling history so the request cannot grow without limit.
     void trimHistory();
+    // Applies a finished reply's edits block and rewrites its turn in the
+    // conversation (prose + what changed).
+    void applyEdits(const QString &reply);
 
     ModelCatalog *m_catalog;
     DocumentContextProvider *m_context;
@@ -85,6 +111,11 @@ private:
     // Rolling conversation history (user/assistant pairs) sent with every
     // request — without it each turn started a context-free conversation.
     QList<ChatMessage> m_history;
+    DocumentTools *m_tools = nullptr;
+    bool m_editMode = true;
+    bool m_turnEdits = false;       // the running turn was sent in edit mode
+    qsizetype m_replyStart = -1;    // where the running reply starts in m_conversation
+    QString m_lastEditSummary;
 };
 
 } // namespace QindaOffice::Ai

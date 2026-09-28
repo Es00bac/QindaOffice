@@ -61,6 +61,7 @@ private slots:
     void markdownBlocksLayOutAndPaintOnPaper();
     void sessionWritesAndRevisesOneBlock();
     void livePanelFollowsTheAiMenu();
+    void assistantEditsThePage();
     void realPipelineEndToEnd();
 };
 
@@ -194,6 +195,61 @@ void NoteLiveTest::livePanelFollowsTheAiMenu()
     QMetaObject::invokeMethod(findItem(panel, QStringLiteral("liveProviders")), "clicked");
     QTest::qWait(250);
     QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindanote_live_providers"));
+}
+
+// The assistant's hands on the page (D-058): the snapshot numbers the
+// typed blocks, one reply's operations are ONE undo step, a block that
+// grew pushes the next one down instead of overlapping it.
+void NoteLiveTest::assistantEditsThePage()
+{
+    using QindaOffice::Apps::Notes::PageBlock;
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+    const QJsonArray start = QJsonDocument::fromJson(R"([
+        {"type":"text","text":"teh first note","rect":[40,40,680]},
+        {"type":"check","text":"buy milk","checked":false,"level":0,"rect":[40,80,680]}])").array();
+    QVERIFY(scene.page->replaceBlocks(start, QStringLiteral("seed")));
+    auto *tools = scene.host.assistant()->documentTools();
+    QVERIFY(tools != nullptr);
+    const QString snapshot = tools->snapshot(60000);
+    QVERIFY2(snapshot.contains(QStringLiteral("[0] text:\nteh first note"))
+                 && snapshot.contains(QStringLiteral("[1] checklist item:\nbuy milk")),
+             qPrintable(snapshot));
+
+    QString tall;
+    for (int i = 0; i < 12; ++i) {
+        tall += QStringLiteral("line %1 of a much longer first note\n").arg(i);
+    }
+    const QJsonArray edits = QJsonDocument::fromJson(QJsonDocument(QJsonArray{
+        QJsonObject{{QStringLiteral("op"), QStringLiteral("replace_block")}, {QStringLiteral("block"), 0},
+                    {QStringLiteral("text"), tall}},
+        QJsonObject{{QStringLiteral("op"), QStringLiteral("insert_block")}, {QStringLiteral("after"), 0},
+                    {QStringLiteral("text"), QStringLiteral("## Added\n- ==key== point")}},
+        QJsonObject{{QStringLiteral("op"), QStringLiteral("delete_block")}, {QStringLiteral("block"), 7}},
+        QJsonObject{{QStringLiteral("op"), QStringLiteral("rename_page")}, {QStringLiteral("title"), QStringLiteral("Groceries")}}})
+        .toJson()).array();
+    const auto outcome = tools->apply(edits);
+    QCOMPARE(outcome.applied, 3);
+    QCOMPARE(outcome.errors.size(), 1); // block 7 does not exist
+    QCOMPARE(scene.host.currentPageTitle(), QStringLiteral("Groceries"));
+    const QList<PageBlock> blocks = scene.page->blocks();
+    QCOMPARE(blocks.size(), 3);
+    QCOMPARE(blocks.at(1).kind, PageBlock::Kind::Markdown);
+    // Reflowed: the grown note, then the new block, then the checklist item.
+    QVERIFY(blocks.at(1).rect.top() >= blocks.at(0).rect.bottom());
+    QVERIFY(blocks.at(2).rect.top() >= blocks.at(1).rect.bottom());
+    tools->undo();
+    QCOMPARE(scene.page->blocks().size(), 2);
+    QCOMPARE(scene.page->blocks().first().text, QStringLiteral("teh first note"));
+
+    // replace_page: every typed block becomes one markdown block.
+    tools->snapshot(60000);
+    const auto page = tools->apply(QJsonDocument::fromJson(
+        R"([{"op":"replace_page","markdown":"# Condensed\n- one line"}])").array());
+    QCOMPARE(page.applied, 1);
+    QCOMPARE(scene.page->blocks().size(), 1);
+    QCOMPARE(scene.page->blocks().first().text, QStringLiteral("# Condensed\n- one line"));
 }
 
 // Manual end-to-end run, skipped unless asked for: real speech (a 16 kHz

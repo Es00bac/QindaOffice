@@ -43,6 +43,7 @@ qt_add_qml_module(qindawrite_app
         src/write_footnotes.cpp src/write_footnotes.h
         src/write_host.cpp src/write_host.h
         src/write_host_ai.cpp
+        src/write_tools.cpp src/write_tools.h
         src/write_host_menus.cpp
         src/write_host_text.cpp
         src/write_review_actions.cpp src/write_review_actions.h

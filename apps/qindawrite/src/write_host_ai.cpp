@@ -9,6 +9,7 @@
 #include "write_host.h"
 
 #include "page_text_control.h"
+#include "write_tools.h"
 #include "standard_actions.h"
 
 #include "inline_action_flow.h"
@@ -94,6 +95,9 @@ void WriteHost::createAssistant()
     m_aiContext = std::make_unique<WriteContext>(m_control, m_document);
     m_aiApplier = std::make_unique<WriteApplier>(m_control, m_document);
     m_assistant = new Ai::AssistantController(m_catalog, m_aiContext.get(), m_aiApplier.get(), this);
+    // D-058: the assistant edits the document itself (one undo step).
+    m_aiTools = std::make_unique<WriteTools>(m_control, m_document);
+    m_assistant->setDocumentTools(m_aiTools.get());
     ActionEntry *toggle = action(QString::fromLatin1(ActionId::kAiAssistant));
     toggle->setEnabled(true);
     toggle->setCheckable(true);

@@ -37,6 +37,8 @@ qt_add_qml_module(qindashow_app
         src/show_document.cpp src/show_document.h
         src/show_host.cpp src/show_host.h
         src/show_host_ai.cpp
+        src/show_tools.cpp src/show_tools.h
+        src/slide_factory.h
         src/show_host_menus.cpp
         src/show_host_slides.cpp
         src/show_toolbox.cpp src/show_toolbox.h

@@ -5,6 +5,76 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-058: The assistant edits documents itself; live notes have a detail level
+
+**Date:** 2026-09-27 · **Status:** accepted (owner request; M53)
+
+**Context.** The owner asked the assistant to condense notes that had come
+out too verbose. They chose **Replace selection** with the whole document as
+context and nothing selected. The reply, raw Markdown, was pasted as a
+plain text block under the notes. The assistant could only paste its reply
+at the cursor (the `EditApplier` seam) in all four apps that have it:
+Write, Calc, Show and Note. The owner asked to "give it some fingers" in
+every one of them. They also asked for live notes to condense by default,
+with a slider for people who need more detail.
+
+**Decision.**
+
+1. **DocumentTools, one per app** (`office_ai/document_tools.h`). Each app
+   provides:
+   - `snapshot()`: the document with addressable parts;
+   - `operationGuide()`: the operations it supports;
+   - `apply(edits)`: runs them as ONE undo step;
+   - `undo()`.
+
+   The adapters:
+   - **Note**: typed blocks `[n]`; replace, delete, insert blocks,
+     `replace_page` (one markdown block), rename the page. After each apply
+     the blocks are reflowed so none overlaps the one above.
+   - **Write**: the document as Markdown, plus the selection;
+     `replace_document`, `replace_section` (by heading), `replace_text`,
+     `insert`, `replace_selection`. All of one reply's operations run in
+     one `QTextCursor` edit block. The first block keeps the heading format
+     that `insertMarkdown` would drop.
+   - **Calc**: the active sheet's filled cells as `A1: input → result`;
+     `set_cells`, `set_range`, `clear`. They become one `applyInputs()`
+     call.
+   - **Show**: slides with their text boxes as `[slide.box]` and speaker
+     notes; `set_text`, `add_slide` (the Slide menu's own layouts),
+     `delete_slide`, `move_slide`, `set_notes`. They become one
+     `SlideListCommand`.
+2. **The protocol is a fenced block, not native tool calling.** The model
+   replies with prose, then one fenced `qinda-edits` block holding
+   `{"edits": [...]}`. Every provider the suite drives can emit this: the
+   CLI subscriptions, llama-server, and OpenAI- and Anthropic-shaped HTTP.
+   The parsing is ours and is tested.
+3. **Edits apply at once, and Undo sits right there.** With **Edit the
+   document** on (the default wherever tools exist), every turn carries
+   the current snapshot. The reply's edits are applied, the conversation
+   shows what changed instead of the JSON, and **Undo change** reverts it
+   (so does Ctrl+Z). An operation whose target no longer matches the
+   snapshot is refused and listed, never guessed. With the switch off, the
+   assistant only answers.
+4. **Pasted replies render.** In QindaNote a reply inserted with no editor
+   open becomes a markdown block, not a raw text block.
+5. **Live notes detail**, from 1 to 5: Key points, Concise (the default),
+   Balanced, Detailed, Comprehensive. Each level is a writing brief in the
+   system prompt, and length governs above everything else. Moving the
+   slider during a session rewrites the notes at the new level (a
+   "restyle"). A restyle is exempt from the guard that refuses a revision
+   dropping more than half the notes.
+
+**Consequences.**
+- In Write, rewritten parts come back through Markdown: fonts, colours and
+  custom styles are not kept in those parts. `replace_text` keeps the
+  formatting around the replaced words.
+- In Calc, edits apply to the active sheet only, and bulk input skips
+  data-validation prompts, as Replace All does.
+- The assistant's snapshot is capped at 60k characters; longer documents
+  say so and steer the model to section-level edits.
+- Speaker notes, previously absent from Show's assistant context, are in
+  the snapshot.
+
 ## D-057: Live notes — speech to markdown notes, revised as the session goes
 
 **Date:** 2026-09-27 · **Status:** accepted (owner request; M52, [live-notes.md](live-notes.md))

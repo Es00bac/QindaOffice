@@ -142,6 +142,7 @@ private slots:
     void engineKeepsTheUsersEdit();
     void engineRetriesWhileTheEditorHoldsTheBlock();
     void engineFinalRevisionUsesTheWholeTranscript();
+    void detailLevelsShapeThePromptAndRestyle();
     void gateSkipsFillerAndMarksKeyPoints();
     void gateFailureFailsOpen();
     void systemOneAnswersParse();
@@ -335,6 +336,40 @@ void LiveNotesTest::engineFinalRevisionUsesTheWholeTranscript()
     QVERIFY(last.contains(QStringLiteral("FULL TRANSCRIPT")));
     QVERIFY(last.contains(QStringLiteral("the first thing said")));
     QVERIFY(last.contains(QStringLiteral("[01:30] and the last")));
+}
+
+void LiveNotesTest::detailLevelsShapeThePromptAndRestyle()
+{
+    QVERIFY(LiveNotesPrompt::systemPrompt(1).contains(QStringLiteral("KEY POINTS")));
+    QVERIFY(LiveNotesPrompt::systemPrompt().contains(QStringLiteral("CONCISE"))); // the default
+    QVERIFY(LiveNotesPrompt::systemPrompt(5).contains(QStringLiteral("COMPREHENSIVE")));
+    QCOMPARE(LiveNotesPrompt::clampDetail(9), 5);
+
+    ScriptedProvider provider;
+    const QString verbose = words(300, QStringLiteral("verbose"));
+    provider.replies = {verbose, QStringLiteral("# Short")};
+    Page page;
+    LiveNotesEngine engine;
+    LiveNotesEngine::Options options;
+    options.minWords = 5;
+    options.minIntervalMs = 0;
+    options.detail = 4;
+    engine.setOptions(options);
+    engine.setProvider(&provider);
+    wire(engine, page);
+    engine.start();
+    engine.addSegment(words(10), 0);
+    engine.tick();
+    QTRY_COMPARE(page.notes, verbose);
+    QVERIFY(provider.requests.first().systemPrompt.contains(QStringLiteral("DETAILED")));
+    // The slider moves to Key points: a rewrite runs with NO new speech,
+    // and shrinking to a tenth is accepted (the guard allows a restyle).
+    engine.setDetail(1);
+    engine.tick();
+    QCOMPARE(provider.requests.size(), 2);
+    QVERIFY(provider.requests.last().systemPrompt.contains(QStringLiteral("KEY POINTS")));
+    QVERIFY(provider.requests.last().messages.first().text.contains(QStringLiteral("changed the detail level")));
+    QTRY_COMPARE(page.notes, QStringLiteral("# Short"));
 }
 
 void LiveNotesTest::gateSkipsFillerAndMarksKeyPoints()

@@ -29,6 +29,14 @@ panel.
    **Stop** lets the last words land and runs one final revision over the
    whole transcript.
 
+**Detail** sets how much the notes keep: Key points, **Concise** (the
+default: short fragments, merged points, roughly one line per minute of
+speech), Balanced, Detailed, or Comprehensive. Moving the slider during a
+session rewrites the notes at the new level straight away. After a
+session, ask the assistant (AI ▸ Assistant, **Edit the document** on) to
+"condense this page to key points"; it edits the page itself, as one undo
+step (D-058).
+
 You can edit the notes while a session runs, and your edits win. A
 revision never lands while the notes block is open in the editor. If you
 changed the notes while the model was writing, its reply is dropped, and

@@ -7,6 +7,9 @@ import QindaOffice.Ai
 // model picker with the off-machine badge, context scope, the conversation
 // as markdown, reply actions, and the prompt line with Send / Stop.
 // Privacy contract: nothing is sent until Send (or Enter in the field).
+// D-058: where the app gave the assistant tools, "Edit the document" lets
+// it change the document itself (one undo step, Undo right here); the
+// document then always goes with the request, so the scope picker hides.
 Tk.Flex {
     id: panel
 
@@ -40,8 +43,33 @@ Tk.Flex {
             variant: "warning"
         }
     }
+    Tk.Flex {
+        direction: Tk.Flex.Row
+        gap: Tk.Theme.space.sm
+        align: Tk.Flex.Center
+        visible: panel.controller.canEdit
+        Tk.Switch {
+            objectName: "assistantEditMode"
+            Tk.Flex.grow: 1
+            small: true
+            text: qsTr("Edit the document")
+            tooltip: qsTr("On: the assistant sees the whole document and makes the changes you ask for (one undo step). Off: it only answers, and Insert pastes its reply.")
+            checked: panel.controller.editMode
+            onToggled: panel.controller.editMode = checked
+        }
+        Tk.Button {
+            objectName: "assistantUndoEdit"
+            small: true
+            iconName: "undo-2"
+            text: qsTr("Undo change")
+            visible: panel.controller.lastEditSummary.length > 0
+            tooltip: panel.controller.lastEditSummary
+            onClicked: panel.controller.undoLastEdit()
+        }
+    }
     Tk.Segmented {
         objectName: "assistantScope"
+        visible: !panel.controller.editMode
         stretch: true
         small: true
         model: [qsTr("No context"), qsTr("Selection"), qsTr("Document")]
@@ -67,10 +95,13 @@ Tk.Flex {
         }
         Tk.EmptyState {
             anchors.centerIn: parent
+            width: transcript.width - Tk.Theme.space.md
             visible: panel.controller.conversation.length === 0
             iconName: "sparkles"
             title: qsTr("Assistant")
-            text: qsTr("Ask a question, or pick a context and ask about the selection or the document. Nothing is sent until you press Send.")
+            text: panel.controller.editMode
+                  ? qsTr("Ask about the document or tell the assistant what to change — “condense this to key points”, “fix the grammar”, “add a summary”. Changes are one undo step. Nothing is sent until you press Send.")
+                  : qsTr("Ask a question, or pick a context and ask about the selection or the document. Nothing is sent until you press Send.")
         }
     }
     Tk.Flex {
@@ -90,7 +121,7 @@ Tk.Flex {
             id: prompt
             objectName: "assistantPrompt"
             Tk.Flex.grow: 1
-            placeholderText: qsTr("Ask the assistant…")
+            placeholderText: panel.controller.editMode ? qsTr("Ask, or tell it what to change…") : qsTr("Ask the assistant…")
             enabled: !panel.controller.streaming
             onAccepted: send.clicked()
         }

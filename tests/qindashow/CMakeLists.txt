@@ -6,7 +6,7 @@
 # — and the panel export through the desktop's validator
 # (tst_show_menu_export). Every test links the app's static QML module, so
 # a source added to apps/qindashow/CMakeLists.txt is in every test.
-foreach(name IN ITEMS tst_qindashow tst_show_ui tst_show_design tst_show_menu_export)
+foreach(name IN ITEMS tst_qindashow tst_show_ui tst_show_design tst_show_menu_export tst_show_tools)
     add_executable(${name} ${name}.cpp show_test_support.h)
     target_link_libraries(${name} PRIVATE qindashow_app qindashow_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)

@@ -54,6 +54,7 @@ public:
         int gateBatchWords = 25;
         QString topic;
         QStringList glossary; // correct spellings of names and terms
+        int detail = LiveNotesPrompt::kDefaultDetail; // 1 (key points) .. 5
     };
 
     using Reader = std::function<QString()>;
@@ -69,6 +70,9 @@ public:
     // Not owned; nullptr = no gate.
     void setGate(SystemOneClient *gate) { m_gate = gate; }
     void setNotesAccess(Reader reader, Writer writer);
+    // The Detail slider, live: a change rewrites the notes at the new level
+    // on the next tick (a "restyle"), even if nothing new was said.
+    void setDetail(int detail);
 
     // Starts the cadence clock. Segments before start() are kept.
     void start();
@@ -98,7 +102,7 @@ private:
     void maybeGate();
     void onGateAnswers(qsizetype from, qsizetype to,
                        const QHash<QString, SystemOneAnswer> &answers, const QString &error);
-    void runUpdate(bool full);
+    void runUpdate(bool full, bool restyle = false);
     void onReply(const QString &text);
     void tryApplyPending();
     [[nodiscard]] bool fullFits() const;
@@ -118,6 +122,8 @@ private:
     QPointer<ChatRun> m_run;
     bool m_runFull = false;
     bool m_runTail = false;
+    bool m_runRestyle = false;
+    bool m_restylePending = false;
     QString m_sentNotes;
     QString m_pending;           // an answer waiting for the writer
     int m_pendingRetries = 0;

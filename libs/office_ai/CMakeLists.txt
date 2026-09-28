@@ -22,6 +22,8 @@ qt_add_library(office_ai STATIC
     src/cli_provider.cpp
     src/cli_provider.h
     src/document_context.h
+    src/document_tools.cpp
+    src/document_tools.h
     src/http_chat_provider.cpp
     src/http_chat_provider.h
     src/inline_action_flow.cpp

@@ -90,6 +90,21 @@ bool AssistantController::offMachine() const
     return spec.has_value() && spec->offMachine;
 }
 
+void AssistantController::setDocumentTools(DocumentTools *tools)
+{
+    m_tools = tools;
+    emit editModeChanged();
+}
+
+void AssistantController::setEditMode(bool on)
+{
+    if (m_editMode == on) {
+        return;
+    }
+    m_editMode = on;
+    emit editModeChanged();
+}
+
 void AssistantController::setScope(int scope)
 {
     scope = qBound(0, scope, 2);
@@ -123,7 +138,17 @@ void AssistantController::send(const QString &rawPrompt)
     // provider sees the conversation, not a context-free one-shot.
     request.messages = m_history;
     request.messages.append({QStringLiteral("user"), prompt, {}});
-    if (m_context != nullptr && m_scope > 0) {
+    m_turnEdits = editMode();
+    if (m_turnEdits) {
+        // D-058: the document as it is NOW rides with every turn (it may
+        // have changed since the last one), after the history.
+        request.systemPrompt = EditProtocol::systemPrompt(*m_tools);
+        request.maxTokens = 16000;
+        request.temperature = 0.3;
+        request.messages.last().text = tr("CURRENT %1:\n%2\n\nREQUEST: %3")
+                                           .arg(m_tools->documentNoun().toUpper(),
+                                                m_tools->snapshot(60000), prompt);
+    } else if (m_context != nullptr && m_scope > 0) {
         const DocumentContext context = m_context->context(m_scope == 2);
         QString material;
         if (m_scope == 1 && !context.selection.isEmpty()) {
@@ -161,6 +186,7 @@ void AssistantController::runRequest(const ChatRequest &request)
         // Label the turn before any token arrives so the reply never runs
         // into the prompt line.
         appendMessage(kRoleAssistant, QString());
+        m_replyStart = m_conversation.size();
         m_streamed = false;
         m_run = provider->start(request);
         emit streamingChanged();
@@ -181,6 +207,9 @@ void AssistantController::runRequest(const ChatRequest &request)
             }
             m_history.append({QStringLiteral("assistant"), m_lastReply, {}});
             trimHistory();
+            if (m_turnEdits) {
+                applyEdits(m_lastReply);
+            }
             emit streamingChanged();
             emit replyChanged();
         });
@@ -237,6 +266,51 @@ void AssistantController::clearConversation()
     m_conversation.clear();
     m_history.clear();
     emit conversationChanged();
+}
+
+void AssistantController::applyEdits(const QString &reply)
+{
+    const EditProtocol::ParsedReply parsed = EditProtocol::parse(reply);
+    if (!parsed.edits.has_value() && parsed.error.isEmpty()) {
+        return; // an answer, not an edit
+    }
+    QString shown = parsed.prose;
+    if (!parsed.error.isEmpty()) {
+        shown += QStringLiteral("\n\n**%1** %2").arg(kRoleError, escapeMarkdown(parsed.error));
+    } else {
+        const EditOutcome outcome = m_tools->apply(*parsed.edits);
+        if (outcome.applied > 0) {
+            m_lastEditSummary = outcome.changes.join(QStringLiteral("; "));
+            emit lastEditChanged();
+            shown += QStringLiteral("\n\n✓ ") + tr("Changed %1 (%n edit(s)):", "", outcome.applied)
+                         .arg(m_tools->documentNoun());
+            for (const QString &change : outcome.changes) {
+                shown += QStringLiteral("\n- ") + escapeMarkdown(change);
+            }
+        }
+        for (const QString &error : outcome.errors) {
+            shown += QStringLiteral("\n- ✗ ") + escapeMarkdown(error);
+        }
+    }
+    // The JSON was streamed into the conversation; show the outcome instead.
+    if (m_replyStart >= 0 && m_replyStart <= m_conversation.size()) {
+        m_conversation.truncate(m_replyStart);
+        m_conversation += shown;
+        emit conversationChanged();
+    }
+    // Insert/Replace/Copy act on the prose, never on the JSON.
+    m_lastReply = parsed.prose;
+}
+
+void AssistantController::undoLastEdit()
+{
+    if (m_tools == nullptr || m_lastEditSummary.isEmpty()) {
+        return;
+    }
+    m_tools->undo();
+    m_lastEditSummary.clear();
+    emit lastEditChanged();
+    appendMessage(kRoleAssistant, tr("_Undid the last change._"));
 }
 
 void AssistantController::trimHistory()

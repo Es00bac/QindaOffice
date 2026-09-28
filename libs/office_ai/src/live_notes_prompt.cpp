@@ -25,7 +25,46 @@ QString tailOf(const QList<TranscriptLine> &lines, int chars)
 
 } // namespace
 
-QString systemPrompt()
+int clampDetail(int detail)
+{
+    return qBound(int(KeyPoints), detail, int(Comprehensive));
+}
+
+QString detailBrief(int detail)
+{
+    switch (clampDetail(detail)) {
+    case KeyPoints:
+        return QStringLiteral(
+            "DETAIL LEVEL 1 of 5 — KEY POINTS. Only what someone must remember: a 2-3 bullet "
+            "summary and at most 3 bullets per topic. Fragments, not sentences (under 10 words "
+            "each). No examples, no asides, no quotes unless they ARE the point. Merge topics "
+            "freely. The whole set should fit on one screen.");
+    case Concise:
+        return QStringLiteral(
+            "DETAIL LEVEL 2 of 5 — CONCISE (condensed study notes). Compress hard: every bullet "
+            "a short fragment (about 12 words at most), one idea per bullet, related points "
+            "merged. Keep definitions, numbers, names, conclusions and decisions; drop "
+            "examples, anecdotes, repetition and hedging unless essential to understanding. "
+            "Aim for roughly one line of notes per minute of speech. When in doubt, cut.");
+    case Balanced:
+        return QStringLiteral(
+            "DETAIL LEVEL 3 of 5 — BALANCED. Clear notes of the main points with their key "
+            "supporting details and the occasional illustrative example; bullets may be short "
+            "sentences.");
+    case Detailed:
+        return QStringLiteral(
+            "DETAIL LEVEL 4 of 5 — DETAILED. Capture supporting details, reasoning, examples "
+            "and figures, with sub-bullets; someone who missed the session should be able to "
+            "follow the argument from the notes.");
+    default:
+        return QStringLiteral(
+            "DETAIL LEVEL 5 of 5 — COMPREHENSIVE. A near-complete structured record: every "
+            "point, example, figure, caveat and question, organised and paraphrased (still "
+            "notes, never a transcript).");
+    }
+}
+
+QString systemPrompt(int detail)
 {
     return QStringLiteral(
         "You are an expert live note-taker. Audio from a live source — a lecture, a meeting, "
@@ -38,8 +77,8 @@ QString systemPrompt()
         "- Then one `##` section per topic, in the order covered, with `###` subsections when a "
         "topic has parts. End each `##` heading with the start time in brackets, e.g. "
         "`## Photosynthesis [12:40]`.\n"
-        "- Concise bullets in your own words; nest sub-points. Keep specifics exact: names, "
-        "numbers, dates, formulas, units, examples, references.\n"
+        "- Bullets in your own words, as long as the detail level below allows; nest "
+        "sub-points. Keep specifics exact: names, numbers, dates, formulas, units, references.\n"
         "- **Bold** each key term where it is introduced; definitions as `**Term** — meaning`.\n"
         "- ==Highlight== the few takeaways that matter most (sparingly: about one per section).\n"
         "- Memorable or exact wording as a quote: `> \"…\"`.\n"
@@ -56,7 +95,11 @@ QString systemPrompt()
         "probably starts; (filler) lines are probably noise — use them only if they matter.\n"
         "Ignore greetings, small talk, sponsor reads and recognition noise. Never invent "
         "anything the transcript does not say.\n\n"
-        "Reply with the notes only: no preamble, no code fence, no closing remarks.");
+        "Reply with the notes only: no preamble, no code fence, no closing remarks.\n\n")
+        + detailBrief(detail)
+        + QStringLiteral(" The detail level governs length above everything else: if the "
+                         "current notes are longer or shorter than this level calls for, "
+                         "rewrite them to fit it.");
 }
 
 QString formatTime(qint64 ms)
@@ -112,7 +155,8 @@ QString userMessage(const Request &request)
                    .arg(request.glossary.join(QStringLiteral(", ")));
     }
     out += QLatin1Char('\n');
-    const bool tail = !request.fullRevision && useTailMode(request.notes);
+    // A restyle rewrites everything, so it always sees the whole notes.
+    const bool tail = !request.fullRevision && !request.restyle && useTailMode(request.notes);
     if (tail) {
         const NotesParts parts = split(request.notes);
         const qsizetype frozen = parts.sections.size() - kTailSections;
@@ -130,6 +174,12 @@ QString userMessage(const Request &request)
         out += QStringLiteral("CURRENT NOTES:\n%1\n\n")
                    .arg(request.notes.trimmed().isEmpty() ? QStringLiteral("(none yet)")
                                                           : request.notes.trimmed());
+    }
+    if (request.restyle && request.fresh.isEmpty()) {
+        out += QStringLiteral("The user changed the detail level. Rewrite the notes to fit it "
+                              "exactly (condense or expand), keeping every fact the level "
+                              "calls for and the user's own additions.");
+        return out;
     }
     if (request.fullRevision) {
         out += QStringLiteral("FULL TRANSCRIPT:\n%1\n\n").arg(formatLines(request.fresh));

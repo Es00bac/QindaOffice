@@ -208,6 +208,7 @@ private:
     Ai::AssistantController *m_assistant = nullptr;
     std::unique_ptr<Ai::DocumentContextProvider> m_aiContext;
     std::unique_ptr<Ai::EditApplier> m_aiApplier;
+    std::unique_ptr<Ai::DocumentTools> m_aiTools; // D-058, note_tools.h
     QString m_editorSelection;
     LiveNotesSession *m_live = nullptr;
     Ai::ProviderSettings *m_providerSettings = nullptr;

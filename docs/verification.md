@@ -73,6 +73,35 @@ app-side requirements above are the parts the suite owns):
 
 ## Milestone-specific gates
 
+### M53 gates (the assistant edits documents; live-notes detail, D-058)
+
+- `tst_assistant_edits`:
+  - the ```qinda-edits parse (object, bare array, plain answer, cut-off
+    block);
+  - edit mode against a scripted SSE model (the snapshot goes out, the
+    block is applied, the conversation shows the change and not the JSON,
+    Undo);
+  - with edit mode off, nothing is applied.
+- `tst_write_tools`: `replace_text`, `replace_section` (the next section
+  survives, and the heading stays a heading), `insert` at the end,
+  refusals, one undo step, `replace_document`.
+- `tst_calc_tools`: the snapshot shows formulas → results; `set_range`,
+  `set_cells` (live `=SUM`), `clear`, a bad address refused, one undo step.
+- `tst_show_tools`: `set_text`, `add_slide` with bullets and notes,
+  `set_notes`, a missing box refused, one `SlideListCommand`, undo.
+- `tst_note_live::assistantEditsThePage`: the snapshot numbering, rewrite
+  plus insert plus rename, blocks reflowed without overlap, one undo step,
+  `replace_page`.
+- `tst_note_ui`: a reply inserted with no editor open is a rendered
+  markdown block. The grab `qindanote_assistant` shows the **Edit the
+  document** switch.
+- `tst_live_notes::detailLevelsShapeThePromptAndRestyle`: level briefs in
+  the system prompt; moving the slider rewrites with no new speech, and a
+  large shrink is accepted.
+- Fixtures for Note, Write, Calc and Show re-recorded. The diff is only
+  `assistantEditMode`, `assistantUndoEdit`, `liveDetail` and
+  `liveDetailName`.
+
 ### M52 gates (live notes, D-057)
 
 Automated:

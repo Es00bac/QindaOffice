@@ -124,15 +124,18 @@ private slots:
                     && panel->isVisible());
         QTest::qWait(100);
         QVERIFY(findItem(panel, QStringLiteral("assistantPrompt")) != nullptr);
+        QVERIFY(findItem(panel, QStringLiteral("assistantEditMode")) != nullptr); // D-058
+        QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindanote_assistant"));
         QVERIFY(findItem(panel, QStringLiteral("assistantSend")) != nullptr);
         QVERIFY(!findItem(panel, QStringLiteral("assistantInsert"))->isEnabled());
-        // A reply lands in a text block on the page (the seam, no provider).
+        // A reply lands on the page as a rendered markdown block (the seam,
+        // no provider) — not as a text block showing raw markdown (D-058).
         scene.host.setEditorSelection(QString());
-        emit scene.host.assistantInsertRequested(QStringLiteral("from the assistant"));
-        QTRY_VERIFY(scene.page->editingBlock() >= 0);
-        QTRY_COMPARE(scene.page->editingText(), QStringLiteral("from the assistant"));
-        scene.page->commitEdit();
-        QVERIFY(scene.host.currentPageText().contains(QStringLiteral("from the assistant")));
+        emit scene.host.assistantInsertRequested(QStringLiteral("from **the** assistant"));
+        QTRY_VERIFY(!scene.page->blocks().isEmpty());
+        QCOMPARE(scene.page->blocks().last().kind, QindaOffice::Apps::Notes::PageBlock::Kind::Markdown);
+        QCOMPARE(scene.page->editingBlock(), -1);
+        QVERIFY(scene.host.currentPageText().contains(QStringLiteral("from **the** assistant")));
         scene.host.actions()->trigger(QStringLiteral("aiAssistantAction"));
         QTRY_VERIFY(!panel->isVisible());
     }

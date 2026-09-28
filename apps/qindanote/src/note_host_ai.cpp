@@ -5,12 +5,14 @@
 // ink is not text and is deliberately never sent. Replies go into the
 // editor the window owns (assistantInsertRequested /
 // assistantReplaceRequested), which opens a fresh text block when none
-// is being edited, so Insert is never a silent no-op.
+// is being edited, so Insert is never a silent no-op. With "Edit the
+// document" on (D-058) the assistant changes the page through NoteTools.
 
 #include "note_host.h"
 
 #include "note_blocks.h"
 #include "note_page_item.h"
+#include "note_tools.h"
 #include "standard_actions.h"
 
 #include "model_catalog.h"
@@ -73,6 +75,9 @@ void NoteHost::createAssistant()
     m_aiContext = std::make_unique<NoteContext>(this);
     m_aiApplier = std::make_unique<NoteApplier>(this);
     m_assistant = new Ai::AssistantController(m_catalog, m_aiContext.get(), m_aiApplier.get(), this);
+    // D-058: the assistant edits the open page itself (one undo step).
+    m_aiTools = std::make_unique<NoteTools>(this);
+    m_assistant->setDocumentTools(m_aiTools.get());
     ActionEntry *toggle = action(QString::fromLatin1(ActionId::kAiAssistant));
     toggle->setEnabled(true);
     toggle->setCheckable(true);

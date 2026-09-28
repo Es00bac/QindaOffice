@@ -30,6 +30,8 @@ set(QINDANOTE_ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_page_item_ink.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_page_render.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_page_render.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_tools.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_tools.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/notebook.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/notebook.h
     PARENT_SCOPE)
@@ -74,6 +76,7 @@ qt_add_qml_module(qindanote_app
         src/note_page_item_blocks.cpp
         src/note_page_item_ink.cpp
         src/note_page_render.cpp src/note_page_render.h
+        src/note_tools.cpp src/note_tools.h
         src/notebook.cpp src/notebook.h
     QML_FILES ${qindanote_qml}
 )

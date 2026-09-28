@@ -193,6 +193,7 @@ private:
     Ai::InlineActionFlow *m_inline = nullptr;
     std::unique_ptr<Ai::DocumentContextProvider> m_aiContext;
     std::unique_ptr<Ai::EditApplier> m_aiApplier;
+    std::unique_ptr<Ai::DocumentTools> m_aiTools; // D-058, show_tools.h
     std::function<void()> m_proposalApply;
     std::function<void()> m_proposalRegenerate;
     QString m_pendingTemplate;

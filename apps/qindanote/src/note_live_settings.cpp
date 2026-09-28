@@ -83,6 +83,8 @@ void LiveNotesSession::loadSettings()
     m_gateBaseUrl = text("gateBaseUrl", m_gate == QLatin1String("laya") ? kLayaBase : kJevBase);
     m_gateModel = text("gateModel", m_gate == QLatin1String("laya") ? kLayaModel : kJevModel);
     m_topic = text("topic", QString());
+    m_detail = Ai::LiveNotesPrompt::clampDetail(
+        m_settings->value(QStringLiteral("detail"), m_detail).toInt());
     if (m_catalog != nullptr && !m_catalog->configFor(m_modelId).has_value()) {
         const QStringList ids = m_catalog->modelIds();
         m_modelId = ids.isEmpty() ? QString() : ids.first();
@@ -103,6 +105,7 @@ void LiveNotesSession::saveSettings()
     m_settings->setValue(QStringLiteral("gateBaseUrl"), m_gateBaseUrl);
     m_settings->setValue(QStringLiteral("gateModel"), m_gateModel);
     m_settings->setValue(QStringLiteral("topic"), m_topic);
+    m_settings->setValue(QStringLiteral("detail"), m_detail);
     static_cast<void>(m_settings->save(nullptr));
     emit settingsChanged();
 }
@@ -130,6 +133,20 @@ QQO_LIVE_SETTER(setGateBaseUrl, m_gateBaseUrl)
 QQO_LIVE_SETTER(setGateModel, m_gateModel)
 QQO_LIVE_SETTER(setTopic, m_topic)
 #undef QQO_LIVE_SETTER
+
+void LiveNotesSession::setDetail(int value)
+{
+    value = Ai::LiveNotesPrompt::clampDetail(value);
+    if (m_detail == value) {
+        return;
+    }
+    m_detail = value;
+    saveSettings();
+    // Unlike the other settings, detail applies to a running session.
+    if (m_engineCore != nullptr) {
+        m_engineCore->setDetail(value);
+    }
+}
 
 void LiveNotesSession::setGate(const QString &value)
 {
