@@ -9,6 +9,7 @@
 #include "note_host.h"
 
 #include "elevenlabs_realtime.h"
+#include "elevenlabs_speakers.h"
 #include "http_transcription.h"
 #include "model_catalog.h"
 #include "pcm_capture.h"
@@ -113,6 +114,15 @@ SpeechRecognizer *LiveNotesSession::createRecognizer(const QString &key)
     if (m_engine == QLatin1String("http")) {
         return new Speech::HttpTranscription(m_httpBaseUrl, key, m_httpModel, m_language, this);
     }
+    if (m_speakerLabels) {
+        // D-060: batch Scribe with diarization, in overlapping windows.
+        auto *speakers = new Speech::ElevenLabsSpeakers(key, m_language, this);
+        const QString endpoint = qEnvironmentVariable("QQO_ELEVENLABS_BATCH_URL");
+        if (!endpoint.isEmpty()) {
+            speakers->setEndpoint(QUrl(endpoint));
+        }
+        return speakers;
+    }
     auto *eleven = new Speech::ElevenLabsRealtime(key, m_language, this);
     const QString endpoint = qEnvironmentVariable("QQO_ELEVENLABS_REALTIME_URL");
     if (!endpoint.isEmpty()) {
@@ -176,7 +186,7 @@ void LiveNotesSession::launch(const QString &modelKey, const QString &speechKey,
         m_recognizer->setKeyterms(glossary);
         connect(m_recognizer, &SpeechRecognizer::committed, this,
                 [this](const Speech::SpeechSegment &segment) {
-                    injectSegment(segment.text, segment.startMs);
+                    injectSegment(segment.text, segment.startMs, segment.speaker);
                     m_partial.clear();
                     emit transcriptChanged();
                 });
@@ -221,12 +231,12 @@ void LiveNotesSession::launch(const QString &modelKey, const QString &speechKey,
     }
 }
 
-void LiveNotesSession::injectSegment(const QString &text, qint64 ms)
+void LiveNotesSession::injectSegment(const QString &text, qint64 ms, const QString &speaker)
 {
     if (m_engineCore == nullptr) {
         return;
     }
-    m_engineCore->addSegment(text, ms);
+    m_engineCore->addSegment(text, ms, speaker);
     emit transcriptChanged();
 }
 

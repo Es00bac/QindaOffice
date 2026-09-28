@@ -102,13 +102,15 @@ void LiveNotesEngine::start()
     m_tick.start();
 }
 
-void LiveNotesEngine::addSegment(const QString &text, qint64 ms)
+void LiveNotesEngine::addSegment(const QString &text, qint64 ms, const QString &speaker)
 {
     const QString clean = text.simplified();
     if (clean.isEmpty()) {
         return;
     }
-    m_lines.append({ms, clean});
+    TranscriptLine line{ms, clean};
+    line.speaker = speaker;
+    m_lines.append(line);
     maybeGate();
 }
 

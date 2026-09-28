@@ -73,6 +73,20 @@ app-side requirements above are the parts the suite owns):
 
 ## Milestone-specific gates
 
+### M55 gates (speaker labels, D-060)
+
+- `tst_office_speech::speakersStitchAcrossWindows`:
+  - two windows against a local server; the second window's diarization
+    numbers the speakers the other way round, and the one speaker who was
+    silent in the overlap is still recognised through the voice samples;
+  - the output is "Speaker 1: Hello there", "Speaker 2: hi",
+    "Speaker 1: how are you", with nothing repeated;
+  - requests carry `diarize=true`, `pcm_s16le_16` and the key header.
+- `tst_live_notes`:
+  - `[mm:ss] Speaker 2: …` lines;
+  - the speaker rule in the prompt;
+  - Laya's `noul` field parsed.
+
 ### M54 gates (live-notes briefing, D-059)
 
 - `tst_live_notes::briefingShapesThePrompt`:

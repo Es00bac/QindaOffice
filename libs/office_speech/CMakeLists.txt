@@ -14,6 +14,8 @@ find_package(Qt6 REQUIRED COMPONENTS WebSockets)
 qt_add_library(office_speech STATIC
     src/elevenlabs_realtime.cpp
     src/elevenlabs_realtime.h
+    src/elevenlabs_speakers.cpp
+    src/elevenlabs_speakers.h
     src/http_transcription.cpp
     src/http_transcription.h
     src/pcm_capture.cpp

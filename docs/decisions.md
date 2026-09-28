@@ -5,6 +5,45 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-060: Who said what — speaker labels through ElevenLabs batch diarization
+
+**Date:** 2026-09-27 · **Status:** accepted (owner request; M55)
+
+**Context.** Live notes transcribed everything as one unlabelled stream.
+Realtime Scribe does not tell speakers apart and faster-whisper cannot.
+The owner chose ElevenLabs for speaker separation; local pyannote was
+deferred for later.
+
+**Decision.**
+1. **A recognizer of its own** (`office_speech/elevenlabs_speakers.h`):
+   batch Scribe (`scribe_v2`, `diarize=true`, `timestamps_granularity=word`,
+   `file_format=pcm_s16le_16`) over overlapping windows of 45 s of new
+   audio plus 15 s already sent. It emits one committed segment per
+   speaker turn, labelled "Speaker N". Only words past the previous
+   window's end are emitted.
+2. **Labels stay stable across windows.** Batch diarization numbers
+   speakers per request, so each window is prefixed with a voice sample
+   (≤ 4 s) of every known speaker (up to 8). Whichever local speaker the
+   diarizer hears in sample k is global speaker k. Speaking time shared
+   in the overlap also votes. A local speaker with no evidence is a new
+   speaker.
+3. **The notes use the labels.** Transcript lines carry `Speaker N:`. The
+   prompt says to attribute decisions, claims and quotes, and to write
+   "Maria (Speaker 2)" once the transcript reveals a name, without ever
+   guessing.
+4. **Opt-in per session**: *Who said what* in the session setup, available
+   with the ElevenLabs engine. Text then arrives about every 45 s instead
+   of live; there are no partials.
+
+**Consequences.**
+- Each request carries a few extra seconds of sample audio, which costs
+  ElevenLabs credits.
+- Labels are "Speaker N"; names come only from the conversation.
+- Also fixed here: SystemOneClient did not read Laya's `noul` field, so
+  every Laya yes/no answer read as 0. Probed with the gate's questions, the
+  installed Laya English checkpoint judged poorly (small talk above lecture
+  content, everything a "new topic"), so the gate stays off by default.
+
 ## D-059: Live notes start with a briefing
 
 **Date:** 2026-09-27 · **Status:** accepted (owner request; M54)

@@ -85,6 +85,7 @@ void LiveNotesSession::loadSettings()
     m_topic = text("topic", QString());
     m_briefing = Ai::NotesBriefing::fromMap(m_settings->value(QStringLiteral("setup")).toMap());
     m_askBeforeStart = m_settings->value(QStringLiteral("askBeforeStart"), true).toBool();
+    m_speakerLabels = m_settings->value(QStringLiteral("speakerLabels"), false).toBool();
     m_detail = Ai::LiveNotesPrompt::clampDetail(
         m_settings->value(QStringLiteral("detail"), m_detail).toInt());
     if (m_catalog != nullptr && !m_catalog->configFor(m_modelId).has_value()) {
@@ -110,6 +111,7 @@ void LiveNotesSession::saveSettings()
     m_settings->setValue(QStringLiteral("detail"), m_detail);
     m_settings->setValue(QStringLiteral("setup"), m_briefing.toMap());
     m_settings->setValue(QStringLiteral("askBeforeStart"), m_askBeforeStart);
+    m_settings->setValue(QStringLiteral("speakerLabels"), m_speakerLabels);
     static_cast<void>(m_settings->save(nullptr));
     emit settingsChanged();
 }
@@ -182,6 +184,15 @@ void LiveNotesSession::setAskBeforeStart(bool on)
         return;
     }
     m_askBeforeStart = on;
+    saveSettings();
+}
+
+void LiveNotesSession::setSpeakerLabels(bool on)
+{
+    if (m_speakerLabels == on) {
+        return;
+    }
+    m_speakerLabels = on;
     saveSettings();
 }
 

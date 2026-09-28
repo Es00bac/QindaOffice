@@ -193,6 +193,7 @@ Tk.Flex {
             elide: Text.ElideRight
             text: panel.session.engine === "whisper" ? qsTr("Local Whisper (%1)").arg(panel.session.whisperModel)
                 : panel.session.engine === "http" ? qsTr("%1").arg(panel.session.httpModel)
+                : panel.session.speakerLabels ? qsTr("ElevenLabs, with speakers")
                 : qsTr("ElevenLabs realtime")
         }
         Tk.Badge { visible: panel.session.audioOffMachine; text: qsTr("Leaves this machine"); variant: "warning" }

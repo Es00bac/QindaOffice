@@ -32,6 +32,7 @@ struct TranscriptLine {
     bool filler = false;   // the gate judged it non-substantive
     bool key = false;      // the gate judged it important (★)
     bool newTopic = false; // the gate saw a topic change here (⤷)
+    QString speaker{};     // "Speaker 2" when the recognizer labels speakers
 };
 
 // Markdown notes split at level-2 headings.

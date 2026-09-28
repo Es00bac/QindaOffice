@@ -30,7 +30,10 @@ panel.
    - **Focus on**: what you care about. It gets the most space.
    - **Leave out**: what you don't care about. It is never noted.
    - **Include**: timestamps, key quotes, action items, open questions,
-     a definitions glossary.
+     a definitions glossary, and **Who said what**. With the ElevenLabs
+     engine, speakers are told apart (Speaker 1, Speaker 2, …, and names
+     once the conversation reveals them). The text then arrives about
+     every 45 s instead of live (D-060).
    - **Instructions**: anything else, in your own words.
 
    Untick *Show this before every session* to start straight away. The
@@ -231,6 +234,12 @@ installed checkpoints and never downloads anything. The unit sets
 sudo emerge sci-ml/laya            # pulls sci-ml/laya-models[english]
 sudo systemctl enable --now laya-serve.service
 ```
+
+**Measured 2026-09-27:** with the gate's own questions, the English
+checkpoint judged poorly: small talk scored above lecture content, and
+every stretch came back as a "new topic". On a busy CPU each request took
+15–22 s. Leave the gate off unless a re-test on an idle machine, or Jev,
+does better.
 
 It listens on `127.0.0.1:8000` (`/etc/laya/serve.env`, which also takes
 `LAYA_API_KEY` if you expose it). In QindaNote, open **Live Notes ▸

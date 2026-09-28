@@ -36,6 +36,7 @@ Tk.Dialog {
         openQuestions.checked = s.openQuestions
         definitions.checked = s.definitions
         askAgain.checked = dialog.session.askBeforeStart
+        speakers.checked = dialog.session.speakerLabels
     }
 
     onAboutToShow: load()
@@ -48,6 +49,7 @@ Tk.Dialog {
             openQuestions: openQuestions.checked, definitions: definitions.checked
         }
         dialog.session.askBeforeStart = askAgain.checked
+        dialog.session.speakerLabels = speakers.checked
         if (dialog.starting) dialog.session.start()
     }
 
@@ -105,6 +107,15 @@ Tk.Dialog {
                 Tk.CheckBox { id: actionItems; objectName: "liveSetupActionItems"; text: qsTr("Action items and deadlines") }
                 Tk.CheckBox { id: openQuestions; objectName: "liveSetupOpenQuestions"; text: qsTr("Open questions") }
                 Tk.CheckBox { id: definitions; objectName: "liveSetupDefinitions"; text: qsTr("A definitions glossary") }
+                Tk.CheckBox {
+                    id: speakers
+                    objectName: "liveSetupSpeakers"
+                    enabled: dialog.session.engine === "elevenlabs"
+                    text: qsTr("Who said what (speaker labels)")
+                    tooltip: dialog.session.engine === "elevenlabs"
+                             ? qsTr("ElevenLabs tells the speakers apart; the text then arrives about every 45 seconds instead of live.")
+                             : qsTr("Needs the ElevenLabs speech engine (Settings).")
+                }
             }
         }
         Tk.PropertyRow {

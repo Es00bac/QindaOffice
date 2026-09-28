@@ -25,6 +25,9 @@ struct SpeechSegment {
     QString text;
     qint64 startMs = 0; // audio time of the segment's first speech
     qint64 endMs = 0;   // audio time when it was committed
+    // "Speaker 1", "Speaker 2", … when the backend tells speakers apart
+    // (ElevenLabsSpeakers); empty otherwise.
+    QString speaker{};
 };
 
 class SpeechRecognizer : public QObject {

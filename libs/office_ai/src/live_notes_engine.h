@@ -79,7 +79,7 @@ public:
 
     // Starts the cadence clock. Segments before start() are kept.
     void start();
-    void addSegment(const QString &text, qint64 ms);
+    void addSegment(const QString &text, qint64 ms, const QString &speaker = {});
     // Runs a last (full, when it fits) update, then emits finalized().
     void finalize();
     void cancel();

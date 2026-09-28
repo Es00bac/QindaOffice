@@ -172,6 +172,10 @@ void LiveNotesTest::promptCarriesNotesAndNewTranscript()
         QVERIFY2(system.contains(QString::fromUtf8(rule)), rule);
     }
     QCOMPARE(LiveNotesPrompt::formatTime(3723000), QStringLiteral("1:02:03"));
+    TranscriptLine spoken{5000, QStringLiteral("we ship Friday")};
+    spoken.speaker = QStringLiteral("Speaker 2");
+    QCOMPARE(LiveNotesPrompt::formatLines({spoken}), QStringLiteral("[00:05] Speaker 2: we ship Friday"));
+    QVERIFY(system.contains(QStringLiteral("speaker label")));
 }
 
 void LiveNotesTest::sanitizeStripsThinkingFencesAndPreamble()
@@ -493,6 +497,10 @@ void LiveNotesTest::systemOneAnswersParse()
     QCOMPARE(answers.value(QStringLiteral("topic")).choice, QStringLiteral("wrap_up"));
     QCOMPARE(answers.value(QStringLiteral("importance")).score, 2.0);
     // Jev's noul shape: a value field.
+    // Laya's noul shape: the probability in "noul".
+    const auto laya = SystemOneClient::parseAnswers(QJsonDocument::fromJson(
+        R"({"answers":{"q":{"type":"noul","noul":0.8106,"confidence":0.8}}})").object());
+    QCOMPARE(laya.value(QStringLiteral("q")).probability, 0.8106);
     const auto jev = SystemOneClient::parseAnswers(QJsonDocument::fromJson(
         R"({"answers":{"q":{"type":"noul","value":0.25,"confidence":0.9}}})").object());
     QCOMPARE(jev.value(QStringLiteral("q")).probability, 0.25);

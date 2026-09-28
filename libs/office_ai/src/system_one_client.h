@@ -18,7 +18,9 @@
 // AGENT-CONTRACT: the response is {"answers": {<key>: {"type", "choice" |
 // "score" | "value" | "probabilities", "confidence"}}, "usage": {...}}.
 // Jev returns "choice" for choice and "score" for score; a noul answer's
-// P(true) is read from "value", else probabilities["true"].
+// P(true) is read from "noul" (what Laya sends), "value" (Jev), else
+// probabilities["true"]. A client that missed "noul" read every Laya
+// answer as 0 — everything filler, no notes ever.
 
 #include <QJsonObject>
 #include <QNetworkAccessManager>

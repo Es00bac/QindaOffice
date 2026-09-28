@@ -120,6 +120,10 @@ QString systemPrompt(int detail, const NotesBriefing &briefing)
         "wording.\n"
         "Transcript lines marked ★ were flagged as important; ⤷ marks where a new topic "
         "probably starts; (filler) lines are probably noise — use them only if they matter.\n"
+        "Lines may start with a speaker label (Speaker 1, Speaker 2, …). Attribute decisions, "
+        "claims, questions and quotes to whoever made them when it matters; once the "
+        "transcript shows who a speaker is (\"thanks, Maria\"), write \"Maria (Speaker 2)\" "
+        "the first time and the name alone after that. Never guess names.\n"
         "Ignore greetings, small talk, sponsor reads and recognition noise. Never invent "
         "anything the transcript does not say.\n\n"
         "Reply with the notes only: no preamble, no code fence, no closing remarks.\n\n");
@@ -162,7 +166,8 @@ QString formatLines(const QList<TranscriptLine> &lines)
         if (line.filler) {
             marks += QStringLiteral("(filler) ");
         }
-        out.append(QStringLiteral("[%1] %2%3").arg(formatTime(line.ms), marks, line.text));
+        const QString who = line.speaker.isEmpty() ? QString() : line.speaker + QStringLiteral(": ");
+        out.append(QStringLiteral("[%1] %2%3%4").arg(formatTime(line.ms), marks, who, line.text));
     }
     return out.join(QLatin1Char('\n'));
 }

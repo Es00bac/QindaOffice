@@ -2,6 +2,7 @@
 // office_speech gates (D-057, docs/live-notes.md).
 
 #include "elevenlabs_realtime.h"
+#include "elevenlabs_speakers.h"
 #include "http_transcription.h"
 #include "pcm_capture.h"
 #include "pcm_mixer.h"
@@ -74,6 +75,7 @@ private slots:
     void whisperHelperProtocol();
     void whisperRealHelperRefusesAMissingModel();
     void httpTranscriptionPostsClips();
+    void speakersStitchAcrossWindows();
 };
 
 void OfficeSpeechTest::mixerSumsAndSaturates()
@@ -397,6 +399,83 @@ void OfficeSpeechTest::httpTranscriptionPostsClips()
     QVERIFY(request.contains("RIFF"));
     recognizer.finish();
     QTRY_COMPARE(finished.size(), 1);
+}
+
+// D-060: two overlapping windows whose diarization numbers the speakers
+// the other way round; the voice samples and the overlap keep "Speaker 1"
+// the same person and nothing is emitted twice.
+void OfficeSpeechTest::speakersStitchAcrossWindows()
+{
+    // Window 1 covers 0-2 s: A says "Hello there" (0.1-0.6), B "hi" (1.3-1.7).
+    // Window 2 carries the two voice samples first — A's 0.5 s at 0-0.5, a
+    // 0.4 s gap, B's 0.4 s at 0.9-1.3, a gap: 1.7 s of prefix — then the
+    // audio from 1 s on. Its diarization numbers them the other way round
+    // (speaker_0 is B). A was silent in the overlap; the sample still
+    // recognises A saying "how are you" (2.2-2.8 s absolute).
+    const QList<QByteArray> replies = {
+        R"({"words":[{"text":"Hello","start":0.1,"end":0.3,"type":"word","speaker_id":"speaker_0"},
+                     {"text":" ","type":"spacing"},
+                     {"text":"there","start":0.35,"end":0.6,"type":"word","speaker_id":"speaker_0"},
+                     {"text":" ","type":"spacing"},
+                     {"text":"hi","start":1.3,"end":1.7,"type":"word","speaker_id":"speaker_1"}]})",
+        R"({"words":[{"text":"Hello","start":0.1,"end":0.45,"type":"word","speaker_id":"speaker_1"},
+                     {"text":"hi","start":0.95,"end":1.25,"type":"word","speaker_id":"speaker_0"},
+                     {"text":"hi","start":2.0,"end":2.4,"type":"word","speaker_id":"speaker_0"},
+                     {"text":" ","type":"spacing"},
+                     {"text":"how","start":2.9,"end":3.05,"type":"word","speaker_id":"speaker_1"},
+                     {"text":" ","type":"spacing"},
+                     {"text":"are","start":3.1,"end":3.25,"type":"word","speaker_id":"speaker_1"},
+                     {"text":" ","type":"spacing"},
+                     {"text":"you","start":3.3,"end":3.5,"type":"word","speaker_id":"speaker_1"}]})"};
+    QTcpServer server;
+    QVERIFY(server.listen(QHostAddress::LocalHost));
+    int served = 0;
+    QList<QByteArray> requests;
+    connect(&server, &QTcpServer::newConnection, this, [&] {
+        QTcpSocket *socket = server.nextPendingConnection();
+        auto *buffer = new QByteArray;
+        connect(socket, &QObject::destroyed, [buffer] { delete buffer; });
+        connect(socket, &QTcpSocket::readyRead, socket, [&, socket, buffer] {
+            buffer->append(socket->readAll());
+            const qsizetype end = buffer->indexOf("\r\n\r\n");
+            const qsizetype at = buffer->toLower().indexOf("content-length:");
+            if (end < 0 || at < 0) {
+                return;
+            }
+            const qsizetype length = buffer->mid(at + 15, buffer->indexOf("\r\n", at) - at - 15).trimmed().toLongLong();
+            if (buffer->size() - end - 4 < length) {
+                return;
+            }
+            requests.append(*buffer);
+            const QByteArray body = replies.value(served++);
+            socket->write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                          + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body);
+            socket->disconnectFromHost();
+        });
+    });
+    ElevenLabsSpeakers recognizer(QStringLiteral("k"), QString());
+    recognizer.setEndpoint(QUrl(QStringLiteral("http://127.0.0.1:%1/v1/speech-to-text").arg(server.serverPort())));
+    recognizer.setWindow(2000, 1000);
+    QSignalSpy committed(&recognizer, &SpeechRecognizer::committed);
+    QSignalSpy finished(&recognizer, &SpeechRecognizer::finished);
+    recognizer.start();
+    recognizer.feed(tone(2000, 0.2));
+    QTRY_COMPARE(served, 1);
+    QVERIFY(requests.first().contains("name=\"diarize\"\r\n\r\ntrue"));
+    QVERIFY(requests.first().contains("pcm_s16le_16"));
+    QVERIFY(requests.first().toLower().contains("xi-api-key: k"));
+    QTRY_COMPARE(committed.size(), 2);
+    recognizer.feed(tone(1000, 0.2));
+    recognizer.finish();
+    QTRY_COMPARE(finished.size(), 1);
+    QCOMPARE(served, 2);
+    QStringList got;
+    for (const QList<QVariant> &args : committed) {
+        const auto segment = args.first().value<SpeechSegment>();
+        got.append(segment.speaker + QStringLiteral(": ") + segment.text);
+    }
+    QCOMPARE(got, (QStringList{QStringLiteral("Speaker 1: Hello there"), QStringLiteral("Speaker 2: hi"),
+                               QStringLiteral("Speaker 1: how are you")}));
 }
 
 QTEST_GUILESS_MAIN(OfficeSpeechTest)

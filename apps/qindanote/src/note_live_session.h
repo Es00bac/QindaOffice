@@ -88,6 +88,9 @@ class LiveNotesSession : public QObject {
     Q_PROPERTY(QVariantMap setup READ setup WRITE setSetup NOTIFY settingsChanged)
     // [{id, name, hint}] for the setup dialog's scenario picker.
     Q_PROPERTY(QVariantList scenarios READ scenarios CONSTANT)
+    // Who said what (D-060): with the ElevenLabs engine, label speakers
+    // through batch Scribe diarization (text then arrives every ~45 s).
+    Q_PROPERTY(bool speakerLabels READ speakerLabels WRITE setSpeakerLabels NOTIFY settingsChanged)
     // Start opens the setup dialog first (the dialog's "show every time").
     Q_PROPERTY(bool askBeforeStart READ askBeforeStart WRITE setAskBeforeStart NOTIFY settingsChanged)
     // Per session: what the user says this is ("Biology 101, lecture 4").
@@ -140,6 +143,8 @@ public:
     void setSetup(const QVariantMap &map);
     [[nodiscard]] QVariantList scenarios() const;
     [[nodiscard]] bool askBeforeStart() const { return m_askBeforeStart; }
+    [[nodiscard]] bool speakerLabels() const { return m_speakerLabels; }
+    void setSpeakerLabels(bool on);
     void setAskBeforeStart(bool on);
     [[nodiscard]] int detail() const { return m_detail; }
     void setDetail(int value);
@@ -174,7 +179,7 @@ public:
     // Test seams: skip PipeWire and the recognizer (segments then come in
     // through injectSegment), and read the engine.
     void setAudioEnabled(bool enabled) { m_audioEnabled = enabled; }
-    void injectSegment(const QString &text, qint64 ms);
+    void injectSegment(const QString &text, qint64 ms, const QString &speaker = {});
     [[nodiscard]] Ai::LiveNotesEngine *notesEngine() const { return m_engineCore; }
     [[nodiscard]] const LiveTarget &target() const { return m_target; }
 
@@ -223,6 +228,7 @@ private:
     int m_detail = Ai::LiveNotesPrompt::kDefaultDetail;
     Ai::NotesBriefing m_briefing;
     bool m_askBeforeStart = true;
+    bool m_speakerLabels = false;
     QVariantMap m_keyOrigins;
     qreal m_level = 0;
     QString m_partial;

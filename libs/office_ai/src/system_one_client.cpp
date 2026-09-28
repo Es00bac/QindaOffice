@@ -40,7 +40,10 @@ QHash<QString, SystemOneAnswer> SystemOneClient::parseAnswers(const QJsonObject 
         answer.score = object.value(QStringLiteral("score")).toDouble();
         answer.confidence = object.value(QStringLiteral("confidence")).toDouble();
         const QJsonObject probabilities = object.value(QStringLiteral("probabilities")).toObject();
-        if (object.contains(QStringLiteral("value"))) {
+        // A yes/no answer's P(true): Laya sends "noul", Jev "value".
+        if (object.contains(QStringLiteral("noul"))) {
+            answer.probability = object.value(QStringLiteral("noul")).toDouble();
+        } else if (object.contains(QStringLiteral("value"))) {
             const QJsonValue value = object.value(QStringLiteral("value"));
             answer.probability = value.isBool() ? (value.toBool() ? 1.0 : 0.0) : value.toDouble();
         } else if (probabilities.contains(QStringLiteral("true"))) {
