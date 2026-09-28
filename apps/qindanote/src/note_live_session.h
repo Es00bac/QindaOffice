@@ -82,6 +82,14 @@ class LiveNotesSession : public QObject {
     // 4 detailed, 5 comprehensive (LiveNotesPrompt::Detail). Live: a change
     // during a session rewrites the notes at the new level.
     Q_PROPERTY(int detail READ detail WRITE setDetail NOTIFY settingsChanged)
+    // The pre-session setup (D-059): NotesBriefing::toMap() keys — scenario,
+    // focus, skip, custom, and the section switches. Live: a change during
+    // a session applies from the next update.
+    Q_PROPERTY(QVariantMap setup READ setup WRITE setSetup NOTIFY settingsChanged)
+    // [{id, name, hint}] for the setup dialog's scenario picker.
+    Q_PROPERTY(QVariantList scenarios READ scenarios CONSTANT)
+    // Start opens the setup dialog first (the dialog's "show every time").
+    Q_PROPERTY(bool askBeforeStart READ askBeforeStart WRITE setAskBeforeStart NOTIFY settingsChanged)
     // Per session: what the user says this is ("Biology 101, lecture 4").
     Q_PROPERTY(QString topic READ topic WRITE setTopic NOTIFY settingsChanged)
     Q_PROPERTY(bool audioOffMachine READ audioOffMachine NOTIFY settingsChanged)
@@ -128,6 +136,11 @@ public:
     void setGateBaseUrl(const QString &value);
     [[nodiscard]] QString gateModel() const { return m_gateModel; }
     void setGateModel(const QString &value);
+    [[nodiscard]] QVariantMap setup() const { return m_briefing.toMap(); }
+    void setSetup(const QVariantMap &map);
+    [[nodiscard]] QVariantList scenarios() const;
+    [[nodiscard]] bool askBeforeStart() const { return m_askBeforeStart; }
+    void setAskBeforeStart(bool on);
     [[nodiscard]] int detail() const { return m_detail; }
     void setDetail(int value);
     [[nodiscard]] QString topic() const { return m_topic; }
@@ -208,6 +221,8 @@ private:
     QString m_gateModel;
     QString m_topic;
     int m_detail = Ai::LiveNotesPrompt::kDefaultDetail;
+    Ai::NotesBriefing m_briefing;
+    bool m_askBeforeStart = true;
     QVariantMap m_keyOrigins;
     qreal m_level = 0;
     QString m_partial;

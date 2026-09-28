@@ -64,42 +64,74 @@ QString detailBrief(int detail)
     }
 }
 
-QString systemPrompt(int detail)
+QString systemPrompt(int detail, const NotesBriefing &briefing)
 {
-    return QStringLiteral(
+    QStringList format;
+    format << QStringLiteral("- One `#` title naming the session's subject (improve it as the "
+                             "subject becomes clear).")
+           << QStringLiteral("- `## Summary` right under the title: 2-5 bullets covering the "
+                             "whole session so far.")
+           << (briefing.timestamps
+                   ? QStringLiteral("- Then one `##` section per topic, in the order covered, "
+                                    "with `###` subsections when a topic has parts. End each "
+                                    "`##` heading with the start time in brackets, e.g. "
+                                    "`## Photosynthesis [12:40]`.")
+                   : QStringLiteral("- Then one `##` section per topic, in the order covered, "
+                                    "with `###` subsections when a topic has parts. No "
+                                    "timestamps."))
+           << QStringLiteral("- Bullets in your own words, as long as the detail level below "
+                             "allows; nest sub-points. Keep specifics exact: names, numbers, "
+                             "dates, formulas, units, references.")
+           << QStringLiteral("- **Bold** each key term where it is introduced; definitions as "
+                             "`**Term** — meaning`.")
+           << QStringLiteral("- ==Highlight== the few takeaways that matter most (sparingly: "
+                             "about one per section).")
+           << (briefing.quotes ? QStringLiteral("- Memorable or exact wording as a quote: "
+                                                "`> \"…\"`.")
+                               : QStringLiteral("- No quotes: paraphrase everything."))
+           << QStringLiteral("- Your own annotations in italics in parentheses: *(connects to "
+                             "the earlier point on X)*, *(speaker corrects the earlier "
+                             "figure)*. Mark doubtful recognition as *(unclear: …?)*.");
+    if (briefing.definitions) {
+        format << QStringLiteral("- A `## Definitions` section near the end: every key term "
+                                 "with a one-line definition, alphabetical.");
+    }
+    if (briefing.openQuestions) {
+        format << QStringLiteral("- A `## Open questions` section near the end: questions "
+                                 "raised and not yet answered.");
+    }
+    format << (briefing.actionItems
+                   ? QStringLiteral("- Tasks, assignments and deadlines as `- [ ] …` in a final "
+                                    "`## Action items` section (omit the section when there are "
+                                    "none).")
+                   : QStringLiteral("- No `## Action items` section; mention tasks only where "
+                                    "they matter to the content."));
+    QString prompt = QStringLiteral(
         "You are an expert live note-taker. Audio from a live source — a lecture, a meeting, "
         "a video, a conversation — is being transcribed as it happens, and you keep the notes "
         "for it. Each turn you get the notes written so far and the newest transcript; you "
-        "return the revised notes.\n\n"
-        "Write GitHub-flavoured Markdown:\n"
-        "- One `#` title naming the session's subject (improve it as the subject becomes clear).\n"
-        "- `## Summary` right under the title: 2-5 bullets covering the whole session so far.\n"
-        "- Then one `##` section per topic, in the order covered, with `###` subsections when a "
-        "topic has parts. End each `##` heading with the start time in brackets, e.g. "
-        "`## Photosynthesis [12:40]`.\n"
-        "- Bullets in your own words, as long as the detail level below allows; nest "
-        "sub-points. Keep specifics exact: names, numbers, dates, formulas, units, references.\n"
-        "- **Bold** each key term where it is introduced; definitions as `**Term** — meaning`.\n"
-        "- ==Highlight== the few takeaways that matter most (sparingly: about one per section).\n"
-        "- Memorable or exact wording as a quote: `> \"…\"`.\n"
-        "- Your own annotations in italics in parentheses: *(connects to the earlier point on "
-        "X)*, *(speaker corrects the earlier figure)*. Mark doubtful recognition as "
-        "*(unclear: …?)*.\n"
-        "- Tasks, assignments and deadlines as `- [ ] …` in a final `## Action items` section "
-        "(omit the section when there are none).\n\n"
-        "Revise, do not just append: when new material corrects, extends or clarifies earlier "
-        "notes, fix those notes; merge duplicates; move points to the section they belong in. "
-        "Never drop substantive content that is still correct. Lines in the notes that do not "
-        "come from the transcript were written by the user: keep them and their wording.\n"
+        "return the revised notes.\n\nWrite GitHub-flavoured Markdown:\n");
+    prompt += format.join(QLatin1Char('\n'));
+    prompt += QStringLiteral(
+        "\n\nRevise, do not just append: when new material corrects, extends or clarifies "
+        "earlier notes, fix those notes; merge duplicates; move points to the section they "
+        "belong in. Never drop substantive content that is still correct. Lines in the notes "
+        "that do not come from the transcript were written by the user: keep them and their "
+        "wording.\n"
         "Transcript lines marked ★ were flagged as important; ⤷ marks where a new topic "
         "probably starts; (filler) lines are probably noise — use them only if they matter.\n"
         "Ignore greetings, small talk, sponsor reads and recognition noise. Never invent "
         "anything the transcript does not say.\n\n"
-        "Reply with the notes only: no preamble, no code fence, no closing remarks.\n\n")
-        + detailBrief(detail)
-        + QStringLiteral(" The detail level governs length above everything else: if the "
-                         "current notes are longer or shorter than this level calls for, "
-                         "rewrite them to fit it.");
+        "Reply with the notes only: no preamble, no code fence, no closing remarks.\n\n");
+    prompt += detailBrief(detail);
+    prompt += QStringLiteral(" The detail level governs length above everything else: if the "
+                             "current notes are longer or shorter than this level calls for, "
+                             "rewrite them to fit it.");
+    const QString session = LiveNotesBriefing::render(briefing);
+    if (!session.isEmpty()) {
+        prompt += QStringLiteral("\n\n") + session;
+    }
+    return prompt;
 }
 
 QString formatTime(qint64 ms)

@@ -284,7 +284,7 @@ void LiveNotesEngine::runUpdate(bool full, bool restyle)
     m_runRestyle = restyle;
 
     ChatRequest chat;
-    chat.systemPrompt = LiveNotesPrompt::systemPrompt(m_options.detail);
+    chat.systemPrompt = LiveNotesPrompt::systemPrompt(m_options.detail, m_options.briefing);
     chat.messages.append({QStringLiteral("user"), LiveNotesPrompt::userMessage(request), {}});
     chat.maxTokens = m_options.maxOutputTokens;
     chat.temperature = 0.3;

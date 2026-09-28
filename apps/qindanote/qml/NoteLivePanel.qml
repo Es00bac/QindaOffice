@@ -16,6 +16,8 @@ Tk.Flex {
 
     required property LiveNotesSession session
     signal settingsRequested()
+    // D-059: the session setup — `starting` when Start asked for it.
+    signal setupRequested(bool starting)
     signal providersRequested()
 
     readonly property bool idle: panel.session.state === "idle"
@@ -50,6 +52,7 @@ Tk.Flex {
             onClicked: {
                 if (panel.session.state === "listening") panel.session.pause()
                 else if (panel.session.state === "paused") panel.session.resume()
+                else if (panel.session.askBeforeStart) panel.setupRequested(true)
                 else panel.session.start()
             }
         }
@@ -59,6 +62,12 @@ Tk.Flex {
             tooltip: qsTr("Stop and finish the notes")
             enabled: panel.session.state === "listening" || panel.session.state === "paused" || panel.session.state === "starting"
             onClicked: panel.session.stop()
+        }
+        Tk.IconButton {
+            objectName: "liveSetup"
+            iconName: "list-checks"
+            tooltip: qsTr("Session setup: kind, focus, what to leave out, sections, instructions")
+            onClicked: panel.setupRequested(false)
         }
         Tk.IconButton {
             objectName: "liveSettings"

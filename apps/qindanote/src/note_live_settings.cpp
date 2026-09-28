@@ -83,6 +83,8 @@ void LiveNotesSession::loadSettings()
     m_gateBaseUrl = text("gateBaseUrl", m_gate == QLatin1String("laya") ? kLayaBase : kJevBase);
     m_gateModel = text("gateModel", m_gate == QLatin1String("laya") ? kLayaModel : kJevModel);
     m_topic = text("topic", QString());
+    m_briefing = Ai::NotesBriefing::fromMap(m_settings->value(QStringLiteral("setup")).toMap());
+    m_askBeforeStart = m_settings->value(QStringLiteral("askBeforeStart"), true).toBool();
     m_detail = Ai::LiveNotesPrompt::clampDetail(
         m_settings->value(QStringLiteral("detail"), m_detail).toInt());
     if (m_catalog != nullptr && !m_catalog->configFor(m_modelId).has_value()) {
@@ -106,6 +108,8 @@ void LiveNotesSession::saveSettings()
     m_settings->setValue(QStringLiteral("gateModel"), m_gateModel);
     m_settings->setValue(QStringLiteral("topic"), m_topic);
     m_settings->setValue(QStringLiteral("detail"), m_detail);
+    m_settings->setValue(QStringLiteral("setup"), m_briefing.toMap());
+    m_settings->setValue(QStringLiteral("askBeforeStart"), m_askBeforeStart);
     static_cast<void>(m_settings->save(nullptr));
     emit settingsChanged();
 }
@@ -146,6 +150,39 @@ void LiveNotesSession::setDetail(int value)
     if (m_engineCore != nullptr) {
         m_engineCore->setDetail(value);
     }
+}
+
+void LiveNotesSession::setSetup(const QVariantMap &map)
+{
+    const Ai::NotesBriefing briefing = Ai::NotesBriefing::fromMap(map);
+    if (briefing == m_briefing) {
+        return;
+    }
+    m_briefing = briefing;
+    saveSettings();
+    if (m_engineCore != nullptr) {
+        m_engineCore->setBriefing(briefing); // from the next update on
+    }
+}
+
+QVariantList LiveNotesSession::scenarios() const
+{
+    QVariantList list;
+    for (const auto &scenario : Ai::LiveNotesBriefing::scenarios()) {
+        list.append(QVariantMap{{QStringLiteral("id"), scenario.id},
+                                {QStringLiteral("name"), scenario.name},
+                                {QStringLiteral("hint"), scenario.hint}});
+    }
+    return list;
+}
+
+void LiveNotesSession::setAskBeforeStart(bool on)
+{
+    if (m_askBeforeStart == on) {
+        return;
+    }
+    m_askBeforeStart = on;
+    saveSettings();
 }
 
 void LiveNotesSession::setGate(const QString &value)

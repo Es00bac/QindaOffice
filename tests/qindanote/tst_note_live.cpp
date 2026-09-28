@@ -23,6 +23,7 @@
 #include <QJsonObject>
 #include <QElapsedTimer>
 #include <QPainter>
+#include <QSignalSpy>
 
 using namespace NoteTest;
 using QindaOffice::Ai::MockSseServer;
@@ -114,6 +115,25 @@ void NoteLiveTest::sessionWritesAndRevisesOneBlock()
     LiveNotesSession *live = scene.host.live();
     QVERIFY(live != nullptr);
     live->setAudioEnabled(false);
+    // Start goes to the setup dialog first unless told not to (D-059).
+    live->setAskBeforeStart(true);
+    QSignalSpy setupAsked(&scene.host, &NoteHost::liveNotesSetupRequested);
+    scene.host.actions()->trigger(QStringLiteral("noteLiveStartAction"));
+    QCOMPARE(setupAsked.size(), 1);
+    QCOMPARE(live->state(), QStringLiteral("idle"));
+    QObject *setup = scene.window->findChild<QObject *>(QStringLiteral("liveSetupDialog"));
+    QVERIFY(setup != nullptr);
+    QTRY_VERIFY(setup->property("visible").toBool());
+    QTest::qWait(150);
+    QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindanote_live_setup"));
+    QMetaObject::invokeMethod(setup, "reject");
+    QTRY_VERIFY(!setup->property("visible").toBool());
+    live->setAskBeforeStart(false);
+    QVariantMap briefing = live->setup();
+    briefing.insert(QStringLiteral("scenario"), QStringLiteral("lecture"));
+    briefing.insert(QStringLiteral("focus"), QStringLiteral("cell energy"));
+    live->setSetup(briefing);
+    QCOMPARE(live->setup().value(QStringLiteral("focus")).toString(), QStringLiteral("cell energy"));
     const QString id = scene.host.providerSettings()->addCustom(
         {{QStringLiteral("id"), QStringLiteral("mock")},
          {QStringLiteral("name"), QStringLiteral("Mock model")},
@@ -275,6 +295,7 @@ void NoteLiveTest::realPipelineEndToEnd()
     QVERIFY2(scene.ready(), qPrintable(scene.error));
     QVERIFY(QTest::qWaitForWindowExposed(scene.window));
     LiveNotesSession *live = scene.host.live();
+    live->setAskBeforeStart(false);
     const QString id = scene.host.providerSettings()->addCustom(
         {{QStringLiteral("id"), QStringLiteral("e2e")},
          {QStringLiteral("name"), QStringLiteral("E2E model")},

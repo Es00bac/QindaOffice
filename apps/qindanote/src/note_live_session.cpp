@@ -147,6 +147,7 @@ void LiveNotesSession::launch(const QString &modelKey, const QString &speechKey,
     options.topic = m_topic;
     options.glossary = glossary;
     options.detail = m_detail;
+    options.briefing = m_briefing;
     m_engineCore->setOptions(options);
     m_engineCore->setProvider(m_provider);
     m_engineCore->setGate(m_gateClient);

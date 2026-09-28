@@ -20,7 +20,22 @@ panel.
    - **Microphone** — a lecture in the room.
    - **Desktop audio** — whatever the desktop is playing, such as a video.
    - **Both** — a call you take part in.
-3. Press **Start live notes**. The current page is used if it is empty;
+3. Press **Start live notes**. The **New live notes session** setup opens
+   first, pre-filled with last time's answers:
+   - **What is it?**: the topic.
+   - **Kind**: General, Lecture or class, Meeting, Interview, Tutorial or
+     how-to, or Talk, podcast or video. Each has its own emphasis: a
+     meeting leads with decisions and owners; a tutorial becomes numbered
+     steps with exact commands.
+   - **Focus on**: what you care about. It gets the most space.
+   - **Leave out**: what you don't care about. It is never noted.
+   - **Include**: timestamps, key quotes, action items, open questions,
+     a definitions glossary.
+   - **Instructions**: anything else, in your own words.
+
+   Untick *Show this before every session* to start straight away. The
+   list-checks button on the panel reopens the setup; changes during a
+   session apply from the next update. Then The current page is used if it is empty;
    otherwise a new page is made. A level meter shows the source is alive,
    and *Heard* shows the latest transcript lines with the words still being
    recognised.

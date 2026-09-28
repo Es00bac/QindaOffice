@@ -73,6 +73,22 @@ app-side requirements above are the parts the suite owns):
 
 ## Milestone-specific gates
 
+### M54 gates (live-notes briefing, D-059)
+
+- `tst_live_notes::briefingShapesThePrompt`:
+  - the default prompt keeps timestamps and action items and has no
+    briefing;
+  - a meeting briefing with focus, skip and custom text and the switches
+    off/on changes the rules and appends SESSION BRIEFING;
+  - the map round-trips;
+  - six scenarios;
+  - the engine sends the briefing.
+- `tst_note_live::sessionWritesAndRevisesOneBlock`: Start opens the setup
+  dialog (`liveNotesSetupRequested`, state still idle; grab
+  `qindanote_live_setup`); the setup persists; with the prompt off, Start
+  starts.
+- The QindaNote fixtures gain only `IconButton#liveSetup`.
+
 ### M53 gates (the assistant edits documents; live-notes detail, D-058)
 
 - `tst_assistant_edits`:

@@ -39,6 +39,7 @@ set(QINDANOTE_ENGINE_SOURCES
 set(qindanote_qml
     qml/NoteLivePanel.qml
     qml/NoteLiveSettingsDialog.qml
+    qml/NoteLiveSetupDialog.qml
     qml/NoteNavigator.qml
     qml/NotePage.qml
     qml/NotePreferencesPage.qml

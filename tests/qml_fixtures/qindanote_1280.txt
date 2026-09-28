@@ -94,6 +94,7 @@ QQuickRootItem#NoteWindow
               Button#liveProviders [hidden]
               Button#liveStart [hidden]
               IconButton#liveSettings [hidden]
+              IconButton#liveSetup [hidden]
               IconButton#liveStop [hidden]
               Label#liveDetailName [hidden]
               Label#liveGate [hidden]

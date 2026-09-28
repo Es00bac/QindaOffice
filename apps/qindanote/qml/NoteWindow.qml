@@ -165,6 +165,7 @@ OfficeWindow {
                 objectName: "livePanel"
                 session: window.note.live
                 onSettingsRequested: liveSettings.open()
+                onSetupRequested: function(starting) { liveSetup.starting = starting; liveSetup.open() }
                 onProvidersRequested: providersDialog.open()
             }
         }
@@ -205,6 +206,7 @@ OfficeWindow {
             if (visible === dock.hiddenPanels.includes("live")) { if (visible) dock.showPanel("live"); else dock.hidePanel("live") }
         }
         function onProvidersRequested() { providersDialog.open() }
+        function onLiveNotesSetupRequested() { liveSetup.starting = true; liveSetup.open() }
         function onFindRequested() { findBar.open() }
         function onNewSectionRequested() { sectionPrompt.text = qsTr("Section"); sectionPrompt.open() }
         function onRenamePageRequested(sectionId, pageId, title) {
@@ -226,6 +228,7 @@ OfficeWindow {
         function onCustomPenColorRequested(current) { colorDialog.selectedColor = current; colorDialog.open() }
     }
 
+    NoteLiveSetupDialog { id: liveSetup; session: window.note.live }
     NoteLiveSettingsDialog { id: liveSettings; session: window.note.live; onProvidersRequested: providersDialog.open() }
     Ai.ProviderSettingsDialog { id: providersDialog; settings: window.note.providerSettings }
 

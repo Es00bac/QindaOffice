@@ -72,6 +72,8 @@ void NoteHost::createLiveNotes()
                 emit liveNotesToggleRequested(true);
                 if (m_live->state() == QLatin1String("paused")) {
                     m_live->resume();
+                } else if (m_live->askBeforeStart() && !m_live->active()) {
+                    emit liveNotesSetupRequested(); // the dialog's Start calls start()
                 } else {
                     m_live->start();
                 }

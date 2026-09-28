@@ -5,6 +5,42 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-059: Live notes start with a briefing
+
+**Date:** 2026-09-27 · **Status:** accepted (owner request; M54)
+
+**Context.** One universal note-taking prompt cannot know that a meeting
+wants owners and deadlines, that a lecture wants definitions and exam
+hints, or that this user does not care about the sponsor segment. The
+owner asked for pre-qualifiers when starting a session: what to take
+notes about, what to leave out, sensible universal presets, a few
+predefined scenarios, and custom instructions.
+
+**Decision.**
+1. **The briefing is data, not prompt text** (`NotesBriefing`,
+   `office_ai/live_notes_briefing.h`). It holds:
+   - a scenario: general, lecture, meeting, interview, tutorial or talk;
+   - focus, skip, and custom instructions;
+   - five section switches: timestamps, quotes, action items, open
+     questions, definitions.
+
+   It is persisted in live-notes.json under `setup`.
+2. **The system prompt is assembled.** The section switches change the
+   format rules themselves (for example "No timestamps", "No quotes").
+   The scenario, focus, skip and custom instructions form a SESSION
+   BRIEFING at the end of the prompt, which wins over the general rules
+   where they conflict.
+3. **Start asks first.** Start (the panel button or the Live ribbon
+   command) opens **New live notes session**, pre-filled with the last
+   setup. A checkbox turns that off; the panel's setup button opens the
+   same dialog without starting. Changing the setup mid-session applies
+   from the next update, like the Detail slider.
+
+**Consequences.** Scenario ids are stable, and new scenarios only add ids.
+The merge contract is unchanged: `## Summary` and `## Action items` keep
+their names, and optional sections such as Definitions and Open questions
+are ordinary sections.
+
 ## D-058: The assistant edits documents itself; live notes have a detail level
 
 **Date:** 2026-09-27 · **Status:** accepted (owner request; M53)

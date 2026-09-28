@@ -55,6 +55,7 @@ public:
         QString topic;
         QStringList glossary; // correct spellings of names and terms
         int detail = LiveNotesPrompt::kDefaultDetail; // 1 (key points) .. 5
+        NotesBriefing briefing; // the pre-session setup (D-059)
     };
 
     using Reader = std::function<QString()>;
@@ -73,6 +74,8 @@ public:
     // The Detail slider, live: a change rewrites the notes at the new level
     // on the next tick (a "restyle"), even if nothing new was said.
     void setDetail(int detail);
+    // The setup edited mid-session: applies from the next update on.
+    void setBriefing(const NotesBriefing &briefing) { m_options.briefing = briefing; }
 
     // Starts the cadence clock. Segments before start() are kept.
     void start();

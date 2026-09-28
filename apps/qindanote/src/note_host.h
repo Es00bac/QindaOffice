@@ -159,6 +159,8 @@ signals:
     // AI ▸ Live Notes toggles the live-notes panel; AI ▸ AI Providers…
     // opens the providers dialog.
     void liveNotesToggleRequested(bool visible);
+    // Start with "ask before every session" on: the window opens the setup.
+    void liveNotesSetupRequested();
     void providersRequested();
 
 protected:

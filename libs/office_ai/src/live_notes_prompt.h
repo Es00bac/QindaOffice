@@ -19,6 +19,8 @@
 // "Action items" are how mergeTail() finds its pieces. Change them in
 // both places or neither.
 
+#include "live_notes_briefing.h"
+
 #include <QString>
 #include <QStringList>
 
@@ -55,7 +57,8 @@ inline constexpr int kDefaultDetail = Concise;
 // The detail level's writing brief, spliced into the system prompt.
 [[nodiscard]] QString detailBrief(int detail);
 
-[[nodiscard]] QString systemPrompt(int detail = kDefaultDetail);
+// The rules, the detail level's brief and the user's session briefing.
+[[nodiscard]] QString systemPrompt(int detail = kDefaultDetail, const NotesBriefing &briefing = {});
 [[nodiscard]] QString formatTime(qint64 ms);
 // "[mm:ss] ★ text" lines (fillers marked "(filler)").
 [[nodiscard]] QString formatLines(const QList<TranscriptLine> &lines);

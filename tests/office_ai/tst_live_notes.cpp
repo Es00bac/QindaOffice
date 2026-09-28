@@ -143,6 +143,7 @@ private slots:
     void engineRetriesWhileTheEditorHoldsTheBlock();
     void engineFinalRevisionUsesTheWholeTranscript();
     void detailLevelsShapeThePromptAndRestyle();
+    void briefingShapesThePrompt();
     void gateSkipsFillerAndMarksKeyPoints();
     void gateFailureFailsOpen();
     void systemOneAnswersParse();
@@ -370,6 +371,56 @@ void LiveNotesTest::detailLevelsShapeThePromptAndRestyle()
     QVERIFY(provider.requests.last().systemPrompt.contains(QStringLiteral("KEY POINTS")));
     QVERIFY(provider.requests.last().messages.first().text.contains(QStringLiteral("changed the detail level")));
     QTRY_COMPARE(page.notes, QStringLiteral("# Short"));
+}
+
+void LiveNotesTest::briefingShapesThePrompt()
+{
+    const QString plain = LiveNotesPrompt::systemPrompt();
+    QVERIFY(plain.contains(QStringLiteral("[12:40]")));             // timestamps on by default
+    QVERIFY(plain.contains(QStringLiteral("## Action items")));
+    QVERIFY(!plain.contains(QStringLiteral("SESSION BRIEFING")));    // nothing to brief
+
+    NotesBriefing briefing;
+    briefing.scenario = QStringLiteral("meeting");
+    briefing.focus = QStringLiteral("the launch date");
+    briefing.skip = QStringLiteral("small talk");
+    briefing.custom = QStringLiteral("write in Spanish");
+    briefing.timestamps = false;
+    briefing.actionItems = false;
+    briefing.quotes = false;
+    briefing.openQuestions = true;
+    briefing.definitions = true;
+    const QString prompt = LiveNotesPrompt::systemPrompt(2, briefing);
+    for (const char *text : {"No timestamps", "No quotes", "No `## Action items`", "## Open questions",
+                             "## Definitions", "This is a MEETING", "FOCUS ON: the launch date",
+                             "LEAVE OUT: small talk", "THE USER'S OWN INSTRUCTIONS: write in Spanish",
+                             "CONCISE"}) {
+        QVERIFY2(prompt.contains(QString::fromUtf8(text)), text);
+    }
+    QVERIFY(!prompt.contains(QStringLiteral("[12:40]")));
+    // Persisted as a map, round trip.
+    QCOMPARE(NotesBriefing::fromMap(briefing.toMap()), briefing);
+    QCOMPARE(LiveNotesBriefing::scenarios().size(), 6);
+    for (const auto &scenario : LiveNotesBriefing::scenarios()) {
+        QVERIFY(scenario.id == QLatin1String("general") || !LiveNotesBriefing::scenarioBrief(scenario.id).isEmpty());
+    }
+    // The engine sends it.
+    ScriptedProvider provider;
+    provider.replies = {QStringLiteral("# N")};
+    Page page;
+    LiveNotesEngine engine;
+    LiveNotesEngine::Options options;
+    options.minWords = 1;
+    options.minIntervalMs = 0;
+    options.briefing = briefing;
+    engine.setOptions(options);
+    engine.setProvider(&provider);
+    wire(engine, page);
+    engine.start();
+    engine.addSegment(words(3), 0);
+    engine.tick();
+    QVERIFY(provider.requests.first().systemPrompt.contains(QStringLiteral("FOCUS ON: the launch date")));
+    QTRY_VERIFY(!engine.busy());
 }
 
 void LiveNotesTest::gateSkipsFillerAndMarksKeyPoints()
