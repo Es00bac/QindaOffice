@@ -179,7 +179,7 @@ Tk.Dialog {
                 Tk.PropertyRow {
                     label: qsTr("Key reference")
                     visible: dialog.current !== null && dialog.current.usesKey
-                    hint: qsTr("Optional: {env:NAME} or {file:~/path/to/key} is read at request time.")
+                    hint: qsTr("Optional: {env:NAME}, {file:~/path/to/key} or just the path; read at request time.")
                     Tk.TextField {
                         objectName: "providerKeyRef"
                         mono: true

@@ -54,6 +54,10 @@ public:
     // True for "{env:…}" / "{file:…}"; anything else is not a reference
     // (a literal key pasted there is refused by the settings UI).
     [[nodiscard]] static bool isReference(const QString &text);
+    // What the settings field stores: a bare path ("~/…" or "/…", no
+    // spaces: a key never looks like that) becomes "{file:…}"; anything
+    // else is returned trimmed and unchanged.
+    [[nodiscard]] static QString normalizeReference(const QString &text);
     [[nodiscard]] static QString expandHome(const QString &path);
 };
 

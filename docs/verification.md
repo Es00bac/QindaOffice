@@ -73,6 +73,16 @@ app-side requirements above are the parts the suite owns):
 
 ## Milestone-specific gates
 
+### Offline notes gates (D-062)
+
+- `tst_ai_providers`: a bare key path is stored as `{file:…}`; a literal
+  key and `{env:…}` are left alone.
+- Manual, run 2026-09-27: `NoteLiveTest::realPipelineEndToEnd` with
+  `QQO_LIVE_E2E_BASE=http://127.0.0.1:8080/v1 QQO_LIVE_E2E_MODEL=qwen3.5-4b`
+  against the installed `sci-ml/qinda-notes-llm` passed (252 s, three
+  revisions; numbers in live-notes.md). The service loaded from cold on the
+  first request and unloaded when its proxy stopped.
+
 ### M56 gates (flag, prep, recording, review, hand-offs; D-061)
 
 - `tst_live_notes_extras`:

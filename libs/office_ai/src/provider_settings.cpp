@@ -108,10 +108,10 @@ bool ProviderSettings::applyFields(ProviderConfig *config, const QVariantMap &fi
         config->model = text("model");
     }
     if (fields.contains(QStringLiteral("apiKeyRef"))) {
-        const QString ref = text("apiKeyRef");
+        const QString ref = ApiKeyResolver::normalizeReference(text("apiKeyRef"));
         if (!ref.isEmpty() && !ApiKeyResolver::isReference(ref)) {
-            *error = tr("Only {env:NAME} or {file:PATH} goes here; paste a key into the key "
-                        "field instead, where it is kept in the keyring.");
+            *error = tr("Only {env:NAME}, {file:PATH} or a file path goes here; paste a key "
+                        "into the key field instead, where it is kept in the keyring.");
             return false;
         }
         config->apiKeyRef = ref;

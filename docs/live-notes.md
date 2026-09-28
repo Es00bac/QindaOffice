@@ -217,7 +217,8 @@ what OpenCode does well:
   OpenAI, Moonshot/Kimi, Kimi Code, Z.ai/GLM, DeepSeek, OpenRouter, Groq,
   Cerebras, Together, Fireworks, xAI, Mistral, Google via its
   OpenAI-compatible endpoint, MiniMax, Ollama Cloud) plus llama-server,
-  Ollama and LM Studio. Each preset maps OpenCode's `npm` wire package onto
+  the laptop's offline notes model (D-062), Ollama and LM Studio. Each
+  preset maps OpenCode's `npm` wire package onto
   the two protocols office_ai speaks: `openai` (chat/completions) and
   `anthropic` (/v1/messages). **AI ▸ AI Providers…** adds a row from a
   preset, edits it, stores its key, tests it (lists the endpoint's models)
@@ -253,6 +254,11 @@ picks it up, with the key as `{file:…/api-key}`. For live notes, add
 `{"chat_template_kwargs": {"enable_thinking": false}}` as the row's extra
 fields.
 
+The OpenCode config names the key as `{env:QINDA_LLM_API_KEY}`, which is
+set only in `~/.zshrc`, so apps started from the desktop do not see it and
+the server answers 401. Point the row at the file instead:
+`{file:~/.config/qinda-llm/api-key}` (or just the path).
+
 ### Laya (self-hosted gate)
 
 Laya is packaged in the `qindaqt` overlay as `sci-ml/laya` (the library
@@ -273,14 +279,56 @@ sudo systemctl enable --now laya-serve.service
 **Measured 2026-09-27:** with the gate's own questions, the English
 checkpoint judged poorly: small talk scored above lecture content, and
 every stretch came back as a "new topic". On a busy CPU each request took
-15–22 s. Leave the gate off unless a re-test on an idle machine, or Jev,
-does better.
+15–22 s. Re-tested on the idle laptop the same evening, the judgements were
+the same and each request still took 14–20 s with 1.5 GB resident. Leave
+the gate off; the engine's own cadence (minimum words and interval) already
+decides when to revise.
 
 It listens on `127.0.0.1:8000` (`/etc/laya/serve.env`, which also takes
 `LAYA_API_KEY` if you expose it). In QindaNote, open **Live Notes ▸
 Settings ▸ Gate ▸ Laya (self-hosted)**; the defaults are
 `http://127.0.0.1:8000` and model `english`. TypeSafe **Jev** is the hosted
 alternative (a key from typesafe.ai, `$JEV_API_KEY`).
+
+### Offline notes on the laptop (D-062)
+
+Local Whisper plus a small local model makes live notes work with no
+network at all. The model is packaged in the `qindaqt` overlay as
+`sci-ml/qinda-notes-llm`: Qwen3.5-4B (unsloth UD-Q4_K_XL, 2.9 GB, pinned)
+under `/usr/share/gguf`, served by `sci-misc/llama-cpp[vulkan]` on the
+integrated GPU. It is **on demand**: `qinda-notes-llm.socket` listens on
+`127.0.0.1:8080`, the first request starts llama-server and waits until
+the model is loaded (about 4 s from the page cache), and it unloads after
+15 idle minutes, so its ~4 GB is held only during a session. Thinking is
+turned off server-side (`LLAMA_ARG_CHAT_TEMPLATE_KWARGS` in
+`/etc/qinda-notes-llm/serve.env`), so no extra fields are needed.
+
+```sh
+sudo emerge sci-ml/qinda-notes-llm
+sudo systemctl enable --now qinda-notes-llm.socket
+```
+
+In **AI ▸ AI Providers…**, add the preset **Local notes model (this
+machine, offline)**; it is model `qwen3.5-4b` at that address.
+
+**Measured 2026-09-27** (qinda-top: Ryzen 7 5825U, Radeon Barcelo,
+13 GiB) on the same four-minute podcast as the Ornith run, Whisper
+transcribing at the same time:
+
+| | Ornith 1.5 on qinda | Qwen3.5-4B on the laptop |
+|---|---|---|
+| reading (prompt) | 120–145 tok/s | 73–115 tok/s |
+| writing | 18–23 tok/s | 7–10 tok/s |
+| first notes on the page | 23 s after sending | 52 s |
+| a full rewrite | ~45 s | 65–78 s |
+| whole run, 3 revisions | 153 s | 252 s |
+
+Writing speed is the limit (memory bandwidth on a shared-memory iGPU), so
+the local model is about half as fast as Ornith per token. It is never
+queued behind another job, though. The notes kept the structure (summary,
+timestamped sections, bold terms, a quote, a numbered walkthrough, a
+highlighted takeaway) and misheard one proper noun. Free memory never fell
+below 3.4 GB with the desktop, QindaNote and Whisper running.
 
 ## Settings
 

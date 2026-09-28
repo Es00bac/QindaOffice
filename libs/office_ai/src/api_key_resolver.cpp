@@ -53,6 +53,14 @@ bool ApiKeyResolver::isReference(const QString &text)
         && t.endsWith(QLatin1Char('}'));
 }
 
+QString ApiKeyResolver::normalizeReference(const QString &text)
+{
+    const QString t = text.trimmed();
+    const bool path = (t.startsWith(QLatin1String("~/")) || t.startsWith(QLatin1Char('/')))
+        && !t.contains(QLatin1Char(' '));
+    return path ? QStringLiteral("{file:%1}").arg(t) : t;
+}
+
 QString ApiKeyResolver::expandHome(const QString &path)
 {
     if (path == QLatin1String("~")) {

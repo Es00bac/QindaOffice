@@ -44,6 +44,15 @@ LOCAL = [
              "(http://<host>:<port>/v1). Its --api-key goes in as a file reference: "
              "{file:~/.config/<name>/api-key}.",
      "models": []},
+    # AGENT-CONTRACT: the laptop's offline notes model, QindaGentoo
+    # sci-ml/qinda-notes-llm (socket 127.0.0.1:8080, alias NOTES_ALIAS).
+    {"id": "qinda-notes-llm", "name": "Local notes model (this machine, offline)", "kind": "openai",
+     "baseUrl": "http://127.0.0.1:8080/v1", "env": [], "local": True,
+     "doc": "https://github.com/Es00bac/QindaGentoo/tree/master/sci-ml/qinda-notes-llm",
+     "hint": "sci-ml/qinda-notes-llm: Qwen3.5-4B on llama.cpp, loaded on first use and "
+             "unloaded when idle. Enable once: systemctl enable --now qinda-notes-llm.socket",
+     "models": [{"id": "qwen3.5-4b", "name": "Qwen3.5-4B", "context": 32768, "output": 8192,
+                 "reasoning": False}]},
     {"id": "ollama", "name": "Ollama (this machine)", "kind": "openai",
      "baseUrl": "http://127.0.0.1:11434/v1", "env": [], "local": True,
      "doc": "https://ollama.com", "models": []},

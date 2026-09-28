@@ -37,6 +37,10 @@ void AiProvidersTest::keyReferencesEnvAndOpenCode()
     QCOMPARE(ApiKeyResolver::fromReference(QStringLiteral("{env:QQO_TEST_KEY}")), QStringLiteral("env-secret"));
     QVERIFY(ApiKeyResolver::fromReference(QStringLiteral("sk-literal")).isEmpty());
     QVERIFY(!ApiKeyResolver::isReference(QStringLiteral("sk-literal")));
+    QCOMPARE(ApiKeyResolver::normalizeReference(QStringLiteral(" ~/.config/qinda-llm/api-key ")),
+             QStringLiteral("{file:~/.config/qinda-llm/api-key}"));
+    QCOMPARE(ApiKeyResolver::normalizeReference(QStringLiteral("sk-literal")), QStringLiteral("sk-literal"));
+    QCOMPARE(ApiKeyResolver::normalizeReference(QStringLiteral("{env:X}")), QStringLiteral("{env:X}"));
     QString which;
     QCOMPARE(ApiKeyResolver::fromEnvironment({QStringLiteral("QQO_UNSET_KEY"), QStringLiteral("QQO_TEST_KEY")}, &which),
              QStringLiteral("env-secret"));

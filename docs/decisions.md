@@ -5,6 +5,36 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-062: Offline live notes — an on-demand local model on the laptop
+
+**Date:** 2026-09-28 · **Status:** accepted (owner request)
+
+**Context.** The owner wants live notes to work fully offline on the
+laptop (qinda-top: 8-core Zen 3, 13 GiB, Radeon Barcelo iGPU) next to the
+desktop and QindaNote, with local Whisper, and without the Laya gate,
+which judged poorly and slowly (live-notes.md).
+
+**Decision.**
+1. The model is Qwen3.5-4B, the official instruct weights at unsloth's
+   UD-Q4_K_XL. No fine-tune on Hugging Face was better suited: the popular
+   ones are reasoning distillations (slower with thinking on, no gain with
+   it off), agentic or uncensored variants, and the DFlash drafter needs
+   SGLang/vLLM.
+2. It is packaged, not hand-installed: `sci-ml/qinda-notes-llm` in the
+   overlay (weights pinned; llama.cpp from ::guru with Vulkan).
+3. It is socket-activated and unloads when idle, so the ~4 GB is held only
+   while a client uses it.
+4. The suite ships a provider preset `qinda-notes-llm` for it
+   (`127.0.0.1:8080`, model `qwen3.5-4b`); thinking is disabled by the
+   server, not by the client.
+5. The key-reference field also accepts a bare path (`~/…` or `/…`), and
+   stores it as `{file:…}`.
+
+**Consequences.** Offline sessions update about half as fast as Ornith on
+qinda (measured, live-notes.md). Full rewrites dominate the time on a slow
+writer, so the next notes-engine change should rewrite less per revision.
+The preset's address and the overlay's socket are an AGENT-CONTRACT pair.
+
 ## D-061: Live notes, round two — flag, prep, recording, review, hand-offs
 
 **Date:** 2026-09-27 · **Status:** accepted (owner request; M56)
