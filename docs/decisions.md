@@ -5,6 +5,34 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-064: Agents work on the live document through a granted semantic service
+
+**Date:** 2026-09-29 · **Status:** accepted (owner request; M58)
+
+**Context.** The owner wants an AI partner to understand and operate actual
+application workflows through structured state and actions, from a built-in
+assistant, CLI or API, without needing screenshots to discover controls.
+
+**Decision.** Adopt QindaTK's independent `QindaTK::agent` contract. Apps own
+domain providers over existing document/undo code; `office_quick` supplies a
+private Unix endpoint and persistent per-window Off/Read/Edit commands. No
+remote method increases a grant. Calc is the first implemented provider:
+active-sheet edits, typed/recalculated state, the grid's actual visible bands,
+input/draft/modal rules, revision preconditions, idempotent request receipts
+and an undo reference that cannot undo an intervening human edit.
+
+The built-in assistant's optional `DocumentTools::revisionToken()` closes the
+same stale-reply/undo gap. Calc bulk assistant edits validate before mutation
+(an intentional tightening of D-058's bulk-input behavior). Session grants
+are menu/command-search/global-menu controls rather than new ribbon chrome.
+
+**Consequences.** Models plan; application code owns facts and writes. The
+same-user local boundary is cooperative, not per-client sandboxing. Providers
+for Write/Show/Note and other apps remain required. This milestone is bounded
+and synchronous, without remote access, async tasks, cross-document atomicity
+or automatic semantic adapters for all toolkit controls. Exact contracts,
+limits, usage and tests are in [agent-interface.md](agent-interface.md).
+
 ## D-062: Offline live notes — an on-demand local model on the laptop
 
 **Date:** 2026-09-28 · **Status:** accepted (owner request)

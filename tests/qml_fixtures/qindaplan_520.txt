@@ -174,18 +174,25 @@ QQuickRootItem#PlanWindow
             NavigationRail#planRail
               QQuickItem#navigationGroup_views [hidden]
                 QQuickButton#navigationButton_views [hidden]
+                  Icon#navigationIcon_views [hidden]
               QQuickItem#navigationItem_calendar
                 QQuickButton#navigationButton_calendar
+                  Icon#navigationIcon_calendar
               QQuickItem#navigationItem_gantt
                 QQuickButton#navigationButton_gantt
+                  Icon#navigationIcon_gantt
               QQuickItem#navigationItem_reports
                 QQuickButton#navigationButton_reports
+                  Icon#navigationIcon_reports
               QQuickItem#navigationItem_resources
                 QQuickButton#navigationButton_resources
+                  Icon#navigationIcon_resources
               QQuickItem#navigationItem_sheet
                 QQuickButton#navigationButton_sheet
+                  Icon#navigationIcon_sheet
               QQuickItem#navigationItem_usage
                 QQuickButton#navigationButton_usage
+                  Icon#navigationIcon_usage
             Notice#planUsageNotice [hidden]
               IconButton#noticeDismiss [hidden]
               Label#noticeText [hidden]

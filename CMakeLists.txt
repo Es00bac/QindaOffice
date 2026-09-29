@@ -32,6 +32,15 @@ find_package(Qt6 6.11 REQUIRED COMPONENTS Core Concurrent Gui Widgets DBus Netwo
 # development checkout installs to <QindaTK>/install; point CMAKE_PREFIX_PATH
 # at it, or at the system prefix the dev-libs/qindatk ebuild installs into.
 find_package(QindaTK 0.1 REQUIRED)
+# A source-only development dependency, never a home-directory installation.
+set(QQO_AGENT_SOURCE_DIR "" CACHE PATH "QindaTK source checkout for an uninstalled agent SDK")
+if(NOT TARGET QindaTK::agent)
+    if(QQO_AGENT_SOURCE_DIR)
+        add_subdirectory("${QQO_AGENT_SOURCE_DIR}/src/agent" agent-sdk EXCLUDE_FROM_ALL)
+    else()
+        message(FATAL_ERROR "QindaOffice requires QindaTK::agent; update dev-libs/qindatk or set QQO_AGENT_SOURCE_DIR for development")
+    endif()
+endif()
 # Poppler renders the print preview from the very PDF the job would print.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(POPPLER_QT6 REQUIRED IMPORTED_TARGET poppler-qt6)

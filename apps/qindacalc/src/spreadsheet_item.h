@@ -102,6 +102,20 @@ public:
     [[nodiscard]] qreal scrollHeight() const { return m_scrollHeight; }
     [[nodiscard]] qreal viewportWidth() const;
     [[nodiscard]] qreal viewportHeight() const;
+    // Semantic projection of the exact bands used by painting/hit-testing,
+    // including frozen panes and filtered rows. Indices are zero-based.
+    [[nodiscard]] QList<qint32> visibleRows() const
+    {
+        QList<qint32> rows;
+        for (const auto &band : visibleRowBands()) rows.append(band.index);
+        return rows;
+    }
+    [[nodiscard]] QList<qint32> visibleColumns() const
+    {
+        QList<qint32> columns;
+        for (const auto &band : visibleColumnBands()) columns.append(band.index);
+        return columns;
+    }
     // Freeze state is DOCUMENT state (Sheet::freezeRows/Cols — it
     // round-trips to xlsx and rides undo/recovery); the item reads through.
     [[nodiscard]] CalcEng::CellAddr frozen() const;

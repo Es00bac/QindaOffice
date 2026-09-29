@@ -33,6 +33,37 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M58 live-agent gates (D-064)
+
+Qualified 2026-09-29 in a clean qinda build against Portage-installed QindaTK
+r13: **129/129 CTest targets passed** (296.87 s). Heavy qualification moved off
+the laptop at the owner's request to leave resources for video playback.
+
+- `tst_calc_agent`: real Calc QtQuick scene, Unix socket + subprocess CLI;
+  budget edit/recalculation/receipt/retry/named undo; human stale revision,
+  validation rejects the whole batch, unfinished input blocks the action.
+- `calc_agent_process`: actual **offscreen** `qindacalc` executable, isolated
+  XDG directories and no live session bus; default Off, read-only refusal,
+  Edit grant, CLI → formula result 7,632 → 9,882 → undo 7,632, MCP live read.
+- `tst_assistant_edits`: delayed model response after human/local edits or
+  editing revoked; no mutation; Undo change refuses a newer human edit.
+- `tst_calc_tools`: built-in batch validation and bounds before any mutation.
+- Existing Calc UI structural fixtures/grabs, command search/ribbon coverage,
+  and panel-menu validator still pass. Grant commands are intentional shared
+  session menu-only entries, not additional ribbon buttons.
+
+The Mail, Books, Plan and Base structural fixtures were refreshed for the
+current toolkit: NavigationView icon children and DataTable horizontal-scroll
+containment. Calendar fixture names normalize dates; behavior tests still use
+real dated targets. Reviewed Calc, Mail, Books, Plan and Base captures at wide
+and 520 px widths. Books retains a pre-existing narrow dashboard header
+overlap, outside the agent interface; M58 changes no QML geometry.
+
+On-desktop follow-up: choose Off/Read/Edit from AI and the panel menu,
+confirm checked state/status and immediate revoke; finish/cancel a formula
+draft before retry; Edit → Undo and agent undo share native history. Desktop
+launch remains explicit user consent, not part of the headless gates.
+
 ## On-desktop manual checklist (run inside a QindaQt session)
 
 From the M0 acceptance criteria. **Verified 2026-09-14** on the live QindaQt

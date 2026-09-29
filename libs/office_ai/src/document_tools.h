@@ -45,6 +45,12 @@ public:
     [[nodiscard]] virtual QString snapshot(int budget) = 0;
     // The operation manual: every op, its fields, one example each.
     [[nodiscard]] virtual QString operationGuide() const = 0;
+    // Optional live revision contract. A reply based on a different revision
+    // is refused by AssistantController, including when another client edits.
+    [[nodiscard]] virtual QString revisionToken() const { return {}; }
+    // Undo ignores harmless focus/viewport changes, but must detect content
+    // changes and unfinished input. Defaults to the conservative live token.
+    [[nodiscard]] virtual QString undoRevisionToken() const { return revisionToken(); }
     // Applies `edits` against the document as it is NOW, as ONE undo step
     // (nothing when no operation applies). Operations refer to the ids of
     // the latest snapshot(); an op whose target no longer matches is

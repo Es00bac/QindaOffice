@@ -116,6 +116,8 @@ private:
     bool m_turnEdits = false;       // the running turn was sent in edit mode
     qsizetype m_replyStart = -1;    // where the running reply starts in m_conversation
     QString m_lastEditSummary;
+    QString m_turnRevision;
+    QString m_lastEditRevision;
 };
 
 } // namespace QindaOffice::Ai

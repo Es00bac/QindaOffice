@@ -61,6 +61,9 @@ inline QStringList sharedMenuOnly()
 {
     return {QStringLiteral("fileQuitAction"), QStringLiteral("editFindNextAction"),
             QStringLiteral("editFindPreviousAction"), QStringLiteral("settingsRestorePreviousAction"),
+            // Session-only access controls live in the AI menu/command
+            // search, alongside other shared process/session preferences.
+            QStringLiteral("agentDisconnect"), QStringLiteral("agentRead"), QStringLiteral("agentEdit"),
             QStringLiteral("helpAboutAction"), QStringLiteral("helpAboutQtAction")};
 }
 

@@ -139,6 +139,7 @@ void AssistantController::send(const QString &rawPrompt)
     request.messages = m_history;
     request.messages.append({QStringLiteral("user"), prompt, {}});
     m_turnEdits = editMode();
+    m_turnRevision.clear();
     if (m_turnEdits) {
         // D-058: the document as it is NOW rides with every turn (it may
         // have changed since the last one), after the history.
@@ -148,6 +149,7 @@ void AssistantController::send(const QString &rawPrompt)
         request.messages.last().text = tr("CURRENT %1:\n%2\n\nREQUEST: %3")
                                            .arg(m_tools->documentNoun().toUpper(),
                                                 m_tools->snapshot(60000), prompt);
+        m_turnRevision = m_tools->revisionToken();
     } else if (m_context != nullptr && m_scope > 0) {
         const DocumentContext context = m_context->context(m_scope == 2);
         QString material;
@@ -277,10 +279,19 @@ void AssistantController::applyEdits(const QString &reply)
     QString shown = parsed.prose;
     if (!parsed.error.isEmpty()) {
         shown += QStringLiteral("\n\n**%1** %2").arg(kRoleError, escapeMarkdown(parsed.error));
+    } else if (!editMode()) {
+        shown += QStringLiteral("\n\n**%1** %2").arg(kRoleError,
+            tr("Editing was turned off while the reply was being generated; nothing was changed."));
+    } else if (!m_turnRevision.isEmpty() && m_turnRevision != m_tools->revisionToken()) {
+        // AGENT-GUARD: a human, local agent or draft input can change the
+        // live document during model inference. Never apply a stale reply.
+        shown += QStringLiteral("\n\n**%1** %2").arg(kRoleError,
+            tr("The document changed while the reply was being generated. Ask again using the current document; nothing was changed."));
     } else {
         const EditOutcome outcome = m_tools->apply(*parsed.edits);
         if (outcome.applied > 0) {
             m_lastEditSummary = outcome.changes.join(QStringLiteral("; "));
+            m_lastEditRevision = m_tools->undoRevisionToken();
             emit lastEditChanged();
             shown += QStringLiteral("\n\n✓ ") + tr("Changed %1 (%n edit(s)):", "", outcome.applied)
                          .arg(m_tools->documentNoun());
@@ -307,10 +318,17 @@ void AssistantController::undoLastEdit()
     if (m_tools == nullptr || m_lastEditSummary.isEmpty()) {
         return;
     }
-    m_tools->undo();
+    const bool stale = !m_lastEditRevision.isEmpty()
+        && m_lastEditRevision != m_tools->undoRevisionToken();
+    if (!stale) {
+        m_tools->undo();
+    }
     m_lastEditSummary.clear();
+    m_lastEditRevision.clear();
     emit lastEditChanged();
-    appendMessage(kRoleAssistant, tr("_Undid the last change._"));
+    appendMessage(kRoleAssistant, stale
+        ? tr("The document changed after the assistant edit. Use the document's undo history to choose what to undo.")
+        : tr("_Undid the last change._"));
 }
 
 void AssistantController::trimHistory()

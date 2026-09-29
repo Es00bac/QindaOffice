@@ -8,10 +8,11 @@
 // writes cells, blocks of cells and clears ranges. One reply's operations
 // become ONE applyInputs() call, so one Undo reverts them.
 //
-// Scope: the active sheet only (the snapshot names the others). Like
-// Replace All, bulk input skips data-validation prompts.
+// Scope: the active sheet only (the snapshot names the others). All
+// proposed inputs pass worksheet bounds and data validation before mutation.
 
 #include "document_tools.h"
+#include <functional>
 
 namespace QindaOffice::Apps::QindaCalc {
 
@@ -28,12 +29,20 @@ public:
     [[nodiscard]] QString documentNoun() const override { return QStringLiteral("spreadsheet"); }
     [[nodiscard]] QString snapshot(int budget) override;
     [[nodiscard]] QString operationGuide() const override;
+    void setRevisionProvider(std::function<QString()> revision, std::function<QString()> undoRevision)
+    { m_revision = std::move(revision); m_undoRevision = std::move(undoRevision); }
+    void setWorkflowGuard(std::function<QString()> guard) { m_guard = std::move(guard); }
+    QString revisionToken() const override { return m_revision ? m_revision() : QString(); }
+    QString undoRevisionToken() const override { return m_undoRevision ? m_undoRevision() : revisionToken(); }
     Ai::EditOutcome apply(const QJsonArray &edits) override;
     void undo() override;
 
 private:
     SpreadsheetDocument *m_document;
     CalcHost *m_host;
+    std::function<QString()> m_revision;
+    std::function<QString()> m_undoRevision;
+    std::function<QString()> m_guard;
 };
 
 } // namespace QindaOffice::Apps::QindaCalc

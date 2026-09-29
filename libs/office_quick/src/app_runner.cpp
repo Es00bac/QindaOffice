@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "app_runner.h"
+#include "agent_runtime.h"
 
 #include "desktop_appearance.h"
 
@@ -80,6 +81,12 @@ int runOfficeApp(int &argc, char *argv[], const QString &desktopId, const QUrl &
     QCommandLineOption newInstance(QStringLiteral("new-instance"),
                                    QStringLiteral("Launch a second independent process"));
     parser.addOption(newInstance);
+    QCommandLineOption agentRead(QStringLiteral("agent-read"),
+        QStringLiteral("Allow local agents to read documents in this new process"));
+    QCommandLineOption agentEdit(QStringLiteral("agent-edit"),
+        QStringLiteral("Allow local agents to read and edit documents in this new process"));
+    parser.addOption(agentRead);
+    parser.addOption(agentEdit);
     QCommandLineOption listCommandsOption(QStringLiteral("list-commands"),
                                           QStringLiteral("Print every command (id, label, shortcut, icon, menu) and exit"));
     parser.addOption(listCommandsOption);
@@ -87,6 +94,10 @@ int runOfficeApp(int &argc, char *argv[], const QString &desktopId, const QUrl &
                                  QStringLiteral("[paths...]"));
     parser.process(application);
     const QStringList paths = parser.positionalArguments();
+    if (parser.isSet(agentRead) && parser.isSet(agentEdit)) {
+        qWarning("Choose --agent-read or --agent-edit");
+        return 2;
+    }
     if (parser.isSet(listCommandsOption)) {
         std::unique_ptr<DocumentHost> host(hostFactory());
         QTextStream out(stdout);
@@ -110,9 +121,15 @@ int runOfficeApp(int &argc, char *argv[], const QString &desktopId, const QUrl &
     OfficeApplication office;
     office.setHostFactory(hostFactory);
     office.setWindowComponent(&engine, windowUrl);
+    AgentRuntime agent(&office, parser.isSet(agentEdit) ? 2 : parser.isSet(agentRead) ? 1 : 0);
+    QString agentError;
+    if (!agent.start(&agentError)) {
+        qWarning("Local agent endpoint unavailable: %s", qPrintable(agentError));
+        if (parser.isSet(agentRead) || parser.isSet(agentEdit)) return 2;
+    }
     QObject::connect(&office, &OfficeApplication::diagnosticReported, &office,
                      [](const QString &message) { qWarning().noquote() << message; });
-    if (!parser.isSet(newInstance)) {
+    if (!parser.isSet(newInstance) && !parser.isSet(agentRead) && !parser.isSet(agentEdit)) {
         bool handedOff = false;
         if (!office.acquirePrimary(paths, &handedOff) && handedOff) {
             return 0; // another instance owns the name and took the paths

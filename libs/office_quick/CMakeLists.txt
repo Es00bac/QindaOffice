@@ -88,6 +88,8 @@ qt_add_qml_module(office_quick
     DEPENDENCIES QtQuick QindaTK
     SOURCES
         src/action_model.cpp src/action_model.h
+        src/agent_runtime.cpp src/agent_runtime.h
+        src/document_host_agent.cpp
         src/app_runner.cpp src/app_runner.h
         src/app_services.h
         src/desktop_settings.cpp src/desktop_settings.h
@@ -150,6 +152,7 @@ target_link_libraries(office_quick
         Qt6::DBus
         Qt6::PrintSupport
         QindaTK::qindatk
+        QindaTK::agent
         office_core
     PRIVATE
         Qt6::GuiPrivate

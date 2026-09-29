@@ -7,6 +7,7 @@
 
 #include "calc_host.h"
 #include "calc_tools.h"
+#include "calc_agent.h"
 
 #include "spreadsheet_item.h"
 #include "standard_actions.h"
@@ -104,6 +105,12 @@ void CalcHost::createAssistant()
     // D-058: the assistant fills and fixes cells itself (one undo step).
     m_aiTools = std::make_unique<CalcTools>(m_document, this);
     m_assistant->setDocumentTools(m_aiTools.get());
+    auto *agent = new CalcAgent(this, m_document, m_aiTools.get());
+    setAgentProvider(agent);
+    auto *tools = static_cast<CalcTools *>(m_aiTools.get());
+    tools->setRevisionProvider([agent] { return agent->revision(); },
+                              [agent] { return agent->undoRevisionToken(); });
+    tools->setWorkflowGuard([agent] { return agent->blockedReason(); });
     ActionEntry *toggle = action(QString::fromLatin1(ActionId::kAiAssistant));
     toggle->setEnabled(true);
     toggle->setCheckable(true);

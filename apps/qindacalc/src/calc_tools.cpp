@@ -94,6 +94,13 @@ QString CalcTools::operationGuide() const
 Ai::EditOutcome CalcTools::apply(const QJsonArray &edits)
 {
     Ai::EditOutcome outcome;
+    if (m_guard) {
+        const QString reason = m_guard();
+        if (!reason.isEmpty()) {
+            outcome.errors.append(reason);
+            return outcome;
+        }
+    }
     QList<QPair<CellAddr, QString>> inputs;
     const auto text = [](const QJsonValue &value) {
         return value.isDouble() ? QString::number(value.toDouble(), 'g', 15)
@@ -155,6 +162,23 @@ Ai::EditOutcome CalcTools::apply(const QJsonArray &edits)
         }
     }
     if (!inputs.isEmpty()) {
+        // AGENT-CONTRACT (CalcTools and CalcAgent): built-in and external
+        // assistants use the same mutation path, including validation. A
+        // rule failure rejects the entire batch before one undo step exists.
+        const auto &sheet = m_document->workbook()->sheetAt(m_document->activeSheet());
+        for (const auto &[address, input] : inputs) {
+            if (address.row >= 1048576 || address.col >= 16384) {
+                outcome.errors.append(QObject::tr("Cell address is outside worksheet bounds; nothing was changed"));
+            } else if (const auto *rule = sheet.validationAt(address);
+                       rule != nullptr && !validationAccepts(*rule, input)) {
+                outcome.errors.append(addrText(address) + QStringLiteral(": ")
+                                      + validationDescription(*rule));
+            } else {
+                continue;
+            }
+            outcome.changes.clear();
+            return outcome;
+        }
         m_document->applyInputs(inputs, QObject::tr("Assistant Edit"));
         if (SpreadsheetItem *grid = m_host->grid()) {
             grid->refreshAll();

@@ -16,6 +16,7 @@ class CalcToolsTest : public QObject {
     Q_OBJECT
 private slots:
     void snapshotEditAndUndo();
+    void validatesWholeBatchBeforeMutation();
 };
 
 void CalcToolsTest::snapshotEditAndUndo()
@@ -48,6 +49,31 @@ void CalcToolsTest::snapshotEditAndUndo()
     tools->undo();
     QVERIFY(scene.doc->inputTextAt({3, 1}).isEmpty());
     QCOMPARE(scene.doc->inputTextAt({5, 3}), QStringLiteral("stale"));
+}
+
+void CalcToolsTest::validatesWholeBatchBeforeMutation()
+{
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    CalcEng::ValidationRule rule;
+    rule.range = {{4, 1}, {4, 1}};
+    rule.kind = CalcEng::ValidationRule::Kind::WholeNumber;
+    rule.min = 1;
+    rule.max = 10;
+    scene.doc->setValidations({rule});
+    const int before = scene.doc->undoStack()->index();
+    auto *tools = scene.host.assistant()->documentTools();
+    const auto edits = QJsonDocument::fromJson(
+        R"({"op":"set_cells","cells":{"B5":"-2","C5":"999"}})").object();
+    auto outcome = tools->apply(QJsonArray{edits});
+    QCOMPARE(outcome.applied, 0);
+    QCOMPARE(outcome.errors.size(), 1);
+    QVERIFY(scene.doc->inputTextAt({4, 2}).isEmpty());
+    QCOMPARE(scene.doc->undoStack()->index(), before);
+    outcome = tools->apply(QJsonArray{QJsonDocument::fromJson(
+        R"({"op":"set_cells","cells":{"A1048577":"bad"}})").object()});
+    QCOMPARE(outcome.applied, 0);
+    QCOMPARE(scene.doc->undoStack()->index(), before);
 }
 
 CALC_TEST_MAIN(CalcToolsTest)

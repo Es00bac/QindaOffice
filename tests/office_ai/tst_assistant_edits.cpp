@@ -26,6 +26,8 @@ public:
     QList<QJsonArray> applied;
     int undos = 0;
     int snapshots = 0;
+    int revision = 0;
+    int focus = 0;
     QString documentNoun() const override { return QStringLiteral("document"); }
     QString snapshot(int) override
     {
@@ -33,12 +35,15 @@ public:
         return QStringLiteral("[0] text:\nhello wrold");
     }
     QString operationGuide() const override { return QStringLiteral("- {\"op\":\"replace_block\"}"); }
+    QString revisionToken() const override { return QStringLiteral("%1/%2").arg(revision).arg(focus); }
+    QString undoRevisionToken() const override { return QString::number(revision); }
     EditOutcome apply(const QJsonArray &edits) override
     {
         applied.append(edits);
+        ++revision;
         return {int(edits.size()), {QStringLiteral("rewrote block 0")}, {}};
     }
-    void undo() override { ++undos; }
+    void undo() override { ++undos; ++revision; }
 };
 
 QByteArray sse(const QString &text)
@@ -56,6 +61,8 @@ class AssistantEditsTest : public QObject {
 private slots:
     void protocolParses();
     void controllerAppliesAndUndoes();
+    void refusesInterveningChange_data();
+    void refusesInterveningChange();
 };
 
 void AssistantEditsTest::protocolParses()
@@ -109,6 +116,7 @@ void AssistantEditsTest::controllerAppliesAndUndoes()
     QVERIFY(controller.conversation().contains(QStringLiteral("rewrote block 0")));
     QCOMPARE(controller.lastReply(), QStringLiteral("Fixed the spelling."));
     QCOMPARE(controller.lastEditSummary(), QStringLiteral("rewrote block 0"));
+    ++tools.focus; // clicking Undo changes focus without changing content
     controller.undoLastEdit();
     QCOMPARE(tools.undos, 1);
     QVERIFY(controller.lastEditSummary().isEmpty());
@@ -119,6 +127,50 @@ void AssistantEditsTest::controllerAppliesAndUndoes()
     QTRY_VERIFY(!controller.streaming() && !controller.lastReply().isEmpty());
     QTRY_VERIFY(controller.lastReply().contains(QStringLiteral("qinda-edits")));
     QCOMPARE(tools.applied.size(), 1);
+
+    controller.setEditMode(true);
+    controller.send(QStringLiteral("apply once more"));
+    QTRY_VERIFY(!controller.streaming() && tools.applied.size() == 2);
+    ++tools.revision; // a human edit after the assistant's undo step
+    controller.undoLastEdit();
+    QCOMPARE(tools.undos, 1);
+    QVERIFY(controller.lastEditSummary().isEmpty());
+    QVERIFY(controller.conversation().contains(QStringLiteral("undo history")));
+}
+
+void AssistantEditsTest::refusesInterveningChange_data()
+{
+    QTest::addColumn<bool>("revoke");
+    QTest::newRow("human-or-local-agent-edit") << false;
+    QTest::newRow("editing-revoked-during-inference") << true;
+}
+
+void AssistantEditsTest::refusesInterveningChange()
+{
+    QFETCH(bool, revoke);
+    MockSseServer server;
+    server.setScript({{sse(QStringLiteral("Done.\n```qinda-edits\n"
+        "{\"edits\":[{\"op\":\"replace_block\",\"block\":0}]}\n```")), 100}});
+    QTemporaryDir dir;
+    ModelCatalog catalog(dir.filePath(QStringLiteral("providers.json")));
+    ProviderConfig row;
+    row.id = QStringLiteral("mock");
+    row.kind = QStringLiteral("openai");
+    row.baseUrl = QStringLiteral("http://127.0.0.1:%1/v1").arg(server.port());
+    row.model = QStringLiteral("m");
+    catalog.addProvider(row);
+    FakeTools tools;
+    AssistantController controller(&catalog, nullptr, nullptr);
+    controller.setModelId(QStringLiteral("mock/m"));
+    controller.setDocumentTools(&tools);
+    QSignalSpy streaming(&controller, &AssistantController::streamingChanged);
+    controller.send(QStringLiteral("change the document"));
+    if (revoke) controller.setEditMode(false);
+    else ++tools.revision;
+    QTRY_VERIFY(!controller.streaming() && streaming.size() >= 2);
+    QVERIFY(tools.applied.isEmpty());
+    QVERIFY(controller.conversation().contains(QStringLiteral("nothing was changed")));
+    QVERIFY(!controller.conversation().contains(QStringLiteral("qinda-edits")));
 }
 
 int main(int argc, char *argv[])

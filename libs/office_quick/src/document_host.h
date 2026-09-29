@@ -34,6 +34,7 @@
 
 class QShortcut;
 class QTimer;
+namespace QindaTK { class AgentProvider; }
 
 namespace QindaOffice::Quick {
 
@@ -66,6 +67,7 @@ class DocumentHost : public QObject {
     Q_PROPERTY(QUrl preferencesPage READ preferencesPage NOTIFY preferencesPageChanged)
     Q_PROPERTY(QString appDisplayName READ appDisplayName CONSTANT)
     Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
+    Q_PROPERTY(int agentAccess READ agentAccess WRITE setAgentAccess NOTIFY agentAccessChanged)
 public:
     explicit DocumentHost(QObject *parent = nullptr);
     ~DocumentHost() override;
@@ -76,6 +78,12 @@ public:
     void setDocument(Core::Document *document);
     [[nodiscard]] Core::Document *document() const { return m_document; }
     [[nodiscard]] bool hasDocument() const { return m_document != nullptr; }
+    // Borrows a provider on this thread (normally a child of the host).
+    // UI grants are session-only; the transport cannot increase them.
+    void setAgentProvider(QindaTK::AgentProvider *provider);
+    QindaTK::AgentProvider *agentProvider() const { return m_agentProvider; }
+    int agentAccess() const { return m_agentAccess; }
+    void setAgentAccess(int access); // 0 off, 1 read, 2 edit; app/UI only.
 
     // ---- window ----
     // Called once by the application after QML created the window. The
@@ -181,6 +189,7 @@ protected:
     void finalizeHost();
 
 signals:
+    void agentAccessChanged();
     void newWindowRequested();
     void openPathsRequested(const QStringList &paths);
     // Emitted from an ACCEPTED close, while everything is still alive.
@@ -237,6 +246,8 @@ private:
     void authorizeClose();
 
     Core::Document *m_document = nullptr;
+    QindaTK::AgentProvider *m_agentProvider = nullptr;
+    int m_agentAccess = 0;
     ActionModel *m_actions;
     MenuTree *m_menuTree;
     QPointer<QQuickWindow> m_window;

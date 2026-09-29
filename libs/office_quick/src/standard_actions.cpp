@@ -70,6 +70,14 @@ void addStandardActions(ActionModel *model, const QString &appDisplayName)
 
     ActionEntry *assistant = model->add(id(kAiAssistant), tr("Assistant…"));
     assistant->setCheckable(true);
+    for (const auto &item : QList<QPair<QString, QString>>{
+            {id(kAgentDisconnect), tr("Disconnect Local Agents")},
+            {id(kAgentRead), tr("Allow Local Agents to Read This Document")},
+            {id(kAgentEdit), tr("Allow Local Agents to Edit This Document")}}) {
+        auto *entry = model->add(item.first, item.second);
+        entry->setCheckable(true);
+        entry->setEnabled(false);
+    }
 
     ActionEntry *restore = model->add(id(kSettingsRestorePrevious),
                                       tr("Restore &Previous Documents"));
@@ -124,7 +132,8 @@ QList<MenuNode> standardMenuTree()
         {a(kViewZoomIn), a(kViewZoomOut), a(kViewZoomReset), MenuNode::separator(),
          a(kViewShowToolBars), a(kViewCompactRibbon), a(kViewShowStatusBar), a(kViewShowMenuBar)}));
     // App menus slot in between View and AI (insertMenuBefore("aiMenu", …)).
-    menus.append(MenuNode::submenu(QStringLiteral("aiMenu"), tr("&AI"), {a(kAiAssistant)}));
+    menus.append(MenuNode::submenu(QStringLiteral("aiMenu"), tr("&AI"), {a(kAiAssistant),
+        MenuNode::separator(), a(kAgentDisconnect), a(kAgentRead), a(kAgentEdit)}));
     menus.append(MenuNode::submenu(QStringLiteral("settingsMenu"), tr("&Settings"),
                                    {a(kSettingsRestorePrevious), MenuNode::separator(),
                                     a(kSettingsPreferences)}));

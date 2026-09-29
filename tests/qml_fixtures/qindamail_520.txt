@@ -8,12 +8,16 @@ QQuickRootItem#MailWindow
             NavigationRail#mailRail
               QQuickItem#navigationGroup_workspaces [hidden]
                 QQuickButton#navigationButton_workspaces [hidden]
+                  Icon#navigationIcon_workspaces [hidden]
               QQuickItem#navigationItem_calendar
                 QQuickButton#navigationButton_calendar
+                  Icon#navigationIcon_calendar
               QQuickItem#navigationItem_mail
                 QQuickButton#navigationButton_mail
+                  Icon#navigationIcon_mail
               QQuickItem#navigationItem_tasks
                 QQuickButton#navigationButton_tasks
+                  Icon#navigationIcon_tasks
             QQuickContentItem#Splitter [hidden]
               Box#calendarSidePane [hidden]
                 Button#calendarNewEvent [hidden]
@@ -34,13 +38,13 @@ QQuickRootItem#MailWindow
                   QQuickRectangle#boxFocusRing [hidden]
                 QQuickItem#calendarGridHeader [hidden]
                 Scroll#calendarGridScroll [hidden]
-                  QQuickItem#calendarGridDay_2026-09-20 [hidden]
-                  QQuickItem#calendarGridDay_2026-09-21 [hidden]
-                  QQuickItem#calendarGridDay_2026-09-22 [hidden]
-                  QQuickItem#calendarGridDay_2026-09-23 [hidden]
-                  QQuickItem#calendarGridDay_2026-09-24 [hidden]
-                  QQuickItem#calendarGridDay_2026-09-25 [hidden]
-                  QQuickItem#calendarGridDay_2026-09-26 [hidden]
+                  QQuickItem#calendarGridDay_<date> [hidden]
+                  QQuickItem#calendarGridDay_<date> [hidden]
+                  QQuickItem#calendarGridDay_<date> [hidden]
+                  QQuickItem#calendarGridDay_<date> [hidden]
+                  QQuickItem#calendarGridDay_<date> [hidden]
+                  QQuickItem#calendarGridDay_<date> [hidden]
+                  QQuickItem#calendarGridDay_<date> [hidden]
                   QQuickItem#calendarGridGutter [hidden]
                   QQuickItem#calendarGridNowLine [hidden]
               Flex#calendarHeader [hidden]

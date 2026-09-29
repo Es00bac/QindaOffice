@@ -30,8 +30,11 @@ inline QString plainClassName(const QObject *object)
 inline QString normalisedName(const QString &name)
 {
     static const QRegularExpression id(QStringLiteral("[0-9a-f]{8}-[0-9a-f]{3,}"));
+    // Calendar dates are real command targets, but the structural fixture
+    // must not become stale every week. Behavior tests verify actual dates.
+    static const QRegularExpression day(QStringLiteral("(?<=calendarGridDay_)[0-9]{4}-[0-9]{2}-[0-9]{2}"));
     QString out = name;
-    return out.replace(id, QStringLiteral("<id>"));
+    return out.replace(id, QStringLiteral("<id>")).replace(day, QStringLiteral("<date>"));
 }
 
 struct DumpNode {

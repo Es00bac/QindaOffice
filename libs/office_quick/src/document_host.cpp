@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "document_host.h"
+#include "agent_provider.h"
 
 #include "app_services.h"
 #include "global_menu_export.h"
@@ -50,6 +51,9 @@ DocumentHost::DocumentHost(QObject *parent)
 
 DocumentHost::~DocumentHost()
 {
+    // Provider cleanup must not reach actions after QObject starts deleting
+    // the host's children (the action model was created before the provider).
+    if (m_agentProvider != nullptr) disconnect(m_agentProvider, nullptr, this, nullptr);
     // The export withdraws its announcement in its destructor; it must go
     // before the tree and model it observes.
     delete m_menuExport;
