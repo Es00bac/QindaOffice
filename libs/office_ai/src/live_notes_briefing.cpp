@@ -16,7 +16,11 @@ QVariantMap NotesBriefing::toMap() const
             {QStringLiteral("quotes"), quotes},
             {QStringLiteral("openQuestions"), openQuestions},
             {QStringLiteral("definitions"), definitions},
-            {QStringLiteral("explainJargon"), explainJargon}};
+            {QStringLiteral("explainJargon"), explainJargon},
+            {QStringLiteral("layout"), layout},
+            {QStringLiteral("sections"), sections},
+            {QStringLiteral("style"), style},
+            {QStringLiteral("timeline"), timeline}};
 }
 
 NotesBriefing NotesBriefing::fromMap(const QVariantMap &map)
@@ -38,6 +42,10 @@ NotesBriefing NotesBriefing::fromMap(const QVariantMap &map)
     b.openQuestions = flag("openQuestions", b.openQuestions);
     b.definitions = flag("definitions", b.definitions);
     b.explainJargon = flag("explainJargon", b.explainJargon);
+    b.layout = text("layout", b.layout);
+    b.sections = map.value(QStringLiteral("sections")).toString().trimmed();
+    b.style = text("style", b.style);
+    b.timeline = flag("timeline", b.timeline);
     return b;
 }
 
@@ -65,7 +73,8 @@ QString scenarioBrief(const QString &id)
 {
     if (id == QLatin1String("lecture")) {
         return QStringLiteral(
-            "This is a LECTURE or class. Organise by the lecture's own structure. Capture every "
+            "This is a LECTURE or class. Use the lecture's own terms and structure where the "
+            "organisation allows. Capture every "
             "definition (as **Term** — meaning), formula, theorem, date and worked example "
             "exactly. When the lecturer signals importance (\"this will be on the exam\", "
             "\"remember\", repetition), ==highlight== it. Note assignments and readings as action "

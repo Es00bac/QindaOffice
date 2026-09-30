@@ -50,6 +50,9 @@ namespace LiveNotesPrompt {
 inline constexpr int kTailModeChars = 9000;
 inline constexpr int kTailSections = 2;
 inline constexpr int kContextChars = 1500;
+// Edit turns show the whole notes up to this size; beyond it the middle
+// sections are shown as their heading and first line (APPEND still works).
+inline constexpr int kEditFullChars = 30000;
 
 // How much the notes keep (the panel's Detail slider). AGENT-CONTRACT: the
 // numbers are persisted (live-notes.json "detail") and shown by
@@ -84,6 +87,12 @@ struct Request {
     // the speakers: …").
     QString restyleReason;
     QHash<QString, QString> speakerNames;
+    // M57: ask for an edit script (live_notes_edits.h) instead of whole
+    // notes — the normal update once there are notes to edit.
+    bool edits = false;
+    // The session stopped: the edit script also tidies the whole notes
+    // (the edit-mode replacement for the final full rewrite).
+    bool finalPass = false;
 };
 [[nodiscard]] bool useTailMode(const QString &notes);
 [[nodiscard]] QString userMessage(const Request &request);

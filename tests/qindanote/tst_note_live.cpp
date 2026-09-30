@@ -313,15 +313,26 @@ void NoteLiveTest::realPipelineEndToEnd()
     live->notesEngine()->setOptions(options);
     QElapsedTimer clock;
     clock.start();
+    // A slow local model needs longer than QTest's 300 s default: run with
+    // QTEST_FUNCTION_TIMEOUT=900000.
+    connect(live->notesEngine(), &QindaOffice::Ai::LiveNotesEngine::failed, this,
+            [&clock](const QString &message) {
+                qInfo("%6.1fs: FAILED %s", clock.elapsed() / 1000.0, qPrintable(message));
+            });
     int lastSegments = -1;
+    QString lastLine;
     qint64 stableSince = 0;
     while (clock.elapsed() < 600000) {
         QTest::qWait(1000);
         if (live->segmentCount() != lastSegments) {
             lastSegments = live->segmentCount();
             stableSince = clock.elapsed();
-            qInfo("%6.1fs: %d segments, %d updates, %s", clock.elapsed() / 1000.0, lastSegments,
-                  live->updateCount(), qPrintable(live->statusText()));
+        }
+        const QString line = QStringLiteral("%1 segments, %2 updates, %3")
+                                 .arg(lastSegments).arg(live->updateCount()).arg(live->statusText());
+        if (line != lastLine) {
+            lastLine = line;
+            qInfo("%6.1fs: %s", clock.elapsed() / 1000.0, qPrintable(line));
         }
         if (lastSegments > 0 && clock.elapsed() - stableSince > 30000 && !live->updating()) {
             break; // the file is transcribed and the model caught up

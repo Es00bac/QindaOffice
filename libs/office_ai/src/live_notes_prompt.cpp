@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "live_notes_prompt.h"
 
+#include "live_notes_edits.h"
+#include "live_notes_layouts.h"
+
 #include <QObject>
 #include <QRegularExpression>
 
@@ -66,28 +69,21 @@ QString detailBrief(int detail)
 
 QString systemPrompt(int detail, const NotesBriefing &briefing, const SessionContext &context)
 {
+    const bool plain = briefing.style == QLatin1String("plain");
     QStringList format;
     format << QStringLiteral("- One `#` title naming the session's subject (improve it as the "
                              "subject becomes clear).")
            << QStringLiteral("- `## Summary` right under the title: 2-5 bullets covering the "
                              "whole session so far.")
-           << (briefing.timestamps
-                   ? QStringLiteral("- Then one `##` section per topic, in the order covered, "
-                                    "with `###` subsections when a topic has parts. End each "
-                                    "`##` heading with the start time in brackets, e.g. "
-                                    "`## Photosynthesis [12:40]`.")
-                   : QStringLiteral("- Then one `##` section per topic, in the order covered, "
-                                    "with `###` subsections when a topic has parts. No "
-                                    "timestamps."))
+           << QStringLiteral("- Then the sections the ORGANISATION below calls for.")
            << QStringLiteral("- Bullets in your own words, as long as the detail level below "
                              "allows; nest sub-points. Keep specifics exact: names, numbers, "
                              "dates, formulas, units, references.")
-           << QStringLiteral("- **Bold** each key term where it is introduced; definitions as "
-                             "`**Term** — meaning`.")
-           << QStringLiteral("- ==Highlight== the few takeaways that matter most (sparingly: "
-                             "about one per section).")
-           << (briefing.quotes ? QStringLiteral("- Memorable or exact wording as a quote: "
-                                                "`> \"…\"`.")
+           << (briefing.quotes ? (plain ? QStringLiteral("- Memorable or exact wording as a "
+                                                         "quote: `> \"…\"`.")
+                                        : QStringLiteral("- Memorable or exact wording as a "
+                                                         "quote callout titled with the speaker, "
+                                                         "e.g. `> [!quote] Maria`."))
                                : QStringLiteral("- No quotes: paraphrase everything."))
            << QStringLiteral("- Your own annotations in italics in parentheses: *(connects to "
                              "the earlier point on X)*, *(speaker corrects the earlier "
@@ -98,6 +94,9 @@ QString systemPrompt(int detail, const NotesBriefing &briefing, const SessionCon
                                  "know, add a one-line plain-language explanation as "
                                  "[[ai: …]] (shown as an AI note, so keep it short and "
                                  "factual; only for terms that need it).");
+    }
+    if (briefing.timeline) {
+        format << LiveNotesLayouts::timelineBrief();
     }
     if (briefing.definitions) {
         format << QStringLiteral("- A `## Definitions` section near the end: every key term "
@@ -117,8 +116,11 @@ QString systemPrompt(int detail, const NotesBriefing &briefing, const SessionCon
         "You are an expert live note-taker. Audio from a live source — a lecture, a meeting, "
         "a video, a conversation — is being transcribed as it happens, and you keep the notes "
         "for it. Each turn you get the notes written so far and the newest transcript; you "
-        "return the revised notes.\n\nWrite GitHub-flavoured Markdown:\n");
+        "revise the notes.\n\nWrite GitHub-flavoured Markdown:\n");
     prompt += format.join(QLatin1Char('\n'));
+    prompt += QStringLiteral("\n\n")
+        + LiveNotesLayouts::layoutBrief(briefing.layout, briefing.sections, briefing.timestamps)
+        + QStringLiteral("\n\n") + LiveNotesLayouts::styleGuide(briefing.style);
     prompt += QStringLiteral(
         "\n\nRevise, do not just append: when new material corrects, extends or clarifies "
         "earlier notes, fix those notes; merge duplicates; move points to the section they "
@@ -135,7 +137,11 @@ QString systemPrompt(int detail, const NotesBriefing &briefing, const SessionCon
         "the first time and the name alone after that. Never guess names.\n"
         "Ignore greetings, small talk, sponsor reads and recognition noise. Never invent "
         "anything the transcript does not say.\n\n"
-        "Reply with the notes only: no preamble, no code fence, no closing remarks.\n\n");
+        "Reply with exactly what the user message asks for — the complete notes, or an edit "
+        "script — and nothing else: no preamble, no code fence, no closing remarks.\n\n"
+        "EDIT SCRIPTS. ");
+    prompt += LiveNotesEdits::protocolText();
+    prompt += QStringLiteral("\n\n");
     prompt += detailBrief(detail);
     prompt += QStringLiteral(" The detail level governs length above everything else: if the "
                              "current notes are longer or shorter than this level calls for, "
@@ -209,8 +215,27 @@ QString userMessage(const Request &request)
     }
     out += QLatin1Char('\n');
     // A restyle rewrites everything, so it always sees the whole notes.
-    const bool tail = !request.fullRevision && !request.restyle && useTailMode(request.notes);
-    if (tail) {
+    const bool edits = request.edits && !request.fullRevision && !request.restyle
+        && !request.notes.trimmed().isEmpty();
+    const bool tail = !edits && !request.fullRevision && !request.restyle
+        && useTailMode(request.notes);
+    if (edits && request.notes.size() > kEditFullChars) {
+        const NotesParts parts = split(request.notes);
+        const qsizetype shown = qMax<qsizetype>(0, parts.sections.size() - kTailSections);
+        out += QStringLiteral("CURRENT NOTES (long: earlier sections shown as their heading and "
+                              "first line — APPEND to them, REPLACE only sections shown in "
+                              "full):\n%1\n\n%2\n\n")
+                   .arg(parts.preamble, parts.summary);
+        for (qsizetype i = 0; i < parts.sections.size(); ++i) {
+            const QString &section = parts.sections.at(i);
+            out += (i < shown ? section.section(QLatin1Char('\n'), 0, 1) + QStringLiteral("\n  …")
+                              : section)
+                + QStringLiteral("\n\n");
+        }
+        if (!parts.actions.isEmpty()) {
+            out += parts.actions + QStringLiteral("\n\n");
+        }
+    } else if (tail) {
         const NotesParts parts = split(request.notes);
         const qsizetype frozen = parts.sections.size() - kTailSections;
         out += QStringLiteral("The notes are long, so this turn you revise only their END.\n\n"
@@ -247,8 +272,27 @@ QString userMessage(const Request &request)
         out += QStringLiteral("EARLIER TRANSCRIPT (already in the notes; context only):\n%1\n\n")
                    .arg(context);
     }
-    out += QStringLiteral("NEW TRANSCRIPT (not yet in the notes):\n%1\n\n")
-               .arg(formatLines(request.fresh, request.speakerNames));
+    if (!request.fresh.isEmpty() || !edits) {
+        out += QStringLiteral("NEW TRANSCRIPT (not yet in the notes):\n%1\n\n")
+                   .arg(formatLines(request.fresh, request.speakerNames));
+    }
+    if (edits && request.finalPass) {
+        out += QStringLiteral("The session has ended; this is the FINAL pass. Reply with an EDIT "
+                              "SCRIPT that files any new transcript above AND tidies the notes: "
+                              "merge duplicate points and callouts (REPLACE or DELETE), re-file "
+                              "misplaced points (MOVE, REPLACE), condense sections that read like "
+                              "a transcript, and make the SUMMARY cover the whole session. Reply "
+                              "`=== END` if the notes are already right.");
+        return out;
+    }
+    if (edits) {
+        out += QStringLiteral("Reply with an EDIT SCRIPT (=== lines, as your instructions "
+                              "describe) that files the new transcript into these notes: "
+                              "APPEND to the section each point belongs in, NEW only for a new "
+                              "subject, update the SUMMARY when the big picture changed. Never "
+                              "repeat a point or a callout the notes already have.");
+        return out;
+    }
     out += tail ? QStringLiteral("Reply with exactly: the `## Summary` section (covering the whole "
                                  "session), then the revised last sections and any new sections, "
                                  "then `## Action items` if there are any. Do not repeat the "

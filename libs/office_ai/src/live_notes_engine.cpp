@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "live_notes_engine.h"
 
+#include "live_notes_edits.h"
+
 #include "system_one_client.h"
 
 #include <QJsonArray>
@@ -92,6 +94,20 @@ void LiveNotesEngine::setDetail(int detail)
     }
     m_options.detail = detail;
     m_restylePending = true;
+}
+
+void LiveNotesEngine::setBriefing(const NotesBriefing &briefing)
+{
+    const NotesBriefing old = m_options.briefing;
+    m_options.briefing = briefing;
+    if (old.layout != briefing.layout || old.style != briefing.style
+        || old.sections != briefing.sections || old.timeline != briefing.timeline) {
+        m_restyleReason = QStringLiteral(
+            "The user changed how the notes are organised or typeset. Rewrite the notes into "
+            "the ORGANISATION and TYPESETTING in your instructions — re-file every point where "
+            "it now belongs — keeping every fact and the user's own additions.");
+        m_restylePending = true;
+    }
 }
 
 void LiveNotesEngine::flagMoment()
@@ -288,6 +304,16 @@ void LiveNotesEngine::tick()
     const qint64 since = now - m_lastUpdateMs;
     const int words = pendingWords();
     const bool anyNew = m_covered < m_lines.size();
+    if (m_finalizing && m_options.editMode && m_read && !m_read().trimmed().isEmpty()) {
+        // M57: one edit-script pass files what is left and tidies the
+        // notes; a full rewrite would cost minutes on a slow local model.
+        if (m_finalAttempts++ < 3) {
+            runUpdate(false, false, true);
+        } else {
+            finishFinal();
+        }
+        return;
+    }
     if (m_finalizing) {
         if ((anyNew || (m_updates > 0 && fullFits())) && m_finalAttempts++ < 3) {
             runUpdate(fullFits());
@@ -312,7 +338,13 @@ void LiveNotesEngine::tick()
     runUpdate(full);
 }
 
-void LiveNotesEngine::runUpdate(bool full, bool restyle)
+void LiveNotesEngine::finishFinal()
+{
+    m_tick.stop();
+    emit finalized();
+}
+
+void LiveNotesEngine::runUpdate(bool full, bool restyle, bool finalPass)
 {
     if (m_provider == nullptr) {
         emit failed(tr("No model is available for live notes."));
@@ -343,7 +375,11 @@ void LiveNotesEngine::runUpdate(bool full, bool restyle)
     }
     m_requestEnd = m_lines.size();
     m_runFull = full;
-    m_runTail = !full && !restyle && LiveNotesPrompt::useTailMode(m_sentNotes);
+    request.edits = m_options.editMode;
+    request.finalPass = finalPass;
+    m_runFinal = finalPass;
+    m_runEdits = m_options.editMode && !full && !restyle && !m_sentNotes.trimmed().isEmpty();
+    m_runTail = !m_runEdits && !full && !restyle && LiveNotesPrompt::useTailMode(m_sentNotes);
     m_runRestyle = restyle;
 
     ChatRequest chat;
@@ -397,7 +433,26 @@ void LiveNotesEngine::onReply(const QString &text)
     }
     const QString reply = LiveNotesPrompt::sanitizeReply(text);
     QString notes = reply;
-    if (m_runTail) {
+    if (m_runEdits) {
+        bool script = false;
+        const QList<LiveNotesEdits::Op> ops = LiveNotesEdits::parse(reply, &script);
+        if (script) {
+            if (ops.isEmpty()) { // "=== END": nothing worth noting
+                m_covered = m_requestEnd;
+                emit status(tr("Nothing new worth noting."));
+                if (m_finalizing && m_runFinal) {
+                    finishFinal();
+                }
+                return;
+            }
+            notes = LiveNotesEdits::apply(m_sentNotes, ops).notes;
+        } else if (!reply.startsWith(QLatin1Char('#'))) {
+            // Neither a script nor whole notes (which start with the title).
+            emit failed(tr("The model's reply was not an edit of the notes; they were kept."));
+            m_covered = m_requestEnd;
+            return;
+        }
+    } else if (m_runTail) {
         notes = LiveNotesPrompt::mergeTail(m_sentNotes, reply);
         if (notes.isEmpty()) {
             emit failed(tr("The model's reply had no sections; the notes were kept."));
@@ -441,9 +496,8 @@ void LiveNotesEngine::tryApplyPending()
                     .arg(LiveNotesPrompt::formatTime(
                         m_lines.isEmpty() ? elapsedMs() : m_lines.last().ms)));
     emit notesApplied(m_updates);
-    if (m_finalizing && m_runFull) {
-        m_tick.stop();
-        emit finalized();
+    if (m_finalizing && (m_runFull || m_runFinal)) {
+        finishFinal();
     }
 }
 

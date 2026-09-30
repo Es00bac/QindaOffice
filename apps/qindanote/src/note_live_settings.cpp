@@ -6,6 +6,8 @@
 
 #include "note_live_session.h"
 
+#include "live_notes_layouts.h"
+
 #include "note_host.h"
 
 #include "json_settings.h"
@@ -196,6 +198,31 @@ QVariantList LiveNotesSession::scenarios() const
                                 {QStringLiteral("hint"), scenario.hint}});
     }
     return list;
+}
+
+namespace {
+
+QVariantList pickerRows(const QList<Ai::LiveNotesLayouts::Layout> &rows)
+{
+    QVariantList list;
+    for (const auto &row : rows) {
+        list.append(QVariantMap{{QStringLiteral("id"), row.id},
+                                {QStringLiteral("name"), row.name},
+                                {QStringLiteral("hint"), row.hint}});
+    }
+    return list;
+}
+
+} // namespace
+
+QVariantList LiveNotesSession::layouts() const
+{
+    return pickerRows(Ai::LiveNotesLayouts::layouts());
+}
+
+QVariantList LiveNotesSession::styles() const
+{
+    return pickerRows(Ai::LiveNotesLayouts::styles());
 }
 
 void LiveNotesSession::setAskBeforeStart(bool on)

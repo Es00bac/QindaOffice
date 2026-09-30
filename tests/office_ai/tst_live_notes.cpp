@@ -168,9 +168,14 @@ void LiveNotesTest::promptCarriesNotesAndNewTranscript()
     QVERIFY(message.contains(QStringLiteral("Correct spellings of names and terms (fix mishearings): Jev, ElevenLabs")));
     QVERIFY(message.endsWith(QStringLiteral("Reply with the complete revised notes.")));
     const QString system = LiveNotesPrompt::systemPrompt();
-    for (const char *rule : {"## Summary", "==Highlight==", "## Action items", "**Bold**", "> \""}) {
+    for (const char *rule : {"## Summary", "==key takeaway==", "## Action items", "**bold**",
+                             "> [!quote]", "BY SUBJECT", "EDIT SCRIPTS", "=={term}"}) {
         QVERIFY2(system.contains(QString::fromUtf8(rule)), rule);
     }
+    NotesBriefing plain;
+    plain.style = QStringLiteral("plain");
+    QVERIFY(LiveNotesPrompt::systemPrompt(2, plain).contains(QStringLiteral("> \"")));
+    QVERIFY(!LiveNotesPrompt::systemPrompt(2, plain).contains(QStringLiteral("[!big]")));
     QCOMPARE(LiveNotesPrompt::formatTime(3723000), QStringLiteral("1:02:03"));
     TranscriptLine spoken{5000, QStringLiteral("we ship Friday")};
     spoken.speaker = QStringLiteral("Speaker 2");
@@ -325,6 +330,7 @@ void LiveNotesTest::engineFinalRevisionUsesTheWholeTranscript()
     LiveNotesEngine::Options options;
     options.minWords = 5;
     options.minIntervalMs = 0;
+    options.editMode = false; // the M52 path; edit mode's final pass is in tst_live_notes_edits
     engine.setOptions(options);
     engine.setProvider(&provider);
     wire(engine, page);

@@ -6,8 +6,10 @@ import QindaOffice.Note
 
 // Live notes session setup (D-059): the pre-qualifiers the note-taker gets
 // before a session — what it is, the kind of session (a scenario with its
-// own emphasis), what to focus on and what to leave out, which optional
-// sections to keep, and custom instructions. Remembered between sessions.
+// own emphasis), how the notes are organised and how they look (M57,
+// D-063: layout, the user's own sections, style), what to focus on and
+// what to leave out, which optional sections to keep, and custom
+// instructions. Remembered between sessions.
 // Opened by Start (unless "Show this before every session" is off) and by
 // the panel's setup button, where it saves without starting (a running
 // session takes the changes from its next update).
@@ -28,6 +30,12 @@ Tk.Dialog {
         topic.text = dialog.session.topic
         const ids = dialog.session.scenarios.map(function(e) { return e.id })
         scenario.currentIndex = Math.max(0, ids.indexOf(s.scenario))
+        const layoutIds = dialog.session.layouts.map(function(e) { return e.id })
+        layout.currentIndex = Math.max(0, layoutIds.indexOf(s.layout))
+        sections.text = s.sections
+        const styleIds = dialog.session.styles.map(function(e) { return e.id })
+        look.currentIndex = Math.max(0, styleIds.indexOf(s.style))
+        timeline.checked = s.timeline
         focus.text = s.focus
         skip.text = s.skip
         custom.text = s.custom
@@ -53,7 +61,9 @@ Tk.Dialog {
             focus: focus.text, skip: skip.text, custom: custom.text,
             timestamps: timestamps.checked, quotes: quotes.checked, actionItems: actionItems.checked,
             openQuestions: openQuestions.checked, definitions: definitions.checked,
-            explainJargon: jargon.checked
+            explainJargon: jargon.checked,
+            layout: dialog.session.layouts[layout.currentIndex].id, sections: sections.text,
+            style: dialog.session.styles[look.currentIndex].id, timeline: timeline.checked
         }
         dialog.session.keepRecording = recording.checked
         dialog.session.captureScreen = screen.checked
@@ -86,6 +96,39 @@ Tk.Dialog {
             }
         }
         Tk.PropertyRow {
+            label: qsTr("Organize")
+            hint: layout.currentIndex >= 0 ? dialog.session.layouts[layout.currentIndex].hint : ""
+            Tk.ComboBox {
+                id: layout
+                objectName: "liveSetupLayout"
+                model: dialog.session.layouts.map(function(e) { return e.name })
+            }
+        }
+        Tk.PropertyRow {
+            readonly property bool own: layout.currentIndex >= 0
+                                        && dialog.session.layouts[layout.currentIndex].id === "custom"
+            label: own ? qsTr("Your sections") : qsTr("Also keep")
+            hint: own ? qsTr("One per line, in order, with what goes there.")
+                      : qsTr("Optional: sections you always want, one per line.")
+            Tk.TextArea {
+                id: sections
+                objectName: "liveSetupSections"
+                rows: 3
+                wrapMode: TextEdit.Wrap
+                placeholderText: qsTr("e.g. Characters — who they are\nFight scenes — who won, how\nRecipes — anything cooked")
+            }
+        }
+        Tk.PropertyRow {
+            label: qsTr("Look")
+            hint: look.currentIndex >= 0 ? dialog.session.styles[look.currentIndex].hint : ""
+            Tk.Segmented {
+                id: look
+                objectName: "liveSetupStyle"
+                small: true
+                model: dialog.session.styles.map(function(e) { return e.name })
+            }
+        }
+        Tk.PropertyRow {
             label: qsTr("Focus on")
             hint: qsTr("What you care about: it gets the most space and detail.")
             Tk.TextArea {
@@ -114,6 +157,7 @@ Tk.Dialog {
                 direction: Tk.Flex.Column
                 gap: Tk.Theme.space.xs
                 Tk.CheckBox { id: timestamps; objectName: "liveSetupTimestamps"; text: qsTr("Timestamps on sections") }
+                Tk.CheckBox { id: timeline; objectName: "liveSetupTimeline"; text: qsTr("A timeline underneath (the chronological record)") }
                 Tk.CheckBox { id: quotes; objectName: "liveSetupQuotes"; text: qsTr("Key quotes, word for word") }
                 Tk.CheckBox { id: actionItems; objectName: "liveSetupActionItems"; text: qsTr("Action items and deadlines") }
                 Tk.CheckBox { id: openQuestions; objectName: "liveSetupOpenQuestions"; text: qsTr("Open questions") }

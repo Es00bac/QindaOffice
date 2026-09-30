@@ -65,17 +65,68 @@ The transcript is kept on the block (the `transcript` field, not painted).
 
 ### What the notes look like
 
-The model is asked for GitHub-flavoured Markdown with a fixed shape:
+The model is asked for GitHub-flavoured Markdown with a fixed frame — a
+`#` title, a `## Summary` of the whole session so far, italic annotations
+in parentheses (*(speaker corrects the earlier figure)*, *(unclear at
+03:12: …?)*), and a final `## Action items` checklist — and, inside it, the
+organisation and typesetting the session setup chose (M57, below).
 
-- a `#` title, then a `## Summary` of the whole session so far;
-- one `##` section per topic, stamped with its start time (`[12:40]`);
-- **bold** key terms and `**Term** — definition` lines;
-- `==highlights==` for the few takeaways that matter most, painted as a
-  yellow marker stroke;
-- `> "quotes"` for exact wording;
-- italic annotations in parentheses — *(speaker corrects the earlier
-  figure)*, *(unclear: …?)*;
-- a final `## Action items` checklist (`- [ ]`) for tasks and deadlines.
+### Organised, typeset notes (M57, D-063)
+
+**Organize** (session setup) decides the notes' shape. The layouts live in
+`libs/office_ai/src/live_notes_layouts.*`:
+
+| Layout | Shape |
+|---|---|
+| By subject (default) | one `##` per subject; a point made later is filed in the section it belongs to, not appended |
+| Chronological | the M52 shape: sections in the order things came up |
+| Learning objectives | "Explain why …" goals, each with explanation, example and a *Check yourself* callout |
+| Study and retention | Cornell `| Cue | Notes |` tables, a takeaway per topic, memory aids, `## Review questions` |
+| Meeting minutes | `## Decisions` first, then topics, risks, open questions |
+| Argument map | thesis, claims with evidence and counterpoints, objections, assessment |
+| Questions and answers | a `###` per question the session answers, grouped by theme |
+| Story guide | characters, plot so far, world and lore, themes, memorable lines, predictions — for shows, films and books |
+| My own sections | the user's list, one per line ("Recipes — anything cooked"), in order, plus `## Other` |
+
+With any other layout the same text box lists sections to keep as well.
+**A timeline underneath** adds `## Timeline` below the organised sections:
+one terse `- [mm:ss]` line per minute or two — the chronological layer under
+the organised one.
+
+**Look** (Plain / Styled / Rich) is how much of the page's typesetting the
+model uses. The vocabulary (`apps/qindanote/src/note_markdown_style.*`,
+Obsidian-compatible where Obsidian has an equivalent):
+
+- highlights by meaning: `==key==` yellow, `=={term}…==` blue,
+  `=={example}…==` green, `=={warn}…==` red, `=={question}…==` violet,
+  `=={date}…==` orange;
+- `++underline++`, `!!stand-out!!` (bold, larger, red ink), `x^2^`,
+  `H~2~O`, `[#tag]` badges; `[mm:ss]` timestamps are small and grey;
+- callout boxes, `> [!kind] Title` with the content on `> ` lines: def,
+  key, example, warn, tip, question, mnemonic, summary, quote, big (the
+  central idea, large and centred), anything else as a note;
+- tables are ruled, padded and get a tinted header row.
+
+Plain is headings, bullets, bold, italics and yellow highlights only.
+Changing the layout, look or sections mid-session rewrites the notes into
+the new shape once (a restyle). **Open in QindaWrite** now hands over HTML
+from the rendered page, so the colours and boxes survive; **Export
+Markdown** keeps the markup.
+
+**Revisions are edits.** Once there are notes, an update no longer asks for
+the whole notes back. The model replies with an edit script
+(`libs/office_ai/src/live_notes_edits.*`): `=== APPEND ## Heading`,
+`=== REPLACE ## Heading`, `=== NEW UNDER ## Heading`, `=== NEW AFTER`,
+`=== NEW`, `=== MOVE ## A TO UNDER ## B`, `=== DELETE`, `=== SUMMARY`,
+`=== TITLE`, `=== TIMELINE`, `=== ACTIONS`, or `=== END` when nothing is
+worth noting. Headings are matched loosely (level, case, `**`, a trailing
+`[mm:ss]` ignored, then a prefix). A missing target keeps the content as a
+new section rather than losing it. This is what lets old sections grow and
+get corrected in place, and it is much cheaper for a slow writer: an
+update's output is only what changed. When the session stops, one final
+edit script files what is left and tidies (merges duplicates, re-files,
+condenses, updates the summary) instead of a full rewrite. A model that
+answers with whole notes anyway (they start with `#`) is still accepted.
 
 Editing the block shows its Markdown source. Closing the editor paints it
 again.
@@ -164,9 +215,11 @@ spellings, so it can fix mishearings: local Whisper hears "Jev" as "Jeff".
 - **Cadence.** An update runs when enough new substantive words have
   arrived (45) and 20 s have passed, or when anything new has waited 75 s.
   Only one runs at a time, so a slow model makes fewer, bigger updates.
-  Every sixth update, and the final one, rewrites from the whole
-  transcript while that still fits.
-- **FULL and TAIL.** Short notes are rewritten whole. Once they pass about
+  Every sixth update rewrites from the whole transcript while that still
+  fits; the others are edit scripts (M57, above), and the final pass is a
+  tidying edit script.
+- **FULL and TAIL** (with `Options::editMode` off, the M52 path). Short
+  notes are rewritten whole. Once they pass about
   9000 characters, the model sees the earlier sections as headings only. It
   returns `## Summary`, the revised last sections and any new ones, and
   `## Action items`. `mergeTail()` splices these back, so a two-hour

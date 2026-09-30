@@ -33,6 +33,48 @@ and synchronous, without remote access, async tasks, cross-document atomicity
 or automatic semantic adapters for all toolkit controls. Exact contracts,
 limits, usage and tests are in [agent-interface.md](agent-interface.md).
 
+## D-063: Organised, typeset live notes revised by section edits
+
+**Date:** 2026-09-28 · **Status:** accepted (owner request; M57)
+
+**Context.** Live notes read like a themed Markdown log: sections in the
+order things were said, one highlight colour, and every update rewrote the
+whole notes. The owner asked for notes sorted by subject or by other
+predefined and user-defined criteria, revised in place as more is said, and
+typeset — colours, bold, italic, underline, superscript and subscript, sizes
+— so that important things stand out and the notes are worth rereading.
+
+**Decision.**
+1. **Layouts** (`LiveNotesLayouts`): by subject (default), chronological,
+   learning objectives, study/retention (Cornell), meeting minutes, argument
+   map, Q&A, story guide, and the user's own sections. Any layout can also
+   keep extra user sections and a `## Timeline` — the chronological layer
+   under the organised notes. The ids are persisted (`setup.layout`) and
+   never renamed.
+2. **Section-edit revisions** (`LiveNotesEdits`): once notes exist, the
+   model answers with an edit script (APPEND / REPLACE / NEW UNDER / NEW
+   AFTER / NEW / MOVE / DELETE / SUMMARY / TITLE / TIMELINE / ACTIONS /
+   END). This makes filing a late point in an old section natural. It also
+   bounds each turn's output to what changed, which a slow local writer
+   needs (D-062). A missing target degrades to keeping the content. Whole
+   notes are still accepted.
+3. **The final pass is a tidying edit script**, not a full rewrite. A full
+   rewrite cost two minutes per pass on the laptop's model and risked
+   dropping content.
+4. **A typesetting vocabulary** on the page (`note_markdown_style`):
+   highlight colours by meaning, underline, stand-out text, super- and
+   subscript, tag badges, small timestamps, callout boxes and ruled tables.
+   It is Obsidian-compatible where Obsidian has an equivalent. Three
+   intensities (plain, styled, rich) decide how much of it the model uses.
+   The colours are paper colours (D-004).
+5. The QindaWrite hand-off becomes HTML from the rendered page, so the
+   typesetting survives. Markdown export keeps the markup.
+
+**Consequences.** The prompt ↔ renderer vocabulary and the prompt ↔ parser
+edit protocol are AGENT-CONTRACT pairs. Small models misuse the syntax, for
+example by putting a callout inside a bullet; the renderer accepts that form.
+The M52 FULL/TAIL path stays behind `Options::editMode = false`.
+
 ## D-062: Offline live notes — an on-demand local model on the laptop
 
 **Date:** 2026-09-28 · **Status:** accepted (owner request)

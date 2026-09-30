@@ -97,6 +97,9 @@ class LiveNotesSession : public QObject {
     Q_PROPERTY(QVariantMap setup READ setup WRITE setSetup NOTIFY settingsChanged)
     // [{id, name, hint}] for the setup dialog's scenario picker.
     Q_PROPERTY(QVariantList scenarios READ scenarios CONSTANT)
+    // M57 (D-063): [{id, name, hint}] for the layout and style pickers.
+    Q_PROPERTY(QVariantList layouts READ layouts CONSTANT)
+    Q_PROPERTY(QVariantList styles READ styles CONSTANT)
     // Who said what (D-060): with the ElevenLabs engine, label speakers
     // through batch Scribe diarization (text then arrives every ~45 s).
     Q_PROPERTY(bool speakerLabels READ speakerLabels WRITE setSpeakerLabels NOTIFY settingsChanged)
@@ -175,6 +178,8 @@ public:
     [[nodiscard]] QVariantMap setup() const { return m_briefing.toMap(); }
     void setSetup(const QVariantMap &map);
     [[nodiscard]] QVariantList scenarios() const;
+    [[nodiscard]] QVariantList layouts() const;
+    [[nodiscard]] QVariantList styles() const;
     [[nodiscard]] bool askBeforeStart() const { return m_askBeforeStart; }
     [[nodiscard]] bool speakerLabels() const { return m_speakerLabels; }
     void setSpeakerLabels(bool on);

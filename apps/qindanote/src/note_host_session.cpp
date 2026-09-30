@@ -6,6 +6,7 @@
 // and notes pages, series memory, and export (Markdown, QindaWrite, Anki).
 
 #include "note_host.h"
+#include "note_markdown.h"
 
 #include "navigator_model.h"
 #include "note_blocks.h"
@@ -282,10 +283,16 @@ void NoteHost::openInWrite()
     QDir().mkpath(dir);
     QString name = currentPageTitle().simplified();
     name.replace(QRegularExpression(QStringLiteral("[^\\w .-]")), QStringLiteral("_"));
-    const QString path = dir + QLatin1Char('/') + (name.isEmpty() ? QStringLiteral("notes") : name) + QStringLiteral(".md");
-    if (!exportMarkdownTo(QUrl::fromLocalFile(path))) {
+    // M57: HTML from the rendered notes, so QindaWrite gets the colours,
+    // callout boxes and tables, not the markup (Markdown export keeps it).
+    const QString path = dir + QLatin1Char('/') + (name.isEmpty() ? QStringLiteral("notes") : name) + QStringLiteral(".html");
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        showStatusMessage(tr("Export failed: %1").arg(file.errorString()), 8000);
         return;
     }
+    file.write(markdownHtml(currentPageNotes()).toUtf8());
+    file.close();
     // AGENT-GUARD: QQO_NO_HANDOFF (set for the tests) writes the file but
     // launches nothing — a detached app inherits the test's output pipe and
     // ctest waits on it until it times out.

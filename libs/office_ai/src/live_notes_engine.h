@@ -57,6 +57,10 @@ public:
         int detail = LiveNotesPrompt::kDefaultDetail; // 1 (key points) .. 5
         NotesBriefing briefing; // the pre-session setup (D-059)
         SessionContext context; // prep material, earlier sessions (M56)
+        // M57 (D-063): once there are notes, ordinary updates ask for a
+        // section-edit script (live_notes_edits.h) instead of whole notes
+        // or a TAIL; false keeps the M52 FULL/TAIL behaviour.
+        bool editMode = true;
     };
 
     using Reader = std::function<QString()>;
@@ -75,8 +79,10 @@ public:
     // The Detail slider, live: a change rewrites the notes at the new level
     // on the next tick (a "restyle"), even if nothing new was said.
     void setDetail(int detail);
-    // The setup edited mid-session: applies from the next update on.
-    void setBriefing(const NotesBriefing &briefing) { m_options.briefing = briefing; }
+    // The setup edited mid-session: applies from the next update on. A new
+    // layout, style or section list also reorganises the notes written so
+    // far (a restyle, M57).
+    void setBriefing(const NotesBriefing &briefing);
     // M56 (D-061):
     // "This matters": marks the line being heard now and the next one ‼.
     void flagMoment();
@@ -130,7 +136,8 @@ private:
     void maybeGate();
     void onGateAnswers(qsizetype from, qsizetype to,
                        const QHash<QString, SystemOneAnswer> &answers, const QString &error);
-    void runUpdate(bool full, bool restyle = false);
+    void runUpdate(bool full, bool restyle = false, bool finalPass = false);
+    void finishFinal();
     void onReply(const QString &text);
     void tryApplyPending();
     [[nodiscard]] bool fullFits() const;
@@ -150,6 +157,8 @@ private:
     QPointer<ChatRun> m_run;
     bool m_runFull = false;
     bool m_runTail = false;
+    bool m_runEdits = false;
+    bool m_runFinal = false;     // the edit-mode final tidy pass
     bool m_runRestyle = false;
     bool m_restylePending = false;
     QString m_restyleReason;

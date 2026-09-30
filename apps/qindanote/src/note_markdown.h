@@ -24,6 +24,9 @@ namespace QindaOffice::Apps::Notes {
 [[nodiscard]] qreal markdownBlockHeight(const QString &markdown, qreal width);
 // Paints `markdown` into `box` (padding inside it).
 void paintMarkdown(QPainter *painter, const QRectF &box, const QString &markdown);
+// The rendered markdown as HTML, colours and callout boxes included (the
+// QindaWrite hand-off, M57).
+[[nodiscard]] QString markdownHtml(const QString &markdown);
 // Plain text of the rendered markdown (search, the assistant's context).
 [[nodiscard]] QString markdownPlainText(const QString &markdown);
 // The [mm:ss] / [h:mm:ss] time under `point` (block coordinates, padding

@@ -28,11 +28,15 @@ qt_add_library(office_ai STATIC
     src/http_chat_provider.h
     src/inline_action_flow.cpp
     src/inline_action_flow.h
+    src/live_notes_edits.cpp
+    src/live_notes_edits.h
     src/live_notes_engine.cpp
     src/live_notes_briefing.cpp
     src/live_notes_briefing.h
     src/live_notes_engine.h
     src/live_notes_extras.cpp
+    src/live_notes_layouts.cpp
+    src/live_notes_layouts.h
     src/live_notes_extras.h
     src/live_notes_prompt.cpp
     src/live_notes_prompt.h

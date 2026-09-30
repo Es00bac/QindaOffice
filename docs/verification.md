@@ -104,6 +104,38 @@ app-side requirements above are the parts the suite owns):
 
 ## Milestone-specific gates
 
+### M57 gates (organised, typeset notes; D-063)
+
+- `tst_live_notes_edits`:
+  - the edit script parses (ops, targets, bodies, `=== END`, whole notes
+    are not a script);
+  - APPEND lands in a section opened long ago, above its subsections;
+  - NEW UNDER re-levels to `###`, NEW (at end) stays above Timeline,
+    Definitions and Action items;
+  - REPLACE keeps the original level (or heading), DELETE takes
+    subsections along, MOVE re-levels and refuses a move into itself;
+  - SUMMARY, TITLE, TIMELINE and ACTIONS; notes grow from empty;
+  - missing targets keep their content;
+  - every layout has its own brief, and the ids are pinned;
+  - the engine files an edit script, treats `=== END` as nothing new and
+    refuses prose;
+  - the final pass is one edit script (no FULL TRANSCRIPT), and `=== END`
+    finishes it.
+- `tst_live_notes`: the system prompt carries the layout, the style guide
+  and the edit protocol; the plain style has no callouts; the M52
+  final-revision case runs with `editMode = false`.
+- `tst_note_markdown`: the markup is gone from the plain text and the
+  typesetting is in the HTML; `C++` and `code` stay literal; a callout inside
+  a bullet still becomes a box; the sample paints its callout tint. The grab
+  `note_typeset.png` was checked: highlights in six colours, underline,
+  sub/superscript, stand-out red, the AI aside, grey timestamps, labelled
+  boxes, a ruled table.
+- `tst_note_live` setup grab: Organize, Also keep / Your sections, Look and
+  the timeline switch.
+- Manual: `realPipelineEndToEnd` on the laptop's Qwen3.5-4B (run with
+  `QTEST_FUNCTION_TIMEOUT=900000`; the harness now logs every status change
+  and engine failure).
+
 ### Offline notes gates (D-062)
 
 - `tst_ai_providers`: a bare key path is stored as `{file:…}`; a literal

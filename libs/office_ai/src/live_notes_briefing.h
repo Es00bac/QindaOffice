@@ -29,6 +29,12 @@ struct NotesBriefing {
     bool openQuestions = false; // ## Open questions
     bool definitions = false;   // ## Definitions glossary
     bool explainJargon = false; // [[ai: …]] explanations after hard terms (M56)
+    // M57 (D-063, live_notes_layouts.h): how the notes are organised and
+    // typeset, the user's own sections, and the chronological layer.
+    QString layout = QStringLiteral("topics");
+    QString sections;           // one per line, "Name — what goes there"
+    QString style = QStringLiteral("styled");
+    bool timeline = false;      // ## Timeline under organised notes
 
     [[nodiscard]] QVariantMap toMap() const;
     [[nodiscard]] static NotesBriefing fromMap(const QVariantMap &map);

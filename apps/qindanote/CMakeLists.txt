@@ -22,6 +22,8 @@ set(QINDANOTE_ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_live_settings.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_markdown.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_markdown.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_markdown_style.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_markdown_style.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_host_structure.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_host_text.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_page_history.cpp
@@ -75,6 +77,7 @@ qt_add_qml_module(qindanote_app
         src/note_live_session.cpp src/note_live_session.h
         src/note_live_settings.cpp
         src/note_markdown.cpp src/note_markdown.h
+        src/note_markdown_style.cpp src/note_markdown_style.h
         src/note_host_structure.cpp
         src/note_host_text.cpp
         src/note_page_history.cpp src/note_page_history.h
