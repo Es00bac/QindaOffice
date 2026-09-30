@@ -72,7 +72,7 @@ Tk.Flex {
         visible: !panel.controller.editMode
         stretch: true
         small: true
-        model: [qsTr("No context"), qsTr("Selection"), qsTr("Document")]
+        model: [qsTr("No context"), qsTr("Selection"), panel.controller.documentScopeLabel]
         currentIndex: panel.controller.scope
         onActivated: function(index) { panel.controller.scope = index }
     }

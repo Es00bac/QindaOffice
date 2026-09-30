@@ -234,7 +234,7 @@ void NoteLiveTest::assistantEditsThePage()
     QVERIFY(tools != nullptr);
     const QString snapshot = tools->snapshot(60000);
     QVERIFY2(snapshot.contains(QStringLiteral("[0] text:\nteh first note"))
-                 && snapshot.contains(QStringLiteral("[1] checklist item:\nbuy milk")),
+                 && snapshot.contains(QStringLiteral("[1] check (not done):\nbuy milk")),
              qPrintable(snapshot));
 
     QString tall;
@@ -250,8 +250,14 @@ void NoteLiveTest::assistantEditsThePage()
         QJsonObject{{QStringLiteral("op"), QStringLiteral("rename_page")}, {QStringLiteral("title"), QStringLiteral("Groceries")}}})
         .toJson()).array();
     const auto outcome = tools->apply(edits);
-    QCOMPARE(outcome.applied, 3);
+    QCOMPARE(outcome.applied, 0); // an invalid batch is atomic
     QCOMPARE(outcome.errors.size(), 1); // block 7 does not exist
+    QCOMPARE(scene.page->blocks().first().text, QStringLiteral("teh first note"));
+    auto valid = edits;
+    valid.removeAt(2);
+    const QString originalTitle = scene.host.currentPageTitle();
+    const auto applied = tools->apply(valid);
+    QCOMPARE(applied.applied, 3);
     QCOMPARE(scene.host.currentPageTitle(), QStringLiteral("Groceries"));
     const QList<PageBlock> blocks = scene.page->blocks();
     QCOMPARE(blocks.size(), 3);
@@ -260,6 +266,7 @@ void NoteLiveTest::assistantEditsThePage()
     QVERIFY(blocks.at(1).rect.top() >= blocks.at(0).rect.bottom());
     QVERIFY(blocks.at(2).rect.top() >= blocks.at(1).rect.bottom());
     tools->undo();
+    QCOMPARE(scene.host.currentPageTitle(), originalTitle);
     QCOMPARE(scene.page->blocks().size(), 2);
     QCOMPARE(scene.page->blocks().first().text, QStringLiteral("teh first note"));
 

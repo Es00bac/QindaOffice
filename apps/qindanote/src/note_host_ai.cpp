@@ -13,6 +13,8 @@
 #include "note_blocks.h"
 #include "note_page_item.h"
 #include "note_tools.h"
+#include "note_agent.h"
+#include "note_evidence.h"
 #include "standard_actions.h"
 
 #include "model_catalog.h"
@@ -40,7 +42,7 @@ public:
         Ai::DocumentContext out;
         out.selection = m_host->editorSelection();
         if (withDocument) {
-            out.document = m_host->currentPageText();
+            out.document = noteEvidence(m_host, 60000);
         }
         return out;
     }
@@ -78,6 +80,13 @@ void NoteHost::createAssistant()
     // D-058: the assistant edits the open page itself (one undo step).
     m_aiTools = std::make_unique<NoteTools>(this);
     m_assistant->setDocumentTools(m_aiTools.get());
+    m_assistant->setDocumentScopeLabel(tr("Page + speech"));
+    m_assistant->setScope(2); // no request is sent until the human presses Send
+    auto *tools = static_cast<NoteTools *>(m_aiTools.get());
+    auto *agent = new NoteAgent(this, tools);
+    setAgentProvider(agent);
+    tools->setRevisionProvider([agent] { return agent->revision(); },
+        [agent] { return agent->undoRevisionToken(); }, [agent] { return agent->blockedReason(); });
     ActionEntry *toggle = action(QString::fromLatin1(ActionId::kAiAssistant));
     toggle->setEnabled(true);
     toggle->setCheckable(true);

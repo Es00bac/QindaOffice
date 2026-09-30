@@ -53,6 +53,20 @@ Tk.Dialog {
         speakers.checked = dialog.session.speakerLabels
     }
 
+    function useSuggestedStructure() {
+        const id = dialog.session.scenarios[scenario.currentIndex].id
+        const s = dialog.session.suggestedSetup(id)
+        layout.currentIndex = Math.max(0, dialog.session.layouts.map(e => e.id).indexOf(s.layout))
+        look.currentIndex = Math.max(0, dialog.session.styles.map(e => e.id).indexOf(s.style))
+        sections.text = s.sections
+        timeline.checked = s.timeline
+        quotes.checked = s.quotes
+        actionItems.checked = s.actionItems
+        openQuestions.checked = s.openQuestions
+        definitions.checked = s.definitions
+        if (id === "appointment") { recording.checked = false; screen.checked = false }
+    }
+
     onAboutToShow: load()
     onAccepted: {
         dialog.session.topic = topic.text
@@ -103,6 +117,14 @@ Tk.Dialog {
                 objectName: "liveSetupLayout"
                 model: dialog.session.layouts.map(function(e) { return e.name })
             }
+        }
+        Tk.Button {
+            objectName: "liveSetupSuggested"
+            small: true
+            iconName: "list-checks"
+            text: qsTr("Use suggested structure for this kind")
+            tooltip: qsTr("Fill the sections and presentation defaults; keep your topic, focus and custom instructions.")
+            onClicked: dialog.useSuggestedStructure()
         }
         Tk.PropertyRow {
             readonly property bool own: layout.currentIndex >= 0

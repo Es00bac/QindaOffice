@@ -10,6 +10,7 @@
 // session started.
 
 #include "note_host.h"
+#include "agent_provider.h"
 
 #include "navigator_model.h"
 #include "note_blocks.h"
@@ -24,6 +25,7 @@
 #include <QDir>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <tuple>
 
 namespace QindaOffice::Apps::Notes {
 
@@ -103,9 +105,43 @@ void NoteHost::createLiveNotes()
     connect(model->add(QStringLiteral("noteStudyPageAction"), tr("Make a &Study Page"), {},
                        QStringLiteral("book-open")),
             &ActionEntry::triggered, m_live, &LiveNotesSession::makeStudyPage);
-    connect(model->add(QStringLiteral("noteActionItemsToMailAction"), tr("Send Action Items to &QindaMail"),
+    connect(model->add(QStringLiteral("noteActionItemsToMailAction"), tr("Review Action Items for &QindaMail"),
                        {}, QStringLiteral("list-todo")),
             &ActionEntry::triggered, m_live, &LiveNotesSession::sendActionItemsToMail);
+    for (const auto &[id, kind, title] : QList<std::tuple<QString, QString, QString>>{
+        {QStringLiteral("noteMeetingRecapAction"), QStringLiteral("recap"), tr("Draft Meeting Recap")},
+        {QStringLiteral("noteProjectPlanAction"), QStringLiteral("plan"), tr("Draft Project Next Steps")},
+        {QStringLiteral("noteTroubleshootingAction"), QStringLiteral("troubleshooting"), tr("Draft Troubleshooting Brief")},
+        {QStringLiteral("noteFollowUpQuestionsAction"), QStringLiteral("questions"), tr("Draft Questions for Next Time")}}) {
+        connect(model->add(id, title, {}, QStringLiteral("sparkles")), &ActionEntry::triggered,
+            m_live, [this, kind] { m_live->makeDraft(kind); });
+        menuTree()->appendTo(QStringLiteral("aiMenu"), MenuNode::action(id));
+    }
+    connect(model->add(QStringLiteral("noteAcceptDraftAction"), tr("Accept Reviewed Draft"), {}, QStringLiteral("check")),
+        &ActionEntry::triggered, m_live, [this] { static_cast<void>(m_live->acceptDraft()); });
+    connect(model->add(QStringLiteral("noteDiscardDraftAction"), tr("Discard Follow-Up Draft"), {}, QStringLiteral("x")),
+        &ActionEntry::triggered, m_live, &LiveNotesSession::clearDraft);
+    menuTree()->appendTo(QStringLiteral("aiMenu"), MenuNode::action(QStringLiteral("noteAcceptDraftAction")));
+    menuTree()->appendTo(QStringLiteral("aiMenu"), MenuNode::action(QStringLiteral("noteDiscardDraftAction")));
+    const auto syncDraftActions = [this] {
+        const bool ready = !m_live->working() && !m_live->active();
+        actions()->setEnabled({QStringLiteral("noteMeetingRecapAction"), QStringLiteral("noteProjectPlanAction"),
+            QStringLiteral("noteTroubleshootingAction"), QStringLiteral("noteFollowUpQuestionsAction"),
+            QStringLiteral("noteStudyPageAction"), QStringLiteral("noteActionItemsToMailAction")}, ready);
+        actions()->setEnabled(QStringLiteral("noteAcceptDraftAction"), ready && !m_live->draftText().isEmpty());
+        actions()->setEnabled(QStringLiteral("noteDiscardDraftAction"), m_live->working() || !m_live->draftText().isEmpty());
+    };
+    connect(m_live, &LiveNotesSession::draftChanged, this, syncDraftActions);
+    connect(m_live, &LiveNotesSession::workingChanged, this, syncDraftActions);
+    connect(m_live, &LiveNotesSession::stateChanged, this, syncDraftActions);
+    syncDraftActions();
+    connect(this, &NoteHost::currentPageChanged, m_live, &LiveNotesSession::clearDraft);
+    if (agentProvider()) {
+        connect(m_live, &LiveNotesSession::stateChanged, agentProvider(), &QindaTK::AgentProvider::changed);
+        connect(m_live, &LiveNotesSession::transcriptChanged, agentProvider(), &QindaTK::AgentProvider::changed);
+        connect(m_live, &LiveNotesSession::draftChanged, agentProvider(), &QindaTK::AgentProvider::changed);
+        connect(m_live, &LiveNotesSession::workingChanged, agentProvider(), &QindaTK::AgentProvider::changed);
+    }
     connect(model->add(QStringLiteral("noteSplitByTopicAction"), tr("Split into Pages by &Topic"), {},
                        QStringLiteral("split")),
             &ActionEntry::triggered, this, &NoteHost::splitCurrentPage);
@@ -198,6 +234,9 @@ LiveTarget NoteHost::beginLiveNotes(const QString &topic)
         page->envelope.blocksJson = withBlocksArray(page->envelope.blocksJson, blocks);
         m_document->setDirty(true);
     }
+    writeLiveBlock(target, QJsonObject{
+        {QStringLiteral("session_started_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)},
+        {QStringLiteral("session_scenario"), m_live->setup().value(QStringLiteral("scenario")).toString()}}, false);
     return target;
 }
 

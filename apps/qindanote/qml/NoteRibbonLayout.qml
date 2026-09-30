@@ -71,6 +71,9 @@ QtObject {
                 "noteActionItemsToMailAction", "noteSplitByTopicAction"] },
             { id: "liveExport", label: qsTr("Export"), items: [
                 "noteExportMarkdownAction", "noteOpenInWriteAction", "noteExportAnkiAction"] },
+            { id: "liveFollowUp", label: qsTr("Follow-up"), items: [
+                "noteMeetingRecapAction", "noteProjectPlanAction", "noteTroubleshootingAction",
+                "noteFollowUpQuestionsAction", "noteAcceptDraftAction", "noteDiscardDraftAction"] },
             { id: "livePanes", label: qsTr("Panel"), items: [
                 { action: "noteLiveNotesAction", size: "large" }, "aiProvidersAction"] }
         ] },

@@ -60,10 +60,15 @@ struct Scenario {
     QString hint;   // one line for the setup dialog
 };
 
-// general, lecture, meeting, interview, tutorial, talk.
+// The six original stable IDs plus eight situation-specific workflows.
 [[nodiscard]] QList<Scenario> scenarios();
 // The note-taking emphasis a scenario adds to the prompt ("" for general).
 [[nodiscard]] QString scenarioBrief(const QString &id);
+// Additional stable situations and opt-in defaults. The setup dialog
+// applies them only when the human chooses "Use suggested structure".
+[[nodiscard]] QList<Scenario> workflowScenarios();
+[[nodiscard]] QString workflowBrief(const QString &id);
+[[nodiscard]] NotesBriefing suggestedBriefing(const QString &id);
 // The SESSION BRIEFING section: scenario, focus, skip, custom.
 [[nodiscard]] QString render(const NotesBriefing &briefing);
 // The REFERENCE MATERIAL / EARLIER SESSIONS sections ("" when empty).

@@ -374,6 +374,9 @@ void LiveNotesSession::cancel()
 
 void LiveNotesSession::teardown()
 {
+    m_catchingUp = false;
+    m_catchUp.clear();
+    emit catchUpChanged();
     m_silenceTimer.stop();
     m_screenTimer.stop();
     m_silencePaused = false;

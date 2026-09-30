@@ -4,9 +4,13 @@
 #include "note_blocks.h"
 #include "note_host.h"
 #include "note_page_item.h"
+#include "note_evidence.h"
+#include "note_agent.h"
+#include "agent_schema.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QUuid>
 
 #include <algorithm>
 
@@ -21,19 +25,6 @@ bool isTyped(const QJsonObject &block)
     const QString type = block.value(QStringLiteral("type")).toString();
     return type == QLatin1String("text") || type == QLatin1String("check")
         || type == QLatin1String("markdown");
-}
-
-QString describe(const QJsonObject &block)
-{
-    const QString type = block.value(QStringLiteral("type")).toString();
-    if (type == QLatin1String("check")) {
-        return block.value(QStringLiteral("checked")).toBool() ? QStringLiteral("checklist item, done")
-                                                              : QStringLiteral("checklist item");
-    }
-    if (type == QLatin1String("markdown")) {
-        return QStringLiteral("markdown");
-    }
-    return type;
 }
 
 // A working copy of the page: each entry remembers the snapshot index it
@@ -60,12 +51,45 @@ QJsonObject newBlock(const QJsonObject &edit)
         type = QStringLiteral("markdown");
     }
     QJsonObject block{{QStringLiteral("type"), type},
+                      {QStringLiteral("uid"), QUuid::createUuid().toString(QUuid::WithoutBraces)},
                       {QStringLiteral("text"), edit.value(QStringLiteral("text")).toString()}};
     if (type == QLatin1String("check")) {
         block.insert(QStringLiteral("checked"), edit.value(QStringLiteral("checked")).toBool());
         block.insert(QStringLiteral("level"), 0);
     }
     return block;
+}
+
+void preserveSessions(const QList<Entry> &entries, QJsonObject *created)
+{
+    QJsonArray sources;
+    for (const auto &entry : entries) {
+        const auto existing = entry.block.value(QStringLiteral("session_sources")).toArray();
+        if (!existing.isEmpty()) {
+            for (const auto &source : existing) sources.append(source);
+        } else if (entry.block.contains(QStringLiteral("transcript"))
+                   || entry.block.contains(QStringLiteral("audio"))) {
+            QJsonObject source;
+            for (const auto *key : {"uid", "transcript", "audio", "session_started_at", "session_scenario"}) {
+                const auto name = QString::fromLatin1(key);
+                if (entry.block.contains(name)) source.insert(name, entry.block.value(name));
+            }
+            sources.append(source);
+        }
+    }
+    if (sources.isEmpty()) return;
+    created->insert(QStringLiteral("session_sources"), sources);
+    if (sources.size() == 1) {
+        const auto source = sources.first().toObject();
+        for (auto it = source.begin(); it != source.end(); ++it) created->insert(it.key(), it.value());
+    } else {
+        QStringList transcripts;
+        for (const auto &source : sources)
+            transcripts.append(QStringLiteral("Session %1:\n%2").arg(
+                source.toObject().value(QStringLiteral("uid")).toString(),
+                source.toObject().value(QStringLiteral("transcript")).toString()));
+        created->insert(QStringLiteral("transcript"), transcripts.join(QStringLiteral("\n\n")));
+    }
 }
 
 } // namespace
@@ -80,43 +104,8 @@ QString NoteTools::snapshot(int budget)
     }
     m_snapshotPage = page->id;
     m_snapshot = blocksArray(page->envelope.blocksJson);
-    QString out = QStringLiteral("Page title: %1\n").arg(page->title);
-    if (!page->envelope.ink.strokes().isEmpty()) {
-        out += QStringLiteral("(The page also has %1 handwritten ink strokes; they cannot be "
-                              "edited.)\n")
-                   .arg(page->envelope.ink.strokes().size());
-    }
-    if (m_snapshot.isEmpty()) {
-        return out + QStringLiteral("(the page has no typed content)\n");
-    }
-    QString transcripts;
-    for (qsizetype i = 0; i < m_snapshot.size(); ++i) {
-        const QJsonObject block = m_snapshot.at(i).toObject();
-        // M56 (#4): a live-notes block carries its session's transcript —
-        // the assistant answers "what did she say about X?" from it.
-        const QString transcript = block.value(QStringLiteral("transcript")).toString();
-        if (!transcript.isEmpty()) {
-            transcripts += QStringLiteral("\n\nTRANSCRIPT of the live session behind block [%1] (answer "
-                                          "questions about what was said from it, citing [mm:ss]):\n%2")
-                               .arg(i)
-                               .arg(transcript.right(qMax(4000, budget / 2)));
-        }
-        if (block.value(QStringLiteral("type")).toString() == QLatin1String("image")) {
-            out += QStringLiteral("\n[%1] image (not editable)\n").arg(i);
-            continue;
-        }
-        if (!isTyped(block)) {
-            continue;
-        }
-        out += QStringLiteral("\n[%1] %2:\n%3\n")
-                   .arg(i)
-                   .arg(describe(block), block.value(QStringLiteral("text")).toString());
-        if (out.size() > budget) {
-            out += QStringLiteral("\n(… the page continues; later blocks omitted)\n");
-            break;
-        }
-    }
-    return out + transcripts;
+    m_snapshotRevision = revisionToken();
+    return noteEvidence(m_host, budget);
 }
 
 QString NoteTools::operationGuide() const
@@ -134,13 +123,25 @@ QString NoteTools::operationGuide() const
         "with one markdown block (images and ink stay). Best for rewriting or condensing a "
         "whole page.\n"
         "- {\"op\":\"rename_page\",\"title\":\"…\"}\n"
+        "- {\"op\":\"set_checked\",\"block\":1,\"checked\":true} — mark a checklist item done.\n"
         "Block numbers always refer to the snapshot, even after earlier edits in the same "
-        "block.");
+        "batch. The whole batch is validated before any change. At most 256 operations and "
+        "500 resulting blocks; texts at most 65536 characters. Session transcripts and "
+        "recordings survive replace_page. Do not mark a proposal as a decision or invent facts.");
 }
 
 Ai::EditOutcome NoteTools::apply(const QJsonArray &edits)
 {
     Ai::EditOutcome outcome;
+    const QString schemaError = QindaTK::validateAgentJson(
+        QJsonObject{{QStringLiteral("edits"), edits}}, noteEditsSchema());
+    const QString blocked = m_guard ? m_guard() : QString();
+    if (!schemaError.isEmpty() || !blocked.isEmpty()
+        || QJsonDocument(edits).toJson(QJsonDocument::Compact).size() > 262144) {
+        outcome.errors.append(!schemaError.isEmpty() ? schemaError : !blocked.isEmpty() ? blocked
+            : QObject::tr("The edit batch is too large (256 KiB maximum)."));
+        return outcome;
+    }
     NotePageItem *item = m_host->pageItem();
     const NotePage *page = m_host->currentPage();
     if (item == nullptr || page == nullptr || page->id != m_snapshotPage) {
@@ -149,6 +150,10 @@ Ai::EditOutcome NoteTools::apply(const QJsonArray &edits)
         return outcome;
     }
     const QJsonArray current = blocksArray(page->envelope.blocksJson);
+    if (current != m_snapshot || (!m_snapshotRevision.isEmpty() && m_snapshotRevision != revisionToken())) {
+        outcome.errors.append(QObject::tr("The page changed since the assistant read it; ask again."));
+        return outcome;
+    }
     QList<Entry> entries;
     for (qsizetype i = 0; i < current.size(); ++i) {
         // A block keeps its snapshot identity only while it is unchanged
@@ -156,12 +161,13 @@ Ai::EditOutcome NoteTools::apply(const QJsonArray &edits)
         const bool same = i < m_snapshot.size() && m_snapshot.at(i) == current.at(i);
         entries.append({same ? int(i) : -2, current.at(i).toObject()});
     }
-    QString newTitle;
+    QString newTitle = page->title;
     for (const QJsonValue &value : edits) {
         const QJsonObject edit = value.toObject();
         const QString op = edit.value(QStringLiteral("op")).toString();
         const int block = edit.value(QStringLiteral("block")).toInt(-1);
-        if (op == QLatin1String("replace_block") || op == QLatin1String("delete_block")) {
+        if (op == QLatin1String("replace_block") || op == QLatin1String("delete_block")
+            || op == QLatin1String("set_checked")) {
             const int at = findEntry(entries, block);
             if (at < 0 || !isTyped(entries.at(at).block)) {
                 outcome.errors.append(QObject::tr("%1: block %2 is not a text block on the page "
@@ -169,8 +175,20 @@ Ai::EditOutcome NoteTools::apply(const QJsonArray &edits)
                 continue;
             }
             if (op == QLatin1String("delete_block")) {
+                if (entries.at(at).block.contains(QStringLiteral("transcript"))
+                    || entries.at(at).block.contains(QStringLiteral("audio"))) {
+                    outcome.errors.append(QObject::tr("Keep session evidence: rewrite this block instead of deleting it."));
+                    continue;
+                }
                 entries.removeAt(at);
                 outcome.changes.append(QObject::tr("deleted block %1").arg(block));
+            } else if (op == QLatin1String("set_checked")) {
+                if (entries.at(at).block.value(QStringLiteral("type")).toString() != QLatin1String("check")) {
+                    outcome.errors.append(QObject::tr("set_checked needs a checklist item."));
+                    continue;
+                }
+                entries[at].block.insert(QStringLiteral("checked"), edit.value(QStringLiteral("checked")));
+                outcome.changes.append(QObject::tr("updated checklist item %1").arg(block));
             } else {
                 entries[at].block.insert(QStringLiteral("text"),
                                          edit.value(QStringLiteral("text")).toString());
@@ -204,39 +222,44 @@ Ai::EditOutcome NoteTools::apply(const QJsonArray &edits)
                     top = b.rect.top();
                 }
             }
+            QJsonObject created{{QStringLiteral("type"), QStringLiteral("markdown")},
+                                {QStringLiteral("uid"), QUuid::createUuid().toString(QUuid::WithoutBraces)},
+                                {QStringLiteral("text"),
+                                 edit.value(QStringLiteral("markdown")).toString()}};
+            preserveSessions(entries, &created);
             entries.erase(std::remove_if(entries.begin(), entries.end(),
                                          [](const Entry &e) { return isTyped(e.block); }),
                           entries.end());
-            QJsonObject created{{QStringLiteral("type"), QStringLiteral("markdown")},
-                                {QStringLiteral("text"),
-                                 edit.value(QStringLiteral("markdown")).toString()}};
             setBlockRect(&created, QRectF(kMargin, top < 0 ? kBlockTop : top,
                                           item->pageWidth() - 2 * kMargin, 0));
             entries.prepend({-1, created});
             outcome.changes.append(QObject::tr("replaced the page's text"));
         } else if (op == QLatin1String("rename_page")) {
             newTitle = edit.value(QStringLiteral("title")).toString().trimmed();
-            if (!newTitle.isEmpty()) {
+            if (newTitle.isEmpty()) {
+                outcome.errors.append(QObject::tr("A page title cannot be blank."));
+            } else {
                 outcome.changes.append(QObject::tr("renamed the page “%1”").arg(newTitle));
             }
         } else {
             outcome.errors.append(QObject::tr("unknown operation “%1”").arg(op));
         }
     }
-    const int textChanges = int(outcome.changes.size()) - (newTitle.isEmpty() ? 0 : 1);
-    if (textChanges > 0) {
+    if (entries.size() > 500) outcome.errors.append(QObject::tr("At most 500 blocks after an AI edit."));
+    // AGENT-GUARD: validation is atomic. In particular, a valid first op
+    // followed by an invalid target never changes the page or its title.
+    if (!outcome.errors.isEmpty()) { outcome.changes.clear(); return outcome; }
+    if (!outcome.changes.isEmpty()) {
         QJsonArray blocks;
         for (const Entry &entry : entries) {
             blocks.append(entry.block);
         }
         reflow(&blocks, item->pageWidth());
-        if (!item->replaceBlocks(blocks, QObject::tr("Assistant Edit"))) {
-            outcome.errors.append(QObject::tr("The page could not be changed."));
+        if (!item->replaceContent(blocks, newTitle, QObject::tr("Assistant Edit"))) {
+            outcome.changes.clear();
+            outcome.errors.append(QObject::tr("No content changed, or the page is being edited."));
             return outcome;
         }
-    }
-    if (!newTitle.isEmpty()) {
-        m_host->renamePage(m_host->currentSectionId(), m_host->currentPageId(), newTitle);
     }
     outcome.applied = int(outcome.changes.size());
     m_snapshotPage.clear(); // a second apply needs a fresh snapshot

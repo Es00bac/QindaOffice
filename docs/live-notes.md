@@ -9,6 +9,11 @@ information arrives. The notes are one **markdown block** on a notebook
 page, so they print, export to PDF, take ink and can be edited like
 anything else on the page.
 
+M59 adds technical discussion, project planning, troubleshooting and broader
+session structures, transcript-based read-only answers, reviewed follow-up
+drafts and local CLI/MCP access. See [QindaNote AI](qindanote-ai.md) for examples
+and the human workflow.
+
 ## Using it
 
 **AI ▸ Live Notes** (Ctrl+Shift+L), or the **Live** ribbon tab, opens the
@@ -23,8 +28,11 @@ panel.
 3. Press **Start live notes**. The **New live notes session** setup opens
    first, pre-filled with last time's answers:
    - **What is it?**: the topic.
-   - **Kind**: General, Lecture or class, Meeting, Interview, Tutorial or
-     how-to, or Talk, podcast or video. Each has its own emphasis: a
+   - **Kind**: the six original choices plus Technical discussion, Project
+     planning, Troubleshooting, Retrospective, One-to-one/coaching, Personal
+     appointment, Workshop/conference, and Community/volunteer planning.
+     **Use suggested structure for this kind** applies an opt-in layout and
+     section list. Each has its own emphasis: a
      meeting leads with decisions and owners; a tutorial becomes numbered
      steps with exact commands.
    - **Focus on**: what you care about. It gets the most space.
@@ -120,7 +128,9 @@ the whole notes back. The model replies with an edit script
 `=== NEW`, `=== MOVE ## A TO UNDER ## B`, `=== DELETE`, `=== SUMMARY`,
 `=== TITLE`, `=== TIMELINE`, `=== ACTIONS`, or `=== END` when nothing is
 worth noting. Headings are matched loosely (level, case, `**`, a trailing
-`[mm:ss]` ignored, then a prefix). A missing target keeps the content as a
+`[mm:ss]` ignored, then a unique prefix). Ambiguous targets cannot delete or
+replace either matching section. `=== END` is a successful no-change reply,
+including the final pass. A missing target keeps the content as a
 new section rather than losing it. This is what lets old sections grow and
 get corrected in place, and it is much cheaper for a slow writer: an
 update's output is only what changed. When the session stops, one final
@@ -155,9 +165,12 @@ again.
   - the player, and the sections with their times;
   - **Check these**: every *(unclear at 1:42: …?)* spot, with Listen and
     a correction box;
-  - **Study page**: flashcards and practice questions on a new page;
-  - **Tasks → QindaMail**: action items become tasks, and dated ones also
-    calendar entries;
+  - **Follow-up drafts**: recap, project next steps, troubleshooting brief,
+    questions, study material or tasks, shown for review before acceptance;
+  - **Study draft**: reviewed flashcards and practice questions become a new page;
+  - **Review tasks**: only **Send reviewed tasks** creates the QindaMail
+    handoff. Relative dates use the recorded session date, and dated tasks
+    also become calendar entries;
   - **Pages by topic**: one page per topic after an index, also automatic
     at Stop if chosen in the setup;
   - **Export**: Markdown, QindaWrite, Anki.

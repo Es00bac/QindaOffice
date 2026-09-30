@@ -50,6 +50,7 @@ class LiveNotesExtrasTest : public QObject {
     Q_OBJECT
 private slots:
     void termsAndActionItemsParse();
+    void malformedDeadlinesStayUnscheduled();
     void actionItemsBecomeIcs();
     void splitByTopicKeepsTheIndex();
     void ankiCardsFromTables();
@@ -86,6 +87,28 @@ void LiveNotesExtrasTest::actionItemsBecomeIcs()
     QVERIFY(ics.contains("DTEND;VALUE=DATE:20261003"));
     QVERIFY(ics.contains("SUMMARY:Maria: Send slides"));
     QVERIFY(ics.contains("From: Biology 101"));
+
+    const QByteArray untrusted = Extras::actionItemsIcs(
+        {{QStringLiteral("Review\r\nBEGIN:VEVENT"), {}, {}, QStringLiteral("one\rtwo")}}, {});
+    QCOMPARE(untrusted.count("\r\nBEGIN:VEVENT\r\n"), 0);
+    QVERIFY(untrusted.contains("Review\\nBEGIN:VEVENT"));
+    QVERIFY(untrusted.contains("DESCRIPTION:one\\ntwo"));
+}
+
+void LiveNotesExtrasTest::malformedDeadlinesStayUnscheduled()
+{
+    const auto tasks = Extras::parseActionItems(QStringLiteral(
+        R"([{"title":"Keep this commitment","due":"2026-02-30"},{"title":17},{"title":"No guessed date","due":"tomorrow"}])"));
+    QCOMPARE(tasks.size(), 2);
+    QVERIFY(!tasks.first().due.isValid() && !tasks.last().due.isValid());
+    QVERIFY(tasks.first().notes.contains(QStringLiteral("Unverified deadline")));
+    const auto request = Extras::actionItemsRequest(QStringLiteral("retry tomorrow"), {});
+    QVERIFY(request.systemPrompt.contains(QStringLiteral("No reliable session date")));
+    const QString longEvidence = QStringLiteral("early failure") + QString(60000, QLatin1Char('x'))
+        + QStringLiteral("late confirmed result");
+    const QString sent = Extras::actionItemsRequest(longEvidence, {}).messages.first().text;
+    QVERIFY(sent.startsWith(QStringLiteral("early failure")) && sent.endsWith(QStringLiteral("late confirmed result")));
+    QVERIFY(sent.contains(QStringLiteral("omitted")) && sent.size() <= 40000);
 }
 
 void LiveNotesExtrasTest::splitByTopicKeepsTheIndex()

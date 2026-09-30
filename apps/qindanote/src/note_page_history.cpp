@@ -96,4 +96,20 @@ void BackgroundCommand::redo()
     }
 }
 
+PageContentCommand::PageContentCommand(QString text, QByteArray before, QByteArray after,
+                                      QString oldTitle, QString newTitle, NotePageItem *item)
+    : QUndoCommand(std::move(text)), m_before(std::move(before)), m_after(std::move(after)),
+      m_oldTitle(std::move(oldTitle)), m_newTitle(std::move(newTitle)), m_item(item)
+{
+}
+void PageContentCommand::undo()
+{
+    if (m_item) m_item->applyHistoryContent(m_before, m_oldTitle);
+}
+void PageContentCommand::redo()
+{
+    if (m_alreadyApplied) { m_alreadyApplied = false; return; }
+    if (m_item) m_item->applyHistoryContent(m_after, m_newTitle);
+}
+
 } // namespace QindaOffice::Apps::Notes

@@ -54,6 +54,31 @@ bool NotePageItem::canRedo() const
     return m_page != nullptr && m_history->canRedo();
 }
 
+int NotePageItem::historyIndex() const { return m_history->index(); }
+
+void NotePageItem::applyHistoryContent(const QByteArray &blocksJson, const QString &title)
+{
+    if (!m_page) return;
+    const bool renamed = m_page->title != title;
+    m_page->title = title;
+    m_page->envelope.title = title;
+    applyHistoryBlocks(blocksJson);
+    if (renamed) emit pageTitleChanged();
+}
+
+bool NotePageItem::replaceContent(const QJsonArray &blocks, const QString &title,
+                                  const QString &undoText)
+{
+    if (!m_page || m_editingBlock >= 0 || m_inking || m_erasing) return false;
+    const QByteArray before = m_page->envelope.blocksJson;
+    const QByteArray after = withBlocksArray(before, blocks);
+    const QString oldTitle = m_page->title;
+    if (before == after && oldTitle == title) return false;
+    applyHistoryContent(after, title);
+    m_history->push(new PageContentCommand(undoText, before, after, oldTitle, title, this));
+    return true;
+}
+
 void NotePageItem::updatePageMetrics()
 {
     // The item is exactly as big as the (grown) page in document units;

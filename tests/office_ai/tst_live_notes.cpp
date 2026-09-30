@@ -410,7 +410,7 @@ void LiveNotesTest::briefingShapesThePrompt()
     QVERIFY(!prompt.contains(QStringLiteral("[12:40]")));
     // Persisted as a map, round trip.
     QCOMPARE(NotesBriefing::fromMap(briefing.toMap()), briefing);
-    QCOMPARE(LiveNotesBriefing::scenarios().size(), 6);
+    QCOMPARE(LiveNotesBriefing::scenarios().size(), 14);
     for (const auto &scenario : LiveNotesBriefing::scenarios()) {
         QVERIFY(scenario.id == QLatin1String("general") || !LiveNotesBriefing::scenarioBrief(scenario.id).isEmpty());
     }

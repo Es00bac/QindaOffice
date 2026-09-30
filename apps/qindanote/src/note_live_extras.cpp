@@ -173,9 +173,10 @@ void LiveNotesSession::learnTerms(const QString &material)
         return;
     }
     QPointer<LiveNotesSession> self(this);
+    const int generation = m_launchGeneration;
     Ai::LiveNotesExtras::runOnce(m_provider, Ai::LiveNotesExtras::termsRequest(material), this,
-                                 [self](const QString &text, const QString &) {
-        if (self == nullptr || self->m_engineCore == nullptr) {
+                                 [self, generation](const QString &text, const QString &) {
+        if (self == nullptr || self->m_engineCore == nullptr || generation != self->m_launchGeneration) {
             return;
         }
         const QStringList terms = Ai::LiveNotesExtras::parseTerms(text);
@@ -242,6 +243,7 @@ void LiveNotesSession::catchUp(int minutes)
         return;
     }
     const QList<Ai::TranscriptLine> &lines = m_engineCore->transcript();
+    minutes = qBound(1, minutes, 30);
     const qint64 from = lines.isEmpty() ? 0 : lines.last().ms - qint64(minutes) * 60000;
     QList<Ai::TranscriptLine> recent;
     for (const Ai::TranscriptLine &line : lines) {
@@ -257,9 +259,10 @@ void LiveNotesSession::catchUp(int minutes)
     m_catchingUp = true;
     emit catchUpChanged();
     QPointer<LiveNotesSession> self(this);
+    const int generation = m_launchGeneration;
     Ai::LiveNotesExtras::runOnce(m_provider, Ai::LiveNotesExtras::catchUpRequest(recent, m_speakerNames),
-                                 this, [self](const QString &text, const QString &error) {
-        if (self == nullptr) {
+                                 this, [self, generation](const QString &text, const QString &error) {
+        if (self == nullptr || generation != self->m_launchGeneration || self->m_engineCore == nullptr) {
             return;
         }
         self->m_catchingUp = false;
@@ -373,6 +376,7 @@ void LiveNotesSession::captureScreenNow()
     QDir().mkpath(dir);
     const QString path = dir + QStringLiteral("/screen-%1.png").arg(QDateTime::currentMSecsSinceEpoch());
     auto *process = new QProcess(this);
+    const int generation = m_launchGeneration;
     QString program = qEnvironmentVariable("QQO_SCREENSHOT_COMMAND");
     QStringList arguments;
     if (program.isEmpty()) {
@@ -382,14 +386,27 @@ void LiveNotesSession::captureScreenNow()
     } else {
         arguments = {path};
     }
-    connect(process, &QProcess::finished, this, [this, process, path](int code, QProcess::ExitStatus) {
+    connect(process, &QProcess::finished, this, [this, process, path, generation](int code, QProcess::ExitStatus) {
         process->deleteLater();
-        if (code == 0) {
+        if (code == 0 && generation == m_launchGeneration && m_state == QLatin1String("listening")) {
             onScreenCaptured(path);
         }
         QFile::remove(path);
     });
+    // A missing helper emits FailedToStart without finished: release it,
+    // stop repeated launch attempts, and keep the audio pipeline alive.
+    connect(process, &QProcess::errorOccurred, this,
+        [this, process, path, generation](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart) return;
+        process->deleteLater();
+        QFile::remove(path);
+        if (generation == m_launchGeneration && m_state == QLatin1String("listening")) {
+            m_screenTimer.stop();
+            setStatus({}, tr("Screen capture could not start; audio notes continue."));
+        }
+    });
     process->start(program, arguments);
+    QTimer::singleShot(20000, process, [process] { if (process->state() != QProcess::NotRunning) process->kill(); });
 }
 
 void LiveNotesSession::onScreenCaptured(const QString &path)
@@ -405,116 +422,6 @@ void LiveNotesSession::onScreenCaptured(const QString &path)
     m_lastScreen = thumb;
     m_engineCore->addScreen(image.width() > 1280 ? image.scaledToWidth(1280, Qt::SmoothTransformation)
                                                  : image);
-}
-
-// ---- study pages and action items ----
-
-void LiveNotesSession::setWorking(bool on)
-{
-    if (m_working != on) {
-        m_working = on;
-        emit workingChanged();
-    }
-}
-
-void LiveNotesSession::withModel(const std::function<void(Ai::ChatProvider *)> &use)
-{
-    const auto config = m_catalog != nullptr ? m_catalog->configFor(m_modelId) : std::nullopt;
-    if (!config.has_value()) {
-        setStatus({}, tr("Choose the model for notes first (Live Notes ▸ Settings)."));
-        return;
-    }
-    QPointer<LiveNotesSession> self(this);
-    const QString modelId = m_modelId;
-    Ai::ApiKeyResolver::resolve(Ai::ModelCatalog::keySources(*config), this,
-                                [self, modelId, use](const QString &key, const QString &) {
-        if (self == nullptr) {
-            return;
-        }
-        Ai::ChatProvider *provider = self->m_catalog->createProvider(modelId, key, self);
-        if (provider == nullptr) {
-            self->setStatus({}, tr("The notes model is not available."));
-            return;
-        }
-        use(provider);
-    });
-}
-
-void LiveNotesSession::makeStudyPage()
-{
-    const QString notes = m_host->currentPageNotes();
-    if (notes.trimmed().isEmpty() || m_working) {
-        setStatus({}, tr("This page has no notes to study from."));
-        return;
-    }
-    const QString title = m_host->currentPageTitle();
-    setWorking(true);
-    setStatus(tr("Making a study page…"));
-    QPointer<LiveNotesSession> self(this);
-    withModel([self, notes, title](Ai::ChatProvider *provider) {
-        Ai::LiveNotesExtras::runOnce(provider, Ai::LiveNotesExtras::studyRequest(title, notes), provider,
-                                     [self, provider, title](const QString &text, const QString &error) {
-            provider->deleteLater();
-            if (self == nullptr) {
-                return;
-            }
-            self->setWorking(false);
-            if (!error.isEmpty()) {
-                self->setStatus({}, tr("Could not make the study page: %1").arg(error));
-                return;
-            }
-            self->m_host->addNotesPage(tr("Study: %1").arg(title), Ai::LiveNotesPrompt::sanitizeReply(text));
-            self->setStatus(tr("Study page added after “%1”. Export it for Anki from the Session panel.").arg(title));
-        });
-    });
-}
-
-void LiveNotesSession::sendActionItemsToMail()
-{
-    const QString notes = m_host->currentPageNotes();
-    if (notes.trimmed().isEmpty() || m_working) {
-        setStatus({}, tr("This page has no notes with action items."));
-        return;
-    }
-    const QString title = m_host->currentPageTitle();
-    setWorking(true);
-    setStatus(tr("Finding the action items…"));
-    QPointer<LiveNotesSession> self(this);
-    withModel([self, notes, title](Ai::ChatProvider *provider) {
-        Ai::LiveNotesExtras::runOnce(provider, Ai::LiveNotesExtras::actionItemsRequest(notes, QDate::currentDate()),
-                                     provider, [self, provider, title](const QString &text, const QString &error) {
-            provider->deleteLater();
-            if (self == nullptr) {
-                return;
-            }
-            self->setWorking(false);
-            const QList<Ai::LiveNotesExtras::ActionItem> items = Ai::LiveNotesExtras::parseActionItems(text);
-            if (!error.isEmpty() || items.isEmpty()) {
-                self->setStatus({}, error.isEmpty() ? tr("No action items were found on this page.")
-                                                    : tr("Could not read the action items: %1").arg(error));
-                return;
-            }
-            const QString dir = Core::stateDirFor(Core::appLeaf()) + QStringLiteral("/handoff");
-            QDir().mkpath(dir);
-            const QString path = dir + QStringLiteral("/action-items-%1.ics").arg(QDateTime::currentMSecsSinceEpoch());
-            QFile file(path);
-            if (!file.open(QIODevice::WriteOnly)) {
-                self->setStatus({}, file.errorString());
-                return;
-            }
-            file.write(Ai::LiveNotesExtras::actionItemsIcs(items, title));
-            file.close();
-            // QQO_NO_HANDOFF: see NoteHost::openInWrite's AGENT-GUARD.
-            const QString mail = qEnvironmentVariableIsSet("QQO_NO_HANDOFF")
-                ? QString() : QStandardPaths::findExecutable(QStringLiteral("qindamail"));
-            if (mail.isEmpty() || !QProcess::startDetached(mail, {path})) {
-                self->setStatus({}, tr("QindaMail is not installed; the tasks were saved to %1").arg(path));
-                return;
-            }
-            self->setStatus(tr("%n action item(s) sent to QindaMail (tasks, and calendar entries for the dated ones).",
-                               "", int(items.size())));
-        });
-    });
 }
 
 } // namespace QindaOffice::Apps::Notes

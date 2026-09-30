@@ -53,7 +53,7 @@ namespace LiveNotesBriefing {
 
 QList<Scenario> scenarios()
 {
-    return {
+    QList<Scenario> out{
         {QStringLiteral("general"), QObject::tr("General"),
          QObject::tr("Anything: organised by topic, nothing assumed.")},
         {QStringLiteral("lecture"), QObject::tr("Lecture or class"),
@@ -67,6 +67,9 @@ QList<Scenario> scenarios()
         {QStringLiteral("talk"), QObject::tr("Talk, podcast or video"),
          QObject::tr("The thesis, the arguments and evidence, references and takeaways.")},
     };
+    const auto workflows = workflowScenarios();
+    for (qsizetype i = 0; i < workflows.size(); ++i) out.insert(i + 1, workflows.at(i));
+    return out;
 }
 
 QString scenarioBrief(const QString &id)
@@ -107,7 +110,7 @@ QString scenarioBrief(const QString &id)
             "mentioned in a `## References` section. Separate the speakers' claims from "
             "established facts when the difference matters.");
     }
-    return {};
+    return workflowBrief(id);
 }
 
 QString render(const NotesBriefing &briefing)

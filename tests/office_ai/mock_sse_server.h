@@ -6,6 +6,7 @@
 // across chunk boundaries. The client must reassemble events exactly.
 
 #include <QTcpServer>
+#include <QJsonObject>
 
 namespace QindaOffice::Ai {
 
@@ -24,6 +25,7 @@ public:
     // Streams that stay open (cancel tests) disable the auto-close.
     void setAutoClose(bool enabled) { m_autoClose = enabled; }
     [[nodiscard]] quint16 port() const { return serverPort(); }
+    [[nodiscard]] QList<QJsonObject> requests() const { return m_requests; }
 
 protected:
     void incomingConnection(qintptr handle) override;
@@ -31,6 +33,7 @@ protected:
 private:
     QVector<SseScriptStep> m_steps;
     bool m_autoClose = true;
+    QList<QJsonObject> m_requests;
 };
 
 } // namespace QindaOffice::Ai

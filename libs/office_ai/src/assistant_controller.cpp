@@ -105,6 +105,13 @@ void AssistantController::setEditMode(bool on)
     emit editModeChanged();
 }
 
+void AssistantController::setDocumentScopeLabel(const QString &label)
+{
+    if (m_documentScopeLabel == label) return;
+    m_documentScopeLabel = label;
+    emit documentScopeLabelChanged();
+}
+
 void AssistantController::setScope(int scope)
 {
     scope = qBound(0, scope, 2);

@@ -127,11 +127,13 @@ public:
     // ---- history ----
     [[nodiscard]] bool canUndo() const;
     [[nodiscard]] bool canRedo() const;
+    [[nodiscard]] int historyIndex() const;
     Q_INVOKABLE void undo();
     Q_INVOKABLE void redo();
     void applyHistoryLayer(const Ink::StrokeLayer &layer);
     void applyHistoryBlocks(const QByteArray &blocksJson);
     void applyHistoryBackground(const QString &background);
+    void applyHistoryContent(const QByteArray &blocksJson, const QString &title);
 
     // ---- blocks (note_page_item_blocks.cpp) ----
     [[nodiscard]] const QList<PageBlock> &blocks() const { return m_blocks; }
@@ -165,6 +167,9 @@ public:
     // The assistant's edits (D-058, note_tools.cpp): the whole block list
     // at once, one undo step. Closes the editor first.
     bool replaceBlocks(const QJsonArray &blocks, const QString &undoText);
+    // An assistant batch, including a rename, is one undo step. Refuses
+    // unfinished typing/ink instead of committing it on somebody's behalf.
+    bool replaceContent(const QJsonArray &blocks, const QString &title, const QString &undoText);
     [[nodiscard]] int editingBlock() const { return m_editingBlock; }
     [[nodiscard]] QString editingKind() const;
     [[nodiscard]] QString editingText() const { return m_editingText; }
@@ -175,9 +180,11 @@ public:
 
     // Test seam: the stroke builder's stroke while inking.
     [[nodiscard]] bool isInking() const { return m_inking; }
+    [[nodiscard]] bool hasActiveGesture() const { return m_inking || m_erasing; }
 
 signals:
     void pageEdited();
+    void pageTitleChanged();
     void presentationChanged();
     void pageChanged();
     void historyChanged();

@@ -173,6 +173,9 @@ void NoteSessionTest::reviewAndPageCommands()
     live->makeStudyPage();
     QTRY_VERIFY(!live->working());
     QVERIFY2(live->errorText().isEmpty(), qPrintable(live->errorText()));
+    QCOMPARE(scene.host.currentSection()->pages.size(), 1);
+    QVERIFY(!live->draftText().isEmpty());
+    QVERIFY(live->acceptDraft());
     const auto *section = scene.host.currentSection();
     qsizetype at = -1;
     for (qsizetype i = 0; i < section->pages.size(); ++i) {
@@ -181,7 +184,7 @@ void NoteSessionTest::reviewAndPageCommands()
         }
     }
     QVERIFY(at >= 0 && at + 1 < section->pages.size());
-    QCOMPARE(section->pages.at(at + 1).title, QStringLiteral("Study: %1").arg(scene.host.currentPageTitle()));
+    QVERIFY(section->pages.at(at + 1).title.endsWith(scene.host.currentPageTitle()));
     scene.host.selectPage(section->id, section->pages.at(at + 1).id);
     QVERIFY(scene.host.pageSession().value(QStringLiteral("hasCards")).toBool());
     QVERIFY(scene.host.exportAnkiTo(QUrl::fromLocalFile(dir.filePath(QStringLiteral("a.txt")))));
@@ -195,7 +198,7 @@ void NoteSessionTest::reviewAndPageCommands()
     QVERIFY(!scene.host.currentPageNotes().contains(QStringLiteral("lipid bilayer")));
 
     // The Session panel.
-    scene.host.actions()->trigger(QStringLiteral("noteSessionPanelAction"));
+    scene.host.actions()->setChecked(QStringLiteral("noteSessionPanelAction"), true);
     QQuickItem *panel = nullptr;
     QTRY_VERIFY((panel = findItem(scene.window->contentItem(), QStringLiteral("sessionPanel"))) != nullptr
                 && panel->isVisible());

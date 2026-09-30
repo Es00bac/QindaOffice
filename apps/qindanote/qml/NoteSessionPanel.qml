@@ -130,6 +130,12 @@ Tk.Flex {
             gap: Tk.Theme.space.xs
             width: scroll.width - Tk.Theme.space.sm
 
+            NoteFollowUp {
+                objectName: "sessionFollowUp"
+                Tk.Flex.alignSelf: Tk.Flex.Stretch
+                note: panel.note
+            }
+
             // ---- sections ----
             Tk.Overline { title: qsTr("Sections"); visible: panel.session.sections.length > 0 }
             Repeater {
@@ -189,10 +195,11 @@ Tk.Flex {
     Tk.Overline { title: qsTr("Make more of it"); visible: panel.session.hasNotes }
     Tk.Flex {
         direction: Tk.Flex.Row
+        wrap: Tk.Flex.Wrap
         gap: Tk.Theme.space.xs
         visible: panel.session.hasNotes
-        Tk.Button { objectName: "sessionStudy"; small: true; iconName: "book-open"; text: qsTr("Study page"); available: !panel.note.live.working; onClicked: panel.note.actions.trigger("noteStudyPageAction") }
-        Tk.Button { objectName: "sessionTasks"; small: true; iconName: "list-todo"; text: qsTr("Tasks → QindaMail"); available: !panel.note.live.working; onClicked: panel.note.actions.trigger("noteActionItemsToMailAction") }
+        Tk.Button { objectName: "sessionStudy"; small: true; iconName: "book-open"; text: qsTr("Study draft"); available: !panel.note.live.working && !panel.note.live.active; onClicked: panel.note.actions.trigger("noteStudyPageAction") }
+        Tk.Button { objectName: "sessionTasks"; small: true; iconName: "list-todo"; text: qsTr("Review tasks"); available: !panel.note.live.working && !panel.note.live.active; onClicked: panel.note.actions.trigger("noteActionItemsToMailAction") }
     }
     Tk.Flex {
         direction: Tk.Flex.Row
@@ -203,6 +210,7 @@ Tk.Flex {
     Tk.Overline { title: qsTr("Export"); visible: panel.session.hasNotes }
     Tk.Flex {
         direction: Tk.Flex.Row
+        wrap: Tk.Flex.Wrap
         gap: Tk.Theme.space.xs
         visible: panel.session.hasNotes
         Tk.Button { objectName: "sessionExportMd"; small: true; iconName: "file-text"; text: qsTr("Markdown…"); onClicked: panel.note.actions.trigger("noteExportMarkdownAction") }

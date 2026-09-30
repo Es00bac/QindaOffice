@@ -67,7 +67,33 @@ private slots:
     void layoutsShapeThePrompt();
     void engineFilesEditsIntoTheNotes();
     void finalPassTidiesWithAnEditScript();
+    void ambiguousTargetsAndNoChange();
 };
+
+void LiveNotesEditsTest::ambiguousTargetsAndNoChange()
+{
+    bool script = false;
+    QVERIFY(Edits::parse(QStringLiteral("=== END"), &script).isEmpty());
+    QVERIFY(script);
+    const QString notes = QStringLiteral("# Investigation\n\n## Network client\n- client fact\n\n## Network server\n- server fact");
+    const auto result = Edits::apply(notes, Edits::parse(QStringLiteral("=== DELETE ## Network")));
+    QCOMPARE(result.applied, 0);
+    QVERIFY(result.notes.contains(QStringLiteral("client fact")));
+    QVERIFY(result.notes.contains(QStringLiteral("server fact")));
+    Provider provider;
+    provider.replies = {QStringLiteral("=== END")};
+    QString current = notes;
+    LiveNotesEngine engine;
+    engine.setProvider(&provider);
+    engine.setNotesAccess([&current] { return current; }, [&current](const QString &text) { current = text; return true; });
+    QSignalSpy done(&engine, &LiveNotesEngine::finalized), failed(&engine, &LiveNotesEngine::failed);
+    engine.start();
+    engine.finalize();
+    engine.tick();
+    QTRY_COMPARE(done.size(), 1);
+    QCOMPARE(failed.size(), 0);
+    QCOMPARE(provider.requests.size(), 1);
+}
 
 void LiveNotesEditsTest::parsesOps()
 {

@@ -15,6 +15,7 @@
 #include "document_tools.h"
 
 #include <QJsonArray>
+#include <functional>
 
 namespace QindaOffice::Apps::Notes {
 
@@ -29,6 +30,11 @@ public:
     [[nodiscard]] QString operationGuide() const override;
     Ai::EditOutcome apply(const QJsonArray &edits) override;
     void undo() override;
+    void setRevisionProvider(std::function<QString()> revision, std::function<QString()> undoRevision,
+                             std::function<QString()> guard)
+    { m_revision = std::move(revision); m_undoRevision = std::move(undoRevision); m_guard = std::move(guard); }
+    QString revisionToken() const override { return m_revision ? m_revision() : QString(); }
+    QString undoRevisionToken() const override { return m_undoRevision ? m_undoRevision() : revisionToken(); }
 
     // Moves blocks down so none overlaps a block above it (exposed for tests).
     static void reflow(QJsonArray *blocks, qreal pageWidth);
@@ -37,6 +43,8 @@ private:
     NoteHost *m_host;
     QString m_snapshotPage;   // page id the snapshot was taken of
     QJsonArray m_snapshot;    // its blocks then (ops are checked against them)
+    QString m_snapshotRevision;
+    std::function<QString()> m_revision, m_undoRevision, m_guard;
 };
 
 } // namespace QindaOffice::Apps::Notes

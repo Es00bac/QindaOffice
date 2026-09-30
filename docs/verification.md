@@ -33,6 +33,59 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M59 QindaNote AI gates (D-065)
+
+Qualified on qinda with Portage-installed QindaTK r14 (the r13 agent SDK):
+**134/134 full-suite targets passed, 374.70 s**. After the model-prompt and UI
+refinements, **14/14 Note/live-notes targets passed, 55.77 s**. Reviewed the
+1280x800 and 520x800 follow-up PNGs: preview, kind picker and Accept/Discard
+fit; the narrow view preserves page space by hiding the other side panels.
+Geometry evidence: `TextArea#sessionDraftPreview at 968,334 304x140.625`
+in the 1280 px window; `at 212,411 300x140.625` in the 520 px window.
+Final optional-capture cleanup passed the three live/session/follow-up targets
+(22.40 s); the two geometry cases passed separately with QML warning failures
+enabled.
+
+Five synthetic workflows ran through the actual Note/model path using Ornith
+on qinda; planning/coaching were rechecked after grounding refinements.
+[Recorded inputs, outputs and observations](verification/qindanote-ai-20260929.json)
+include the initial failures. The final planning sample retains the undated
+promise, leaves the signing-fix owner unknown and preserves the proposed date
+as a proposal. Models still sometimes add unrequested recap/boilerplate;
+these examples do not establish a universal accuracy or latency guarantee.
+
+- `tst_note_followup`: real Note window and HTTP provider; read-only questions
+  include stored speech; bounded evidence retains head/tail and marks gaps;
+  no mutation before review, source preserved, no duplicate Accept;
+  human edits/navigation/cancel discard stale replies; missing/empty model
+  output releases busy state; task preview precedes file creation, uses the
+  recorded session date, and never launches Mail in the headless gate.
+  Wide/narrow preview grabs and 520 px bounds are checked.
+- `tst_note_agent`: native grants, typed snapshot including viewport/speech,
+  read-only refusal, atomic valid/invalid batches, title/content undo together,
+  replay deduplication, stale edit/undo ABA, human-edit protection, unfinished
+  input refusal, preservation of recording/transcript/images through rewrite.
+- `note_agent_process`: actual offscreen `qindanote` executable in isolated
+  XDG state with no live D-Bus; Off/Read/Edit, CLI edit/receipt/retry/undo,
+  atomic refusal and stale revision; MCP reads the live page.
+- `tst_live_notes_edits`: ambiguous prefix deletion refused; `=== END` is a
+  successful no-change final pass with one request and no retry/error.
+- `tst_live_notes_extras`: malformed dates retain unscheduled commitments,
+  unknown date anchors stay undated, long evidence marks omissions, and
+  carriage-return text cannot introduce an iCalendar component.
+- Existing Note live/session/markdown/input/UI/ribbon/menu gates remain.
+  New follow-up controls are persistent actions; menu/ribbon reachability and
+  structural fixtures at wide/narrow widths cover them.
+
+Opt-in model review: `tst_note_followup realModelWorkflowReview` with
+`QQO_NOTE_EVAL_BASE`, `_MODEL`, `_KEYREF`, optional `_BODY` and `_DIR`. It uses
+synthetic design-review, planning, incident, coaching and task evidence,
+records outputs/timing, and asserts generation leaves source pages unchanged.
+Assess factual grounding separately from deterministic application behavior.
+No microphones, real meeting recordings or personal calendar contents enter
+this review. Heavy builds and model inference stay on qinda.
+`QQO_NOTE_EVAL_KINDS=plan,questions` limits a follow-up review to changed kinds.
+
 ## M58 live-agent gates (D-064)
 
 Qualified 2026-09-29 in a clean qinda build against Portage-installed QindaTK

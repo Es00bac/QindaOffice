@@ -37,6 +37,8 @@ class AssistantController : public QObject {
     Q_PROPERTY(bool offMachine READ offMachine NOTIFY modelIdChanged)
     // 0 = no context, 1 = selection, 2 = whole document.
     Q_PROPERTY(int scope READ scope WRITE setScope NOTIFY scopeChanged)
+    // Apps name the actual scope: a notebook's context is its current page.
+    Q_PROPERTY(QString documentScopeLabel READ documentScopeLabel NOTIFY documentScopeLabelChanged)
     Q_PROPERTY(QString conversation READ conversation NOTIFY conversationChanged)
     Q_PROPERTY(bool streaming READ streaming NOTIFY streamingChanged)
     Q_PROPERTY(bool hasReply READ hasReply NOTIFY replyChanged)
@@ -57,6 +59,8 @@ public:
     [[nodiscard]] bool offMachine() const;
     [[nodiscard]] int scope() const { return m_scope; }
     void setScope(int scope);
+    [[nodiscard]] QString documentScopeLabel() const { return m_documentScopeLabel; }
+    void setDocumentScopeLabel(const QString &label);
     [[nodiscard]] QString conversation() const { return m_conversation; }
     [[nodiscard]] bool streaming() const { return m_run != nullptr; }
     [[nodiscard]] bool hasReply() const { return !m_lastReply.isEmpty(); }
@@ -82,6 +86,7 @@ signals:
     void modelsChanged();
     void modelIdChanged();
     void scopeChanged();
+    void documentScopeLabelChanged();
     void conversationChanged();
     void streamingChanged();
     void replyChanged();
@@ -102,6 +107,7 @@ private:
     EditApplier *m_applier;
     QString m_modelId;
     int m_scope = 0;
+    QString m_documentScopeLabel = tr("Document");
     QString m_conversation;
     ChatRun *m_run = nullptr;
     // True once the running turn has produced at least one textDelta; a

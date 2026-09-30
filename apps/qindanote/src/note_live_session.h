@@ -23,7 +23,8 @@
 // note_live_settings.cpp (settings, persistence, keys), note_live_extras.cpp
 // (M56, D-061: the flag, catch-up, speaker names, learned key terms, prep
 // material and series memory, the recording, silence handling, screen
-// capture, the usage meter, study pages and action items).
+// capture and the usage meter), note_session_drafts.cpp (M59: source-bound
+// follow-up previews, acceptance and reviewed action-item handoff).
 
 #include "api_key_resolver.h"
 #include "live_notes_engine.h"
@@ -145,6 +146,10 @@ class LiveNotesSession : public QObject {
     Q_PROPERTY(QVariantMap usage READ usage NOTIFY usageChanged)
     // A study page or the action-items hand-off is being made.
     Q_PROPERTY(bool working READ working NOTIFY workingChanged)
+    Q_PROPERTY(QVariantList followUpKinds READ followUpKinds CONSTANT)
+    Q_PROPERTY(QString draftKind READ draftKind NOTIFY draftChanged)
+    Q_PROPERTY(QString draftTitle READ draftTitle NOTIFY draftChanged)
+    Q_PROPERTY(QString draftText READ draftText NOTIFY draftChanged)
 public:
     LiveNotesSession(NoteHost *host, Ai::ModelCatalog *catalog, QString settingsPath,
                      QObject *parent = nullptr);
@@ -178,6 +183,7 @@ public:
     [[nodiscard]] QVariantMap setup() const { return m_briefing.toMap(); }
     void setSetup(const QVariantMap &map);
     [[nodiscard]] QVariantList scenarios() const;
+    Q_INVOKABLE QVariantMap suggestedSetup(const QString &scenario) const;
     [[nodiscard]] QVariantList layouts() const;
     [[nodiscard]] QVariantList styles() const;
     [[nodiscard]] bool askBeforeStart() const { return m_askBeforeStart; }
@@ -243,9 +249,18 @@ public:
     Q_INVOKABLE void setSpeakerName(const QString &label, const QString &name);
     // A few bullets on the last `minutes` of the session.
     Q_INVOKABLE void catchUp(int minutes = 5);
-    // From the current page's notes (any time, session or not):
+    // Prepare reviewable follow-ups from the current page after capture.
+    // These legacy entry points now create previews; only acceptDraft
+    // adds a page or creates the QindaMail handoff.
     Q_INVOKABLE void makeStudyPage();
     Q_INVOKABLE void sendActionItemsToMail();
+    [[nodiscard]] QVariantList followUpKinds() const;
+    [[nodiscard]] QString draftKind() const { return m_draftKind; }
+    [[nodiscard]] QString draftTitle() const { return m_draftTitle; }
+    [[nodiscard]] QString draftText() const { return m_draftText; }
+    Q_INVOKABLE void makeDraft(const QString &kind);
+    Q_INVOKABLE bool acceptDraft();
+    Q_INVOKABLE void clearDraft();
     // Text of a prep file (tests; .txt .md .pdf .html).
     [[nodiscard]] static QString readPrepFile(const QString &path, QString *error = nullptr);
     // Test seams: feed the silence logic a level; run its 1 s tick now.
@@ -271,6 +286,7 @@ signals:
     void catchUpChanged();
     void usageChanged();
     void workingChanged();
+    void draftChanged();
 
 private:
     // note_live_session.cpp
@@ -348,6 +364,10 @@ private:
     QString m_catchUp;
     bool m_catchingUp = false;
     bool m_working = false;
+    int m_draftGeneration = 0;
+    QString m_draftKind, m_draftTitle, m_draftText, m_draftRevision;
+    QList<Ai::LiveNotesExtras::ActionItem> m_draftTasks;
+    QPointer<Ai::ChatRun> m_draftRun;
     bool m_learnedFromTranscript = false;
     int m_learnedTerms = 0;
     std::unique_ptr<Speech::WavRecorder> m_recorder;

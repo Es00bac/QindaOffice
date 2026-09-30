@@ -216,6 +216,11 @@ void NoteHost::attachPageItem(NotePageItem *item)
         updatePageStatus();
     });
     connect(item, &NotePageItem::pageChanged, this, [this] { syncStructureEnablement(); });
+    connect(item, &NotePageItem::pageTitleChanged, this, [this] {
+        m_navigator->rebuild();
+        emit currentPageChanged();
+        updatePageStatus();
+    });
     loadToolState();
     applyPreferences();
     if (!m_currentPageId.isEmpty()) {

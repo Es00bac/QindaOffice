@@ -520,8 +520,15 @@ void LiveNotesEngine::cancel()
 {
     m_tick.stop();
     m_pending.clear();
+    m_started = false;
+    m_finalizing = false;
     if (m_run != nullptr) {
-        m_run->cancel();
+        const auto run = m_run;
+        m_run = nullptr;
+        run->disconnect(this);
+        run->cancel();
+        run->deleteLater();
+        emit busyChanged(false);
     }
 }
 

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-# Live agent access — Calc first (M58, D-064)
+# Live agent access — Calc and Note (M58/M59, D-064/D-065)
 
 QindaCalc now exposes its **running document**, not a separate file copy, over
 the QindaTK agent service. A CLI or MCP client can discover an open workbook,
@@ -7,15 +7,15 @@ read its live state, edit inputs, see recalculated values and undo its named
 edit. The provider calls the same `CalcTools` / `SpreadsheetDocument` code as
 the built-in assistant. No screen capture or coordinate clicking is involved.
 
-This milestone includes the reusable toolkit service and a complete Calc
-vertical slice. Write, Show, Note and the other suite applications still need
+M58 includes the reusable toolkit service and a complete Calc vertical slice;
+M59 adds QindaNote. Write, Show and the other suite applications still need
 their own domain providers; their local-agent access commands stay disabled.
 Existing built-in assistants continue working. No model subscription or cloud
 API is required for the local service itself.
 
 ## Human controls
 
-Each Calc window starts **disconnected**. In **AI**, choose **Allow Local
+Each supported document window starts **disconnected**. In **AI**, choose **Allow Local
 Agents to Read This Document** or **Allow Local Agents to Edit This Document**.
 The checked action records the grant. **Disconnect Local Agents** revokes it
 immediately, including access to cached edit receipts. These session controls
@@ -94,6 +94,32 @@ its parser; inspect the reported value/error rather than assuming a valid
 formula or a successful numeric result. Edits mark the open workbook dirty;
 saving still uses the normal File menu. This first provider does not expose
 save, export, sheet switching or arbitrary command activation.
+
+## QindaNote's live page (M59)
+
+`qindanote --agent-read /path/to/notebook` or `--agent-edit` grants a running
+notebook. `inspect` reports its section/page title inventory and current page
+blocks, checklist state, stored transcript/session metadata, dirty state,
+viewport, selection/editor draft, drawing, modals, live capture state and
+follow-up draft. Ink and image contents are explicitly unread. Snapshots cap
+1,000 page titles, 500 blocks and 512 KiB of block fields; omissions and
+shortened fields have explicit flags.
+
+`note.edit` accepts one `edits` array: `replace_block`, `insert_block`,
+`delete_block`, `replace_page`, `rename_page`, or `set_checked`. Up to 256
+operations, 256 KiB per batch, 65,536 characters per text, 512 per new title,
+and 500 resulting blocks. Block numbers always refer to the read snapshot.
+The entire batch validates before mutation; title and content share one undo
+step. Ink/images and session evidence survive rewrites; deletion of a session
+evidence block is refused. `note.undo` accepts the receipt's named `undo_ref`.
+Newer human work invalidates that reference. The built-in Note assistant uses
+the same tools and revision checks, including transcript context in read mode.
+
+Edits are disabled during unfinished typing/drawing, live capture or a modal.
+This first provider does not navigate pages, expose all page contents, save,
+export, start recording or hand off tasks. Follow-ups are human-reviewed UI
+drafts; edit permission is not permission to send them. See
+[QindaNote AI](qindanote-ai.md) for the human workflow and concrete use cases.
 
 ## Concurrency, receipts and the built-in assistant
 

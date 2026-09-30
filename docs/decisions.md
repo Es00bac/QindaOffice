@@ -5,6 +5,40 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-065: Note AI uses session evidence, atomic edits and reviewed follow-ups
+
+**Date:** 2026-09-29 · **Status:** accepted (owner request; M59)
+
+**Context.** The owner wants QindaNote's AI to help in technical discussions,
+project planning and troubleshooting, with broader meeting/event usefulness
+and a CLI or embedded AI partner. An audit found read-only assistant context
+omitted speech, edit batches could partially apply, title changes bypassed
+undo, whole-page rewrites lost session metadata, and asynchronous study/task
+generation lacked a source-bound review step.
+
+**Decision.** Bounded page evidence labels notes and speech with page/block
+identity, times and explicit omissions; unread ink/images stay identified.
+Add eight stable scenarios with opt-in structures, emphasizing decisions
+versus proposals, failed attempts versus verified results, and source-backed
+owners/dates. Six follow-up kinds generate ephemeral previews. Acceptance
+checks the unchanged source again and creates a new adjacent page or an
+explicitly reviewed QindaMail handoff. Relative dates use the recorded session
+date; unknown/invalid dates stay unscheduled. Navigation/cancel/model failure
+cannot add a draft to another page or leave the operation busy.
+
+Adopt the existing granted QindaTK SDK in `NoteAgent`, with bounded live state,
+typed current-page edits, receipts and named undo. `NoteTools` validates each
+entire batch; title and content share one undo step. Human typing/drawing,
+live sessions and modals block agent edits. Rewrites preserve transcript,
+recording references, ink and images. The built-in assistant follows the same
+revision contract. Narrow panel requests use DockModel commands to make room.
+
+**Consequences.** Models draft; application code owns mutation and lifecycle.
+Prompts request evidence grounding but do not guarantee factual accuracy.
+No implicit capture, message sending, RPC task handoff, OCR, all-page reading
+or navigation is added. Exact human flows, bounds and verification are in
+[QindaNote AI](qindanote-ai.md) and [agent interface](agent-interface.md).
+
 ## D-064: Agents work on the live document through a granted semantic service
 
 **Date:** 2026-09-29 · **Status:** accepted (owner request; M58)

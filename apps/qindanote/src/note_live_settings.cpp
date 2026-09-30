@@ -66,11 +66,17 @@ LiveNotesSession::LiveNotesSession(NoteHost *host, Ai::ModelCatalog *catalog,
 
 LiveNotesSession::~LiveNotesSession()
 {
+    clearDraft();
     // Leaving mid-session (the window closes): keep what was written and
     // the transcript, stop the processes.
     if (active()) {
         cancel();
     }
+}
+
+QVariantMap LiveNotesSession::suggestedSetup(const QString &scenario) const
+{
+    return Ai::LiveNotesBriefing::suggestedBriefing(scenario).toMap();
 }
 
 void LiveNotesSession::loadSettings()

@@ -71,4 +71,19 @@ private:
     bool m_alreadyApplied = true;
 };
 
+// AGENT-CONTRACT: NoteTools batches title and blocks together; the same
+// command must undo both, preserving transcript/audio fields and ink.
+class PageContentCommand final : public QUndoCommand {
+public:
+    PageContentCommand(QString text, QByteArray before, QByteArray after,
+                       QString oldTitle, QString newTitle, NotePageItem *item);
+    void undo() override;
+    void redo() override;
+private:
+    QByteArray m_before, m_after;
+    QString m_oldTitle, m_newTitle;
+    QPointer<NotePageItem> m_item;
+    bool m_alreadyApplied = true;
+};
+
 } // namespace QindaOffice::Apps::Notes

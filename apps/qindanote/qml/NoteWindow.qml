@@ -100,6 +100,29 @@ OfficeWindow {
         objectName: "noteDock"
         model: Tk.DockModel { storageKey: "qindanote/window" }
         workspace: "notes"
+        // The model remains the placement authority. At narrow widths a
+        // requested panel takes the available side space; opposite panels
+        // stay reachable through their persistent View/AI commands.
+        function showSidePanel(panelId, visible) {
+            if (visible && width > 0 && width < Tk.Theme.size.panelMinWidth * 3) {
+                for (const other of ["navigator", "assistant", "live", "session"])
+                    if (other !== panelId && !hiddenPanels.includes(other)) hidePanel(other)
+            }
+            if (visible === hiddenPanels.includes(panelId)) {
+                if (visible) showPanel(panelId); else hidePanel(panelId)
+            }
+            if (visible && width > 0 && width < Tk.Theme.size.panelMinWidth * 3) {
+                const info = model.panel(panelId)
+                if (info.mode === "docked")
+                    model.resizeDocked(panelId, Math.min(info.extent,
+                        Math.max(info.minWidth, width - Tk.Theme.size.panelMinWidth - Tk.Theme.space.sm)))
+            }
+        }
+        onWidthChanged: Qt.callLater(function() {
+            if (dock.width <= 0 || dock.width >= Tk.Theme.size.panelMinWidth * 3) return
+            for (const panelId of ["session", "live", "assistant"])
+                if (!dock.hiddenPanels.includes(panelId)) { dock.showSidePanel(panelId, true); break }
+        })
         canvas: Tk.Stack {
             NotePage {
                 id: pageHost
@@ -187,13 +210,15 @@ OfficeWindow {
         }
         // Keeps the two toggles honest when a panel is closed from its own
         // header (the list carries panel ids).
-        onHiddenPanelsChanged: {
+        // Defer action feedback until the model's menu binding has finished.
+        // Opening one narrow panel may hide several others in the same turn.
+        onHiddenPanelsChanged: Qt.callLater(function() {
             const hidden = dock.hiddenPanels.map(function(e) { return typeof e === "string" ? e : e.panelId })
             window.host.actions.setChecked("noteShowNavigatorAction", !hidden.includes("navigator"))
             window.host.actions.setChecked("aiAssistantAction", !hidden.includes("assistant"))
             window.host.actions.setChecked("noteLiveNotesAction", !hidden.includes("live"))
             window.host.actions.setChecked("noteSessionPanelAction", !hidden.includes("session"))
-        }
+        })
     }
 
     // Zoom commands drive the viewport.
@@ -214,20 +239,20 @@ OfficeWindow {
     Connections {
         target: window.note
         function onNavigatorToggleRequested(visible) {
-            if (visible === dock.hiddenPanels.includes("navigator")) { if (visible) dock.showPanel("navigator"); else dock.hidePanel("navigator") }
+            dock.showSidePanel("navigator", visible)
         }
         function onAssistantToggleRequested(visible) {
-            if (visible === dock.hiddenPanels.includes("assistant")) { if (visible) dock.showPanel("assistant"); else dock.hidePanel("assistant") }
+            dock.showSidePanel("assistant", visible)
         }
         function onLiveNotesToggleRequested(visible) {
-            if (visible === dock.hiddenPanels.includes("live")) { if (visible) dock.showPanel("live"); else dock.hidePanel("live") }
+            dock.showSidePanel("live", visible)
         }
         function onProvidersRequested() { providersDialog.open() }
         function onSessionPanelToggleRequested(visible) {
-            if (visible === dock.hiddenPanels.includes("session")) { if (visible) dock.showPanel("session"); else dock.hidePanel("session") }
+            dock.showSidePanel("session", visible)
         }
         function onPlayRecordingRequested(ms) {
-            if (dock.hiddenPanels.includes("session")) dock.showPanel("session")
+            dock.showSidePanel("session", true)
         }
         function onExportMarkdownRequested(name) { markdownDialog.selectedFile = "file://" + name; markdownDialog.open() }
         function onExportAnkiRequested(name) { ankiDialog.selectedFile = "file://" + name; ankiDialog.open() }

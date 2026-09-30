@@ -61,14 +61,18 @@ public:
                 return i;
             }
         }
+        int match = -1;
         for (int i = 0; i < headings.size(); ++i) {
             const QString &have = headings.at(i).norm;
             if (headings.at(i).level >= minLevel && qMin(have.size(), want.size()) >= 4
                 && (have.startsWith(want) || want.startsWith(have))) {
-                return i;
+                // A shortened heading must not select the first of two
+                // different topics. Missing/ambiguous targets keep content.
+                if (match >= 0) return -1;
+                match = i;
             }
         }
-        return -1;
+        return match;
     }
     int sectionEnd(int h) const
     {
@@ -246,6 +250,7 @@ QList<Op> parse(const QString &reply, bool *script)
     QList<Op> ops;
     QStringList body;
     bool open = false;
+    bool sawEnd = false;
     const auto close = [&] {
         if (open) {
             ops.last().body = bodyLines(body.join(QLatin1Char('\n'))).join(QLatin1Char('\n'));
@@ -265,6 +270,7 @@ QList<Op> parse(const QString &reply, bool *script)
         const QString word = m.captured(1).toUpper();
         const QString rest = m.captured(2).trimmed();
         if (word == QLatin1String("END")) {
+            sawEnd = true;
             continue;
         }
         Op op;
@@ -311,7 +317,7 @@ QList<Op> parse(const QString &reply, bool *script)
     }
     close();
     if (script != nullptr) {
-        *script = !ops.isEmpty();
+        *script = sawEnd || !ops.isEmpty();
     }
     return ops;
 }

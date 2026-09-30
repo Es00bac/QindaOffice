@@ -42,7 +42,9 @@ struct ActionItem {
     QDate due;      // invalid = no date
     QString notes;
 };
-// The notes' action items, dates resolved against `today`.
+// Outstanding commitments; dates are resolved against the recorded session
+// date. Pass an invalid date when no reliable anchor exists. Invalid model
+// deadlines remain unscheduled and are flagged in the review notes.
 [[nodiscard]] ChatRequest actionItemsRequest(const QString &notes, const QDate &today);
 [[nodiscard]] QList<ActionItem> parseActionItems(const QString &reply);
 // iCalendar: one VTODO per item (QindaMail imports them as tasks) and a
