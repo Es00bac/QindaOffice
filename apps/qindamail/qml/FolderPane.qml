@@ -15,6 +15,10 @@ Tk.Box {
     property MailService service: null
     property MailHost host: null
 
+    // AGENT-CONTRACT: the workspace routes this account intent through its
+    // window's MailHost; shared service signIn is browser-only (docs/mail.md).
+    signal signInRequested(string accountId)
+
     color: Tk.Theme.color.panel
     padding: 0
 
@@ -91,7 +95,7 @@ Tk.Box {
                             variant: "outline"
                             text: qsTr("Sign in")
                             tooltip: qsTr("Sign in again to %1").arg(row.name)
-                            onClicked: pane.service.signIn(row.accountId)
+                            onClicked: pane.signInRequested(row.accountId)
                         }
                     }
                 }

@@ -604,6 +604,16 @@ skip with a message where `soffice` is unavailable.
   `qindamail_{1280,520}.txt`. Grabs reviewed: `M44-iter4-*` in the
   validation gallery (inbox, calendar week with the now line, tasks,
   composer, account kinds, 520 px).
+  `accountSignInUsesCredentialDialog` clicks the named `needsSignIn`
+  account button with settled geometry and observed `clicked` delivery at
+  1280/520 px. IMAP and saved Gmail app-password accounts open their usable
+  password field; Google accounts display the actual missing-client error.
+  A configured synthetic OAuth client reaches an intercepted browser adapter,
+  then a private-flow cancellation proves that the correlated rejection stays
+  visible in the same dialog. A second real window shares the service but
+  receives neither the account-dialog intent nor its problem. Fixtures use
+  private XDG data, an in-memory keyring and a private D-Bus session; no browser
+  or external authentication/network operation runs.
 
 Automated by `tst_qindamail_drafts`, `tst_qindamail_service`,
 `tst_qindamail_accounts`, `tst_qindamail_calendar`, `tst_qindamail_host` and

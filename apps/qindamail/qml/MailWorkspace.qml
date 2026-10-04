@@ -28,6 +28,9 @@ Item {
             T.SplitView.minimumWidth: Tk.Theme.size.panelMinWidth * 0.8
             service: workspace.service
             host: workspace.host
+            onSignInRequested: function(accountId) {
+                if (workspace.host !== null) workspace.host.accountDialogRequested(accountId)
+            }
         }
         MessageList {
             id: messageList

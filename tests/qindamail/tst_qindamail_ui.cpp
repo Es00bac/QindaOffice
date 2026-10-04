@@ -10,6 +10,8 @@
 #include "mail_test_support.h"
 
 #include "qindamail/src/mail_host.h"
+#include "qindamail/src/account_runtime.h"
+#include "oauth2_session.h"
 #include "support/quick_dump.h"
 #include "support/ribbon_gate.h"
 
@@ -192,6 +194,157 @@ private slots:
         QTRY_VERIFY(dialog->property("opened").toBool());
         QTest::qWait(150);
         QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindamail_account_dialog"));
+    }
+
+    void accountSignInUsesCredentialDialog_data()
+    {
+        QTest::addColumn<QString>("kind");
+        QTest::addColumn<bool>("appPassword");
+        QTest::addColumn<bool>("configuredOAuth");
+        QTest::addColumn<int>("width");
+        for (const int width : {1280, 520}) {
+            const QByteArray suffix = QByteArray::number(width);
+            QTest::newRow(("password-" + suffix).constData()) << QStringLiteral("imap") << false << false << width;
+            QTest::newRow(("gmail-app-password-" + suffix).constData()) << QStringLiteral("gmail") << true << false << width;
+            QTest::newRow(("google-missing-client-" + suffix).constData()) << QStringLiteral("gmail") << false << false << width;
+            QTest::newRow(("google-configured-" + suffix).constData()) << QStringLiteral("gmail") << false << true << width;
+        }
+    }
+
+    void accountSignInUsesCredentialDialog()
+    {
+        QFETCH(QString, kind);
+        QFETCH(bool, appPassword);
+        QFETCH(bool, configuredOAuth);
+        QFETCH(int, width);
+        Scene scene(QSize(width, 800), false);
+        QVERIFY2(scene.window != nullptr, qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        auto *service = scene.env.service.get();
+        QVariantMap account = service->accountStore()->draftFor(kind, QStringLiteral("ada@example.org"));
+        QVariantMap incoming = account.value(QStringLiteral("incoming")).toMap();
+        incoming.insert(QStringLiteral("host"), QStringLiteral("imap.example.invalid"));
+        incoming.insert(QStringLiteral("port"), 993);
+        incoming.insert(QStringLiteral("security"), QStringLiteral("tls"));
+        QVariantMap outgoing = account.value(QStringLiteral("outgoing")).toMap();
+        outgoing.insert(QStringLiteral("host"), QStringLiteral("smtp.example.invalid"));
+        outgoing.insert(QStringLiteral("port"), 465);
+        outgoing.insert(QStringLiteral("security"), QStringLiteral("tls"));
+        if (appPassword) {
+            incoming.insert(QStringLiteral("authMechanism"), QStringLiteral("plain"));
+            outgoing.insert(QStringLiteral("authMechanism"), QStringLiteral("plain"));
+        }
+        account.insert(QStringLiteral("incoming"), incoming);
+        account.insert(QStringLiteral("outgoing"), outgoing);
+        account.insert(QStringLiteral("calendar"), QVariantMap{{QStringLiteral("protocol"), QStringLiteral("none")}});
+        if (configuredOAuth) {
+            QVariantMap oauth = account.value(QStringLiteral("oauth")).toMap();
+            oauth.insert(QStringLiteral("clientId"), QStringLiteral("synthetic-client.apps.googleusercontent.com"));
+            account.insert(QStringLiteral("oauth"), oauth);
+        }
+        const QVariantMap added = service->addAccount(account);
+        QVERIFY2(added.value(QStringLiteral("ok")).toBool(), qPrintable(added.value(QStringLiteral("error")).toString()));
+        const QString id = added.value(QStringLiteral("id")).toString();
+        auto *runtime = service->runtime(id);
+        QVERIFY(runtime != nullptr);
+        if (kind == QLatin1String("imap") || appPassword || configuredOAuth)
+            runtime->setStatus(QStringLiteral("needsSignIn"), QStringLiteral("Synthetic credential needs renewal"));
+        const QString problem = service->accountById(id).value(QStringLiteral("lastError")).toString();
+        if (kind == QLatin1String("gmail") && !appPassword && !configuredOAuth)
+            QVERIFY2(problem.contains(QStringLiteral("No OAuth client ID")), qPrintable(problem));
+
+        // A second real window shares the service but must not receive this
+        // window's dialog intent or its correlated sign-in error.
+        MailHost otherHost(service);
+        QQmlComponent component(&scene.engine, QUrl(QStringLiteral("qrc:/qt/qml/QindaOffice/Mail/App/MailWindow.qml")));
+        std::unique_ptr<QObject> otherWindow(component.createWithInitialProperties(
+            {{QStringLiteral("host"), QVariant::fromValue(&otherHost)}}));
+        QVERIFY2(otherWindow != nullptr, qPrintable(component.errorString()));
+        QObject *otherDialog = otherWindow->findChild<QObject *>(QStringLiteral("accountDialog"));
+        QVERIFY(otherDialog != nullptr);
+        scene.window->requestActivate();
+        QTRY_VERIFY(scene.window->isActive());
+        QSignalSpy requested(scene.host.get(), &MailHost::accountDialogRequested);
+        QSignalSpy otherRequested(&otherHost, &MailHost::accountDialogRequested);
+        QSignalSpy operations(service, &MailTest::MailService::operationFinished);
+        QQuickItem *button = nullptr;
+        QTRY_VERIFY((button = scene.item(QStringLiteral("folderSignIn_") + id)) != nullptr && button->isVisible() && button->width() > 0 && button->height() > 0);
+        QTest::qWait(150); // the folder delegate's Flex layout settles on the next frame
+        QSignalSpy clicked(button, SIGNAL(clicked()));
+        QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindamail_sign_in_before_%1").arg(QString::fromLatin1(QTest::currentDataTag())));
+        QTest::mouseClick(scene.window, Qt::LeftButton, {}, button->mapToScene(QPointF(button->width() / 2, button->height() / 2)).toPoint());
+        QCOMPARE(clicked.count(), 1);
+        QObject *dialog = scene.window->findChild<QObject *>(QStringLiteral("accountDialog"));
+        QVERIFY(dialog != nullptr);
+        QTRY_VERIFY(dialog->property("opened").toBool());
+        QCOMPARE(requested.count(), 1);
+        QCOMPARE(requested.first().first().toString(), id);
+        QCOMPARE(otherRequested.count(), 0);
+        QVERIFY(!otherDialog->property("opened").toBool());
+        QCOMPARE(operations.count(), 0); // opening an editor never authorizes or syncs
+        QCOMPARE(dialog->property("editingId").toString(), id);
+        QCOMPARE(dialog->property("kind").toString(), kind);
+        QCOMPARE(dialog->property("step").toString(), QStringLiteral("details"));
+        auto *body = dialog->property("contentItem").value<QQuickItem *>();
+        QVERIFY(body != nullptr);
+        QQuickItem *notice = findNamed(body, QStringLiteral("accountProblem"));
+        QVERIFY(notice != nullptr);
+        QTRY_VERIFY(notice->isVisible());
+        QCOMPARE(notice->property("text").toString(), problem);
+        QQuickItem *password = findNamed(body, QStringLiteral("accountPassword"));
+        QVERIFY(password != nullptr);
+        QCOMPARE(password->isVisible(), kind == QLatin1String("imap") || appPassword);
+
+        if (password->isVisible()) {
+            password->forceActiveFocus();
+            QTRY_VERIFY(password->hasActiveFocus());
+            QTest::keyClick(scene.window, Qt::Key_P);
+            QTRY_COMPARE(password->property("text").toString(), QStringLiteral("p"));
+        } else {
+            const auto browserRequests = std::make_shared<int>(0);
+            // updateAccount rebuilds its runtime. Intercept each new OAuth
+            // object's browser adapter; the actual signIn path still runs,
+            // but no desktop browser or remote request can be started.
+            connect(service, &MailTest::MailService::accountsChanged, scene.host.get(), [service, id, browserRequests] {
+                auto *current = service->runtime(id);
+                if (current != nullptr && current->oauth() != nullptr)
+                    current->oauth()->setBrowserOpener([browserRequests](const QUrl &) { ++*browserRequests; return false; });
+            });
+            auto *footer = dialog->property("footer").value<QQuickItem *>();
+            QVERIFY(footer != nullptr);
+            QQuickItem *primary = findNamed(footer, QStringLiteral("dialogPrimary"));
+            QVERIFY(primary != nullptr && primary->isVisible());
+            QTest::qWait(150);
+            QSignalSpy acceptedClick(primary, SIGNAL(clicked()));
+            QTest::mouseClick(scene.window, Qt::LeftButton, {}, primary->mapToScene(QPointF(primary->width() / 2, primary->height() / 2)).toPoint());
+            QCOMPARE(acceptedClick.count(), 1);
+            if (configuredOAuth) {
+                // Browser-open failure intentionally keeps OAuth waiting for
+                // a manual redirect. End this private synthetic flow through
+                // its public test API to exercise a real correlated rejection.
+                QTRY_COMPARE(*browserRequests, 1);
+                auto *current = service->runtime(id);
+                QVERIFY(current != nullptr && current->oauth() != nullptr);
+                QVERIFY(current->oauth()->authorizing());
+                QCOMPARE(operations.count(), 0);
+                QTRY_VERIFY(dialog->property("opened").toBool());
+                QVERIFY(!dialog->property("primaryEnabled").toBool());
+                current->oauth()->cancel();
+            }
+            QTRY_COMPARE(operations.count(), 1);
+            QCOMPARE(operations.first().at(1).toString(), QStringLiteral("rejected"));
+            QTRY_VERIFY(dialog->property("opened").toBool());
+            QTRY_COMPARE(notice->property("text").toString(), operations.first().at(2).toString());
+            QVERIFY(notice->isVisible());
+            QCOMPARE(dialog->property("editingId").toString(), id);
+            QCOMPARE(dialog->property("kind").toString(), kind);
+            QCOMPARE(dialog->property("step").toString(), QStringLiteral("details"));
+            QCOMPARE(*browserRequests, configuredOAuth ? 1 : 0);
+            QCOMPARE(otherDialog->property("accountError").toString(), QString());
+            QVERIFY(!otherDialog->property("opened").toBool());
+        }
+        QTest::qWait(200);
+        QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindamail_sign_in_%1").arg(QString::fromLatin1(QTest::currentDataTag())));
     }
 
     void structuralFixtures()

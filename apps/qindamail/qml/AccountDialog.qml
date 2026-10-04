@@ -18,8 +18,10 @@ Tk.Dialog {
     property string editingId: ""
     property string lookupId: ""
     property string testId: ""
+    property string signInId: ""
     property var testResult: null
     property string autoNote: ""
+    property string accountError: ""
     readonly property bool oauthKind: kind === "gmail" || kind === "microsoft365"
     readonly property bool mailKind: kind === "gmail" || kind === "imap" || kind === "pop3" || kind === "microsoft365" || kind === "exchange"
     readonly property bool calendarUrlKind: kind === "caldav" || kind === "ics" || kind === "exchange"
@@ -36,8 +38,8 @@ Tk.Dialog {
     title: editingId.length > 0 ? qsTr("Account settings") : qsTr("Add an account")
     subtitle: step === "choose" ? qsTr("What kind of account?") : String((kinds.find(function(k) { return k.id === dialog.kind }) || {}).title || "")
     dialogWidth: Tk.Theme.size.dialogWidth * 1.4
-    primaryText: step === "choose" ? "" : step === "testing" ? qsTr("Save") : (oauthKind && !appPassword.checked ? qsTr("Save and sign in") : qsTr("Test and save"))
-    primaryEnabled: step === "testing" ? (testResult !== null && testResult.state === "accepted") : step === "details" && emailField.text.trim().length > 0
+    primaryText: signInId.length > 0 ? qsTr("Signing in…") : step === "choose" ? "" : step === "testing" ? qsTr("Save") : (oauthKind && !appPassword.checked ? qsTr("Save and sign in") : qsTr("Test and save"))
+    primaryEnabled: signInId.length === 0 && (step === "testing" ? (testResult !== null && testResult.state === "accepted") : step === "details" && emailField.text.trim().length > 0)
     secondaryText: qsTr("Cancel")
     tertiaryText: step === "details" && editingId.length === 0 ? qsTr("Back") : editingId.length > 0 ? qsTr("Remove account") : ""
     destructive: false
@@ -45,8 +47,10 @@ Tk.Dialog {
     function openFor(accountId) {
         editingId = accountId || ""
         testResult = null; autoNote = ""
+        lookupId = ""; testId = ""; signInId = ""; accountError = ""
         if (editingId.length > 0) {
             account = service.accountStore.accountById(editingId)
+            accountError = String(service.accountById(editingId).lastError || "")
             kind = String(account.kind || "imap")
             loadFields()
             step = "details"
@@ -59,6 +63,7 @@ Tk.Dialog {
     function choose(k) {
         kind = k
         account = service.accountStore.draftFor(k, "", "")
+        accountError = ""
         loadFields()
         step = "details"
         emailField.forceActiveFocus()
@@ -67,6 +72,9 @@ Tk.Dialog {
         nameField.text = String(account.fullName || "")
         emailField.text = String(account.emailAddress || "")
         const incoming = account.incoming || {}, outgoing = account.outgoing || {}, calendar = account.calendar || {}
+        // AGENT-GUARD: saved Gmail app-password accounts reopen with a credential
+        // field, and a previous account's switch state must never carry over.
+        appPassword.checked = kind === "gmail" && incoming.authMechanism !== "xoauth2"
         inHost.text = String(incoming.host || ""); inPort.text = incoming.port ? String(incoming.port) : ""
         outHost.text = String(outgoing.host || ""); outPort.text = outgoing.port ? String(outgoing.port) : ""
         userField.text = String(incoming.userName || "")
@@ -83,8 +91,9 @@ Tk.Dialog {
                                                                    userName: userField.text.trim() || out.emailAddress })
         out.outgoing = Object.assign({}, account.outgoing || {}, { host: outHost.text.trim(), port: Number(outPort.text) || 0 })
         if (calendarUrlKind) out.calendar = Object.assign({}, account.calendar || {}, { url: urlField.text.trim() })
-        if (oauthKind && appPassword.checked) {
-            out.incoming.authMechanism = "plain"; out.outgoing.authMechanism = "plain"
+        if (oauthKind) {
+            const mechanism = appPassword.checked ? "plain" : "xoauth2"
+            out.incoming.authMechanism = mechanism; out.outgoing.authMechanism = mechanism
         }
         return out
     }
@@ -94,9 +103,20 @@ Tk.Dialog {
         service.autoConfig.lookup(lookupId, emailField.text.trim())
     }
     onAccepted: {
+        accountError = ""
         if (step === "details" && oauthKind && !appPassword.checked) {
             const saved = editingId.length > 0 ? service.updateAccount(collect()) : service.addAccount(collect(), "")
-            if (saved.ok) service.signIn(String(saved.id || editingId))
+            if (!saved.ok) {
+                accountError = String(saved.error || qsTr("The account could not be saved."))
+                Qt.callLater(dialog.open)
+                return
+            }
+            editingId = String(saved.id || editingId)
+            // AGENT-GUARD: MailService replies on a later turn. Correlate
+            // only this dialog's request; another window shares the service.
+            signInId = service.signIn(editingId)
+            const pending = signInId
+            Qt.callLater(function() { if (dialog.signInId === pending) dialog.open() })
             return
         }
         if (step === "details") {
@@ -107,10 +127,16 @@ Tk.Dialog {
             return
         }
         if (step === "testing") {
-            if (editingId.length > 0) service.updateAccount(collect(), passwordField.text)
-            else service.addAccount(collect(), passwordField.text)
+            const saved = editingId.length > 0 ? service.updateAccount(collect(), passwordField.text) : service.addAccount(collect(), passwordField.text)
+            if (!saved.ok) {
+                accountError = String(saved.error || qsTr("The account could not be saved."))
+                Qt.callLater(dialog.open)
+            }
         }
     }
+    // AGENT-GUARD: dismissing or opening another account invalidates late completions;
+    // an unrelated shared-service result must not reopen a window's dialog.
+    onRejected: { signInId = ""; testId = ""; lookupId = "" }
     onTertiary: {
         if (editingId.length > 0) { service.removeAccount(editingId); return }
         step = "choose"; open()
@@ -130,11 +156,30 @@ Tk.Dialog {
     Connections {
         target: dialog.service
         function onAccountTestFinished(requestId, result) { if (requestId === dialog.testId) dialog.testResult = result }
+        function onOperationFinished(requestId, state, message) {
+            if (dialog.signInId.length === 0 || requestId !== dialog.signInId) return
+            dialog.signInId = ""
+            if (state === "accepted") {
+                dialog.accountError = ""
+                dialog.close()
+            } else {
+                dialog.accountError = String(message || qsTr("Sign-in did not complete. Please try again."))
+                dialog.open()
+            }
+        }
     }
 
     Tk.Flex {
         direction: Tk.Flex.Column
         gap: Tk.Theme.space.sm
+
+        Tk.Notice {
+            objectName: "accountProblem"
+            visible: dialog.accountError.length > 0
+            variant: "danger"
+            title: qsTr("Account needs attention")
+            text: dialog.accountError
+        }
 
         // ---- step 1: the kind ----
         Tk.Grid {
