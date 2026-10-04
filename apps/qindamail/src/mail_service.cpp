@@ -164,6 +164,16 @@ void MailService::initialize(const Options &options)
         emit calendarsChanged();
         scheduleRefresh();
     });
+    connect(m_accountStore, &QindaOffice::Mail::AccountStore::secretsRemoved, this,
+            [this](const QString &, const QVariantMap &result) {
+        if (result.value(QStringLiteral("state")).toString() == QLatin1String("accepted")) return;
+        // Account removal is already durable. Keyring cleanup is a separate
+        // asynchronous result, including preserved imports (D-067).
+        const QString error = result.value(QStringLiteral("error")).toString();
+        emit notify(tr("Account removed; credential cleanup incomplete"),
+                    error.isEmpty() ? tr("The keyring could not complete credential cleanup.") : error,
+                    QStringLiteral("warning"));
+    });
 
     loadFolderCache();
     for (const MailAccount &account : m_accountStore->list()) {

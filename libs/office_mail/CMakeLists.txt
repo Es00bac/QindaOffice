@@ -3,8 +3,9 @@
 # office_mail (M43, D-043; docs/mail.md): mail/calendar ACCOUNTS for
 # QindaMail — the account list (accounts.json, no secrets), provider presets,
 # Thunderbird-format autoconfig, OAuth 2.0 (PKCE + loopback redirect), the
-# client-ID registry, keyring secrets (QtKeychain) and XOAUTH2 helpers.
-# Qt Core/Network/Qml + qt6keychain + QindaTK; no Quick, no desktop archives
+# client-ID registry, keyring secrets (QtKeychain plus a client-owned native
+# imported Password reader, D-067) and XOAUTH2 helpers.
+# Qt Core/Network/Qml/DBus + qt6keychain + QindaTK; no Quick, no desktop archives
 # (AGENTS.md rules 8/9). Qt Gui only for QDesktopServices (opening the
 # browser) and through office_core.
 #
@@ -30,6 +31,10 @@ qt_add_qml_module(office_mail
         src/mail_account_validation.cpp
         src/mail_result.h
         src/mail_secrets.cpp src/mail_secrets.h
+        src/imported_password_backend.cpp src/imported_password_backend.h
+        src/imported_password_codec.cpp src/imported_password_codec.h
+        src/imported_password_reader.cpp src/imported_password_reader.h
+        src/imported_password_wire.h
         src/net_policy.cpp src/net_policy.h
         src/oauth2_profiles.cpp src/oauth2_profiles.h
         src/oauth2_session.cpp src/oauth2_session.h src/oauth2_session_p.h
@@ -57,6 +62,7 @@ target_link_libraries(office_mail
         office_core
     PRIVATE
         Qt6::Gui
+        Qt6::DBus
         # Same dependency as office_ai's SecretStore (dev-libs/qtkeychain,
         # Qt 6 build); linked by library name, headers <qt6keychain/…>.
         qt6keychain

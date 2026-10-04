@@ -256,6 +256,9 @@ the app-password path.
 
 `MailSecrets` keeps secrets **only** in the desktop keyring through
 QtKeychain: service `qindaoffice-mail`, key `<accountId>/<service>`.
+On the native QindaQt keyring, a missing QtKeychain lookup can read a
+preserved imported KWallet **Password** record through the standard Secret
+Service API ([D-067](decisions.md#d-067-native-imported-mail-passwords-have-a-typed-read-only-client-bridge)).
 
 | Service | Holds |
 | --- | --- |
@@ -276,9 +279,58 @@ QtKeychain: service `qindaoffice-mail`, key `<accountId>/<service>`.
 - `QQO_MAIL_SECRET_BACKEND=memory` selects one process-wide in-memory
   backend — for tests and headless UI runs that must not touch the user's
   keyring. Tests may also inject `InMemorySecretBackend` directly.
+- **Imported Password compatibility.** The normal QtKeychain credential
+  wins. Only `NotFound` triggers the bridge; denied, locked, unavailable and
+  failed primary lookups keep their original result. An absent native
+  `org.qindaqt.Keyring1` name leaves a normal missing lookup unchanged on
+  other desktops. When present, that name and `org.freedesktop.secrets` must
+  resolve to the same pinned unique owner. The bridge queries exactly
+  `qindaqt.import.kwallet.folder=qindaoffice-mail`,
+  `qindaqt.import.kwallet.key=<accountId>/<service>` and
+  `qindaqt.import.kwallet.type=1`. It rejects duplicate matches, rechecks
+  decrypted attributes after unlocking, and decodes one complete bounded
+  big-endian QDataStream QString. Stream/Map records, wrong content types,
+  null/empty/NUL text, malformed UTF-16 and incomplete/trailing data fail
+  closed. No labels, other accounts or private keyring storage are searched.
+- A locked imported record uses the native standard `Unlock`/`Prompt`
+  flow. Cancellation/refusal or a still-locked item is reported as denied;
+  the bridge does not open KWallet or request credentials itself. Calls have
+  two-second timeouts and a read has a seventy-second deadline. Provider
+  changes reject the read, and a final owner check precedes publication.
+  The client-owned plain Secret Service session operates on the same-user
+  bus: this is ordinary client assurance, without raw reply-sender or
+  executable attestation. Passwords exist only in the necessary application
+  callback/provider memory; no secret is logged, exposed to QML or persisted
+  outside the keyring. The wrapper retains its primary backend and belongs
+  to one event-loop thread. Destruction cancels callbacks, dismisses its
+  own prompt and closes its own session on the original pinned owner;
+  in-flight resource-creating replies are drained within their call bound.
 - Removing an account writes `accounts.json` first, then removes all of its
   secrets (`AccountStore::secretsRemoved`); a keyring failure can orphan a
-  secret, never an account.
+  secret, never an account. New writes and ordinary removals stay with
+  QtKeychain. Imported originals are never changed or deleted by the
+  bridge. If one remains after ordinary removal, cleanup returns a clear
+  failure directing the user to **Passwords and Keys**. The Mail service
+  displays an **Account removed; credential cleanup incomplete** warning;
+  complete cleanup emits no warning. There are no filesystem tombstones or
+  automatic credential migrations.
+
+The focused codec and private-bus gates can build without desktop archives:
+Qt 6.11, Qt6Keychain with libsecret support and `dbus-run-session` are required.
+
+```sh
+cmake -S tests/office_mail/native_secrets -B .cache/native-secrets-build -G Ninja
+cmake --build .cache/native-secrets-build
+ctest --test-dir .cache/native-secrets-build --output-on-failure
+```
+
+They use synthetic records and temporary user paths; CTest starts a private
+`dbus-run-session`. Coverage includes the actual installed QtKeychain/libsecret
+plaintext/base64 schema miss and imported recovery, actual native precedence,
+Unicode framing and hostile lengths, mismatch/duplicates/malformed records,
+locked/prompt/cancelled reads, owner mismatch/replacement, destruction during
+session/prompt creation and honest read-only cleanup. `tst_qindamail_accounts`
+covers the visible cleanup-failure notification and successful cleanup silence.
 
 ## XOAUTH2 and the toolkit providers
 
