@@ -2,8 +2,8 @@
 #pragma once
 
 // Where MailSecrets keeps passwords and refresh tokens: the desktop keyring
-// through QtKeychain (the only production backend), or an in-memory map for
-// tests and headless runs. There is deliberately NO plain-file backend: a
+// through QtKeychain with a native imported-Password read adapter (D-067),
+// or an in-memory map for tests and headless runs. There is deliberately NO plain-file backend: a
 // missing secret service is reported, never papered over (D-043).
 //
 // AGENT-GUARD: never add a file-backed SecretBackend and never enable
@@ -82,7 +82,8 @@ private:
     bool m_unavailable = false;
 };
 
-// The backend a default-constructed MailSecrets uses: QtKeychain, or — when
+// The backend a default-constructed MailSecrets uses: QtKeychain with native
+// imported-Password compatibility after a missing read (D-067), or — when
 // the environment sets QQO_MAIL_SECRET_BACKEND=memory — one in-memory
 // backend shared by the whole process (so every MailSecrets instance of a
 // headless UI test sees the same secrets).

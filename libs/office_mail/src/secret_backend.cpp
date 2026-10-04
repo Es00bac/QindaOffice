@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "secret_backend.h"
+#include "imported_password_backend.h"
 
 #include <QTimer>
 
@@ -140,7 +141,7 @@ std::shared_ptr<SecretBackend> defaultSecretBackend()
         static const std::shared_ptr<SecretBackend> shared = std::make_shared<InMemorySecretBackend>();
         return shared;
     }
-    return std::make_shared<KeychainSecretBackend>();
+    return withImportedPasswords(std::make_shared<KeychainSecretBackend>());
 }
 
 } // namespace QindaOffice::Mail

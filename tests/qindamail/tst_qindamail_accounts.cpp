@@ -22,8 +22,24 @@
 
 #include <QFile>
 #include <QTcpServer>
+#include <QTimer>
 
 using namespace QindaOffice::Apps::Mail;
+
+namespace {
+class PreservedCredentialBackend final : public QindaOffice::Mail::SecretBackend {
+public:
+    QindaOffice::Mail::InMemorySecretBackend primary;
+    void read(const QString &key, Callback done) override { primary.read(key, std::move(done)); }
+    void write(const QString &key, const QString &value, Callback done) override { primary.write(key, value, std::move(done)); }
+    void remove(const QString &, Callback done) override
+    {
+        QTimer::singleShot(0, [done] { done({QindaOffice::Mail::SecretOutcome::Status::Failed, {}, QStringLiteral(
+            "An imported credential is preserved. Remove it in Passwords and Keys to complete cleanup.")}); });
+    }
+    QString name() const override { return QStringLiteral("synthetic-preserved"); }
+};
+}
 
 class TestMailAccounts : public QObject {
     Q_OBJECT
@@ -47,6 +63,43 @@ class TestMailAccounts : public QObject {
     }
 
 private slots:
+    void accountRemovalReportsCleanupOutcome_data()
+    {
+        QTest::addColumn<bool>("preserved");
+        QTest::newRow("cleanup-complete") << false;
+        QTest::newRow("import-preserved") << true;
+    }
+    void accountRemovalReportsCleanupOutcome()
+    {
+        QFETCH(bool, preserved);
+        MailTest::Env env;
+        auto options = env.options();
+        if (preserved) options.secretBackend = std::make_shared<PreservedCredentialBackend>();
+        env.service = std::make_unique<MailService>(options);
+        auto account = imapAccount();
+        account.insert(QStringLiteral("enabled"), false);
+        const auto added = env.service->accountStore()->add(account);
+        QVERIFY(added.value(QStringLiteral("ok")).toBool());
+        const QString id = added.value(QStringLiteral("id")).toString();
+        QSignalSpy notification(env.service.get(), &MailService::notify);
+        QSignalSpy cleanup(env.service->accountStore(), &QindaOffice::Mail::AccountStore::secretsRemoved);
+        const auto removed = env.service->removeAccount(id);
+        QVERIFY(removed.value(QStringLiteral("ok")).toBool());
+        QTRY_COMPARE(cleanup.count(), 1);
+        QVERIFY(!env.service->accountStore()->find(id).has_value());
+        if (preserved) {
+            QCOMPARE(notification.count(), 1);
+            const auto message = notification.first();
+            QVERIFY(message.at(0).toString().contains(QStringLiteral("cleanup incomplete")));
+            QVERIFY(message.at(1).toString().contains(QStringLiteral("Passwords and Keys")));
+            QCOMPARE(message.at(2).toString(), QStringLiteral("warning"));
+            QCOMPARE(cleanup.first().at(1).toMap().value(QStringLiteral("state")).toString(), QStringLiteral("rejected"));
+        } else {
+            QCOMPARE(notification.count(), 0);
+            QCOMPARE(cleanup.first().at(1).toMap().value(QStringLiteral("state")).toString(), QStringLiteral("accepted"));
+        }
+    }
+
     void addAndRemoveAccount()
     {
         MailTest::Env env;

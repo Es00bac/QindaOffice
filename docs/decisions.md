@@ -5,6 +5,60 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-067: Native imported Mail Passwords have a typed read-only client bridge
+
+**Date:** 2026-10-04 · **Status:** accepted (owner recovery request)
+
+**Context.** QtKeychain's native libsecret lookup matches `user`, `server`
+and `type` attributes. Generic native KWallet import deliberately preserves
+the original folder/key/type attributes and serialized entry bytes instead
+of rewriting them into another application's schema. A normal missing
+lookup therefore cannot find the preserved Mail Password records. Their
+locked collections also require the native provider's ordinary prompt.
+
+**Decision.** Keep QtKeychain first and add a small client-owned adapter
+inside `office_mail`, with a private Qt DBus dependency and standard Secret
+Service wire types. Only a primary `NotFound` may discover an exact
+`qindaoffice-mail` folder, validated `<accountId>/<service>` key and Password
+type `1`. No native provider initially means the bridge is inapplicable:
+normal missing reads and successful ordinary removal remain unchanged.
+Otherwise pin equality of `org.qindaqt.Keyring1` and
+`org.freedesktop.secrets`, address the original unique owner without service
+activation, observe owner changes and re-pin before returning a value.
+This is the ordinary same-user client boundary. Qt's
+[reply `service()` implementation](https://raw.githubusercontent.com/qt/qtbase/6.11/src/dbus/qdbusmessage.cpp)
+deliberately returns empty; no raw reply-sender or executable attestation is
+claimed and no additional libdbus transport is introduced.
+
+Standard `Unlock`/`Prompt` is used only for a unique locked import, with
+bounded asynchronous calls. After unlock, decrypted item attributes and
+one-match uniqueness are checked before an owned plain Secret Service
+session reads the value. The imported content type must be
+`application/vnd.kde.kwallet-entry`. KDE's
+[Password entry codec](https://raw.githubusercontent.com/KDE/kwallet/master/src/runtime/kwalletbackend/kwalletentry.cc)
+is QDataStream QString. Pin compatible Qt6.0 big-endian framing, check
+declared length before allocating, and reject null/empty/NUL, unsupported
+extended lengths, malformed UTF-16, oversized, truncated or trailing data.
+Stream and Map are never interpreted as passwords. Primary errors are not
+recovery signals; ambiguity, changed identity and protocol failures fail
+closed. Standard prompt dismissal cannot distinguish cancellation from
+refusal, so it reports denied rather than claiming credential loss.
+
+**Consequences.** New writes remain native QtKeychain writes. There is no
+migration, original mutation, KWallet activation, private keyring-header
+dependency, filesystem tombstone or plaintext disk fallback. Reads require
+the normal application-memory password lifetime; no secret value reaches
+logs or QML. The adapter owns its primary backend and callbacks on one
+event-loop thread. Destroying it cancels callbacks; bounded in-flight
+session/prompt creation is drained and only its owned resources are closed
+on the originally pinned owner. Ordinary removal followed by import
+presence returns an honest incomplete-cleanup error; Mail forwards that
+as its existing visible warning after durable account removal. Synthetic
+private-bus and codec gates exercise these contracts, including actual
+QtKeychain lookup/preference, without production credential access.
+The exact behavior, bounds and standalone command are in
+[Mail secrets](mail.md#secrets).
+
 ## D-065: Note AI uses session evidence, atomic edits and reviewed follow-ups
 
 **Date:** 2026-09-29 · **Status:** accepted (owner request; M59)
