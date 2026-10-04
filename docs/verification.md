@@ -690,6 +690,16 @@ Automated by `tst_mail_accounts`, `tst_mail_autoconfig` and `tst_mail_oauth`
 127.0.0.1 and the keyring is in memory (`QQO_MAIL_SECRET_BACKEND=memory` in
 the ctest environment). Rationale in D-043; reference in `docs/mail.md`.
 
+Native imported Password compatibility (D-067) additionally runs
+`tst_imported_password_codec` and `tst_imported_password_backend`. The latter
+uses its own private D-Bus provider, including actual QtKeychain/libsecret
+lookup precedence. These gates cover bounded QString framing, exact import
+attributes, absent native-provider compatibility, owner changes, locked and
+cancelled prompts, resource cleanup and preserved-original removal errors.
+`tst_qindamail_accounts` verifies that incomplete cleanup removes the account
+durably and emits the existing visible warning; successful cleanup emits no
+warning. Synthetic results do not prove real wallet unlock or server login.
+
 - [x] `jsonRoundTripKeepsUnknownFields`: unknown keys at the root, in an
       account, in `incoming` and in a calendar entry survive load → update →
       save; the typed fields round-trip exactly.

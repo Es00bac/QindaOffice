@@ -628,6 +628,17 @@ signals `composeRequested(draft)`, `accountDialogRequested(accountId)` (empty
 listed in `mail_host.h`): mail*, cal*, `taskNewAction`; radio groups
 `mailView` and `calendarMode`.
 
+For a `needsSignIn` account, `FolderPane` emits
+`signInRequested(accountId)`; only its owning `MailWorkspace` routes that
+intent through the window's public `MailHost.accountDialogRequested`.
+The existing account dialog opens that account's password/app-password or
+browser path, displays its public `lastError` (including missing-client
+guidance), and retains rejected sign-in/save results. OAuth
+`operationFinished` replies are correlated to that dialog's returned
+request ID; dismissal or opening another account invalidates late replies.
+Opening the dialog itself never authorizes or syncs, and other windows
+sharing the service receive no dialog broadcast.
+
 `MailService` (`host.service`):
 
 | Kind | Names |
