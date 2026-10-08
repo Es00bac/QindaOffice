@@ -46,6 +46,18 @@ prefixes and are validated against the Transitional XSDs in tests when
 but to the OOXML format and then through the native reader, never through
 HTML.
 
+**QindaWrite (M60).** Word (`.docx`) becomes Write's default Save format
+(it was `.odt`): the owner's documents are Word documents. Crash-recovery
+snapshots are `.docx` bytes, so layout, rich headers, footnotes and pictures
+survive a crash (journals holding HTML still restore). Pictures are stored as
+bytes in the document, never referenced by path. Where Qt's text layout
+differs from Word's (first-block top margin, empty paragraph after a table,
+row heights, paragraph borders, tall headers, header-less cover sections),
+the reader adds display-only state the writer never exports — see
+[word-interchange.md](word-interchange.md#layout-adjustments-display-only-never-written).
+Write keeps one header set and one page layout per document; keep-with-next
+is not laid out yet.
+
 **Consequences.** LibreOffice is no longer needed for Office formats.
 Rendering can stay approximate for preserved content (a placeholder, or the
 picture fallback Word/PowerPoint embed) without losing it on save. The

@@ -133,6 +133,7 @@ From `container-wm/AGENTS.md`, applied here unchanged:
 ```
 apps/qinda{write,calc,show,note}  → office_quick → office_core
                                   → office_ai    → office_core
+qindawrite → office_docx → office_ooxml   (Word interchange, D-068)
 apps/qindalauncher (qindaoffice)  → office_quick (theme bridge only)
 qindacalc → calc_io → calc_engine
 qindashow → show_model

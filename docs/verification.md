@@ -33,6 +33,32 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M60 Word interchange gates (D-068)
+
+Laptop (incremental, against Portage-installed QindaTK): `tst_ooxml` 18/18,
+`tst_docx_read` 13/13, `tst_docx_write` 6/6 with every written package
+validated against the ECMA-376 Transitional XSDs (`QQO_OOXML_SCHEMA_DIR`),
+`tst_write_docx` 7/7 (+1 opt-in render), the QindaWrite suite 9/9.
+
+**Real documents** (`tst_docx_corpus` over the owner's 590 `.docx`, 96 %
+written by Microsoft Word; counts only, content never copied): 590 read, 0
+failures, ~1 s per document worst case; 135,604 paragraphs, 8,792 tables, 545
+pictures, 12,470 list items, 505 preserved objects. Every document written
+and re-read with identical plain text, table count and picture count.
+
+**Visual review** (`QQO_WRITE_RENDER_DOCX`, compared page by page with
+LibreOffice's rendering of the original): a developer spec, a developer
+brief, a 25-page training guide and a 14-page forms packet. Page counts
+match on three; the guide differs by keep-with-next (known limit). Fixed on
+the way: lost cell shading/merges when a cell's first paragraph format was
+set, prefixed OPC package parts LibreOffice refused, first-block spacing,
+collapsed empty paragraphs after tables, row heights, paragraph borders,
+header overlap, cover-page headers, PDF page size (px passed as points).
+
+On the desktop (owner, Microsoft Word): open a `.docx` saved by QindaWrite
+in Word — no repair prompt; styles, lists, headers with logo, page numbers,
+footnotes and tracked changes as written.
+
 ## M59 QindaNote AI gates (D-065)
 
 Qualified on qinda with Portage-installed QindaTK r14 (the r13 agent SDK):

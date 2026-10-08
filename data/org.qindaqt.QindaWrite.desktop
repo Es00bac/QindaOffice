@@ -7,6 +7,6 @@ Exec=qindawrite %F
 Icon=org.qindaqt.QindaWrite
 Terminal=false
 Categories=Qt;Office;WordProcessor;
-MimeType=application/vnd.oasis.opendocument.text;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/msword;application/rtf;text/html;text/markdown;text/plain;
+MimeType=application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.openxmlformats-officedocument.wordprocessingml.template;application/vnd.ms-word.document.macroEnabled.12;application/vnd.ms-word.template.macroEnabled.12;application/msword;application/vnd.oasis.opendocument.text;application/vnd.oasis.opendocument.text-template;application/rtf;text/html;text/markdown;text/plain;
 StartupNotify=true
 StartupWMClass=qindawrite
