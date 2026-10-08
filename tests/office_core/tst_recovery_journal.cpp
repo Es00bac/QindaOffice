@@ -2,6 +2,7 @@
 #include "recovery_journal.h"
 
 #include <QGuiApplication>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -89,8 +90,17 @@ void RecoveryJournalTest::oversizedPayloadIsSkippedNotTruncated()
     RecoveryJournal journal(dir.path());
     const QString key = RecoveryJournal::keyForPath(QStringLiteral("/big.txt"));
     const QByteArray huge(RecoveryJournal::kMaxTextPayload + 1, 'x');
+    QSignalSpy skipped(&journal, &RecoveryJournal::snapshotSkipped);
     journal.writeNow(key, QStringLiteral("/big.txt"), false, huge);
     QVERIFY(journal.pendingKeys().isEmpty()); // skipped entirely
+    // ... but never silently: the window tells the user (DocumentHost).
+    QCOMPARE(skipped.count(), 1);
+    QCOMPARE(skipped.at(0).at(0).toString(), key);
+    QCOMPARE(skipped.at(0).at(1).toLongLong(), huge.size());
+    // A document may declare the binary bound; the same bytes then fit.
+    journal.writeNow(key, QStringLiteral("/big.txt"), false, huge, RecoveryJournal::kMaxBinaryPayload);
+    QVERIFY(journal.entry(key).has_value());
+    QCOMPARE(skipped.count(), 1);
 }
 
 // Engines whose recoverySnapshot() is still a stub return {}. Writing those

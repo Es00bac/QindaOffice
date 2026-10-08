@@ -36,6 +36,8 @@ public:
     [[nodiscard]] QStringList mimeTypes() const override;
     [[nodiscard]] QByteArray recoverySnapshot() const override;
     bool loadRecovery(const QByteArray &snapshot, QString *error = nullptr) override;
+    // The snapshot is the .docx with its pictures (D-068): the binary bound.
+    [[nodiscard]] qint64 recoveryPayloadLimit() const override;
 
     // ---- page layout -----------------------------------------------------------------
     [[nodiscard]] const Docx::PageLayout &pageLayout() const { return m_parts.layout; }

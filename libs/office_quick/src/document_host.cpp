@@ -8,6 +8,7 @@
 #include "standard_actions.h"
 
 #include "recent_files.h"
+#include "recovery_journal.h"
 
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -323,6 +324,15 @@ void DocumentHost::setAppServices(AppServices *services)
         restore->setChecked(services->restorePreviousDocuments());
         if (Core::RecentFiles *recent = services->recentFiles(); recent != nullptr) {
             connect(recent, &Core::RecentFiles::changed, this, [this] { rebuildRecentMenu(); });
+        }
+        if (Core::RecoveryJournal *journal = services->journal(); journal != nullptr) {
+            connect(journal, &Core::RecoveryJournal::snapshotSkipped, this, [this](const QString &key, qint64 bytes) {
+                if (key == m_journalKey) {
+                    showStatusMessage(tr("Too large for crash recovery (%1 MB): save often")
+                                          .arg(QString::number(double(bytes) / (1024 * 1024), 'f', 1)),
+                                      10000);
+                }
+            });
         }
     }
     rebuildRecentMenu();

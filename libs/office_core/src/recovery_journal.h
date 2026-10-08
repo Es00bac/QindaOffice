@@ -66,6 +66,12 @@ public:
     };
     [[nodiscard]] std::optional<Entry> entry(const QString &key) const;
 
+signals:
+    // A snapshot over its bound was not written (never truncated): the
+    // window says so, because otherwise a crash would find no recovery
+    // point — or an older one — for a document that looked protected.
+    void snapshotSkipped(const QString &key, qint64 bytes);
+
 private:
     struct Pending {
         QString path;

@@ -400,7 +400,7 @@ void DocumentHost::scheduleJournalSnapshot()
     journal->schedule(m_journalKey, m_document->canonicalPath(),
                       m_document->canonicalPath().isEmpty(), [doc] {
                           return doc && doc->isDirty() ? doc->recoverySnapshot() : QByteArray();
-                      });
+                      }, m_document->recoveryPayloadLimit());
 }
 
 void DocumentHost::clearJournalEntry()

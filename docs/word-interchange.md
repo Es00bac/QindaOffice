@@ -19,6 +19,10 @@ document's own styles, numbering, theme and everything Write does not edit.
 LibreOffice conversions run on a private copy in a temporary directory, so
 nothing is written beside the user's file and read-only folders work.
 
+Crash recovery journals the document as `.docx` bytes with its pictures, up
+to the journal's 16 MiB binary bound; a larger document is not journalled
+and the status bar says "Too large for crash recovery … save often".
+
 ## The model
 
 The body is a `QTextDocument`; `Docx::WordParts` (`docx_model.h`) holds the

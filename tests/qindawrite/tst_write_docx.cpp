@@ -14,11 +14,14 @@
 #include "qindawrite/src/format_controller.h"
 #include "qindawrite/src/pdf_exporter.h"
 #include "qindawrite/src/write_document.h"
+#include "recovery_journal.h"
 #include "support/soffice_env.h"
 
+#include <QBuffer>
 #include <QFile>
 #include <QGuiApplication>
 #include <QProcess>
+#include <QRandomGenerator>
 #include <QTemporaryDir>
 #include <QTextBlock>
 #include <QTextCursor>
@@ -156,6 +159,35 @@ void WriteDocxTest::recoveryKeepsTheWholeDocument()
     WriteDocument legacy;
     QVERIFY(legacy.loadRecovery(QByteArrayLiteral("<p>old journal</p>")));
     QCOMPARE(legacy.textDocument()->toPlainText(), QStringLiteral("old journal"));
+
+    // A document with photos outgrows the 4 MiB text bound: Write declares
+    // the binary one, so the journal keeps it instead of skipping it.
+    WriteDocument photos;
+    QImage noise(1300, 1100, QImage::Format_ARGB32);
+    QRandomGenerator random(7);
+    for (int y = 0; y < noise.height(); ++y) {
+        auto *line = reinterpret_cast<quint32 *>(noise.scanLine(y));
+        for (int x = 0; x < noise.width(); ++x) {
+            line[x] = random.generate();
+        }
+    }
+    QByteArray png;
+    QBuffer buffer(&png);
+    buffer.open(QIODevice::WriteOnly);
+    noise.save(&buffer, "PNG");
+    QTextImageFormat picture;
+    picture.setName(photos.addPicture(png));
+    QTextCursor(photos.textDocument()).insertImage(picture);
+    const QByteArray large = photos.recoverySnapshot();
+    QVERIFY(large.size() > Core::RecoveryJournal::kMaxTextPayload);
+    QCOMPARE(photos.recoveryPayloadLimit(), Core::RecoveryJournal::kMaxBinaryPayload);
+    Core::RecoveryJournal journal(dir.filePath(QStringLiteral("journal")));
+    const QString key = journal.allocateUntitledKey();
+    journal.writeNow(key, QString(), true, large, photos.recoveryPayloadLimit());
+    QVERIFY(journal.entry(key).has_value());
+    WriteDocument back;
+    QVERIFY(back.loadRecovery(journal.entry(key)->payload));
+    QCOMPARE(back.parts().media.size(), 1);
 }
 
 void WriteDocxTest::htmlCarriesPicturesInside()

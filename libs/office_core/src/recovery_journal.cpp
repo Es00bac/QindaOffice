@@ -96,6 +96,7 @@ void RecoveryJournal::writeNow(const QString &key, const QString &path, bool unt
     if (payload.size() > maxPayloadBytes) {
         qWarning().noquote() << "recovery journal: skipping oversized snapshot for"
                              << (path.isEmpty() ? key : path);
+        emit snapshotSkipped(key, payload.size());
         return;
     }
     // AGENT-GUARD: an EMPTY snapshot is not a recovery point. Engines whose

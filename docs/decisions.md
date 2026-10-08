@@ -273,7 +273,10 @@ HTML.
 **QindaWrite (M60).** Word (`.docx`) becomes Write's default Save format
 (it was `.odt`): the owner's documents are Word documents. Crash-recovery
 snapshots are `.docx` bytes, so layout, rich headers, footnotes and pictures
-survive a crash (journals holding HTML still restore). Pictures are stored as
+survive a crash (journals holding HTML still restore); a document declares
+its journal bound (`Document::recoveryPayloadLimit`), Write the 16 MiB
+binary one, and a snapshot over its bound is announced in the status bar
+instead of being skipped silently. Pictures are stored as
 bytes in the document, never referenced by path. Where Qt's text layout
 differs from Word's (first-block top margin, empty paragraph after a table,
 row heights, paragraph borders, tall headers, header-less cover sections),

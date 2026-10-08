@@ -2,6 +2,7 @@
 #include "document.h"
 
 #include "atomic_file_store.h"
+#include "recovery_journal.h"
 
 #include <QFileInfo>
 #include <QUndoStack>
@@ -49,6 +50,11 @@ void Document::refreshByteRevision()
 void Document::notifyContentChanged()
 {
     emit contentChanged();
+}
+
+qint64 Document::recoveryPayloadLimit() const
+{
+    return RecoveryJournal::kMaxTextPayload;
 }
 
 bool Document::loadCanRunOnWorker(const QString &path) const

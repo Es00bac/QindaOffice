@@ -59,6 +59,12 @@ public:
     // touching the on-disk file or the byte revision.
     [[nodiscard]] virtual QByteArray recoverySnapshot() const = 0;
     virtual bool loadRecovery(const QByteArray &snapshot, QString *error = nullptr) = 0;
+    // The largest snapshot the journal keeps for this document: the text
+    // bound by default; a document whose snapshot is a packaged file with
+    // its pictures (QindaWrite's .docx bytes) returns the binary bound.
+    // AGENT-CONTRACT: RecoveryJournal::kMaxTextPayload / kMaxBinaryPayload
+    // are the only values; DocumentHost passes this to schedule().
+    [[nodiscard]] virtual qint64 recoveryPayloadLimit() const;
 
     void setDirty(bool dirty);
     // Adopts a canonical path without touching content (recovery restore,

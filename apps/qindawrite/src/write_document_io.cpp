@@ -11,6 +11,7 @@
 #include "format_io.h"
 #include "libre_office_converter.h"
 #include "ooxml_package.h"
+#include "recovery_journal.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -264,6 +265,11 @@ QStringList WriteDocument::mimeTypes() const
             QStringLiteral("text/html"),
             QStringLiteral("text/markdown"),
             QStringLiteral("text/plain")};
+}
+
+qint64 WriteDocument::recoveryPayloadLimit() const
+{
+    return Core::RecoveryJournal::kMaxBinaryPayload;
 }
 
 QByteArray WriteDocument::recoverySnapshot() const
