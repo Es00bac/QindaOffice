@@ -48,6 +48,10 @@ struct ParagraphSpacing {
 [[nodiscard]] QColor wordColor(const Ooxml::XmlElement *element, const Ooxml::Theme &theme,
                                QStringView valueAttribute = u"val");
 
+// A w:pBdr as the kParagraphBorders display spec (docx_properties.h);
+// empty when no side draws.
+[[nodiscard]] QString paragraphBordersSpec(const Ooxml::XmlElement &pBdr, const Ooxml::Theme &theme);
+
 [[nodiscard]] QVariantMap blockSnapshot(const QTextBlockFormat &format);
 [[nodiscard]] QVariantMap charSnapshot(const QTextCharFormat &format);
 

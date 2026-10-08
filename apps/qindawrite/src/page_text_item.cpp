@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "page_text_item.h"
 
+#include "docx_text.h"
+
 #include "page_text_control.h"
 #include "pdf_exporter.h"
 #include "style_catalog.h"
@@ -134,7 +136,10 @@ void PageTextItem::paintPage(QPainter *painter, int index, const QRectF &clip)
     painter->setClipRect(page.intersected(clip));
     painter->translate(page.topLeft());
     painter->translate(0, -index * size.height());
-    m_control->drawContents(painter, QRectF(0, index * size.height(), size.width(), size.height()));
+    const QRectF pageArea(0, index * size.height(), size.width(), size.height());
+    m_control->drawContents(painter, pageArea);
+    // Word paragraph borders: Qt's layout draws none (docx_text.h).
+    Docx::drawParagraphBorders(painter, *m_document->textDocument(), pageArea);
     painter->restore();
 
     const PageDecoration decoration = m_document->decoration();

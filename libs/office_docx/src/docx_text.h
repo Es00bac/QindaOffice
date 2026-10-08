@@ -6,6 +6,7 @@
 // one safe way to set a block's character format inside a table cell.
 
 #include <QFont>
+#include <QRectF>
 #include <QHash>
 #include <QString>
 #include <QTextCharFormat>
@@ -13,6 +14,8 @@
 #include <QTextDocument>
 
 #include <memory>
+
+class QPainter;
 
 namespace QindaOffice::Docx {
 
@@ -47,5 +50,21 @@ QString addPicture(QTextDocument *document, QHash<QString, QByteArray> *media, c
 // `pageCount` (pictures included).
 [[nodiscard]] std::unique_ptr<QTextDocument> instantiateHeaderFooter(const QTextDocument &document, int page,
                                                                     int pageCount);
+
+// Paints Word paragraph borders (kParagraphBorders) of the document's
+// top-level paragraphs that meet `clip` (document coordinates; the painter
+// is already set up the way QAbstractTextDocumentLayout::draw expects).
+// Consecutive paragraphs with the same borders share one box, as in Word.
+void drawParagraphBorders(QPainter *painter, const QTextDocument &document, const QRectF &clip);
+
+// Pads table rows up to their Word minimum height (kRowHeight): Qt tables
+// have no row heights, and forms use tall empty rows as writing space.
+// Lays the document out first; call after the page width is final.
+void applyRowHeights(QTextDocument *document);
+
+// The laid-out height of a header/footer across `width` px (page fields
+// filled in for page 1), for Word's rule that a tall header pushes the
+// body down.
+[[nodiscard]] qreal headerFooterHeight(const QTextDocument &story, qreal width);
 
 } // namespace QindaOffice::Docx

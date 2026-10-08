@@ -52,15 +52,27 @@ void WriteDocument::applyLayout()
     // document margin in a "-qt-table-type: root" table, which changed what
     // an HTML round trip of an ordinary document read back.
     const qreal left = l.margins.left() + l.gutter;
-    if (qFuzzyCompare(left, l.margins.right()) && qFuzzyCompare(left, l.margins.top())
-        && qFuzzyCompare(left, l.margins.bottom())) {
+    // Word's rule: a header taller than the room above the top margin
+    // pushes the body down (and a tall footer pushes it up), instead of
+    // overlapping it. The model keeps the document's own margins.
+    qreal top = l.margins.top();
+    qreal bottom = l.margins.bottom();
+    for (int s = 0; s < Docx::kHeaderFooterSlots; ++s) {
+        if (const auto &h = m_parts.headers[size_t(s)]; h.document) {
+            top = qMax(top, l.headerDistance + Docx::headerFooterHeight(*h.document, l.contentWidth()));
+        }
+        if (const auto &f = m_parts.footers[size_t(s)]; f.document) {
+            bottom = qMax(bottom, l.footerDistance + Docx::headerFooterHeight(*f.document, l.contentWidth()));
+        }
+    }
+    if (qFuzzyCompare(left, l.margins.right()) && qFuzzyCompare(left, top) && qFuzzyCompare(left, bottom)) {
         m_text->setDocumentMargin(left);
     } else {
         QTextFrameFormat root = m_text->rootFrame()->frameFormat();
         root.setLeftMargin(left);
         root.setRightMargin(l.margins.right());
-        root.setTopMargin(l.margins.top());
-        root.setBottomMargin(l.margins.bottom());
+        root.setTopMargin(top);
+        root.setBottomMargin(bottom);
         m_text->rootFrame()->setFrameFormat(root);
     }
     emit pageSetupChanged();
@@ -161,10 +173,10 @@ void WriteDocument::setHeaderFooter(const QString &header, const QString &footer
     if (!changed) {
         return;
     }
+    applyLayout(); // a taller header moves the body (Word's rule)
     m_text->setModified(true);
     setDirty(true);
     emit contentChanged();
-    emit pageSetupChanged();
 }
 
 void WriteDocument::setDifferentFirstPage(bool different)
@@ -230,6 +242,8 @@ void WriteDocument::adoptParts(Docx::WordParts parts)
 {
     m_parts = std::move(parts);
     applyLayout();
+    // Word row heights need the final column widths: after the layout.
+    Docx::applyRowHeights(m_text.get());
 }
 
 } // namespace QindaOffice::Apps::Write

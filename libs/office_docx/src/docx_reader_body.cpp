@@ -8,6 +8,7 @@
 #include "ooxml_namespaces.h"
 #include "ooxml_units.h"
 
+#include <QFontMetricsF>
 #include <QTextBlock>
 #include <QTextDocument>
 #include <QTextTable>
@@ -177,6 +178,11 @@ void BodyReader::readBlocks(const XmlElement &container, QTextCursor &cursor, Co
             readParagraph(*e, cursor, state);
             lastWasTable = false;
         } else if (e->ns == kW && e->name == u"tbl") {
+            state.tableTopMargin = 0;
+            if (state.collapsedExtra > 0) {
+                state.tableTopMargin = state.collapsedExtra + (state.hasPending ? state.pendingAfter : 0);
+                state.collapsedExtra = 0;
+            }
             if (state.hasPending) {
                 finishParagraph(state, true);
             }
@@ -273,6 +279,12 @@ void BodyReader::readParagraph(const XmlElement &p, QTextCursor &cursor, Contain
     effective = mergeProperties(effective.get(), pPr);
 
     QTextBlockFormat bf = blockFormatFromPPr(effective.get(), m_env.theme);
+    if (const XmlElement *pBdr = effective->child(kW, u"pBdr")) {
+        const QString borders = paragraphBordersSpec(*pBdr, m_env.theme);
+        if (!borders.isEmpty()) {
+            bf.setProperty(kParagraphBorders, borders);
+        }
+    }
     const ParagraphSpacing spacing = spacingOf(effective.get());
     const bool sameStyle = !state.first && state.previousStyle == styleId;
     qreal gap = (spacing.contextual && sameStyle) ? 0.0 : spacing.before;
@@ -282,6 +294,10 @@ void BodyReader::readParagraph(const XmlElement &p, QTextCursor &cursor, Contain
         }
         finishParagraph(state, false);
     }
+    gap += state.collapsedExtra; // an empty paragraph Qt hid beside a table
+    state.collapsedExtra = 0;
+    const bool directlyAfterTable = state.afterTable;
+    state.afterTable = false;
     bf.setTopMargin(gap);
     bf.setBottomMargin(0);
     bf.setProperty(kParagraphStyleId, styleId);
@@ -337,6 +353,16 @@ void BodyReader::readParagraph(const XmlElement &p, QTextCursor &cursor, Contain
     inl.paragraphRunProperties = runBase;
     readInline(p, cursor, inl, state);
 
+    if (directlyAfterTable && cursor.block().text().isEmpty()) {
+        QFont font = mark.font();
+        const qreal natural = QFontMetricsF(font).height();
+        const int type = bf.lineHeightType();
+        const qreal line = type == QTextBlockFormat::FixedHeight ? bf.lineHeight()
+            : type == QTextBlockFormat::MinimumHeight            ? qMax(natural, bf.lineHeight())
+            : type == QTextBlockFormat::ProportionalHeight       ? natural * bf.lineHeight() / 100.0
+                                                                 : natural;
+        state.collapsedExtra = gap + line;
+    }
     state.pending = cursor.block();
     state.pendingAfter = spacing.after;
     state.hasPending = true;

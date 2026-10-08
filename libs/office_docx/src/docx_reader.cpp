@@ -2,10 +2,13 @@
 #include "docx_reader.h"
 
 #include "docx_format.h"
+#include "docx_properties.h"
 #include "docx_reader_p.h"
 #include "ooxml_namespaces.h"
 #include "ooxml_units.h"
 
+#include <QTextBlock>
+#include <QTextCursor>
 #include <QTextOption>
 
 namespace QindaOffice::Docx {
@@ -90,6 +93,33 @@ QString describe(const QMap<QString, int> &approximations)
                                      : QStringLiteral("%1 %2s").arg(it.value()).arg(it.key()));
     }
     return parts.join(QStringLiteral(", "));
+}
+
+// AGENT-NOTE: QTextDocumentLayout drops the top margin of a frame's first
+// block (probed on Qt 6.11: a 160 px top margin on block one moved nothing),
+// so a Word cover whose title sits 2 inches down started at the margin. A
+// synthetic, practically zero-height empty block in front makes the title
+// an ordinary block whose top margin Qt applies; the writer skips the
+// spacer (kParagraphSynthetic) and the title keeps its own spacing markup.
+void insertLeadingSpace(QTextDocument *body)
+{
+    const QTextBlock first = body->begin();
+    const qreal gap = first.blockFormat().topMargin();
+    if (!first.isValid() || gap <= 0.5 || first.blockFormat().boolProperty(kParagraphSynthetic)) {
+        return;
+    }
+    QTextCursor cursor(first);
+    const QTextBlockFormat original = first.blockFormat();
+    const QTextCharFormat mark = first.charFormat();
+    cursor.insertBlock(original, mark); // the text moves on; block one is now empty
+    QTextBlockFormat spacer;
+    spacer.setLineHeight(0.01, QTextBlockFormat::FixedHeight);
+    spacer.setProperty(kParagraphSynthetic, true);
+    QTextCursor head(body->begin());
+    head.setBlockFormat(spacer);
+    QTextCharFormat tiny;
+    tiny.setFontPointSize(1);
+    head.setBlockCharFormat(tiny);
 }
 
 } // namespace
@@ -196,6 +226,8 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
     detail::BodyReader reader(env, body, main);
     reader.readDocument(*bodyElement);
 
+    insertLeadingSpace(body);
+
     // Page layout and headers come from the first section; a later section
     // that names a header slot the first one lacks lends it (Word inherits
     // header slots section to section).
@@ -237,6 +269,23 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
             target.document->setUndoRedoEnabled(true);
             target.document->setModified(false);
             target.sourcePart = part;
+        }
+    }
+    // A first section with no header or footer at all, followed by one that
+    // has them, is a cover page: Word shows nothing there. Write has one set
+    // of headers for the document, so the cover becomes a different first
+    // page with empty slots (unchanged on save: the source sections stay).
+    if (sections.size() > 1) {
+        bool coverHasNone = true;
+        for (const XmlElement *e : sections.first()->elements()) {
+            coverHasNone = coverHasNone && e->name != u"headerReference" && e->name != u"footerReference";
+        }
+        const bool laterHas = parts->header(HeaderFooterSlot::Default).document
+            || parts->footer(HeaderFooterSlot::Default).document;
+        if (coverHasNone && laterHas && !parts->differentFirstPage) {
+            parts->differentFirstPage = true;
+            parts->header(HeaderFooterSlot::First).document = std::make_unique<QTextDocument>();
+            parts->footer(HeaderFooterSlot::First).document = std::make_unique<QTextDocument>();
         }
     }
     if (!env.approximations.isEmpty()) {

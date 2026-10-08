@@ -52,6 +52,10 @@ inline constexpr int kPageBreakRun = kDocxBase + 5;      // bool: break came fro
 // An empty block Qt requires (before a leading table, between adjacent
 // tables) that has no w:p behind it; the writer skips it while empty.
 inline constexpr int kParagraphSynthetic = kDocxBase + 6; // bool
+// Word paragraph borders (w:pBdr) for display: "side:widthPx:style:#rrggbb:spacePx;…"
+// with side top/bottom/left/right/between. Qt draws no paragraph borders;
+// drawParagraphBorders() paints these (docx_text.h).
+inline constexpr int kParagraphBorders = kDocxBase + 7; // QString
 
 // Char formats (QTextImageFormat included).
 inline constexpr int kRunStyleId = kDocxBase + 10;      // QString w:rStyle value
@@ -80,6 +84,9 @@ inline constexpr int kTableSnapshot = kDocxBase + 32; // QVariantMap
 inline constexpr int kCellXml = kDocxBase + 35;       // QString preserved w:tcPr
 inline constexpr int kRowXml = kDocxBase + 36;        // QString preserved w:trPr (row's first cell)
 inline constexpr int kCellSnapshot = kDocxBase + 37;  // QVariantMap
+// A row's minimum height (w:trHeight, px) on the row's first cell; Qt has
+// no row heights, so applyRowHeights() pads the cells (docx_text.h).
+inline constexpr int kRowHeight = kDocxBase + 38;     // qreal
 
 // How QindaWrite shows a tracked change: blue underlined insertions, red
 // struck deletions — content colours, the same on screen, paper and PDF.

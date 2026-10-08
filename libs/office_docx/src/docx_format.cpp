@@ -344,6 +344,36 @@ QTextCharFormat charFormatFromRPr(const XmlElement *rPr, const Ooxml::Theme &the
     return f;
 }
 
+QString paragraphBordersSpec(const XmlElement &pBdr, const Ooxml::Theme &theme)
+{
+    QStringList sides;
+    for (const XmlElement *side : pBdr.elements()) {
+        const QString val = wAttr(side, u"val", QStringLiteral("single"));
+        if (val == u"nil" || val == u"none") {
+            continue;
+        }
+        const QString name = side->name == u"start" ? QStringLiteral("left")
+            : side->name == u"end"                  ? QStringLiteral("right")
+                                                    : side->name;
+        if (name != u"top" && name != u"bottom" && name != u"left" && name != u"right" && name != u"between") {
+            continue;
+        }
+        // w:sz in eighths of a point, w:space in points.
+        const qreal width = qMax<qreal>(0.75, Units::ptToPx(wAttr(side, u"sz", QStringLiteral("4")).toDouble() / 8.0));
+        const QString style = val.startsWith(u"double") ? QStringLiteral("double")
+            : val.startsWith(u"dot")                    ? QStringLiteral("dot")
+            : val.startsWith(u"dash")                   ? QStringLiteral("dash")
+                                                        : QStringLiteral("solid");
+        QColor color = wordColor(side, theme, u"color");
+        if (!color.isValid()) {
+            color = Qt::black;
+        }
+        const qreal space = Units::ptToPx(wAttr(side, u"space", QStringLiteral("0")).toDouble());
+        sides.append(QStringLiteral("%1:%2:%3:%4:%5").arg(name).arg(width, 0, 'f', 2).arg(style, color.name()).arg(space, 0, 'f', 2));
+    }
+    return sides.join(QLatin1Char(';'));
+}
+
 QVariantMap blockSnapshot(const QTextBlockFormat &f)
 {
     QStringList tabs;

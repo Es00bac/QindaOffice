@@ -3,7 +3,11 @@
 
 #include "docx_properties.h"
 
+#include <QAbstractTextDocumentLayout>
 #include <QImage>
+#include <QPainter>
+#include <QTextFrame>
+#include <QTextLayout>
 #include <QRegularExpression>
 #include <QTextBlock>
 #include <QTextFragment>
@@ -215,6 +219,175 @@ std::unique_ptr<QTextDocument> instantiateHeaderFooter(const QTextDocument &docu
         cursor.insertText(it->text, it->format);
     }
     return copy;
+}
+
+namespace {
+
+struct Side {
+    qreal width = 0;
+    QString style;
+    QColor color;
+    qreal space = 0;
+};
+
+QHash<QString, Side> parseBorders(const QString &spec)
+{
+    QHash<QString, Side> out;
+    for (const QString &entry : spec.split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
+        const QStringList f = entry.split(QLatin1Char(':'));
+        if (f.size() == 5) {
+            out.insert(f[0], {f[1].toDouble(), f[2], QColor(f[3]), f[4].toDouble()});
+        }
+    }
+    return out;
+}
+
+void line(QPainter *painter, const Side &side, QPointF a, QPointF b)
+{
+    QPen pen(side.color, side.width);
+    pen.setCapStyle(Qt::FlatCap);
+    pen.setStyle(side.style == u"dot" ? Qt::DotLine : side.style == u"dash" ? Qt::DashLine : Qt::SolidLine);
+    painter->setPen(pen);
+    painter->drawLine(a, b);
+    if (side.style == u"double") {
+        const bool horizontal = qFuzzyCompare(a.y(), b.y());
+        const QPointF shift = horizontal ? QPointF(0, side.width * 2) : QPointF(side.width * 2, 0);
+        painter->drawLine(a + shift, b + shift);
+    }
+}
+
+bool topLevel(const QTextDocument &document, const QTextBlock &block)
+{
+    return QTextCursor(block).currentFrame() == document.rootFrame();
+}
+
+} // namespace
+
+void drawParagraphBorders(QPainter *painter, const QTextDocument &document, const QRectF &clip)
+{
+    QAbstractTextDocumentLayout *layout = document.documentLayout();
+    const QTextFrameFormat root = document.rootFrame()->frameFormat();
+    const qreal pageWidth = document.pageSize().width();
+    const int start = layout->hitTest(clip.topLeft(), Qt::FuzzyHit);
+    QTextBlock block = document.findBlock(qMax(0, start));
+    if (block.previous().isValid()) {
+        block = block.previous();
+    }
+    painter->save();
+    for (; block.isValid(); block = block.next()) {
+        const QRectF rect = layout->blockBoundingRect(block);
+        if (rect.top() > clip.bottom() + 8) {
+            break;
+        }
+        const QString spec = block.blockFormat().stringProperty(kParagraphBorders);
+        if (spec.isEmpty() || !topLevel(document, block)) {
+            continue;
+        }
+        const QTextBlockFormat f = block.blockFormat();
+        const auto same = [&](const QTextBlock &other) {
+            return other.isValid() && topLevel(document, other) && other.blockFormat().stringProperty(kParagraphBorders) == spec
+                && other.blockFormat().leftMargin() == f.leftMargin() && other.blockFormat().rightMargin() == f.rightMargin();
+        };
+        const QHash<QString, Side> sides = parseBorders(spec);
+        const bool first = !same(block.previous());
+        const bool last = !same(block.next());
+        const qreal x0 = root.leftMargin() + f.leftMargin() + qMin<qreal>(0, f.textIndent()) - sides.value(QStringLiteral("left")).space;
+        const qreal x1 = pageWidth - root.rightMargin() - f.rightMargin() + sides.value(QStringLiteral("right")).space;
+        const qreal y0 = rect.top() - (first ? sides.value(QStringLiteral("top")).space : 0);
+        const qreal y1 = rect.bottom() + (last ? sides.value(QStringLiteral("bottom")).space : 0);
+        if (first && sides.contains(QStringLiteral("top"))) {
+            line(painter, sides.value(QStringLiteral("top")), {x0, y0}, {x1, y0});
+        }
+        if (last && sides.contains(QStringLiteral("bottom"))) {
+            line(painter, sides.value(QStringLiteral("bottom")), {x0, y1}, {x1, y1});
+        } else if (!last && sides.contains(QStringLiteral("between"))) {
+            line(painter, sides.value(QStringLiteral("between")), {x0, y1}, {x1, y1});
+        }
+        // Side rules run on through the gap to the next paragraph of the box.
+        const qreal bottom = last ? y1 : layout->blockBoundingRect(block.next()).top();
+        if (sides.contains(QStringLiteral("left"))) {
+            line(painter, sides.value(QStringLiteral("left")), {x0, y0}, {x0, bottom});
+        }
+        if (sides.contains(QStringLiteral("right"))) {
+            line(painter, sides.value(QStringLiteral("right")), {x1, y0}, {x1, bottom});
+        }
+    }
+    painter->restore();
+}
+
+namespace {
+
+qreal cellContentHeight(const QTextTableCell &cell)
+{
+    qreal height = 0;
+    for (auto it = cell.begin(); !it.atEnd(); ++it) {
+        if (it.currentFrame() != nullptr) {
+            return -1; // nested table: leave the row alone
+        }
+        const QTextBlock b = it.currentBlock();
+        const QTextLayout *layout = b.layout();
+        height += (layout != nullptr ? layout->boundingRect().height() : 0) + b.blockFormat().topMargin()
+            + b.blockFormat().bottomMargin();
+    }
+    const QTextTableCellFormat f = cell.format().toTableCellFormat();
+    return height + f.topPadding() + f.bottomPadding() + f.topBorder() + f.bottomBorder();
+}
+
+void padRows(QTextFrame *frame)
+{
+    for (QTextFrame *child : frame->childFrames()) {
+        if (auto *table = qobject_cast<QTextTable *>(child)) {
+            for (int r = 0; r < table->rows(); ++r) {
+                const QTextTableCell first = table->cellAt(r, 0);
+                const qreal wanted = first.row() == r ? first.format().doubleProperty(kRowHeight) : 0;
+                if (wanted <= 0) {
+                    continue;
+                }
+                qreal tallest = 0;
+                QTextTableCell target;
+                for (int c = 0; c < table->columns(); ++c) {
+                    const QTextTableCell cell = table->cellAt(r, c);
+                    if (cell.row() != r || cell.column() != c || cell.rowSpan() != 1) {
+                        continue;
+                    }
+                    const qreal h = cellContentHeight(cell);
+                    if (h < 0) {
+                        tallest = wanted; // nested tables decide for themselves
+                        break;
+                    }
+                    if (!target.isValid()) {
+                        target = cell;
+                    }
+                    tallest = qMax(tallest, h);
+                }
+                if (target.isValid() && tallest < wanted - 0.5) {
+                    QTextTableCellFormat f = target.format().toTableCellFormat();
+                    f.setBottomPadding(f.bottomPadding() + wanted - tallest);
+                    target.setFormat(f);
+                }
+            }
+        }
+        padRows(child);
+    }
+}
+
+} // namespace
+
+void applyRowHeights(QTextDocument *document)
+{
+    static_cast<void>(document->documentLayout()->documentSize()); // lay everything out
+    padRows(document->rootFrame());
+}
+
+qreal headerFooterHeight(const QTextDocument &story, qreal width)
+{
+    if (story.isEmpty()) {
+        return 0;
+    }
+    const std::unique_ptr<QTextDocument> shown = instantiateHeaderFooter(story, 1, 1);
+    shown->setDocumentMargin(0);
+    shown->setTextWidth(width);
+    return shown->size().height();
 }
 
 } // namespace QindaOffice::Docx

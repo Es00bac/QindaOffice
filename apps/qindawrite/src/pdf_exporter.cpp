@@ -147,6 +147,7 @@ void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDoc
         QAbstractTextDocumentLayout::PaintContext context;
         context.clip = QRectF(0, i * page.height(), page.width(), page.height());
         const_cast<QAbstractTextDocumentLayout *>(layout)->draw(painter, context);
+        Docx::drawParagraphBorders(painter, *document, context.clip);
         drawPageDecoration(painter, QRectF(0, i * page.height(), page.width(), page.height()), decoration, i + 1,
                            pages);
         painter->restore();

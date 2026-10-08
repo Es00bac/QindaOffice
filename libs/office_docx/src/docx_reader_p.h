@@ -67,6 +67,14 @@ public:
         QList<Field> fields;         // complex fields may span paragraphs
         QStringList pendingAnchors;  // bookmarks waiting for the next text
         bool pageBreakPending = false;
+        // AGENT-NOTE: Qt lays an EMPTY block that directly follows a table
+        // out beside the table's last line — it takes no height (probed on
+        // Qt 6.11). Word gives that paragraph a full line, so its height is
+        // carried to whatever comes next: the next paragraph's top margin or
+        // the next table's (tableTopMargin). Display only; markup unchanged.
+        bool afterTable = false;
+        qreal collapsedExtra = 0;
+        qreal tableTopMargin = 0;
     };
     struct InlineState {
         QString href;

@@ -246,6 +246,10 @@ void BodyReader::readTable(const XmlElement &tbl, QTextCursor &cursor, Container
         ++headerRows;
     }
     tf.setHeaderRowCount(headerRows);
+    if (state.tableTopMargin > 0) {
+        tf.setTopMargin(state.tableTopMargin); // see ContainerState::afterTable
+        state.tableTopMargin = 0;
+    }
     if (tblPr != nullptr) {
         tf.setProperty(kTableXml, Ooxml::serializeFragment(*tblPr));
     }
@@ -380,6 +384,12 @@ void BodyReader::readTable(const XmlElement &tbl, QTextCursor &cursor, Container
         if (s.column == 0 || owner.value({s.row, 0}, -1) < 0) {
             if (const XmlElement *trPr = s.tr->child(kW, u"trPr")) {
                 cf.setProperty(kRowXml, Ooxml::serializeFragment(*trPr));
+                if (const XmlElement *height = trPr->child(kW, u"trHeight")) {
+                    // hRule auto means "as tall as the content": no minimum.
+                    if (wAttr(height, u"hRule", QStringLiteral("atLeast")) != u"auto" && s.rowSpan == 1) {
+                        cf.setProperty(kRowHeight, Units::twipsToPx(Units::parseTwips(wAttr(height, u"val"))));
+                    }
+                }
             }
         }
         cf.setProperty(kCellSnapshot, QVariantMap{
@@ -399,6 +409,7 @@ void BodyReader::readTable(const XmlElement &tbl, QTextCursor &cursor, Container
     cursor = table->lastCursorPosition();
     cursor.movePosition(QTextCursor::NextBlock);
     state.blockFresh = true;
+    state.afterTable = true;
     state.first = false;
     state.previousStyle.clear();
     state.previousContextual = false;
