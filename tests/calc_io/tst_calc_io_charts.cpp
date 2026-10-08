@@ -5,6 +5,8 @@
 
 #include "xlsx_bridge.h"
 
+#include "calc_io_schema.h"
+
 #include <QCoreApplication>
 #include <QTemporaryDir>
 
@@ -67,6 +69,7 @@ void CalcIoChartsTest::chartImportReadsKindsAndGrouping()
     const QString path = dir.path() + QStringLiteral("/stacked.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(chartedWorkbook(true), path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
 
     Workbook back;
     QVERIFY2(IO::readXlsxFile(path, &back, &error), qPrintable(error));
@@ -106,6 +109,7 @@ void CalcIoChartsTest::stackedBarExportWritesGrouping()
     const QString path = dir.path() + QStringLiteral("/grouped.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
     const QString chartXml = readPart(path, QStringLiteral("xl/charts/chart1.xml"));
     QVERIFY2(chartXml.contains(QStringLiteral("<c:grouping val=\"stacked\"/>")), qPrintable(chartXml.left(400)));
 }
@@ -117,6 +121,7 @@ void CalcIoChartsTest::chartsSurviveRoundTrip()
     const QString path = dir.path() + QStringLiteral("/line.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(chartedWorkbook(false), path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
 
     // The generated part has the shape an external consumer reads.
     const QString chartXml = readPart(path, QStringLiteral("xl/charts/chart1.xml"));

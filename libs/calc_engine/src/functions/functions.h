@@ -13,6 +13,7 @@
 #include <QHash>
 
 #include <functional>
+#include <memory>
 
 namespace QindaOffice::Calc {
 
@@ -54,6 +55,24 @@ public:
     [[nodiscard]] virtual qint32 sheetCount() const = 0;
     // Named cell/range lookup; nullopt when the name is unknown.
     [[nodiscard]] virtual std::optional<RangeRef> namedRange(const QString &name) const = 0;
+    // A defined name bound to a formula, a constant or one sheet (D-069):
+    // the parsed body to evaluate in the name's place when it is used on
+    // `sheet`; null when namedRange answers instead (or nobody does).
+    [[nodiscard]] virtual std::shared_ptr<const Node> nameFormula(const QString &name, qint32 sheet) const
+    {
+        Q_UNUSED(name);
+        Q_UNUSED(sheet);
+        return {};
+    }
+    // The text of the formula in a cell, without '='; empty for a value or
+    // an empty cell (ISFORMULA, FORMULATEXT — M61).
+    [[nodiscard]] virtual QString cellFormula(qint32 sheet, qint32 row, qint32 col) const
+    {
+        Q_UNUSED(sheet);
+        Q_UNUSED(row);
+        Q_UNUSED(col);
+        return {};
+    }
 };
 
 struct EvalContext {
@@ -63,6 +82,10 @@ struct EvalContext {
     // LET bindings in scope (upper-case name → value or range), consulted
     // before the workbook's named ranges.
     QHash<QString, Arg> locals;
+    // Defined names being expanded around this evaluation (D-069): a name
+    // whose body refers back to itself stops at a fixed depth as #NAME?
+    // instead of recursing until the stack runs out.
+    int nameDepth = 0;
 };
 
 struct FunctionSpec {
@@ -123,5 +146,14 @@ void registerInfoFunctions(QHash<QString, FunctionSpec> &registry);
 void registerSubtotalFunctions(QHash<QString, FunctionSpec> &registry);
 void registerFinancialFunctions(QHash<QString, FunctionSpec> &registry);
 void registerFinancialExtraFunctions(QHash<QString, FunctionSpec> &registry);
+// M61 (D-069): functions Excel workbooks use that the engine lacked. They
+// register after the files above — MODE, NETWORKDAYS and WORKDAY are
+// replaced by corrected versions, and the .INC aliases copy older specs.
+void registerFinancialMoreFunctions(QHash<QString, FunctionSpec> &registry);
+void registerStatisticalMoreFunctions(QHash<QString, FunctionSpec> &registry);
+void registerMathMoreFunctions(QHash<QString, FunctionSpec> &registry);
+void registerLookupMoreFunctions(QHash<QString, FunctionSpec> &registry);
+void registerTextMoreFunctions(QHash<QString, FunctionSpec> &registry);
+void registerDateMoreFunctions(QHash<QString, FunctionSpec> &registry);
 
 } // namespace QindaOffice::Calc

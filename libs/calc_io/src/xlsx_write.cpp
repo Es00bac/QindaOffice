@@ -3,25 +3,42 @@
 // old xlsx_bridge.cpp in M33): values and formulas WITH their formats
 // (formula cells carried the default format in v1; writeFormula takes the
 // format and registers it), styles on empty cells via writeBlank, merges,
-// geometry, charts and defined names.
+// geometry and charts; rules in xlsx_write_rules, names in xlsx_write_book.
+//
+// AGENT-NOTE (M61, D-069): the writer is honest. Text goes in as text —
+// QXlsx's own write(QVariant) turns any string starting with '=' into a
+// formula and anything URL-shaped into a blue hyperlink. Formulas are
+// written in Excel's spelling (_xlfn. prefixes, ',' separators). A cell
+// whose real type QXlsx cannot express — a literal error, a formula whose
+// cached result is text, a boolean or an error — is patched to its true t=
+// by the post-pass. And the whole package is built in memory and saved
+// atomically, so a failed save never leaves a half-written file.
 
 #include "xlsx_bridge.h"
 
+#include "xlsx_formula.h"
 #include "xlsx_manifest.h"
 #include "xlsx_post.h"
 #include "xlsx_style.h"
+#include "xlsx_text.h"
+#include "xlsx_write_book.h"
+#include "xlsx_write_rules.h"
 #include "xlsx_write_xml.h"
 
 #include "eval.h"
 #include "number_format.h"
 
+#include <QBuffer>
+#include <QSaveFile>
+
+#include <algorithm>
+#include <functional>
+
+#include <xlsxcellformula.h>
+#include <xlsxchart.h>
 #include <xlsxdocument.h>
 #include <xlsxworkbook.h>
 #include <xlsxworksheet.h>
-#include <xlsxcellformula.h>
-#include <xlsxchart.h>
-#include <xlsxconditionalformatting.h>
-#include <xlsxdatavalidation.h>
 
 namespace QindaOffice::Calc::IO {
 
@@ -38,316 +55,145 @@ qreal pxToPt(qreal px)
     return px * 72.0 / 96.0;
 }
 
-// The reference spelling of a sheet name in print names: quoted when the
-// name carries anything but word characters ('Sheet 1'!$A$1).
-QString printSheetName(const QString &name)
+// The type and value Excel caches for a cell QXlsx can only write as a
+// number: text, a boolean, an error. nullopt when the number QXlsx wrote is
+// right (numbers and blanks; the circular marker, which Excel shows as 0).
+std::optional<PatchManifest::CellType> realType(const Value &value)
 {
-    for (const QChar c : name) {
-        if (!c.isLetterOrNumber() && c != QLatin1Char('_')) {
-            return QStringLiteral("'") + QString(name).replace(QStringLiteral("'"),
-                                                               QStringLiteral("''"))
-                + QStringLiteral("'");
+    if (const auto *text = std::get_if<QString>(&value)) {
+        return PatchManifest::CellType{QByteArrayLiteral("str"), encodeXString(*text)};
+    }
+    if (const auto *flag = std::get_if<bool>(&value)) {
+        return PatchManifest::CellType{QByteArrayLiteral("b"), *flag ? QStringLiteral("1") : QStringLiteral("0")};
+    }
+    if (const auto *err = std::get_if<Err>(&value)) {
+        if (const QString spelled = errorForFile(*err); !spelled.isEmpty()) {
+            return PatchManifest::CellType{QByteArrayLiteral("e"), spelled};
         }
     }
-    return name;
+    return std::nullopt;
 }
 
-// The dxf for a conditional format. AGENT-NOTE: a dxf's visible fill is the
-// file's bgColor element (Excel's dxf convention — the reverse of a cell
-// fill), and QXlsx's solid-fill swap writes P_Fill_FgColor AS bgColor, so
-// the foreground setter is the right one here and ONLY here.
-QXlsx::Format dxfFromCondFormat(const CondFormat &cf)
-{
-    QXlsx::Format format;
-    if (cf.bold.has_value()) {
-        format.setFontBold(*cf.bold);
-    }
-    if (cf.italic.has_value()) {
-        format.setFontItalic(*cf.italic);
-    }
-    if (cf.foreground.has_value()) {
-        format.setFontColor(QColor(cf.foreground->r, cf.foreground->g, cf.foreground->b));
-    }
-    if (cf.background.has_value()) {
-        format.setFillPattern(QXlsx::Format::PatternSolid);
-        format.setPatternForegroundColor(
-            QColor(cf.background->r, cf.background->g, cf.background->b));
-    }
-    return format;
-}
+using FormatFor = std::function<QXlsx::Format(qint32)>;
 
-void writeValidations(QXlsx::Worksheet *worksheet, const Sheet &sheet)
+// Every cell of one sheet. `headerText` overrides table header cells (see
+// tableForFile); `patch` collects the cells the post-pass must retype.
+void writeSheetCells(QXlsx::Worksheet *worksheet, const Sheet &sheet, const FormatFor &formatFor,
+                     const QHash<quint64, QString> &headerText, PatchManifest::SheetPatch *patch)
 {
-    for (const ValidationRule &rule : sheet.validations()) {
-        QXlsx::DataValidation validation;
-        switch (rule.kind) {
-        case ValidationRule::Kind::List: {
-            QStringList escaped = rule.list;
-            for (QString &item : escaped) {
-                item.replace(QStringLiteral("\""), QStringLiteral("\"\""));
-            }
-            validation.setValidationType(QXlsx::DataValidation::List);
-            validation.setFormula1(QStringLiteral("\"") + escaped.join(QLatin1Char(','))
-                                   + QStringLiteral("\""));
-            break;
-        }
-        case ValidationRule::Kind::WholeNumber:
-            validation.setValidationType(QXlsx::DataValidation::Whole);
-            validation.setValidationOperator(QXlsx::DataValidation::Between);
-            validation.setFormula1(QString::number(rule.min));
-            validation.setFormula2(QString::number(rule.max));
-            break;
-        case ValidationRule::Kind::Decimal:
-            validation.setValidationType(QXlsx::DataValidation::Decimal);
-            validation.setValidationOperator(QXlsx::DataValidation::Between);
-            validation.setFormula1(QString::number(rule.min));
-            validation.setFormula2(QString::number(rule.max));
-            break;
-        case ValidationRule::Kind::TextLength:
-            validation.setValidationType(QXlsx::DataValidation::TextLength);
-            validation.setValidationOperator(QXlsx::DataValidation::Between);
-            validation.setFormula1(QString::number(rule.min));
-            validation.setFormula2(QString::number(rule.max));
-            break;
-        case ValidationRule::Kind::NotEmpty:
-            // Excel has no "not empty" validation; the idiom is a custom
-            // formula over the range's first cell.
-            validation.setValidationType(QXlsx::DataValidation::Custom);
-            validation.setFormula1(QStringLiteral("LEN(TRIM(%1))>0")
-                                       .arg(addrText(rule.range.topLeft)));
-            break;
-        }
-        if (!rule.message.isEmpty()) {
-            validation.setErrorMessage(rule.message);
-        }
-        validation.setErrorStyle(QXlsx::DataValidation::Stop);
-        validation.addRange(QXlsx::CellRange(rule.range.topLeft.row + 1,
-                                             rule.range.topLeft.col + 1,
-                                             rule.range.bottomRight.row + 1,
-                                             rule.range.bottomRight.col + 1));
-        worksheet->addDataValidation(validation);
-    }
-}
-
-void writeCondFormats(QXlsx::Worksheet *worksheet, const Sheet &sheet)
-{
-    using Op = CondFormatRule::Op;
-    for (const CondFormatRule &rule : sheet.condFormats()) {
-        QXlsx::ConditionalFormatting cf;
-        const QXlsx::Format dxf = dxfFromCondFormat(rule.format);
-        const QString first = QString::number(rule.first);
-        const QString second = QString::number(rule.second);
-        bool added = true;
-        switch (rule.op) {
-        case Op::GreaterThan:
-            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_GreaterThan, first, dxf, rule.stopIfTrue);
-            break;
-        case Op::GreaterThanOrEqual:
-            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_GreaterThanOrEqual, first, dxf, rule.stopIfTrue);
-            break;
-        case Op::LessThan:
-            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_LessThan, first, dxf, rule.stopIfTrue);
-            break;
-        case Op::LessThanOrEqual:
-            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_LessThanOrEqual, first, dxf, rule.stopIfTrue);
-            break;
-        case Op::Between:
-            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_Between, first, second, dxf, rule.stopIfTrue);
-            break;
-        case Op::EqualTo:
-            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_Equal, first, dxf, rule.stopIfTrue);
-            break;
-        case Op::NotEqualTo:
-            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_NotEqual, first, dxf, rule.stopIfTrue);
-            break;
-        case Op::ContainsText:
-            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_ContainsText, rule.text, dxf, rule.stopIfTrue);
-            break;
-        case Op::IsEmpty:
-            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_Blanks, dxf, rule.stopIfTrue);
-            break;
-        case Op::NotEmpty:
-            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_NoBlanks, dxf, rule.stopIfTrue);
-            break;
-        case Op::Expression:
-            cf.addHighlightCellsRule(QXlsx::ConditionalFormatting::Highlight_Expression, rule.formula, dxf, rule.stopIfTrue);
-            break;
-        case Op::DataBar:
-            cf.addDataBarRule(QColor(rule.barColor.r, rule.barColor.g, rule.barColor.b),
-                              true, rule.stopIfTrue);
-            break;
-        }
-        if (!added) {
+    for (auto it = sheet.cells().constBegin(); it != sheet.cells().constEnd(); ++it) {
+        const quint64 key = it.key();
+        const CellAddr addr{qint32(key & 0xffffffffu), qint32(key >> 32)};
+        const Cell &cell = it.value();
+        const QXlsx::Format format = formatFor(sheet.styleIdAt(addr));
+        const int row = addr.row + 1;
+        const int col = addr.col + 1;
+        if (const auto header = headerText.constFind(key); header != headerText.constEnd()) {
+            worksheet->writeString(row, col, encodeXString(header.value()), format);
             continue;
         }
-        cf.addRange(QXlsx::CellRange(rule.range.topLeft.row + 1, rule.range.topLeft.col + 1,
-                                     rule.range.bottomRight.row + 1,
-                                     rule.range.bottomRight.col + 1));
-        worksheet->addConditionalFormatting(cf);
+        // AGENT-NOTE: the engine's evaluated value is written as the
+        // cached result: consumers that do not recalculate on load
+        // (LibreOffice's default for xlsx) still show correct data.
+        if (cell.hasFormula()) {
+            const double cached = isNumber(cell.value) ? std::get<double>(cell.value) : 0.0;
+            worksheet->writeFormula(row, col, QXlsx::CellFormula(formulaForFile(cell.formula)), format, cached);
+            if (const auto type = realType(cell.value); type.has_value() && patch != nullptr) {
+                patch->cellTypes.insert(addrText(addr), *type);
+            }
+        } else if (const auto *number = std::get_if<double>(&cell.value)) {
+            worksheet->writeNumeric(row, col, *number, format);
+        } else if (const auto *text = std::get_if<QString>(&cell.value)) {
+            worksheet->writeString(row, col, encodeXString(*text), format);
+        } else if (const auto *flag = std::get_if<bool>(&cell.value)) {
+            worksheet->writeBool(row, col, *flag, format);
+        } else if (isErr(cell.value)) {
+            // QXlsx has no API for an error cell: a number now, t="e" later.
+            worksheet->writeNumeric(row, col, 0.0, format);
+            if (const auto type = realType(cell.value); type.has_value() && patch != nullptr) {
+                patch->cellTypes.insert(addrText(addr), *type);
+            }
+        } else if (!format.isEmpty()) {
+            // AGENT-GUARD: a BLANK cell that still carries a style. The
+            // reader makes a Cell for every <c> element in the file,
+            // painted-but-empty ones included, so these have a Cell and no
+            // value — the styled-empty loop below skips them precisely
+            // BECAUSE a Cell exists. Without this branch the author's empty
+            // painted cells (2,114 of them in the sample workbook) disappear
+            // on save, which is exactly the silent loss D-012 forbids.
+            worksheet->writeBlank(row, col, format);
+        }
+    }
+    // Table header cells the model leaves blank still need their names.
+    for (auto it = headerText.constBegin(); it != headerText.constEnd(); ++it) {
+        const CellAddr addr{qint32(it.key() & 0xffffffffu), qint32(it.key() >> 32)};
+        if (sheet.cellAt(addr) == nullptr) {
+            worksheet->writeString(addr.row + 1, addr.col + 1, encodeXString(it.value()),
+                                   formatFor(sheet.styleIdAt(addr)));
+        }
+    }
+    // Styles live on EMPTY cells too (a painted fill, a border on a
+    // blank): writeBlank carries the format with no content.
+    for (auto it = sheet.styleIds().constBegin(); it != sheet.styleIds().constEnd(); ++it) {
+        const CellAddr addr{qint32(it.key() & 0xffffffffu), qint32(it.key() >> 32)};
+        if (sheet.cellAt(addr) != nullptr || it.value() == 0 || headerText.contains(it.key())) {
+            continue;
+        }
+        worksheet->writeBlank(addr.row + 1, addr.col + 1, formatFor(it.value()));
     }
 }
 
-} // namespace
-
-// Builds the QXlsx model and, when `manifest` is non-null, the post-pass
-// patch list for the features QXlsx has no model for (autofilter, comments).
-std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *manifest,
-                                           QString *error)
+// The post-pass work one sheet needs; `tables` are already file-ready.
+void fillSheetPatch(const Sheet &sheet, qint32 index, const QList<TableSpec> &tables, int *nextVmlBlock,
+                    PatchManifest::SheetPatch *patch)
 {
-    Q_UNUSED(error);
-    auto doc = std::make_unique<QXlsx::Document>();
-    // The engine style table -> QXlsx formats, built once. AGENT-NOTE: the
-    // v1 writer rebuilt the Format per cell; with full field coverage that
-    // is the same mapping work a hundred thousand times on a big sheet.
-    QHash<qint32, QXlsx::Format> formats;
-    const auto formatFor = [&wb, &formats](qint32 styleId) -> QXlsx::Format {
-        if (styleId == 0 || wb.style(styleId) == nullptr) {
-            return {};
-        }
-        if (!formats.contains(styleId)) {
-            formats.insert(styleId, formatFromStyle(*wb.style(styleId)));
-        }
-        return formats.value(styleId);
-    };
-    for (qint32 s = 0; s < wb.sheetCount(); ++s) {
-        const Sheet &sheet = wb.sheetAt(s);
-        if (s == 0 && !doc->sheetNames().isEmpty()) {
-            doc->renameSheet(doc->sheetNames().first(), sheet.name());
-        } else {
-            doc->addSheet(sheet.name());
-        }
-        doc->selectSheet(sheet.name());
-        QXlsx::Worksheet *worksheet =
-            static_cast<QXlsx::Worksheet *>(doc->sheet(sheet.name()));
-        if (sheet.isHidden()) {
-            worksheet->setSheetState(QXlsx::AbstractSheet::SS_Hidden);
-        }
-        for (auto it = sheet.cells().constBegin(); it != sheet.cells().constEnd(); ++it) {
-            const quint64 key = it.key();
-            const CellAddr addr{qint32(key & 0xffffffffu), qint32(key >> 32)};
-            const Cell &cell = it.value();
-            const QXlsx::Format format = formatFor(sheet.styleIdAt(addr));
-            const int row = addr.row + 1;
-            const int col = addr.col + 1;
-            // AGENT-NOTE: value writes go through Document (it registers the
-            // cell format into the workbook style table). Formulas use the
-            // Worksheet API (QXlsx has no Document::writeFormula); the format
-            // registers there just the same (writeFormula → addXfFormat), so
-            // formula cells keep their look. The engine's evaluated value is
-            // written as the cached result: consumers that do not recalculate
-            // on load (LibreOffice's default for xlsx) still show correct
-            // data.
-            if (cell.hasFormula()) {
-                const double cached = isNumber(cell.value) ? std::get<double>(cell.value) : 0.0;
-                worksheet->writeFormula(row, col,
-                                        QXlsx::CellFormula(QStringLiteral("=") + cell.formula),
-                                        format, cached);
-            } else if (isNumber(cell.value)) {
-                doc->write(row, col, std::get<double>(cell.value), format);
-            } else if (isText(cell.value)) {
-                doc->write(row, col, std::get<QString>(cell.value), format);
-            } else if (isBool(cell.value)) {
-                doc->write(row, col, std::get<bool>(cell.value), format);
-            } else if (isErr(cell.value)) {
-                doc->write(row, col, errText(std::get<Err>(cell.value)), format);
-            } else if (!format.isEmpty()) {
-                // AGENT-GUARD: a BLANK cell that still carries a style. The
-                // reader makes a Cell for every <c> element in the file,
-                // painted-but-empty ones included, so these have a Cell and
-                // no value — they match none of the branches above, and the
-                // styled-empty loop below skips them precisely BECAUSE a
-                // Cell exists. Without this branch the author's empty
-                // painted cells (2,114 of them in the sample workbook)
-                // disappear on save, which is exactly the silent loss D-012
-                // forbids.
-                worksheet->writeBlank(row, col, format);
-            }
-        }
-        // Styles live on EMPTY cells too (a painted fill, a border on a
-        // blank): writeBlank carries the format with no content.
-        for (auto it = sheet.styleIds().constBegin(); it != sheet.styleIds().constEnd(); ++it) {
-            const quint64 key = it.key();
-            const CellAddr addr{qint32(key & 0xffffffffu), qint32(key >> 32)};
-            if (sheet.cellAt(addr) != nullptr || it.value() == 0) {
-                continue;
-            }
-            worksheet->writeBlank(addr.row + 1, addr.col + 1, formatFor(it.value()));
-        }
-        for (const CellRange &merge : sheet.merges()) {
-            doc->mergeCells(QXlsx::CellRange(merge.topLeft.row + 1, merge.topLeft.col + 1,
-                                             merge.bottomRight.row + 1,
-                                             merge.bottomRight.col + 1));
-        }
-        for (const qint32 col : sheet.sizedColumns()) {
-            worksheet->setColumnWidth(col + 1, col + 1, pxToCharWidth(sheet.columnWidth(col)));
-        }
-        for (const qint32 row : sheet.sizedRows()) {
-            worksheet->setRowHeight(row + 1, row + 1, pxToPt(sheet.rowHeight(row)));
-        }
-        writeValidations(worksheet, sheet);
-        writeCondFormats(worksheet, sheet);
-        if (manifest != nullptr) {
-            // QXlsx's sheet part naming is deterministic (document order);
-            // the post-pass asserts it before touching anything.
-            PatchManifest::SheetPatch patch;
-            patch.sheetPart = QStringLiteral("xl/worksheets/sheet%1.xml").arg(s + 1);
-            if (sheet.autoFilter().active) {
-                patch.autoFilterXml = autoFilterXml(sheet.autoFilter());
-            }
-            if (!sheet.comments().isEmpty()) {
-                patch.commentsPart = QStringLiteral("xl/comments%1.xml").arg(s + 1);
-                patch.commentsXml = commentsPartXml(sheet.comments());
-            }
-            patch.tables = sheet.tables();
-            patch.freezeRows = sheet.freezeRows();
-            patch.freezeCols = sheet.freezeCols();
-            if (sheet.cursor().isValid() && sheet.cursor() != CellAddr{0, 0}) {
-                patch.activeCell = addrText(sheet.cursor());
-            }
-            const Sheet::PageSetup &setup = sheet.pageSetup();
-            if (setup.orientation != 0 || setup.fitToWidth != 0 || setup.fitToHeight != 0) {
-                patch.pageSetupXml = QByteArrayLiteral("<pageSetup")
-                    + (setup.orientation != 0 ? QByteArrayLiteral(" orientation=\"landscape\"") : QByteArray())
-                    + (setup.fitToWidth != 0 ? QByteArrayLiteral(" fitToWidth=\"") + QByteArray::number(setup.fitToWidth) + "\"" : QByteArray())
-                    + (setup.fitToHeight != 0 ? QByteArrayLiteral(" fitToHeight=\"") + QByteArray::number(setup.fitToHeight) + "\"" : QByteArray())
-                    + QByteArrayLiteral("/>");
-            }
-            if (sheet.printArea().has_value()) {
-                manifest->printAreas.append(
-                    {s, QStringLiteral("%1!%2:%3")
-                            .arg(printSheetName(sheet.name()),
-                                 addrText(sheet.printArea()->topLeft, true, true),
-                                 addrText(sheet.printArea()->bottomRight, true, true))});
-            }
-            if (sheet.printTitleRows().has_value() || sheet.printTitleCols().has_value()) {
-                QStringList parts;
-                if (sheet.printTitleCols().has_value()) {
-                    parts.append(QStringLiteral("%1!$%2:$%3")
-                                     .arg(printSheetName(sheet.name()),
-                                          colName(sheet.printTitleCols()->topLeft.col),
-                                          colName(sheet.printTitleCols()->bottomRight.col)));
-                }
-                if (sheet.printTitleRows().has_value()) {
-                    parts.append(QStringLiteral("%1!$%2:$%3")
-                                     .arg(printSheetName(sheet.name()))
-                                     .arg(sheet.printTitleRows()->topLeft.row + 1)
-                                     .arg(sheet.printTitleRows()->bottomRight.row + 1));
-                }
-                manifest->printTitles.append({s, parts.join(QLatin1Char(','))});
-            }
-            if (!patch.autoFilterXml.isEmpty() || !patch.commentsPart.isEmpty()
-                || !patch.tables.isEmpty() || patch.freezeRows != 0 || patch.freezeCols != 0
-                || !patch.activeCell.isEmpty() || !patch.pageSetupXml.isEmpty()) {
-                manifest->sheets.append(patch);
-            }
-        }
+    if (sheet.autoFilter().active) {
+        patch->autoFilterXml = autoFilterXml(sheet.autoFilter());
     }
-    // Floating charts (plan section 7.2). Charts with an explicit series
-    // list (imported, usually multi-range) cannot go through QXlsx's
-    // single-range chart API — they travel in the manifest and the
-    // post-pass generates their parts and drawing anchors. rangeText charts
-    // keep the QXlsx path; StackedBar gets its grouping in the post-pass
-    // (QXlsx's grouping serialization is commented out upstream).
+    if (!sheet.comments().isEmpty()) {
+        patch->commentsPart = QStringLiteral("xl/comments%1.xml").arg(index + 1);
+        patch->commentsXml = commentsPartXml(sheet.comments());
+        QList<quint64> keys = sheet.comments().keys();
+        std::sort(keys.begin(), keys.end());
+        for (const quint64 key : std::as_const(keys)) {
+            patch->commentCells.append({qint32(key & 0xffffffffu), qint32(key >> 32)});
+        }
+        // Each VML drawing owns blocks of 1024 shape ids, numbered across
+        // the workbook; a sheet with more notes takes more blocks.
+        patch->vmlNumber = *nextVmlBlock;
+        *nextVmlBlock += int(keys.size() / 1024) + 1;
+    }
+    patch->tables = tables;
+    patch->freezeRows = sheet.freezeRows();
+    patch->freezeCols = sheet.freezeCols();
+    if (sheet.cursor().isValid() && sheet.cursor() != CellAddr{0, 0}) {
+        patch->activeCell = addrText(sheet.cursor());
+    }
+    const Sheet::PageSetup &setup = sheet.pageSetup();
+    if (setup.orientation != 0 || setup.fitToWidth != 0 || setup.fitToHeight != 0) {
+        patch->pageSetupXml = QByteArrayLiteral("<pageSetup")
+            + (setup.orientation != 0 ? QByteArrayLiteral(" orientation=\"landscape\"") : QByteArray())
+            + (setup.fitToWidth != 0 ? QByteArrayLiteral(" fitToWidth=\"") + QByteArray::number(setup.fitToWidth) + "\"" : QByteArray())
+            + (setup.fitToHeight != 0 ? QByteArrayLiteral(" fitToHeight=\"") + QByteArray::number(setup.fitToHeight) + "\"" : QByteArray())
+            + QByteArrayLiteral("/>");
+    }
+}
+
+bool patchNeeded(const PatchManifest::SheetPatch &patch)
+{
+    return !patch.cellTypes.isEmpty() || !patch.autoFilterXml.isEmpty() || !patch.commentsPart.isEmpty()
+        || !patch.tables.isEmpty() || patch.freezeRows != 0 || patch.freezeCols != 0
+        || !patch.activeCell.isEmpty() || !patch.pageSetupXml.isEmpty();
+}
+
+// Floating charts (plan section 7.2). Charts with an explicit series list
+// (imported, usually multi-range) cannot go through QXlsx's single-range
+// chart API — they travel in the manifest and the post-pass generates their
+// parts and drawing anchors. rangeText charts keep the QXlsx path;
+// StackedBar gets its grouping in the post-pass (QXlsx's grouping
+// serialization is commented out upstream).
+void writeCharts(QXlsx::Document *doc, const Workbook &wb, PatchManifest *manifest)
+{
     int qxlsxChartCount = 0;
     for (const ChartSpec &chart : wb.charts) {
         if (chart.sheet < 0 || chart.sheet >= wb.sheetCount()) {
@@ -388,8 +234,7 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
             continue;
         }
         QXlsx::Chart *qxChart =
-            worksheet->insertChart(chart.anchorRow + 1, chart.anchorCol + 1,
-                                   QSize(chart.widthPx, chart.heightPx));
+            worksheet->insertChart(chart.anchorRow + 1, chart.anchorCol + 1, QSize(chart.widthPx, chart.heightPx));
         if (qxChart == nullptr) {
             continue;
         }
@@ -418,10 +263,96 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
             manifest->charts.append(patch);
         }
     }
-    // Floating images (M39). QXlsx's insertImage re-encodes every image as
-    // PNG and sizes it from the QImage's DPI, which loses the author's
-    // format and extent, so pictures always travel in the manifest.
+}
+
+} // namespace
+
+// Builds the QXlsx model and, when `manifest` is non-null, the post-pass
+// patch list for everything QXlsx cannot write (or writes wrongly).
+std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *manifest, QString *error)
+{
+    Q_UNUSED(error);
+    auto doc = std::make_unique<QXlsx::Document>();
+    // QXlsx guesses on write: off, even though the honest cell writer below
+    // never routes text through the guessing write(QVariant).
+    doc->workbook()->setStringsToHyperlinksEnabled(false);
+    doc->workbook()->setStringsToNumbersEnabled(false);
+    doc->workbook()->setHtmlToRichStringEnabled(false);
+    // The engine style table -> QXlsx formats, built once. AGENT-NOTE: the
+    // v1 writer rebuilt the Format per cell; with full field coverage that
+    // is the same mapping work a hundred thousand times on a big sheet.
+    QHash<qint32, QXlsx::Format> formats;
+    const FormatFor formatFor = [&wb, &formats](qint32 styleId) -> QXlsx::Format {
+        if (styleId == 0 || wb.style(styleId) == nullptr) {
+            return {};
+        }
+        if (!formats.contains(styleId)) {
+            formats.insert(styleId, formatFromStyle(*wb.style(styleId)));
+        }
+        return formats.value(styleId);
+    };
+    HiddenLists lists{hiddenListsSheetName(wb), {}};
+    int nextVmlBlock = 1;
+    for (qint32 s = 0; s < wb.sheetCount(); ++s) {
+        const Sheet &sheet = wb.sheetAt(s);
+        if (s == 0 && !doc->sheetNames().isEmpty()) {
+            doc->renameSheet(doc->sheetNames().first(), sheet.name());
+        } else {
+            doc->addSheet(sheet.name());
+        }
+        doc->selectSheet(sheet.name());
+        auto *worksheet = static_cast<QXlsx::Worksheet *>(doc->sheet(sheet.name()));
+        if (sheet.isHidden()) {
+            worksheet->setSheetState(QXlsx::AbstractSheet::SS_Hidden);
+        }
+        QHash<quint64, QString> headerText;
+        QList<TableSpec> tables;
+        for (const TableSpec &table : sheet.tables()) {
+            tables.append(tableForFile(wb, s, table, &headerText));
+        }
+        // QXlsx's sheet part naming is deterministic (document order); the
+        // post-pass asserts it before touching anything.
+        PatchManifest::SheetPatch patch;
+        patch.sheetPart = QStringLiteral("xl/worksheets/sheet%1.xml").arg(s + 1);
+        writeSheetCells(worksheet, sheet, formatFor, headerText, &patch);
+        for (const CellRange &merge : sheet.merges()) {
+            doc->mergeCells(QXlsx::CellRange(merge.topLeft.row + 1, merge.topLeft.col + 1,
+                                             merge.bottomRight.row + 1, merge.bottomRight.col + 1));
+        }
+        for (const qint32 col : sheet.sizedColumns()) {
+            worksheet->setColumnWidth(col + 1, col + 1, pxToCharWidth(sheet.columnWidth(col)));
+        }
+        for (const qint32 row : sheet.sizedRows()) {
+            worksheet->setRowHeight(row + 1, row + 1, pxToPt(sheet.rowHeight(row)));
+        }
+        writeValidations(worksheet, wb, sheet, &lists);
+        writeCondFormats(worksheet, sheet);
+        fillSheetPatch(sheet, s, tables, &nextVmlBlock, &patch);
+        if (manifest != nullptr && patchNeeded(patch)) {
+            manifest->sheets.append(patch);
+        }
+    }
+    // Lists too long for Excel's inline form live on a hidden sheet AFTER
+    // the user's sheets, so no sheet index — print names, scopes, the
+    // active tab, the post-pass's part names — moves.
+    if (!lists.columns.isEmpty()) {
+        doc->addSheet(lists.sheetName);
+        doc->selectSheet(lists.sheetName);
+        auto *listSheet = static_cast<QXlsx::Worksheet *>(doc->sheet(lists.sheetName));
+        listSheet->setSheetState(QXlsx::AbstractSheet::SS_Hidden);
+        for (qsizetype col = 0; col < lists.columns.size(); ++col) {
+            const QStringList &items = lists.columns.at(col);
+            for (qsizetype row = 0; row < items.size(); ++row) {
+                listSheet->writeString(int(row) + 1, int(col) + 1, encodeXString(items.at(row)));
+            }
+        }
+    }
+    writeCharts(doc.get(), wb, manifest);
     if (manifest != nullptr) {
+        // Floating images (M39). QXlsx's insertImage re-encodes every image
+        // as PNG and sizes it from the QImage's DPI, which loses the
+        // author's format and extent, so pictures always travel in the
+        // manifest.
         for (const ImageSpec &image : wb.images) {
             if (image.sheet < 0 || image.sheet >= wb.sheetCount() || !image.isValid()) {
                 continue;
@@ -431,13 +362,14 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
             patch.sheetPart = QStringLiteral("xl/worksheets/sheet%1.xml").arg(image.sheet + 1);
             manifest->images.append(patch);
         }
-    }
-
-    // Named ranges: the canonical text form is already the xlsx spelling
-    // ("Sheet1!$A$1:$A$5"), so the workbook's own defineName takes it as is.
-    const QHash<QString, RangeRef> &names = wb.namedRanges();
-    for (auto it = names.constBegin(); it != names.constEnd(); ++it) {
-        static_cast<void>(doc->workbook()->defineName(it.key(), rangeRefText(it.value())));
+        manifest->definedNames = definedNamesForFile(wb);
+        manifest->source = wb.source;
+    } else {
+        // No post-pass: the workbook range names go through QXlsx itself.
+        const QHash<QString, RangeRef> &names = wb.namedRanges();
+        for (auto it = names.constBegin(); it != names.constEnd(); ++it) {
+            static_cast<void>(doc->workbook()->defineName(it.key(), rangeRefText(it.value())));
+        }
     }
     // The write loop selected every sheet in turn; restore the engine's
     // active tab unconditionally, or the file opens on the LAST sheet.
@@ -448,8 +380,9 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
 std::unique_ptr<QXlsx::Document> writeXlsx(const Workbook &wb, QString *error)
 {
     // No post-pass without a file: the returned document carries everything
-    // QXlsx has a model for (which now includes validations and conditional
-    // formats) but not the manifest-only features (autofilter, comments).
+    // QXlsx has a model for (which includes validations and conditional
+    // formats) but none of the manifest-only parts (autofilter, comments,
+    // tables, typed error cells, scoped names, properties, …).
     return buildXlsx(wb, nullptr, error);
 }
 
@@ -460,17 +393,28 @@ bool writeXlsxFile(const Workbook &wb, const QString &path, QString *error)
     if (doc == nullptr) {
         return false;
     }
-    if (!doc->saveAs(path)) {
+    QBuffer raw;
+    raw.open(QIODevice::WriteOnly);
+    if (!doc->saveAs(&raw)) {
         if (error != nullptr) {
-            *error = QStringLiteral("cannot write %1").arg(path);
+            *error = QStringLiteral("cannot build the package for %1").arg(path);
         }
         return false;
     }
-    // The manifest-only parts land after QXlsx finished the package.
-    if ((!manifest.sheets.isEmpty() || !manifest.charts.isEmpty()
-         || !manifest.images.isEmpty() || !manifest.printAreas.isEmpty()
-         || !manifest.printTitles.isEmpty())
-        && !applyPatchManifest(path, manifest, error)) {
+    QByteArray package = raw.data();
+    // The post-pass always runs: at the least it replaces QXlsx's document
+    // properties ("Qt Xlsx Library", "Microsoft Excel").
+    if (!applyPatchManifest(&package, manifest, error)) {
+        return false;
+    }
+    // AGENT-GUARD: one atomic write of the finished bytes. The old save
+    // wrote QXlsx's package to `path` and rewrote it in place, so a failing
+    // post-pass left the user's file half-done.
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(package) != package.size() || !file.commit()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("cannot write %1: %2").arg(path, file.errorString());
+        }
         return false;
     }
     return true;

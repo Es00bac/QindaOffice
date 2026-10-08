@@ -5,6 +5,7 @@
 
 #include "xlsx_read_xml.h"
 
+#include "xlsx_formula.h"
 #include "xlsx_parts.h"
 
 #include "workbook.h"
@@ -18,7 +19,9 @@ namespace QindaOffice::Calc::IO {
 
 namespace {
 
-QStringList validationListItems(const QString &formula1, Workbook *wb, qint32 sheetIndex)
+// An inline list's items; empty for a list that names a range (its
+// source is kept and resolveValidationLists fills the items later).
+QStringList validationListItems(const QString &formula1)
 {
     QStringList items;
     if (formula1.startsWith(QLatin1Char('"'))) {
@@ -33,36 +36,12 @@ QStringList validationListItems(const QString &formula1, Workbook *wb, qint32 sh
         }
         return items;
     }
-    // Range reference: resolved to the current values at import (the live
-    // link is lost — documented D-034).
-    const QString clean = formula1;
-    const int bang = clean.indexOf(QLatin1Char('!'));
-    const std::optional<CellRange> range = rangeFromText(clean.mid(bang + 1));
-    if (!range.has_value()) {
-        return items;
-    }
-    qint32 sheet = sheetIndex;
-    if (bang > 0) {
-        QString sheetName = clean.left(bang);
-        sheetName.remove(QLatin1Char('\''));
-        const qint32 named = wb->sheetIndex(sheetName);
-        if (named < 0) {
-            return items;
-        }
-        sheet = named;
-    }
-    const QVector<QPair<CellAddr, Value>> cells = wb->nonBlankCellsIn(sheet, *range);
-    for (const auto &[addr, value] : cells) {
-        Q_UNUSED(addr);
-        items.append(toText(value));
-    }
     return items;
 }
 
 } // namespace
 
-QList<ValidationRule> readValidations(const QByteArray &xml, Workbook *wb, qint32 sheetIndex,
-                                      int *skipped)
+QList<ValidationRule> readValidations(const QByteArray &xml, int *skipped)
 {
     QList<ValidationRule> out;
     QXmlStreamReader reader(xml);
@@ -94,8 +73,14 @@ QList<ValidationRule> readValidations(const QByteArray &xml, Workbook *wb, qint3
             usable = false;
         } else if (type == QLatin1String("list")) {
             rule.kind = ValidationRule::Kind::List;
-            rule.list = validationListItems(formulas.value(0), wb, sheetIndex);
-            usable = !rule.list.isEmpty();
+            const QString source = formulas.value(0).trimmed();
+            rule.list = validationListItems(source);
+            if (!source.startsWith(QLatin1Char('"'))) {
+                // A range or a name: kept as the list's live source (M61,
+                // D-069 — written back as is), resolved after the load.
+                rule.listSource = formulaFromFile(source.startsWith(QLatin1Char('=')) ? source.mid(1) : source);
+            }
+            usable = !rule.list.isEmpty() || !rule.listSource.isEmpty();
         } else if (type == QLatin1String("whole") || type == QLatin1String("decimal")) {
             // An absent operator IS between (writers omit the default).
             if (!op.isEmpty() && op != QLatin1String("between")) {
@@ -345,60 +330,6 @@ void readSheetViews(const QByteArray &xml, Sheet *sheet)
             setup.fitToWidth = attributes.value(QLatin1String("fitToWidth")).toInt();
             setup.fitToHeight = attributes.value(QLatin1String("fitToHeight")).toInt();
             sheet->setPageSetup(setup);
-        }
-    }
-}
-
-// _xlnm built-in names (Print_Area / Print_Titles) are SHEET-LOCAL fields,
-// not user names — they ride localSheetId and never enter the formula name
-// table. A rows title spells "$1:$1", a cols title "$A:$A".
-void readPrintNames(const QByteArray &workbookXml, Workbook *wb)
-{
-    QXmlStreamReader reader(workbookXml);
-    while (!reader.atEnd()) {
-        if (reader.readNext() != QXmlStreamReader::StartElement
-            || reader.name() != QLatin1String("definedName")) {
-            continue;
-        }
-        const auto attributes = reader.attributes();
-        const QString name = attributes.value(QLatin1String("name")).toString();
-        if (!name.startsWith(QLatin1String("_xlnm."), Qt::CaseInsensitive)) {
-            reader.readElementText(); // consume the body
-            continue;
-        }
-        const int sheetId = attributes.value(QLatin1String("localSheetId")).toInt();
-        const QString body = reader.readElementText();
-        if (sheetId < 0 || sheetId >= wb->sheetCount()) {
-            continue;
-        }
-        // Strip the sheet qualifier: "Sheet1!$A$1:$D$10" → the range.
-        const int bang = body.indexOf(QLatin1Char('!'));
-        const QString refText = body.mid(bang + 1);
-        Sheet &sheet = wb->sheetAt(sheetId);
-        if (name.compare(QLatin1String("_xlnm.Print_Area"), Qt::CaseInsensitive) == 0) {
-            if (const std::optional<CellRange> range = rangeFromText(refText)) {
-                sheet.setPrintArea(*range);
-            }
-        } else if (name.compare(QLatin1String("_xlnm.Print_Titles"), Qt::CaseInsensitive) == 0) {
-            // Rows: "$1:$1" / "1:1"; columns: "$A:$A" / "A:A".
-            static const QRegularExpression rowsPattern(QStringLiteral("^\\$?(\\d+):\\$?(\\d+)$"));
-            static const QRegularExpression colsPattern(
-                QStringLiteral("^\\$?([A-Za-z]+):\\$?([A-Za-z]+)$"));
-            const auto rowsMatch = rowsPattern.match(refText);
-            const auto colsMatch = colsPattern.match(refText);
-            if (rowsMatch.hasMatch()) {
-                const qint32 first = rowsMatch.captured(1).toInt() - 1;
-                const qint32 last = rowsMatch.captured(2).toInt() - 1;
-                sheet.setPrintTitles(CellRange{{first, 0}, {last, Sheet::kMaxCols - 1}},
-                                     sheet.printTitleCols());
-            } else if (colsMatch.hasMatch()) {
-                const std::optional<qint32> first = colFromName(colsMatch.captured(1));
-                const std::optional<qint32> last = colFromName(colsMatch.captured(2));
-                if (first.has_value() && last.has_value()) {
-                    sheet.setPrintTitles(sheet.printTitleRows(),
-                                         CellRange{{0, *first}, {Sheet::kMaxRows - 1, *last}});
-                }
-            }
         }
     }
 }

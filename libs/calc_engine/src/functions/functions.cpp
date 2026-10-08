@@ -31,6 +31,12 @@ const QHash<QString, FunctionSpec> &functionRegistry()
         registerSubtotalFunctions(r);
         registerFinancialFunctions(r);
         registerFinancialExtraFunctions(r);
+        registerFinancialMoreFunctions(r);
+        registerStatisticalMoreFunctions(r);
+        registerMathMoreFunctions(r);
+        registerLookupMoreFunctions(r);
+        registerTextMoreFunctions(r);
+        registerDateMoreFunctions(r);
         return r;
     }();
     return registry;
@@ -157,6 +163,12 @@ bool criteriaMatches(const Value &cell, const QString &rawCriteria)
             bool numOk = false;
             const double num = rest.toDouble(&numOk);
             if (numOk) {
+                // A blank is not a number: it fails every numeric comparison
+                // except "not equal" (Excel's COUNTIF(range,"<1") skips
+                // blanks; the old coercion counted them as 0 — M61).
+                if (isBlank(cell)) {
+                    return op.prefix == QLatin1String("<>");
+                }
                 const std::optional<double> cellNum = toNumber(cell);
                 if (!cellNum.has_value()) {
                     // Excel: "<>5" counts TEXT cells as not-equal; only
@@ -189,6 +201,10 @@ bool criteriaMatches(const Value &cell, const QString &rawCriteria)
     if (criteria.contains(QLatin1Char('*')) || criteria.contains(QLatin1Char('?'))
         || criteria.contains(QLatin1Char('~'))) {
         return textMatchesWithWildcards(toText(cell), criteria);
+    }
+    // An error cell matches its own spelling ("#N/A"), as in Excel (M61).
+    if (const auto *err = std::get_if<Err>(&cell)) {
+        return QString::compare(errText(*err), criteria, Qt::CaseInsensitive) == 0;
     }
     // Numeric criterion coerces numeric text ("5" matches 5).
     if (isText(cell) && isText(criterionValue)) {

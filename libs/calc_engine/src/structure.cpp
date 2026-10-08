@@ -86,7 +86,10 @@ struct Band {
     if (ref.sheet.isEmpty()) {
         return ownerIsEdited;
     }
-    return ref.sheet.compare(editedSheetName, Qt::CaseInsensitive) == 0;
+    // AGENT-GUARD: RangeRef.sheet keeps the file's spelling, quotes
+    // included ('Q1 Sales'); comparing it raw left every reference to a
+    // quoted sheet unmoved by an insert (M61).
+    return unquotedSheetName(ref.sheet).compare(editedSheetName, Qt::CaseInsensitive) == 0;
 }
 
 // Adjusts a reference in place; false means the reference died (#REF!).
@@ -197,6 +200,52 @@ void rewriteNames(Workbook &book, const StructureEdit &edit)
         }
         if (!(ref.range == target.range)) {
             book.defineName(name, ref);
+        }
+    }
+    // Scoped, constant and formula names (D-069) follow like formulas; an
+    // unqualified reference in a sheet-scoped name means its own sheet.
+    QList<DefinedName> defined = book.definedNames();
+    bool touched = false;
+    for (DefinedName &entry : defined) {
+        if (!entry.ast) {
+            continue; // kept verbatim; the engine cannot see its references
+        }
+        const NodePtr adjusted = adjustNode(entry.ast, edit, entry.sheet == edit.sheet, editedSheetName);
+        if (adjusted != entry.ast) {
+            entry.ast = adjusted;
+            entry.formula = nodeText(adjusted);
+            touched = true;
+        }
+    }
+    if (touched) {
+        book.setDefinedNames(defined);
+    }
+}
+
+// A list validation that names a range (D-069) keeps that live source for
+// the file; it moves with the edit like a formula reference, and a source
+// whose range is removed is dropped (the rule keeps its last items).
+void rewriteValidationSources(Workbook &book, const StructureEdit &edit)
+{
+    const QString editedSheetName = book.sheetName(edit.sheet);
+    for (qint32 s = 0; s < book.sheetCount(); ++s) {
+        QList<ValidationRule> rules = book.sheetAt(s).validations();
+        bool touched = false;
+        for (ValidationRule &rule : rules) {
+            const ParseResult parsed = parseFormula(rule.listSource);
+            if (rule.listSource.isEmpty() || !parsed.root || parsed.root->kind != Node::Kind::Ref) {
+                continue;
+            }
+            RangeRef ref = parsed.root->ref;
+            if (!adjustRef(ref, edit, s == edit.sheet, editedSheetName)) {
+                rule.listSource.clear();
+            } else {
+                rule.listSource = rangeRefText(ref);
+            }
+            touched = true;
+        }
+        if (touched) {
+            book.sheetAt(s).setValidations(rules);
         }
     }
 }
@@ -427,6 +476,7 @@ void applyStructureEdit(Workbook &book, const StructureEdit &edit)
     // deleted, which simply disappear with their cells.
     rewriteFormulas(book, edit);
     rewriteNames(book, edit);
+    rewriteValidationSources(book, edit);
     rewriteCharts(book, edit);
     rewriteImages(book, edit);
     moveSheetContents(book.sheetAt(edit.sheet), edit);

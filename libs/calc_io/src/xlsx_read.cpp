@@ -1,14 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The xlsx read half of the QXlsx <-> calc_engine bridge (split out of the
 // old xlsx_bridge.cpp in M33): sheets, cells, shared-formula shifting,
-// styles, geometry, merges and defined names. Style mapping and colour
-// resolution live in xlsx_style.*.
+// styles, geometry and merges. Style mapping and colour resolution live in
+// xlsx_style.*. Since M61 (D-069) literal values come typed straight from
+// the package (xlsx_read_cells), formulas lose Excel's _xlfn. prefixes on
+// the way in (xlsx_formula), a formula the engine cannot parse stays a
+// formula, and the workbook-level parts — defined names, the theme, the
+// document properties — are read by xlsx_read_book.
 
 #include "xlsx_bridge.h"
 
+#include "xlsx_formula.h"
 #include "xlsx_package.h"
+#include "xlsx_parts.h"
+#include "xlsx_read_cells.h"
 #include "xlsx_read_xml.h"
 #include "xlsx_style.h"
+#include "xlsx_text.h"
 
 #include <QElapsedTimer>
 #include <QLoggingCategory>
@@ -25,6 +33,8 @@
 #include <xlsxzipreader_p.h>
 
 #include <QXmlStreamReader>
+
+#include <optional>
 
 namespace QindaOffice::Calc::IO {
 
@@ -79,9 +89,32 @@ qreal ptToPx(qreal pt)
     return pt * 96.0 / 72.0;
 }
 
+// The value of a literal cell when the package itself is not at hand
+// (readXlsx on a caller's QXlsx::Document): QXlsx's cell type says how to
+// read the string it kept. With the package, xlsx_read_cells types every
+// cell instead (inline strings with every run, ISO dates, …).
 Value valueFromCell(const std::shared_ptr<QXlsx::Cell> &cell, bool date1904)
 {
     const QVariant v = cell->value();
+    if (v.metaType().id() == QMetaType::QString) {
+        const QString text = v.toString();
+        switch (cell->cellType()) {
+        case QXlsx::Cell::ErrorType:
+            return errorFromFile(text);
+        case QXlsx::Cell::NumberType:
+        case QXlsx::Cell::CustomType: {
+            // No t attribute: how Excel writes every number.
+            bool ok = false;
+            const double number = text.trimmed().toDouble(&ok);
+            if (ok) {
+                return number;
+            }
+            return text.isEmpty() ? Value() : Value(text);
+        }
+        default:
+            return decodeXString(text);
+        }
+    }
     switch (v.metaType().id()) {
     case QMetaType::Bool:
         return v.toBool();
@@ -89,8 +122,6 @@ Value valueFromCell(const std::shared_ptr<QXlsx::Cell> &cell, bool date1904)
     case QMetaType::Int:
     case QMetaType::LongLong:
         return v.toDouble();
-    case QMetaType::QString:
-        return v.toString();
     case QMetaType::QDateTime:
     case QMetaType::QDate: {
         const QDate date = v.metaType().id() == QMetaType::QDate
@@ -113,46 +144,17 @@ Value valueFromCell(const std::shared_ptr<QXlsx::Cell> &cell, bool date1904)
     }
 }
 
-// AGENT-NOTE: QXlsx parses <definedName> into WorkbookPrivate::definedNamesList
-// but exposes no public reader for it (AbstractOOXmlFile::d_ptr is protected),
-// so the names are read straight out of xl/workbook.xml. ZipReader is QXlsx's
-// own zip front end; it is a private header but a self-contained class, and
-// the library is vendored and built here (third_party is ours to include).
-// Writing goes the public way, through Workbook::defineName().
-void readDefinedNames(const QString &path, Workbook *out)
+// Installs a formula read from the file, whatever the engine can make of it.
+// AGENT-NOTE (D-069): a formula the parser cannot read — a structured table
+// reference, the space intersection operator — stays a FORMULA: its text
+// kept for the formula bar and the file, its value #NAME? (honest: the
+// engine cannot compute it; Excel recomputes on open). It used to become the
+// TEXT "=…", which the writer would now save as a string, losing it.
+void installFileFormula(Workbook *out, qint32 sheet, const CellAddr &addr, const QString &text)
 {
-    QXlsx::ZipReader zip(path);
-    if (!zip.exists()) {
-        return;
-    }
-    const QByteArray xml = zip.fileData(QStringLiteral("xl/workbook.xml"));
-    if (xml.isEmpty()) {
-        return;
-    }
-    QXmlStreamReader reader(xml);
-    while (!reader.atEnd()) {
-        if (reader.readNext() != QXmlStreamReader::StartElement
-            || reader.name() != QLatin1String("definedName")) {
-            continue;
-        }
-        const QString name = reader.attributes().value(QLatin1String("name")).toString();
-        const QString formula = reader.readElementText();
-        if (name.isEmpty() || formula.isEmpty()) {
-            continue;
-        }
-        // Print areas and similar built-ins are spelled _xlnm.*; they are
-        // not user names and the engine has nothing to do with them (M37
-        // reads them into per-sheet print fields).
-        if (name.startsWith(QLatin1String("_xlnm"), Qt::CaseInsensitive)) {
-            continue;
-        }
-        // The engine's own reference parser understands the xlsx spelling
-        // (sheet qualifier, $ anchors, quoted sheet names).
-        ParseResult parsed = parseFormula(formula);
-        if (parsed.root && parsed.root->kind == Node::Kind::Ref) {
-            out->defineName(name, parsed.root->ref);
-        }
-    }
+    const ParseResult parsed = parseFormula(text);
+    const bool parses = parsed.error.isEmpty() && parsed.root;
+    out->installFormula(sheet, addr, parses ? parsed.root : Node::makeError(Err::Name), text);
 }
 
 // The theme palette for the whole read, from xl/theme/theme1.xml when the
@@ -187,6 +189,22 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
         }
         return false;
     }
+    // Literal values, typed from the package itself (xlsx_read_cells.h says
+    // why QXlsx's own value model cannot be used for them).
+    std::optional<QXlsx::ZipReader> package;
+    QVector<QString> sheetParts;
+    QStringList sharedStrings;
+    if (!packagePath.isEmpty()) {
+        package.emplace(packagePath);
+        sheetParts = sheetPartMap(*package);
+        QString sstPart = QStringLiteral("xl/sharedStrings.xml");
+        for (const auto &[type, target] : readRels(*package, QStringLiteral("xl/_rels/workbook.xml.rels"))) {
+            if (type.endsWith(QLatin1String("/sharedStrings"))) {
+                sstPart = resolveTarget(QStringLiteral("xl"), target);
+            }
+        }
+        sharedStrings = readSharedStrings(package->fileData(sstPart));
+    }
     // One recalc for the whole workbook, at the end (Workbook::beginBulkLoad).
     out->beginBulkLoad();
     // AGENT-NOTE: style dedup is workbook-wide and keyed by QXlsx's own
@@ -198,12 +216,25 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
         if (!doc.selectSheet(sheetIndex)) {
             continue;
         }
-        QXlsx::Worksheet *worksheet = static_cast<QXlsx::Worksheet *>(doc.sheet(names.at(sheetIndex)));
-        if (worksheet == nullptr) {
+        QXlsx::AbstractSheet *abstract = doc.sheet(names.at(sheetIndex));
+        if (abstract == nullptr) {
             continue;
         }
         Sheet &sheet = out->addSheet(names.at(sheetIndex));
-        sheet.setHidden(worksheet->sheetState() != QXlsx::AbstractSheet::SS_Visible);
+        sheet.setHidden(abstract->sheetState() != QXlsx::AbstractSheet::SS_Visible);
+        if (abstract->sheetType() != QXlsx::AbstractSheet::ST_WorkSheet) {
+            // AGENT-GUARD: a chart sheet (or dialog/macro sheet) is not a
+            // Worksheet — the old static_cast read it as one. It stays an
+            // empty sheet so every later sheet keeps its index (localSheetId,
+            // print names and the active tab count sheets by position).
+            qInfo("xlsx: sheet %d (%s) is not a worksheet; kept empty", sheetIndex,
+                  qPrintable(names.at(sheetIndex)));
+            continue;
+        }
+        auto *worksheet = static_cast<QXlsx::Worksheet *>(abstract);
+        const QHash<quint64, TypedCell> typed = package.has_value() && !sheetParts.value(sheetIndex).isEmpty()
+            ? readTypedCells(package->fileData(sheetParts.value(sheetIndex)), sharedStrings)
+            : QHash<quint64, TypedCell>();
         QElapsedTimer sheetTimer;
         sheetTimer.start();
 
@@ -232,17 +263,10 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
                 }
                 const CellAddr addr{row - 1, col - 1};
                 const QXlsx::CellFormula formula = cell->formula();
-                const QString text = formula.formulaText();
+                // Excel's _xlfn./_xlpm. spellings become the engine's.
+                const QString text = formulaFromFile(formula.formulaText());
                 if (!text.isEmpty()) {
-                    ParseResult parsed = parseFormula(text);
-                    if (!parsed.error.isEmpty() || !parsed.root) {
-                        out->setCellValue(sheetIndex, addr,
-                                          QStringLiteral("=") + text);
-                    } else {
-                        // Volatility/dependency tracking happens in setCellInput;
-                        // formulas install via the shared installer.
-                        out->installFormula(sheetIndex, addr, parsed.root, text);
-                    }
+                    installFileFormula(out, sheetIndex, addr, text);
                     if (formula.formulaType() == QXlsx::CellFormula::SharedType) {
                         sharedMasters.insert(formula.sharedIndex(),
                                              QXlsx::CellReference(row, col));
@@ -264,23 +288,40 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
                     if (masterCell == nullptr) {
                         continue;
                     }
-                    const QString masterText = masterCell->formula().formulaText();
+                    const QString masterText = formulaFromFile(masterCell->formula().formulaText());
                     if (masterText.isEmpty()) {
                         continue;
                     }
-                    ParseResult parsed = parseFormula(masterText);
+                    const qint32 dr = row - master.row();
+                    const qint32 dc = col - master.column();
+                    const ParseResult parsed = parseFormula(masterText);
                     if (!parsed.error.isEmpty() || !parsed.root) {
-                        continue;
+                        // The master is beyond the engine: shift its TEXT so
+                        // this cell keeps a formula of its own (D-069) —
+                        // dropped before M61, which emptied filled columns
+                        // such as VLOOKUP(…,$A:$C,…) on save.
+                        installFileFormula(out, sheetIndex, addr, shiftedFormulaText(masterText, dr, dc));
+                    } else {
+                        // Store the shifted text, not the master's (the
+                        // formula bar and the xlsx export read the stored
+                        // text); nodeText puts back the grouping brackets.
+                        const NodePtr shifted = shiftNode(parsed.root, dr, dc);
+                        out->installFormula(sheetIndex, addr, shifted, nodeText(shifted));
                     }
-                    const NodePtr shifted = shiftNode(parsed.root, row - master.row(),
-                                                      col - master.column());
-                    // Store the shifted text, not the master's (the formula
-                    // bar and the xlsx export read the stored text).
-                    out->installFormula(sheetIndex, addr, shifted,
-                                        nodeText(shifted));
                 } else {
-                    out->setCellValue(sheetIndex, addr,
-                                      valueFromCell(cell, date1904));
+                    Value value;
+                    if (const auto found = typed.constFind(addr.key()); found != typed.constEnd()) {
+                        value = found->value;
+                        // 1904 workbooks count days from 1904: dates move to
+                        // the engine's 1900 serials (plan section 7.2).
+                        if (date1904 && !found->isoDate && isNumber(value)
+                            && cell->format().isDateTimeFormat()) {
+                            value = std::get<double>(value) + 1462.0;
+                        }
+                    } else {
+                        value = valueFromCell(cell, date1904);
+                    }
+                    out->setCellValue(sheetIndex, addr, value);
                 }
                 const QXlsx::Format format = cell->format();
                 if (!format.isEmpty()) {
@@ -311,7 +352,7 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
         // The features QXlsx has no public model for (conditional formats,
         // validations, autofilter, comments) read straight from the package.
         if (!packagePath.isEmpty()) {
-            readSheetExtras(packagePath, out, sheetIndex, palette, &sheet);
+            readSheetExtras(packagePath, sheetIndex, palette, &sheet);
             readSheetDrawings(packagePath, out, sheetIndex);
         }
         if (qEnvironmentVariableIsSet("QQO_XLSX_TRACE")) {
@@ -322,10 +363,11 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
     }
     QElapsedTimer recalcTimer;
     recalcTimer.start();
-    // AGENT-GUARD: a final full recalc is mandatory. installFormula evaluates
-    // each cell as it loads, so a formula referencing a sheet that had not
-    // been read yet (Summary before Detail — the common layout) captured a
-    // stale 0/#REF! and no dependency edge could ever fix it afterwards.
+    // AGENT-GUARD: endBulkLoad is mandatory, and it rebuilds the dependency
+    // index before its one recalculation (M61). A formula installed while a
+    // sheet it reads had not been read yet (Summary before Detail — the
+    // common layout) recorded no edge for that reference; recalculating over
+    // the load-time index ordered such cells by hash order.
     out->endBulkLoad();
     // View state that lives outside the sheet parts: the active tab and the
     // _xlnm print names, both from xl/workbook.xml. (QXlsx's activeSheet()
@@ -351,6 +393,9 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
             readPrintNames(workbookXml, out);
         }
     }
+    // Lists sourced from a range can only be resolved once every sheet,
+    // and every formula in them, has a value.
+    resolveValidationLists(out);
     if (qEnvironmentVariableIsSet("QQO_XLSX_TRACE")) {
         qInfo("xlsx: recalcAll %lld ms", static_cast<long long>(recalcTimer.elapsed()));
     }
@@ -385,12 +430,18 @@ bool readXlsxFile(const QString &path, Workbook *out, QString *error)
         }
         return false;
     }
+    if (out == nullptr) {
+        return readXlsxImpl(doc, out, ThemePalette::officeDefault(), source, error);
+    }
+    QXlsx::ZipReader zip(source);
     // AGENT-GUARD: names BEFORE cells. installFormula() resolves a name to
     // its dependency targets at install time, so a name defined afterwards
     // leaves every formula that uses it evaluated against nothing (#NAME? at
     // best) and missing from the recalc index. readXlsx only appends sheets,
-    // so seeding the name table first is safe.
-    readDefinedNames(source, out);
+    // so seeding the name tables first is safe.
+    readDefinedNames(zip.fileData(QStringLiteral("xl/workbook.xml")), out);
+    // The theme and properties ride with the workbook to its next save.
+    out->source = readWorkbookSource(zip);
     return readXlsxImpl(doc, out, paletteForPackage(source), source, error);
 }
 

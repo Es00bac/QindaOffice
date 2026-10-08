@@ -133,6 +133,7 @@ QJsonObject validationsToJson(const QList<CalcEng::ValidationRule> &rules)
             {QStringLiteral("min"), rule.min},
             {QStringLiteral("max"), rule.max},
             {QStringLiteral("list"), QJsonArray::fromStringList(rule.list)},
+            {QStringLiteral("source"), rule.listSource},
             {QStringLiteral("message"), rule.message},
         });
     }
@@ -154,6 +155,7 @@ QList<CalcEng::ValidationRule> validationsFromJson(const QJsonObject &object)
         for (const QJsonValue &listed : item.value(QStringLiteral("list")).toArray()) {
             rule.list.append(listed.toString());
         }
+        rule.listSource = item.value(QStringLiteral("source")).toString();
         rule.message = item.value(QStringLiteral("message")).toString();
         if (rule.range.isValid()) {
             rules.append(rule);
@@ -259,6 +261,67 @@ QList<CalcEng::TableSpec> tablesFromJson(const QJsonArray &array)
         }
     }
     return tables;
+}
+
+QJsonArray definedNamesToJson(const QList<CalcEng::DefinedName> &names)
+{
+    QJsonArray array;
+    for (const CalcEng::DefinedName &name : names) {
+        array.append(QJsonObject{
+            {QStringLiteral("name"), name.name},
+            {QStringLiteral("sheet"), name.sheet},
+            {QStringLiteral("formula"), name.formula},
+            {QStringLiteral("hidden"), name.hidden},
+            {QStringLiteral("comment"), name.comment},
+        });
+    }
+    return array;
+}
+
+QList<CalcEng::DefinedName> definedNamesFromJson(const QJsonArray &array)
+{
+    QList<CalcEng::DefinedName> names;
+    for (const QJsonValue &entry : array) {
+        const QJsonObject item = entry.toObject();
+        CalcEng::DefinedName name;
+        name.name = item.value(QStringLiteral("name")).toString();
+        name.sheet = item.value(QStringLiteral("sheet")).toInt(-1);
+        name.formula = item.value(QStringLiteral("formula")).toString();
+        name.hidden = item.value(QStringLiteral("hidden")).toBool();
+        name.comment = item.value(QStringLiteral("comment")).toString();
+        if (!name.name.isEmpty()) {
+            names.append(name); // the body is parsed by Workbook::setDefinedNames
+        }
+    }
+    return names;
+}
+
+QJsonObject sourceToJson(const CalcEng::WorkbookSource &source)
+{
+    return QJsonObject{
+        {QStringLiteral("theme"), QString::fromLatin1(source.themeXml.toBase64())},
+        {QStringLiteral("title"), source.title},
+        {QStringLiteral("subject"), source.subject},
+        {QStringLiteral("creator"), source.creator},
+        {QStringLiteral("keywords"), source.keywords},
+        {QStringLiteral("description"), source.description},
+        {QStringLiteral("category"), source.category},
+        {QStringLiteral("created"), source.created.toString(Qt::ISODate)},
+    };
+}
+
+CalcEng::WorkbookSource sourceFromJson(const QJsonObject &object)
+{
+    CalcEng::WorkbookSource source;
+    source.themeXml = QByteArray::fromBase64(object.value(QStringLiteral("theme")).toString().toLatin1());
+    source.title = object.value(QStringLiteral("title")).toString();
+    source.subject = object.value(QStringLiteral("subject")).toString();
+    source.creator = object.value(QStringLiteral("creator")).toString();
+    source.keywords = object.value(QStringLiteral("keywords")).toString();
+    source.description = object.value(QStringLiteral("description")).toString();
+    source.category = object.value(QStringLiteral("category")).toString();
+    source.created = QDateTime::fromString(object.value(QStringLiteral("created")).toString(), Qt::ISODate);
+    return source;
 }
 
 } // namespace QindaOffice::Apps::QindaCalc

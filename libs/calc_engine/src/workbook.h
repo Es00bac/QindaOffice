@@ -7,10 +7,44 @@
 #include "eval.h"
 #include "sheet.h"
 
+#include <QDateTime>
+
 #include <memory>
 #include <vector>
 
 namespace QindaOffice::Calc {
+
+// A defined name the RangeRef table cannot hold (D-069): scoped to one sheet
+// (Excel's localSheetId), bound to a constant or a formula, hidden or
+// commented. The engine evaluates the body wherever it parses (`ast`), and
+// the file round-trip carries `formula` verbatim either way, so a name the
+// engine cannot evaluate is never dropped.
+struct DefinedName {
+    QString name;       // as the file spells it
+    qint32 sheet = -1;  // localSheetId: the sheet it is scoped to; -1 = workbook
+    QString formula;    // body without '=', engine spelling (_xlfn. prefixes stripped)
+    NodePtr ast;        // parsed body; null when it does not parse
+    bool hidden = false;
+    QString comment;
+    bool operator==(const DefinedName &) const = default;
+};
+
+// What the package a workbook was opened from carried that the engine does
+// not model but a save must give back (D-069, D-068 rule 2): the theme part
+// verbatim and the document properties. calc_io fills it on read and writes
+// it on save; nothing in the engine interprets it. It is document state: the
+// app's undo snapshots and recovery payload carry it like the sheets.
+struct WorkbookSource {
+    QByteArray themeXml; // xl/theme/theme1.xml as read; empty = not from a package
+    QString title;
+    QString subject;
+    QString creator;
+    QString keywords;
+    QString description;
+    QString category;
+    QDateTime created;
+    bool operator==(const WorkbookSource &) const = default;
+};
 
 // The spreadsheet document (plan section 7.2): ordered sheets, the shared
 // cell-style table, named ranges, the dependency index and the recalc
@@ -72,7 +106,8 @@ public:
     void recalcAll();
     // Bulk load: between begin and end, installFormula/setCellValue/
     // setCellInput record dependencies but do NOT recalculate; endBulkLoad
-    // runs one recalcAll. AGENT-GUARD: the per-cell recalc re-evaluated
+    // rebuilds the dependency index (references to sheets added later in
+    // the load resolve only then) and recalculates once. AGENT-GUARD: the per-cell recalc re-evaluated
     // every dependent and every volatile cell on EVERY import — a 95k-cell
     // workbook with 10k formulas took minutes to open (quadratic); one pass
     // at the end is what a load needs anyway.
@@ -86,13 +121,28 @@ public:
     // Table length including the reserved id-0 default (snapshot/undo seam).
     [[nodiscard]] qint32 styleCount() const { return qint32(m_styles.size()); }
 
-    // Named ranges (simple refs in v1).
+    // Named ranges (simple refs in v1). Names match without regard to case,
+    // as in Excel, and keep the spelling they were defined with (M61: the
+    // table used to upper-case them, so a save renamed "Total" to "TOTAL").
     void defineName(const QString &name, const RangeRef &target);
     [[nodiscard]] std::optional<RangeRef> namedRange(const QString &name) const;
     // Full table (snapshot/undo seam; defineName stays the mutation path).
     [[nodiscard]] const QHash<QString, RangeRef> &namedRanges() const { return m_names; }
     // Drops a name (structural edits delete names whose range is gone).
     bool removeName(const QString &name);
+
+    // Names beyond that table (D-069): sheet-scoped, constant and formula
+    // names, in file order. Replaces the whole list; an entry with a null
+    // `ast` has its `formula` parsed here. Callers reindex/recalc after.
+    void setDefinedNames(QList<DefinedName> names);
+    [[nodiscard]] const QList<DefinedName> &definedNames() const { return m_definedNames; }
+    // EvalHost: the body a name stands for when used on `sheet` — a name
+    // scoped to that sheet first, then a workbook-wide formula or constant
+    // name; null when the RangeRef table (namedRange) or nobody answers. A
+    // body that does not parse answers #NAME?.
+    [[nodiscard]] NodePtr nameFormula(const QString &name, qint32 sheet) const override;
+    // EvalHost: the formula text of a cell (ISFORMULA, FORMULATEXT).
+    [[nodiscard]] QString cellFormula(qint32 sheet, qint32 row, qint32 col) const override;
 
     // EvalHost implementation.
     [[nodiscard]] Value cellValue(qint32 sheet, qint32 row, qint32 col) const override;
@@ -114,6 +164,9 @@ public:
     // Floating images (M39, D-040), encoded bytes as the file carried them.
     QList<ImageSpec> images;
 
+    // The source package's theme and document properties (D-069).
+    WorkbookSource source;
+
 private:
     static Value parseLiteral(const QString &input, bool *isFormula, NodePtr *ast,
                               QString *formulaText);
@@ -122,7 +175,10 @@ private:
     QHash<QString, qint32> m_sheetIndex;
     qint32 m_activeTab = 0;
     QVector<CellStyle> m_styles;
-    QHash<QString, RangeRef> m_names;
+    QHash<QString, RangeRef> m_names;      // as spelled -> target
+    QHash<QString, QString> m_nameSpelling; // upper-case -> the key in m_names
+    QList<DefinedName> m_definedNames;
+    QHash<QString, QList<qsizetype>> m_definedIndex; // upper-case name -> entries
     DependencyGraph m_dependencies;
     bool m_bulkLoading = false;
     // Data-bar min/max per rule (keyed by rule content), cleared on every

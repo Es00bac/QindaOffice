@@ -5,6 +5,8 @@
 // budget.
 
 #include "xlsx_bridge.h"
+
+#include "calc_io_schema.h"
 #include "xlsx_package.h"
 #include "support/soffice_env.h"
 
@@ -74,6 +76,7 @@ void CalcIoTest::roundTrip()
     const QString path = dir.path() + QStringLiteral("/roundtrip.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
 
     Workbook back;
     QVERIFY2(IO::readXlsxFile(path, &back, &error), qPrintable(error));
@@ -127,6 +130,7 @@ void CalcIoTest::chartExportWritesChartPart()
     const QString path = dir.path() + QStringLiteral("/charted.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
 
     // The xlsx package must carry a chart part with the series range and
     // title (the gate QXlsx::Chart promised).
@@ -181,6 +185,7 @@ void CalcIoTest::opensInLibreOffice()
     const QString xlsx = dir.path() + QStringLiteral("/sample.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, xlsx, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(xlsx);
 
     // Convert to CSV and confirm LibreOffice evaluates the formula.
     QProcess soffice;
@@ -226,6 +231,7 @@ void CalcIoTest::largeSheetStaysResponsive()
     const QString path = dir.path() + QStringLiteral("/big.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
     Workbook back;
     QVERIFY2(IO::readXlsxFile(path, &back, &error), qPrintable(error));
     QVERIFY2(timer.elapsed() < 30000,
@@ -258,6 +264,7 @@ void CalcIoTest::namedRangesRoundTrip()
     const QString path = dir.path() + QStringLiteral("/names.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
 
     Workbook back;
     QVERIFY2(IO::readXlsxFile(path, &back, &error), qPrintable(error));
@@ -299,6 +306,7 @@ void CalcIoTest::absolutePartNamesStillOpen()
     const QString relative = dir.path() + QStringLiteral("/relative.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, relative, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(relative);
     QVERIFY(!IO::xlsxPackageHasAbsoluteTargets(relative));
 
     // Rewrite every relationship target to its absolute part name, the way

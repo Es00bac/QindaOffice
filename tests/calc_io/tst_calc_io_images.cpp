@@ -7,6 +7,8 @@
 
 #include "xlsx_bridge.h"
 
+#include "calc_io_schema.h"
+
 #include "structure.h"
 
 #include <QBuffer>
@@ -96,6 +98,7 @@ void CalcIoImagesTest::imagesRoundTrip()
     const QString path = dir.path() + QStringLiteral("/picture.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
 
     // The package shape an external consumer reads.
     const QStringList names = partNames(path);
@@ -195,6 +198,7 @@ void CalcIoImagesTest::picturesAndChartsShareOneDrawing()
     const QString path = dir.path() + QStringLiteral("/both.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
 
     const QStringList names = partNames(path);
     const QStringList drawings = names.filter(QStringLiteral("xl/drawings/drawing"));

@@ -9,10 +9,11 @@
 
 namespace QindaOffice::Calc::IO {
 
-// Applies `manifest` to the package at `path` in place. Returns false with
-// `error` set when the package does not look like QXlsx's output (a silent
-// miss would be data loss the user never hears about — D-012).
-[[nodiscard]] bool applyPatchManifest(const QString &path, const PatchManifest &manifest,
+// Applies `manifest` to a package QXlsx wrote (its bytes, rewritten in
+// place). Returns false with `error` set when the package does not look like
+// QXlsx's output (a silent miss would be data loss the user never hears
+// about — D-012). Always run: the document properties are always rewritten.
+[[nodiscard]] bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest,
                                       QString *error = nullptr);
 
 } // namespace QindaOffice::Calc::IO

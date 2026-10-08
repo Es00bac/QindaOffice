@@ -37,16 +37,25 @@ bool lexesAsCellRef(const QString &word)
     return isRefTail(s, letters);
 }
 
+// One side of a whole-row/column reference without its optional '$'
+// anchor: "$C" → "C". Excel spells absolute whole columns $A:$C and whole
+// rows $1:$3 (M61, D-069); before that those lexed as identifiers and every
+// VLOOKUP(x,$A:$C,…) failed to parse.
+QString unanchored(const QString &side)
+{
+    return side.startsWith(QLatin1Char('$')) ? side.mid(1) : side;
+}
+
 bool lexesAsWholeCol(const QString &word)
 {
-    // [A-Z]{1,3}:[A-Z]{1,3}
+    // \$?[A-Z]{1,3}:\$?[A-Z]{1,3}
     const int colon = word.indexOf(QLatin1Char(':'));
     if (colon <= 0 || colon != word.lastIndexOf(QLatin1Char(':'))) {
         return false;
     }
-    const QString a = word.left(colon);
-    const QString b = word.mid(colon + 1);
-    if (a.size() > 3 || b.size() > 3) {
+    const QString a = unanchored(word.left(colon));
+    const QString b = unanchored(word.mid(colon + 1));
+    if (a.isEmpty() || b.isEmpty() || a.size() > 3 || b.size() > 3) {
         return false;
     }
     const auto allCaps = [](const QString &x) {
@@ -69,12 +78,13 @@ bool lexesAsCellRange(const QString &word)
 
 bool lexesAsWholeRow(const QString &word)
 {
+    // \$?[0-9]+:\$?[0-9]+
     const int colon = word.indexOf(QLatin1Char(':'));
     if (colon <= 0 || colon != word.lastIndexOf(QLatin1Char(':'))) {
         return false;
     }
-    const QString a = word.left(colon);
-    const QString b = word.mid(colon + 1);
+    const QString a = unanchored(word.left(colon));
+    const QString b = unanchored(word.mid(colon + 1));
     const auto allDigits = [](const QString &x) {
         return !x.isEmpty() && std::all_of(x.begin(), x.end(), [](QChar c) { return c.isDigit(); });
     };
@@ -119,11 +129,12 @@ QVector<Token> lexFormula(const QString &input)
                     break;
                 }
             }
-            // Whole-row refs (1:3) start with digits; promote when the
-            // number is immediately followed by ':' and more digits.
-            if (i < n && input[i] == QLatin1Char(':') && i + 1 < n
-                && input[i + 1].isDigit()) {
-                int j = i + 1;
+            // Whole-row refs (1:3, 1:$3) start with digits; promote when
+            // the number is immediately followed by ':' and more digits.
+            const int anchor = i + 1 < n && input[i + 1] == QLatin1Char('$') ? 1 : 0;
+            if (i < n && input[i] == QLatin1Char(':') && i + 1 + anchor < n
+                && input[i + 1 + anchor].isDigit()) {
+                int j = i + 1 + anchor;
                 while (j < n && input[j].isDigit()) {
                     ++j;
                 }

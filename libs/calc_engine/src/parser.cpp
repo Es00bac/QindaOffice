@@ -295,28 +295,38 @@ struct Parser {
             addr.col = colFromName(letters).value_or(0);
             addr.row = digits.toInt() - 1;
         };
-        auto parseWholeCol = [](const QString &part, qint32 &col) {
-            col = colFromName(part).value_or(0);
+        // Whole columns ($A:C) and whole rows (1:$3): the '$' anchors land
+        // in the same abs flags a cell range uses, so printing and shifting
+        // treat both forms alike (M61, D-069).
+        const auto anchored = [](const QString &side) { return side.startsWith(QLatin1Char('$')); };
+        const auto bare = [&anchored](const QString &side) { return anchored(side) ? side.mid(1) : side; };
+        const bool wholeA = colon >= 0 && colFromName(bare(a)).has_value()
+            && colFromName(bare(b)).has_value();
+        const auto digits = [](const QString &x) {
+            return !x.isEmpty() && std::all_of(x.begin(), x.end(), [](QChar c) { return c.isDigit(); });
         };
-        auto parseWholeRow = [](const QString &part, qint32 &row) { row = part.toInt() - 1; };
-
-        const bool wholeA = colon >= 0 && colFromName(a).has_value()
-            && colFromName(b).has_value();
-        const bool wholeRowA = colon >= 0 && std::all_of(a.begin(), a.end(), [](QChar c) {
-                                   return c.isDigit();
-                               });
+        const bool wholeRowA = colon >= 0 && digits(bare(a)) && digits(bare(b));
         if (wholeA) {
             ref.wholeCols = true;
-            parseWholeCol(a, ref.range.topLeft.col);
-            parseWholeCol(b, ref.range.bottomRight.col);
+            ref.absCol0 = anchored(a);
+            ref.absCol1 = anchored(b);
+            ref.range.topLeft.col = colFromName(bare(a)).value_or(0);
+            ref.range.bottomRight.col = colFromName(bare(b)).value_or(0);
             ref.range.topLeft.row = 0;
             ref.range.bottomRight.row = 1048575;
             return ref;
         }
         if (wholeRowA) {
             ref.wholeRows = true;
-            parseWholeRow(a, ref.range.topLeft.row);
-            parseWholeRow(b, ref.range.bottomRight.row);
+            ref.absRow0 = anchored(a);
+            ref.absRow1 = anchored(b);
+            ref.range.topLeft.row = bare(a).toInt() - 1;
+            ref.range.bottomRight.row = bare(b).toInt() - 1;
+            // AGENT-GUARD: a whole row spans every column. The columns were
+            // left at -1 before M61, so the range was invalid and SUM(1:1)
+            // evaluated to #REF!.
+            ref.range.topLeft.col = 0;
+            ref.range.bottomRight.col = 16383;
             return ref;
         }
         parseCell(a, ref.range.topLeft, ref.absRow0, ref.absCol0);
@@ -350,113 +360,6 @@ ParseResult parseFormula(const QString &input)
     return {std::move(root), QString(), -1};
 }
 
-QString nodeText(const NodePtr &node)
-{
-    if (!node) {
-        return QString();
-    }
-    switch (node->kind) {
-    case Node::Kind::Number: {
-        QString t = QString::number(node->number, 'g', 15);
-        return t;
-    }
-    case Node::Kind::Text:
-        return QStringLiteral("\"") + QString(node->text).replace(QLatin1Char('"'),
-                                                                  QStringLiteral("\"\""))
-               + QStringLiteral("\"");
-    case Node::Kind::Bool:
-        return node->boolean ? QStringLiteral("TRUE") : QStringLiteral("FALSE");
-    case Node::Kind::Error:
-        return errText(node->error);
-    case Node::Kind::Ref:
-        return rangeRefText(node->ref);
-    case Node::Kind::Unary: {
-        const QString inner = nodeText(node->left);
-        switch (node->op) {
-        case Op::Neg: return QStringLiteral("-") + inner;
-        case Op::Pos: return QStringLiteral("+") + inner;
-        case Op::Percent: return inner + QStringLiteral("%");
-        default: return inner;
-        }
-    }
-    case Node::Kind::Binary: {
-        const QString l = nodeText(node->left);
-        const QString r = nodeText(node->right);
-        QString opText;
-        switch (node->op) {
-        case Op::Range: opText = QStringLiteral(":"); break;
-        case Op::Union: opText = QStringLiteral(","); break;
-        case Op::Add: opText = QStringLiteral("+"); break;
-        case Op::Sub: opText = QStringLiteral("-"); break;
-        case Op::Mul: opText = QStringLiteral("*"); break;
-        case Op::Div: opText = QStringLiteral("/"); break;
-        case Op::Pow: opText = QStringLiteral("^"); break;
-        case Op::Concat: opText = QStringLiteral("&"); break;
-        case Op::Eq: opText = QStringLiteral("="); break;
-        case Op::Ne: opText = QStringLiteral("<>"); break;
-        case Op::Lt: opText = QStringLiteral("<"); break;
-        case Op::Le: opText = QStringLiteral("<="); break;
-        case Op::Gt: opText = QStringLiteral(">"); break;
-        case Op::Ge: opText = QStringLiteral(">="); break;
-        default: opText = QStringLiteral("+"); break;
-        }
-        return l + opText + r;
-    }
-    case Node::Kind::Call: {
-        QString out = node->text + QStringLiteral("(");
-        for (int i = 0; i < node->args.size(); ++i) {
-            if (i > 0) out += QStringLiteral(",");
-            out += nodeText(node->args.at(i));
-        }
-        return out + QStringLiteral(")");
-    }
-    case Node::Kind::Name:
-        return node->text;
-    }
-    return QString();
-}
-
-static RangeRef shiftRef(const RangeRef &ref, qint32 dr, qint32 dc)
-{
-    RangeRef out = ref;
-    auto shiftAddr = [](CellAddr &addr, bool absRow, bool absCol, qint32 dr, qint32 dc) {
-        if (!absRow) addr.row += dr;
-        if (!absCol) addr.col += dc;
-    };
-    shiftAddr(out.range.topLeft, ref.absRow0, ref.absCol0, dr, dc);
-    shiftAddr(out.range.bottomRight, ref.absRow1, ref.absCol1, dr, dc);
-    return out;
-}
-
-NodePtr shiftNode(const NodePtr &node, qint32 dr, qint32 dc)
-{
-    if (!node) {
-        return node;
-    }
-    switch (node->kind) {
-    case Node::Kind::Number:
-    case Node::Kind::Text:
-    case Node::Kind::Bool:
-    case Node::Kind::Error:
-    case Node::Kind::Name:
-        return node;
-    case Node::Kind::Ref:
-        return Node::makeRef(shiftRef(node->ref, dr, dc));
-    case Node::Kind::Unary:
-        return Node::makeUnary(node->op, shiftNode(node->left, dr, dc));
-    case Node::Kind::Binary:
-        return Node::makeBinary(node->op, shiftNode(node->left, dr, dc),
-                                shiftNode(node->right, dr, dc));
-    case Node::Kind::Call: {
-        QVector<NodePtr> args;
-        args.reserve(node->args.size());
-        for (const NodePtr &arg : node->args) {
-            args.append(shiftNode(arg, dr, dc));
-        }
-        return Node::makeCall(node->text, std::move(args));
-    }
-    }
-    return node;
-}
+// nodeText and shiftNode live in formula_print.cpp (M61, D-069).
 
 } // namespace QindaOffice::Calc

@@ -65,27 +65,6 @@ QString drawingPartFor(const QByteArray &sheetRelsXml)
     return {};
 }
 
-// Adds a <Default Extension ContentType> for a media extension. Packages
-// carry defaults for png/jpeg already; anything else has to be declared or
-// the consumer refuses the part.
-void appendContentTypeDefault(QByteArray *contentTypesXml, const QString &extension,
-                              const QString &contentType)
-{
-    const QByteArray probe = QByteArrayLiteral("Extension=\"") + extension.toUtf8()
-        + QByteArrayLiteral("\"");
-    if (contentTypesXml->contains(probe)) {
-        return;
-    }
-    const QByteArray entry = QByteArrayLiteral("<Default Extension=\"") + extension.toUtf8()
-        + QByteArrayLiteral("\" ContentType=\"") + contentType.toUtf8()
-        + QByteArrayLiteral("\"/>");
-    const int types = contentTypesXml->indexOf("<Types");
-    const int close = types >= 0 ? contentTypesXml->indexOf('>', types) : -1;
-    if (close >= 0) {
-        contentTypesXml->insert(close + 1, entry);
-    }
-}
-
 // A oneCellAnchor holding a picture: position from the anchor cell, size in
 // EMU from the spec (the author's extent, not the image's own DPI).
 QByteArray pictureAnchorXml(const QString &rid, int shapeId, const ImageSpec &spec)
@@ -93,6 +72,14 @@ QByteArray pictureAnchorXml(const QString &rid, int shapeId, const ImageSpec &sp
     QByteArray xml;
     QXmlStreamWriter writer(&xml);
     writer.writeStartElement(QStringLiteral("xdr:oneCellAnchor"));
+    // AGENT-GUARD: the anchor declares the a: and r: prefixes it uses. The
+    // drawing it lands in may be QXlsx's (a dialog chart's), whose root
+    // declares xdr and a but not r — r:embed there made the whole drawing
+    // malformed XML, and Excel dropped every object in it (M61, D-069).
+    writer.writeAttribute(QStringLiteral("xmlns:a"),
+                          QStringLiteral("http://schemas.openxmlformats.org/drawingml/2006/main"));
+    writer.writeAttribute(QStringLiteral("xmlns:r"),
+                          QStringLiteral("http://schemas.openxmlformats.org/officeDocument/2006/relationships"));
     writer.writeStartElement(QStringLiteral("xdr:from"));
     writer.writeTextElement(QStringLiteral("xdr:col"), QString::number(spec.anchorCol));
     writer.writeTextElement(QStringLiteral("xdr:colOff"), QStringLiteral("0"));

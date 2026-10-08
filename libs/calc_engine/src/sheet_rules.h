@@ -110,6 +110,11 @@ struct ValidationRule {
     double min = 0;
     double max = 0;
     QStringList list;   // Kind::List
+    // Kind::List read from a file whose list names a range or a name
+    // ("Lists!$A$1:$A$3", no '='): the live source the file keeps. Entries
+    // are still checked against `list` (the source's values at load); a
+    // save writes the source back. Empty for a typed list (M61, D-069).
+    QString listSource;
     QString message;    // shown when input is refused; a default is used when empty
     bool operator==(const ValidationRule &) const = default;
 };

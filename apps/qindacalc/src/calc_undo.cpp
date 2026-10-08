@@ -54,6 +54,8 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
         }
     }
     snap.names = workbook.namedRanges();
+    snap.definedNames = workbook.definedNames();
+    snap.source = workbook.source;
     snap.charts = workbook.charts;
     snap.images = workbook.images;
     return snap;
@@ -102,6 +104,10 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
     for (auto it = snapshot.names.constBegin(); it != snapshot.names.constEnd(); ++it) {
         fresh.defineName(it.key(), it.value());
     }
+    // AGENT-GUARD: names before the dependency index below — a formula
+    // using a formula name depends on what the name's body references.
+    fresh.setDefinedNames(snapshot.definedNames);
+    fresh.source = snapshot.source;
     fresh.charts = snapshot.charts;
     fresh.images = snapshot.images;
 

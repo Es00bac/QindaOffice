@@ -88,7 +88,8 @@ void Workbook::rebuildSheetIndex()
 
 bool Workbook::removeName(const QString &name)
 {
-    return m_names.remove(name.toUpper()) > 0;
+    const QString spelled = m_nameSpelling.take(name.toUpper());
+    return !spelled.isEmpty() && m_names.remove(spelled) > 0;
 }
 
 void Workbook::reindexAll()
@@ -236,7 +237,14 @@ void Workbook::installFormula(qint32 sheet, const CellAddr &addr, const NodePtr 
 void Workbook::endBulkLoad()
 {
     m_bulkLoading = false;
-    recalcAll();
+    // AGENT-GUARD (M61, D-069): rebuild the dependency index, not just the
+    // values. A formula installed during the load resolved its sheet
+    // references against the sheets that existed THEN — Summary reading
+    // Detail, which is read later, recorded no edge at all — so recalcAll
+    // over that index ordered such cells by hash order: a real workbook
+    // opened with a different set of #DIV/0! cells on every run, and editing
+    // Detail afterwards never reached Summary.
+    reindexAll();
 }
 
 void Workbook::recalc(const QSet<CellKey> &edited)
@@ -298,12 +306,66 @@ const CellStyle *Workbook::style(qint32 id) const
 
 void Workbook::defineName(const QString &name, const RangeRef &target)
 {
-    m_names.insert(name.toUpper(), target);
+    removeName(name); // a redefinition may change the spelling's case
+    m_names.insert(name, target);
+    m_nameSpelling.insert(name.toUpper(), name);
+}
+
+void Workbook::setDefinedNames(QList<DefinedName> names)
+{
+    m_definedIndex.clear();
+    for (qsizetype i = 0; i < names.size(); ++i) {
+        DefinedName &entry = names[i];
+        if (!entry.ast && !entry.formula.isEmpty()) {
+            const ParseResult parsed = parseFormula(entry.formula);
+            if (parsed.error.isEmpty()) {
+                entry.ast = parsed.root;
+            }
+        }
+        m_definedIndex[entry.name.toUpper()].append(i);
+    }
+    m_definedNames = std::move(names);
+}
+
+NodePtr Workbook::nameFormula(const QString &name, qint32 sheet) const
+{
+    const auto found = m_definedIndex.constFind(name.toUpper());
+    if (found == m_definedIndex.constEnd()) {
+        return {};
+    }
+    // Excel's precedence: the name scoped to the sheet the formula lives on
+    // hides a workbook-wide one of the same name.
+    const auto bodyOf = [](const DefinedName &entry) {
+        return entry.ast ? entry.ast : Node::makeError(Err::Name);
+    };
+    for (const qsizetype index : found.value()) {
+        if (m_definedNames.at(index).sheet == sheet) {
+            return bodyOf(m_definedNames.at(index));
+        }
+    }
+    if (m_nameSpelling.contains(name.toUpper())) {
+        return {}; // a plain workbook range: namedRange() answers
+    }
+    for (const qsizetype index : found.value()) {
+        if (m_definedNames.at(index).sheet < 0) {
+            return bodyOf(m_definedNames.at(index));
+        }
+    }
+    return {};
+}
+
+QString Workbook::cellFormula(qint32 sheet, qint32 row, qint32 col) const
+{
+    if (sheet < 0 || sheet >= qint32(m_sheets.size())) {
+        return {};
+    }
+    const Cell *cell = m_sheets.at(size_t(sheet))->cellAt({row, col});
+    return cell != nullptr && cell->ast ? cell->formula : QString();
 }
 
 std::optional<RangeRef> Workbook::namedRange(const QString &name) const
 {
-    const auto it = m_names.constFind(name.toUpper());
+    const auto it = m_names.constFind(m_nameSpelling.value(name.toUpper()));
     if (it != m_names.constEnd()) {
         return it.value();
     }

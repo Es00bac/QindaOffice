@@ -54,6 +54,8 @@ private slots:
     void sortRangeKeepsHeaderAndSinksBlanks();
     void recalcAllRefreshesOffDiagonalCells();
     void chartSeriesFollowTheEdit();
+    void quotedSheetReferencesFollowEdits();
+    void definedNamesEvaluateAndFollowEdits();
 };
 
 void CalcStructureTest::insertRowsMovesCellsAndFormulas()
@@ -316,6 +318,101 @@ void CalcStructureTest::chartSeriesFollowTheEdit()
     // Remove every data row: the series dies, and the chart goes with it.
     applyStructureEdit(book, {StructureOp::RemoveRows, 0, 2, 4});
     QCOMPARE(book.charts.size(), 0);
+}
+
+// Excel quotes sheet names with spaces ('Q1 Sales'!A1) and the parser keeps
+// that spelling on the reference, so every comparison against the sheet's
+// real name must unquote first: an insert on 'Q1 Sales' moves references
+// from other sheets, and a rename rewrites them — quoted where the new name
+// needs it (M61, D-069).
+void CalcStructureTest::quotedSheetReferencesFollowEdits()
+{
+    Workbook book;
+    book.addSheet(QStringLiteral("Q1 Sales"));
+    book.addSheet(QStringLiteral("Report"));
+    book.setCellInput(0, at(0, 0), QStringLiteral("5"));
+    book.setCellInput(1, at(0, 0), QStringLiteral("='Q1 Sales'!A1*2"));
+    QCOMPARE(numberAt(book, 1, at(0, 0)), 10.0);
+
+    applyStructureEdit(book, {StructureOp::InsertRows, 0, 0, 1});
+    QCOMPARE(formulaOf(book, 1, at(0, 0)), QStringLiteral("'Q1 Sales'!A2*2"));
+    QCOMPARE(numberAt(book, 1, at(0, 0)), 10.0);
+
+    QVERIFY(renameSheet(book, 0, QStringLiteral("Q2 Sales")));
+    QCOMPARE(formulaOf(book, 1, at(0, 0)), QStringLiteral("'Q2 Sales'!A2*2"));
+    QCOMPARE(numberAt(book, 1, at(0, 0)), 10.0);
+    QVERIFY(renameSheet(book, 0, QStringLiteral("Sales")));
+    QCOMPARE(formulaOf(book, 1, at(0, 0)), QStringLiteral("Sales!A2*2"));
+    QCOMPARE(numberAt(book, 1, at(0, 0)), 10.0);
+}
+
+namespace {
+
+QString definedBody(const Workbook &book, const QString &name, qint32 sheet = -1)
+{
+    for (const DefinedName &entry : book.definedNames()) {
+        if (entry.name == name && entry.sheet == sheet) {
+            return entry.formula;
+        }
+    }
+    return QStringLiteral("<missing>");
+}
+
+} // namespace
+
+// Defined names beyond the workbook range table (D-069): a constant, a
+// formula, a name scoped to one sheet that hides the workbook one there, a
+// name that refers to itself, one the engine cannot parse. They evaluate,
+// recalculate when what they reference changes, and follow row inserts,
+// sheet moves and sheet removal like the formulas that use them.
+void CalcStructureTest::definedNamesEvaluateAndFollowEdits()
+{
+    Workbook book;
+    book.addSheet(QStringLiteral("Data"));
+    book.addSheet(QStringLiteral("Report"));
+    for (int row = 0; row < 3; ++row) {
+        book.setCellInput(0, at(row, 0), QString::number(row + 1)); // Data!A1:A3 = 1, 2, 3
+    }
+    RangeRef total;
+    total.sheet = QStringLiteral("Data");
+    total.range = {{0, 0}, {2, 0}};
+    total.absRow0 = total.absCol0 = total.absRow1 = total.absCol1 = true;
+    book.defineName(QStringLiteral("Total"), total);
+    book.setDefinedNames({
+        DefinedName{QStringLiteral("Rate"), -1, QStringLiteral("0.5"), {}, false, {}},
+        DefinedName{QStringLiteral("Total"), 1, QStringLiteral("Data!$A$1:$A$2"), {}, false, {}},
+        DefinedName{QStringLiteral("Twice"), -1, QStringLiteral("Data!$A$3*2"), {}, false, {}},
+        DefinedName{QStringLiteral("Loop"), -1, QStringLiteral("Loop+1"), {}, false, {}},
+        DefinedName{QStringLiteral("Broken"), -1, QStringLiteral("Table1[Col]"), {}, true,
+                    QStringLiteral("kept")},
+    });
+    book.setCellInput(0, at(0, 2), QStringLiteral("=SUM(Total)"));  // Data!C1: the workbook Total
+    book.setCellInput(1, at(0, 0), QStringLiteral("=SUM(Total)"));  // Report!A1: its own Total
+    book.setCellInput(1, at(1, 0), QStringLiteral("=Twice*Rate"));
+    book.setCellInput(1, at(2, 0), QStringLiteral("=Loop"));
+    book.setCellInput(1, at(3, 0), QStringLiteral("=Broken"));
+    QCOMPARE(numberAt(book, 0, at(0, 2)), 6.0);
+    QCOMPARE(numberAt(book, 1, at(0, 0)), 3.0);
+    QCOMPARE(numberAt(book, 1, at(1, 0)), 3.0);
+    QCOMPARE(book.cellValue(1, 2, 0), Value(Err::Name)); // stops, does not recurse forever
+    QCOMPARE(book.cellValue(1, 3, 0), Value(Err::Name)); // kept, but not evaluable
+    QCOMPARE(definedBody(book, QStringLiteral("Broken")), QStringLiteral("Table1[Col]"));
+
+    // What a formula name references is a dependency of every cell using it.
+    book.setCellInput(0, at(2, 0), QStringLiteral("10"));
+    QCOMPARE(numberAt(book, 1, at(1, 0)), 10.0);
+
+    applyStructureEdit(book, {StructureOp::InsertRows, 0, 0, 1});
+    QCOMPARE(definedBody(book, QStringLiteral("Twice")), QStringLiteral("Data!$A$4*2"));
+    QCOMPARE(definedBody(book, QStringLiteral("Total"), 1), QStringLiteral("Data!$A$2:$A$3"));
+    QCOMPARE(numberAt(book, 1, at(1, 0)), 10.0);
+    QCOMPARE(numberAt(book, 1, at(0, 0)), 3.0);
+
+    QVERIFY(moveSheet(book, 1, 0)); // Report first: its scope moves with it
+    QCOMPARE(definedBody(book, QStringLiteral("Total"), 0), QStringLiteral("Data!$A$2:$A$3"));
+    QVERIFY(removeSheet(book, 0)); // Report removed: its scoped name goes too
+    QCOMPARE(definedBody(book, QStringLiteral("Total"), 0), QStringLiteral("<missing>"));
+    QCOMPARE(book.definedNames().size(), 4);
 }
 
 QTEST_MAIN(CalcStructureTest)
