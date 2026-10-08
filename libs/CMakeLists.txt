@@ -2,6 +2,8 @@
 add_subdirectory(calc_engine)
 add_subdirectory(calc_io)
 add_subdirectory(office_core)
+# Office Open XML foundation (M60, D-068): packages, XML, themes.
+add_subdirectory(office_ooxml)
 add_subdirectory(office_quick)
 add_subdirectory(office_ai)
 # Live audio to text for QindaNote's live notes (D-057).

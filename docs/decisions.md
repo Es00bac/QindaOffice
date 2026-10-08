@@ -5,6 +5,55 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-068: Native Office Open XML, mapped where modelled and preserved where not
+
+**Date:** 2026-10-08 · **Status:** accepted (owner request: "open, edit and save
+Office documents … openable in Microsoft Office … embedded images"; M60)
+
+**Context.** Word and PowerPoint files reached QindaWrite and QindaShow only
+through headless LibreOffice: `.docx` became HTML (embedded images, page
+setup, headers and footers lost on open; save went HTML → LibreOffice),
+`.pptx` became flat ODP read by a subset reader that drops most formatting.
+QindaCalc's `.xlsx` path is native (QXlsx) but rebuilds the package on every
+save, so anything it does not model is silently dropped. The owner's own
+documents (590 `.docx`, 15 `.pptx`, 29 `.xlsx` on the laptop, 96 % written by
+Microsoft Office) use tables, cell shading, headers/footers with page fields,
+lists and pictures far more than anything else.
+
+**Decision.** Every Microsoft Office format gets a native mapper built on one
+foundation library, `office_ooxml` (OPC package reader/writer, a namespace-aware
+XML tree, `RelationshipCopier`, DrawingML themes/colours, units, document
+properties). Each mapper follows three rules:
+
+1. **Map what the app models** into the app's own model (QTextDocument for
+   Write, `show_model` for Show, the workbook for Calc), both directions.
+2. **Preserve what it does not model verbatim.** The reader stores the
+   untouched XML subtree as a self-contained fragment beside the content it
+   belongs to, together with its source part; the writer re-emits it, and
+   `RelationshipCopier` carries every part it references (pictures, charts and
+   their embedded workbooks, diagrams) with fresh relationship ids. Package
+   parts the app never models (themes, settings, custom XML, fonts) are carried
+   over from the package the document was opened from.
+3. **Unchanged stays original.** Where a modelled property still has the value
+   the reader produced, the writer emits the source markup rather than a
+   re-derivation, so a document the user only partly edited keeps Word's exact
+   spelling of everything else.
+
+Writers emit ECMA-376 Transitional with Word's/PowerPoint's conventional
+prefixes and are validated against the Transitional XSDs in tests when
+`QQO_OOXML_SCHEMA_DIR` points at them. Legacy and foreign formats (`.doc`,
+`.rtf`, `.odt`, `.ppt`, `.odp`, `.xls`, `.ods`) still go through LibreOffice,
+but to the OOXML format and then through the native reader, never through
+HTML.
+
+**Consequences.** LibreOffice is no longer needed for Office formats.
+Rendering can stay approximate for preserved content (a placeholder, or the
+picture fallback Word/PowerPoint embed) without losing it on save. The
+foundation is Qt Core/Gui + KArchive only, so every mapper and its tests build
+without the desktop. Format mappers live in their own libraries
+(`office_docx`, `show_model`'s pptx reader/writer, `calc_io`) and never
+reach into an app.
+
 ## D-067: Native imported Mail Passwords have a typed read-only client bridge
 
 **Date:** 2026-10-04 · **Status:** accepted (owner recovery request)

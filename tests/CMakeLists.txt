@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 add_subdirectory(office_core)
+add_subdirectory(office_ooxml)
 add_subdirectory(office_quick)
 add_subdirectory(calc_engine)
 add_subdirectory(calc_io)
