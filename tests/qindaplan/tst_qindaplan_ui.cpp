@@ -167,6 +167,16 @@ private slots:
         QTest::qWait(200);
         QindaOffice::Test::saveGrab(scene.window, s("qindaplan_task_info"));
         QCOMPARE(dialog->property("info").toMap().value(s("name")).toString(), s("Book entertainment"));
+        // M63: the Advanced page carries Deadline and Priority.
+        QMetaObject::invokeMethod(dialog, "openFor", Q_ARG(QVariant, scene.id("Book entertainment")),
+                                  Q_ARG(QVariant, s("advanced")));
+        QObject *priority = scene.window->findChild<QObject *>(s("taskInfoPriority"));
+        QVERIFY(priority != nullptr);
+        QTRY_VERIFY(priority->property("visible").toBool());
+        QCOMPARE(priority->property("text").toString(), s("500"));
+        QVERIFY(scene.window->findChild<QObject *>(s("taskInfoDeadline")) != nullptr);
+        QTest::qWait(200);
+        QindaOffice::Test::saveGrab(scene.window, s("qindaplan_task_info_advanced"));
     }
 
     void ribbonTabsForReview()

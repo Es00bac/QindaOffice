@@ -8,6 +8,7 @@
 #include "plan_reports.h"
 #include "plan_service.h"
 #include "plan_time.h"
+#include "plan_xlsx.h"
 #include "timeline_render.h"
 
 #include <QClipboard>
@@ -84,6 +85,19 @@ QVariantMap PlanService::exportCsv(const QUrl &url) const
     fields.prepend(QStringLiteral("id"));
     const QString path = localPath(url);
     return written(path, Core::AtomicFileStore::write(path, Engine::taskSheetCsv(project(), fields, m_locale)));
+}
+
+QVariantMap PlanService::exportXlsx(const QUrl &url) const
+{
+    QStringList fields = tableFields();
+    fields.removeAll(QStringLiteral("indicators"));
+    fields.prepend(QStringLiteral("id"));
+    const QString path = localPath(url);
+    QString error;
+    if (!Engine::writeTaskSheetXlsx(project(), fields, path, m_locale, &error)) {
+        return fail(error);
+    }
+    return ok({{QStringLiteral("path"), path}});
 }
 
 QVariantMap PlanService::exportMspdi(const QUrl &url) const

@@ -109,6 +109,11 @@ public:
     // fiscal-year start (allocation keeps the total exact).
     Result setAnnual(qint64 accountId, int fiscalYear, qint64 amountMinor, qint64 classId = 0);
     [[nodiscard]] qint64 amount(qint64 accountId, int year, int month, qint64 classId = 0) const;
+    // The 12 months of fiscal year `fiscalYear` (it starts in that calendar
+    // year at the fiscal start month), first month first; writing them is
+    // one transaction and one changed() (the app's budget editor, M63).
+    [[nodiscard]] QList<qint64> fiscalYearMonths(qint64 accountId, int fiscalYear, qint64 classId = 0) const;
+    Result setFiscalYearMonths(qint64 accountId, int fiscalYear, const QList<qint64> &months, qint64 classId = 0);
     // Σ budget of an account over the months touching [from, to].
     [[nodiscard]] qint64 total(qint64 accountId, const QDate &from, const QDate &to, qint64 classId = 0) const;
 

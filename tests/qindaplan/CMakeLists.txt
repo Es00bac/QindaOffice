@@ -7,7 +7,8 @@ foreach(name IN ITEMS tst_qindaplan_service tst_qindaplan_menu_export tst_qindap
     add_executable(${name} ${name}.cpp plan_app_test_support.h)
     target_link_libraries(${name} PRIVATE qindaplan_app qindaplan_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)
-    target_compile_definitions(${name} PRIVATE QQO_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/qml_fixtures")
+    target_compile_definitions(${name} PRIVATE QQO_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/qml_fixtures"
+                                               QQO_PLAN_DATA_DIR="${PROJECT_SOURCE_DIR}/tests/plan_engine/data")
     qqo_set_strict_warnings(${name})
     qqo_desktop_runtime(${name})
     add_test(NAME ${name} COMMAND ${name})

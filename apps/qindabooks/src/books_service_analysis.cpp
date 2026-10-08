@@ -47,21 +47,39 @@ PeriodTotals periodTotals(CompanyFile &file, const QHash<qint64, AccountType> &t
     return t;
 }
 
-std::optional<ListKind> listKindFrom(const QString &key)
+// AGENT-CONTRACT (list keys, with ListsDialog.qml): the plural keys are the
+// API's ("customers", "vendors", "items", "accounts"). The singular party
+// kinds the rest of the API uses ("customer", "vendor") and the obvious
+// synonyms are accepted too — the window once sent "customer" here and
+// every import failed without a word (M63).
+std::optional<ListKind> listKindFrom(const QString &raw)
 {
-    if (key == QLatin1String("accounts")) {
-        return ListKind::Accounts;
-    }
-    if (key == QLatin1String("customers")) {
-        return ListKind::Customers;
-    }
-    if (key == QLatin1String("vendors")) {
-        return ListKind::Vendors;
-    }
-    if (key == QLatin1String("items")) {
-        return ListKind::Items;
+    const QString key = raw.trimmed().toLower();
+    for (const auto &[kind, names] :
+         {std::pair{ListKind::Accounts, QStringList{QStringLiteral("accounts"), QStringLiteral("account"),
+                                                    QStringLiteral("chart")}},
+          std::pair{ListKind::Customers, QStringList{QStringLiteral("customers"), QStringLiteral("customer")}},
+          std::pair{ListKind::Vendors, QStringList{QStringLiteral("vendors"), QStringLiteral("vendor"),
+                                                   QStringLiteral("suppliers"), QStringLiteral("supplier")}},
+          std::pair{ListKind::Items, QStringList{QStringLiteral("items"), QStringLiteral("item"),
+                                                 QStringLiteral("products"), QStringLiteral("product"),
+                                                 QStringLiteral("services")}}}) {
+        if (names.contains(key)) {
+            return kind;
+        }
     }
     return std::nullopt;
+}
+
+QString listKey(ListKind kind)
+{
+    switch (kind) {
+    case ListKind::Accounts: return QStringLiteral("accounts");
+    case ListKind::Customers: return QStringLiteral("customers");
+    case ListKind::Vendors: return QStringLiteral("vendors");
+    case ListKind::Items: return QStringLiteral("items");
+    }
+    return QStringLiteral("customers");
 }
 
 // Rule-of-thumb health of a ratio for the dashboard's colour: margins
@@ -318,9 +336,14 @@ QVariantMap BooksService::exportListCsv(const QString &kind, const QUrl &fileUrl
     }
     QVariantMap out = Format::success();
     out.insert(QStringLiteral("path"), path);
+    out.insert(QStringLiteral("kind"), listKey(*list));
     return out;
 }
 
+// AGENT-CONTRACT (result, with ListsDialog.qml): {ok, error, kind, added,
+// skipped, errors[]}. ok is false only when nothing could be imported and
+// something was wrong; rows refused next to rows added come back in
+// `errors` with ok true, so the dialog shows both.
 QVariantMap BooksService::importListCsv(const QString &kind, const QUrl &fileUrl)
 {
     CompanyFile *c = file();
@@ -333,12 +356,13 @@ QVariantMap BooksService::importListCsv(const QString &kind, const QUrl &fileUrl
     }
     QFile in(localPath(fileUrl));
     if (!in.open(QIODevice::ReadOnly)) {
-        return Format::failure(in.errorString());
+        return Format::failure(tr("%1 could not be read: %2").arg(localPath(fileUrl), in.errorString()));
     }
     const ImportReport report = ListImport::importCsv(*c, *list, in.readAll());
     QVariantMap out = report.added > 0 || report.errors.isEmpty()
         ? Format::success()
         : Format::failure(report.errors.value(0));
+    out.insert(QStringLiteral("kind"), listKey(*list));
     out.insert(QStringLiteral("added"), report.added);
     out.insert(QStringLiteral("skipped"), report.skipped);
     out.insert(QStringLiteral("errors"), report.errors);

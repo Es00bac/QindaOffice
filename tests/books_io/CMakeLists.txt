@@ -15,5 +15,13 @@ endfunction()
 
 qqo_add_books_io_test(tst_books_io_forms)
 qqo_add_books_io_test(tst_books_io_reports)
+# M63: the Excel export is read back with QXlsx (through calc_io).
+target_link_libraries(tst_books_io_reports PRIVATE calc_io)
 qqo_add_books_io_test(tst_books_io_bank_import)
 qqo_add_books_io_test(tst_books_io_export)
+# M63 (D-071): QuickBooks IIF import (lists, transactions, preview, mapping,
+# idempotence, the export round trip) and QuickBooks Online list CSVs.
+qqo_add_books_io_test(tst_books_io_iif)
+# M63 (D-071 item 7): voucher check printing (words, builder, refusals,
+# one check per page with the values where the stock expects them).
+qqo_add_books_io_test(tst_books_io_checks)

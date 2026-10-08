@@ -131,6 +131,12 @@ struct Task {
     Minutes manualFinish = kNoDate;
     ConstraintType constraint = ConstraintType::AsSoonAsPossible;
     Minutes constraintDate = kNoDate;
+    // M63: Project's Priority (0–1000, 500 = medium; leveling's tie-break
+    // in Project, kept and shown here) and Deadline (a date the task should
+    // finish by; it does not move the schedule, a finish after it is
+    // flagged as in Project).
+    int priority = 500;
+    Minutes deadline = kNoDate;
     QList<Link> predecessors;
     int percentComplete = 0;
     Minutes actualStart = kNoDate;

@@ -29,7 +29,10 @@
 // books_service_banking.cpp (registers, import, feed, rules),
 // books_service_reconcile.cpp, books_service_reports.cpp,
 // books_service_analysis.cpp (dashboard, housekeeping),
-// books_service_connections.cpp (Mercury / Stripe connections, M48).
+// books_service_connections.cpp (Mercury / Stripe connections, M48),
+// books_service_recurring.cpp, books_service_statements.cpp (statements
+// and the company logo), books_service_budgets.cpp and
+// books_service_migration.cpp (QuickBooks IIF import) (M63, D-071).
 
 #include "books_format.h"
 
@@ -112,6 +115,8 @@ public:
     Q_INVOKABLE QVariantMap createCompany(const QUrl &fileUrl, const QVariantMap &settings,
                                           const QString &templateId);
     Q_INVOKABLE QVariantMap setLockDate(const QString &isoDate, const QString &reason);
+    // The fiscal year that contains today (its first day's calendar year).
+    Q_INVOKABLE int currentFiscalYear() const;
 
     // ---- lists (books_service_lists.cpp; terms/classes/tax: books_service_tax.cpp) ----
     Q_INVOKABLE QVariantList accounts(bool includeInactive = false) const;
@@ -133,6 +138,10 @@ public:
     Q_INVOKABLE QVariantList taxRates() const;
     Q_INVOKABLE QVariantList taxAgencies() const;
     Q_INVOKABLE QVariantMap saveTaxRate(const QVariantMap &map);
+    // M63: what is owed to each agency as of a date, and paying it
+    // ({agencyId, bankAccountId, amount (text), date, memo}).
+    Q_INVOKABLE QVariantList salesTaxOwed(const QString &asOfIso) const;
+    Q_INVOKABLE QVariantMap recordSalesTaxPayment(const QVariantMap &map);
 
     // ---- documents (books_service_documents.cpp) ----
     Q_INVOKABLE QVariantList documents(const QVariantMap &filter) const;
@@ -148,12 +157,50 @@ public:
     Q_INVOKABLE QVariantMap payBills(const QVariantMap &map);
     Q_INVOKABLE QVariantList openInvoices(qint64 customerId) const;
     Q_INVOKABLE QVariantList unpaidBills(qint64 vendorId) const;
+    // A form's PDF; a check or bank-paid bill payment writes its voucher
+    // check page (M63, check_print.h).
     Q_INVOKABLE QVariantMap exportDocumentPdf(qint64 id, const QUrl &fileUrl);
     Q_INVOKABLE QVariantMap emailDocument(qint64 id);
+
+    // ---- recurring invoices (books_service_recurring.cpp; edit/delete M63) ----
     Q_INVOKABLE QVariantList recurringTemplates() const;
+    // One schedule with its template body as `document` (document() keys).
+    Q_INVOKABLE QVariantMap recurringTemplate(qint64 id) const;
+    // id 0 creates; an id with only `active` pauses/resumes (M47); an id
+    // with a schedule or a document edits (Recurring::update re-bases a
+    // changed schedule from `nextDate`).
     Q_INVOKABLE QVariantMap saveRecurring(const QVariantMap &map);
+    Q_INVOKABLE QVariantMap setRecurringActive(qint64 id, bool active);
+    Q_INVOKABLE QVariantMap deleteRecurring(qint64 id);
     Q_INVOKABLE int generateDueRecurring();
     [[nodiscard]] int dueRecurringCount() const;
+
+    // ---- statements and the company logo (books_service_statements.cpp, M63) ----
+    // {ok, customerName, email, from, to, opening(Text), closing(Text),
+    //  lines: [{date, number, kindLabel, description, amount(Text), balance(Text)}],
+    //  aging: [{label, amount, amountText}]}
+    Q_INVOKABLE QVariantMap statement(qint64 customerId, const QString &fromIso, const QString &toIso) const;
+    Q_INVOKABLE QVariantMap exportStatementPdf(qint64 customerId, const QString &fromIso, const QString &toIso,
+                                               const QUrl &fileUrl);
+    // The statement's PDF to QindaMail, as emailDocument does for invoices.
+    Q_INVOKABLE QVariantMap emailStatement(qint64 customerId, const QString &fromIso, const QString &toIso);
+    // PNG/JPEG (whatever prints); refused when it does not decode.
+    Q_INVOKABLE QVariantMap setCompanyLogo(const QUrl &fileUrl);
+    Q_INVOKABLE QVariantMap removeCompanyLogo();
+    // A data: URL for a preview; "" without a logo.
+    Q_INVOKABLE QString companyLogo() const;
+
+    // ---- budgets (books_service_budgets.cpp, M63) ----
+    // {ok, fiscalYear, monthLabels[12], rows: [{accountId, name, section,
+    //  months[12] (plain text), annual, annualText}]} for every active
+    // income and expense account.
+    Q_INVOKABLE QVariantMap budget(int fiscalYear) const;
+    // {fiscalYear, rows: [{accountId, months[12] text}]}; one transaction.
+    Q_INVOKABLE QVariantMap saveBudget(const QVariantMap &map);
+    // An annual amount split exactly into 12 months (largest remainder),
+    // and the total of 12 month texts — so the dialog never adds money.
+    Q_INVOKABLE QVariantMap budgetSpread(const QString &annualText) const;
+    Q_INVOKABLE QVariantMap budgetTotal(const QVariantList &monthTexts) const;
 
     // ---- journal (books_service_journal.cpp) ----
     Q_INVOKABLE QVariantMap postJournalEntry(const QVariantMap &map);
@@ -193,6 +240,7 @@ public:
     Q_INVOKABLE QVariantList reportCatalog() const;
     Q_INVOKABLE QVariantMap runReport(const QString &id, const QVariantMap &options) const;
     Q_INVOKABLE QVariantList drillDown(const QVariantMap &drill) const;
+    // format: "pdf" | "csv" | "xlsx" (M63; report_xlsx.h).
     Q_INVOKABLE QVariantMap exportReport(const QString &id, const QVariantMap &options, const QUrl &fileUrl,
                                          const QString &format);
     Q_INVOKABLE QVariantMap rangePreset(const QString &name) const;
@@ -208,6 +256,12 @@ public:
     Q_INVOKABLE QVariantMap exportJournalCsv(const QUrl &fileUrl);
     Q_INVOKABLE QVariantMap exportListCsv(const QString &kind, const QUrl &fileUrl);
     Q_INVOKABLE QVariantMap importListCsv(const QString &kind, const QUrl &fileUrl);
+    // ---- QuickBooks Desktop IIF (books_service_migration.cpp, M63) ----
+    // previewIif runs the whole import and rolls it back (what importIif
+    // will do); importIif makes a backup copy first, then imports as one
+    // batch. Options and result keys: books_service_migration.cpp.
+    Q_INVOKABLE QVariantMap previewIif(const QUrl &fileUrl, const QVariantMap &options = {});
+    Q_INVOKABLE QVariantMap importIif(const QUrl &fileUrl, const QVariantMap &options = {});
 
     // ---- bank and payment connections (books_service_connections.cpp, M48, D-048) ----
     // AGENT-CONTRACT (the lead's ConnectionsDialog.qml): providers are
@@ -254,10 +308,17 @@ private:
     [[nodiscard]] QVariantMap documentRow(const ::QindaOffice::Books::BusinessDocument &doc) const;
     [[nodiscard]] static QString localPath(const QUrl &url);
     bool writeFile(const QString &path, const QByteArray &bytes, QString *error) const;
+    // The per-user outbox path for a PDF named `base` (e-mail hand-offs).
+    [[nodiscard]] static QString outboxPath(const QString &base);
+    // `qindamail --attach <pdf> mailto:<to>?subject=…&body=…` through the
+    // launcher, with the notices and the result keys emailDocument returns.
+    QVariantMap mailWithAttachment(qint64 id, const QString &pdf, const QString &to, const QString &who,
+                                   const QString &subject, const QString &body);
 
     // Waits (user input blocked) for an async call's callback, ≤ timeoutMs.
     [[nodiscard]] static std::optional<QVariantMap>
     waitFor(const std::function<void(std::function<void(const QVariantMap &)>)> &start, int timeoutMs = 30000);
+    QVariantMap runIif(const QUrl &fileUrl, const QVariantMap &options, bool commit);
     // The body text of an invoice e-mail's "Pay online" line ("" without one).
     [[nodiscard]] QString payOnlineLine(qint64 documentId) const;
 

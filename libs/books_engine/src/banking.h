@@ -92,6 +92,18 @@ struct MatchSuggestion {
     int score = 0; // 0..100: amount equal (required), date and payee closeness
 };
 
+// A deposit line that is not a payment from Undeposited Funds (M63): money
+// from another account — a QuickBooks "other deposit", interest, an owner
+// contribution. A positive amount credits `accountId`; a negative one
+// (cash back, a fee taken out) debits it.
+struct DepositLine {
+    qint64 accountId = 0;
+    Money amount;
+    qint64 partyId = 0;
+    qint64 classId = 0;
+    QString memo;
+};
+
 struct RegisterEntry {
     qint64 lineId = 0;
     qint64 txnId = 0;
@@ -120,9 +132,12 @@ public:
     Result transfer(qint64 fromAccountId, qint64 toAccountId, const Money &amount, const QDate &date,
                     const QString &memo = {}, const PostOptions &options = {}, const QString &reference = {});
     // Deposits payments sitting in Undeposited Funds (by payment/sales
-    // receipt document id) into a bank account in one deposit.
+    // receipt document id) into a bank account in one deposit, together
+    // with `otherLines` (M63; the QuickBooks IIF import uses them). The
+    // total must be positive; payments or other lines may be absent.
     Result deposit(qint64 bankAccountId, const QDate &date, const QList<qint64> &paymentDocIds,
-                   const QString &memo = {}, const PostOptions &options = {});
+                   const QString &memo = {}, const PostOptions &options = {},
+                   const QList<DepositLine> &otherLines = {});
     // Payments and sales receipts still in Undeposited Funds.
     [[nodiscard]] QList<qint64> undepositedPayments() const;
 

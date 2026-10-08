@@ -34,6 +34,9 @@ Tk.Box {
             direction: Tk.Flex.Row; align: Tk.Flex.Center; gap: Tk.Theme.space.sm
             Tk.Heading { level: 2; text: qsTr("Accounting"); Tk.Flex.grow: 1 }
             Tk.Caption { visible: view.books !== null && String(view.books.lockDate).length > 0; text: qsTr("Books closed through %1").arg(view.books !== null ? view.books.lockDate : "") }
+            // M63: paying what the sales-tax tab says is owed; budgets for the chart.
+            Tk.Button { objectName: "accountsBudgets"; visible: view.tab === 0; variant: "outline"; iconName: "target"; text: qsTr("Budgets…"); onClicked: view.host.actions.trigger("booksBudgetsAction") }
+            Tk.Button { objectName: "accountsPayTax"; visible: view.tab === 2; variant: "outline"; iconName: "percent"; text: qsTr("Pay sales tax…"); onClicked: view.host.actions.trigger("booksSalesTaxPaymentAction") }
             Tk.Button { objectName: "accountsNew"; variant: "accent"; iconName: "plus"
                         text: view.tab === 0 ? qsTr("New account") : view.tab === 1 ? qsTr("Journal entry") : qsTr("New tax rate")
                         onClicked: view.tab === 0 ? view.host.actions.trigger("booksNewAccountAction")

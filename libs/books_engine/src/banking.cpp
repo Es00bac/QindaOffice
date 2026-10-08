@@ -129,7 +129,7 @@ QList<qint64> Banking::undepositedPayments() const
 }
 
 Result Banking::deposit(qint64 bankAccountId, const QDate &date, const QList<qint64> &paymentDocIds,
-                        const QString &memo, const PostOptions &options)
+                        const QString &memo, const PostOptions &options, const QList<DepositLine> &otherLines)
 {
     const std::optional<Account> bank = ChartOfAccounts(m_file).account(bankAccountId);
     if (!bank || bank->type != AccountType::Bank) {
@@ -159,8 +159,25 @@ Result Banking::deposit(qint64 bankAccountId, const QDate &date, const QList<qin
         doc.lines << line;
         total += payment->total;
     }
+    ChartOfAccounts chart(m_file);
+    for (const DepositLine &other : otherLines) {
+        if (!chart.account(other.accountId) || !other.amount.sameCurrency(m_file.money(0))) {
+            return Result::failure(ErrorCode::UnknownAccount, QStringLiteral("a deposit line needs an account"));
+        }
+        DocumentLine line;
+        line.accountId = other.accountId;
+        line.partyId = other.partyId;
+        line.classId = other.classId;
+        line.amount = other.amount;
+        line.description = other.memo;
+        doc.lines << line;
+        total += other.amount;
+    }
     if (doc.lines.isEmpty()) {
         return Result::failure(ErrorCode::Invalid, QStringLiteral("choose the payments to deposit"));
+    }
+    if (!total.isPositive()) {
+        return Result::failure(ErrorCode::Invalid, QStringLiteral("a deposit needs a positive total"));
     }
     doc.total = total;
     doc.subtotal = total;
@@ -170,7 +187,10 @@ Result Banking::deposit(qint64 bankAccountId, const QDate &date, const QList<qin
     }
     QList<PostingLine> lines{PostingLine{bankAccountId, total.minor(), 0, 0, 0, 0, 0, 0, memo}};
     for (const DocumentLine &line : std::as_const(doc.lines)) {
-        lines << PostingLine{line.accountId, 0, line.amount.minor(), line.partyId, 0, 0, 0, 0, line.description};
+        // A negative other line (cash back, a fee) is a debit.
+        const qint64 amount = line.amount.minor();
+        lines << PostingLine{line.accountId, amount < 0 ? -amount : 0, amount > 0 ? amount : 0, line.partyId,
+                             line.classId, 0, 0, 0, line.description};
     }
     if (const Result p = Ledger(m_file).postLines(doc.id, doc.kind, date, {}, memo, lines, options); !p.ok) {
         return p;

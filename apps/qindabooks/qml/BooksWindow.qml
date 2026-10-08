@@ -99,21 +99,24 @@ OfficeWindow {
         property string what: ""
         title: qsTr("Export")
         fileMode: Dialogs.FileDialog.SaveFile
-        nameFilters: what === "reportPdf" ? [qsTr("PDF (*.pdf)")] : what === "iif" ? [qsTr("QuickBooks IIF (*.iif)")] : [qsTr("CSV (*.csv)")]
+        nameFilters: what === "reportPdf" ? [qsTr("PDF (*.pdf)")] : what === "reportXlsx" ? [qsTr("Excel workbook (*.xlsx)")]
+                     : what === "iif" ? [qsTr("QuickBooks IIF (*.iif)")] : [qsTr("CSV (*.csv)")]
         onAccepted: {
-            if (what === "reportPdf" || what === "reportCsv") reports.exportTo(selectedFile, what === "reportPdf" ? "pdf" : "csv")
+            if (what === "reportPdf" || what === "reportCsv" || what === "reportXlsx")
+                reports.exportTo(selectedFile, what === "reportPdf" ? "pdf" : what === "reportXlsx" ? "xlsx" : "csv")
             else if (what === "iif") window.books.exportIif(selectedFile)
             else if (what === "journalCsv") window.books.exportJournalCsv(selectedFile)
         }
     }
-    Dialogs.FileDialog {
-        id: importListsDialog
-        property string kind: "customer"
-        title: qsTr("Import a list (CSV)")
-        fileMode: Dialogs.FileDialog.OpenFile
-        nameFilters: [qsTr("CSV (*.csv)")]
-        onAccepted: window.books.importListCsv(kind, selectedFile)
-    }
+    ListsDialog { id: listsDialog; books: window.books }
+    // M63 (D-071): the engine's statements, schedules, budgets, sales-tax
+    // payments and logo, reachable at last.
+    LogoDialog { id: logoDialog; books: window.books }
+    StatementDialog { id: statementDialog; books: window.books; host: window.booksHost }
+    RecurringDialog { id: recurringDialog; books: window.books }
+    BudgetDialog { id: budgetDialog; books: window.books; host: window.booksHost }
+    SalesTaxPaymentDialog { id: salesTaxDialog; books: window.books }
+    IifImportDialog { id: iifDialog; books: window.books }
 
     Connections {
         target: window.booksHost
@@ -138,7 +141,14 @@ OfficeWindow {
             exportDialog.what = what
             exportDialog.open()
         }
-        function onImportListsRequested() { importListsDialog.open() }
+        function onImportListsRequested() { listsDialog.openFor("import") }
+        function onExportListsRequested() { listsDialog.openFor("export") }
+        function onImportIifRequested() { iifDialog.openDialog() }
+        function onCompanyLogoRequested() { logoDialog.openDialog() }
+        function onStatementsRequested() { statementDialog.openFor(0) }
+        function onRecurringRequested() { recurringDialog.openDialog() }
+        function onBudgetsRequested() { budgetDialog.openFor(window.books.currentFiscalYear()) }
+        function onSalesTaxPaymentRequested() { salesTaxDialog.openDialog() }
         function onConnectionsRequested() { connectionsDialog.openDialog() }
     }
     Connections {

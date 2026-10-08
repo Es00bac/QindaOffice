@@ -228,6 +228,29 @@ EditResult setTaskField(Project &project, int index, const QString &field, const
         }
         return {};
     }
+    if (field == QLatin1String("priority")) {
+        bool ok = false;
+        const int value = text.trimmed().toInt(&ok);
+        if (!ok || value < 0 || value > 1000) {
+            return EditResult::fail(QStringLiteral("Priority is a whole number from 0 to 1000 (500 is medium)."));
+        }
+        t.priority = value;
+        return {};
+    }
+    if (field == QLatin1String("deadline")) {
+        // A deadline never moves the schedule (Project's semantics): it is
+        // a date the task is flagged against.
+        if (isNa(text)) {
+            t.deadline = kNoDate;
+            return {};
+        }
+        const std::optional<Minutes> d = parseDate(text, project.info.defaultFinishMinute, locale);
+        if (!d) {
+            return EditResult::fail(QStringLiteral("“%1” is not a date.").arg(text.trimmed()));
+        }
+        t.deadline = *d;
+        return {};
+    }
     if (field == QLatin1String("fixedCost")) {
         const std::optional<qint64> money = parseMoney(text, project.info.currency, locale);
         if (!money) {

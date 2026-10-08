@@ -167,7 +167,10 @@ Tk.Dialog {
             Tk.Flex {
                 direction: Tk.Flex.Column
                 gap: Tk.Theme.space.sm
-                Tk.TextArea { objectName: "documentNotes"; visible: editor.sales; rows: 3; readOnly: editor.voided; placeholderText: qsTr("Note to the customer (printed)"); text: String(editor.doc.notes || ""); onEditingFinished: editor.edit("notes", text) }
+                // M63: a check's printed note is the memo line on the check.
+                Tk.TextArea { objectName: "documentNotes"; visible: editor.sales || editor.kind === "check"; rows: editor.sales ? 3 : 1; readOnly: editor.voided
+                              placeholderText: editor.sales ? qsTr("Note to the customer (printed)") : qsTr("Memo printed on the check")
+                              text: String(editor.doc.notes || ""); onEditingFinished: editor.edit("notes", text) }
                 Tk.TextArea { objectName: "documentMemo"; rows: 2; readOnly: editor.voided; placeholderText: qsTr("Internal memo (not printed)"); text: String(editor.doc.memo || ""); onEditingFinished: editor.edit("memo", text) }
             }
             Tk.Box {

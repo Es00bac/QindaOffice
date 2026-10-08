@@ -26,7 +26,8 @@ const QStringList &dialogFields()
         QStringLiteral("finish"),     QStringLiteral("percent"),        QStringLiteral("actualStart"),
         QStringLiteral("actualFinish"), QStringLiteral("predecessors"), QStringLiteral("resources"),
         QStringLiteral("active"),     QStringLiteral("milestone"),      QStringLiteral("calendar"),
-        QStringLiteral("fixedCost"),  QStringLiteral("notes")};
+        QStringLiteral("fixedCost"),  QStringLiteral("priority"),       QStringLiteral("deadline"),
+        QStringLiteral("notes")};
     return fields;
 }
 

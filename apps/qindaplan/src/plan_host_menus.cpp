@@ -39,8 +39,8 @@ void PlanHost::insertMenus()
     tree->insertInto(QStringLiteral("fileMenu"), close,
                      MenuNode::submenu(QStringLiteral("planImportExportMenu"), tr("&Import and Export"),
                                        nodes({"planImportMspdiAction", nullptr, "planExportPdfAction",
-                                                "planExportCsvAction", "planExportMspdiAction",
-                                                "planExportTimelineAction"})));
+                                                "planExportCsvAction", "planExportXlsxAction",
+                                                "planExportMspdiAction", "planExportTimelineAction"})));
     tree->insertInto(QStringLiteral("fileMenu"), close, a("planPageSetupAction"));
     tree->insertInto(QStringLiteral("fileMenu"), close, MenuNode::separator());
 

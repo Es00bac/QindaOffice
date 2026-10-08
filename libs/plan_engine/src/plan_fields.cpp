@@ -39,6 +39,9 @@ constexpr FieldInfo kTaskFields[] = {
     {"notes", "Notes", true},
     {"constraint", "Constraint Type", true},
     {"constraintDate", "Constraint Date", true},
+    // M63: Project's Priority and Deadline (Microsoft Project XML keeps them).
+    {"priority", "Priority", true},
+    {"deadline", "Deadline", true},
     {"actualStart", "Actual Start", true},
     {"actualFinish", "Actual Finish", true},
     {"baselineStart", "Baseline Start", false},
@@ -137,6 +140,9 @@ QString taskFieldText(const Project &project, int index, const QString &field, c
         if (t.overallocated) {
             flags << QStringLiteral("overallocated");
         }
+        if (t.deadline != kNoDate && t.finish != kNoDate && t.finish > t.deadline && t.percentComplete < 100) {
+            flags << QStringLiteral("missed-deadline");
+        }
         if (t.percentComplete >= 100) {
             flags << QStringLiteral("done");
         }
@@ -195,6 +201,12 @@ QString taskFieldText(const Project &project, int index, const QString &field, c
     }
     if (field == QLatin1String("constraintDate")) {
         return constraintNeedsDate(t.constraint) ? formatDate(t.constraintDate, locale) : QStringLiteral("NA");
+    }
+    if (field == QLatin1String("priority")) {
+        return locale.toString(t.priority);
+    }
+    if (field == QLatin1String("deadline")) {
+        return t.deadline == kNoDate ? QStringLiteral("NA") : formatDate(t.deadline, locale);
     }
     if (field == QLatin1String("actualStart")) {
         return t.actualStart == kNoDate ? QStringLiteral("NA") : formatDate(t.actualStart, locale);
@@ -279,6 +291,9 @@ QString taskFieldEditText(const Project &project, int index, const QString &fiel
     }
     if (field == QLatin1String("percent")) {
         return QString::number(t.percentComplete);
+    }
+    if (field == QLatin1String("priority")) {
+        return QString::number(t.priority);
     }
     return taskFieldText(project, index, field, locale);
 }

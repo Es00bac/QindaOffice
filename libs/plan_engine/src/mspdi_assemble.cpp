@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // MSPDI import, second half: the raw records the reader collected become a
 // validated Project (mspdi_p.h), which is then scheduled.
+#include "mspdi_keep.h"
 #include "mspdi_p.h"
 
 #include "outline.h"
@@ -61,6 +62,11 @@ void assembleTasks(Raw &raw, Project &p, int decimals, Minutes *earliest)
         }
         if (t.outlineLevel <= 0) {
             p.info.notes = t.task.notes; // the project summary task (UID 0)
+            // Its unmodelled elements travel with the project (M63).
+            if (t.task.extra.contains(kKeptKey)) {
+                p.info.extra.insert(kSummaryKey, t.task.extra.value(kKeptKey));
+                p.info.extra.insert(kSummaryStampKey, t.task.extra.value(kStampKey));
+            }
             continue;
         }
         tasks.append(t);
@@ -246,6 +252,7 @@ void assembleResources(Raw &raw, Project &p, int decimals)
         a.taskUid = ra.taskUid;
         a.resourceUid = resourceUid;
         a.units = int(std::clamp<qint64>(ra.units, 0, 100000000));
+        a.extra = ra.extra; // kept elements (mspdi_keep.h)
         p.assignments.append(a);
     }
 }

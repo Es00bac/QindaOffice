@@ -4,7 +4,8 @@ import QtQuick.Dialogs as Dialogs
 import QindaOffice.Plan.App
 
 // The file chooser behind File ▸ Import and Export: PDF of what is on
-// screen (the Gantt chart or the open report), the task sheet as CSV,
+// screen (the Gantt chart or the open report), the task sheet as CSV or
+// Excel (M63),
 // Microsoft Project XML out and in, and the Timeline as a PNG. Results
 // come back as toasts through PlanService.notify.
 //
@@ -16,20 +17,22 @@ Dialogs.FileDialog {
 
     property PlanService plan: null
     property PlanHost host: null
-    property string what: "pdf"   // pdf | csv | mspdi | png | import
+    property string what: "pdf"   // pdf | csv | xlsx | mspdi | png | import
 
     objectName: "planFileDialog"
     title: what === "import" ? qsTr("Import Microsoft Project XML") : qsTr("Export")
     fileMode: what === "import" ? Dialogs.FileDialog.OpenFile : Dialogs.FileDialog.SaveFile
     nameFilters: what === "pdf" ? [qsTr("PDF (*.pdf)")]
                : what === "csv" ? [qsTr("CSV (*.csv)")]
+               : what === "xlsx" ? [qsTr("Excel workbook (*.xlsx)")]
                : what === "png" ? [qsTr("PNG image (*.png)")] : [qsTr("Microsoft Project XML (*.xml)")]
 
     function request(kind) {
         what = kind
         if (kind !== "import") {
             const base = (plan !== null ? plan.title : "Project").replace(/[^A-Za-z0-9 _-]/g, "").trim() || "Project"
-            const suffix = kind === "pdf" ? ".pdf" : kind === "csv" ? ".csv" : kind === "mspdi" ? ".xml" : ".png"
+            const suffix = kind === "pdf" ? ".pdf" : kind === "csv" ? ".csv" : kind === "xlsx" ? ".xlsx"
+                         : kind === "mspdi" ? ".xml" : ".png"
             selectedFile = "file://" + base + suffix
         }
         open()
@@ -47,6 +50,8 @@ Dialogs.FileDialog {
             report(host.exportPdfTo(selectedFile))
         } else if (what === "csv") {
             report(plan.exportCsv(selectedFile))
+        } else if (what === "xlsx") {
+            report(plan.exportXlsx(selectedFile))
         } else if (what === "mspdi") {
             report(plan.exportMspdi(selectedFile))
         } else {

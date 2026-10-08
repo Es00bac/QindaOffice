@@ -33,6 +33,14 @@ set(qindabooks_qml
     qml/ReportTableView.qml
     qml/BooksPreferencesPage.qml
     qml/ConnectionsDialog.qml
+    qml/ListsDialog.qml
+    qml/LogoDialog.qml
+    qml/StatementDialog.qml
+    qml/RecurringDialog.qml
+    qml/RecurringEditor.qml
+    qml/BudgetDialog.qml
+    qml/SalesTaxPaymentDialog.qml
+    qml/IifImportDialog.qml
 )
 foreach(qml_file IN LISTS qindabooks_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -58,9 +66,13 @@ qt_add_qml_module(qindabooks_app
         src/books_service_documents.cpp
         src/books_service_journal.cpp
         src/books_service_lists.cpp
+        src/books_service_migration.cpp
         src/books_service_payments.cpp
         src/books_service_reconcile.cpp
+        src/books_service_recurring.cpp
         src/books_service_reports.cpp
+        src/books_service_budgets.cpp
+        src/books_service_statements.cpp
         src/books_service_tax.cpp
     QML_FILES ${qindabooks_qml}
 )

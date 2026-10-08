@@ -5,7 +5,9 @@ QQuickRootItem#BooksWindow
       QQuickItem#appContent
         QQuickItem#booksContent
           Flex#booksRoot
+            Button#accountsBudgets [hidden]
             Button#accountsNew [hidden]
+            Button#accountsPayTax [hidden]
             Button#dashNewExpense
             Button#dashNewInvoice
             Button#dashReceivePayment
@@ -14,6 +16,8 @@ QQuickRootItem#BooksWindow
             Button#expensesPay [hidden]
             Button#salesNew [hidden]
             Button#salesReceive [hidden]
+            Button#salesRecurring [hidden]
+            Button#salesStatements [hidden]
             Caption#emptyText [hidden]
             Card#dashBreakdown
               QQuickRectangle#boxFocusRing [hidden]
@@ -351,6 +355,7 @@ QQuickRootItem#BooksWindow
               Box#reportCatalog [hidden]
                 QQuickRectangle#boxFocusRing [hidden]
               Flex#reportOptions [hidden]
+                Button#reportExcel [hidden]
                 ComboBox#reportPreset [hidden]
                   QQuickText#comboDisplayText [hidden]
                 IconButton#fieldClear [hidden]
@@ -487,11 +492,29 @@ QQuickRootItem#BooksWindow
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksRecurringAction
+                RibbonButton#ribbonAction_booksRecurringAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksStatementsAction
+                RibbonButton#ribbonAction_booksStatementsAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
             RibbonGroup#ribbonGroup_document
               Overline#ribbonGroupCaption
               QQuickRectangle#ribbonGroupCard
               RibbonSlot#ribbonItem_booksEmailDocumentAction
                 RibbonButton#ribbonAction_booksEmailDocumentAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_booksPrintCheckAction
+                RibbonButton#ribbonAction_booksPrintCheckAction
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground

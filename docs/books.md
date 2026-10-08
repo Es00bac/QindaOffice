@@ -12,7 +12,7 @@ QuickBooks is the reference for *scope*, not for look or file format.
 | --- | --- | --- |
 | `books_engine` | Qt Core + Qt Sql (QSQLITE) | The ledger and everything computed from it. No Gui, no Quick. |
 | `books_document` | `books_engine`, `office_core` | `BooksDocument : Core::Document` — the company file as a DocumentHost document. |
-| `books_io` | `books_engine`, Qt Gui/PrintSupport | Printed forms and reports (PDF/paper/CSV), bank-file import, CSV/IIF export, backups. |
+| `books_io` | `books_engine`, Qt Gui/PrintSupport, `calc_io` (M63) | Printed forms and reports (PDF/paper/CSV/Excel), bank-file import, CSV/IIF export, QuickBooks IIF import, backups. |
 | `books_connect` | `books_engine`, Qt Network, qt6keychain | Online connections (M48): Mercury bank transactions and Stripe balance history into the bank feed, payout matching, Stripe payment links; tokens in the keyring. |
 
 ## One company, one file
@@ -184,7 +184,13 @@ component and agency.
 - **Recurring invoices**: `occurrence(k)` is computed from the start date
   (Jan 31 monthly → Feb 28, Mar 31, Apr 30, never drifting); the template
   counts what it generated, so `generateDue(today)` twice creates nothing
-  new. The engine never reads the clock for this.
+  new. The engine never reads the clock for this. `update()` (M63) rewrites
+  the name, the invoice body and the posting mode; an unchanged schedule
+  keeps its start and count, a changed one is **re-based** — occurrence 0
+  becomes the next invoice date the user chose, the count restarts and
+  `maxOccurrences` counts the invoices still to come — and may not start on
+  or before the last invoice it made. `remove()` deletes the schedule and
+  its template body; the invoices it made stay. Both are audited.
 - **Inventory quantities are out of scope**: items are services,
   non-inventory products or other charges with a price, a cost and
   accounts; nothing tracks stock on hand.
@@ -235,7 +241,7 @@ party, item or document ids). Cells hold integers only.
 | Sales by Customer / by Product/Service | Income per customer / item with share of total. |
 | Expenses by Vendor / by Category | Spending per vendor / per expense account with share. |
 | Sales Tax Liability | Per agency and component: taxable sales, rate, tax collected, tax paid, balance due. |
-| Budget vs. Actual | Actual, budget, over budget and % of budget per income/expense account (budgets are per account per month; `setAnnual` spreads a year exactly). |
+| Budget vs. Actual | Actual, budget, over budget and % of budget per income/expense account (budgets are per account per month; `setAnnual` spreads a year exactly; `setFiscalYearMonths` writes a fiscal year's twelve months in one transaction — the app's budget editor). |
 | Reconciliation Report | See above. |
 
 ### Cash vs accrual
@@ -316,7 +322,37 @@ a highlighted amount due, a line table whose header repeats on every page,
 totals (discount, tax, paid, balance due), notes, payment instructions and
 "Page x of y". Wide reports turn landscape. Letter for US/CA/MX locales,
 A4 elsewhere. Reports also export as RFC 4180 CSV (`reportToCsv`) with
-money in plain `-1234.56` form.
+money in plain `-1234.56` form, and — M63 — as an Excel workbook
+(`ReportXlsx`, through calc_io's writer, the code QindaCalc saves with):
+company, title and period above a bold header row; money cells are numbers
+in major units under the company currency's format (`"$"#,##0.00;-"$"#,##0.00`,
+exactly the currency's digits), numbers and percentages are numbers (a
+percentage as a fraction under `0.0%`), dates are date serials under
+`yyyy-mm-dd`; labels keep their indentation, subtotals and totals are bold
+with a rule above, the header row is frozen and the notes follow.
+
+**Checks** (M63, D-071 item 7). `buildPrintableCheck` turns a Check, or
+a Bill Payment drawn on a bank account, into a `PrintableCheck`
+(`check_print.h`), and `CheckRenderer` paints one per page for standard
+US voucher stock (letter: the check is the top 3.5 in, two 3.5 in stubs
+follow). The stock pre-prints the bank, the company, the labels, the check
+number, the signature line and the MICR line, so the check third prints
+only the values, each on its line (baselines measured from the sheet's
+top-left corner, not from the printer's printable area): the date
+(numeric, four-digit year, in the locale's order) top right, the payee,
+the amount in figures (`**1,234.56`) in the amount box, the amount in
+English words (`One thousand two hundred thirty-four and 56/100`) starred
+to the end of its line, the payee's name and postal address where a #10
+double-window envelope shows them, and the memo — the document's printed
+note (the check editor's "Memo printed on the check"; the internal memo
+never prints). Both stubs print in full: payee, date, number, the bills the
+payment pays (date, bill, bill amount, paid) or the check's account lines,
+the check amount, the company and the bank account; a stub that cannot hold
+every line says how many it left out. Debit-card expenses, credit-card
+payments, void and draft documents and zero amounts are refused with the
+reason (`isPrintableCheck`). Not yet: blank stock (MICR toner, the bank's
+routing digits), a per-printer alignment offset, a "to be printed" queue
+that numbers checks as they print, words in languages other than English.
 
 AGENT-NOTE (fonts): Noto Sans, no OpenType features, ligatures off. Qt's
 PDF engine gives glyphs substituted by a font feature (`tnum`, `ffi`) no
@@ -349,14 +385,73 @@ position among identical lines).
 customers / vendors / items CSV (`LedgerExport`), which import back into
 another company (`ListImport::importCsv`, through the engine's validating
 and audited APIs; a clashing account number is a row error, never a
-renumbering). **QuickBooks IIF** for accountants: account types map to
+renumbering). In the app, *File ▸ Import and Export ▸ Import Lists… /
+Export Lists…* open one dialog (`ListsDialog.qml`, M63) that asks which
+list travels and reports what an import added, what was already there
+and every refused row by number. **QuickBooks IIF** for accountants: account types map to
 BANK, AR, OCASSET, FIXASSET, OASSET, AP, CCARD, OCLIAB, LTLIAB, EQUITY,
 INC, EXINC, COGS, EXP, EXEXP; sub-accounts become `Parent:Child`;
 customers, vendors and items (`!CUST`, `!VEND`, `!INVITEM`); every live
 transaction becomes a balanced `GENERAL JOURNAL` TRNS/SPL block with
-signed amounts. The IIF item-type keywords (SERV, NONINV, OTHC) are
-unverified against Intuit's current reference — check before relying on
-item import into QuickBooks. IIF is export-only.
+signed amounts. Item types are Intuit's INVITEMTYPE keywords — SERV, PART
+(non-inventory part), OTHC (M63: before, non-inventory parts were written
+as NONINV, which QuickBooks does not know); ACCNT rows carry EXTRA
+(UNDEPOSIT, OPENBAL, RETEARNINGS) and HIDDEN, customers and vendors CONT1,
+the shipping address and HIDDEN, items COGSACCNT and HIDDEN — so the export
+imports back exactly (below).
+
+### Moving from QuickBooks (M63, D-071)
+
+**QuickBooks Desktop: IIF import** (`IifReader` + `IifImport`,
+*File ▸ Import and Export ▸ Import from QuickBooks (IIF)…*). The reader
+follows Intuit's format: tab-separated lines, `!TYPE` header rows naming
+the columns of the rows after them (a later header replaces one), quoted
+fields with doubled quotes, TRNS / SPL / ENDTRNS blocks, MM/DD/YYYY dates
+(M/D/YY too), amounts positive for a debit and negative for a credit, bytes
+UTF-8 else Windows-1252.
+
+- **Lists first.** ACCNT with QuickBooks' types mapped to ours (BANK, AR,
+  OCASSET, FIXASSET, OASSET, AP, CCARD, OCLIAB, LTLIAB, EQUITY, INC, EXINC,
+  COGS, EXP, EXEXP; NONPOSTING left out), sub-accounts "Parent:Child"
+  (missing parents made), a number this company already uses left off,
+  HIDDEN accounts deactivated once the transactions are in, OBAMOUNT
+  not imported (balances come from transactions). QuickBooks' own Accounts
+  Receivable, Accounts Payable, Undeposited Funds, Sales Tax Payable,
+  Retained Earnings and Opening Bal Equity (by name or EXTRA marker) are
+  this company's system accounts. CUST, VEND (1099, tax id), INVITEM (SERV,
+  PART, INVENTORY as non-inventory — no quantities —, OTHC; discount,
+  subtotal, group, payment and tax items left out) and CLASS. A name the
+  company already has is left as it is.
+- **Then transactions, exactly.** A block is refused, with its line
+  numbers, when its rows do not sum to zero, a date or amount does not
+  read, or an account is unknown — the preview lists those accounts and
+  the user maps each to one of the company's (`accountMap`). Every other
+  block posts exactly its rows: INVOICE, CREDIT MEMO, CASH SALE, PAYMENT,
+  BILL, BILL PMT, CHECK, CREDIT CARD, DEPOSIT and TRANSFER become the
+  matching document when that document's posting reproduces the rows line
+  for line (checked after posting, inside a savepoint); anything else — and
+  GENERAL JOURNAL — posts as a journal entry with the same rows. Deposits
+  take the matching payments out of Undeposited Funds (same customer and
+  amount) and keep any other rows as deposit lines (`Banking::deposit`'s
+  `otherLines`). Payments, credit memos and bill payments go to the oldest
+  open invoices and bills of the same customer or vendor (IIF carries no
+  links; switch it off to leave payments unapplied — bill payments then
+  post as journal entries). A transaction already in the books (same date,
+  same account/amount rows, posted for the same main name — counted per
+  occurrence) is skipped: importing a file twice adds nothing.
+- **One batch, previewed.** The import runs in one SQL transaction; the
+  preview is the same run rolled back, so its counts are what Import does.
+  Import refuses while any transaction is refused unless the user chooses
+  to leave those out, and makes a timestamped backup copy first (postings
+  are never undone, D-045; the copy is the way back).
+
+**QuickBooks Online and Desktop list exports (CSV)** import through
+*Import Lists* (`ListImport`): "Customer"/"Vendor"/"Product/Service" name
+columns, "Full Name" as the contact, "Phone Numbers", "Account #" /
+"Accnt. #" as numbers, Street/City/State/ZIP/Country joined into the
+address, QuickBooks' type names ("Accounts receivable (A/R)", "Other
+Current Liabilities", "Long Term Liabilities", "Expenses"; "Inventory"
+items as non-inventory), and the company's own A/R and A/P rows skipped.
 
 **Backups.** `Backups::createTimestamped(file, dir, keep)` makes a
 `VACUUM INTO` copy named by time and keeps the newest `keep`; each copy is
@@ -570,20 +665,55 @@ company file.
 | Journal | `postJournalEntry` (id = replace), `checkJournalEntry` (balance check, posts nothing), `transfer`, `deposit`, `undepositedPayments`, `auditTrail` |
 | Banking | `bankAccounts`, `accountRegister` (the brief's `register`: a C++ keyword), `importStatement(account, url, mapping?)` (CSV/OFX/QFX/QIF; an unsure CSV returns `needsMapping` + `columns`; rules run on new lines), `feed(account, status)` with a rule or match `suggestion`, `acceptSuggestion`, `categorize`, `exclude`, `restore`, `rules`, `saveRule` (edit = replace), `deleteRule`, `applyRules` |
 | Reconcile | `startReconciliation`, `reconciliationInProgress`, `reconcileCandidates`, `markCleared`, `reconcileState`, `finishReconciliation`, `cancelReconciliation`, `undoLastReconciliation` |
-| Reports | `reportCatalog()` (with the option words each report takes), `runReport(id, options)` (the `ReportTable` as a map: typed columns, rows with kind/depth/key/cells/drill), `drillDown(drill)`, `exportReport(id, options, url, "pdf" \| "csv")`, `rangePreset(name)` (fiscal-year aware) |
+| Reports | `reportCatalog()` (with the option words each report takes), `runReport(id, options)` (the `ReportTable` as a map: typed columns, rows with kind/depth/key/cells/drill), `drillDown(drill)`, `exportReport(id, options, url, "pdf" \| "csv" \| "xlsx")`, `rangePreset(name)` (fiscal-year aware) |
 | Dashboard | `kpis(asOf)` (MTD/YTD income, expenses, net; open/overdue invoices, unpaid bills, cash), `monthlyTrends(months)`, `expenseBreakdown(from, to)`, `ratios(asOf)` (value text, definition, `good`) |
 | Connections (M48) | `connections`, `connectMercury`, `linkMercuryAccount`, `mercuryLinks`, `connectStripe`, `stripeSettings`, `saveStripeSettings`, `syncConnections` (→ `connectionSyncFinished`), `disconnect`, `createPaymentLink` (→ `paymentLinkFinished`) — see [Bank and payment connections](#bank-and-payment-connections-mercury-stripe); `document(id).paymentLinkUrl` |
-| Housekeeping | `backupNow()` (timestamped copies in `$XDG_DATA_HOME/qindaoffice/books/backups`, newest 20 kept), `backupTo(url)`, `exportIif`, `exportJournalCsv`, `exportListCsv`, `importListCsv` |
+| Statements, logo (M63) | `statement(customerId, from, to)` → `{ok, customerName, email, from, to, opening(Text), closing(Text), lines[{date, number, kindLabel, description, amount(Text), balance(Text)}], aging[{label, amountText}]}` (an open period is the fiscal year to date), `exportStatementPdf`, `emailStatement` (the statement PDF to QindaMail as `--attach`, like invoices), `setCompanyLogo(url)` (refused unless `QImage` decodes it — what prints — and ≤ 4 MB), `removeCompanyLogo()`, `companyLogo()` (a `data:` URL for the preview) |
+| Recurring (M63) | `recurringTemplates()` rows also carry `remaining`, `scheduleText`, `statusText`; `recurringTemplate(id)` adds the body as `document`; `saveRecurring` edits an existing id (`nextDate`, invoices still to come in `maxOccurrences`; the service passes an unchanged schedule back as stored so nothing re-bases), `setRecurringActive`, `deleteRecurring` |
+| Budgets, sales tax (M63) | `currentFiscalYear()`, `budget(fiscalYear)` (every active income/expense account, twelve month texts), `saveBudget({fiscalYear, rows})` (all parsed before anything is written), `budgetSpread(annual)` / `budgetTotal(months)` (exact splits and sums for the dialog); `salesTaxOwed(asOf)` (per agency: collected − paid), `recordSalesTaxPayment({agencyId, bankAccountId, amount, date, memo})` |
+| QuickBooks (M63) | `previewIif(url, options)` (the whole import, rolled back) and `importIif(url, options)` (backup copy, then one batch); options `{accountMap: {name: accountId}, autoApply, skipRefused}`; answer `{ok, committed, error, backupPath, posted, postedText, lists[{key, label, added, existing, skipped}], transactions[{type, count, documents, journal, duplicates, refused}], refused[{firstLine, lastLine, type, reason}], unmapped[{name, lines, linesText}], notes[]}` |
+| Housekeeping | `backupNow()` (timestamped copies in `$XDG_DATA_HOME/qindaoffice/books/backups`, newest 20 kept), `backupTo(url)`, `exportIif`, `exportJournalCsv`, `exportListCsv(kind, url)`, `importListCsv(kind, url)` → `{ok, error, kind, added, skipped, errors[]}` (M63: `kind` is `customers`, `vendors`, `items` or `accounts`; the singular party kinds and obvious synonyms are accepted; refused rows come back as `row N: …` even when others were added) |
 
 **Printing the current source.** Print, Print Preview and File ▸ Export
 PDF render whatever the QML named with
 `BooksHost.setPrintSource("report", reportId, options)` (the report on
-screen) or `setPrintSource("document", id)` (the selected invoice,
-estimate, sales receipt or credit memo). The host builds the value when
+screen), `setPrintSource("document", id)` (the selected invoice,
+estimate, sales receipt or credit memo) or — M63 —
+`setPrintSource("statement", customerId, {from, to})` (the statement the
+Customer Statements dialog shows) or `setPrintSource("check", id)` (M63:
+the selected check or bank-paid bill payment, on voucher stock; a
+`"document"` source naming such a payment becomes `"check"`, so Print on a
+selected check prints the check). The host builds the value when
 the job is created and hands office_quick one `PrintRenderCallback` —
 books_io's painter wrapped by `asPrintCallback<QPrinter>` — so paper,
 preview and PDF are the same pages. `printLandscape` says when a report
 reads better wide. With no source the print commands are disabled.
+
+**Reached since M63** (D-071). *File ▸ Company Logo…*
+(`booksCompanyLogoAction`, `LogoDialog.qml`), *Sales ▸ Customer
+Statements…* (`booksStatementsAction`, `StatementDialog.qml`: customer,
+period presets, the activity with running balance, aging, Preview / Print
+through the standard commands, Save PDF, E-mail), *Sales ▸ Recurring
+Invoices…* (`booksRecurringAction`, `RecurringDialog.qml` with
+`RecurringEditor.qml`: new, edit, pause/resume, delete, create what is due),
+*Accounting ▸ Budgets…* (`booksBudgetsAction`, `BudgetDialog.qml`: a fiscal
+year per account, a year's amount split exactly or month by month, a jump to
+Budget vs. Actual) and *Accounting ▸ Pay Sales Tax…*
+(`booksSalesTaxPaymentAction`, `SalesTaxPaymentDialog.qml`). Each is also on
+the ribbon (File, Home, Accounting) and, where a workspace shows the
+subject, a button there (Sales: Recurring…, Statements…; Accounting:
+Budgets…, Pay sales tax…). *File ▸ Import and Export ▸ Import from
+QuickBooks (IIF)…* (`booksImportIifAction`, `IifImportDialog.qml`) shows the
+preview — lists added or already here, each QuickBooks type as documents or
+journal entries, what is already in the books, the accounts to map, the
+refused transactions by line — and imports. *Reports ▸ Export Report as
+Excel…* (`booksExportReportXlsxAction`, also on the Reports ribbon tab and
+as "Excel" beside PDF and CSV in the report's option bar) writes the report
+on screen as `.xlsx`. *Expenses ▸ Print Check…* (`booksPrintCheckAction`,
+also in the Home ribbon's Document group) prints the selected check or
+bill payment; it is enabled only while the selection is one, the check
+editor shows the memo that prints on it, and its Print and Save PDF… give
+the check page (`exportDocumentPdf` writes a check as its check).
 
 **E-mailing an invoice.** `emailDocument(id)` writes the form's PDF to
 `$XDG_CACHE_HOME/qindaoffice/books/outbox/<number>.pdf` and starts

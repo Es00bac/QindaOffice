@@ -3,8 +3,9 @@
 // request, the workspace radio group stays consistent, no two commands
 // share a shortcut, commands wait for a company, a new window asks for the
 // setup wizard, Save As switches the window to the copy (and the service
-// follows), the print source drives Print/Preview/Export PDF, and the
-// real BooksWindow.qml instantiates over the host.
+// follows), the print source drives Print/Preview/Export PDF, Print Check
+// prints the selected check (M63), and the real BooksWindow.qml
+// instantiates over the host.
 
 #include "books_app_test_support.h"
 
@@ -41,6 +42,12 @@ const QStringList kCommandIds{
     QStringLiteral("booksViewExpensesAction"),     QStringLiteral("booksViewBankingAction"),
     QStringLiteral("booksViewAccountingAction"),   QStringLiteral("booksViewReportsAction"),
     QStringLiteral("booksSyncBankAction"),         QStringLiteral("booksConnectionsAction"),
+    // M63 (D-071)
+    QStringLiteral("booksExportListsAction"),      QStringLiteral("booksCompanyLogoAction"),
+    QStringLiteral("booksStatementsAction"),       QStringLiteral("booksRecurringAction"),
+    QStringLiteral("booksBudgetsAction"),          QStringLiteral("booksSalesTaxPaymentAction"),
+    QStringLiteral("booksImportIifAction"),        QStringLiteral("booksExportReportXlsxAction"),
+    QStringLiteral("booksPrintCheckAction"),
 };
 
 // A host with a company at `dir/name`.
@@ -282,6 +289,58 @@ private slots:
         QCOMPARE(print.count(), 1);
         QCOMPARE(host.printSourceKind(), QStringLiteral("document"));
         QVERIFY(host.createPrintJob() != nullptr);
+    }
+
+    // M63 (D-071 item 7): Print Check follows the selection, prints the
+    // check onto voucher stock, and a check chosen for Print is the check.
+    void printCheckPrintsTheSelectedCheck()
+    {
+        QTemporaryDir dir;
+        BooksHost host;
+        QVERIFY(ok(withCompany(host, dir)));
+        BooksService *books = host.books();
+        const qint64 vendor = idOf(books->saveParty({{QStringLiteral("kind"), QStringLiteral("vendor")},
+                                                     {QStringLiteral("name"), QStringLiteral("Pixel Print Works")},
+                                                     {QStringLiteral("billingAddress"), QStringLiteral("77 SE Water Ave")}}));
+        const auto paid = [&](const QString &kind) {
+            return idOf(books->saveDocument(
+                {{QStringLiteral("kind"), kind},
+                 {QStringLiteral("partyId"), vendor},
+                 {QStringLiteral("paymentAccountId"), find(books->accounts(), QStringLiteral("number"), QStringLiteral("1000")).value(QStringLiteral("id"))},
+                 {QStringLiteral("number"), QStringLiteral("1001")},
+                 {QStringLiteral("notes"), QStringLiteral("Proof paper")},
+                 {QStringLiteral("lines"), QVariantList{QVariantMap{
+                      {QStringLiteral("description"), QStringLiteral("Paper")},
+                      {QStringLiteral("accountId"), find(books->accounts(), QStringLiteral("number"), QStringLiteral("6400")).value(QStringLiteral("id"))},
+                      {QStringLiteral("amount"), QStringLiteral("120.00")}}}}}));
+        };
+        const qint64 check = paid(QStringLiteral("check"));
+        const qint64 expense = paid(QStringLiteral("expense"));
+        QVERIFY(check != 0 && expense != 0);
+        ActionEntry *printCheck = host.action(QStringLiteral("booksPrintCheckAction"));
+        QVERIFY(!printCheck->isEnabled());
+        host.setSelectedDocumentId(expense); // a debit-card expense is no check
+        QVERIFY(!printCheck->isEnabled());
+        host.setSelectedDocumentId(check);
+        QVERIFY(printCheck->isEnabled());
+        QSignalSpy print(&host, &BooksHost::printRequested);
+        QVERIFY(host.actions()->trigger(QStringLiteral("booksPrintCheckAction")));
+        QCOMPARE(print.count(), 1);
+        QCOMPARE(host.printSourceKind(), QStringLiteral("check"));
+        QVERIFY(host.createPrintJob() != nullptr);
+        const QString pdf = dir.filePath(QStringLiteral("check.pdf"));
+        QVERIFY(host.exportPdf(pdf));
+        QVERIFY(QFileInfo(pdf).size() > 1000);
+        // Save PDF in the editor writes the check page too.
+        QVERIFY(ok(books->exportDocumentPdf(check, QUrl::fromLocalFile(dir.filePath(QStringLiteral("saved.pdf"))))));
+        QVERIFY(!ok(books->exportDocumentPdf(expense, QUrl::fromLocalFile(dir.filePath(QStringLiteral("expense.pdf"))))));
+        host.setPrintSource(QStringLiteral("document"), check); // File ▸ Print on a selected check
+        QCOMPARE(host.printSourceKind(), QStringLiteral("check"));
+        host.setPrintSource(QStringLiteral("check"), expense);
+        QCOMPARE(host.printSourceKind(), QString());
+        // Voiding the selected check takes the command away.
+        QVERIFY(ok(books->voidDocument(check, QStringLiteral("spoiled"))));
+        QVERIFY(!printCheck->isEnabled());
     }
 
     void theWindowInstantiatesOverTheHost()

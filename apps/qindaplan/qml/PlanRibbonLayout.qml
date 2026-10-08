@@ -17,7 +17,7 @@ QtObject {
         StandardRibbon.fileTab([
             { id: "exchange", label: qsTr("Microsoft Project"), items: [
                 { action: "planImportMspdiAction", size: "large" }, "planExportMspdiAction",
-                "planExportCsvAction", "planExportTimelineAction"] }],
+                "planExportCsvAction", "planExportXlsxAction", "planExportTimelineAction"] }],
             [], [{ action: "planExportPdfAction", iconName: "file-output" }, "planPageSetupAction"]),
         { id: "home", label: qsTr("Task"), keyTip: "T", groups: [
             { id: "taskView", label: qsTr("View"), items: [
@@ -62,7 +62,7 @@ QtObject {
                 "planReportResourcesAction", "planReportLateAction"] },
             { id: "output", label: qsTr("Share"), items: [
                 { action: "planExportPdfAction", size: "large" }, "filePrintAction", "filePrintPreviewAction",
-                "planExportTimelineAction", "planExportCsvAction"] }
+                "planExportTimelineAction", "planExportCsvAction", "planExportXlsxAction"] }
         ] },
         { id: "project", label: qsTr("Project"), keyTip: "J", groups: [
             { id: "projectProperties", label: qsTr("Properties"), items: [

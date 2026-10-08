@@ -7,6 +7,7 @@
 // tree exactly once (the desktop validator rejects duplicates).
 #include "books_host.h"
 
+#include "check_print.h"
 #include "standard_actions.h"
 
 #include <QKeySequence>
@@ -56,15 +57,28 @@ constexpr Command kCommands[] = {
     {"booksRunReportAction", QT_TRANSLATE_NOOP("BooksHost", "&Run Report…"), "", "chart-column"},
     {"booksExportReportPdfAction", QT_TRANSLATE_NOOP("BooksHost", "Export Report as &PDF…"), "", "file-output"},
     {"booksExportReportCsvAction", QT_TRANSLATE_NOOP("BooksHost", "Export Report as &CSV…"), "", "file-spreadsheet"},
+    // M63 (D-071): every report to Excel with numeric, currency-formatted cells.
+    {"booksExportReportXlsxAction", QT_TRANSLATE_NOOP("BooksHost", "Export Report as E&xcel…"), "", "sheet"},
     {"booksExportIifAction", QT_TRANSLATE_NOOP("BooksHost", "Export for QuickBooks (&IIF)…"), "", "file-down"},
     {"booksExportJournalCsvAction", QT_TRANSLATE_NOOP("BooksHost", "Export &Journal (CSV)…"), "", "sheet"},
     {"booksImportListsAction", QT_TRANSLATE_NOOP("BooksHost", "Import &Lists (CSV)…"), "", "file-up"},
+    // M63 (D-071): the other half of the list round trip.
+    {"booksExportListsAction", QT_TRANSLATE_NOOP("BooksHost", "Export Li&sts (CSV)…"), "", "file-down"},
+    {"booksImportIifAction", QT_TRANSLATE_NOOP("BooksHost", "Import from &QuickBooks (IIF)…"), "", "import"},
     {"booksBackupAction", QT_TRANSLATE_NOOP("BooksHost", "&Backup…"), "", "archive"},
     {"booksCompanySettingsAction", QT_TRANSLATE_NOOP("BooksHost", "Company Se&ttings…"), "", "building"},
     {"booksCloseBooksAction", QT_TRANSLATE_NOOP("BooksHost", "Close the &Books…"), "", "lock"},
     {"booksVoidAction", QT_TRANSLATE_NOOP("BooksHost", "&Void Document…"), "", "circle-x"},
     {"booksEmailDocumentAction", QT_TRANSLATE_NOOP("BooksHost", "E-&mail Document…"), "", "mail"},
     {"booksPrintDocumentAction", QT_TRANSLATE_NOOP("BooksHost", "Print &Document…"), "", "printer"},
+    // M63 (D-071): what the engine always had, now reachable.
+    {"booksCompanyLogoAction", QT_TRANSLATE_NOOP("BooksHost", "Company &Logo…"), "", "image"},
+    {"booksStatementsAction", QT_TRANSLATE_NOOP("BooksHost", "Customer S&tatements…"), "", "scroll-text"},
+    {"booksRecurringAction", QT_TRANSLATE_NOOP("BooksHost", "Recurring In&voices…"), "", "repeat"},
+    {"booksBudgetsAction", QT_TRANSLATE_NOOP("BooksHost", "&Budgets…"), "", "target"},
+    {"booksSalesTaxPaymentAction", QT_TRANSLATE_NOOP("BooksHost", "Pay Sales &Tax…"), "", "percent"},
+    // M63 (D-071 item 7): the selected check or bill payment onto voucher stock.
+    {"booksPrintCheckAction", QT_TRANSLATE_NOOP("BooksHost", "Print Chec&k…"), "", "printer"},
 };
 
 // The workspace radio group, in Ctrl+1…6 order (BooksHost::viewKeys()).
@@ -146,11 +160,19 @@ void BooksHost::createActions()
     });
     on("booksExportReportPdfAction", [this] { emit exportRequested(QStringLiteral("reportPdf")); });
     on("booksExportReportCsvAction", [this] { emit exportRequested(QStringLiteral("reportCsv")); });
+    on("booksExportReportXlsxAction", [this] { emit exportRequested(QStringLiteral("reportXlsx")); });
     on("booksExportIifAction", [this] { emit exportRequested(QStringLiteral("iif")); });
     on("booksExportJournalCsvAction", [this] { emit exportRequested(QStringLiteral("journalCsv")); });
     on("booksBackupAction", [this] { emit exportRequested(QStringLiteral("backup")); });
     on("booksImportListsAction", [this] { emit importListsRequested(); });
+    on("booksExportListsAction", [this] { emit exportListsRequested(); });
+    on("booksImportIifAction", [this] { emit importIifRequested(); });
     on("booksCompanySettingsAction", [this] { emit companySettingsRequested(); });
+    on("booksCompanyLogoAction", [this] { emit companyLogoRequested(); });
+    on("booksStatementsAction", [this] { emit statementsRequested(); });
+    on("booksRecurringAction", [this] { emit recurringRequested(); });
+    on("booksBudgetsAction", [this] { emit budgetsRequested(); });
+    on("booksSalesTaxPaymentAction", [this] { emit salesTaxPaymentRequested(); });
     on("booksCloseBooksAction", [this] { emit closeBooksRequested(); });
     on("booksVoidAction", [this] { emit voidRequested(m_selectedDocumentId); });
     on("booksEmailDocumentAction", [this] {
@@ -164,6 +186,16 @@ void BooksHost::createActions()
         setPrintSource(QStringLiteral("document"), m_selectedDocumentId);
         emit printRequested();
     });
+    on("booksPrintCheckAction", [this] {
+        QString why;
+        if (!m_service->hasCompany()
+            || !::QindaOffice::Books::isPrintableCheck(*m_service->file(), m_selectedDocumentId, &why)) {
+            emit messageRequested(tr("Print Check"), why, QStringLiteral("warning"));
+            return;
+        }
+        setPrintSource(QStringLiteral("check"), m_selectedDocumentId);
+        emit printRequested();
+    });
 }
 
 void BooksHost::insertMenus()
@@ -175,10 +207,12 @@ void BooksHost::insertMenus()
     tree->insertInto(QStringLiteral("fileMenu"), close, a("booksBackupAction"));
     tree->insertInto(QStringLiteral("fileMenu"), close,
                      MenuNode::submenu(QStringLiteral("booksImportExportMenu"), tr("&Import and Export"),
-                                       {a("booksImportListsAction"), MenuNode::separator(), a("booksExportIifAction"),
+                                       {a("booksImportListsAction"), a("booksExportListsAction"), MenuNode::separator(),
+                                        a("booksImportIifAction"), a("booksExportIifAction"),
                                         a("booksExportJournalCsvAction")}));
     tree->insertInto(QStringLiteral("fileMenu"), close, MenuNode::separator());
     tree->insertInto(QStringLiteral("fileMenu"), close, a("booksCompanySettingsAction"));
+    tree->insertInto(QStringLiteral("fileMenu"), close, a("booksCompanyLogoAction"));
     tree->insertInto(QStringLiteral("fileMenu"), close, a("booksCloseBooksAction"));
     tree->insertInto(QStringLiteral("fileMenu"), close, MenuNode::separator());
 
@@ -187,6 +221,7 @@ void BooksHost::insertMenus()
                                                      {a("booksNewInvoiceAction"), a("booksNewEstimateAction"),
                                                       a("booksNewSalesReceiptAction"), a("booksNewCreditMemoAction"),
                                                       MenuNode::separator(), a("booksReceivePaymentAction"),
+                                                      a("booksStatementsAction"), a("booksRecurringAction"),
                                                       MenuNode::separator(), a("booksNewCustomerAction"),
                                                       a("booksNewItemAction"), MenuNode::separator(),
                                                       a("booksEmailDocumentAction"), a("booksPrintDocumentAction")}));
@@ -194,7 +229,8 @@ void BooksHost::insertMenus()
                                                      {a("booksNewBillAction"), a("booksPayBillsAction"),
                                                       MenuNode::separator(), a("booksNewExpenseAction"),
                                                       a("booksNewCheckAction"), a("booksNewVendorCreditAction"),
-                                                      MenuNode::separator(), a("booksNewVendorAction")}));
+                                                      MenuNode::separator(), a("booksNewVendorAction"),
+                                                      MenuNode::separator(), a("booksPrintCheckAction")}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("booksBankingMenu"), tr("&Banking"),
                                                      {a("booksSyncBankAction"), a("booksConnectionsAction"),
                                                       MenuNode::separator(), a("booksImportStatementAction"),
@@ -204,11 +240,14 @@ void BooksHost::insertMenus()
                                                       a("booksReconcileAction")}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("booksAccountingMenu"), tr("Accou&nting"),
                                                      {a("booksNewAccountAction"), a("booksJournalEntryAction"),
-                                                      MenuNode::separator(), a("booksVoidAction")}));
+                                                      MenuNode::separator(), a("booksBudgetsAction"),
+                                                      a("booksSalesTaxPaymentAction"), MenuNode::separator(),
+                                                      a("booksVoidAction")}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("booksReportsMenu"), tr("&Reports"),
                                                      {a("booksRunReportAction"), MenuNode::separator(),
                                                       a("booksExportReportPdfAction"),
-                                                      a("booksExportReportCsvAction")}));
+                                                      a("booksExportReportCsvAction"),
+                                                      a("booksExportReportXlsxAction")}));
     // View: the workspaces first, then the standard chrome toggles.
     const QString firstView = id(ActionId::kViewZoomIn);
     for (const Command &c : kViews) {
@@ -229,8 +268,12 @@ void BooksHost::syncEnablement()
     const bool selected = company && m_selectedDocumentId != 0;
     actions()->setEnabled({id("booksVoidAction"), id("booksEmailDocumentAction"), id("booksPrintDocumentAction")},
                           selected);
+    actions()->setEnabled(id("booksPrintCheckAction"),
+                          selected && ::QindaOffice::Books::isPrintableCheck(*m_service->file(), m_selectedDocumentId));
     const bool reportShown = company && m_printKind == QLatin1String("report");
-    actions()->setEnabled({id("booksExportReportPdfAction"), id("booksExportReportCsvAction")}, reportShown);
+    actions()->setEnabled({id("booksExportReportPdfAction"), id("booksExportReportCsvAction"),
+                           id("booksExportReportXlsxAction")},
+                          reportShown);
     // Print / Preview render the current source (see the header).
     const bool printable = company && !m_printKind.isEmpty();
     actions()->setEnabled({id(ActionId::kFilePrint), id(ActionId::kFilePrintPreview)}, printable);

@@ -141,6 +141,42 @@ qint64 Budgets::amount(qint64 accountId, int year, int month, qint64 classId) co
                           {accountId, classId, year, month});
 }
 
+QList<qint64> Budgets::fiscalYearMonths(qint64 accountId, int fiscalYear, qint64 classId) const
+{
+    const int startMonth = m_file.settings().fiscalYearStartMonth;
+    QList<qint64> out;
+    for (int i = 0; i < 12; ++i) {
+        const QDate d = QDate(fiscalYear, startMonth, 1).addMonths(i);
+        out << amount(accountId, d.year(), d.month(), classId);
+    }
+    return out;
+}
+
+Result Budgets::setFiscalYearMonths(qint64 accountId, int fiscalYear, const QList<qint64> &months, qint64 classId)
+{
+    if (months.size() != 12 || !ChartOfAccounts(m_file).account(accountId)) {
+        return Result::failure(ErrorCode::Invalid, QStringLiteral("a budget year needs an account and 12 months"));
+    }
+    const int startMonth = m_file.settings().fiscalYearStartMonth;
+    SqlTransaction txn(m_file);
+    for (int i = 0; i < 12; ++i) {
+        const QDate d = QDate(fiscalYear, startMonth, 1).addMonths(i);
+        QString error;
+        // AGENT-NOTE: SQL directly rather than set(), which signals
+        // changed() per month; the transaction signals once.
+        if (!Sql::exec(m_file.database(),
+                       QStringLiteral("INSERT INTO budgets(account_id, class_id, year, month, amount) VALUES(?,?,?,?,?)"
+                                      " ON CONFLICT(account_id, class_id, year, month) DO UPDATE SET amount = excluded.amount"),
+                       {accountId, classId, d.year(), d.month(), months.at(i)}, &error)) {
+            return Result::failure(ErrorCode::Storage, error);
+        }
+    }
+    if (!txn.commit()) {
+        return Result::failure(ErrorCode::Storage, txn.error());
+    }
+    return Result::success(accountId);
+}
+
 qint64 Budgets::total(qint64 accountId, const QDate &from, const QDate &to, qint64 classId) const
 {
     const int a = LedgerQuery::monthIndex(from);

@@ -255,6 +255,181 @@ app-side requirements above are the parts the suite owns):
 
 ## Milestone-specific gates
 
+### M63 gates (QuickBooks essentials and Project XML preservation; D-071)
+
+Automated on the desktop (`ctest --preset dev -R 'qindabooks|books_|plan'`),
+`TZ=UTC`, "today" 2026-03-31, generated company files only.
+
+- [x] `tst_qindabooks_essentials` — list import takes `customer` and
+      `customers` (and `vendor`, `items`, `accounts`); a second import skips
+      what is there; refused rows come back as `row 3: …`, `row 4: …` next
+      to the rows that landed; an empty or missing file is refused with its
+      reason; export takes the same keys.
+- [x] `tst_qindabooks_dialogs` — Import Lists opens `listsDialog`; choosing
+      Vendors puts the rows in the vendor list (not the customers); the
+      result notice says added / skipped, turns `warning` with the refused
+      row listed; Export Lists writes the chosen list. Grabs
+      `qindabooks_lists_import`, `qindabooks_lists_refused` reviewed.
+- [x] `tst_qindabooks_essentials` (step 2) — a PNG logo is stored, previewed
+      as a `data:` URL and carried by the printable invoice; a text file is
+      refused without touching the stored one; removal clears it. A
+      statement for Feb–Mar shows balance forward 1,000.00, a −400.00
+      payment and a 250.00 invoice, amount due 850.00, five aging buckets;
+      an open period is the fiscal year to date; a reversed period and no
+      customer are refused; the PDF is written; e-mail hands QindaMail
+      `--attach <pdf> mailto:ap@acme.test?subject=Statement from …` with
+      $850.00 in the body. A monthly schedule from Jan 31 makes 3 invoices;
+      a name/amount edit keeps start and count; a weekly schedule from
+      Mar 15 is refused (last invoice Mar 31); from Apr 6 it re-bases (3 due
+      by Apr 20); paused → 0 due, "Paused"; resumed → 6 invoices; deleted →
+      the 6 invoices stay, the audit has `delete`. A 1,000.00 year splits
+      into twelve months that add up exactly; 12.345 is refused; saved
+      budgets show in Budget vs. Actual (budget 1,000.00, actual 400.00);
+      one bad month saves nothing. A 10 % rate on 100.00 owes 10.00 by
+      Mar 31 (0 by Feb 28); paying from an expense account is refused;
+      paying from Checking leaves 0 owed.
+- [x] `tst_qindabooks_dialogs` (step 2) — each command opens its dialog
+      (`logoDialog`, `statementDialog`, `recurringDialog` +
+      `recurringEditor`, `budgetDialog`, `salesTaxPaymentDialog`); the logo
+      preview loads; the statement shows one line and 1,200.00 due, mails
+      through the launcher and its Preview makes the statement the print
+      source with Print Preview enabled; a schedule made in the editor lists
+      with its customer and next date, pauses, resumes and is deleted; a
+      24,000 year spreads to 2,000.00 a month and saves; Pay Sales Tax offers
+      the 40.00 owed and records it. Grabs `qindabooks_logo`,
+      `qindabooks_statement`, `qindabooks_recurring_editor`,
+      `qindabooks_recurring_list`, `qindabooks_budget`,
+      `qindabooks_sales_tax` reviewed.
+- [x] `tst_books_io_iif` (step 3, 7 cases) — the reader resolves quoted
+      fields with doubled quotes, M/D/YY and MM/DD/YYYY, a redefined
+      header, Windows-1252 bytes, a block without ENDTRNS and an SPL
+      outside one (`line 7:`); a QuickBooks-shaped studio file (16 accounts
+      incl. a sub-account, a hidden and a non-posting one, 2 customers, 2
+      vendors, 4 items, a class, 13 transactions) previews without changing
+      the company and is refused when committed strictly; imported with the
+      refusals left out: 9 accounts added, 6 matched (A/R, A/P, Undeposited
+      Funds, Sales Tax Payable, Interest Income, Opening Bal Equity), the
+      non-posting and the discount item left out, the hidden account
+      inactive, the tax agency on the invoice's tax split not made a
+      customer; 11 posted — 10 documents (2 invoices, payment, deposit, bill,
+      bill payment, check, card charge, credit memo, transfer) and 1 journal
+      entry — and 2 refused with their lines (unknown "Petty Cash"; "do not
+      balance"); every balance to the cent (checking 7,418.85, A/R 300.00,
+      Undeposited Funds 0, A/P 0, Sales Tax Payable 81.25 …), invoice 1001
+      paid, 1002 open 300.00 after the credit memo, the deposit emptied the
+      undeposited queue, the bill paid; mapping "Petty Cash" posts the 12th;
+      a second import posts 0 (11 already in the books); the Northwind
+      fixture's own IIF export imports into a fresh company with every
+      account balance and the account, customer and vendor list CSVs
+      identical (a hidden account included), items intact, PART written,
+      and re-imports as nothing; QuickBooks Online CSVs: accounts with
+      "Accounts receivable (A/R)" skipped as the company's own, "Other
+      Current Liabilities" and "Long Term Liabilities" typed, customers with
+      "Full Name" as contact and "Phone Numbers", Street/City/State/ZIP
+      joined, "Inventory" products as non-inventory.
+- [x] `tst_books_io_export` — the ACCNT rows end with EXTRA and HIDDEN.
+- [x] `tst_qindabooks_essentials` / `tst_qindabooks_dialogs` (step 3) — the
+      preview posts nothing and lists the unmapped account; a strict import
+      with a refusal imports nothing; mapped, the import makes a backup,
+      posts 2 ($520.00 of debits), notifies once, and a second run posts 0.
+      The dialog previews, shows the refusal and the account to map, maps it
+      (0 refused, 2 to post), imports and says so. Grabs
+      `qindabooks_iif_preview`, `qindabooks_iif_done` reviewed.
+- [x] `tst_books_io_reports` (step 4) — the March P&L as `.xlsx`, read back
+      with QXlsx: company and title in A1/A2, a bold header row, "Net
+      Income" a bold double equal to the report's total under
+      `"$"#,##0.00;-"$"#,##0.00`, "4000 Project Fees" a double and indented;
+      Sales by Customer's share is the number 1.0 under `0.0%`; the General
+      Ledger's dates are dates under `yyyy-mm-dd`.
+- [x] `tst_qindabooks_essentials` (step 4) — every report of the catalog
+      but the reconciliation report exports through
+      `exportReport(…, "xlsx")` as a zip package.
+- [x] `tst_plan_mspdi_keep` (step 5, new, 4 cases) — a Project-shaped file
+      (`tests/plan_engine/data/project_keep_sample.xml`) reads priority 900
+      / 100 and the deadline into the model, flags the task that finishes
+      after its deadline, edits both and refuses priority 1200; the
+      recurring exception, the work weeks and baseline 4 are reported; the
+      export keeps Subject, Author, the project GUID, `HonorConstraints 0`,
+      `CurrencySymbol €`, the `ExtendedAttributes` definition and an
+      unknown project element in place, the calendar's GUID, its recurring
+      exception inside `<Exceptions>` and its work weeks, the summary task's
+      custom field, the task's Type 1 and FixedCostAccrual 1 (not our
+      constants), contact, an unknown element (with its attribute) right
+      after Contact, hyperlinks (escaped), custom fields, baselines 0 and 4,
+      timephased data, the resource's notes, custom field and rate tables,
+      the assignment's contour and delay — every Task child in Project's
+      order; re-reading the export writes it byte for byte; a `.qplan` save
+      and load writes it byte for byte; after a duration change the task's
+      timephased data and remaining duration are dropped (and the
+      assignment's), the user's own fields and the rate tables stay, and a
+      changed rate drops the rate tables.
+- [x] `tst_plan_mspdi` — unchanged expectations except two counts and one
+      check the feature changes by design: the export holds 4 baselines and
+      4 exceptions (baseline 5 and the recurring exception are kept), and
+      re-reading our export may only repeat the original import's warnings.
+- [x] `tst_plan_output` (step 5) — the task sheet as `.xlsx`, read back with
+      QXlsx: a bold "Task Name" header; "Shortlist venues" indented, 3.0
+      days, its start a date-time serial under `yyyy-mm-dd hh:mm`, 60 % as
+      0.6 under `0%`, its cost a number under `"$"#,##0.00…`, 24 hours of
+      work, priority 800, "Ana Ruiz".
+- [x] `tst_qindaplan_service` (step 5) — Task Information saves priority 950
+      and a deadline, refuses "high", clears the deadline with NA; Export
+      Task Sheet as Excel writes a package; the sample opened through the
+      host and exported as XML still carries its custom-field definition and
+      values, priority, deadline, rate tables and recurring exception.
+      `tst_qindaplan_menu_export` and `tst_qindaplan_ui` (ribbon gate with
+      `planExportXlsxAction`) green; Plan fixtures unchanged.
+- [x] `tst_qindabooks_ui`, `tst_qindabooks_host`, `tst_qindabooks_menu_export`
+      — the new commands exist with icons, sit once in the menu tree and on
+      the ribbon; the ribbon gate holds at 1320 and 520 px (grabs
+      `qindabooks_ribbon_1320/520` reviewed); fixtures
+      `qindabooks_1280/520` regenerated for the new ribbon slots and view
+      buttons (`salesRecurring`, `salesStatements`, `accountsBudgets`,
+      `accountsPayTax`, and step 4's `reportExcel`); grab
+      `qindabooks_reports_1320` reviewed (the option bar wraps PDF/CSV/Excel
+      onto a second line at 1320 px, as the strips do).
+- [x] `tst_books_io_checks` (step 6, new, 6 cases) — the amount in words
+      for 10 amounts (1,234.56 → "One thousand two hundred thirty-four and
+      56/100", 0.05 → "Zero and 05/100", 21.00 hyphenated, empty thousands
+      skipped, JPY without a fraction, KWD over 1000, a negative amount
+      empty) and for the largest qint64 ("Ninety-two quadrillion …
+      and 07/100"); a written check gives number 1042, 03/09/2026, the
+      payee and its address block, `**449.99`, "Four hundred forty-nine and
+      99/100", the printed note as memo (never the internal memo), "1000
+      Checking", the two account lines; a bill payment with reference 1043
+      prints as check 1043 for `**1,400.00` with both bills (date, number,
+      bill amount, paid 1,200.00 and 200.00); a debit-card expense, an
+      invoice, a missing id, a credit-card bill payment and a voided check
+      are refused with their reason and no PDF is written; two checks make a
+      two-page PDF whose text, read back with Poppler by band, has the date
+      top right, payee and figures on one line, the words starred to the
+      line's end, the address block, the memo line, and both stubs complete;
+      a 30-line check's stubs say how many lines they left out. Gallery
+      grab `books-check-voucher.png` reviewed.
+- [x] `tst_qindabooks_host` (step 6) — Print Check is disabled with no
+      selection and for a debit-card expense, enabled for a check; it emits
+      the print request with the `"check"` source, a print job is created
+      and Export PDF writes it; `exportDocumentPdf` (the editor's Save
+      PDF…) writes the check and still refuses the expense; a `"document"`
+      source naming the check becomes `"check"`, a `"check"` source naming the expense is cleared;
+      voiding the selected check disables the command. Fixtures
+      `qindabooks_1280/520` regenerated for the one new ribbon slot
+      (`ribbonItem_booksPrintCheckAction`); grabs
+      `qindabooks_ribbon_1320/520` reviewed (the Document group holds four
+      commands at 520 px).
+- [x] Full suite on qinda at `594590b` (`cmake --build --preset dev`, then
+      `ctest --preset dev`): **142 of 142 passed** — the 137 before M63
+      plus `tst_qindabooks_essentials`, `tst_qindabooks_dialogs`,
+      `tst_books_io_iif`, `tst_books_io_checks` and `tst_plan_mspdi_keep`.
+      QtTest totals of the M63 binaries (functions incl. init/cleanup and
+      data rows): `tst_books_io_checks` 17, `tst_books_io_iif` 9,
+      `tst_books_io_reports` 11, `tst_books_io_export` 7,
+      `tst_qindabooks_essentials` 10, `tst_qindabooks_dialogs` 9,
+      `tst_qindabooks_host` 11, `tst_qindabooks_ui` 7,
+      `tst_qindabooks_menu_export` 4, `tst_plan_mspdi_keep` 6,
+      `tst_plan_mspdi` 6, `tst_plan_output` 7, `tst_qindaplan_service` 11,
+      `tst_qindaplan_ui` 8, `tst_qindaplan_menu_export` 4 — all passed.
+
 ### M57 gates (organised, typeset notes; D-063)
 
 - `tst_live_notes_edits`:

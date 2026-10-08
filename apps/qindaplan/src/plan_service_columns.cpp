@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // PlanService: the task sheet's tables (Entry, Tracking, Variance, Cost,
-// Schedule — Project's standard tables) and the column widths both sheets
-// ask for (plan_service.h).
+// Schedule — Project's standard tables; Schedule also shows the Deadline and
+// Priority Microsoft Project XML carries, M63) and the column widths both
+// sheets ask for (plan_service.h).
 #include "plan_edit.h"
 #include "plan_service.h"
 
@@ -27,7 +28,8 @@ const QList<TableDef> &tables()
         {"cost", "Cost",
          {"indicators", "name", "fixedCost", "cost", "baselineCost", "costVariance", "actualCost", "remainingCost"}},
         {"schedule", "Schedule",
-         {"indicators", "wbs", "name", "start", "finish", "lateStart", "lateFinish", "freeSlack", "totalSlack"}},
+         {"indicators", "wbs", "name", "start", "finish", "deadline", "lateStart", "lateFinish", "freeSlack",
+          "totalSlack", "priority"}},
     };
     return defs;
 }

@@ -3,7 +3,9 @@
 // and schedules as documented; sheet edits, ribbon operations, undo/redo
 // and Save/Load round-trip through the document; the Gantt, calendar and
 // usage projections carry what the views draw; MSPDI and CSV export;
-// the Gantt drag adapter previews and commits through the engine.
+// the Gantt drag adapter previews and commits through the engine. M63:
+// Task Information edits priority and deadline, the task sheet exports to
+// Excel, and a Project XML opened and saved keeps what Project wrote.
 
 #include "plan_app_test_support.h"
 
@@ -223,6 +225,40 @@ private slots:
         QVERIFY(pf.open(QIODevice::ReadOnly));
         QVERIFY(pf.read(4) == "%PDF");
         QVERIFY(l.host.ganttPageCount() >= 1);
+    }
+
+    void priorityDeadlineExcelAndKeptXml()
+    {
+        Loaded l;
+        QVERIFY(l.loaded);
+        const QString gala = l.id("Gala night");
+        QVERIFY(ok(l.plan->saveTaskInfo(gala, {{s("priority"), s("950")}, {s("deadline"), s("2026-04-01")}})));
+        QCOMPARE(l.task("Gala night").priority, 950);
+        QVERIFY(l.task("Gala night").deadline != Engine::kNoDate);
+        QCOMPARE(l.plan->taskInfo(gala).value(s("priority")).toString(), s("950"));
+        QVERIFY(!ok(l.plan->saveTaskInfo(gala, {{s("priority"), s("high")}})));
+        QVERIFY(ok(l.plan->saveTaskInfo(gala, {{s("deadline"), s("NA")}})));
+        QCOMPARE(l.task("Gala night").deadline, Engine::kNoDate);
+        // The task sheet as Excel.
+        const QString xlsx = l.dir.filePath(s("gala.xlsx"));
+        QVERIFY(ok(l.plan->exportXlsx(QUrl::fromLocalFile(xlsx))));
+        QFile book(xlsx);
+        QVERIFY(book.open(QIODevice::ReadOnly));
+        QVERIFY(book.read(2) == "PK");
+        // A Project XML with custom fields: open, save as .xml, still there.
+        const QString source = s(QQO_PLAN_DATA_DIR "/project_keep_sample.xml");
+        PlanHost fromProject;
+        QVERIFY(fromProject.loadPath(source));
+        const QString saved = l.dir.filePath(s("kept.xml"));
+        QVERIFY(ok(fromProject.plan()->exportMspdi(QUrl::fromLocalFile(saved))));
+        QFile out(saved);
+        QVERIFY(out.open(QIODevice::ReadOnly));
+        const QByteArray xml = out.readAll();
+        for (const char *kept : {"<Alias>Department</Alias>", "<Value>Design</Value>", "<Priority>900</Priority>",
+                                 "<Deadline>2026-03-13T17:00:00</Deadline>", "<RateTable>1</RateTable>",
+                                 "<Name>Monday review</Name>"}) {
+            QVERIFY2(xml.contains(kept), kept);
+        }
     }
 
     void viewProjections()

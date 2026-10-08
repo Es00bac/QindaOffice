@@ -13,7 +13,7 @@ and writes.
 | Target | Depends on | What it is |
 | --- | --- | --- |
 | `plan_engine` | Qt Core | The model, calendars, scheduler, leveling, baselines, reports, editing, `.qplan`, MSPDI, CSV. No Gui. |
-| `plan_output` | `plan_engine`, Qt Gui | One page painter each for the printed Gantt, the reports and the Timeline (PDF, paper, PNG). |
+| `plan_output` | `plan_engine`, Qt Gui, `calc_io` (M63) | One page painter each for the printed Gantt, the reports and the Timeline (PDF, paper, PNG); the task sheet as xlsx. |
 | `apps/qindaplan` | `office_quick`, both libraries, QindaTK | `PlanHost`, `PlanDocument`, `PlanService`, the QML window. |
 
 ## Model (`plan_types.h`)
@@ -109,7 +109,11 @@ typed finish Finish No Earlier Than, a constraint date on an ASAP task
 makes it SNET; `3, 4SS+2d, 5FF-1 day, 6FS+50%` for predecessors;
 `Ana[50%], Card stock[200 sheets]` for resource names (unknown names become
 resources). Durations accept `5d`, `3 days`, `4h`, `2w`, `1 mon`, `3?`
-(estimated). Tables: Entry, Tracking, Variance, Cost, Schedule.
+(estimated). Tables: Entry, Tracking, Variance, Cost, Schedule (which also
+shows Deadline and Priority, M63). `priority` takes 0–1000 (500 = medium,
+as in Project); `deadline` takes a date or `NA` — it never moves the
+schedule, and a task that finishes after it shows the missed-deadline flag
+(`missed-deadline` in the indicators text, a red flag in the sheet).
 
 ## File format (`plan_file.h`)
 
@@ -131,12 +135,48 @@ ProjectLibre and MPXJ use: project properties, base and resource calendars
 written), tasks with outline, durations, milestones, manual and inactive
 tasks, constraints, % complete and actuals, notes, fixed cost, links of
 all four types with lag (LinkLag in tenths of a minute; LagFormat 19/20 is a
-percentage), baselines 0–2, work and material resources (cost resources
-import as material, with a warning) and assignments. Costs are decimal
-cents on the wire (MPXJ's reading), rates per hour, units decimals. The
-project summary task (UID 0) is skipped on import and written on export.
-Whatever cannot be represented is reported as a warning, never silently
-dropped.
+percentage), baselines 0–2, priority and deadline (M63), work and material
+resources (cost resources import as material, with a warning) and
+assignments. Costs are decimal cents on the wire (MPXJ's reading), rates per
+hour, units decimals. The project summary task (UID 0) is skipped on import
+and written on export. Whatever cannot be represented is reported as a
+warning, never silently dropped.
+
+**What QindaPlan does not model is kept** (M63, D-071; `mspdi_keep.h`).
+Every child of Project, Calendar, Task, Resource and Assignment the reader
+does not turn into the model — custom fields (`ExtendedAttribute`) and the
+project's definitions of them (`ExtendedAttributes`, `OutlineCodes`), task
+type, effort driven, contact, hyperlinks, cost rate tables, availability,
+resource notes, work contours, baselines 3–10, the summary task's fields,
+views, tables, filters, and elements of Project versions not yet written —
+is captured verbatim into the object's `extra` (`"mspdi"`: name, the element
+before it, the XML) and written back. Recurring calendar exceptions travel
+inside `<Exceptions>` (`"mspdiExceptions"`); alternative work weeks as a
+calendar child. Both are kept but **not scheduled**, and the import says so.
+Because `extra` round-trips through `.qplan`, a Project file saved as
+`.qplan` and back keeps all of it.
+
+- **Project's order.** MSPDI children are ordered sequences. The writer
+  emits each object's children — modelled and kept alike — in the order
+  Microsoft Project 2019 writes them (`mspdi_order.cpp`: the lists come from
+  Project's own files, with the schema's positions for elements those files
+  do not use); an element the lists do not name goes right after the one it
+  followed in the source. (This also fixed the export's own order: `Active`
+  and `Manual` now follow `Name`, as Project writes them.)
+- **The file's values, not ours.** Where QindaPlan used to write a constant —
+  task `Type` (0), `FixedCostAccrual` (3), `CurrencySymbol`,
+  `HonorConstraints`, `DefaultTaskType` and the other project defaults,
+  `StandardRateFormat`, `IsBaselineCalendar` — the file's own value is kept
+  and the constant written only when the file had none. Priority is no
+  longer written back as 500.
+- **Derived values follow the schedule.** Timephased data, actual and
+  remaining work and duration, variances, earned-value fields, leveling
+  delay and the like are what Project computed from the dates and progress
+  QindaPlan edits. They are kept with a stamp of the object's UID, dates,
+  duration, work and progress as read and written back only while the
+  object still writes the same values; a rescheduled task (or a pasted copy,
+  which has a new UID) drops them and Project recomputes. A resource's cost
+  rate tables follow its rate alone.
 
 ## Output (`plan_output`)
 
@@ -149,6 +189,14 @@ baselines, links with arrowheads, today and status lines and a legend.
 in lanes, milestone callouts above and below that never overlap — at a
 crowded edge a label is shortened or dropped). One painter serves paper,
 PDF and the window (D-004: paper colours live in `PlanPaperStyle`).
+`writeTaskSheetXlsx` (M63) writes the table on screen as an Excel workbook
+through calc_io: the fields' titles as a bold frozen header; costs as numbers
+under the project currency's format; dates as date-times under
+`yyyy-mm-dd hh:mm`; durations, slack and variances as numbers of working
+days (`0.## d`), work as hours (`0.## h`); % complete as a fraction under
+`0%`; ID and priority as whole numbers; names indented by outline level.
+*File ▸ Import and Export ▸ Export Task Sheet as Excel…*
+(`planExportXlsxAction`) exports the same columns as the CSV.
 
 ## QindaPlan (app)
 
@@ -197,7 +245,7 @@ PDF and the window (D-004: paper colours live in `PlanPaperStyle`).
   `planWorkingTimeAction`, `planSetBaselineAction`, `planClearBaselineAction`,
   `planStatusDateAction`, `planUpdateProjectAction`, `planRecalculateAction`;
   report `planReport{Overview,Critical,Resources,Late}Action`; files
-  `planExport{Pdf,Csv,Mspdi,Timeline}Action`, `planImportMspdiAction`,
+  `planExport{Pdf,Csv,Xlsx,Mspdi,Timeline}Action` (Xlsx: M63), `planImportMspdiAction`,
   `planPageSetupAction`; view `planTable{Entry,Tracking,Variance,Cost,Schedule}Action`,
   `planTimescale{Days,Weeks,Months}Action`, `planGoToTodayAction`,
   `planShow{Timeline,Critical,Baseline,BarText}Action`, `planUsageWeeksAction`.

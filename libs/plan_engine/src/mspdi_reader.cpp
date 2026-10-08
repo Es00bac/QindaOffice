@@ -1,107 +1,55 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // MSPDI import (mspdi.h): a streaming read into raw records, then one
 // assembly step that validates, converts units (mspdi_p.h) and schedules.
-#include "mspdi.h"
-#include "mspdi_p.h"
-
-#include "outline.h"
-#include "plan_time.h"
-#include "scheduler.h"
-
-#include <QHash>
-#include <QSet>
-#include <QXmlStreamReader>
+// Every child of Project, Task, Resource and Assignment the model does not
+// hold is kept verbatim (mspdi_keep.h, M63); calendars: mspdi_reader_calendar.cpp.
+#include "mspdi_reader_p.h"
 
 #include <algorithm>
 
 namespace QindaOffice::Plan {
 
+namespace Mspdi {
+
 namespace {
 
-using namespace Mspdi;
-
-const DayHours kDefaultDay{{8 * 60, 12 * 60}, {13 * 60, 17 * 60}};
-
-class Reader {
-public:
-    explicit Reader(const QByteArray &xml)
-        : m_xml(xml)
-    {
-    }
-    MspdiResult run(Project *out);
-
-private:
-    QString text() { return m_xml.readElementText(QXmlStreamReader::SkipChildElements).trimmed(); }
-    int integer(int fallback)
-    {
-        bool ok = false;
-        const int v = text().toInt(&ok);
-        return ok ? v : fallback;
-    }
-    bool boolean()
-    {
-        const QString t = text();
-        return t == QLatin1String("1") || t.compare(QLatin1String("true"), Qt::CaseInsensitive) == 0;
-    }
-    qint64 scaled(int scale, qint64 fallback)
-    {
-        return scaledDecimal(text(), scale).value_or(fallback);
-    }
-    Minutes duration() { return parseWireDuration(text()).value_or(0); }
-    void warn(const QString &message) { m_raw.warn(message); }
-
-    void readProject();
-    void readCalendar();
-    DayHours readWorkingTimes();
-    void readWeekDay(Calendar &calendar);
-    void readException(Calendar &calendar);
-    bool readTimePeriod(QDate *from, QDate *to);
-    void readTask();
-    void readResource();
-    void readAssignment();
-
-    QXmlStreamReader m_xml;
-    Raw m_raw;
-    ProjectInfo &m_info = m_raw.info;
-    QList<Calendar> &m_calendars = m_raw.calendars;
-    QList<RawTask> &m_tasks = m_raw.tasks;
-    QList<RawResource> &m_resources = m_raw.resources;
-    QList<RawAssignment> &m_assignments = m_raw.assignments;
-};
-
-void addException(Calendar &calendar, const CalendarException &ex)
+void store(QJsonObject &extra, const QList<Kept> &kept, const QJsonObject &stamp)
 {
-    if (!ex.from.isValid()) {
-        return;
+    if (kept.isEmpty()) {
+        return; // nothing kept, nothing to stamp
     }
-    // Project writes the legacy (DayType 0, no name) and the 2007 form of
-    // the same exception; keep one, with the name.
-    for (CalendarException &existing : calendar.exceptions) {
-        if (existing.from == ex.from && existing.to == ex.to && existing.times == ex.times) {
-            if (existing.name.isEmpty()) {
-                existing.name = ex.name;
-            }
-            return;
-        }
+    extra.insert(kKeptKey, keptToJson(kept));
+    if (!stamp.isEmpty()) {
+        extra.insert(kStampKey, stamp);
     }
-    calendar.exceptions.append(ex);
+}
+
+} // namespace
+
+QJsonObject Reader::stampOf(Kind kind, const QHash<QString, QString> &parts)
+{
+    QJsonObject out;
+    for (const QString &e : stampElements(kind)) {
+        out.insert(e, parts.value(e));
+    }
+    return out;
 }
 
 MspdiResult Reader::run(Project *out)
 {
     MspdiResult result;
-    if (!m_xml.readNextStartElement() || m_xml.name() != u"Project") {
-        result.error = m_xml.hasError()
-                           ? QStringLiteral("line %1: %2").arg(m_xml.lineNumber()).arg(m_xml.errorString())
+    if (!in().readNextStartElement() || in().name() != u"Project") {
+        result.error = in().hasError()
+                           ? QStringLiteral("line %1: %2").arg(in().lineNumber()).arg(in().errorString())
                            : QStringLiteral("This is not a Microsoft Project XML file (no <Project> root).");
         return result;
     }
-    if (!m_xml.namespaceUri().isEmpty() && m_xml.namespaceUri() != kNamespace) {
-        warn(QStringLiteral("Unexpected XML namespace %1; read as Microsoft Project XML.").arg(m_xml.namespaceUri()));
+    if (!in().namespaceUri().isEmpty() && in().namespaceUri() != kNamespace) {
+        warn(QStringLiteral("Unexpected XML namespace %1; read as Microsoft Project XML.").arg(in().namespaceUri()));
     }
     readProject();
-    if (m_xml.hasError()) {
-        result.error = QStringLiteral("line %1: %2").arg(m_xml.lineNumber()).arg(m_xml.errorString());
+    if (in().hasError()) {
+        result.error = QStringLiteral("line %1: %2").arg(in().lineNumber()).arg(in().errorString());
         return result;
     }
     assemble(m_raw, out);
@@ -112,308 +60,213 @@ MspdiResult Reader::run(Project *out)
 
 void Reader::readProject()
 {
-    while (m_xml.readNextStartElement()) {
-        const QStringView n = m_xml.name();
-        if (n == u"Name") {
+    QList<Kept> kept;
+    QString previous;
+    while (in().readNextStartElement()) {
+        const QString n = in().name().toString();
+        if (n == QLatin1String("Name")) {
             m_raw.name = text();
-        } else if (n == u"Title") {
+        } else if (n == QLatin1String("Title")) {
             m_info.title = text();
-        } else if (n == u"Manager") {
+        } else if (n == QLatin1String("Manager")) {
             m_info.manager = text();
-        } else if (n == u"Company") {
+        } else if (n == QLatin1String("Company")) {
             m_info.company = text();
-        } else if (n == u"StartDate") {
+        } else if (n == QLatin1String("StartDate")) {
             m_info.start = parseWireDateTime(text());
-        } else if (n == u"StatusDate") {
+        } else if (n == QLatin1String("FinishDate") || n == QLatin1String("SaveVersion")) {
+            in().skipCurrentElement(); // ours to compute / to write
+        } else if (n == QLatin1String("StatusDate")) {
             m_info.statusDate = parseWireDateTime(text());
-        } else if (n == u"CurrencyCode") {
+        } else if (n == QLatin1String("CurrencyCode")) {
             const QString code = text().toUpper();
             if (code.size() == 3) {
                 m_info.currency = code;
             }
-        } else if (n == u"MinutesPerDay") {
+        } else if (n == QLatin1String("CurrencyDigits")) {
+            in().skipCurrentElement(); // follows the currency
+        } else if (n == QLatin1String("MinutesPerDay")) {
             m_info.minutesPerDay = std::clamp(integer(480), 1, 1440);
-        } else if (n == u"MinutesPerWeek") {
+        } else if (n == QLatin1String("MinutesPerWeek")) {
             m_info.minutesPerWeek = std::clamp(integer(2400), 1, 10080);
-        } else if (n == u"DaysPerMonth") {
+        } else if (n == QLatin1String("DaysPerMonth")) {
             m_info.daysPerMonth = std::clamp(integer(20), 1, 31);
-        } else if (n == u"DefaultStartTime") {
+        } else if (n == QLatin1String("DefaultStartTime")) {
             m_info.defaultStartMinute = parseTimeOfDay(text(), false).value_or(8 * 60);
-        } else if (n == u"DefaultFinishTime") {
+        } else if (n == QLatin1String("DefaultFinishTime")) {
             m_info.defaultFinishMinute = parseTimeOfDay(text(), true).value_or(17 * 60);
-        } else if (n == u"CalendarUID") {
+        } else if (n == QLatin1String("CalendarUID")) {
             m_info.calendarUid = integer(1);
             m_raw.hasCalendarUid = true;
-        } else if (n == u"ScheduleFromStart") {
+        } else if (n == QLatin1String("ScheduleFromStart")) {
             if (!boolean()) {
                 warn(QStringLiteral("The project is scheduled from its finish date; it is imported as scheduled from its start."));
             }
-        } else if (n == u"Calendars") {
-            while (m_xml.readNextStartElement()) {
-                m_xml.name() == u"Calendar" ? readCalendar() : m_xml.skipCurrentElement();
+        } else if (n == QLatin1String("Calendars")) {
+            while (in().readNextStartElement()) {
+                in().name() == u"Calendar" ? readCalendar() : in().skipCurrentElement();
             }
-        } else if (n == u"Tasks") {
-            while (m_xml.readNextStartElement()) {
-                m_xml.name() == u"Task" ? readTask() : m_xml.skipCurrentElement();
+        } else if (n == QLatin1String("Tasks")) {
+            while (in().readNextStartElement()) {
+                in().name() == u"Task" ? readTask() : in().skipCurrentElement();
             }
-        } else if (n == u"Resources") {
-            while (m_xml.readNextStartElement()) {
-                m_xml.name() == u"Resource" ? readResource() : m_xml.skipCurrentElement();
+        } else if (n == QLatin1String("Resources")) {
+            while (in().readNextStartElement()) {
+                in().name() == u"Resource" ? readResource() : in().skipCurrentElement();
             }
-        } else if (n == u"Assignments") {
-            while (m_xml.readNextStartElement()) {
-                m_xml.name() == u"Assignment" ? readAssignment() : m_xml.skipCurrentElement();
+        } else if (n == QLatin1String("Assignments")) {
+            while (in().readNextStartElement()) {
+                in().name() == u"Assignment" ? readAssignment() : in().skipCurrentElement();
             }
         } else {
-            m_xml.skipCurrentElement();
+            keep(kept, Kind::Project, previous);
         }
+        previous = n;
     }
+    store(m_info.extra, kept, {});
 }
 
-void Reader::readCalendar()
+void Reader::readLink(RawTask &raw)
 {
-    Calendar cal;
-    bool isBase = true;
-    int baseUid = -1;
-    while (m_xml.readNextStartElement()) {
-        const QStringView n = m_xml.name();
-        if (n == u"UID") {
-            cal.uid = integer(0);
-        } else if (n == u"Name") {
-            cal.name = text();
-        } else if (n == u"IsBaseCalendar") {
-            isBase = boolean();
-        } else if (n == u"BaseCalendarUID") {
-            baseUid = integer(-1);
-        } else if (n == u"WeekDays") {
-            while (m_xml.readNextStartElement()) {
-                m_xml.name() == u"WeekDay" ? readWeekDay(cal) : m_xml.skipCurrentElement();
-            }
-        } else if (n == u"Exceptions") {
-            while (m_xml.readNextStartElement()) {
-                m_xml.name() == u"Exception" ? readException(cal) : m_xml.skipCurrentElement();
-            }
-        } else if (n == u"WorkWeeks") {
-            warn(QStringLiteral("Alternative work weeks (calendar “%1”) are not supported and were skipped.").arg(cal.name));
-            m_xml.skipCurrentElement();
+    RawLink link;
+    while (in().readNextStartElement()) {
+        const QStringView l = in().name();
+        if (l == u"PredecessorUID") {
+            link.predecessorUid = integer(-1);
+        } else if (l == u"Type") {
+            link.type = integer(1);
+        } else if (l == u"LinkLag") {
+            link.lagTenths = scaled(0, 0);
+        } else if (l == u"LagFormat") {
+            link.lagFormat = integer(7);
+        } else if (l == u"CrossProject") {
+            link.crossProject = boolean();
         } else {
-            m_xml.skipCurrentElement();
+            in().skipCurrentElement();
         }
     }
-    cal.baseUid = isBase ? -1 : baseUid;
-    m_calendars.append(cal);
+    raw.links.append(link);
 }
 
-DayHours Reader::readWorkingTimes()
+// Baselines 0–2 are modelled; Project's 3–10 are kept as written.
+void Reader::readBaseline(RawTask &raw, QList<Kept> &kept, const QString &after)
 {
-    DayHours hours;
-    while (m_xml.readNextStartElement()) {
-        if (m_xml.name() != u"WorkingTime") {
-            m_xml.skipCurrentElement();
-            continue;
-        }
-        std::optional<int> from;
-        std::optional<int> to;
-        while (m_xml.readNextStartElement()) {
-            if (m_xml.name() == u"FromTime") {
-                from = parseTimeOfDay(text(), false);
-            } else if (m_xml.name() == u"ToTime") {
-                to = parseTimeOfDay(text(), true);
+    const QString fragment = capture(in());
+    RawBaseline b;
+    b.data.set = true;
+    reparse(fragment, [&] {
+        while (in().readNextStartElement()) {
+            const QStringView l = in().name();
+            if (l == u"Number") {
+                b.number = integer(-1);
+            } else if (l == u"Start") {
+                b.data.start = parseWireDateTime(text());
+            } else if (l == u"Finish") {
+                b.data.finish = parseWireDateTime(text());
+            } else if (l == u"Duration") {
+                b.data.duration = duration();
+            } else if (l == u"Work") {
+                b.data.work = duration();
+            } else if (l == u"Cost") {
+                b.costCents = scaled(0, 0);
             } else {
-                m_xml.skipCurrentElement();
+                in().skipCurrentElement();
             }
         }
-        if (from && to && *to > *from) {
-            hours.append({*from, *to});
-        }
-    }
-    return hours;
-}
-
-bool Reader::readTimePeriod(QDate *from, QDate *to)
-{
-    while (m_xml.readNextStartElement()) {
-        if (m_xml.name() == u"FromDate") {
-            *from = dateOf(parseWireDateTime(text()));
-        } else if (m_xml.name() == u"ToDate") {
-            *to = dateOf(parseWireDateTime(text()));
-        } else {
-            m_xml.skipCurrentElement();
-        }
-    }
-    return from->isValid();
-}
-
-void Reader::readWeekDay(Calendar &calendar)
-{
-    int dayType = -1;
-    bool working = false;
-    bool hasTimes = false;
-    DayHours hours;
-    QDate from;
-    QDate to;
-    while (m_xml.readNextStartElement()) {
-        const QStringView n = m_xml.name();
-        if (n == u"DayType") {
-            dayType = integer(-1);
-        } else if (n == u"DayWorking") {
-            working = boolean();
-        } else if (n == u"WorkingTimes") {
-            hours = readWorkingTimes();
-            hasTimes = true;
-        } else if (n == u"TimePeriod") {
-            readTimePeriod(&from, &to);
-        } else {
-            m_xml.skipCurrentElement();
-        }
-    }
-    // AGENT-NOTE: a working day without times gets the standard 08–12,
-    // 13–17 (Project always writes the times; other writers do not).
-    const DayHours day = working ? (hasTimes && !hours.isEmpty() ? hours : kDefaultDay) : DayHours{};
-    if (dayType == 0) {
-        addException(calendar, {from, to.isValid() ? to : from, QString(), day});
-    } else if (dayType >= 1 && dayType <= 7) {
-        calendar.week[size_t(dayType == 1 ? 6 : dayType - 2)] = day;
-    }
-}
-
-void Reader::readException(Calendar &calendar)
-{
-    CalendarException ex;
-    int type = 1;
-    bool working = false;
-    bool hasTimes = false;
-    DayHours hours;
-    while (m_xml.readNextStartElement()) {
-        const QStringView n = m_xml.name();
-        if (n == u"TimePeriod") {
-            readTimePeriod(&ex.from, &ex.to);
-        } else if (n == u"Name") {
-            ex.name = text();
-        } else if (n == u"Type") {
-            type = integer(1);
-        } else if (n == u"DayWorking") {
-            working = boolean();
-        } else if (n == u"WorkingTimes") {
-            hours = readWorkingTimes();
-            hasTimes = true;
-        } else {
-            m_xml.skipCurrentElement();
-        }
-    }
-    if (type != 1) {
-        // AGENT-NOTE: only daily ranges map onto CalendarException; weekly,
-        // monthly and yearly recurrences would need expanding.
-        warn(QStringLiteral("The recurring calendar exception “%1” (calendar “%2”) is not supported and was skipped.")
-                 .arg(ex.name, calendar.name));
+    });
+    if (b.number >= 0 && b.number < kBaselineCount) {
+        raw.baselines.append(b);
         return;
     }
-    ex.times = working ? (hasTimes && !hours.isEmpty() ? hours : kDefaultDay) : DayHours{};
-    if (!ex.to.isValid()) {
-        ex.to = ex.from;
-    }
-    addException(calendar, ex);
+    kept << Kept{QStringLiteral("Baseline"), after, fragment, false};
+    warn(QStringLiteral("Baselines 3–10 are kept in the file but QindaPlan shows baselines 0–2 only (baseline %1).")
+             .arg(b.number));
 }
 
 void Reader::readTask()
 {
     RawTask raw;
     Task &t = raw.task;
-    while (m_xml.readNextStartElement()) {
-        const QStringView n = m_xml.name();
-        if (n == u"UID") {
-            t.uid = integer(-1);
-        } else if (n == u"GUID") {
+    QList<Kept> kept;
+    QHash<QString, QString> stamp;
+    QString previous;
+    while (in().readNextStartElement()) {
+        const QString n = in().name().toString();
+        if (stampElements(Kind::Task).contains(n) && n != QLatin1String("Duration")) {
+            const QString value = text();
+            stamp.insert(n, stampPart(n, value));
+            if (n == QLatin1String("UID")) {
+                t.uid = value.toInt();
+            } else if (n == QLatin1String("Start")) {
+                raw.start = parseWireDateTime(value);
+            } else if (n == QLatin1String("Finish")) {
+                raw.finish = parseWireDateTime(value);
+            } else if (n == QLatin1String("PercentComplete")) {
+                t.percentComplete = std::clamp(value.toInt(), 0, 100);
+            } else if (n == QLatin1String("ActualStart")) {
+                t.actualStart = parseWireDateTime(value);
+            } else if (n == QLatin1String("ActualFinish")) {
+                t.actualFinish = parseWireDateTime(value);
+            }
+        } else if (n == QLatin1String("Duration")) {
+            const QString value = text();
+            stamp.insert(n, stampPart(n, value));
+            t.duration = parseWireDuration(value).value_or(0);
+        } else if (n == QLatin1String("GUID")) {
             t.guid = QUuid(text());
-        } else if (n == u"ID") {
+        } else if (n == QLatin1String("ID")) {
             raw.id = integer(-1);
-        } else if (n == u"Name") {
+        } else if (n == QLatin1String("Name")) {
             t.name = text();
-        } else if (n == u"IsNull") {
+        } else if (n == QLatin1String("IsNull")) {
             raw.isNull = boolean();
-        } else if (n == u"OutlineLevel") {
+        } else if (n == QLatin1String("OutlineLevel")) {
             raw.outlineLevel = integer(1);
-        } else if (n == u"Start") {
-            raw.start = parseWireDateTime(text());
-        } else if (n == u"Finish") {
-            raw.finish = parseWireDateTime(text());
-        } else if (n == u"ManualStart") {
+        } else if (n == QLatin1String("Priority")) {
+            t.priority = std::clamp(integer(500), 0, 1000);
+        } else if (n == QLatin1String("ManualStart")) {
             raw.manualStart = parseWireDateTime(text());
-        } else if (n == u"ManualFinish") {
+        } else if (n == QLatin1String("ManualFinish")) {
             raw.manualFinish = parseWireDateTime(text());
-        } else if (n == u"Duration") {
-            t.duration = duration();
-        } else if (n == u"DurationFormat") {
+        } else if (n == QLatin1String("DurationFormat")) {
             raw.durationFormat = integer(7);
-        } else if (n == u"Estimated") {
+        } else if (n == QLatin1String("Estimated")) {
             t.estimated = boolean();
-        } else if (n == u"Milestone") {
+        } else if (n == QLatin1String("Milestone")) {
             t.milestone = boolean();
-        } else if (n == u"Manual") {
+        } else if (n == QLatin1String("Manual")) {
             t.manual = boolean();
-        } else if (n == u"Active") {
+        } else if (n == QLatin1String("Active")) {
             t.active = boolean();
-        } else if (n == u"ConstraintType") {
+        } else if (n == QLatin1String("ConstraintType")) {
             raw.constraintCode = integer(0);
-        } else if (n == u"ConstraintDate") {
+        } else if (n == QLatin1String("ConstraintDate")) {
             t.constraintDate = parseWireDateTime(text());
-        } else if (n == u"PercentComplete") {
-            t.percentComplete = std::clamp(integer(0), 0, 100);
-        } else if (n == u"ActualStart") {
-            t.actualStart = parseWireDateTime(text());
-        } else if (n == u"ActualFinish") {
-            t.actualFinish = parseWireDateTime(text());
-        } else if (n == u"Notes") {
-            t.notes = m_xml.readElementText(QXmlStreamReader::SkipChildElements);
-        } else if (n == u"CalendarUID") {
+        } else if (n == QLatin1String("Deadline")) {
+            t.deadline = parseWireDateTime(text());
+        } else if (n == QLatin1String("Notes")) {
+            t.notes = in().readElementText(QXmlStreamReader::SkipChildElements);
+        } else if (n == QLatin1String("CalendarUID")) {
             raw.calendarUid = integer(-1);
-        } else if (n == u"FixedCost") {
+        } else if (n == QLatin1String("FixedCost")) {
             raw.fixedCostCents = scaled(0, 0);
-        } else if (n == u"PredecessorLink") {
-            RawLink link;
-            while (m_xml.readNextStartElement()) {
-                const QStringView l = m_xml.name();
-                if (l == u"PredecessorUID") {
-                    link.predecessorUid = integer(-1);
-                } else if (l == u"Type") {
-                    link.type = integer(1);
-                } else if (l == u"LinkLag") {
-                    link.lagTenths = scaled(0, 0);
-                } else if (l == u"LagFormat") {
-                    link.lagFormat = integer(7);
-                } else if (l == u"CrossProject") {
-                    link.crossProject = boolean();
-                } else {
-                    m_xml.skipCurrentElement();
-                }
-            }
-            raw.links.append(link);
-        } else if (n == u"Baseline") {
-            RawBaseline b;
-            b.data.set = true;
-            while (m_xml.readNextStartElement()) {
-                const QStringView l = m_xml.name();
-                if (l == u"Number") {
-                    b.number = integer(-1);
-                } else if (l == u"Start") {
-                    b.data.start = parseWireDateTime(text());
-                } else if (l == u"Finish") {
-                    b.data.finish = parseWireDateTime(text());
-                } else if (l == u"Duration") {
-                    b.data.duration = duration();
-                } else if (l == u"Work") {
-                    b.data.work = duration();
-                } else if (l == u"Cost") {
-                    b.costCents = scaled(0, 0);
-                } else {
-                    m_xml.skipCurrentElement();
-                }
-            }
-            raw.baselines.append(b);
+        } else if (n == QLatin1String("PredecessorLink")) {
+            readLink(raw);
+        } else if (n == QLatin1String("Baseline")) {
+            readBaseline(raw, kept, previous);
+        } else if (n == QLatin1String("WBS") || n == QLatin1String("OutlineNumber") || n == QLatin1String("Work")
+                   || n == QLatin1String("ManualDuration") || n == QLatin1String("Summary")
+                   || n == QLatin1String("Critical") || n == QLatin1String("OverAllocated")
+                   || n == QLatin1String("EarlyStart") || n == QLatin1String("EarlyFinish")
+                   || n == QLatin1String("LateStart") || n == QLatin1String("LateFinish")
+                   || n == QLatin1String("FreeSlack") || n == QLatin1String("TotalSlack") || n == QLatin1String("Cost")) {
+            in().skipCurrentElement(); // computed: the writer writes ours
         } else {
-            m_xml.skipCurrentElement();
+            keep(kept, Kind::Task, previous);
         }
+        previous = n;
     }
+    store(t.extra, kept, stampOf(Kind::Task, stamp));
     m_tasks.append(raw);
 }
 
@@ -421,67 +274,96 @@ void Reader::readResource()
 {
     RawResource raw;
     Resource &r = raw.resource;
-    while (m_xml.readNextStartElement()) {
-        const QStringView n = m_xml.name();
-        if (n == u"UID") {
-            r.uid = integer(-1);
-        } else if (n == u"Name") {
+    QList<Kept> kept;
+    QHash<QString, QString> stamp;
+    QString previous;
+    while (in().readNextStartElement()) {
+        const QString n = in().name().toString();
+        if (n == QLatin1String("UID") || n == QLatin1String("MaxUnits") || n == QLatin1String("StandardRate")
+            || n == QLatin1String("CostPerUse") || n == QLatin1String("Work")) {
+            const QString value = text();
+            stamp.insert(n, stampPart(n, value));
+            if (n == QLatin1String("UID")) {
+                bool ok = false;
+                r.uid = value.toInt(&ok);
+                r.uid = ok ? r.uid : -1;
+            } else if (n == QLatin1String("MaxUnits")) {
+                r.maxUnits = int(std::clamp<qint64>(scaledDecimal(value, 2).value_or(100), 0, 100000));
+            } else if (n == QLatin1String("StandardRate")) {
+                raw.rateCents = scaledDecimal(value, 2).value_or(0);
+            } else if (n == QLatin1String("CostPerUse")) {
+                raw.costPerUseCents = scaledDecimal(value, 0).value_or(0);
+            }
+        } else if (n == QLatin1String("Name")) {
             r.name = text();
-        } else if (n == u"Type") {
+        } else if (n == QLatin1String("Type")) {
             raw.type = integer(1);
-        } else if (n == u"IsNull") {
+        } else if (n == QLatin1String("IsNull")) {
             raw.isNull = boolean();
-        } else if (n == u"Initials") {
+        } else if (n == QLatin1String("Initials")) {
             r.initials = text();
-        } else if (n == u"Group") {
+        } else if (n == QLatin1String("Group")) {
             r.group = text();
-        } else if (n == u"MaterialLabel") {
+        } else if (n == QLatin1String("MaterialLabel")) {
             r.materialLabel = text();
-        } else if (n == u"EmailAddress") {
+        } else if (n == QLatin1String("EmailAddress")) {
             r.email = text();
-        } else if (n == u"MaxUnits") {
-            r.maxUnits = int(std::clamp<qint64>(scaled(2, 100), 0, 100000));
-        } else if (n == u"StandardRate") {
-            raw.rateCents = scaled(2, 0);
-        } else if (n == u"CostPerUse") {
-            raw.costPerUseCents = scaled(0, 0);
-        } else if (n == u"CalendarUID") {
+        } else if (n == QLatin1String("CalendarUID")) {
             r.calendarUid = integer(-1);
+        } else if (n == QLatin1String("ID") || n == QLatin1String("OverAllocated") || n == QLatin1String("Cost")) {
+            in().skipCurrentElement(); // computed
         } else {
-            m_xml.skipCurrentElement();
+            keep(kept, Kind::Resource, previous);
         }
+        previous = n;
     }
+    store(r.extra, kept, stampOf(Kind::Resource, stamp));
     m_resources.append(raw);
 }
 
 void Reader::readAssignment()
 {
     RawAssignment raw;
-    while (m_xml.readNextStartElement()) {
-        const QStringView n = m_xml.name();
-        if (n == u"UID") {
-            raw.uid = integer(0);
-        } else if (n == u"TaskUID") {
-            raw.taskUid = integer(-1);
-        } else if (n == u"ResourceUID") {
-            raw.resourceUid = integer(kUnassignedResource);
-        } else if (n == u"Units") {
-            raw.units = std::clamp<qint64>(scaled(2, 100), 0, 100000000);
+    QList<Kept> kept;
+    QHash<QString, QString> stamp;
+    QString previous;
+    while (in().readNextStartElement()) {
+        const QString n = in().name().toString();
+        if (stampElements(Kind::Assignment).contains(n)) {
+            const QString value = text();
+            stamp.insert(n, stampPart(n, value));
+            bool ok = false;
+            if (n == QLatin1String("UID")) {
+                raw.uid = value.toInt(&ok);
+                raw.uid = ok ? raw.uid : 0;
+            } else if (n == QLatin1String("TaskUID")) {
+                raw.taskUid = value.toInt(&ok);
+                raw.taskUid = ok ? raw.taskUid : -1;
+            } else if (n == QLatin1String("ResourceUID")) {
+                raw.resourceUid = value.toInt(&ok);
+                raw.resourceUid = ok ? raw.resourceUid : kUnassignedResource;
+            } else if (n == QLatin1String("Units")) {
+                raw.units = std::clamp<qint64>(scaledDecimal(value, 2).value_or(100), 0, 100000000);
+            }
+        } else if (n == QLatin1String("Cost")) {
+            in().skipCurrentElement(); // computed
         } else {
-            m_xml.skipCurrentElement();
+            keep(kept, Kind::Assignment, previous);
         }
+        previous = n;
     }
+    store(raw.extra, kept, stampOf(Kind::Assignment, stamp));
     m_assignments.append(raw);
 }
 
-} // namespace
+} // namespace Mspdi
 
 MspdiResult readMspdi(const QByteArray &xml, Project *out)
 {
     if (out == nullptr) {
         return {false, QStringLiteral("No project to read into."), {}};
     }
-    return Reader(xml).run(out);
+    return Mspdi::Reader(xml).run(out);
 }
 
 } // namespace QindaOffice::Plan

@@ -100,7 +100,7 @@ signals:
     void resourceInfoRequested(int resourceUid);
     void pageSetupRequested();
     void findRequested(bool replace);
-    // "pdf" | "csv" | "mspdi" | "png" | "import"
+    // "pdf" | "csv" | "xlsx" (M63) | "mspdi" | "png" | "import"
     void fileRequested(const QString &what);
     void scrollToTaskRequested(const QString &taskId);
     void goToTodayRequested();

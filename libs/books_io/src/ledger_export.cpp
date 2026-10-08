@@ -87,6 +87,18 @@ QString yesNo(bool value)
     return value ? QStringLiteral("Y") : QStringLiteral("N");
 }
 
+// QuickBooks marks its own special accounts in the ACCNT EXTRA column.
+QString iifExtra(const QString &role)
+{
+    if (role == SystemRole::UndepositedFunds) {
+        return QStringLiteral("UNDEPOSIT");
+    }
+    if (role == SystemRole::OpeningBalanceEquity) {
+        return QStringLiteral("OPENBAL");
+    }
+    return role == SystemRole::RetainedEarnings ? QStringLiteral("RETEARNINGS") : QString();
+}
+
 QString itemKindText(ItemKind kind)
 {
     switch (kind) {
@@ -227,40 +239,52 @@ QByteArray LedgerExport::iif(CompanyFile &file, const IifOptions &options)
     const Names names = namesOf(file);
     QByteArray out;
     if (options.lists) {
+        // AGENT-CONTRACT (round trip, M63): every column below is one
+        // IifImport reads back (iif_import_lists.cpp); HIDDEN carries the
+        // active flag and EXTRA marks the system accounts as QuickBooks does.
         iifLine(out, {QStringLiteral("!ACCNT"), QStringLiteral("NAME"), QStringLiteral("ACCNTTYPE"), QStringLiteral("DESC"),
-                      QStringLiteral("ACCNUM")});
+                      QStringLiteral("ACCNUM"), QStringLiteral("EXTRA"), QStringLiteral("HIDDEN")});
         for (const Account &a : ChartOfAccounts(file).accounts(true)) {
-            iifLine(out, {QStringLiteral("ACCNT"), a.fullName, iifAccountType(int(a.type)), a.description, a.number});
+            iifLine(out, {QStringLiteral("ACCNT"), a.fullName, iifAccountType(int(a.type)), a.description, a.number,
+                          iifExtra(a.systemRole), yesNo(!a.active)});
         }
         Lists lists(file);
         iifLine(out, {QStringLiteral("!CUST"), QStringLiteral("NAME"), QStringLiteral("COMPANYNAME"), QStringLiteral("BADDR1"),
                       QStringLiteral("BADDR2"), QStringLiteral("BADDR3"), QStringLiteral("BADDR4"), QStringLiteral("BADDR5"),
-                      QStringLiteral("PHONE1"), QStringLiteral("EMAIL"), QStringLiteral("TERMS"), QStringLiteral("NOTE")});
+                      QStringLiteral("SADDR1"), QStringLiteral("SADDR2"), QStringLiteral("SADDR3"), QStringLiteral("SADDR4"),
+                      QStringLiteral("SADDR5"), QStringLiteral("PHONE1"), QStringLiteral("EMAIL"), QStringLiteral("CONT1"),
+                      QStringLiteral("TERMS"), QStringLiteral("NOTE"), QStringLiteral("HIDDEN")});
         for (const Party &p : lists.parties(PartyKind::Customer, true)) {
+            const QString addressee = p.companyName.isEmpty() ? p.displayName : p.companyName;
             iifLine(out, QStringList{QStringLiteral("CUST"), p.displayName, p.companyName}
-                             + addressLines(p.companyName.isEmpty() ? p.displayName : p.companyName, p.billingAddress, 5)
-                             + QStringList{p.phone, p.email, names.terms.value(p.termsId), p.notes});
+                             + addressLines(addressee, p.billingAddress, 5)
+                             + (p.shippingAddress.isEmpty() ? QStringList(5, QString()) : addressLines(addressee, p.shippingAddress, 5))
+                             + QStringList{p.phone, p.email, p.contactName, names.terms.value(p.termsId), p.notes,
+                                           yesNo(!p.active)});
         }
         iifLine(out, {QStringLiteral("!VEND"), QStringLiteral("NAME"), QStringLiteral("COMPANYNAME"), QStringLiteral("ADDR1"),
                       QStringLiteral("ADDR2"), QStringLiteral("ADDR3"), QStringLiteral("ADDR4"), QStringLiteral("ADDR5"),
-                      QStringLiteral("PHONE1"), QStringLiteral("EMAIL"), QStringLiteral("TERMS"), QStringLiteral("TAXID"),
-                      QStringLiteral("1099"), QStringLiteral("NOTE")});
+                      QStringLiteral("PHONE1"), QStringLiteral("EMAIL"), QStringLiteral("CONT1"), QStringLiteral("TERMS"),
+                      QStringLiteral("TAXID"), QStringLiteral("1099"), QStringLiteral("NOTE"), QStringLiteral("HIDDEN")});
         for (const Party &p : lists.parties(PartyKind::Vendor, true)) {
             iifLine(out, QStringList{QStringLiteral("VEND"), p.displayName, p.companyName}
                              + addressLines(p.companyName.isEmpty() ? p.displayName : p.companyName, p.billingAddress, 5)
-                             + QStringList{p.phone, p.email, names.terms.value(p.termsId), p.taxId, yesNo(p.is1099), p.notes});
+                             + QStringList{p.phone, p.email, p.contactName, names.terms.value(p.termsId), p.taxId,
+                                           yesNo(p.is1099), p.notes, yesNo(!p.active)});
         }
         iifLine(out, {QStringLiteral("!INVITEM"), QStringLiteral("NAME"), QStringLiteral("INVITEMTYPE"), QStringLiteral("DESC"),
-                      QStringLiteral("ACCNT"), QStringLiteral("PRICE"), QStringLiteral("COST"), QStringLiteral("TAXABLE")});
+                      QStringLiteral("ACCNT"), QStringLiteral("COGSACCNT"), QStringLiteral("PRICE"), QStringLiteral("COST"),
+                      QStringLiteral("TAXABLE"), QStringLiteral("HIDDEN")});
         for (const Item &i : lists.items(true)) {
-            // SERV = service, OTHC = other charge; non-inventory parts use
-            // NONINV (QuickBooks' "Non-inventory Part").
+            // Intuit's INVITEMTYPE keywords: SERV service, PART non-inventory
+            // part (INVENTORY is a stocked part), OTHC other charge. (Before
+            // M63 this wrote NONINV, which QuickBooks does not know.)
             const QString type = i.kind == ItemKind::Service     ? QStringLiteral("SERV")
                                  : i.kind == ItemKind::OtherCharge ? QStringLiteral("OTHC")
-                                                                   : QStringLiteral("NONINV");
-            iifLine(out, {QStringLiteral("INVITEM"), i.name, type, i.description,
-                          names.accounts.value(i.incomeAccountId != 0 ? i.incomeAccountId : i.expenseAccountId),
-                          i.price.toPlainString(), i.cost.toPlainString(), yesNo(i.taxable)});
+                                                                   : QStringLiteral("PART");
+            iifLine(out, {QStringLiteral("INVITEM"), i.name, type, i.description, names.accounts.value(i.incomeAccountId),
+                          names.accounts.value(i.expenseAccountId), i.price.toPlainString(), i.cost.toPlainString(),
+                          yesNo(i.taxable), yesNo(!i.active)});
         }
     }
     if (options.journal) {

@@ -179,6 +179,7 @@ void PlanHost::createActions()
     }
     on("planExportPdfAction", [this] { emit fileRequested(QStringLiteral("pdf")); });
     on("planExportCsvAction", [this] { emit fileRequested(QStringLiteral("csv")); });
+    on("planExportXlsxAction", [this] { emit fileRequested(QStringLiteral("xlsx")); });
     on("planExportMspdiAction", [this] { emit fileRequested(QStringLiteral("mspdi")); });
     on("planExportTimelineAction", [this] { emit fileRequested(QStringLiteral("png")); });
     on("planImportMspdiAction", [this] { emit fileRequested(QStringLiteral("import")); });

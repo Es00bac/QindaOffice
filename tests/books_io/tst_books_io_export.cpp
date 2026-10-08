@@ -141,9 +141,10 @@ void TestBooksIoExport::iifListsAndBalancedEntries()
     const QByteArray iif = LedgerExport::iif(*m_company.file);
     const QStringList lines = QString::fromUtf8(iif).split(QStringLiteral("\r\n"), Qt::SkipEmptyParts);
     QVERIFY(lines.first().startsWith(QStringLiteral("!ACCNT\tNAME\tACCNTTYPE")));
-    QVERIFY(lines.contains(QStringLiteral("ACCNT\tChecking\tBANK\t\t1000")));
-    QVERIFY(lines.contains(QStringLiteral("ACCNT\tAccounts Receivable\tAR\t\t1100")));
-    QVERIFY(lines.contains(QStringLiteral("ACCNT\tOwner's Equity:Owner Draws\tEQUITY\t\t3120")));
+    // M63: EXTRA (QuickBooks' system-account marker) and HIDDEN close the row.
+    QVERIFY(lines.contains(QStringLiteral("ACCNT\tChecking\tBANK\t\t1000\t\tN")));
+    QVERIFY(lines.contains(QStringLiteral("ACCNT\tAccounts Receivable\tAR\t\t1100\t\tN")));
+    QVERIFY(lines.contains(QStringLiteral("ACCNT\tOwner's Equity:Owner Draws\tEQUITY\t\t3120\t\tN")));
     for (const QString &header : {QStringLiteral("!CUST\t"), QStringLiteral("!VEND\t"), QStringLiteral("!INVITEM\t"),
                                   QStringLiteral("!TRNS\t"), QStringLiteral("!SPL\t")}) {
         QVERIFY2(std::any_of(lines.cbegin(), lines.cend(), [&](const QString &l) { return l.startsWith(header); }),

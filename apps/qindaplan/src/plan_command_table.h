@@ -80,6 +80,8 @@ inline std::span<const PlanCommand> planCommands()
         {"planReportLateAction", QT_TRANSLATE_NOOP("PlanHost", "&Late Tasks"), "", "timer", nullptr},
         {"planExportPdfAction", QT_TRANSLATE_NOOP("PlanHost", "Export &PDF…"), "", "file-output", nullptr},
         {"planExportCsvAction", QT_TRANSLATE_NOOP("PlanHost", "Export Task Sheet as &CSV…"), "", "file-spreadsheet", nullptr},
+        // M63 (D-071): the task sheet with numbers and dates as numbers.
+        {"planExportXlsxAction", QT_TRANSLATE_NOOP("PlanHost", "Export Task Sheet as E&xcel…"), "", "sheet", nullptr},
         {"planExportMspdiAction", QT_TRANSLATE_NOOP("PlanHost", "Export &Microsoft Project XML…"), "", "file-down", nullptr},
         {"planExportTimelineAction", QT_TRANSLATE_NOOP("PlanHost", "Export &Timeline Image…"), "", "image", nullptr},
         {"planImportMspdiAction", QT_TRANSLATE_NOOP("PlanHost", "&Import Microsoft Project XML…"), "", "file-input", nullptr},

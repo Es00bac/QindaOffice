@@ -232,7 +232,14 @@ private slots:
         Project second;
         const MspdiResult r = readMspdi(xml, &second);
         QVERIFY2(r.ok, qPrintable(r.error));
-        QVERIFY2(r.warnings.isEmpty(), qPrintable(r.warnings.join(QLatin1Char('\n')))); // our export is clean
+        // Our export adds no problem of its own. (M63: what the file had and
+        // QindaPlan does not schedule — the recurring exception, baseline 5 —
+        // is kept and written back, so re-reading reports it again.)
+        Project original;
+        const MspdiResult first0 = readMspdi(sample(), &original);
+        for (const QString &w : r.warnings) {
+            QVERIFY2(first0.warnings.contains(w), qPrintable(w));
+        }
         QCOMPARE(second.info.title, first.info.title);
         QCOMPARE(second.info.notes, first.info.notes);
         QCOMPARE(second.info.start, first.info.start);
@@ -311,8 +318,10 @@ private slots:
         QVERIFY2(!reader.hasError(), qPrintable(reader.errorString()));
         QCOMPARE(tasks, 12);      // UID 0 + 11
         QCOMPARE(links, 6);
-        QCOMPARE(baselines, 3);
-        QCOMPARE(exceptions, 3);  // two holidays + the vacation
+        // M63: baseline 5 and the recurring "Monday stand-up" are kept and
+        // written back next to what QindaPlan models.
+        QCOMPARE(baselines, 4);
+        QCOMPARE(exceptions, 4);  // two holidays + the vacation + the kept recurring one
         // Schema order: properties, then Calendars, Tasks, Resources, Assignments.
         const int calendars = int(firstChildren.indexOf(QStringLiteral("Calendars")));
         QVERIFY(calendars > firstChildren.indexOf(QStringLiteral("StatusDate")));

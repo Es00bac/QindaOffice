@@ -3,13 +3,15 @@
 // across), real PDFs of the Gantt and the overview report with the page
 // counts the layouts promise, and the Timeline strip as an image and a PNG.
 // QQO_GRAB_DIR (+ QQO_GRAB_PREFIX) saves PNG renders of the first pages
-// and of the timeline at two sizes for review.
+// and of the timeline at two sizes for review. M63: the task sheet as xlsx,
+// read back with QXlsx — numbers, money, dates and percentages as numbers.
 
 #include "baselines.h"
 #include "gantt_print.h"
 #include "plan_edit.h"
 #include "plan_reports.h"
 #include "plan_time.h"
+#include "plan_xlsx.h"
 #include "report_print.h"
 #include "scheduler.h"
 #include "timeline_render.h"
@@ -19,6 +21,10 @@
 #include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QtTest>
+
+#include <xlsxcell.h>
+#include <xlsxdocument.h>
+#include <xlsxformat.h>
 
 using namespace QindaOffice::Plan;
 
@@ -264,6 +270,52 @@ private slots:
         QImage back(path);
         QCOMPARE(back.size(), QSize(1800, 400));
         QVERIFY(!exportTimelinePng(g.p, dir.filePath(QStringLiteral("no/such/dir.png")), QSize(10, 10), o, &error));
+    }
+
+    void taskSheetToExcel()
+    {
+        Gala g;
+        int venues = -1; // 60 % complete, Ana Ruiz for three days
+        for (int i = 0; i < g.p.tasks.size(); ++i) {
+            venues = g.p.tasks.at(i).name == QStringLiteral("Shortlist venues") ? i : venues;
+        }
+        QVERIFY(venues >= 0);
+        g.p.tasks[venues].priority = 800;
+        schedule(g.p);
+        const QStringList fields{QStringLiteral("id"),       QStringLiteral("name"),     QStringLiteral("duration"),
+                                 QStringLiteral("start"),    QStringLiteral("percent"),  QStringLiteral("cost"),
+                                 QStringLiteral("work"),     QStringLiteral("priority"), QStringLiteral("resources")};
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("sheet.xlsx"));
+        QString error;
+        QVERIFY2(writeTaskSheetXlsx(g.p, fields, path, QLocale::c(), &error), qPrintable(error));
+        QXlsx::Document doc(path);
+        QVERIFY(doc.isLoadPackage());
+        QCOMPARE(doc.read(1, 2).toString(), QStringLiteral("Task Name"));
+        QVERIFY(doc.cellAt(1, 2)->format().fontBold());
+        const int row = venues + 2;
+        QCOMPARE(doc.read(row, 1).toInt(), g.p.tasks.at(venues).id);
+        QCOMPARE(doc.read(row, 2).toString().trimmed(), QStringLiteral("Shortlist venues"));
+        QVERIFY(doc.read(row, 2).toString().startsWith(QLatin1Char(' '))); // outline level 2
+        const std::shared_ptr<QXlsx::Cell> duration = doc.cellAt(row, 3);
+        QCOMPARE(duration->value().typeId(), QMetaType::Double);
+        QCOMPARE(duration->value().toDouble(), 3.0); // three working days
+        const std::shared_ptr<QXlsx::Cell> start = doc.cellAt(row, 4);
+        QCOMPARE(start->format().numberFormat(), QStringLiteral("yyyy-mm-dd hh:mm"));
+        const Minutes begins = g.p.tasks.at(venues).start;
+        QCOMPARE(start->value().toDouble(),
+                 double(QDate(1899, 12, 30).daysTo(dateOf(begins))) + minuteOfDay(begins) / 1440.0);
+        QCOMPARE(doc.cellAt(row, 5)->value().toDouble(), 0.6);
+        // "0%" is Excel's built-in format 9, written by index.
+        const QXlsx::Format percent = doc.cellAt(row, 5)->format();
+        QVERIFY(percent.numberFormat() == QStringLiteral("0%") || percent.numberFormatIndex() == 9);
+        const std::shared_ptr<QXlsx::Cell> cost = doc.cellAt(row, 6);
+        QCOMPARE(cost->value().typeId(), QMetaType::Double);
+        QCOMPARE(qRound64(cost->value().toDouble() * 100), g.p.tasks.at(venues).cost);
+        QVERIFY(cost->format().numberFormat().startsWith(QStringLiteral("\"$\"#,##0.00")));
+        QCOMPARE(doc.cellAt(row, 7)->value().toDouble(), double(g.p.tasks.at(venues).work) / 60.0);
+        QCOMPARE(doc.read(row, 8).toInt(), 800);
+        QCOMPARE(doc.read(row, 9).toString(), QStringLiteral("Ana Ruiz"));
     }
 };
 

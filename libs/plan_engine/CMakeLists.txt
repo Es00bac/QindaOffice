@@ -16,8 +16,13 @@ add_library(plan_engine STATIC
     src/mspdi.h
     src/mspdi_assemble.cpp
     src/mspdi_common.cpp
+    src/mspdi_keep.cpp
+    src/mspdi_keep.h
+    src/mspdi_order.cpp
     src/mspdi_p.h
     src/mspdi_reader.cpp
+    src/mspdi_reader_calendar.cpp
+    src/mspdi_reader_p.h
     src/mspdi_writer.cpp
     src/outline.cpp
     src/outline.h

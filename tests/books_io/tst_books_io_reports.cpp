@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // M46: ReportTable → PDF (the same PagePainter contract as the forms) and
-// → CSV, with the CSV read back to the numbers the report computed.
+// → CSV, with the CSV read back to the numbers the report computed. M63:
+// → Excel, read back with QXlsx: money, numbers, percentages and dates are
+// numeric cells with their formats, never text.
 #include "books_io_fixture.h"
 
 #include "csv_util.h"
 #include "report_output.h"
+#include "report_xlsx.h"
 #include "reports.h"
 
 #include <QTemporaryDir>
+
+#include <xlsxcell.h>
+#include <xlsxdocument.h>
+#include <xlsxformat.h>
 
 using namespace QindaOffice::Books;
 using namespace BooksIoFixture;
@@ -23,6 +30,7 @@ private slots:
     void wideReportsGoLandscape();
     void longReportsPaginate();
     void csvQuoting();
+    void reportsToExcelAsNumbers();
 
 private:
     QTemporaryDir m_dir;
@@ -187,6 +195,80 @@ void TestBooksIoReports::csvQuoting()
     QCOMPARE(back.first(), row);
     QCOMPARE(Csv::detectDelimiter(QStringLiteral("a;b;c\n1,5;2;3\n4;5,5;6\n")), QLatin1Char(';'));
     QCOMPARE(Csv::detectDelimiter(QStringLiteral("a\tb\tc\n1\t2\t3\n")), QLatin1Char('\t'));
+}
+
+namespace {
+
+// The 1-based row whose column A (indentation trimmed) is `label`; 0 if none.
+int rowOf(QXlsx::Document &doc, const QString &label)
+{
+    for (int row = 1; row <= doc.dimension().lastRow(); ++row) {
+        if (doc.read(row, 1).toString().trimmed() == label) {
+            return row;
+        }
+    }
+    return 0;
+}
+
+} // namespace
+
+void TestBooksIoReports::reportsToExcelAsNumbers()
+{
+    CompanyFile &f = *m_company.file;
+    PnlOptions options;
+    options.from = QDate(2026, 3, 1);
+    options.to = QDate(2026, 3, 31);
+    options.basis = Basis::Accrual;
+    const ReportTable pnl = Reports(f).profitAndLoss(options);
+    const QString path = m_dir.filePath(QStringLiteral("pnl.xlsx"));
+    QString error;
+    QVERIFY2(ReportXlsx::write(pnl, path, &error), qPrintable(error));
+    QXlsx::Document doc(path);
+    QVERIFY(doc.isLoadPackage());
+    QCOMPARE(doc.read(1, 1).toString(), QStringLiteral("Northwind Creative"));
+    QCOMPARE(doc.read(2, 1).toString(), QStringLiteral("Profit and Loss"));
+    QVERIFY(doc.cellAt(5, 1)->format().fontBold()); // the header row
+    const int net = rowOf(doc, QStringLiteral("Net Income"));
+    QVERIFY(net > 5);
+    const std::shared_ptr<QXlsx::Cell> total = doc.cellAt(net, 2);
+    QVERIFY(total);
+    QCOMPARE(total->value().typeId(), QMetaType::Double);
+    QCOMPARE(qRound64(total->value().toDouble() * 100), pnl.money(QStringLiteral("total:net_income"), QStringLiteral("total")));
+    QCOMPARE(total->format().numberFormat(), ReportXlsx::moneyFormat(QStringLiteral("USD")));
+    QCOMPARE(ReportXlsx::moneyFormat(QStringLiteral("USD")), QStringLiteral("\"$\"#,##0.00;-\"$\"#,##0.00"));
+    QVERIFY(total->format().fontBold());
+    const int fees = rowOf(doc, QStringLiteral("4000 Project Fees"));
+    QVERIFY(fees > 0);
+    QCOMPARE(doc.cellAt(fees, 2)->value().typeId(), QMetaType::Double);
+    QVERIFY(doc.read(fees, 1).toString().startsWith(QLatin1Char(' '))); // indented under Income
+
+    // A percentage share and a listing with dates.
+    const ReportTable sales = Reports(f).salesByCustomer(QDate(2026, 1, 1), QDate(2026, 3, 31), Basis::Accrual);
+    const QString salesPath = m_dir.filePath(QStringLiteral("sales.xlsx"));
+    QVERIFY(ReportXlsx::write(sales, salesPath, &error));
+    QXlsx::Document salesDoc(salesPath);
+    const int shareColumn = sales.columnIndex(QStringLiteral("share")) + 1;
+    QVERIFY(shareColumn > 0);
+    const int customer = rowOf(salesDoc, QStringLiteral("Harbor & Pine Coffee Co."));
+    QVERIFY(customer > 0);
+    const std::shared_ptr<QXlsx::Cell> share = salesDoc.cellAt(customer, shareColumn);
+    QCOMPARE(share->value().typeId(), QMetaType::Double);
+    QCOMPARE(share->value().toDouble(), 1.0); // the only customer: 100.0%
+    QCOMPARE(share->format().numberFormat(), QStringLiteral("0.0%"));
+    const ReportTable ledger = Reports(f).generalLedger(QDate(2026, 3, 1), QDate(2026, 3, 31));
+    const QString ledgerPath = m_dir.filePath(QStringLiteral("ledger.xlsx"));
+    QVERIFY(ReportXlsx::write(ledger, ledgerPath, &error));
+    QXlsx::Document ledgerDoc(ledgerPath);
+    const int dateColumn = ledger.columnIndex(QStringLiteral("date")) + 1;
+    QVERIFY(dateColumn > 0);
+    bool sawDate = false;
+    for (int row = 6; row <= ledgerDoc.dimension().lastRow() && !sawDate; ++row) {
+        const std::shared_ptr<QXlsx::Cell> c = ledgerDoc.cellAt(row, dateColumn);
+        if (c && c->format().numberFormat() == QStringLiteral("yyyy-mm-dd")) {
+            sawDate = c->readValue().toDate() == QDate(2026, 3, 2) || c->readValue().toDate().isValid();
+        }
+    }
+    QVERIFY(sawDate);
 }
 
 QTEST_MAIN(TestBooksIoReports)

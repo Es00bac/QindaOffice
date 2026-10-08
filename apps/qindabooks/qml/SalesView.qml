@@ -57,6 +57,9 @@ Tk.Box {
                         text: view.tab === 0 ? qsTr("New invoice") : view.tab === 1 ? qsTr("New estimate") : view.tab === 2 ? qsTr("New customer") : qsTr("New product or service")
                         onClicked: view.host.actions.trigger(["booksNewInvoiceAction", "booksNewEstimateAction", "booksNewCustomerAction", "booksNewItemAction"][view.tab]) }
             Tk.Button { objectName: "salesReceive"; variant: "outline"; iconName: "hand-coins"; text: qsTr("Receive payment"); onClicked: view.host.actions.trigger("booksReceivePaymentAction") }
+            // M63: the statements and schedules the engine always had.
+            Tk.Button { objectName: "salesRecurring"; visible: view.tab === 0; variant: "outline"; iconName: "repeat"; text: qsTr("Recurring…"); onClicked: view.host.actions.trigger("booksRecurringAction") }
+            Tk.Button { objectName: "salesStatements"; visible: view.tab === 2; variant: "outline"; iconName: "scroll-text"; text: qsTr("Statements…"); onClicked: view.host.actions.trigger("booksStatementsAction") }
         }
         Tk.TabStrip {
             objectName: "salesTabs"

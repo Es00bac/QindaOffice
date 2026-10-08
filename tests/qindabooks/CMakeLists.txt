@@ -8,9 +8,14 @@
 # tst_qindabooks_connections (M48) drives the Mercury/Stripe API against
 # tests/books_connect/fake_bank_api.h; every test runs with the in-memory
 # keyring (QQO_BOOKS_SECRET_BACKEND=memory), never the user's.
+# M63 (D-071): tst_qindabooks_essentials (the service calls that made the
+# engine's statements, recurring schedules, budgets, sales-tax payments,
+# logo, list transfer and reports-to-Excel reachable) and
+# tst_qindabooks_dialogs (their dialogs through the real window,
+# books_window_scene.h).
 foreach(name IN ITEMS tst_qindabooks_service tst_qindabooks_banking tst_qindabooks_host tst_qindabooks_menu_export
-                      tst_qindabooks_ui tst_qindabooks_connections)
-    add_executable(${name} ${name}.cpp books_app_test_support.h)
+                      tst_qindabooks_ui tst_qindabooks_connections tst_qindabooks_essentials tst_qindabooks_dialogs)
+    add_executable(${name} ${name}.cpp books_app_test_support.h books_window_scene.h)
     target_link_libraries(${name} PRIVATE qindabooks_app qindabooks_appplugin Qt6::Test Qt6::Network)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)
     target_compile_definitions(${name} PRIVATE QQO_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/qml_fixtures")

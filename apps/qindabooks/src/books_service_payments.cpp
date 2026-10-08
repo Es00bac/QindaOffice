@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // BooksService: money in and out (receive payment, pay bills), the open
-// documents they apply to, printed forms as PDF, e-mailing an invoice
-// through QindaMail, and recurring invoices.
+// documents they apply to, printed forms as PDF, and e-mailing a form
+// through QindaMail (invoices here; statements use the same hand-off).
 #include "books_service.h"
 
+#include "check_print.h"
 #include "company_file.h"
 #include "documents.h"
 #include "form_renderer.h"
 #include "lists.h"
 #include "purchases.h"
-#include "recurring.h"
 #include "sales.h"
 
 #include <QDir>
@@ -24,28 +24,6 @@ namespace QindaOffice::Apps::Books {
 using namespace ::QindaOffice::Books;
 
 namespace {
-
-QString frequencyKey(Frequency f)
-{
-    switch (f) {
-    case Frequency::Daily: return QStringLiteral("daily");
-    case Frequency::Weekly: return QStringLiteral("weekly");
-    case Frequency::Monthly: return QStringLiteral("monthly");
-    case Frequency::Yearly: return QStringLiteral("yearly");
-    }
-    return QStringLiteral("monthly");
-}
-
-Frequency frequencyFrom(const QString &key)
-{
-    if (key == QLatin1String("daily")) {
-        return Frequency::Daily;
-    }
-    if (key == QLatin1String("weekly")) {
-        return Frequency::Weekly;
-    }
-    return key == QLatin1String("yearly") ? Frequency::Yearly : Frequency::Monthly;
-}
 
 bool launchDetached(const QString &program, const QStringList &arguments)
 {
@@ -199,7 +177,10 @@ QVariantMap BooksService::exportDocumentPdf(qint64 id, const QUrl &fileUrl)
     }
     const QString path = localPath(fileUrl);
     QString error;
-    if (!FormRenderer::writeDocumentPdf(*c, id, path, &error)) {
+    // M63: a check (or bank-paid bill payment) saves as the check it prints.
+    const bool written = isPrintableCheck(*c, id) ? CheckRenderer::writeChecksPdf(*c, {id}, path, &error)
+                                                  : FormRenderer::writeDocumentPdf(*c, id, path, &error);
+    if (!written) {
         return Format::failure(error);
     }
     QVariantMap out = Format::success(id);
@@ -217,14 +198,7 @@ QVariantMap BooksService::emailDocument(qint64 id)
     if (!doc) {
         return Format::failure(tr("That document no longer exists."));
     }
-    // The PDF goes to a stable per-user outbox (not a temp file that
-    // vanishes before the mail is written).
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
-        + QStringLiteral("/qindaoffice/books/outbox");
-    QDir().mkpath(dir);
-    QString base = doc->number.isEmpty() ? QStringLiteral("document-%1").arg(id) : doc->number;
-    base.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9._-]")), QStringLiteral("_"));
-    const QString path = dir + QLatin1Char('/') + base + QStringLiteral(".pdf");
+    const QString path = outboxPath(doc->number.isEmpty() ? QStringLiteral("document-%1").arg(id) : doc->number);
     QString error;
     if (!FormRenderer::writeDocumentPdf(*c, id, path, &error)) {
         return Format::failure(error);
@@ -249,6 +223,24 @@ QVariantMap BooksService::emailDocument(qint64 id)
         body += c->settings().paymentInstructions + QStringLiteral("\n\n");
     }
     body += tr("Thank you,\n%1").arg(company);
+    return mailWithAttachment(id, path, email, customer ? customer->displayName : tr("The customer"), subject, body);
+}
+
+QString BooksService::outboxPath(const QString &base)
+{
+    // The PDF goes to a stable per-user outbox (not a temp file that
+    // vanishes before the mail is written).
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
+        + QStringLiteral("/qindaoffice/books/outbox");
+    QDir().mkpath(dir);
+    QString name = base;
+    name.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9._-]")), QStringLiteral("_"));
+    return dir + QLatin1Char('/') + name + QStringLiteral(".pdf");
+}
+
+QVariantMap BooksService::mailWithAttachment(qint64 id, const QString &path, const QString &email, const QString &who,
+                                             const QString &subject, const QString &body)
+{
     // AGENT-CONTRACT (apps/qindamail main.cpp, launch_arguments.h
     // foldAttachArguments): `qindamail --attach <path> mailto:…` opens a
     // composer draft with the file imported into its attachment store. The
@@ -265,8 +257,7 @@ QVariantMap BooksService::emailDocument(qint64 id)
         emit notify(tr("QindaMail did not start"), tr("The PDF is saved at %1.").arg(path), QStringLiteral("warning"));
     }
     if (email.isEmpty()) {
-        emit notify(tr("No e-mail address"), tr("%1 has no e-mail address; fill in the To field.")
-                                                 .arg(customer ? customer->displayName : tr("The customer")),
+        emit notify(tr("No e-mail address"), tr("%1 has no e-mail address; fill in the To field.").arg(who),
                     QStringLiteral("warning"));
     }
     QVariantMap out = launched ? Format::success(id) : Format::failure(tr("QindaMail could not be started."));
@@ -277,111 +268,6 @@ QVariantMap BooksService::emailDocument(qint64 id)
     out.insert(QStringLiteral("to"), email);
     out.insert(QStringLiteral("subject"), subject);
     return out;
-}
-
-// ---- recurring invoices ----------------------------------------------------------
-
-QVariantList BooksService::recurringTemplates() const
-{
-    QVariantList out;
-    CompanyFile *c = file();
-    if (c == nullptr) {
-        return out;
-    }
-    const MoneyFormat money = moneyFormat();
-    Recurring recurring(*c);
-    for (const RecurringTemplate &t : recurring.templates()) {
-        const QDate next = Recurring::occurrence(t.schedule, t.generated);
-        out << QVariantMap{{QStringLiteral("id"), t.id},
-                           {QStringLiteral("name"), t.name},
-                           {QStringLiteral("customerId"), t.body.partyId},
-                           {QStringLiteral("customerName"), nameOfParty(t.body.partyId)},
-                           {QStringLiteral("frequency"), frequencyKey(t.schedule.frequency)},
-                           {QStringLiteral("interval"), t.schedule.interval},
-                           {QStringLiteral("dayOfMonth"), t.schedule.dayOfMonth},
-                           {QStringLiteral("start"), Format::isoDate(t.schedule.start)},
-                           {QStringLiteral("end"), Format::isoDate(t.schedule.end)},
-                           {QStringLiteral("maxOccurrences"), t.schedule.maxOccurrences},
-                           {QStringLiteral("nextDate"), Format::isoDate(next)},
-                           {QStringLiteral("generated"), t.generated},
-                           {QStringLiteral("postOpen"), t.postOpen},
-                           {QStringLiteral("active"), t.active},
-                           {QStringLiteral("due"), t.active ? recurring.dueDates(t.id, todayDate()).size() : 0},
-                           {QStringLiteral("total"), t.body.total.minor()},
-                           {QStringLiteral("totalText"), money.text(t.body.total.minor())}};
-    }
-    return out;
-}
-
-QVariantMap BooksService::saveRecurring(const QVariantMap &map)
-{
-    CompanyFile *c = file();
-    if (c == nullptr) {
-        return noCompany();
-    }
-    Recurring recurring(*c);
-    const qint64 id = Format::id(map.value(QStringLiteral("id")));
-    if (id != 0) {
-        // AGENT-NOTE: the engine keeps a schedule immutable once it has
-        // generated (occurrence k is a function of the start); a template
-        // is paused/resumed here, and a different schedule is a new one.
-        if (!map.contains(QStringLiteral("active"))) {
-            return Format::failure(tr("A schedule cannot be changed; pause it and create a new one."));
-        }
-        return Format::result(recurring.setActive(id, map.value(QStringLiteral("active")).toBool()));
-    }
-    QVariantMap body = map.value(QStringLiteral("document")).toMap();
-    body.insert(QStringLiteral("kind"), QStringLiteral("invoice"));
-    BusinessDocument doc;
-    QString error;
-    if (!documentFromMap(body, &doc, &error)) {
-        return Format::failure(error);
-    }
-    RecurringSchedule schedule;
-    schedule.frequency = frequencyFrom(map.value(QStringLiteral("frequency")).toString());
-    schedule.interval = qMax(1, map.value(QStringLiteral("interval"), 1).toInt());
-    schedule.dayOfMonth = map.value(QStringLiteral("dayOfMonth")).toInt();
-    schedule.start = Format::date(map.value(QStringLiteral("start")));
-    if (!schedule.start.isValid()) {
-        schedule.start = todayDate();
-    }
-    schedule.end = Format::date(map.value(QStringLiteral("end")));
-    schedule.maxOccurrences = map.value(QStringLiteral("maxOccurrences")).toInt();
-    return Format::result(recurring.create(map.value(QStringLiteral("name")).toString().trimmed(), doc, schedule,
-                                           map.value(QStringLiteral("postOpen"), true).toBool()));
-}
-
-int BooksService::generateDueRecurring()
-{
-    CompanyFile *c = file();
-    if (c == nullptr) {
-        return 0;
-    }
-    QList<qint64> created;
-    const Result r = Recurring(*c).generateDue(todayDate(), &created);
-    if (!r.ok) {
-        emit notify(tr("Recurring invoices"), r.error, QStringLiteral("danger"));
-    } else if (!created.isEmpty()) {
-        emit notify(tr("Recurring invoices"), tr("Created %n invoice(s).", nullptr, int(created.size())),
-                    QStringLiteral("success"));
-    }
-    return int(created.size());
-}
-
-int BooksService::dueRecurringCount() const
-{
-    CompanyFile *c = file();
-    if (c == nullptr) {
-        return 0;
-    }
-    Recurring recurring(*c);
-    int due = 0;
-    for (const RecurringTemplate &t : recurring.templates()) {
-        if (t.active) {
-            due += int(recurring.dueDates(t.id, todayDate()).size());
-        }
-    }
-    return due;
 }
 
 } // namespace QindaOffice::Apps::Books

@@ -17,3 +17,6 @@ qqo_add_plan_test(tst_plan_edit)
 qqo_add_plan_test(tst_plan_file)
 qqo_add_plan_test(tst_plan_resources)
 qqo_add_plan_test(tst_plan_mspdi)
+# M63 (D-071): what Microsoft Project XML holds beyond the model is kept and
+# written back in Project's order.
+qqo_add_plan_test(tst_plan_mspdi_keep)

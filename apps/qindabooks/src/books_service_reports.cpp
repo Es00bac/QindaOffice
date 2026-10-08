@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // BooksService: the report catalog, running a report with its options,
-// drill-down to the transactions behind a number, export to PDF/CSV and
-// the fiscal-year-aware date-range presets.
+// drill-down to the transactions behind a number, export to PDF, CSV and
+// Excel (M63), and the fiscal-year-aware date-range presets.
 #include "books_service.h"
 
 #include "accounts.h"
@@ -9,6 +9,7 @@
 #include "documents.h"
 #include "reconciliation.h"
 #include "report_output.h"
+#include "report_xlsx.h"
 #include "reports.h"
 
 #include <algorithm>
@@ -298,8 +299,10 @@ QVariantMap BooksService::exportReport(const QString &id, const QVariantMap &opt
         return Format::failure(error);
     }
     const QString path = localPath(fileUrl);
-    const bool ok = format == QLatin1String("csv") ? writeFile(path, reportToCsv(*table), &error)
-                                                   : ReportPdf::writeReportPdf(*file(), *table, path, &error);
+    // "pdf" | "csv" | "xlsx" (M63: numbers stay numbers in Excel).
+    const bool ok = format == QLatin1String("csv")    ? writeFile(path, reportToCsv(*table), &error)
+                    : format == QLatin1String("xlsx") ? ReportXlsx::write(*table, path, &error)
+                                                      : ReportPdf::writeReportPdf(*file(), *table, path, &error);
     if (!ok) {
         return Format::failure(error);
     }

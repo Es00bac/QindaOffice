@@ -102,6 +102,7 @@ struct RawAssignment {
     int taskUid = 0;
     int resourceUid = 0;
     qint64 units = 100;
+    QJsonObject extra; // kept elements and their stamp (mspdi_keep.h)
 };
 
 struct Raw {

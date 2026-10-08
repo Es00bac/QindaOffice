@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// BooksService: payment terms, classes/tags and sales tax (agencies and
-// rates).
+// BooksService: payment terms, classes/tags and sales tax (agencies,
+// rates, and — M63 — what is owed and paying it).
 #include "books_service.h"
 
+#include "accounts.h"
 #include "company_file.h"
 #include "lists.h"
 #include "tax.h"
@@ -150,6 +151,60 @@ QVariantMap BooksService::saveTaxRate(const QVariantMap &map)
         agencyId = created.id;
     }
     return Format::result(tax.createSimpleRate(agencyId, map.value(QStringLiteral("name")).toString().trimmed(), *rate));
+}
+
+// ---- sales tax owed and paid (M63, D-071) ----------------------------------------
+
+// AGENT-CONTRACT (QML, SalesTaxPaymentDialog.qml): one row per agency with
+// {agencyId, name, owed, owedText, owedPlain} — owed = collected − paid as
+// of the date (SalesTax::liability), in minor units and as text.
+QVariantList BooksService::salesTaxOwed(const QString &asOfIso) const
+{
+    QVariantList out;
+    CompanyFile *c = file();
+    if (c == nullptr) {
+        return out;
+    }
+    QDate asOf = Format::date(asOfIso);
+    if (!asOf.isValid()) {
+        asOf = todayDate();
+    }
+    const MoneyFormat money = moneyFormat();
+    SalesTax tax(*c);
+    for (const TaxAgency &a : tax.agencies()) {
+        const qint64 owed = tax.liability(a.id, asOf).minor();
+        out << QVariantMap{{QStringLiteral("agencyId"), a.id},
+                           {QStringLiteral("name"), a.name},
+                           {QStringLiteral("owed"), owed},
+                           {QStringLiteral("owedText"), money.text(owed)},
+                           {QStringLiteral("owedPlain"), money.plain(owed)}};
+    }
+    return out;
+}
+
+QVariantMap BooksService::recordSalesTaxPayment(const QVariantMap &map)
+{
+    CompanyFile *c = file();
+    if (c == nullptr) {
+        return noCompany();
+    }
+    const qint64 agency = Format::id(map.value(QStringLiteral("agencyId")));
+    const qint64 bank = Format::id(map.value(QStringLiteral("bankAccountId")));
+    const std::optional<Account> from = ChartOfAccounts(*c).account(bank);
+    if (!from || (from->type != AccountType::Bank && from->type != AccountType::CreditCard)) {
+        return Format::failure(tr("Choose the bank or card account the tax is paid from."));
+    }
+    QString error;
+    const std::optional<qint64> amount = moneyFormat().parse(map.value(QStringLiteral("amount")), &error);
+    if (!amount) {
+        return Format::failure(error);
+    }
+    QDate date = Format::date(map.value(QStringLiteral("date")));
+    if (!date.isValid()) {
+        date = todayDate();
+    }
+    return Format::result(SalesTax(*c).recordPayment(agency, bank, c->money(*amount), date,
+                                                     map.value(QStringLiteral("memo")).toString().trimmed()));
 }
 
 } // namespace QindaOffice::Apps::Books

@@ -5,6 +5,99 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-071: QuickBooks migration and reachable bookkeeping; Project XML preservation
+
+**Date:** 2026-10-08 · **Status:** accepted (owner request: QuickBooks and
+Microsoft Project interchange; M63, docs/plans/office-parity.md)
+
+**Context.** The bookkeeping engine (D-045) had company logos, customer
+statements, recurring-invoice schedules, budgets and sales-tax payments that
+no command reached, and File ▸ Import Lists failed on every use: the window
+sent `"customer"`, the service accepted only `customers`, and the answer was
+dropped, so nothing happened and nobody was told. A small business leaving
+QuickBooks Desktop had no way in.
+
+**Decision.**
+
+1. **The user chooses the list, and every answer is shown.** One dialog
+   (`ListsDialog.qml`) imports or exports customers, vendors, products and
+   services or the chart of accounts; the service accepts the plural keys,
+   the singular party kinds and obvious synonyms, and returns what was added,
+   what was already there and each refused row by number. The dialog shows
+   all of it.
+2. **Every engine feature gets a command, a dialog and a test.** Company logo
+   (stored only if it decodes the way the forms decode it), customer
+   statements (screen, preview, paper and PDF from one painter through a
+   `"statement"` print source; e-mail through the invoice's QindaMail
+   hand-off), recurring schedules (create, edit, pause, resume, delete),
+   budgets (a fiscal year per account) and sales-tax payments. Dialogs edit
+   text; the service splits and sums money exactly.
+3. **A changed recurring schedule is re-based, never replayed.** Occurrence
+   k is a function of the start date, so editing the rhythm of a template
+   that has invoiced would move or repeat dates. `Recurring::update` keeps an
+   unchanged schedule as stored and re-bases a changed one on the next
+   invoice date the user chose (count reset, "invoices to come"), refusing a
+   date on or before the last invoice it made. Deleting a schedule keeps the
+   invoices it made.
+4. **QuickBooks Desktop comes in through IIF, exactly or not at all**
+   (supersedes D-046's "IIF export is one-way"). Lists, then every
+   TRNS/SPL block. The ledger must equal the file: a block that does not
+   balance, does not read or names an account the company lacks (unless the
+   user maps it) is refused with its line numbers; every other block posts
+   exactly its rows — as the matching QindaBooks document when that
+   document's own posting reproduces the rows line for line (verified after
+   posting inside a savepoint, rolled back otherwise), else as a journal
+   entry. Payments and credits go to the oldest open documents (IIF carries
+   no links). A block already in the books is skipped, so re-importing adds
+   nothing. The import is one SQL transaction; the preview is the same run
+   rolled back; a backup copy is made before the commit, because postings
+   are never undone (D-045). QuickBooks Online and Desktop list exports
+   (CSV) go through the list importer's column and type aliases.
+5. **Reports go to Excel as numbers.** Every report also exports as
+   `.xlsx` through calc_io (books_io links calc_io; libraries never depend
+   on apps): money cells are numbers under the company currency's format,
+   percentages fractions under `0.0%`, dates date serials — never text, so
+   an accountant's formulas work on them. QindaPlan's task sheet does the
+   same through plan_output.
+6. **Microsoft Project XML keeps what QindaPlan does not model** (D-068's
+   rule for Office files, applied to MSPDI; plan.md said it already did).
+   Every unmodelled child of Project, Calendar, Task, Resource and
+   Assignment is captured verbatim into the object's `extra` and written
+   back in the order Microsoft Project 2019 itself writes (its own output,
+   with the schema for the rest; an unknown element follows the element it
+   followed) — so custom fields, task type, hyperlinks, rate tables,
+   baselines 3–10, recurring exceptions and views survive, and a `.qplan`
+   save keeps them too. Values Project derives from the schedule (timephased
+   data, actuals, variances) carry a stamp of the dates and progress they
+   came from and are dropped once the object no longer writes the same, so
+   QindaPlan never hands Project stale derived data. Priority and Deadline
+   become model fields (sheet, Task Information, missed-deadline flag).
+7. **Checks print onto pre-printed voucher stock.** A check, or a bill
+   payment drawn on a bank account, prints one check per page (Expenses ▸
+   Print Check, or Print on a selected check) through the same PagePainter
+   as every form: on the check third only the values — date, payee, the
+   amount in figures and in English words starred to the line's end, the
+   window-envelope address, the printed memo — at baselines measured from
+   the sheet's corner, because the stock carries the labels, the number and
+   the MICR line; both stubs print in full (the bills paid or the account
+   lines, the check amount, the bank account). Blank-stock printing (MICR)
+   and per-printer alignment offsets are not supported yet.
+
+**Consequences.** A list import can no longer fail silently: a refused row is
+on screen with its row number. Statements, schedules, budgets and tax
+payments no longer need the engine's API to be used. A company can leave
+QuickBooks Desktop with its history: the trial balance after an IIF import
+is the file's, and QindaBooks' own IIF export round-trips (lists equal,
+every balance equal). Imported invoices carry no sales-tax agency tag (the
+tax is a plain line on Sales Tax Payable), so the per-agency liability
+report starts from the payments made after the move. A Project file opened
+and saved by QindaPlan loses nothing it did not change; the price is that
+QindaPlan's MSPDI output now carries elements it cannot validate (they are
+Project's own, as written), and the export's element order changed to
+Project's (tests that counted exported elements were updated). Checks
+print from QindaBooks; a misaligned printer cannot yet be corrected in the
+app, and purchase orders and time tracking remain open (office-parity.md).
+
 ## D-069: Excel interchange: typed cells, future-function prefixes, honest writer
 
 **Date:** 2026-10-08 · **Status:** accepted (M61, the Excel half of the owner's

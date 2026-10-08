@@ -3,6 +3,7 @@
 #include "books_host.h"
 
 #include "books_document.h"
+#include "check_print.h"
 #include "company_file.h"
 #include "form_renderer.h"
 #include "page_output.h"
@@ -33,6 +34,8 @@ BooksHost::BooksHost()
         emit titleChanged(); // the path (and so the title) moved
         syncEnablement();
     });
+    // What is printable can change under the selection (a check voided).
+    connect(m_service, &BooksService::changed, this, [this] { syncEnablement(); });
     finalizeHost();
     syncEnablement();
     // A window still without a company once start-up settles (File ▸ New
@@ -105,7 +108,15 @@ void BooksHost::setPrintSource(const QString &kind, const QVariant &id, const QV
             const ReportStyle style = ReportPdf::styleFor(file);
             m_printLandscape = ReportPdf::prefersLandscape(*table, defaultPageSize(style.locale), style);
         }
-    } else if (kind == QLatin1String("document") && m_service->hasCompany()) {
+    } else if ((kind == QLatin1String("document") || kind == QLatin1String("statement")) && m_service->hasCompany()) {
+        m_printKind = kind;
+        m_printDocumentId = Format::id(id);
+        // M63: a check prints as the check it is, onto check stock.
+        if (kind == QLatin1String("document") && isPrintableCheck(*m_service->file(), m_printDocumentId)) {
+            m_printKind = QStringLiteral("check");
+        }
+    } else if (kind == QLatin1String("check") && m_service->hasCompany()
+               && isPrintableCheck(*m_service->file(), Format::id(id))) {
         m_printKind = kind;
         m_printDocumentId = Format::id(id);
     }
@@ -129,6 +140,23 @@ Quick::PrintRenderCallback BooksHost::printRenderCallback() const
             return {};
         }
         painter = ReportPdf::painter(*table, ReportPdf::styleFor(*file));
+    } else if (m_printKind == QLatin1String("statement")) {
+        // The period the dialog showed, resolved as BooksService::statement does.
+        const QVariantMap shown = m_service->statement(m_printDocumentId, m_printOptions.value(QStringLiteral("from")).toString(),
+                                                       m_printOptions.value(QStringLiteral("to")).toString());
+        PrintableDocument printable;
+        if (!shown.value(QStringLiteral("ok")).toBool()
+            || !buildPrintableStatement(*file, m_printDocumentId, Format::date(shown.value(QStringLiteral("from"))),
+                                        Format::date(shown.value(QStringLiteral("to"))), &printable)) {
+            return {};
+        }
+        painter = FormRenderer::painter(printable);
+    } else if (m_printKind == QLatin1String("check")) {
+        PrintableCheck check;
+        if (!buildPrintableCheck(*file, m_printDocumentId, &check)) {
+            return {}; // voided since it was chosen
+        }
+        painter = CheckRenderer::painter({check});
     } else {
         PrintableDocument printable;
         if (!buildPrintableDocument(*file, m_printDocumentId, &printable)) {

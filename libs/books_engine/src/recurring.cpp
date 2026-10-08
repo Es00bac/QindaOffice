@@ -5,9 +5,32 @@
 #include "sales.h"
 #include "sql_util.h"
 
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSqlQuery>
 
 namespace QindaOffice::Books {
+
+namespace {
+
+// The audit trail's before/after of a template (M63 edit and delete).
+QString templateJson(CompanyFile &file, const RecurringTemplate &t)
+{
+    const QJsonObject o{{QStringLiteral("name"), t.name},
+                        {QStringLiteral("frequency"), int(t.schedule.frequency)},
+                        {QStringLiteral("interval"), t.schedule.interval},
+                        {QStringLiteral("day_of_month"), t.schedule.dayOfMonth},
+                        {QStringLiteral("start"), Sql::isoDate(t.schedule.start)},
+                        {QStringLiteral("end"), Sql::isoDate(t.schedule.end)},
+                        {QStringLiteral("max_occurrences"), t.schedule.maxOccurrences},
+                        {QStringLiteral("generated"), t.generated},
+                        {QStringLiteral("post_open"), t.postOpen},
+                        {QStringLiteral("active"), t.active},
+                        {QStringLiteral("body"), Documents(file).toJson(t.body)}};
+    return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
+}
+
+} // namespace
 
 Recurring::Recurring(CompanyFile &file)
     : m_file(file)
@@ -90,6 +113,90 @@ Result Recurring::setActive(qint64 templateId, bool active)
     m_file.audit(active ? QStringLiteral("activate") : QStringLiteral("pause"), QStringLiteral("recurring"), templateId,
                  {}, {});
     emit m_file.changed();
+    return Result::success(templateId);
+}
+
+Result Recurring::update(qint64 templateId, const QString &name, BusinessDocument body,
+                         const RecurringSchedule &schedule, bool postOpen)
+{
+    const std::optional<RecurringTemplate> before = recurringTemplate(templateId);
+    if (!before) {
+        return Result::failure(ErrorCode::NotFound, QStringLiteral("no such recurring schedule"));
+    }
+    if (name.trimmed().isEmpty() || !schedule.start.isValid() || schedule.interval < 1) {
+        return Result::failure(ErrorCode::Invalid, QStringLiteral("a schedule needs a name, a start date and an interval"));
+    }
+    if (body.lines.isEmpty() || body.partyId == 0) {
+        return Result::failure(ErrorCode::Invalid, QStringLiteral("the template needs a customer and lines"));
+    }
+    // AGENT-GUARD: occurrence(k) is computed from the start, so a changed
+    // schedule is re-based (see the header) — and must not reach back to
+    // a date this template has already invoiced.
+    const bool rebase = !(schedule == before->schedule);
+    if (rebase && before->generated > 0) {
+        const QDate last = occurrence(before->schedule, before->generated - 1);
+        if (last.isValid() && schedule.start <= last) {
+            return Result::failure(ErrorCode::Invalid,
+                                   QStringLiteral("the next invoice date must be after %1, the last invoice this "
+                                                  "schedule made")
+                                       .arg(last.toString(Qt::ISODate)));
+        }
+    }
+    Documents documents(m_file);
+    body.id = before->body.id;
+    body.kind = DocKind::InvoiceTemplate;
+    body.state = DocState::Open;
+    body.date = schedule.start;
+    body.number.clear();
+    body.templateId = templateId;
+    body.txnId = 0;
+    documents.fillFromItems(body, false);
+    documents.finalize(body);
+    SqlTransaction txn(m_file);
+    if (const Result w = documents.write(body); !w.ok) {
+        return w;
+    }
+    QString error;
+    if (!Sql::exec(m_file.database(),
+                   QStringLiteral("UPDATE recurring_templates SET name = ?, frequency = ?, interval = ?,"
+                                  " day_of_month = ?, start_date = ?, end_date = ?, max_occurrences = ?,"
+                                  " generated = ?, post_open = ? WHERE id = ?"),
+                   {name.trimmed(), int(schedule.frequency), schedule.interval, schedule.dayOfMonth,
+                    Sql::isoDate(schedule.start),
+                    schedule.end.isValid() ? QVariant(Sql::isoDate(schedule.end)) : QVariant(),
+                    schedule.maxOccurrences, rebase ? 0 : before->generated, postOpen ? 1 : 0, templateId},
+                   &error)) {
+        return Result::failure(ErrorCode::Storage, error);
+    }
+    const std::optional<RecurringTemplate> after = recurringTemplate(templateId);
+    m_file.audit(QStringLiteral("edit"), QStringLiteral("recurring"), templateId, templateJson(m_file, *before),
+                 after ? templateJson(m_file, *after) : QString(),
+                 rebase ? QStringLiteral("schedule re-based") : QString());
+    if (!txn.commit()) {
+        return Result::failure(ErrorCode::Storage, txn.error());
+    }
+    return Result::success(templateId);
+}
+
+Result Recurring::remove(qint64 templateId)
+{
+    const std::optional<RecurringTemplate> before = recurringTemplate(templateId);
+    if (!before) {
+        return Result::failure(ErrorCode::NotFound, QStringLiteral("no such recurring schedule"));
+    }
+    SqlTransaction txn(m_file);
+    QString error;
+    // The schedule row first: it references its body document.
+    if (!Sql::exec(m_file.database(), QStringLiteral("DELETE FROM recurring_templates WHERE id = ?"), {templateId},
+                   &error)
+        || !Sql::exec(m_file.database(), QStringLiteral("DELETE FROM documents WHERE id = ? AND kind = ?"),
+                      {before->body.id, int(DocKind::InvoiceTemplate)}, &error)) {
+        return Result::failure(ErrorCode::Storage, error);
+    }
+    m_file.audit(QStringLiteral("delete"), QStringLiteral("recurring"), templateId, templateJson(m_file, *before), {});
+    if (!txn.commit()) {
+        return Result::failure(ErrorCode::Storage, txn.error());
+    }
     return Result::success(templateId);
 }
 

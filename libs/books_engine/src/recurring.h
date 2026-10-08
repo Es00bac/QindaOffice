@@ -35,6 +35,7 @@ struct RecurringSchedule {
     QDate start;
     QDate end;              // invalid = open-ended
     int maxOccurrences = 0; // 0 = unlimited
+    friend bool operator==(const RecurringSchedule &, const RecurringSchedule &) = default;
 };
 
 struct RecurringTemplate {
@@ -56,6 +57,21 @@ public:
     Result create(const QString &name, BusinessDocument body, const RecurringSchedule &schedule,
                   bool postOpen = true);
     Result setActive(qint64 templateId, bool active);
+    // Rewrites a template's name, body (customer, lines, discount, tax) and
+    // posting mode (M63, D-071). A schedule equal to the stored one keeps
+    // its start and its count of generated invoices. A different schedule
+    // RE-BASES the template: occurrence 0 of the new schedule is
+    // `schedule.start` (the next invoice date the user chose), the
+    // generated count restarts at 0 and maxOccurrences counts the
+    // invoices still to come — so the invoices already made stay as they
+    // are and none is made twice. The new start must lie after the last
+    // invoice the template generated (Invalid otherwise). Audited.
+    Result update(qint64 templateId, const QString &name, BusinessDocument body, const RecurringSchedule &schedule,
+                  bool postOpen);
+    // Deletes the schedule and its template body (which never posted).
+    // Invoices it generated stay; their template id no longer resolves.
+    // Audited with the template's JSON.
+    Result remove(qint64 templateId);
     [[nodiscard]] QList<RecurringTemplate> templates() const;
     [[nodiscard]] std::optional<RecurringTemplate> recurringTemplate(qint64 id) const;
 

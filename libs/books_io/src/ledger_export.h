@@ -14,7 +14,9 @@
 // format. Journal entries are exported as TRNSTYPE GENERAL JOURNAL with
 // signed amounts (+ debit / − credit) — every posting becomes a balanced
 // entry an accountant can import; document structure (invoice lines,
-// applications) does not travel. Voided transactions are left out.
+// applications) does not travel. Voided transactions are left out. The
+// output imports back through IifImport (iif_import.h, M63): lists equal,
+// every balance equal (tst_books_io_iif).
 
 #include "books_types.h"
 

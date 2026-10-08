@@ -30,6 +30,11 @@ QVariantMap indicatorStyle(const Engine::Task &t)
     } else if (t.overallocated) {
         style.insert(QStringLiteral("icon"), QStringLiteral("user"));
         style.insert(QStringLiteral("iconTone"), QStringLiteral("negative"));
+    } else if (t.deadline != Engine::kNoDate && t.finish != Engine::kNoDate && t.finish > t.deadline
+               && t.percentComplete < 100) {
+        // M63: finishes after its deadline (Project's missed-deadline flag).
+        style.insert(QStringLiteral("icon"), QStringLiteral("flag"));
+        style.insert(QStringLiteral("iconTone"), QStringLiteral("negative"));
     } else if (t.percentComplete >= 100) {
         style.insert(QStringLiteral("icon"), QStringLiteral("circle-check"));
         style.insert(QStringLiteral("iconTone"), QStringLiteral("positive"));
@@ -106,7 +111,8 @@ QVariantMap TaskSheetSource::cellStyle(const QString &rowId, const QString &colu
         style.insert(QStringLiteral("iconTone"), t.manual ? QStringLiteral("accent") : QStringLiteral("muted"));
         style.insert(QStringLiteral("horizontalAlignment"), QStringLiteral("center"));
     }
-    static const QStringList numeric{QStringLiteral("duration"), QStringLiteral("percent"), QStringLiteral("work"),
+    static const QStringList numeric{QStringLiteral("duration"), QStringLiteral("percent"), QStringLiteral("priority"),
+                                     QStringLiteral("work"),
                                      QStringLiteral("cost"), QStringLiteral("fixedCost"), QStringLiteral("totalSlack"),
                                      QStringLiteral("freeSlack"), QStringLiteral("baselineCost"),
                                      QStringLiteral("costVariance"), QStringLiteral("actualCost"),

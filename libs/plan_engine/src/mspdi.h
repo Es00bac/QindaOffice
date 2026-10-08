@@ -8,10 +8,16 @@
 //
 // Covered both ways: project properties, base and resource calendars
 // (week days and exceptions), the task outline with durations, milestones,
-// manual and inactive tasks, constraints, % complete and actuals, notes,
-// fixed cost, links of all four types with lag / lead / percentage lag,
-// baselines 0–2, work and material resources, and assignments. Native
-// .mpp files are out of scope.
+// manual and inactive tasks, constraints, priority and deadline (M63),
+// % complete and actuals, notes, fixed cost, links of all four types with
+// lag / lead / percentage lag, baselines 0–2, work and material resources,
+// and assignments. Everything else a file holds — custom fields and their
+// definitions, task type, hyperlinks, cost rate tables, baselines 3–10,
+// recurring calendar exceptions, views, timephased data, elements of later
+// Project versions — is KEPT verbatim and written back in Project's order
+// (mspdi_keep.h, D-071); values Project derives from the schedule travel
+// only while the object's dates and progress are as read. Native .mpp
+// files are out of scope.
 //
 // AGENT-CONTRACT (units on the wire, mspdi_p.h has the converters):
 //  * Durations, work and lag are working time: xs:duration "PT#H#M#S" for
@@ -38,9 +44,9 @@ struct MspdiResult {
 };
 
 // Reads an MSPDI document into *out (replacing it) and schedules it.
-// Unknown elements are skipped; dangling links and assignments are dropped
-// with a warning; recurring calendar exceptions other than daily ranges are
-// skipped with a warning.
+// Unmodelled elements are kept (see above); dangling links and assignments
+// are dropped with a warning; recurring calendar exceptions and alternative
+// work weeks are kept for the file and reported as not scheduled.
 MspdiResult readMspdi(const QByteArray &xml, Project *out);
 
 // Writes MSPDI for a scheduled project (element order follows the MSPDI

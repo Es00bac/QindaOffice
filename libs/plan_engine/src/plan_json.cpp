@@ -103,6 +103,10 @@ QJsonObject taskToJson(const Task &t)
         o.insert(QStringLiteral("constraint"), constraintCode(t.constraint));
         putDate(o, "constraintDate", t.constraintDate);
     }
+    if (t.priority != 500) {
+        o.insert(QStringLiteral("priority"), t.priority); // M63
+    }
+    putDate(o, "deadline", t.deadline);
     if (!t.predecessors.isEmpty()) {
         QJsonArray links;
         for (const Link &l : t.predecessors) {
@@ -197,6 +201,8 @@ Task taskFromJson(const QJsonObject &o, QStringList *warnings)
         l.extra = extraOf(x, {"uid", "type", "lag", "lagPercent"});
         t.predecessors.append(l);
     }
+    t.priority = std::clamp(o.value(QStringLiteral("priority")).toInt(500), 0, 1000);
+    t.deadline = date(o, "deadline");
     t.percentComplete = std::clamp(o.value(QStringLiteral("percentComplete")).toInt(), 0, 100);
     t.actualStart = date(o, "actualStart");
     t.actualFinish = date(o, "actualFinish");
@@ -219,7 +225,8 @@ Task taskFromJson(const QJsonObject &o, QStringList *warnings)
         b.cost = integer(x, "cost");
     }
     t.extra = extraOf(o, {"uid", "guid", "name", "level", "duration", "durationUnit", "estimated", "milestone", "manual",
-                          "manualStart", "manualFinish", "active", "constraint", "constraintDate", "predecessors",
+                          "manualStart", "manualFinish", "active", "constraint", "constraintDate", "priority",
+                          "deadline", "predecessors",
                           "percentComplete", "actualStart", "actualFinish", "calendarUid", "fixedCost", "levelingFloor",
                           "notes", "baselines"});
     return t;

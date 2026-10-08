@@ -216,6 +216,8 @@ public:
     Q_INVOKABLE QVariantMap updateProject(const QString &date);
     Q_INVOKABLE QVariantMap report(const QString &id) const;
     Q_INVOKABLE QVariantMap exportCsv(const QUrl &url) const;
+    // The same table as an Excel workbook (M63; plan_xlsx.h).
+    Q_INVOKABLE QVariantMap exportXlsx(const QUrl &url) const;
     Q_INVOKABLE QVariantMap exportMspdi(const QUrl &url) const;
     Q_INVOKABLE QVariantMap exportTimelinePng(const QUrl &url, int width = 1600, int height = 280) const;
     Q_INVOKABLE QVariantMap importMspdi(const QUrl &url);

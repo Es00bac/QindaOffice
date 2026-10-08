@@ -52,7 +52,7 @@ class BooksHost : public Quick::DocumentHost {
     // The document selected in a list (Void / E-mail / Print Document act on it).
     Q_PROPERTY(qint64 selectedDocumentId READ selectedDocumentId WRITE setSelectedDocumentId NOTIFY
                    selectedDocumentIdChanged)
-    // "report" | "document" | "" and whether a report prints better wide.
+    // "report" | "document" | "statement" | "check" | "" and whether a report prints better wide.
     Q_PROPERTY(QString printSourceKind READ printSourceKind NOTIFY printSourceChanged)
     Q_PROPERTY(bool printLandscape READ printLandscape NOTIFY printSourceChanged)
 public:
@@ -68,7 +68,13 @@ public:
     void setSelectedDocumentId(qint64 id);
 
     // kind "report": id = report id, options = runReport options.
-    // kind "document": id = document id. Anything else clears the source.
+    // kind "document": id = document id.
+    // kind "statement" (M63): id = customer id, options = {from, to}.
+    // kind "check" (M63): id = a check or bill payment drawn on a bank
+    // account (check_print.h), printed onto voucher check stock; anything
+    // else clears the source. A "document" that is such a payment becomes
+    // "check" — File ▸ Print on a selected check prints the check.
+    // Anything else clears the source.
     Q_INVOKABLE void setPrintSource(const QString &kind, const QVariant &id, const QVariantMap &options = {});
     Q_INVOKABLE void clearPrintSource() { setPrintSource(QString(), {}); }
     [[nodiscard]] QString printSourceKind() const { return m_printKind; }
@@ -100,9 +106,23 @@ signals:
     void companySetupRequested();
     void companySettingsRequested();
     void closeBooksRequested();
-    // "reportPdf" | "reportCsv" | "iif" | "journalCsv" | "backup"
+    // "reportPdf" | "reportCsv" | "reportXlsx" (M63) | "iif" | "journalCsv" | "backup"
     void exportRequested(const QString &what);
+    // File ▸ Import and Export ▸ Import / Export Lists (M63): ListsDialog.qml
+    // asks which list and which file.
     void importListsRequested();
+    void exportListsRequested();
+    // File ▸ Import and Export ▸ Import from QuickBooks (IIF) (M63):
+    // IifImportDialog.qml previews, maps accounts, then imports.
+    void importIifRequested();
+    // M63 (D-071): the engine features the app did not reach. Each opens
+    // its dialog (LogoDialog, StatementDialog, RecurringDialog,
+    // BudgetDialog, SalesTaxPaymentDialog).
+    void companyLogoRequested();
+    void statementsRequested();
+    void recurringRequested();
+    void budgetsRequested();
+    void salesTaxPaymentRequested();
     void voidRequested(qint64 documentId);
 
 protected:
@@ -122,7 +142,7 @@ private:
     qint64 m_selectedDocumentId = 0;
     QString m_printKind;
     QString m_printReportId;
-    qint64 m_printDocumentId = 0;
+    qint64 m_printDocumentId = 0; // the document or check, or the statement's customer
     QVariantMap m_printOptions;
     bool m_printLandscape = false;
 };

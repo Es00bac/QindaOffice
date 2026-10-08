@@ -8,8 +8,8 @@ import QindaOffice.Books.App
 // Reports (D-045/D-047): the catalog grouped as the engine groups it
 // (business overview, who owes you, what you owe, sales, expenses, taxes,
 // accountant), the options a report takes (period or as-of date, basis,
-// comparison, columns), the rendered table, drill-down, and PDF/CSV/print
-// of exactly what is on screen (BooksHost.setPrintSource).
+// comparison, columns), the rendered table, drill-down, and PDF/CSV/Excel/
+// print of exactly what is on screen (BooksHost.setPrintSource).
 Item {
     id: view
 
@@ -130,6 +130,7 @@ Item {
                     Tk.IconButton { iconName: "printer"; tooltip: qsTr("Print this report"); onClicked: view.host.actions.trigger("filePrintAction") }
                     Tk.Button { small: true; variant: "ghost"; iconName: "file-down"; text: "PDF"; onClicked: view.host.actions.trigger("booksExportReportPdfAction") }
                     Tk.Button { small: true; variant: "ghost"; iconName: "file-spreadsheet"; text: "CSV"; onClicked: view.host.actions.trigger("booksExportReportCsvAction") }
+                    Tk.Button { objectName: "reportExcel"; small: true; variant: "ghost"; iconName: "sheet"; text: "Excel"; onClicked: view.host.actions.trigger("booksExportReportXlsxAction") }
                 }
                 ReportTableView {
                     objectName: "reportTable"

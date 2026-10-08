@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Hand-written in the shape Microsoft Project saves as XML, with what
+     QindaPlan does not model (custom fields, task type, hyperlinks, a
+     baseline 4, timephased data, cost rate tables, a recurring exception,
+     work weeks, elements of no Project version yet). tst_plan_mspdi_keep.cpp
+     documents every expectation. -->
+<Project xmlns="http://schemas.microsoft.com/project">
+ <SaveVersion>14</SaveVersion>
+ <Name>Launch.xml</Name>
+ <GUID>A0000000-0000-4000-8000-000000000001</GUID>
+ <Title>Launch</Title>
+ <Subject>Spring catalogue launch</Subject>
+ <Author>Planner</Author>
+ <FutureProjectThing>kept</FutureProjectThing>
+ <CreationDate>2026-02-01T09:00:00</CreationDate>
+ <ScheduleFromStart>1</ScheduleFromStart>
+ <StartDate>2026-03-02T08:00:00</StartDate>
+ <CurrencySymbol>€</CurrencySymbol>
+ <CurrencyCode>EUR</CurrencyCode>
+ <CalendarUID>1</CalendarUID>
+ <MinutesPerDay>480</MinutesPerDay>
+ <MinutesPerWeek>2400</MinutesPerWeek>
+ <DaysPerMonth>20</DaysPerMonth>
+ <HonorConstraints>0</HonorConstraints>
+ <ExtendedAttributes>
+  <ExtendedAttribute><FieldID>188743731</FieldID><FieldName>Text1</FieldName><Alias>Department</Alias></ExtendedAttribute>
+ </ExtendedAttributes>
+ <Calendars>
+  <Calendar>
+   <UID>1</UID>
+   <GUID>C0000000-0000-4000-8000-000000000001</GUID>
+   <Name>Standard</Name>
+   <IsBaseCalendar>1</IsBaseCalendar>
+   <BaseCalendarUID>-1</BaseCalendarUID>
+   <WeekDays>
+    <WeekDay><DayType>1</DayType><DayWorking>0</DayWorking></WeekDay>
+    <WeekDay><DayType>2</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>3</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>4</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>5</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>6</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>7</DayType><DayWorking>0</DayWorking></WeekDay>
+   </WeekDays>
+   <Exceptions>
+    <Exception><EnteredByOccurrences>0</EnteredByOccurrences><TimePeriod><FromDate>2026-04-03T00:00:00</FromDate><ToDate>2026-04-03T23:59:00</ToDate></TimePeriod><Occurrences>1</Occurrences><Name>Good Friday</Name><Type>1</Type><DayWorking>0</DayWorking></Exception>
+    <Exception><EnteredByOccurrences>1</EnteredByOccurrences><TimePeriod><FromDate>2026-03-02T00:00:00</FromDate><ToDate>2026-06-29T23:59:00</ToDate></TimePeriod><Occurrences>18</Occurrences><Name>Monday review</Name><Type>6</Type><Period>1</Period><DaysOfWeek>2</DaysOfWeek><DayWorking>0</DayWorking></Exception>
+   </Exceptions>
+   <WorkWeeks><WorkWeek><TimePeriod><FromDate>2026-07-01T00:00:00</FromDate><ToDate>2026-08-31T23:59:00</ToDate></TimePeriod><Name>Summer</Name></WorkWeek></WorkWeeks>
+  </Calendar>
+ </Calendars>
+ <Tasks>
+  <Task>
+   <UID>0</UID><ID>0</ID><Name>Launch</Name><Type>1</Type><IsNull>0</IsNull><OutlineLevel>0</OutlineLevel>
+   <ExtendedAttribute><FieldID>188743731</FieldID><Value>Whole studio</Value></ExtendedAttribute>
+  </Task>
+  <Task>
+   <UID>1</UID>
+   <GUID>B0000000-0000-4000-8000-000000000001</GUID>
+   <ID>1</ID>
+   <Name>Design</Name>
+   <Active>1</Active>
+   <Manual>0</Manual>
+   <Type>1</Type>
+   <IsNull>0</IsNull>
+   <CreateDate>2026-02-01T09:00:00</CreateDate>
+   <Contact>Ana</Contact>
+   <FutureTaskThing kind="new">kept as written</FutureTaskThing>
+   <WBS>1</WBS>
+   <OutlineNumber>1</OutlineNumber>
+   <OutlineLevel>1</OutlineLevel>
+   <Priority>900</Priority>
+   <Start>2026-03-02T08:00:00</Start>
+   <Finish>2026-03-06T17:00:00</Finish>
+   <Duration>PT40H0M0S</Duration>
+   <DurationFormat>7</DurationFormat>
+   <Work>PT40H0M0S</Work>
+   <EffortDriven>1</EffortDriven>
+   <FixedCost>0</FixedCost>
+   <FixedCostAccrual>1</FixedCostAccrual>
+   <PercentComplete>0</PercentComplete>
+   <ActualDuration>PT0H0M0S</ActualDuration>
+   <RemainingDuration>PT40H0M0S</RemainingDuration>
+   <ConstraintType>0</ConstraintType>
+   <CalendarUID>-1</CalendarUID>
+   <Deadline>2026-03-13T17:00:00</Deadline>
+   <Hyperlink>Brief</Hyperlink>
+   <HyperlinkAddress>https://example.test/brief?a=1&amp;b=2</HyperlinkAddress>
+   <Notes>Logo, colours, type.</Notes>
+   <ExtendedAttribute><FieldID>188743731</FieldID><Value>Design</Value></ExtendedAttribute>
+   <Baseline><Number>0</Number><Start>2026-03-02T08:00:00</Start><Finish>2026-03-06T17:00:00</Finish><Duration>PT40H0M0S</Duration><Work>PT40H0M0S</Work><Cost>240000</Cost></Baseline>
+   <Baseline><Number>4</Number><Start>2026-03-09T08:00:00</Start><Finish>2026-03-13T17:00:00</Finish><Duration>PT40H0M0S</Duration></Baseline>
+   <TimephasedData><Type>11</Type><UID>1</UID><Start>2026-03-02T08:00:00</Start><Finish>2026-03-03T08:00:00</Finish><Unit>2</Unit><Value>PT8H0M0S</Value></TimephasedData>
+  </Task>
+  <Task>
+   <UID>2</UID>
+   <ID>2</ID>
+   <Name>Print</Name>
+   <OutlineLevel>1</OutlineLevel>
+   <Priority>100</Priority>
+   <Duration>PT16H0M0S</Duration>
+   <ConstraintType>0</ConstraintType>
+   <Deadline>2026-03-09T17:00:00</Deadline>
+   <PredecessorLink><PredecessorUID>1</PredecessorUID><Type>1</Type></PredecessorLink>
+   <ExtendedAttribute><FieldID>188743731</FieldID><Value>Production</Value></ExtendedAttribute>
+  </Task>
+ </Tasks>
+ <Resources>
+  <Resource><UID>0</UID><ID>0</ID><Type>1</Type><IsNull>0</IsNull></Resource>
+  <Resource>
+   <UID>1</UID><ID>1</ID><Name>Ana</Name><Type>1</Type><IsNull>0</IsNull>
+   <MaxUnits>1.00</MaxUnits><CanLevel>1</CanLevel><AccrueAt>3</AccrueAt><Work>PT40H0M0S</Work>
+   <StandardRate>60</StandardRate><StandardRateFormat>2</StandardRateFormat><CostPerUse>0</CostPerUse>
+   <CalendarUID>1</CalendarUID><Notes>Lead designer</Notes>
+   <ExtendedAttribute><FieldID>205520904</FieldID><Value>Studio</Value></ExtendedAttribute>
+   <Rates><Rate><RatesFrom>1984-01-01T00:00:00</RatesFrom><RatesTo>2049-12-31T23:59:00</RatesTo><RateTable>0</RateTable><StandardRate>60</StandardRate><StandardRateFormat>2</StandardRateFormat></Rate><Rate><RatesFrom>1984-01-01T00:00:00</RatesFrom><RatesTo>2049-12-31T23:59:00</RatesTo><RateTable>1</RateTable><StandardRate>90</StandardRate><StandardRateFormat>2</StandardRateFormat></Rate></Rates>
+  </Resource>
+ </Resources>
+ <Assignments>
+  <Assignment>
+   <UID>1</UID><TaskUID>1</TaskUID><ResourceUID>1</ResourceUID><Delay>0</Delay>
+   <Finish>2026-03-06T17:00:00</Finish><Start>2026-03-02T08:00:00</Start><Units>1</Units><Work>PT40H0M0S</Work>
+   <WorkContour>3</WorkContour>
+   <TimephasedData><Type>1</Type><UID>1</UID><Start>2026-03-02T08:00:00</Start><Finish>2026-03-03T08:00:00</Finish><Unit>2</Unit><Value>PT8H0M0S</Value></TimephasedData>
+  </Assignment>
+ </Assignments>
+</Project>

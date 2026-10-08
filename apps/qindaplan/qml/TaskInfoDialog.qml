@@ -5,7 +5,8 @@ import QindaOffice.Plan.App
 
 // Task Information (Shift+F2): the task's fields on four pages — General
 // (name, duration, dates, progress, mode), Predecessors, Advanced
-// (constraint, calendar, fixed cost, active, milestone) and Notes. Save
+// (constraint, deadline, priority, calendar, fixed cost, active, milestone)
+// and Notes. Save
 // sends only what changed, as one undo step; the engine checks every value
 // and a refusal keeps the dialog open with the reason.
 Tk.Dialog {
@@ -33,6 +34,8 @@ Tk.Dialog {
         calendarBox.model = info.calendars || []
         calendarBox.currentIndex = Math.max(0, (info.calendars || []).indexOf(String(info.calendar || "None")))
         fixedCost.text = String(info.fixedCost || "")
+        deadlineField.text = String(info.deadline || "") === "NA" ? "" : String(info.deadline || "")
+        priorityField.text = String(info.priority || "500")
         activeSwitch.checked = info.activeFlag !== false
         milestoneSwitch.checked = info.milestoneFlag === true
         notesField.text = String(info.notes || "")
@@ -48,6 +51,8 @@ Tk.Dialog {
             out.constraintDate = constraintDate.text.trim().length > 0 ? constraintDate.text : String(info.start || "")
         out.calendar = calendarBox.currentText
         out.fixedCost = fixedCost.text
+        out.deadline = deadlineField.text.trim().length > 0 ? deadlineField.text : "NA"
+        out.priority = priorityField.text
         out.active = activeSwitch.checked ? "Yes" : "No"
         out.milestone = milestoneSwitch.checked ? "Yes" : "No"
         out.notes = notesField.text
@@ -120,6 +125,16 @@ Tk.Dialog {
                 label: qsTr("Constraint date")
                 enabled: constraintBox.currentIndex > 1
                 Tk.TextField { id: constraintDate; objectName: "taskInfoConstraintDate"; placeholderText: qsTr("e.g. 16 Mar 2026") }
+            }
+            // M63: Project's Deadline (flags a later finish, moves nothing)
+            // and Priority (0–1000), kept through Microsoft Project XML.
+            Tk.PropertyRow {
+                label: qsTr("Deadline")
+                Tk.TextField { id: deadlineField; objectName: "taskInfoDeadline"; placeholderText: qsTr("none") }
+            }
+            Tk.PropertyRow {
+                label: qsTr("Priority")
+                Tk.TextField { id: priorityField; objectName: "taskInfoPriority"; mono: true; placeholderText: "500" }
             }
             Tk.PropertyRow {
                 label: qsTr("Calendar")
