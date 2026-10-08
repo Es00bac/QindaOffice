@@ -368,8 +368,13 @@ private slots:
     {
         WriteHost host;
         host.writeDocument()->textDocument()->setPlainText(QStringLiteral("body"));
-        host.applyPageSetup(816, 1056, 64, QStringLiteral("Report & <Quotes>"), QStringLiteral("Page {page} of {pages}"));
-        QCOMPARE(host.pageSetup().value(QStringLiteral("margin")).toReal(), 64.0);
+        host.applyPageSetup({{QStringLiteral("width"), 816}, {QStringLiteral("height"), 1056},
+                             {QStringLiteral("left"), 64}, {QStringLiteral("top"), 50},
+                             {QStringLiteral("right"), 80}, {QStringLiteral("bottom"), 70},
+                             {QStringLiteral("header"), QStringLiteral("Report & <Quotes>")},
+                             {QStringLiteral("footer"), QStringLiteral("Page {page} of {pages}")}});
+        QCOMPARE(host.pageSetup().value(QStringLiteral("left")).toReal(), 64.0);
+        QCOMPARE(host.pageSetup().value(QStringLiteral("right")).toReal(), 80.0);
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
         const QString path = dir.path() + QStringLiteral("/doc.html");
@@ -385,6 +390,8 @@ private slots:
         QVERIFY2(reloaded.load(path, &error), qPrintable(error));
         QCOMPARE(reloaded.pageSize(), QSizeF(816, 1056));
         QCOMPARE(reloaded.pageMargin(), 64.0);
+        // Word's four independent margins survive (D-068).
+        QCOMPARE(reloaded.pageLayout().margins, QMarginsF(64, 50, 80, 70));
         QCOMPARE(reloaded.headerText(), QStringLiteral("Report & <Quotes>"));
         QCOMPARE(reloaded.footerText(), QStringLiteral("Page {page} of {pages}"));
         QCOMPARE(formatPageDecoration(QStringLiteral("{page}/{pages}"), 2, 7), QStringLiteral("2/7"));

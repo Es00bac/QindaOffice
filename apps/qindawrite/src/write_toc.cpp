@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_toc.h"
 
+#include "docx_properties.h"
+
+static_assert(QindaOffice::Apps::Write::kTocBlockProperty == QindaOffice::Docx::kWriteTocBlockProperty);
+
 #include "page_geometry.h"
 #include "style_catalog.h"
 

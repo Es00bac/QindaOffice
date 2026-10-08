@@ -370,6 +370,12 @@ public:
         if (found != m_prefixes.constEnd()) {
             return found.value();
         }
+        if (m_defaultUri.isEmpty() && Ns::isDefaultNamespace(uri)) {
+            m_defaultUri = uri;
+            m_prefixes.insert(uri, QString());
+            m_order.append(uri);
+            return {};
+        }
         QString prefix = Ns::conventionalPrefix(uri);
         if (prefix.isEmpty() || m_used.contains(prefix)) {
             do {
@@ -408,7 +414,8 @@ public:
                 if (uri == QStringView(Ns::XML)) {
                     continue;
                 }
-                m_out += QStringLiteral(" xmlns:") + m_prefixes.value(uri) + QStringLiteral("=\"");
+                const QString prefix = m_prefixes.value(uri);
+                m_out += prefix.isEmpty() ? QStringLiteral(" xmlns=\"") : QStringLiteral(" xmlns:") + prefix + QStringLiteral("=\"");
                 escape(uri, true);
                 m_out += QLatin1Char('"');
             }
@@ -500,6 +507,7 @@ private:
     QHash<QString, QString> m_prefixes; // uri → prefix
     QSet<QString> m_used;
     QStringList m_order;
+    QString m_defaultUri; // the one namespace written without a prefix
     int m_generated = 0;
     QString m_out;
 };

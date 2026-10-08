@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// QindaWrite format matrix (plan section 6.1):
-//  - .html/.htm  native (QTextDocument HTML)
-//  - .md         native (QTextDocument Markdown, Qt 6)
+// QindaWrite's format matrix for a bare QTextDocument (plan section 6.1,
+// D-068). WriteDocument (write_document_io.cpp) is the full path — it adds
+// page layout, headers/footers, footnotes and pictures; these helpers are
+// what it and the tests use for the text alone:
+//  - .html/.htm  QTextDocument HTML
+//  - .md         QTextDocument Markdown (Qt 6)
 //  - .txt        plain text
-//  - .odt        native save via QTextDocumentWriter (ODF)
-//  - .odt/.docx/.doc/.rtf OPEN and .docx/.rtf SAVE through the headless
-//    LibreOffice bridge (HTML intermediate, blocking wait over the async
-//    converter). Page setup meta is not round-tripped through ODT/DOCX in
-//    v1 (documented limitation, plan 6.1).
-// Default Save format is .odt.
+//  - .docx/.docm/.dotx/.dotm natively through office_docx
+//  - .odt        saved with QTextDocumentWriter (ODF); opened, like .doc
+//    and .rtf, through LibreOffice → .docx → office_docx (never HTML)
+// The default Save format is Word (.docx): the owner's documents are Word
+// documents and must reopen in Microsoft Word (D-068).
 
 class QTextDocument;
 class QString;

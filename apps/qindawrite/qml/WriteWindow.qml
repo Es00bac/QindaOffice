@@ -178,7 +178,7 @@ OfficeWindow {
     FootnoteDialog { id: footnoteDialog; onFootnoteApplied: function(id, text) { window.write.commitFootnote(id, text) } }
     PageSetupDialog {
         id: pageSetup
-        onSetupApplied: function(w, h, margin, header, footer) { window.write.applyPageSetup(w, h, margin, header, footer) }
+        onSetupApplied: function(setup) { window.write.applyPageSetup(setup) }
     }
     Tk.MessageDialog { id: wordCount; objectName: "wordCountDialog"; title: qsTr("Word Count"); variant: "info"; primaryText: qsTr("OK"); secondaryText: "" }
     Ai.ProposalDialog {

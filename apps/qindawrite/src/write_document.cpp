@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_document.h"
 
-#include "format_io.h"
+#include "docx_text.h"
 #include "page_geometry.h"
 #include "write_footnotes.h"
 
-#include <QFile>
-#include <QFileInfo>
 #include <QTextCursor>
+#include <QTextFrame>
 
 namespace QindaOffice::Apps::Write {
 
 WriteDocument::WriteDocument()
     : m_text(std::make_unique<QTextDocument>())
 {
-    setupPaged(QSizeF(PageGeometry::kDefaultPageW, PageGeometry::kDefaultPageH), m_margin);
+    // A4 with QindaWrite's historical 1-inch (96 px) margins.
+    setupPaged(QSizeF(PageGeometry::kDefaultPageW, PageGeometry::kDefaultPageH), 96);
     // AGENT-NOTE (Qt 6.11 quirk): QTextDocument::setPageSize() records an
     // undo item, so every fresh document was born with one phantom undo
     // step - Undo looked enabled on a pristine document and triggering it
@@ -40,49 +40,51 @@ WriteDocument::WriteDocument()
             });
 }
 
-void WriteDocument::setupPaged(const QSizeF &pageSize, qreal margin)
+void WriteDocument::applyLayout()
 {
-    m_margin = margin;
+    const Docx::PageLayout &l = m_parts.layout;
     m_text->setUseDesignMetrics(true);
-    m_text->setDocumentMargin(margin);
-    m_text->setPageSize(pageSize);
+    m_text->setPageSize(l.pageSize);
+    // AGENT-NOTE: QTextDocument paginates with the ROOT FRAME's four
+    // margins; the gutter is binding space on the left, as Word lays out a
+    // single-sided document. Equal margins go through setDocumentMargin:
+    // Qt's HTML writer wraps a root frame whose margins differ from the
+    // document margin in a "-qt-table-type: root" table, which changed what
+    // an HTML round trip of an ordinary document read back.
+    const qreal left = l.margins.left() + l.gutter;
+    if (qFuzzyCompare(left, l.margins.right()) && qFuzzyCompare(left, l.margins.top())
+        && qFuzzyCompare(left, l.margins.bottom())) {
+        m_text->setDocumentMargin(left);
+    } else {
+        QTextFrameFormat root = m_text->rootFrame()->frameFormat();
+        root.setLeftMargin(left);
+        root.setRightMargin(l.margins.right());
+        root.setTopMargin(l.margins.top());
+        root.setBottomMargin(l.margins.bottom());
+        m_text->rootFrame()->setFrameFormat(root);
+    }
     emit pageSetupChanged();
 }
 
-PageDecoration WriteDocument::decoration() const
+void WriteDocument::setPageLayout(const Docx::PageLayout &layout)
 {
-    PageDecoration out;
-    out.header = m_header;
-    out.footer = m_footer;
-    out.margin = m_margin;
-    if (!m_footnotes.isEmpty()) {
-        // The page lookup uses the document's OWN page size, which is the
-        // same size PageGeometry paints with — zoom does not affect which
-        // page a position falls on.
-        PageGeometry geometry;
-        geometry.setPageSize(m_text->pageSize());
-        out.footnotes = footnotesByPage(m_text.get(), geometry, m_footnotes);
-    }
-    return out;
-}
-
-void WriteDocument::setFootnotes(QHash<QString, QString> notes)
-{
-    m_footnotes = std::move(notes);
-}
-
-void WriteDocument::setFootnoteText(const QString &id, const QString &text)
-{
-    if (id.isEmpty()) {
+    if (layout == m_parts.layout && m_text->pageSize() == layout.pageSize) {
         return;
     }
-    if (text.isEmpty()) {
-        m_footnotes.remove(id);
-    } else {
-        m_footnotes.insert(id, text);
-    }
+    m_parts.layout = layout;
+    applyLayout();
     m_text->setModified(true);
-    emit contentChanged();
+}
+
+void WriteDocument::setupPaged(const QSizeF &pageSize, qreal margin)
+{
+    m_parts.layout.pageSize = pageSize;
+    m_parts.layout.margins = QMarginsF(margin, margin, margin, margin);
+    // Headers/footers sit half-way into the margin, as M14 drew them.
+    m_parts.layout.headerDistance = margin / 2;
+    m_parts.layout.footerDistance = margin / 2;
+    m_parts.layout.gutter = 0;
+    applyLayout();
 }
 
 QSizeF WriteDocument::pageSize() const
@@ -92,106 +94,142 @@ QSizeF WriteDocument::pageSize() const
 
 qreal WriteDocument::pageMargin() const
 {
-    return m_margin;
+    return m_parts.layout.margins.left() + m_parts.layout.gutter;
 }
 
-bool WriteDocument::load(const QString &path, QString *error)
+// ---- headers and footers -------------------------------------------------------------
+
+namespace {
+
+QFont headerFont(const QTextDocument &body)
 {
-    if (!loadDocument(path, m_text.get(), error)) {
-        return false;
-    }
-    // Page setup + header/footer travel in HTML metas (see page_setup_io);
-    // QTextDocument::setHtml drops them, so parse the raw source. ODT/DOCX
-    // via the LibreOffice bridge lose them - documented limitation.
-    if (path.endsWith(QLatin1String(".html"), Qt::CaseInsensitive)
-        || path.endsWith(QLatin1String(".htm"), Qt::CaseInsensitive)) {
-        QFile raw(path);
-        if (raw.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            const PageSetup setup = pageSetupFromHtml(QString::fromUtf8(raw.readAll()));
-            if (setup.hasCustomPageSize) {
-                setupPaged(setup.pageSize, setup.margin);
-            }
-            m_header = setup.header;
-            m_footer = setup.footer;
-            m_footnotes = setup.footnotes;
-        }
-    }
-    setCanonicalPath(path);
-    refreshByteRevision();
-    // Both flags: ours drives the title and close consent, QTextDocument's
-    // drives the signal that sets ours.
-    m_text->setModified(false);
-    setDirty(false);
-    emit contentChanged();
-    return true;
+    QFont font = body.defaultFont();
+    font.setPointSizeF(9);
+    return font;
 }
 
-bool WriteDocument::save(const QString &path, QString *error)
+} // namespace
+
+QString WriteDocument::headerText() const
 {
-    if (!saveDocument(path, m_text.get(), error)) {
-        return false;
-    }
-    const QString ext = QFileInfo(path).suffix().toLower();
-    if (ext == QLatin1String("html") || ext == QLatin1String("htm")) {
-        // Page setup + header/footer metas: re-inject after the generic
-        // writer (QTextDocumentWriter does not know about them).
-        QFile file(path);
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QString html = QString::fromUtf8(file.readAll());
-            file.close();
-            PageSetup setup;
-            setup.pageSize = m_text->pageSize();
-            setup.margin = m_margin;
-            setup.header = m_header;
-            setup.footer = m_footer;
-            setup.footnotes = m_footnotes;
-            html = injectPageSetupMeta(html, setup);
-            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                file.write(html.toUtf8());
-            }
-        }
-    }
-    setCanonicalPath(path);
-    refreshByteRevision();
-    m_text->setModified(false);
-    setDirty(false);
-    return true;
+    const Docx::HeaderFooter &h = m_parts.header(Docx::HeaderFooterSlot::Default);
+    return h.document ? Docx::patternFromHeaderFooter(*h.document) : QString();
 }
 
-QStringList WriteDocument::mimeTypes() const
+QString WriteDocument::footerText() const
 {
-    return {QStringLiteral("text/html"), QStringLiteral("text/markdown"),
-            QStringLiteral("text/plain"),
-            QStringLiteral("application/vnd.oasis.opendocument.text"),
-            QStringLiteral("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
-            QStringLiteral("application/rtf")};
+    const Docx::HeaderFooter &f = m_parts.footer(Docx::HeaderFooterSlot::Default);
+    return f.document ? Docx::patternFromHeaderFooter(*f.document) : QString();
+}
+
+bool WriteDocument::headerIsSimple() const
+{
+    bool simple = true;
+    if (const auto &h = m_parts.header(Docx::HeaderFooterSlot::Default); h.document) {
+        static_cast<void>(Docx::patternFromHeaderFooter(*h.document, &simple));
+    }
+    return simple;
+}
+
+bool WriteDocument::footerIsSimple() const
+{
+    bool simple = true;
+    if (const auto &f = m_parts.footer(Docx::HeaderFooterSlot::Default); f.document) {
+        static_cast<void>(Docx::patternFromHeaderFooter(*f.document, &simple));
+    }
+    return simple;
 }
 
 void WriteDocument::setHeaderFooter(const QString &header, const QString &footer)
 {
-    if (m_header == header && m_footer == footer) {
+    bool changed = false;
+    auto apply = [&](Docx::HeaderFooter &slot, const QString &current, const QString &pattern) {
+        if (current == pattern) {
+            return; // an unchanged pattern keeps a rich header intact
+        }
+        changed = true;
+        if (pattern.isEmpty()) {
+            slot.document.reset();
+            slot.sourcePart.clear();
+            return;
+        }
+        slot.document = Docx::headerFooterFromPattern(pattern, headerFont(*m_text));
+        slot.sourcePart.clear();
+    };
+    apply(m_parts.header(Docx::HeaderFooterSlot::Default), headerText(), header);
+    apply(m_parts.footer(Docx::HeaderFooterSlot::Default), footerText(), footer);
+    if (!changed) {
         return;
     }
-    m_header = header;
-    m_footer = footer;
     m_text->setModified(true);
     setDirty(true);
     emit contentChanged();
+    emit pageSetupChanged();
 }
 
-QByteArray WriteDocument::recoverySnapshot() const
+void WriteDocument::setDifferentFirstPage(bool different)
 {
-    return m_text->toHtml().toUtf8();
-}
-
-bool WriteDocument::loadRecovery(const QByteArray &snapshot, QString *error)
-{
-    Q_UNUSED(error);
-    m_text->setHtml(QString::fromUtf8(snapshot));
+    if (m_parts.differentFirstPage == different) {
+        return;
+    }
+    m_parts.differentFirstPage = different;
     m_text->setModified(true);
-    setDirty(true);
+    emit pageSetupChanged();
+}
+
+// ---- footnotes -------------------------------------------------------------------------
+
+void WriteDocument::setFootnotes(QHash<QString, QString> notes)
+{
+    m_parts.footnotes = std::move(notes);
+}
+
+void WriteDocument::setFootnoteText(const QString &id, const QString &text)
+{
+    if (id.isEmpty()) {
+        return;
+    }
+    if (text.isEmpty()) {
+        m_parts.footnotes.remove(id);
+    } else {
+        m_parts.footnotes.insert(id, text);
+    }
+    m_text->setModified(true);
     emit contentChanged();
-    return true;
+}
+
+// ---- pictures and decoration -------------------------------------------------------
+
+QString WriteDocument::addPicture(const QByteArray &bytes)
+{
+    return Docx::addPicture(m_text.get(), &m_parts.media, bytes);
+}
+
+PageDecoration WriteDocument::decoration() const
+{
+    PageDecoration out;
+    out.layout = m_parts.layout;
+    for (int s = 0; s < Docx::kHeaderFooterSlots; ++s) {
+        out.headers[size_t(s)] = m_parts.headers[size_t(s)].document.get();
+        out.footers[size_t(s)] = m_parts.footers[size_t(s)].document.get();
+    }
+    out.differentFirstPage = m_parts.differentFirstPage;
+    out.differentOddEven = m_parts.differentOddEven;
+    if (!m_parts.footnotes.isEmpty()) {
+        // The page lookup uses the document's OWN page size, which is the
+        // same size PageGeometry paints with — zoom does not affect which
+        // page a position falls on.
+        PageGeometry geometry;
+        geometry.setPageSize(m_text->pageSize());
+        out.footnotes = footnotesByPage(m_text.get(), geometry, m_parts.footnotes);
+    }
+    return out;
+}
+
+void WriteDocument::adoptParts(Docx::WordParts parts)
+{
+    m_parts = std::move(parts);
+    applyLayout();
 }
 
 } // namespace QindaOffice::Apps::Write

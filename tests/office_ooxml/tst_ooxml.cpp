@@ -26,6 +26,7 @@ private slots:
     void rejectsDtd();
     void packageRoundTrip();
     void zipHasNoDirectoryEntriesAndTypesFirst();
+    void packagePartsUseTheDefaultNamespace();
     void relativeTargets();
     void copierCarriesPartsOnceWithTheirRelationships();
     void copierDropsDanglingIds();
@@ -205,6 +206,20 @@ void OoxmlTest::zipHasNoDirectoryEntriesAndTypesFirst()
     for (const QString &name : std::as_const(names)) {
         QVERIFY2(!name.endsWith(QLatin1Char('/')), qPrintable(name));
     }
+}
+
+void OoxmlTest::packagePartsUseTheDefaultNamespace()
+{
+    // AGENT-GUARD regression: LibreOffice refused <ns0:Relationships …>.
+    const auto package = Package::fromData(samplePackage());
+    QVERIFY(package);
+    QVERIFY(package->data(QStringLiteral("_rels/.rels"))
+                .contains("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"));
+    QVERIFY(package->data(QStringLiteral("[Content_Types].xml"))
+                .contains("<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"));
+    PackageWriter writer;
+    writeProperties(writer, {}, QStringLiteral("Test"));
+    QVERIFY(writer.partData(QStringLiteral("docProps/app.xml")).contains("<Properties xmlns=\""));
 }
 
 void OoxmlTest::relativeTargets()

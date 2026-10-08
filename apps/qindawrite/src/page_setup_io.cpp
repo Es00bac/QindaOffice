@@ -4,6 +4,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QTextDocument>
 
 namespace QindaOffice::Apps::Write {
 
@@ -11,8 +12,8 @@ namespace {
 
 QString readMeta(const QString &html, const QString &name)
 {
-    // <meta name="qindawrite-page" content="W H M"> - attribute order fixed
-    // by our own writer; content is HTML-escaped text.
+    // <meta name="qindawrite-page" content="…"> - attribute order fixed by
+    // our own writer; content is HTML-escaped text.
     // No static caching: the pattern is built per meta name.
     const QRegularExpression kPattern(
         QStringLiteral("<meta\\s+name=\"%1\"\\s+content=\"([^\"]*)\"\\s*>").arg(name));
@@ -42,17 +43,57 @@ QString escapeMeta(const QString &text)
 
 } // namespace
 
+const QTextDocument *PageDecoration::headerFor(int page) const
+{
+    if (differentFirstPage && page == 1) {
+        return headers[size_t(Docx::HeaderFooterSlot::First)];
+    }
+    if (differentOddEven && page % 2 == 0 && headers[size_t(Docx::HeaderFooterSlot::Even)] != nullptr) {
+        return headers[size_t(Docx::HeaderFooterSlot::Even)];
+    }
+    return headers[size_t(Docx::HeaderFooterSlot::Default)];
+}
+
+const QTextDocument *PageDecoration::footerFor(int page) const
+{
+    if (differentFirstPage && page == 1) {
+        return footers[size_t(Docx::HeaderFooterSlot::First)];
+    }
+    if (differentOddEven && page % 2 == 0 && footers[size_t(Docx::HeaderFooterSlot::Even)] != nullptr) {
+        return footers[size_t(Docx::HeaderFooterSlot::Even)];
+    }
+    return footers[size_t(Docx::HeaderFooterSlot::Default)];
+}
+
+bool PageDecoration::isEmpty() const
+{
+    for (size_t i = 0; i < headers.size(); ++i) {
+        if ((headers[i] != nullptr && !headers[i]->isEmpty()) || (footers[i] != nullptr && !footers[i]->isEmpty())) {
+            return false;
+        }
+    }
+    return footnotes.isEmpty();
+}
+
 PageSetup pageSetupFromHtml(const QString &html)
 {
     PageSetup setup;
-    const QString pageMeta = readMeta(html, QStringLiteral("qindawrite-page"));
-    if (!pageMeta.isEmpty()) {
-        const QStringList parts = pageMeta.split(QLatin1Char(' '));
-        if (parts.size() == 3) {
-            setup.pageSize = QSizeF(parts[0].toDouble(), parts[1].toDouble());
-            setup.margin = parts[2].toDouble();
-            setup.hasCustomPageSize = setup.pageSize.isValid() && setup.pageSize.width() > 0;
+    const QStringList parts = readMeta(html, QStringLiteral("qindawrite-page")).split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    QList<qreal> n;
+    for (const QString &p : parts) {
+        n.append(p.toDouble());
+    }
+    if (n.size() == 3 || n.size() == 8) {
+        setup.layout.pageSize = QSizeF(n[0], n[1]);
+        if (n.size() == 3) {
+            // M14: one uniform margin.
+            setup.layout.margins = QMarginsF(n[2], n[2], n[2], n[2]);
+        } else {
+            setup.layout.margins = QMarginsF(n[2], n[3], n[4], n[5]);
+            setup.layout.headerDistance = n[6];
+            setup.layout.footerDistance = n[7];
         }
+        setup.hasCustomPageSize = setup.layout.pageSize.isValid() && setup.layout.pageSize.width() > 0;
     }
     setup.header = readMeta(html, QStringLiteral("qindawrite-header"));
     setup.footer = readMeta(html, QStringLiteral("qindawrite-footer"));
@@ -68,22 +109,25 @@ PageSetup pageSetupFromHtml(const QString &html)
 
 QString injectPageSetupMeta(const QString &html, const PageSetup &setup)
 {
-    const int head = html.indexOf(QStringLiteral("</head>"));
+    const int head = int(html.indexOf(QStringLiteral("</head>")));
     if (head < 0) {
         return html;
     }
-    QString meta =
-        QStringLiteral("<meta name=\"qindawrite-page\" content=\"%1 %2 %3\">")
-            .arg(setup.pageSize.width())
-            .arg(setup.pageSize.height())
-            .arg(setup.margin);
+    const Docx::PageLayout &l = setup.layout;
+    QString meta = QStringLiteral("<meta name=\"qindawrite-page\" content=\"%1 %2 %3 %4 %5 %6 %7 %8\">")
+                       .arg(l.pageSize.width())
+                       .arg(l.pageSize.height())
+                       .arg(l.margins.left())
+                       .arg(l.margins.top())
+                       .arg(l.margins.right())
+                       .arg(l.margins.bottom())
+                       .arg(l.headerDistance)
+                       .arg(l.footerDistance);
     if (!setup.header.isEmpty()) {
-        meta += QStringLiteral("<meta name=\"qindawrite-header\" content=\"%1\">")
-                    .arg(escapeMeta(setup.header));
+        meta += QStringLiteral("<meta name=\"qindawrite-header\" content=\"%1\">").arg(escapeMeta(setup.header));
     }
     if (!setup.footer.isEmpty()) {
-        meta += QStringLiteral("<meta name=\"qindawrite-footer\" content=\"%1\">")
-                    .arg(escapeMeta(setup.footer));
+        meta += QStringLiteral("<meta name=\"qindawrite-footer\" content=\"%1\">").arg(escapeMeta(setup.footer));
     }
     if (!setup.footnotes.isEmpty()) {
         QJsonObject object;
@@ -91,8 +135,7 @@ QString injectPageSetupMeta(const QString &html, const PageSetup &setup)
             object.insert(id, text);
         }
         meta += QStringLiteral("<meta name=\"qindawrite-footnotes\" content=\"%1\">")
-                    .arg(escapeMeta(QString::fromUtf8(
-                        QJsonDocument(object).toJson(QJsonDocument::Compact))));
+                    .arg(escapeMeta(QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact))));
     }
     QString out = html;
     out.insert(head, meta);

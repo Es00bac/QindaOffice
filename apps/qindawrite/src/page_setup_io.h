@@ -1,39 +1,54 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// Page setup + header/footer persistence (M14). QTextDocument::setHtml
-// drops unknown <meta> tags, so the page geometry, header and footer are
-// carried in the HTML head and parsed back from the raw source on load
-// (ODT/DOCX through the LibreOffice bridge still lose them - the
-// documented limitation). {page}/{pages} tokens in header/footer text
-// expand at render time so screen, print and PDF always agree.
+// Page decoration (what is drawn in a page's margins) and the HTML form of
+// the page setup.
+//
+// PageDecoration is what the screen view, the print path and the PDF
+// exporter all hand to drawPageDecoration: the page layout, the header and
+// footer documents per slot (rich text; PAGE / NUMPAGES fields expand per
+// page), and the footnote lines per page — one renderer, so all three agree.
+//
+// HTML persistence (M14): QTextDocument::setHtml drops unknown <meta> tags,
+// so the layout, plain header/footer patterns and footnote texts travel in
+// qindawrite-* metas parsed back from the raw source. Rich headers survive
+// only in .docx (and the recovery snapshot, which is .docx).
+
+#include "docx_model.h"
 
 #include <QHash>
 #include <QSizeF>
 #include <QString>
 #include <QStringList>
 
+#include <array>
+
+class QTextDocument;
+
 namespace QindaOffice::Apps::Write {
 
-// Header/footer text drawn into the page margin on every page (screen,
-// print and PDF share this so all outputs agree). {page}/{pages} tokens
-// expand per page. margin is in document coordinates (96-dpi px).
 struct PageDecoration {
-    QString header;
-    QString footer;
-    qreal margin = 96;
+    Docx::PageLayout layout;
+    // Borrowed from the WriteDocument; valid while it lives and its
+    // headers are not replaced (a decoration is used right after it is made).
+    std::array<const QTextDocument *, Docx::kHeaderFooterSlots> headers{};
+    std::array<const QTextDocument *, Docx::kHeaderFooterSlots> footers{};
+    bool differentFirstPage = false;
+    bool differentOddEven = false;
     // Footnote lines to print at the foot of each 1-based page, already
-    // numbered (write_footnotes.h). Carried here because the screen view,
-    // the print path and the PDF exporter all already hand this struct to
-    // drawPageDecoration — one place to render means all three agree.
+    // numbered (write_footnotes.h).
     QHash<int, QStringList> footnotes;
+
+    // The header/footer Word would show on 1-based `page`.
+    [[nodiscard]] const QTextDocument *headerFor(int page) const;
+    [[nodiscard]] const QTextDocument *footerFor(int page) const;
+    [[nodiscard]] bool isEmpty() const;
 };
 
 struct PageSetup {
-    QSizeF pageSize;
-    qreal margin = 96;
+    Docx::PageLayout layout;
     bool hasCustomPageSize = false;
-    QString header;
+    QString header; // plain patterns with {page}/{pages}
     QString footer;
     // Footnote texts keyed by the id their marker carries. The MARKERS
     // travel in the HTML body as ordinary superscript runs; without this
@@ -42,12 +57,12 @@ struct PageSetup {
     QHash<QString, QString> footnotes;
 };
 
-// Reads the three qindawrite-* metas from raw HTML; tolerant of absence
-// (defaults) and of HTML-escaped content.
+// Reads the qindawrite-* metas from raw HTML; tolerant of absence
+// (defaults), of HTML-escaped content and of the M14 three-number page meta.
 [[nodiscard]] PageSetup pageSetupFromHtml(const QString &html);
 
-// Injects the three metas into an HTML document (before </head>); returns
-// the input unchanged when no </head> exists.
+// Injects the metas into an HTML document (before </head>); returns the
+// input unchanged when no </head> exists.
 [[nodiscard]] QString injectPageSetupMeta(const QString &html, const PageSetup &setup);
 
 // Expands {page} and {pages} tokens for one rendered page.

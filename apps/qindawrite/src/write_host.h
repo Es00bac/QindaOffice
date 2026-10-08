@@ -51,10 +51,12 @@ class WriteHost : public Quick::DocumentHost {
     Q_PROPERTY(QString fontFamily READ fontFamily NOTIFY formatChanged)
     Q_PROPERTY(QString fontSize READ fontSize NOTIFY formatChanged)
     Q_PROPERTY(QStringList symbols READ symbols CONSTANT)
-    // {margin, pageWidth, firstLine, left, right} in document px: where
+    // {margin, rightMargin, pageWidth, firstLine, left, right} in document px: where
     // the ruler's markers sit for the cursor's paragraph.
     Q_PROPERTY(QVariantMap rulerMarkers READ rulerMarkers NOTIFY rulerChanged)
-    // {width, height, margin, header, footer}
+    // {width, height, left, top, right, bottom, headerDistance,
+    // footerDistance, landscape, differentFirstPage, header, footer,
+    // headerRich, footerRich}
     Q_PROPERTY(QVariantMap pageSetup READ pageSetup NOTIFY pageSetupChanged)
     Q_PROPERTY(QUrl preferencesPageUrl READ preferencesPage WRITE setPreferencesPage NOTIFY preferencesPageChanged)
     Q_PROPERTY(QindaOffice::Ai::AssistantController *assistant READ assistant CONSTANT)
@@ -96,8 +98,10 @@ public:
     Q_INVOKABLE void insertHyperlink(const QString &url, const QString &label);
     Q_INVOKABLE void commitFootnote(const QString &id, const QString &text);
     [[nodiscard]] QVariantMap pageSetup() const;
-    Q_INVOKABLE void applyPageSetup(qreal width, qreal height, qreal margin, const QString &header,
-                                    const QString &footer);
+    // {width, height, left, top, right, bottom, headerDistance,
+    // footerDistance} in document px, plus differentFirstPage, header,
+    // footer (plain patterns; {page}/{pages}).
+    Q_INVOKABLE void applyPageSetup(const QVariantMap &setup);
     Q_INVOKABLE void exportPdfTo(const QUrl &url);
     Q_INVOKABLE void loadTemplateResolved(const QString &path, const QString &choice);
     // ---- find and replace ----

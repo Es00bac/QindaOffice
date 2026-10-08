@@ -4,6 +4,8 @@ add_subdirectory(calc_io)
 add_subdirectory(office_core)
 # Office Open XML foundation (M60, D-068): packages, XML, themes.
 add_subdirectory(office_ooxml)
+# Word documents natively (M60, D-068).
+add_subdirectory(office_docx)
 add_subdirectory(office_quick)
 add_subdirectory(office_ai)
 # Live audio to text for QindaNote's live notes (D-057).

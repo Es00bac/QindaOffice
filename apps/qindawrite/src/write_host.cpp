@@ -239,21 +239,45 @@ void WriteHost::applyStyle(int styleId)
 
 QVariantMap WriteHost::pageSetup() const
 {
-    return {{QStringLiteral("width"), m_document->pageSize().width()},
-            {QStringLiteral("height"), m_document->pageSize().height()},
-            {QStringLiteral("margin"), m_document->pageMargin()},
+    // Document px throughout; the dialog shows inches or centimetres.
+    const Docx::PageLayout &l = m_document->pageLayout();
+    return {{QStringLiteral("width"), l.pageSize.width()},
+            {QStringLiteral("height"), l.pageSize.height()},
+            {QStringLiteral("left"), l.margins.left()},
+            {QStringLiteral("top"), l.margins.top()},
+            {QStringLiteral("right"), l.margins.right()},
+            {QStringLiteral("bottom"), l.margins.bottom()},
+            {QStringLiteral("headerDistance"), l.headerDistance},
+            {QStringLiteral("footerDistance"), l.footerDistance},
+            {QStringLiteral("landscape"), l.landscape()},
+            {QStringLiteral("differentFirstPage"), m_document->differentFirstPage()},
             {QStringLiteral("header"), m_document->headerText()},
-            {QStringLiteral("footer"), m_document->footerText()}};
+            {QStringLiteral("footer"), m_document->footerText()},
+            {QStringLiteral("headerRich"), !m_document->headerIsSimple()},
+            {QStringLiteral("footerRich"), !m_document->footerIsSimple()}};
 }
 
-void WriteHost::applyPageSetup(qreal width, qreal height, qreal margin, const QString &header,
-                               const QString &footer)
+void WriteHost::applyPageSetup(const QVariantMap &setup)
 {
+    Docx::PageLayout layout = m_document->pageLayout();
+    const qreal width = setup.value(QStringLiteral("width"), layout.pageSize.width()).toReal();
+    const qreal height = setup.value(QStringLiteral("height"), layout.pageSize.height()).toReal();
     if (width <= 0 || height <= 0) {
         return;
     }
-    m_document->setupPaged(QSizeF(width, height), qBound<qreal>(0, margin, 200));
-    m_document->setHeaderFooter(header, footer);
+    layout.pageSize = QSizeF(width, height);
+    auto margin = [&](const char *key, qreal current) {
+        return qBound<qreal>(0, setup.value(QString::fromLatin1(key), current).toReal(), qMin(width, height) / 2);
+    };
+    layout.margins = QMarginsF(margin("left", layout.margins.left()), margin("top", layout.margins.top()),
+                               margin("right", layout.margins.right()), margin("bottom", layout.margins.bottom()));
+    layout.headerDistance = margin("headerDistance", layout.headerDistance);
+    layout.footerDistance = margin("footerDistance", layout.footerDistance);
+    m_document->setPageLayout(layout);
+    m_document->setDifferentFirstPage(setup.value(QStringLiteral("differentFirstPage"),
+                                                  m_document->differentFirstPage()).toBool());
+    m_document->setHeaderFooter(setup.value(QStringLiteral("header"), m_document->headerText()).toString(),
+                                setup.value(QStringLiteral("footer"), m_document->footerText()).toString());
     m_document->setDirty(true);
 }
 
@@ -297,6 +321,12 @@ void WriteHost::documentReplaced()
     emit pageSetupChanged();
     emit rulerChanged();
     updateWriteStatus();
+    // What the open approximated (text boxes, charts, …) is said once, not
+    // hidden: those objects are kept unchanged on save (D-068).
+    const QStringList warnings = m_document->openWarnings();
+    if (!warnings.isEmpty()) {
+        showStatusMessage(warnings.join(QLatin1Char(' ')), 12000);
+    }
 }
 
 Quick::PrintRenderCallback WriteHost::printRenderCallback() const
@@ -305,10 +335,10 @@ Quick::PrintRenderCallback WriteHost::printRenderCallback() const
     return [doc](QPrinter *printer, QPainter *painter) {
         // WYSIWYG: the paper follows the document's page size, matching the
         // on-screen and PDF pagination.
+        // Document px → points (×0.75): see the AGENT-GUARD in pdf_exporter.cpp.
         const QSizeF docPage = doc->pageSize();
         if (docPage.width() > 0 && docPage.height() > 0) {
-            printer->setPageSize(QPageSize(QSize(int(docPage.width()), int(docPage.height())),
-                                           QPageSize::Point));
+            printer->setPageSize(QPageSize(docPage * 0.75, QPageSize::Point));
             printer->setPageMargins(QMarginsF(0, 0, 0, 0));
         }
         renderDocumentPages(painter, QSizeF(printer->width(), printer->height()),

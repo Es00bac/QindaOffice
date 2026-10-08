@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "style_catalog.h"
 
+#include "docx_properties.h"
+#include "docx_text.h"
+
 #include <QTextBlock>
 #include <QTextCursor>
 #include <QTextDocument>
 
 namespace QindaOffice::Apps::Write {
+
+// AGENT-CONTRACT (docx_properties.h): the .docx mapping reads and writes
+// Write's own style, TOC, footnote and revision properties.
+static_assert(kStyleIdProperty == Docx::kWriteStyleIdProperty);
 
 namespace {
 
@@ -96,7 +103,9 @@ void StyleCatalog::apply(QTextCursor cursor, int id) const
     if (!charFormat.hasProperty(QTextFormat::FontFamily)) {
         charFormat.setFontFamily(QString());
     }
-    cursor.setBlockCharFormat(charFormat);
+    // Not setBlockCharFormat(): in a table cell's first paragraph that would
+    // reset the cell's merge, shading and borders (docx_text.h).
+    Docx::setBlockCharFormatKeepingCell(cursor, charFormat);
     if (cursor.hasSelection()) {
         cursor.mergeCharFormat(charFormat);
     }

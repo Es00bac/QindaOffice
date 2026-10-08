@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "format_io.h"
 
+#include "docx_reader.h"
+#include "docx_writer.h"
 #include "libre_office_converter.h"
 
-#include <QCoreApplication>
-#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
+#include <QTemporaryDir>
 #include <QTextDocument>
 #include <QTextDocumentWriter>
-#include <QTemporaryDir>
 
 namespace QindaOffice::Apps::Write {
 
@@ -37,67 +37,22 @@ bool writeUtf8Atomically(const QString &path, const QByteArray &payload, QString
     return true;
 }
 
+bool readText(const QString &path, QString *out, QString *error)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        if (error != nullptr) {
+            *error = file.errorString();
+        }
+        return false;
+    }
+    *out = QString::fromUtf8(file.readAll());
+    return true;
+}
+
 QString extensionOf(const QString &path)
 {
     return QFileInfo(path).suffix().toLower();
-}
-
-// Conversion goes through Core::convertBlocking (office_core): this file and
-// show_document.cpp each carried a byte-identical private copy of the nested
-// event loop, timeout and intermediate-cleanup rules.
-QString convertAndWait(const QString &input, const QString &targetExt, QString *error)
-{
-    return Core::convertBlocking(input, targetExt, QStringLiteral(".qindawrite-lo"), error);
-}
-
-bool saveViaHtml(const QString &path, QTextDocument *document, const QString &targetExt,
-                 QString *error)
-{
-    QTemporaryDir temp;
-    if (!temp.isValid()) {
-        if (error != nullptr) {
-            *error = QStringLiteral("no temporary directory");
-        }
-        return false;
-    }
-    const QString htmlPath = temp.path() + QStringLiteral("/document.html");
-    if (!saveDocument(htmlPath, document, error)) {
-        return false;
-    }
-    const QString output = convertAndWait(htmlPath, targetExt, error);
-    if (output.isEmpty()) {
-        return false;
-    }
-    // AGENT-GUARD: copy through QSaveFile at the destination — the converted
-    // file lives in the QTemporaryDir (often tmpfs) while `path` is on the
-    // user's filesystem, so QFile::rename fails with EXDEV. The previous
-    // code removed the target first, destroying the user's file on that
-    // failure. QSaveFile also keeps the write atomic and never truncates
-    // the original when the conversion output is broken.
-    QSaveFile out(path);
-    if (!out.open(QIODevice::WriteOnly)) {
-        if (error != nullptr) {
-            *error = out.errorString();
-        }
-        return false;
-    }
-    QFile converted(output);
-    if (!converted.open(QIODevice::ReadOnly)) {
-        if (error != nullptr) {
-            *error = converted.errorString();
-        }
-        out.cancelWriting();
-        return false;
-    }
-    const QByteArray payload = converted.readAll();
-    if (payload.isEmpty() || out.write(payload) != payload.size() || !out.commit()) {
-        if (error != nullptr) {
-            *error = QStringLiteral("converting to %1 produced no usable output").arg(targetExt);
-        }
-        out.cancelWriting();
-        return false;
-    }
-    return true;
 }
 
 } // namespace
@@ -105,54 +60,48 @@ bool saveViaHtml(const QString &path, QTextDocument *document, const QString &ta
 bool loadDocument(const QString &path, QTextDocument *document, QString *error)
 {
     const QString ext = extensionOf(path);
-    if (ext == QLatin1String("html") || ext == QLatin1String("htm")) {
-        QFile file(path);
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            if (error != nullptr) {
-                *error = file.errorString();
-            }
+    QString text;
+    if (ext == u"html" || ext == u"htm") {
+        if (!readText(path, &text, error)) {
             return false;
         }
-        document->setHtml(QString::fromUtf8(file.readAll()));
+        document->setHtml(text);
         return true;
     }
-    if (ext == QLatin1String("md")) {
-        QFile file(path);
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            if (error != nullptr) {
-                *error = file.errorString();
-            }
+    if (ext == u"md") {
+        if (!readText(path, &text, error)) {
             return false;
         }
-        document->setMarkdown(QString::fromUtf8(file.readAll()));
+        document->setMarkdown(text);
         return true;
     }
-    if (ext == QLatin1String("txt")) {
-        QFile file(path);
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            if (error != nullptr) {
-                *error = file.errorString();
-            }
+    if (ext == u"txt") {
+        if (!readText(path, &text, error)) {
             return false;
         }
-        document->setPlainText(QString::fromUtf8(file.readAll()));
+        document->setPlainText(text);
         return true;
     }
-    if (ext == QLatin1String("odt") || ext == QLatin1String("docx") || ext == QLatin1String("doc")
-        || ext == QLatin1String("rtf")) {
-        const QString html = convertAndWait(path, QStringLiteral("html"), error);
-        if (html.isEmpty()) {
-            return false;
-        }
-        QFile file(html);
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    if (ext == u"docx" || ext == u"docm" || ext == u"dotx" || ext == u"dotm") {
+        Docx::WordParts parts;
+        return Docx::readDocx(path, document, &parts, error);
+    }
+    if (ext == u"odt" || ext == u"doc" || ext == u"rtf") {
+        // LibreOffice writes beside its input: convert a private copy.
+        QTemporaryDir scratch;
+        const QString input = scratch.filePath(QFileInfo(path).fileName());
+        if (!scratch.isValid() || !QFile::copy(path, input)) {
             if (error != nullptr) {
-                *error = file.errorString();
+                *error = QStringLiteral("cannot read %1").arg(path);
             }
             return false;
         }
-        document->setHtml(QString::fromUtf8(file.readAll()));
-        return true;
+        const QString docx = Core::convertBlocking(input, QStringLiteral("docx"), QStringLiteral("lo"), error);
+        if (docx.isEmpty()) {
+            return false;
+        }
+        Docx::WordParts parts;
+        return Docx::readDocx(docx, document, &parts, error);
     }
     if (error != nullptr) {
         *error = QStringLiteral("Unsupported format .%1").arg(ext);
@@ -163,17 +112,19 @@ bool loadDocument(const QString &path, QTextDocument *document, QString *error)
 bool saveDocument(const QString &path, QTextDocument *document, QString *error)
 {
     const QString ext = extensionOf(path);
-    if (ext == QLatin1String("html") || ext == QLatin1String("htm")) {
+    if (ext == u"html" || ext == u"htm") {
         return writeUtf8Atomically(path, document->toHtml().toUtf8(), error);
     }
-    if (ext == QLatin1String("md")) {
-        return writeUtf8Atomically(
-            path, document->toMarkdown(QTextDocument::MarkdownDialectGitHub).toUtf8(), error);
+    if (ext == u"md") {
+        return writeUtf8Atomically(path, document->toMarkdown(QTextDocument::MarkdownDialectGitHub).toUtf8(), error);
     }
-    if (ext == QLatin1String("txt")) {
+    if (ext == u"txt") {
         return writeUtf8Atomically(path, document->toPlainText().toUtf8(), error);
     }
-    if (ext == QLatin1String("odt")) {
+    if (ext == u"docx") {
+        return Docx::writeDocx(path, *document, Docx::WordParts(), {}, error);
+    }
+    if (ext == u"odt") {
         QTextDocumentWriter writer(path, "odf");
         if (!writer.write(document)) {
             if (error != nullptr) {
@@ -183,9 +134,6 @@ bool saveDocument(const QString &path, QTextDocument *document, QString *error)
         }
         return true;
     }
-    if (ext == QLatin1String("docx") || ext == QLatin1String("rtf")) {
-        return saveViaHtml(path, document, ext, error);
-    }
     if (error != nullptr) {
         *error = QStringLiteral("Unsupported save format .%1").arg(ext);
     }
@@ -194,14 +142,16 @@ bool saveDocument(const QString &path, QTextDocument *document, QString *error)
 
 QString defaultSaveFilter()
 {
-    return QStringLiteral("OpenDocument Text (*.odt);;HTML (*.html);;Markdown (*.md);;"
-                          "Plain text (*.txt);;Word (*.docx);;RTF (*.rtf)");
+    return QStringLiteral("Word document (*.docx);;Word template (*.dotx);;Word macro-enabled document (*.docm);;"
+                          "Word 97-2003 document (*.doc);;OpenDocument Text (*.odt);;Rich Text Format (*.rtf);;"
+                          "Web page (*.html);;Markdown (*.md);;Plain text (*.txt)");
 }
 
 QString openFilterString()
 {
-    return QStringLiteral(
-        "Documents (*.html *.htm *.md *.txt *.odt *.docx *.doc *.rtf);;All files (*)");
+    return QStringLiteral("Documents (*.docx *.docm *.dotx *.dotm *.doc *.dot *.odt *.ott *.fodt *.rtf *.wpd *.wps "
+                          "*.html *.htm *.md *.txt);;Word documents (*.docx *.docm *.dotx *.dotm *.doc *.dot);;"
+                          "All files (*)");
 }
 
 } // namespace QindaOffice::Apps::Write

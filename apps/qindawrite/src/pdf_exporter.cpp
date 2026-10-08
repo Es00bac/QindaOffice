@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pdf_exporter.h"
 
-#include <QFontMetricsF>
-
+#include "docx_text.h"
 #include "page_geometry.h"
 #include "page_setup_io.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QFileInfo>
 #include <QFont>
+#include <QFontMetricsF>
 #include <QPainter>
 #include <QPdfWriter>
 
 namespace QindaOffice::Apps::Write {
 
 bool exportDocumentPdf(QTextDocument *document, const QString &path, QString *error,
-                         const PageDecoration &decoration)
+                       const PageDecoration &decoration)
 {
     if (document == nullptr) {
         if (error != nullptr) {
@@ -23,14 +23,13 @@ bool exportDocumentPdf(QTextDocument *document, const QString &path, QString *er
         }
         return false;
     }
-    // AGENT-GUARD: the PDF page must match the DOCUMENT's page size — the
-    // earlier release hardcoded A4, so Letter-sized documents came out
-    // distorted (the two-axis scale in renderDocumentPages stretched x and
-    // y differently).
+    // AGENT-GUARD: the PDF page must match the DOCUMENT's page size, which
+    // is in 96-dpi px. QPageSize takes points (72 per inch), so px × 0.75 —
+    // passing px as points made every A4 export 1.33 × too large (11 × 15.6
+    // in), and the earlier hardcoded A4 distorted Letter documents.
     QPdfWriter writer(path);
     const QSizeF docPage = document->pageSize();
-    const QPageSize size(QSize(docPage.width(), docPage.height()), QPageSize::Point);
-    writer.setPageSize(size);
+    writer.setPageSize(QPageSize(docPage * 0.75, QPageSize::Point));
     writer.setPageMargins(QMarginsF(0, 0, 0, 0));
     writer.setResolution(96);
     writer.setCreator(QStringLiteral("QindaWrite"));
@@ -49,64 +48,77 @@ bool exportDocumentPdf(QTextDocument *document, const QString &path, QString *er
     return true;
 }
 
+namespace {
+
+// One header or footer, page fields filled in, laid out across the text
+// column. `top` is where it starts, or (top < 0) `bottom` is where it ends.
+void drawStory(QPainter *painter, const QTextDocument *story, const QRectF &pageRect, const Docx::PageLayout &l,
+               qreal top, qreal bottom, int page, int pageCount)
+{
+    if (story == nullptr || story->isEmpty()) {
+        return;
+    }
+    const std::unique_ptr<QTextDocument> shown = Docx::instantiateHeaderFooter(*story, page, pageCount);
+    const qreal width = qMax<qreal>(48, pageRect.width() - l.margins.left() - l.margins.right() - l.gutter);
+    shown->setDocumentMargin(0);
+    shown->setTextWidth(width);
+    const qreal height = shown->size().height();
+    const qreal y = top >= 0 ? pageRect.y() + top : pageRect.y() + bottom - height;
+    painter->save();
+    painter->translate(pageRect.x() + l.margins.left() + l.gutter, y);
+    QAbstractTextDocumentLayout::PaintContext context;
+    // Paper is white with black ink on every theme (D-004).
+    context.palette.setColor(QPalette::Text, Qt::black);
+    context.clip = QRectF(0, 0, width, height);
+    shown->documentLayout()->draw(painter, context);
+    painter->restore();
+}
+
+} // namespace
+
 void drawPageDecoration(QPainter *painter, const QRectF &pageRect, const PageDecoration &decoration,
                         int pageIndex, int pageCount)
 {
-    const bool hasHeader = !decoration.header.isEmpty();
-    const bool hasFooter = !decoration.footer.isEmpty();
-    const QStringList notes = decoration.footnotes.value(pageIndex);
-    if (!hasHeader && !hasFooter && notes.isEmpty()) {
+    if (decoration.isEmpty()) {
         return;
     }
-    // Header/footer are document content, not chrome: small dark type in
-    // the margin band, horizontally centered (matching the paper pin).
-    QFont font = painter->font();
-    font.setPointSize(9);
+    const Docx::PageLayout &l = decoration.layout;
+    drawStory(painter, decoration.headerFor(pageIndex), pageRect, l, l.headerDistance, 0, pageIndex, pageCount);
+    drawStory(painter, decoration.footerFor(pageIndex), pageRect, l, -1, pageRect.height() - l.footerDistance,
+              pageIndex, pageCount);
+    const QStringList notes = decoration.footnotes.value(pageIndex);
+    if (notes.isEmpty()) {
+        return;
+    }
+    // Notes sit in the bottom margin band, above the footer, with a
+    // separator rule — the shape a printed footnote has. The band is fixed
+    // (a growing one needs per-page re-layout, which a single QTextDocument
+    // flow cannot express), so what does not fit is elided rather than
+    // drawn over the footer.
     painter->save();
-    painter->setFont(font);
+    QFont noteFont = painter->font();
+    noteFont.setPointSize(8);
+    painter->setFont(noteFont);
     painter->setPen(QPen(Qt::black));
-    const qreal margin = decoration.margin;
-    const QRectF contentBand(pageRect.x() + margin, pageRect.y() + margin,
-                             pageRect.width() - 2 * margin, pageRect.height() - 2 * margin);
-    if (hasHeader) {
-        const QRectF band(contentBand.x(), pageRect.y(), contentBand.width(), margin);
-        painter->drawText(band, Qt::AlignHCenter | Qt::AlignVCenter,
-                          formatPageDecoration(decoration.header, pageIndex, pageCount));
-    }
-    if (hasFooter) {
-        const QRectF band(contentBand.x(), pageRect.bottom() - margin, contentBand.width(), margin);
-        painter->drawText(band, Qt::AlignHCenter | Qt::AlignVCenter,
-                          formatPageDecoration(decoration.footer, pageIndex, pageCount));
-    }
-    if (!notes.isEmpty()) {
-        // Notes sit in the bottom margin band, above the footer line, with a
-        // separator rule — the shape a printed footnote has. The band is
-        // fixed (a growing one needs per-page re-layout, which a single
-        // QTextDocument flow cannot express), so what does not fit is
-        // elided rather than drawn over the footer.
-        QFont noteFont = painter->font();
-        noteFont.setPointSize(8);
-        painter->setFont(noteFont);
-        const QFontMetricsF metrics(noteFont);
-        const qreal lineHeight = metrics.height();
-        const qreal footerRoom = hasFooter ? lineHeight + 4 : 0;
-        const qreal available = margin - footerRoom - 8;
-        const int maxLines = qMax(1, int(available / lineHeight));
-        qreal y = pageRect.bottom() - margin + 4;
-        painter->drawLine(QPointF(contentBand.left(), y),
-                          QPointF(contentBand.left() + contentBand.width() / 3.0, y));
-        y += 3;
-        for (int i = 0; i < notes.size() && i < maxLines; ++i) {
-            const bool last = (i == maxLines - 1) && notes.size() > maxLines;
-            const QString line = last
-                ? QStringLiteral("…") + QString::number(notes.size() - maxLines + 1)
-                      + QStringLiteral(" more")
-                : notes.at(i);
-            painter->drawText(QRectF(contentBand.left(), y, contentBand.width(), lineHeight),
-                              Qt::AlignLeft | Qt::AlignVCenter,
-                              metrics.elidedText(line, Qt::ElideRight, contentBand.width()));
-            y += lineHeight;
-        }
+    const QFontMetricsF metrics(noteFont);
+    const qreal lineHeight = metrics.height();
+    const qreal band = l.margins.bottom();
+    const qreal left = pageRect.x() + l.margins.left() + l.gutter;
+    const qreal width = pageRect.width() - l.margins.left() - l.margins.right() - l.gutter;
+    const qreal footerRoom = decoration.footerFor(pageIndex) != nullptr ? lineHeight + 4 + l.footerDistance : 0;
+    const qreal available = band - footerRoom - 8;
+    const int maxLines = qMax(1, int(available / lineHeight));
+    qreal y = pageRect.bottom() - band + 4;
+    painter->drawLine(QPointF(left, y), QPointF(left + width / 3.0, y));
+    y += 3;
+    for (int i = 0; i < notes.size() && i < maxLines; ++i) {
+        const bool last = (i == maxLines - 1) && notes.size() > maxLines;
+        const QString line = last ? QStringLiteral("…") + QString::number(notes.size() - maxLines + 1)
+                + QStringLiteral(" more")
+                                  : notes.at(i);
+        painter->drawText(QRectF(left, y, width, lineHeight), Qt::AlignLeft | Qt::AlignVCenter,
+                          metrics.elidedText(line, Qt::ElideRight, width));
+        y += lineHeight;
     }
     painter->restore();
 }
@@ -122,8 +134,7 @@ void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDoc
     // AGENT-GUARD: a UNIFORM scale (width-derived). Two independent axes
     // distorted every document whose aspect ratio differed from the target;
     // height overflow is a page-setup concern, never a licence to stretch.
-    const qreal uniformScale =
-        page.width() > 0 ? targetPixels.width() / page.width() : 1.0;
+    const qreal uniformScale = page.width() > 0 ? targetPixels.width() / page.width() : 1.0;
     painter->scale(uniformScale, uniformScale);
     const QAbstractTextDocumentLayout *layout = document->documentLayout();
     const int pages = qMax(1, int(std::ceil(layout->documentSize().height() / page.height())));
@@ -136,8 +147,8 @@ void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDoc
         QAbstractTextDocumentLayout::PaintContext context;
         context.clip = QRectF(0, i * page.height(), page.width(), page.height());
         const_cast<QAbstractTextDocumentLayout *>(layout)->draw(painter, context);
-        drawPageDecoration(painter, QRectF(0, i * page.height(), page.width(), page.height()),
-                           decoration, i + 1, pages);
+        drawPageDecoration(painter, QRectF(0, i * page.height(), page.width(), page.height()), decoration, i + 1,
+                           pages);
         painter->restore();
     }
     painter->restore();

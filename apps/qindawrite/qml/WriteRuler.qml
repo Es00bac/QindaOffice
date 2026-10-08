@@ -15,6 +15,8 @@ Tk.Ruler {
     required property Tk.Viewport page
     readonly property var m: write.rulerMarkers
     // One centimetre at 96 dpi; the page defaults are metric (A4).
+    // rulerMarkers carries the left (margin) and right (rightMargin) page
+    // margins separately: Word documents rarely have equal ones.
     readonly property real pxPerCm: 96 / 2.54
     function viewX(docX) { return page.fromContent(Qt.point(docX, 0)).x }
     objectName: "writeRuler"
@@ -24,7 +26,7 @@ Tk.Ruler {
     majorEvery: 2
     minorEvery: 1
     band: [viewX(0), viewX(m.pageWidth)]
-    activeBand: [viewX(m.margin), viewX(m.pageWidth - m.margin)]
+    activeBand: [viewX(m.margin), viewX(m.pageWidth - m.rightMargin)]
     markers: [
         { id: "indent-first", position: viewX(m.firstLine), kind: "indent-first", draggable: true },
         { id: "indent-left", position: viewX(m.left), kind: "indent-left", draggable: true },

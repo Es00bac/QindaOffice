@@ -62,6 +62,13 @@ inline constexpr char16_t VT[] = u"http://schemas.openxmlformats.org/officeDocum
 // not one the suite knows (the writer then invents ns0, ns1, …).
 [[nodiscard]] QString conventionalPrefix(QStringView uri);
 
+// True for vocabularies Office writes as the DEFAULT namespace (no prefix):
+// [Content_Types].xml, the .rels parts and docProps/app.xml.
+// AGENT-GUARD: LibreOffice refuses a package whose relationships part is
+// <ns0:Relationships xmlns:ns0="…"> ("source file could not be loaded") —
+// legal XML, but OPC consumers match these roots literally.
+[[nodiscard]] bool isDefaultNamespace(QStringView uri);
+
 // Strict (ISO/IEC 29500 Strict) URIs mapped to their Transitional twins;
 // any other URI is returned unchanged.
 [[nodiscard]] QString normalizeNamespace(QStringView uri);

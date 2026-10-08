@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "format_controller.h"
 
+#include <QFile>
+
 #include "menu_tree.h"
 #include "page_text_control.h"
 #include "write_document.h"
@@ -258,19 +260,29 @@ void FormatController::insertColumnsAtCursor(int columns, int gutterPx)
 
 bool FormatController::insertImageFile(const QString &path)
 {
-    QImage loaded(path);
-    if (loaded.isNull()) {
+    // AGENT-NOTE (D-068): the picture's BYTES join the document (as Word
+    // embeds them); referring to the file by path broke the moment the file
+    // moved, and every .docx/.html save lost it.
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
         return false;
     }
-    const qreal contentWidth = m_document->pageSize().width() - 2 * m_document->pageMargin();
-    if (loaded.width() > contentWidth) {
-        loaded = loaded.scaledToWidth(int(contentWidth), Qt::SmoothTransformation);
+    const QByteArray bytes = file.readAll();
+    const QImage loaded = QImage::fromData(bytes);
+    const QString name = m_document->addPicture(bytes);
+    if (loaded.isNull() || name.isEmpty()) {
+        return false;
+    }
+    QSizeF size(loaded.width(), loaded.height());
+    const qreal contentWidth = m_document->contentWidth();
+    if (size.width() > contentWidth && contentWidth > 0) {
+        size = QSizeF(contentWidth, size.height() * contentWidth / size.width());
     }
     QTextCursor cursor = m_control->textCursor();
     QTextImageFormat format;
-    format.setName(path);
-    format.setWidth(loaded.width());
-    format.setHeight(loaded.height());
+    format.setName(name);
+    format.setWidth(size.width());
+    format.setHeight(size.height());
     cursor.insertImage(format);
     m_document->setDirty(true);
     return true;

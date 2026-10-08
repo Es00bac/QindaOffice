@@ -183,20 +183,23 @@ QVariantMap WriteHost::rulerMarkers() const
 {
     const QTextBlockFormat format = m_control->textCursor().blockFormat();
     const qreal margin = m_document->pageMargin();
+    const qreal rightMargin = m_document->pageLayout().margins.right();
     const qreal pageWidth = m_document->pageSize().width();
     const qreal left = margin + format.leftMargin();
     return {{QStringLiteral("margin"), margin},
+            {QStringLiteral("rightMargin"), rightMargin},
             {QStringLiteral("pageWidth"), pageWidth},
             {QStringLiteral("left"), left},
             {QStringLiteral("firstLine"), left + format.textIndent()},
-            {QStringLiteral("right"), pageWidth - margin - format.rightMargin()}};
+            {QStringLiteral("right"), pageWidth - rightMargin - format.rightMargin()}};
 }
 
 void WriteHost::applyRulerMarker(const QString &id, qreal rawDocX)
 {
     const qreal margin = m_document->pageMargin();
+    const qreal rightMargin = m_document->pageLayout().margins.right();
     const qreal pageWidth = m_document->pageSize().width();
-    const qreal docX = qBound(margin, rawDocX, pageWidth - margin);
+    const qreal docX = qBound(margin, rawDocX, pageWidth - rightMargin);
     QTextCursor cursor = m_control->textCursor();
     QTextBlockFormat format = cursor.blockFormat();
     if (id == QLatin1String("indent-left")) {
@@ -207,7 +210,7 @@ void WriteHost::applyRulerMarker(const QString &id, qreal rawDocX)
     } else if (id == QLatin1String("indent-first")) {
         format.setTextIndent(docX - margin - format.leftMargin());
     } else if (id == QLatin1String("indent-right")) {
-        format.setRightMargin(qMax(0.0, pageWidth - margin - docX));
+        format.setRightMargin(qMax(0.0, pageWidth - rightMargin - docX));
     } else {
         return;
     }

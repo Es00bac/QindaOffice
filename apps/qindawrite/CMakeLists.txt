@@ -40,6 +40,7 @@ qt_add_qml_module(qindawrite_app
         src/table_actions.cpp src/table_actions.h
         src/write_actions.cpp src/write_actions.h
         src/write_document.cpp src/write_document.h
+        src/write_document_io.cpp
         src/write_footnotes.cpp src/write_footnotes.h
         src/write_host.cpp src/write_host.h
         src/write_host_ai.cpp
@@ -57,7 +58,7 @@ target_include_directories(qindawrite_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
 # header, exported with the Qt_6_PRIVATE_API tag; version-locked like the
 # rest of the suite (ADR-0116).
 target_link_libraries(qindawrite_app PUBLIC office_quick office_quickplugin office_ai office_aiplugin
-    Qt6::QuickPrivate KF6::SonnetCore)
+    office_docx Qt6::QuickPrivate KF6::SonnetCore)
 target_compile_definitions(qindawrite_app PRIVATE QT_NO_CAST_FROM_ASCII)
 qqo_set_strict_warnings(qindawrite_app)
 

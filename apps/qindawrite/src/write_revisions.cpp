@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_revisions.h"
 
+#include "docx_properties.h"
+
 #include "page_text_control.h"
 #include "write_document.h"
 
@@ -18,8 +20,12 @@ namespace {
 // screen, on paper and in the PDF, where the desktop palette does not
 // apply. Blue for "added", red for "removed", the convention every word
 // processor shares.
-const QColor kInsertColor(0x1a, 0x5f, 0xb4);
-const QColor kDeleteColor(0xc0, 0x39, 0x2b);
+// AGENT-CONTRACT: the .docx mapping shows imported revisions with the same
+// colours and never writes them out as formatting (docx_properties.h).
+const QColor kInsertColor = QColor::fromRgb(Docx::kRevisionInsertColor);
+const QColor kDeleteColor = QColor::fromRgb(Docx::kRevisionDeleteColor);
+static_assert(kRevisionInsertProperty == Docx::kRevisionInsertProperty);
+static_assert(kRevisionDeleteProperty == Docx::kRevisionDeleteProperty);
 
 bool isMarked(const QTextCharFormat &format)
 {

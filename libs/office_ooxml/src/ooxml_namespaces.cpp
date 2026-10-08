@@ -95,6 +95,11 @@ QString conventionalPrefix(QStringView uri)
     return {};
 }
 
+bool isDefaultNamespace(QStringView uri)
+{
+    return uri == QStringView(CT) || uri == QStringView(RELS) || uri == QStringView(EP);
+}
+
 QString normalizeNamespace(QStringView uri)
 {
     if (!uri.startsWith(u"http://purl.oclc.org/ooxml/")) {

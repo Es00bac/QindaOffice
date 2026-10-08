@@ -138,8 +138,7 @@ void PageTextItem::paintPage(QPainter *painter, int index, const QRectF &clip)
     painter->restore();
 
     const PageDecoration decoration = m_document->decoration();
-    if (!decoration.header.isEmpty() || !decoration.footer.isEmpty()
-        || !decoration.footnotes.isEmpty()) {
+    if (!decoration.isEmpty()) {
         painter->save();
         painter->translate(page.topLeft());
         drawPageDecoration(painter, QRectF(QPointF(0, 0), size), decoration, index + 1, m_pageCount);

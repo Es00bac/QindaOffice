@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_footnotes.h"
 
+#include "docx_properties.h"
+
+static_assert(QindaOffice::Apps::Write::kFootnoteIdProperty == QindaOffice::Docx::kFootnoteIdProperty);
+
 #include "page_geometry.h"
 
 #include <QAbstractTextDocumentLayout>
