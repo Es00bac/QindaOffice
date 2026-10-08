@@ -50,6 +50,8 @@ public:
     [[nodiscard]] QStringList mimeTypes() const override;
     [[nodiscard]] QByteArray recoverySnapshot() const override;
     bool loadRecovery(const QByteArray &snapshot, QString *error = nullptr) override;
+    // The snapshot is compressed JSON: the journal's binary bound.
+    [[nodiscard]] qint64 recoveryPayloadLimit() const override;
 
     // UI-facing edits route through here so dirty/content signals stay
     // uniform for journaling and title updates.

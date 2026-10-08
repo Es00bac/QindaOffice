@@ -7,6 +7,7 @@
 #include "calc_test_support.h"
 
 #include "libre_office_converter.h"
+#include "recovery_journal.h"
 #include "standard_actions.h"
 
 #include "sheet.h"
@@ -101,10 +102,17 @@ private slots:
         chart.rangeText = QStringLiteral("A1:A1");
         doc.addChart(chart);
         const QByteArray payload = doc.recoverySnapshot();
+        QVERIFY(payload.startsWith("QINDACALC-Z/1\n"));
+        QCOMPARE(doc.recoveryPayloadLimit(), QindaOffice::Core::RecoveryJournal::kMaxBinaryPayload);
         SpreadsheetDocument restored;
         QString error;
         QVERIFY2(restored.loadRecovery(payload, &error), qPrintable(error));
         QCOMPARE(restored.workbook()->sheetCount(), 2);
+        // Journals written before the compression still restore (plain JSON).
+        SpreadsheetDocument legacy;
+        QVERIFY2(legacy.loadRecovery(qUncompress(payload.mid(14)), &error), qPrintable(error));
+        QCOMPARE(legacy.workbook()->sheetCount(), 2);
+        QVERIFY(!legacy.loadRecovery(QByteArrayLiteral("QINDACALC-Z/1\nbroken"), &error));
         QCOMPARE(Calc::toText(restored.workbook()->cellValue(1, 0, 0)), QStringLiteral("30"));
         const Calc::CellStyle *restyledStyle =
             restored.workbook()->style(restored.workbook()->sheetAt(1).styleIdAt({0, 0}));

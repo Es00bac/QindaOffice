@@ -2864,7 +2864,10 @@ could tell content from absence.
    (`calc_recovery.cpp`) — deliberately not an in-memory xlsx, because QXlsx
    has no chart read path and the round trip would drop every chart. Values
    are typed (`n`/`t`/`b`/`e`), never display text, or the text cell `007`
-   comes back as the number 7. QindaNote's is the notebook index plus the
+   comes back as the number 7. (2026-10-08: the JSON is zlib-compressed
+   behind a `QINDACALC-Z/1` tag and the document declares the journal's
+   16 MiB binary bound, `Document::recoveryPayloadLimit`; plain JSON
+   journals still restore.) QindaNote's is the notebook index plus the
    loaded envelopes plus the source directory.
 3. **A declared MIME type is a promise.** QindaCalc opens and saves foreign
    spreadsheet formats through the headless LibreOffice bridge, so its

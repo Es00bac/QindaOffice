@@ -7,6 +7,7 @@
 #include "number_format.h"
 
 #include "libre_office_converter.h"
+#include "recovery_journal.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -227,18 +228,41 @@ QStringList SpreadsheetDocument::mimeTypes() const
             QStringLiteral("text/csv")};
 }
 
+namespace {
+// AGENT-NOTE: the journal payload is the JSON snapshot zlib-compressed
+// behind this tag: a 100k-cell workbook's JSON passed the journal's 4 MiB
+// text bound and was never journalled (known issue of 2026-09-19).
+// Untagged JSON from older journals still restores.
+const QByteArray kRecoveryTag = QByteArrayLiteral("QINDACALC-Z/1\n");
+} // namespace
+
 QByteArray SpreadsheetDocument::recoverySnapshot() const
 {
     // The undo layer's snapshot already covers everything the app models
     // (cells, the style table including styles on empty cells, geometry,
     // merges, names, charts); calc_recovery serializes exactly that.
-    return snapshotToJson(takeSnapshot(m_workbook, m_activeSheet));
+    return kRecoveryTag + qCompress(snapshotToJson(takeSnapshot(m_workbook, m_activeSheet)), 6);
+}
+
+qint64 SpreadsheetDocument::recoveryPayloadLimit() const
+{
+    return Core::RecoveryJournal::kMaxBinaryPayload;
 }
 
 bool SpreadsheetDocument::loadRecovery(const QByteArray &snapshot, QString *error)
 {
+    QByteArray json = snapshot;
+    if (snapshot.startsWith(kRecoveryTag)) {
+        json = qUncompress(snapshot.mid(kRecoveryTag.size()));
+        if (json.isEmpty()) {
+            if (error != nullptr) {
+                *error = tr("The recovery snapshot is damaged.");
+            }
+            return false;
+        }
+    }
     WorkbookSnapshot restored;
-    if (!snapshotFromJson(snapshot, &restored, error)) {
+    if (!snapshotFromJson(json, &restored, error)) {
         return false;
     }
     restoreSnapshot(&m_workbook, restored);
