@@ -21,6 +21,10 @@ private slots:
     void errorLiterals();
     void badInput();
     void shift();
+    void printingKeepsGrouping_data();
+    void printingKeepsGrouping();
+    void absoluteWholeColumnsAndRows();
+    void sheetNamesQuoteWhenTheyMust();
 };
 
 static double evalSimple(const QString &expr, bool *ok)
@@ -143,6 +147,111 @@ void CalcParserTest::shift()
     ParseResult parsed = parseFormula(QStringLiteral("A1+$B$2+B$3"));
     const NodePtr shifted = shiftNode(parsed.root, 2, 5); // down 2, right 5
     QCOMPARE(nodeText(shifted), QStringLiteral("F3+$B$2+G$3"));
+}
+
+// nodeText is how a tree becomes text again — shared-formula dependents,
+// structural edits and sheet renames all store what it prints, and the xlsx
+// writer saves that. The parser folds parentheses into the tree, so the
+// printer must put back every pair the grouping needs: "(A1+B1)*2" printed
+// as "A1+B1*2" is a different formula (M61, D-069).
+void CalcParserTest::printingKeepsGrouping_data()
+{
+    QTest::addColumn<QString>("expr");
+    QTest::addColumn<QString>("printed");
+    const char *kRows[][2] = {
+        {"(1+2)*3", "(1+2)*3"},
+        {"1+2*3", "1+2*3"},
+        {"(1+2)+3", "1+2+3"},
+        {"1-(2-3)", "1-(2-3)"},
+        {"1-(2+3)", "1-(2+3)"},
+        {"(1-2)-3", "1-2-3"},
+        {"8/(4/2)", "8/(4/2)"},
+        {"8/(4*2)", "8/(4*2)"},
+        {"2^(1+1)", "2^(1+1)"},
+        {"(2^3)^2", "2^3^2"},
+        {"2^(3^2)", "2^(3^2)"},
+        {"-(1+2)", "-(1+2)"},
+        {"-(2^2)", "-(2^2)"},
+        {"(-2)^2", "-2^2"},
+        {"(1+2)%", "(1+2)%"},
+        {"(-5)%", "(-5)%"},
+        {"-5%", "-5%"},
+        {"(\"a\"&\"b\")&\"c\"", "\"a\"&\"b\"&\"c\""},
+        {"\"a\"&(\"b\"&\"c\")", "\"a\"&(\"b\"&\"c\")"},
+        {"(1<2)=TRUE", "1<2=TRUE"},
+        {"1<(2=TRUE)", "1<(2=TRUE)"},
+        {"1+(2>1)", "1+(2>1)"},
+        {"SUM((A1,B1))", "SUM((A1,B1))"},
+        {"2^-(1-2)", "2^-(1-2)"},
+        {"A1-(B1-A1)/(B1*2)^-(A1-2)", "A1-(B1-A1)/(B1*2)^-(A1-2)"},
+    };
+    for (const auto &row : kRows) {
+        QTest::newRow(row[0]) << QString::fromLatin1(row[0]) << QString::fromLatin1(row[1]);
+    }
+}
+
+void CalcParserTest::printingKeepsGrouping()
+{
+    QFETCH(QString, expr);
+    QFETCH(QString, printed);
+    const ParseResult parsed = parseFormula(expr);
+    QVERIFY2(parsed.error.isEmpty(), qPrintable(parsed.error));
+    QCOMPARE(nodeText(parsed.root), printed);
+    // And the printed text parses back to the very same tree.
+    const ParseResult again = parseFormula(printed);
+    QVERIFY2(again.error.isEmpty(), qPrintable(again.error));
+    QCOMPARE(nodeText(again.root), printed);
+}
+
+// $A:$C and $1:$3 are how Excel spells absolute whole columns and rows —
+// VLOOKUP(x,$A:$C,2,FALSE) is everyday Excel. They lex as one reference,
+// keep their anchors in print, and a shifted copy keeps whole-column rows
+// (and whole-row columns) where they are.
+void CalcParserTest::absoluteWholeColumnsAndRows()
+{
+    for (const char *ref : {"$A:$C", "A:$C", "$A:C", "$1:$3", "1:$3", "$1:3"}) {
+        const QVector<Token> tokens = lexFormula(QString::fromLatin1(ref));
+        QCOMPARE(tokens.size(), 2);
+        QCOMPARE(tokens.at(0).type, Token::Type::Ref);
+        const ParseResult parsed = parseFormula(QString::fromLatin1(ref));
+        QVERIFY2(parsed.error.isEmpty() && parsed.root->kind == Node::Kind::Ref, ref);
+        QCOMPARE(nodeText(parsed.root), QString::fromLatin1(ref));
+    }
+    const ParseResult cols = parseFormula(QStringLiteral("SUM($A:B)"));
+    QVERIFY(cols.error.isEmpty());
+    const NodePtr shiftedCols = shiftNode(cols.root, 5, 1);
+    QCOMPARE(nodeText(shiftedCols), QStringLiteral("SUM($A:C)"));
+    QCOMPARE(shiftedCols->args.at(0)->ref.range.topLeft.row, 0);
+    QCOMPARE(shiftedCols->args.at(0)->ref.range.bottomRight.row, 1048575);
+    const ParseResult rows = parseFormula(QStringLiteral("SUM(2:$4)"));
+    QVERIFY(rows.error.isEmpty());
+    const NodePtr shiftedRows = shiftNode(rows.root, 1, 3);
+    QCOMPARE(nodeText(shiftedRows), QStringLiteral("SUM(3:$4)"));
+    QCOMPARE(shiftedRows->args.at(0)->ref.range.topLeft.col, 0);
+    QCOMPARE(shiftedRows->args.at(0)->ref.range.bottomRight.col, 16383);
+}
+
+// A sheet name that is not a plain identifier is quoted when a reference is
+// printed: "2024", "Q1 Sales", "It's" (doubled quote), a name that reads as
+// a cell address. A name the parser kept quoted stays as it was.
+void CalcParserTest::sheetNamesQuoteWhenTheyMust()
+{
+    RangeRef ref;
+    ref.range = {{0, 0}, {0, 0}};
+    const auto printed = [&ref](const QString &sheet) {
+        ref.sheet = sheet;
+        return rangeRefText(ref);
+    };
+    QCOMPARE(printed(QStringLiteral("Data")), QStringLiteral("Data!A1"));
+    QCOMPARE(printed(QStringLiteral("Data_2")), QStringLiteral("Data_2!A1"));
+    QCOMPARE(printed(QStringLiteral("Data.v1")), QStringLiteral("'Data.v1'!A1"));
+    QCOMPARE(printed(QStringLiteral("2024")), QStringLiteral("'2024'!A1"));
+    QCOMPARE(printed(QStringLiteral("Q1 Sales")), QStringLiteral("'Q1 Sales'!A1"));
+    QCOMPARE(printed(QStringLiteral("It's")), QStringLiteral("'It''s'!A1"));
+    QCOMPARE(printed(QStringLiteral("AB12")), QStringLiteral("'AB12'!A1"));
+    QCOMPARE(printed(QStringLiteral("R1C1")), QStringLiteral("'R1C1'!A1"));
+    QCOMPARE(printed(QStringLiteral("Q-1")), QStringLiteral("'Q-1'!A1"));
+    QCOMPARE(printed(QStringLiteral("'My Sheet'")), QStringLiteral("'My Sheet'!A1"));
 }
 
 int main(int argc, char *argv[])

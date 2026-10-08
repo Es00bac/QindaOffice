@@ -5,6 +5,137 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-069: Excel interchange: typed cells, future-function prefixes, honest writer
+
+**Date:** 2026-10-08 · **Status:** accepted (M61, the Excel half of the owner's
+"open, edit, save … openable in Microsoft Office" request in D-068)
+
+**Context.** QindaCalc already read and wrote `.xlsx` natively (QXlsx plus the
+post-pass, D-033…D-040), so the survey behind the office-parity plan measured
+it against what Excel itself writes and reads. Every finding was a silent
+corruption: Excel writes numbers with no `t` attribute and QXlsx keeps those
+as strings, so `5` loaded as the text "5"; error cells loaded as text; only
+an inline string's last run survived; functions added after Excel 2007 are
+stored `_xlfn.IFS(…)` and evaluated `#NAME?`, and were written back without
+the prefix, which Excel answers with `#NAME?`; QXlsx turned text starting
+with `=` into a formula and URL-shaped text into a hyperlink; a cached
+result that was text, a boolean or an error was written as `0`; a drawing
+holding a dialog chart and a picture used an undeclared `r:` prefix; table
+column names went stale; inline validation lists exceeded Excel's 255
+characters; comments had no VML, so Excel could not show them; `2024` and
+`Q1 Sales` went unquoted in print areas and names; the theme and document
+properties were replaced by QXlsx's ("Qt Xlsx Library", "Microsoft
+Excel"); and sheet-scoped, constant and formula defined names were dropped.
+Writing the fail-first tests found three more: the formula printer dropped
+the parentheses the parser folds into the tree (`(A2+B2)*2` stored as
+`A2+B2*2` — every shared-formula cell, structural edit and sheet rename
+wrote the wrong formula); Excel's everyday `$A:$C` did not parse, so whole
+filled-down columns of `VLOOKUP(…,$A:$C,…)` vanished on save; and references
+to a quoted sheet (`'Q1 Sales'!A1`) were not moved by row inserts or renames.
+Measuring the owner's 29 workbooks on the laptop (aggregate counts only)
+found two more: a formula reading a sheet that the load had not reached yet
+recorded no dependency edge, so the final recalculation ordered such cells by
+hash order — the same file opened with 54 to 61 error cells depending on the
+run — and COUNTIF failed with `#VALUE!` on a single-cell range or on an error
+cell anywhere in its range.
+
+**Decision.**
+
+1. **Literal values come typed from the package** (`xlsx_read_cells`), not
+   from QXlsx's value model: numbers with or without `t="n"`, shared strings
+   with every rich run and without phonetic guides (`rPh`), inline strings,
+   `t="b"`, `t="e"` as engine errors, `t="str"`, ISO-8601 `t="d"`, and
+   Excel's `_xHHHH_` escapes decoded. QXlsx still supplies formulas, styles,
+   geometry and merges.
+2. **Excel's function spellings** (`xlsx_formula`): read strips exactly the
+   prefixes Microsoft documents (`_xlfn.`, `_xlfn._xlws.` for FILTER and
+   SORT, `_xlpm.` on LET/LAMBDA parameters); write adds them back from the
+   same table, to typed formulas too, upper-cases known names and turns the
+   engine's accepted `;` separator into `,`. A prefixed function not in the
+   table keeps its prefix both ways, so it round-trips byte for byte. Both
+   directions work token by token over the engine's lexer: string literals,
+   quoted sheet names and structured-reference brackets are never touched.
+3. **A formula the engine cannot parse stays a formula**: its text is kept
+   for the formula bar and the file, its value is `#NAME?` (honest — the
+   engine cannot compute it), and the workbook asks Excel to recalculate on
+   open (`fullCalcOnLoad`). Shared-formula cells of such a master get a
+   token-shifted copy of its text. `nodeText` puts back every parenthesis the
+   precedence needs (print → parse is the identity on trees), and `$A:$C` /
+   `$1:$3` parse, print and shift with their anchors (a whole row now spans
+   every column; before, `SUM(1:1)` was `#REF!`).
+4. **The writer is honest.** Text is written as text through
+   `Worksheet::writeString` (QXlsx's guessing is off and bypassed), with
+   `_xHHHH_` escapes; a literal error and a non-numeric cached result are
+   retyped by the post-pass (`t="e"`, `"str"`, `"b"`); the package is built
+   in memory and saved atomically through `QSaveFile`, so a failed save no
+   longer leaves a half-rewritten file.
+5. **The source's package-level state rides with the workbook**
+   (`Workbook::source`, `WorkbookSource`): the theme part verbatim and the
+   core properties; a save writes them back (title, author, keywords,
+   created kept; Application = QindaCalc; never "Qt Xlsx Library"). A theme
+   with relationships of its own stays behind. It is document state: the
+   undo snapshot and the recovery payload carry it.
+6. **Defined names keep their scope and body.** Workbook-wide plain ranges
+   stay in the RangeRef table (now keeping their spelling); every other name
+   — sheet-scoped (`localSheetId`), constant, formula, hidden, commented,
+   Excel's other built-ins — is a `DefinedName`, evaluated where it parses
+   (a sheet's own name hides the workbook one there; a name that reaches
+   itself stops as `#NAME?`), followed by structural and sheet edits, and
+   written back whole in one `<definedNames>` block. None is dropped.
+7. **Sheet names are quoted wherever a reference prints them**
+   (`quotedSheetName`: anything but a plain ASCII identifier, or a name that
+   reads as an A1/R1C1 address), and every comparison unquotes first.
+8. **Package rules Excel enforces**: table column names come from the header
+   cells (unique, `ColumnN` for a blank, the header cell written to match);
+   an inline list over 255 characters or with a comma becomes a range — the
+   source's own range when it came from one (`ValidationRule::listSource`,
+   kept live and moved by edits), a range of the workbook already holding
+   the items, or a hidden `QindaLists` sheet after the user's sheets;
+   comments get their legacy VML drawing and `<legacyDrawing>` (D-034
+   skipped it on the openpyxl precedent; Excel cannot show a note without
+   it); a picture
+   anchor declares the prefixes it uses.
+9. **Loads compute what Excel computes.** The end of a bulk load rebuilds
+   the dependency index from the stored formulas (`Workbook::endBulkLoad` →
+   `reindexAll`) instead of recalculating over edges recorded while later
+   sheets did not exist. The criteria family — COUNTIF, SUMIF, AVERAGEIF,
+   COUNTIFS, SUMIFS, AVERAGEIFS, MAXIFS, MINIFS — takes a single cell or an
+   array as a range, compares an error cell instead of failing on it (it
+   matches only a criterion naming that error; in a value range it counts
+   only when its row matches), and a blank fails every numeric criterion but
+   "not equal", as in Excel; COUNTIF over a whole column stays sparse.
+10. **Functions**: XMATCH, IPMT, PPMT, CUMIPMT, CUMPRINC, XNPV, XIRR, MIRR,
+   PDURATION, RRI, NETWORKDAYS.INTL, WORKDAY.INTL, HYPERLINK, SUMSQ,
+   SUMX2MY2, SUMX2PY2, SUMXMY2, CEILING.MATH/.PRECISE, FLOOR.MATH/.PRECISE,
+   PERCENTILE.INC/EXC, QUARTILE.INC/EXC, MODE.SNGL, RANK.AVG, COVARIANCE.P/S,
+   COVAR, DEVSQ, NORM.DIST/NORM.S.DIST/NORM.INV/NORM.S.INV (and their old
+   names), STANDARDIZE, ISFORMULA, FORMULATEXT, ISREF, SHEET, SHEETS,
+   TEXTBEFORE, TEXTAFTER. MODE now breaks ties by data order and
+   NETWORKDAYS counts a backwards span negative, as Excel does.
+
+**Consequences.** On the owner's 29 workbooks (laptop, counts only;
+`tests/calc_io/calc_io_survey.cpp`): before, 0 load failures, 15 `#NAME?`
+cells, 8,261 text cells that read as numbers and 54–61 error cells varying
+by run; after, 0 load failures, 0 `#NAME?`, 2,880 text cells that read as
+numbers — every one stored as text by Excel itself — and 12 error cells,
+all deliberate `=NA()`, identical on every run. Every package the calc_io
+tests write validates against
+the ECMA-376 Transitional schemas, with one documented allowance: Excel
+writes `xml:space="preserve"` on SpreadsheetML `<t>`, which `sml.xsd` does
+not declare (`tests/calc_io/calc_io_schema.h`). Expected function values
+come from headless LibreOffice 25.2 where it agrees with Microsoft's
+documentation; TEXTBEFORE/TEXTAFTER (absent from it) and the cases where it
+differs (MODE ties; the `#N/A`/`#NUM!` kinds of MODE.SNGL, PERCENTILE.EXC,
+COVARIANCE.P, NORM.INV) are worked by hand against Excel's rules. D-034's
+"the live link is lost" no longer holds for the file: a list's range is
+written back, although entries are still checked against its values at
+load. Limits that remain: a formula the engine cannot parse is not adjusted
+by row inserts; relative references in a defined name evaluate as anchored
+at A1; structured references, CSE array formulas (written as ordinary
+ones) and the spilling functions (FILTER, SORT, UNIQUE, SEQUENCE) evaluate
+`#NAME?`; cell hyperlinks are not modelled; a chart sheet loads as an empty
+sheet.
+
 ## D-068: Native Office Open XML, mapped where modelled and preserved where not
 
 **Date:** 2026-10-08 · **Status:** accepted (owner request: "open, edit and save

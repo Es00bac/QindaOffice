@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "xlsx_post.h"
 
+#include "xlsx_post_book.h"
+#include "xlsx_post_cells.h"
 #include "xlsx_post_images.h"
 #include "xlsx_write_charts.h"
 #include "xlsx_write_xml.h"
@@ -10,9 +12,12 @@
 #include <KArchiveFile>
 #include <KZip>
 
+#include <QBuffer>
 #include <QDir>
 #include <QRegularExpression>
 #include <QXmlStreamReader>
+
+#include <algorithm>
 
 #include <functional>
 
@@ -78,36 +83,17 @@ int nextShapeId(const QByteArray &drawingXml)
     return maxId + 1;
 }
 
-// The drawing part a sheet's rels point at, or empty.
-QString drawingPartFor(const QByteArray &sheetRelsXml)
-{
-    QXmlStreamReader reader(sheetRelsXml);
-    while (!reader.atEnd()) {
-        if (reader.readNext() != QXmlStreamReader::StartElement
-            || reader.name() != QLatin1String("Relationship")) {
-            continue;
-        }
-        const auto attributes = reader.attributes();
-        if (attributes.value(QLatin1String("Type")).toString()
-            .endsWith(QLatin1String("/drawing"))) {
-            // Targets here are relative to xl/worksheets.
-            return QDir::cleanPath(QStringLiteral("xl/worksheets/")
-                                   + attributes.value(QLatin1String("Target")).toString());
-        }
-    }
-    return {};
-}
-
 } // namespace
 
-bool applyPatchManifest(const QString &path, const PatchManifest &manifest, QString *error)
+bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest, QString *error)
 {
     QHash<QString, QByteArray> parts;
     {
-        KZip zip(path);
+        QBuffer in(package);
+        KZip zip(&in);
         if (!zip.open(QIODevice::ReadOnly)) {
             if (error != nullptr) {
-                *error = QStringLiteral("post-pass cannot read %1").arg(path);
+                *error = QStringLiteral("post-pass cannot read the package QXlsx wrote");
             }
             return false;
         }
@@ -120,6 +106,14 @@ bool applyPatchManifest(const QString &path, const PatchManifest &manifest, QStr
             if (error != nullptr) {
                 *error = QStringLiteral("post-pass: %1 missing from the package")
                              .arg(patch.sheetPart);
+            }
+            return false;
+        }
+        // Literal errors and typed formula results (D-069) first, while the
+        // sheet is still exactly what QXlsx wrote.
+        if (!retypeCells(&parts[patch.sheetPart], patch.cellTypes)) {
+            if (error != nullptr) {
+                *error = QStringLiteral("post-pass: a cell to retype is missing from %1").arg(patch.sheetPart);
             }
             return false;
         }
@@ -212,35 +206,15 @@ bool applyPatchManifest(const QString &path, const PatchManifest &manifest, QStr
             appendContentTypeOverride(&parts[QStringLiteral("[Content_Types].xml")],
                                       QStringLiteral("/") + patch.commentsPart,
                                       QStringLiteral("application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"));
+            if (!addCommentsVml(&parts, patch, error)) {
+                return false;
+            }
         }
     }
 
-    // Workbook-level print names: merge into xl/workbook.xml's
-    // <definedNames> (created when QXlsx wrote none).
-    if (!manifest.printAreas.isEmpty() || !manifest.printTitles.isEmpty()) {
-        QByteArray &workbookXml = parts[QStringLiteral("xl/workbook.xml")];
-        QByteArray entries;
-        for (const auto &[sheetId, body] : manifest.printAreas) {
-            entries += QByteArrayLiteral("<definedName name=\"_xlnm.Print_Area\" localSheetId=\"")
-                + QByteArray::number(sheetId) + QByteArrayLiteral("\">") + body.toUtf8()
-                + QByteArrayLiteral("</definedName>");
-        }
-        for (const auto &[sheetId, body] : manifest.printTitles) {
-            entries += QByteArrayLiteral("<definedName name=\"_xlnm.Print_Titles\" localSheetId=\"")
-                + QByteArray::number(sheetId) + QByteArrayLiteral("\">") + body.toUtf8()
-                + QByteArrayLiteral("</definedName>");
-        }
-        if (workbookXml.contains("</definedNames>")) {
-            workbookXml.replace("</definedNames>", entries + "</definedNames>");
-        } else if (!insertAfterTag(&workbookXml, QStringLiteral("sheets"),
-                                   QByteArrayLiteral("<definedNames>") + entries
-                                       + QByteArrayLiteral("</definedNames>"))) {
-            // <definedNames> follows <sheets> in the workbook schema.
-            if (error != nullptr) {
-                *error = QStringLiteral("post-pass: no </sheets> in xl/workbook.xml");
-            }
-            return false;
-        }
+    // Workbook-level parts: defined names, calcPr, properties, theme.
+    if (!applyWorkbookPatches(&parts, manifest, error)) {
+        return false;
     }
 
     // ---- charts ------------------------------------------------------------
@@ -376,27 +350,41 @@ bool applyPatchManifest(const QString &path, const PatchManifest &manifest, QStr
         return false;
     }
 
-    KZip out(path);
-    if (!out.open(QIODevice::WriteOnly)) {
-        if (error != nullptr) {
-            *error = QStringLiteral("post-pass cannot write %1").arg(path);
-        }
-        return false;
-    }
-    for (auto it = parts.constBegin(); it != parts.constEnd(); ++it) {
-        if (!out.writeFile(it.key(), it.value())) {
+    // Deterministic part order: [Content_Types].xml first (the OPC
+    // convention), the package relationships next, then by name.
+    QStringList names = parts.keys();
+    std::sort(names.begin(), names.end(), [](const QString &a, const QString &b) {
+        const auto rank = [](const QString &name) {
+            return name == QLatin1String("[Content_Types].xml") ? 0 : (name == QLatin1String("_rels/.rels") ? 1 : 2);
+        };
+        return rank(a) != rank(b) ? rank(a) < rank(b) : a < b;
+    });
+    QByteArray rewritten;
+    {
+        QBuffer outBuffer(&rewritten);
+        KZip out(&outBuffer);
+        if (!out.open(QIODevice::WriteOnly)) {
             if (error != nullptr) {
-                *error = QStringLiteral("post-pass failed writing %1").arg(it.key());
+                *error = QStringLiteral("post-pass cannot build the package");
+            }
+            return false;
+        }
+        for (const QString &name : std::as_const(names)) {
+            if (!out.writeFile(name, parts.value(name))) {
+                if (error != nullptr) {
+                    *error = QStringLiteral("post-pass failed writing %1").arg(name);
+                }
+                return false;
+            }
+        }
+        if (!out.close()) {
+            if (error != nullptr) {
+                *error = QStringLiteral("post-pass failed finishing the package");
             }
             return false;
         }
     }
-    if (!out.close()) {
-        if (error != nullptr) {
-            *error = QStringLiteral("post-pass failed closing %1").arg(path);
-        }
-        return false;
-    }
+    *package = rewritten;
     return true;
 }
 

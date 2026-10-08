@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "value.h"
 
+#include <QRegularExpression>
+
+#include <algorithm>
+
 namespace QindaOffice::Calc {
 
 QString errText(Err err)
@@ -175,13 +179,15 @@ QString addrText(const CellAddr &addr, bool absRow, bool absCol)
 
 QString rangeRefText(const RangeRef &ref)
 {
-    QString out = ref.sheet.isEmpty() ? QString() : ref.sheet + QStringLiteral("!");
+    QString out = ref.sheet.isEmpty() ? QString() : quotedSheetName(ref.sheet) + QStringLiteral("!");
+    const auto anchor = [](bool absolute) { return absolute ? QStringLiteral("$") : QString(); };
     if (ref.wholeCols) {
-        return out + colName(ref.range.topLeft.col) + QStringLiteral(":")
-               + colName(ref.range.bottomRight.col);
+        return out + anchor(ref.absCol0) + colName(ref.range.topLeft.col) + QStringLiteral(":")
+               + anchor(ref.absCol1) + colName(ref.range.bottomRight.col);
     }
     if (ref.wholeRows) {
-        return out + QString::number(ref.range.topLeft.row + 1) + QStringLiteral(":")
+        return out + anchor(ref.absRow0) + QString::number(ref.range.topLeft.row + 1)
+               + QStringLiteral(":") + anchor(ref.absRow1)
                + QString::number(ref.range.bottomRight.row + 1);
     }
     out += addrText(ref.range.topLeft, ref.absRow0, ref.absCol0);
@@ -194,10 +200,57 @@ QString rangeRefText(const RangeRef &ref)
 
 QString unquotedSheetName(QString name)
 {
-    if (name.startsWith(QLatin1Char('\'')) && name.endsWith(QLatin1Char('\''))) {
+    if (name.size() >= 2 && name.startsWith(QLatin1Char('\'')) && name.endsWith(QLatin1Char('\''))) {
         name = name.mid(1, name.size() - 2).replace(QStringLiteral("''"), QStringLiteral("'"));
     }
     return name;
+}
+
+bool sheetNameNeedsQuotes(const QString &name)
+{
+    if (name.isEmpty()) {
+        return true;
+    }
+    const auto asciiLetter = [](QChar c) {
+        return (c >= QLatin1Char('A') && c <= QLatin1Char('Z')) || (c >= QLatin1Char('a') && c <= QLatin1Char('z'));
+    };
+    const auto asciiDigit = [](QChar c) { return c >= QLatin1Char('0') && c <= QLatin1Char('9'); };
+    if (!asciiLetter(name.at(0)) && name.at(0) != QLatin1Char('_')) {
+        return true; // "2024", "'s", "Ünits" (non-ASCII: quoting is the safe side)
+    }
+    for (const QChar c : name) {
+        if (!asciiLetter(c) && !asciiDigit(c) && c != QLatin1Char('_')) {
+            return true; // spaces, punctuation, periods, apostrophes
+        }
+    }
+    const QString upper = name.toUpper();
+    if (upper == QLatin1String("TRUE") || upper == QLatin1String("FALSE")) {
+        return true;
+    }
+    // Reads as an A1 address: 1-3 letters then digits ("AB12", "XFD1").
+    int letters = 0;
+    while (letters < upper.size() && asciiLetter(upper.at(letters))) {
+        ++letters;
+    }
+    const bool restDigits = std::all_of(upper.begin() + letters, upper.end(), asciiDigit);
+    if (letters >= 1 && letters <= 3 && letters < upper.size() && restDigits) {
+        return true;
+    }
+    // Reads as an R1C1 address: R, C, R12, C3, RC, R1C1.
+    static const QRegularExpression r1c1(QStringLiteral("^(R[0-9]*)?(C[0-9]*)?$"));
+    return r1c1.match(upper).hasMatch();
+}
+
+QString quotedSheetName(const QString &name)
+{
+    if (name.size() >= 2 && name.startsWith(QLatin1Char('\'')) && name.endsWith(QLatin1Char('\''))) {
+        return name;
+    }
+    if (!sheetNameNeedsQuotes(name)) {
+        return name;
+    }
+    return QStringLiteral("'") + QString(name).replace(QStringLiteral("'"), QStringLiteral("''"))
+        + QStringLiteral("'");
 }
 
 } // namespace QindaOffice::Calc

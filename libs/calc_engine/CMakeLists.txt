@@ -15,22 +15,29 @@ add_library(calc_engine STATIC
     src/eval.h
     src/eval_array.cpp
     src/eval_array.h
+    src/formula_print.cpp
     src/image_spec.cpp
     src/image_spec.h
     src/functions/date.cpp
+    src/functions/date_more.cpp
     src/functions/financial.cpp
+    src/functions/financial_more.cpp
     src/functions/functions.cpp
     src/functions/functions.h
     src/functions/logical.cpp
     src/chart_spec.cpp
     src/chart_spec.h
     src/functions/lookup.cpp
+    src/functions/lookup_more.cpp
     src/functions/conditional_agg.cpp
     src/functions/math_extra.cpp
+    src/functions/math_more.cpp
     src/functions/regression.cpp
     src/functions/statistical.cpp
+    src/functions/stats_more.cpp
     src/functions/subtotal.cpp
     src/functions/text.cpp
+    src/functions/text_more.cpp
     src/lexer.cpp
     src/lexer.h
     src/number_format.cpp

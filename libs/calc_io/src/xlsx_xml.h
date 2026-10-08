@@ -25,6 +25,11 @@ namespace QindaOffice::Calc::IO {
 void appendContentTypeOverride(QByteArray *contentTypesXml, const QString &partName,
                                const QString &contentType);
 
+// Adds a <Default Extension ContentType> (media and VML parts are declared
+// by extension). No-op when the extension is already declared.
+void appendContentTypeDefault(QByteArray *contentTypesXml, const QString &extension,
+                              const QString &contentType);
+
 // Inserts `fragment` into a worksheet part directly before the FIRST of the
 // `beforeTags` anchors found (schema order, e.g. autoFilter goes before
 // mergeCells). Returns false when no anchor exists — the caller then fails

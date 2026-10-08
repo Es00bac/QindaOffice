@@ -5,6 +5,8 @@
 // resolve through the package palette.
 
 #include "xlsx_bridge.h"
+
+#include "calc_io_schema.h"
 #include "xlsx_style.h"
 
 #include <QCoreApplication>
@@ -148,6 +150,7 @@ void CalcIoStylesTest::fullStyleRoundTripsOnValueFormulaAndEmptyCells()
     const QString path = dir.path() + QStringLiteral("/styled.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
 
     Workbook back;
     QVERIFY2(IO::readXlsxFile(path, &back, &error), qPrintable(error));
@@ -192,6 +195,7 @@ void CalcIoStylesTest::customNumberFormatsRoundTrip()
     const QString path = dir.path() + QStringLiteral("/codes.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
 
     Workbook back;
     QVERIFY2(IO::readXlsxFile(path, &back, &error), qPrintable(error));

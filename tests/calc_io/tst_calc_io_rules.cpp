@@ -6,6 +6,8 @@
 
 #include "xlsx_bridge.h"
 
+#include "calc_io_schema.h"
+
 #include <QCoreApplication>
 #include <QTemporaryDir>
 
@@ -56,6 +58,7 @@ void CalcIoRulesTest::condFormatsRoundTrip()
     const QString path = dir.path() + QStringLiteral("/cf.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
     const QString sheetXml = readPart(path, QStringLiteral("xl/worksheets/sheet1.xml"));
     QVERIFY(sheetXml.contains(QStringLiteral("conditionalFormatting")));
     QVERIFY(sheetXml.contains(QStringLiteral("cellIs")));
@@ -104,6 +107,7 @@ void CalcIoRulesTest::expressionAndDataBarSurvive()
     const QString path = dir.path() + QStringLiteral("/expr.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
 
     Workbook back;
     QVERIFY2(IO::readXlsxFile(path, &back, &error), qPrintable(error));
@@ -149,6 +153,7 @@ void CalcIoRulesTest::validationsRoundTrip()
     const QString path = dir.path() + QStringLiteral("/dv.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
     const QString sheetXml = readPart(path, QStringLiteral("xl/worksheets/sheet1.xml"));
     QVERIFY(sheetXml.contains(QStringLiteral("dataValidation")));
     QVERIFY(sheetXml.contains(QStringLiteral("Downside,Base,Upside")));
@@ -191,6 +196,7 @@ void CalcIoRulesTest::autoFilterRoundTrip()
     const QString path = dir.path() + QStringLiteral("/af.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
     const QString sheetXml = readPart(path, QStringLiteral("xl/worksheets/sheet1.xml"));
     QVERIFY(sheetXml.contains(QStringLiteral("<autoFilter ref=\"A1:B4\">")));
     QVERIFY(sheetXml.contains(QStringLiteral("filterColumn colId=\"1\"")));
@@ -224,6 +230,7 @@ void CalcIoRulesTest::commentsRoundTrip()
     const QString path = dir.path() + QStringLiteral("/cm.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
     const QString part = readPart(path, QStringLiteral("xl/comments1.xml"));
     QVERIFY(part.contains(QStringLiteral("Ada")));
     QVERIFY(part.contains(QStringLiteral("Check this number")));

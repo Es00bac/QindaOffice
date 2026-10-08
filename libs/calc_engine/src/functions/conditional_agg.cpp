@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "functions.h"
 
+#include "../eval_array.h"
+
 namespace QindaOffice::Calc {
 
 void registerConditionalAggFunctions(QHash<QString, FunctionSpec> &r)
@@ -15,24 +17,21 @@ void registerConditionalAggFunctions(QHash<QString, FunctionSpec> &r)
         return FunctionSpec{3, 255, false,
                             [average, sum, maxima, countOnly](EvalContext &ctx,
                                                               const QVector<Arg> &args) -> Value {
-                                const auto *valueRangeView = std::get_if<RangeView>(&args.at(0));
-                                if (!valueRangeView) return Err::Value;
-                                QVector<Value> values;
-                                Value err = flatRangeValues(ctx, *valueRangeView, &values);
-                                if (isErr(err)) return err;
+                                // Any shape, error cells kept (M61): an
+                                // error only matters in a value cell whose
+                                // row matches every criterion.
+                                ArrayValue grid;
+                                if (const Value err = arrayFromArg(ctx, args.at(0), &grid); isErr(err)) return err;
+                                const QVector<Value> values = grid.cells;
                                 struct Pair {
                                     QVector<Value> cells;
                                     QString criteria;
                                 };
                                 QVector<Pair> pairs;
                                 for (int i = 1; i + 1 < args.size(); i += 2) {
-                                    const auto *critRangeView = std::get_if<RangeView>(&args.at(i));
-                                    if (!critRangeView) return Err::Value;
-                                    QVector<Value> cells;
-                                    err = flatRangeValues(ctx, *critRangeView, &cells);
-                                    if (isErr(err)) return err;
-                                    pairs.append({cells,
-                                                  toText(scalarOrValue(args.at(i + 1)))});
+                                    ArrayValue crit;
+                                    if (const Value err = arrayFromArg(ctx, args.at(i), &crit); isErr(err)) return err;
+                                    pairs.append({crit.cells, toText(scalarOrValue(args.at(i + 1)))});
                                 }
                                 double result = 0;
                                 int count = 0;
@@ -51,6 +50,7 @@ void registerConditionalAggFunctions(QHash<QString, FunctionSpec> &r)
                                         ++count;
                                         continue;
                                     }
+                                    if (isErr(values.at(i))) return values.at(i);
                                     // Blank (and text) cells in the value
                                     // range contribute nothing — counting a
                                     // blank as 0 skewed MINIFS/AVERAGEIFS.
@@ -80,15 +80,9 @@ void registerConditionalAggFunctions(QHash<QString, FunctionSpec> &r)
                               };
                               QVector<Pair> pairs;
                               for (int i = 0; i + 1 < args.size(); i += 2) {
-                                  if (!std::holds_alternative<RangeView>(args.at(i))) {
-                                      return Err::Value;
-                                  }
-                                  QVector<Value> cells;
-                                  const Value err = flatRangeValues(
-                                      ctx, std::get<RangeView>(args.at(i)), &cells);
-                                  if (isErr(err)) return err;
-                                  pairs.append({cells,
-                                                toText(scalarOrValue(args.at(i + 1)))});
+                                  ArrayValue crit; // any shape, error cells kept (M61)
+                                  if (const Value err = arrayFromArg(ctx, args.at(i), &crit); isErr(err)) return err;
+                                  pairs.append({crit.cells, toText(scalarOrValue(args.at(i + 1)))});
                               }
                               int span = 0;
                               for (const Pair &pair : pairs) {

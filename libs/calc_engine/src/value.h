@@ -113,6 +113,7 @@ struct RangeRef {
     {
         return !wholeRows && !wholeCols && range.topLeft == range.bottomRight;
     }
+    bool operator==(const RangeRef &) const = default;
 };
 
 // Human/canonical text forms ("A1", "$B$2", "A1:B3", "'My Sheet'!A1").
@@ -125,5 +126,16 @@ struct RangeRef {
 // comparison without this never matches (eval.cpp's resolveSheet unquotes
 // the same way).
 [[nodiscard]] QString unquotedSheetName(QString name);
+// True when a sheet name has to be quoted in a reference ('Q1 Sales'!A1):
+// anything but a plain ASCII identifier, and identifiers that read as a cell
+// or R1C1 address ("AB12", "R1C1") or a boolean. Quoting a name that did not
+// need it is always valid in Excel, so the rule errs towards quoting (M61).
+[[nodiscard]] bool sheetNameNeedsQuotes(const QString &name);
+// The spelling a reference uses for a sheet: quoted, with ' doubled, when
+// sheetNameNeedsQuotes says so; unchanged otherwise. A name that is already
+// in quotes (RangeRef.sheet keeps the file's spelling) comes back as is —
+// Excel forbids a sheet name that starts or ends with an apostrophe, so the
+// quotes cannot be part of a real name.
+[[nodiscard]] QString quotedSheetName(const QString &name);
 
 } // namespace QindaOffice::Calc

@@ -246,6 +246,8 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
         names.insert(it.key(), CalcEng::rangeRefText(it.value()));
     }
     root.insert(QStringLiteral("names"), names);
+    root.insert(QStringLiteral("definedNames"), definedNamesToJson(snapshot.definedNames));
+    root.insert(QStringLiteral("source"), sourceToJson(snapshot.source));
 
     QJsonArray charts;
     for (const CalcEng::ChartSpec &chart : snapshot.charts) {
@@ -373,6 +375,9 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
             snapshot.names.insert(it.key(), parsed.root->ref);
         }
     }
+    // Absent in payloads written before M61; an old one simply has none.
+    snapshot.definedNames = definedNamesFromJson(root.value(QStringLiteral("definedNames")).toArray());
+    snapshot.source = sourceFromJson(root.value(QStringLiteral("source")).toObject());
     for (const QJsonValue &value : root.value(QStringLiteral("charts")).toArray()) {
         snapshot.charts.append(chartFromJson(value.toObject()));
     }

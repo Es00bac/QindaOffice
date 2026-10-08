@@ -62,6 +62,24 @@ void appendContentTypeOverride(QByteArray *contentTypesXml, const QString &partN
     }
 }
 
+void appendContentTypeDefault(QByteArray *contentTypesXml, const QString &extension,
+                              const QString &contentType)
+{
+    const QByteArray probe = QByteArrayLiteral("Extension=\"") + extension.toUtf8()
+        + QByteArrayLiteral("\"");
+    if (contentTypesXml->contains(probe)) {
+        return;
+    }
+    const QByteArray entry = QByteArrayLiteral("<Default Extension=\"") + extension.toUtf8()
+        + QByteArrayLiteral("\" ContentType=\"") + contentType.toUtf8()
+        + QByteArrayLiteral("\"/>");
+    const int types = int(contentTypesXml->indexOf("<Types"));
+    const int close = types >= 0 ? int(contentTypesXml->indexOf('>', types)) : -1;
+    if (close >= 0) {
+        contentTypesXml->insert(close + 1, entry);
+    }
+}
+
 bool insertBeforeAny(QByteArray *sheetXml, const QStringList &beforeTags,
                      const QByteArray &fragment)
 {

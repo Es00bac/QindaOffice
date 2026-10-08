@@ -10,6 +10,7 @@
 #include "chart_spec.h"
 #include "image_spec.h"
 #include "sheet_rules.h"
+#include "workbook.h"
 
 #include <QByteArray>
 #include <QHash>
@@ -18,13 +19,24 @@
 namespace QindaOffice::Calc::IO {
 
 struct PatchManifest {
+    // A cell QXlsx can only write as a number (it has no API for an error
+    // cell, and writeFormula caches a double): the t attribute and <v> text
+    // it really needs (M61, D-069). t is "e", "str" or "b".
+    struct CellType {
+        QByteArray type;
+        QString value;
+    };
+
     // One sheet's additions, keyed by the sheet's part name (deterministic
     // from QXlsx: xl/worksheets/sheet<N>.xml in document order).
     struct SheetPatch {
         QString sheetPart;       // "xl/worksheets/sheet1.xml"
+        QHash<QString, CellType> cellTypes; // A1 reference -> real type and value
         QByteArray autoFilterXml; // "<autoFilter ...>...</autoFilter>", or empty
         QString commentsPart;    // "xl/comments1.xml", or empty
         QByteArray commentsXml;  // the comments part's content
+        QList<CellAddr> commentCells; // where the notes sit (their legacy VML shapes)
+        int vmlNumber = 0;       // N of xl/drawings/vmlDrawingN.vml (and its shape-id block)
         QList<TableSpec> tables; // structured tables (parts + tableParts element)
         // View state: frozen panes (0/0 = none), the selection cell, and
         // page setup (empty = default). Written by expanding QXlsx's
@@ -36,11 +48,22 @@ struct PatchManifest {
     };
     QList<SheetPatch> sheets;
 
-    // Workbook-level print names (_xlnm.Print_Area / _xlnm.Print_Titles):
-    // (localSheetId, body text) pairs for the <definedNames> post-pass edit
-    // (QXlsx's defineName has no scope parameter).
-    QList<QPair<int, QString>> printAreas;
-    QList<QPair<int, QString>> printTitles;
+    // Every defined name the file gets — user names, sheet-scoped and
+    // formula names, print areas and titles — written as one <definedNames>
+    // block by the post-pass (QXlsx's defineName knows neither hidden names
+    // nor comments; D-069).
+    struct DefinedNameEntry {
+        QString name;
+        int localSheetId = -1; // -1: workbook scope
+        QString body;          // file spelling, no '='
+        bool hidden = false;
+        QString comment;
+    };
+    QList<DefinedNameEntry> definedNames;
+
+    // The source package's theme and document properties (D-069): written
+    // over QXlsx's fixed theme and "Qt Xlsx Library" properties.
+    WorkbookSource source;
 
     // Charts. Grouping-only patches target a chart part QXlsx already wrote
     // (its grouping serialization is commented out upstream); generated

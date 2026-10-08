@@ -66,6 +66,27 @@ bool refView(const NodePtr &node, const EvalContext &ctx, RangeView *view)
     return view->isValid();
 }
 
+// Defined names bound to a formula, a constant or one sheet (D-069) expand
+// to their body; a name that reaches itself again stops here as #NAME?.
+constexpr int kMaxNameDepth = 32;
+
+// The body `node` (a Name) stands for on the evaluating sheet, with the
+// context it must be evaluated in: the caller's position, none of the
+// caller's LET bindings (a name is workbook state, not formula state).
+NodePtr nameBody(const NodePtr &node, const EvalContext &ctx, EvalContext *inner)
+{
+    NodePtr body = ctx.host->nameFormula(node->text, ctx.sheet);
+    if (!body) {
+        return body;
+    }
+    *inner = ctx;
+    inner->locals.clear();
+    if (++inner->nameDepth > kMaxNameDepth) {
+        return Node::makeError(Err::Name);
+    }
+    return body;
+}
+
 } // namespace
 
 // Builds the argument vector for a call, preserving reference-position args.
@@ -151,6 +172,10 @@ Arg evalArg(const NodePtr &node, EvalContext &ctx)
         // position carries as a RangeView.
         if (const auto local = ctx.locals.constFind(node->text.toUpper()); local != ctx.locals.constEnd()) {
             return local.value();
+        }
+        EvalContext inner;
+        if (const NodePtr body = nameBody(node, ctx, &inner)) {
+            return evalArg(body, inner);
         }
         const auto target = ctx.host->namedRange(node->text.toUpper());
         if (!target.has_value()) {
@@ -238,6 +263,10 @@ Value evalNode(const NodePtr &node, EvalContext &ctx)
         if (const auto local = ctx.locals.constFind(node->text.toUpper()); local != ctx.locals.constEnd()) {
             return scalarFromArg(ctx, local.value());
         }
+        EvalContext inner;
+        if (const NodePtr body = nameBody(node, ctx, &inner)) {
+            return evalNode(body, inner);
+        }
         // Named ranges resolve through the host (Workbook::namedRange).
         const auto target = ctx.host->namedRange(node->text.toUpper());
         if (!target.has_value()) {
@@ -299,6 +328,7 @@ QVector<DepTarget> collectTargets(const NodePtr &node, const EvalContext &ctx)
     if (!node) {
         return out;
     }
+    int nameDepth = 0;
     std::function<void(const NodePtr &)> walk = [&](const NodePtr &n) {
         if (!n) {
             return;
@@ -313,6 +343,16 @@ QVector<DepTarget> collectTargets(const NodePtr &node, const EvalContext &ctx)
             break;
         }
         case Node::Kind::Name: {
+            // A name with a formula or constant body depends on whatever
+            // its body references (D-069).
+            if (const NodePtr body = ctx.host->nameFormula(n->text, ctx.sheet)) {
+                if (nameDepth < kMaxNameDepth) {
+                    ++nameDepth;
+                    walk(body);
+                    --nameDepth;
+                }
+                break;
+            }
             // Named ranges index their resolved target so edits inside the
             // range propagate to formulas using the name.
             const auto target = ctx.host->namedRange(n->text.toUpper());

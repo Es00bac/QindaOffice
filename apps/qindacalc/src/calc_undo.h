@@ -49,6 +49,10 @@ struct WorkbookSnapshot {
     QVector<SheetSnapshot> sheets;
     QVector<CalcEng::CellStyle> styles;
     QHash<QString, CalcEng::RangeRef> names;
+    // Scoped, constant and formula names, and the source package's theme
+    // and properties (M61, D-069): document state an undo must not drop.
+    QList<CalcEng::DefinedName> definedNames;
+    CalcEng::WorkbookSource source;
     QList<CalcEng::ChartSpec> charts;
     QList<CalcEng::ImageSpec> images;
     qint32 activeSheet = 0;

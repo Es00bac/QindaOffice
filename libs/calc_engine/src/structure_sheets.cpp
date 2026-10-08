@@ -29,7 +29,8 @@ namespace {
     case Node::Kind::Name:
         return node;
     case Node::Kind::Ref: {
-        if (node->ref.sheet.compare(from, Qt::CaseInsensitive) != 0) {
+        // Unquote first: 'Q1 Sales'!A1 names the sheet Q1 Sales (M61).
+        if (unquotedSheetName(node->ref.sheet).compare(from, Qt::CaseInsensitive) != 0) {
             return node;
         }
         if (to.isEmpty()) {
@@ -81,7 +82,7 @@ void requalifyWorkbook(Workbook &book, const QString &from, const QString &to)
     }
     const QHash<QString, RangeRef> names = book.namedRanges();
     for (const auto &[name, target] : names.asKeyValueRange()) {
-        if (target.sheet.compare(from, Qt::CaseInsensitive) != 0) {
+        if (unquotedSheetName(target.sheet).compare(from, Qt::CaseInsensitive) != 0) {
             continue;
         }
         if (to.isEmpty()) {
@@ -91,6 +92,38 @@ void requalifyWorkbook(Workbook &book, const QString &from, const QString &to)
         RangeRef ref = target;
         ref.sheet = to;
         book.defineName(name, ref);
+    }
+    // Validation list sources (D-069) follow the sheet, or lose it.
+    for (qint32 s = 0; s < book.sheetCount(); ++s) {
+        QList<ValidationRule> rules = book.sheetAt(s).validations();
+        bool moved = false;
+        for (ValidationRule &rule : rules) {
+            const ParseResult parsed = parseFormula(rule.listSource);
+            if (rule.listSource.isEmpty() || !parsed.root || parsed.root->kind != Node::Kind::Ref) {
+                continue;
+            }
+            const NodePtr adjusted = requalify(parsed.root, from, to);
+            if (adjusted != parsed.root) {
+                rule.listSource = adjusted->kind == Node::Kind::Ref ? rangeRefText(adjusted->ref) : QString();
+                moved = true;
+            }
+        }
+        if (moved) {
+            book.sheetAt(s).setValidations(rules);
+        }
+    }
+    QList<DefinedName> defined = book.definedNames();
+    bool touched = false;
+    for (DefinedName &entry : defined) {
+        const NodePtr adjusted = requalify(entry.ast, from, to);
+        if (adjusted != entry.ast) {
+            entry.ast = adjusted;
+            entry.formula = nodeText(adjusted);
+            touched = true;
+        }
+    }
+    if (touched) {
+        book.setDefinedNames(defined);
     }
 }
 
@@ -127,6 +160,18 @@ bool removeSheet(Workbook &book, qint32 index)
         images.append(spec);
     }
     book.images = images;
+    // Names scoped to the sheet go with it; later scopes shift down (D-069).
+    QList<DefinedName> defined;
+    for (DefinedName entry : book.definedNames()) {
+        if (entry.sheet == index) {
+            continue;
+        }
+        if (entry.sheet > index) {
+            --entry.sheet;
+        }
+        defined.append(entry);
+    }
+    book.setDefinedNames(defined);
     if (!book.removeSheetAt(index)) {
         return false;
     }
@@ -181,6 +226,13 @@ bool moveSheet(Workbook &book, qint32 from, qint32 to)
     for (ImageSpec &spec : book.images) {
         spec.sheet = remap(spec.sheet);
     }
+    QList<DefinedName> defined = book.definedNames();
+    for (DefinedName &entry : defined) {
+        if (entry.sheet >= 0) {
+            entry.sheet = remap(entry.sheet);
+        }
+    }
+    book.setDefinedNames(defined);
     book.reindexAll();
     return true;
 }

@@ -184,17 +184,19 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
     const auto ifAgg = [](std::function<double(double, double)> fold, bool average) {
         return FunctionSpec{2, 3, false,
                             [fold, average](EvalContext &ctx, const QVector<Arg> &args) -> Value {
-                                const auto *rangeView = std::get_if<RangeView>(&args.at(0));
-                                if (!rangeView) return Err::Value;
-                                QVector<Value> values;
-                                const Value err = flatRangeValues(ctx, *rangeView, &values);
-                                if (isErr(err)) return err;
+                                // Any shape (a single cell reaches here as
+                                // its value), error cells kept: an error in
+                                // the criteria range just does not match,
+                                // and one in the sum range counts only when
+                                // its row matches (M61, Excel's rule).
+                                ArrayValue grid;
+                                if (const Value err = arrayFromArg(ctx, args.at(0), &grid); isErr(err)) return err;
+                                const QVector<Value> &values = grid.cells;
                                 QVector<Value> sums;
                                 if (args.size() > 2) {
-                                    const auto *sumRangeView = std::get_if<RangeView>(&args.at(2));
-                                    if (!sumRangeView) return Err::Value;
-                                    const Value err2 = flatRangeValues(ctx, *sumRangeView, &sums);
-                                    if (isErr(err2)) return err2;
+                                    ArrayValue sumGrid;
+                                    if (const Value err = arrayFromArg(ctx, args.at(2), &sumGrid); isErr(err)) return err;
+                                    sums = sumGrid.cells;
                                 }
                                 const QString criteria =
                                     toText(scalarOrValue(args.at(1)));
@@ -213,6 +215,7 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
                                         ? values.at(i)
                                         : (i < sums.size() ? sums.at(i)
                                                            : Value(std::monostate{}));
+                                    if (isErr(source)) return source;
                                     const auto d = toNumber(source);
                                     if (d.has_value()) {
                                         sum = fold(sum, *d);
@@ -227,17 +230,29 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
     };
     r.insert(QStringLiteral("SUMIF"), ifAgg([](double a, double b) { return a + b; }, false));
     r.insert(QStringLiteral("AVERAGEIF"), ifAgg([](double a, double b) { return a + b; }, true));
+    // COUNTIF reads a range sparsely (COUNTIF($A:$A, B2) down a column is
+    // common): the non-blank cells are compared — errors included, they just
+    // do not match — and the blanks count once, as a block, when the
+    // criterion accepts a blank. A single cell or an array counts too (M61).
     r.insert(QStringLiteral("COUNTIF"),
              FunctionSpec{2, 2, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
-                              const auto *rangeView = std::get_if<RangeView>(&args.at(0));
-                              if (!rangeView) return Err::Value;
-                              QVector<Value> values;
-                              const Value err =
-                                  sparseRangeValues(ctx, *rangeView, &values);
-                              if (isErr(err)) return err;
                               const QString criteria = toText(scalarOrValue(args.at(1)));
                               double count = 0;
-                              for (const Value &v : values) {
+                              if (const auto *view = std::get_if<RangeView>(&args.at(0))) {
+                                  if (!view->isValid()) return Err::Ref;
+                                  const auto cells = ctx.host->nonBlankCellsIn(view->sheet, view->range);
+                                  for (const auto &[addr, v] : cells) {
+                                      Q_UNUSED(addr);
+                                      if (criteriaMatches(v, criteria)) ++count;
+                                  }
+                                  if (criteriaMatches(Value(), criteria)) {
+                                      count += double(view->range.cellCount() - cells.size());
+                                  }
+                                  return count;
+                              }
+                              ArrayValue grid;
+                              if (const Value err = arrayFromArg(ctx, args.at(0), &grid); isErr(err)) return err;
+                              for (const Value &v : std::as_const(grid.cells)) {
                                   if (criteriaMatches(v, criteria)) ++count;
                               }
                               return count;

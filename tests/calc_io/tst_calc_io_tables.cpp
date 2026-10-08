@@ -5,6 +5,8 @@
 
 #include "xlsx_bridge.h"
 
+#include "calc_io_schema.h"
+
 #include "structure.h"
 
 #include <QCoreApplication>
@@ -48,6 +50,11 @@ static Workbook tabledWorkbook()
     table.styleName = QStringLiteral("TableStyleMedium2");
     table.columnNames = {QStringLiteral("Month"), QStringLiteral("Revenue"),
                          QStringLiteral("Cost"), QStringLiteral("Profit")};
+    // Excel names a table column by its header cell (M61, D-069: the names
+    // are taken from the cells on save), so the header row says the same.
+    for (int c = 0; c < table.columnNames.size(); ++c) {
+        wb.setCellInput(0, {1, c}, table.columnNames.at(c));
+    }
     wb.sheetAt(0).setTables({table});
     return wb;
 }
@@ -59,6 +66,7 @@ void CalcIoTablesTest::tablesRoundTrip()
     const QString path = dir.path() + QStringLiteral("/table.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(tabledWorkbook(), path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
 
     // The package shape an external consumer reads.
     const QString tableXml = readPart(path, QStringLiteral("xl/tables/table1.xml"));

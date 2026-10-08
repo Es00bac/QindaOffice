@@ -7,6 +7,7 @@
 
 #include "xlsx_read_xml.h"
 
+#include "xlsx_formula.h"
 #include "xlsx_parts.h"
 
 #include "sheet.h"
@@ -115,7 +116,7 @@ void readCondFormatBlock(QXmlStreamReader &reader, const QList<CellRange> &range
                 continue;
             }
             if (reader.name() == QLatin1String("formula")) {
-                formulas.append(reader.readElementText());
+                formulas.append(formulaFromFile(reader.readElementText())); // D-069: _xlfn. spellings
             } else if (reader.name() == QLatin1String("color") && type == QLatin1String("dataBar")) {
                 const std::optional<Rgb> color = colorFromAttributes(reader.attributes(), palette);
                 if (color.has_value()) {
@@ -216,8 +217,8 @@ QList<CondFormatRule> readCondFormats(const QByteArray &xml, const QList<CondFor
 
 } // namespace
 
-void readSheetExtras(const QString &packagePath, Workbook *wb, qint32 sheetIndex,
-                     const ThemePalette &palette, Sheet *sheet)
+void readSheetExtras(const QString &packagePath, qint32 sheetIndex, const ThemePalette &palette,
+                     Sheet *sheet)
 {
     QXlsx::ZipReader zip(packagePath);
     if (!zip.exists()) {
@@ -239,7 +240,7 @@ void readSheetExtras(const QString &packagePath, Workbook *wb, qint32 sheetIndex
         // the sheet (nothing, on import) would come first.
         sheet->setCondFormats(rules);
     }
-    const QList<ValidationRule> validations = readValidations(xml, wb, sheetIndex, &skipped);
+    const QList<ValidationRule> validations = readValidations(xml, &skipped);
     if (!validations.isEmpty()) {
         sheet->setValidations(validations);
     }

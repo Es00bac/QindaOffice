@@ -5,6 +5,7 @@
 // (calc_recovery.h owns the envelope; this owns the rule shapes).
 
 #include "sheet_rules.h"
+#include "workbook.h"
 
 #include <QHash>
 #include <QJsonArray>
@@ -28,5 +29,13 @@ namespace QindaOffice::Apps::QindaCalc {
 
 [[nodiscard]] QJsonArray tablesToJson(const QList<CalcEng::TableSpec> &tables);
 [[nodiscard]] QList<CalcEng::TableSpec> tablesFromJson(const QJsonArray &array);
+
+// Workbook-level state since M61 (D-069): scoped/constant/formula names
+// (bodies as text, re-parsed on load) and the source package's theme and
+// properties. Absent keys in older payloads read as "none".
+[[nodiscard]] QJsonArray definedNamesToJson(const QList<CalcEng::DefinedName> &names);
+[[nodiscard]] QList<CalcEng::DefinedName> definedNamesFromJson(const QJsonArray &array);
+[[nodiscard]] QJsonObject sourceToJson(const CalcEng::WorkbookSource &source);
+[[nodiscard]] CalcEng::WorkbookSource sourceFromJson(const QJsonObject &object);
 
 } // namespace QindaOffice::Apps::QindaCalc

@@ -21,6 +21,7 @@ class ZipReader;
 namespace QindaOffice::Calc {
 class Sheet;
 class Workbook;
+struct WorkbookSource;
 }
 
 namespace QindaOffice::Calc::IO {
@@ -29,8 +30,8 @@ namespace QindaOffice::Calc::IO {
 // autofilter and cell comments for one sheet out of the package at
 // `packagePath` (the normalized copy). `sheetIndex` selects the part; the
 // palette resolves theme colours in dxfs and data bars.
-void readSheetExtras(const QString &packagePath, Workbook *wb, qint32 sheetIndex,
-                     const ThemePalette &palette, Sheet *sheet);
+void readSheetExtras(const QString &packagePath, qint32 sheetIndex, const ThemePalette &palette,
+                     Sheet *sheet);
 
 // Reads the sheet's drawing (via its rels) and appends what it holds to the
 // workbook: charts to `charts`, pictures to `images`, both with
@@ -38,8 +39,7 @@ void readSheetExtras(const QString &packagePath, Workbook *wb, qint32 sheetIndex
 void readSheetDrawings(const QString &packagePath, Workbook *wb, qint32 sheetIndex);
 
 // The xlsx_read_parts.cpp readers (called by readSheetExtras).
-[[nodiscard]] QList<ValidationRule> readValidations(const QByteArray &xml, Workbook *wb,
-                                                    qint32 sheetIndex, int *skipped);
+[[nodiscard]] QList<ValidationRule> readValidations(const QByteArray &xml, int *skipped);
 [[nodiscard]] AutoFilter readAutoFilter(const QByteArray &xml);
 [[nodiscard]] QHash<quint64, CellComment> readComments(QXlsx::ZipReader &zip,
                                                        const QString &sheetPart);
@@ -47,7 +47,19 @@ void readSheetDrawings(const QString &packagePath, Workbook *wb, qint32 sheetInd
 [[nodiscard]] QList<TableSpec> readTables(QXlsx::ZipReader &zip, const QString &sheetPart);
 // Sheet view state (frozen pane, selection, page setup) from the sheet XML.
 void readSheetViews(const QByteArray &xml, Sheet *sheet);
-// _xlnm print names (Print_Area/Print_Titles) from xl/workbook.xml.
+
+// Workbook-level reads (xlsx_read_book.cpp, M61/D-069).
+// Defined names, BEFORE the cells (a formula resolves names when it is
+// installed): workbook-wide plain ranges into the RangeRef table, every
+// other name — sheet-scoped, constant, formula, hidden, commented,
+// Excel's other built-ins — into Workbook::definedNames.
+void readDefinedNames(const QByteArray &workbookXml, Workbook *wb);
+// _xlnm print names (Print_Area/Print_Titles), AFTER the sheets exist.
 void readPrintNames(const QByteArray &workbookXml, Workbook *wb);
+// The source package's theme part and core document properties.
+[[nodiscard]] WorkbookSource readWorkbookSource(QXlsx::ZipReader &zip);
+// Validation lists that name a range get their items once every sheet is
+// loaded (a list on Sheet1 may come from a range on Sheet3).
+void resolveValidationLists(Workbook *wb);
 
 } // namespace QindaOffice::Calc::IO

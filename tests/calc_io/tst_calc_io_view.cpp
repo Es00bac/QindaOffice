@@ -5,6 +5,8 @@
 
 #include "xlsx_bridge.h"
 
+#include "calc_io_schema.h"
+
 #include <QCoreApplication>
 #include <QTemporaryDir>
 
@@ -53,6 +55,7 @@ void CalcIoViewTest::viewStateRoundTrips()
     const QString path = dir.path() + QStringLiteral("/view.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
     const QString sheetXml = readPart(path, QStringLiteral("xl/worksheets/sheet1.xml"));
     QVERIFY(sheetXml.contains(QStringLiteral("state=\"frozen\"")));
     QVERIFY(sheetXml.contains(QStringLiteral("ySplit=\"1\"")));
@@ -90,6 +93,7 @@ void CalcIoViewTest::printNamesAreLocalDefinedNames()
     const QString path = dir.path() + QStringLiteral("/print.xlsx");
     QString error;
     QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
     const QString workbookXml = readPart(path, QStringLiteral("xl/workbook.xml"));
     QVERIFY(workbookXml.contains(QStringLiteral("_xlnm.Print_Area")));
     QVERIFY(workbookXml.contains(QStringLiteral("localSheetId=\"0\"")));

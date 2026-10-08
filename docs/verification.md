@@ -33,6 +33,70 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M61 Excel interchange gates (D-069)
+
+Qualified on qinda (branch `m61-excel-interchange`, merged with
+`m60-office-formats` 2d47dfa) with `QQO_OOXML_SCHEMA_DIR=~/scratch/qqo/ecma-xsd`
+and xmllint: **143/143 CTest targets passed, 342.37 s** (full
+`cmake --build --preset dev`, then `ctest --preset dev`). The calc gates:
+`tst_calc_io_excel` 9/9 and `tst_calc_io_package` 9/9 (7 test functions
+each plus init/cleanup), the seven older calc_io programs with the schema
+step on every package, `tst_calc_parser` 57, `tst_calc_structure` 18,
+`tst_calc_functions` 5 (519 fixture rows), and the eight QindaCalc app
+targets (`tst_calc_window`, `_sample` — skipped without `QQO_SAMPLE_XLSX` —,
+`_ui`, `_rules_ui`, `_menu_export`, `_tools`, `_agent`, `calc_agent_process`).
+
+- **Schema gate, every calc_io test.** `QQO_VERIFY_XLSX_SCHEMA(path)` follows
+  each of the **35** package writes across the nine calc_io test programs;
+  every part with an ECMA-376 root validates against the Transitional XSDs
+  after Markup Compatibility preprocessing (`tests/calc_io/calc_io_schema.h`).
+  One documented allowance: `xml:space` on SpreadsheetML `<t>`, which Excel
+  writes and `sml.xsd` does not declare. Only the schema step skips without
+  the XSDs or xmllint.
+- `tst_calc_io_excel` (**7 functions**, packages built by hand the way Excel
+  writes them, `excel_package.h`): untyped numbers, shared strings with rich
+  and phonetic runs, multi-run inline strings, `t="b"/"e"/"str"/"d"`,
+  `_x000D_`, typed cached results written back (`t="str"/"b"/"e"`); `_xlfn.`,
+  `_xlfn._xlws.` and `_xlpm.` stripped and restored, an unknown prefixed
+  function verbatim, typed formulas prefixed, no `;` in any saved formula;
+  text starting with `=`, URLs, HTML and control characters stay text; a
+  structured reference and intersection formulas (shared, token-shifted)
+  stay formulas; `$A:$A` evaluates; shared formulas keep their parentheses;
+  a formula on an earlier sheet depends on a later one; the spelling
+  transforms both ways (nested LET, LAMBDA calls, structured references,
+  array constants).
+- `tst_calc_io_package` (**7 functions**): the source theme and properties
+  survive (no "Qt Xlsx Library", Application QindaCalc); seven defined names
+  keep scope, hidden, comment and body and evaluate (sheet-scoped,
+  constant, formula, `_xlfn.` in a name); `'2024'`, `'Q1 Sales'`, `'It''s'`
+  quoted in print areas, titles and names; table column names from their
+  header cells (`name2`, `2024`, `Column4`); long and comma lists written as
+  ranges, a range list on a later sheet kept live; comment VML with
+  `<legacyDrawing>`, 1500 notes taking two shape-id blocks; a dialog chart
+  plus a picture make a well-formed drawing.
+- Engine: `tst_calc_parser` (printing keeps grouping — 25 data rows —,
+  anchored whole columns/rows, sheet-name quoting), `tst_calc_structure`
+  (quoted-sheet references follow inserts and renames; defined names
+  evaluate and follow inserts, moves and removal), `tst_calc_functions`
+  (**121** new LibreOffice-oracle rows in `functions_m61.tsv`, 519 rows in
+  all; `excelRulesBeyondTheOracle` for TEXTBEFORE/TEXTAFTER and the cases
+  where LibreOffice 25.2 departs from Excel's documented answer).
+- QindaCalc: the undo snapshot and the recovery payload carry the defined
+  names, the source theme and properties, and validation list sources; the
+  QindaCalc app tests stay green.
+- LibreOffice cross-check (qinda, manual, not committed): every package the
+  two new tests save converts with headless LibreOffice 25.2.7 to CSV with
+  the values the engine computed (names 6/60/0.07/3/1, shared formulas
+  14/22/−5/−1723, quoted names, table headers, text kept as text).
+- Laptop survey (optional gate; the owner's 29 `.xlsx`, read in place,
+  aggregate counts only, `calc_io_survey`): before — 0 load failures, 15
+  `#NAME?` cells, 8,261 text cells that read as numbers, 54–61 error cells
+  varying by run; after — 0, 0, 2,880 (all stored as text by Excel itself),
+  12 (all `=NA()`), identical on every run.
+- Not verified: opening the saved packages in Microsoft Excel itself (none
+  available here). On the desktop: open an Excel-made workbook, save, reopen
+  in Excel and LibreOffice; check notes show, a long dropdown offers its
+  items, the theme fonts and the title/author in File ▸ Info.
 ## M60 Word interchange gates (D-068)
 
 Laptop (incremental, against Portage-installed QindaTK): `tst_ooxml` 18/18,
