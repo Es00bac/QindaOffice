@@ -255,6 +255,7 @@ OfficeWindow {
             dock.showSidePanel("session", true)
         }
         function onExportMarkdownRequested(name) { markdownDialog.selectedFile = "file://" + name; markdownDialog.open() }
+        function onExportWordRequested(name) { wordDialog.selectedFile = "file://" + name; wordDialog.open() }
         function onExportAnkiRequested(name) { ankiDialog.selectedFile = "file://" + name; ankiDialog.open() }
         function onLiveNotesSetupRequested() { liveSetup.starting = true; liveSetup.open() }
         function onFindRequested() { findBar.open() }
@@ -313,6 +314,11 @@ OfficeWindow {
         id: markdownDialog; title: qsTr("Export Markdown"); fileMode: Dialogs.FileDialog.SaveFile
         nameFilters: [qsTr("Markdown (*.md)")]
         onAccepted: window.note.exportMarkdownTo(selectedFile)
+    }
+    Dialogs.FileDialog {
+        id: wordDialog; title: qsTr("Export as Word document"); fileMode: Dialogs.FileDialog.SaveFile
+        nameFilters: [qsTr("Word document (*.docx)")]
+        onAccepted: window.note.exportWordTo(selectedFile)
     }
     Dialogs.FileDialog {
         id: ankiDialog; title: qsTr("Export flashcards for Anki"); fileMode: Dialogs.FileDialog.SaveFile

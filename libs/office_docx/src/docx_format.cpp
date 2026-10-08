@@ -422,4 +422,36 @@ QVariantMap charSnapshot(const QTextCharFormat &f)
     };
 }
 
+qreal displayedPointSize(const QTextCharFormat &format, const QFont &defaultFont)
+{
+    if (format.fontPointSize() > 0) {
+        return format.fontPointSize();
+    }
+    if (!format.hasProperty(QTextFormat::FontSizeAdjustment)) {
+        return 0;
+    }
+    // AGENT-NOTE: the same table and index as QTextFormatPrivate::resolveFont
+    // (qtextformat.cpp, Qt 6): step 0 is the default size, +1 "large" ×1.2,
+    // +2 ×1.5 (Markdown "##"), +3 ×2 ("#"), -1 ×0.8, -2 ×0.7.
+    static constexpr qreal kScale[7] = {0.7, 0.8, 1.0, 1.2, 1.5, 2.0, 2.4};
+    const int step = qBound(0, format.intProperty(QTextFormat::FontSizeAdjustment) + 2, 6);
+    const qreal base = defaultFont.pointSizeF() > 0 ? defaultFont.pointSizeF() : 11.0;
+    return kScale[step] * base;
+}
+
+QString wordFontFamily(const QString &family)
+{
+    const QString key = family.trimmed().toLower().remove(QLatin1Char(' ')).remove(QLatin1Char('-'));
+    if (key == u"sansserif" || key == u"sans" || key == u"systemui" || key == u"uisansserif") {
+        return QStringLiteral("Calibri");
+    }
+    if (key == u"serif" || key == u"uiserif") {
+        return QStringLiteral("Times New Roman");
+    }
+    if (key == u"monospace" || key == u"mono" || key == u"uimonospace") {
+        return QStringLiteral("Courier New");
+    }
+    return family;
+}
+
 } // namespace QindaOffice::Docx

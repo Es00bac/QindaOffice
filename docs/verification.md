@@ -55,9 +55,17 @@ set, prefixed OPC package parts LibreOffice refused, first-block spacing,
 collapsed empty paragraphs after tables, row heights, paragraph borders,
 header overlap, cover-page headers, PDF page size (px passed as points).
 
+**QindaNote Word export (M65):** `tst_note_word` 3/3 (XSD-validated; the
+page's title, Heading 2, list, typed text, checklist, picture and handwriting
+read back), the Note suite 16/16 with the ribbon/squeeze gate and the
+`sessionExportWord` fixture row. Looked at: the exported page rendered by
+LibreOffice (title, blue Heading 2 at 16.5 pt, bullets, ☑ line, picture,
+italic "Handwriting" caption and the ink picture).
+
 On the desktop (owner, Microsoft Word): open a `.docx` saved by QindaWrite
 in Word — no repair prompt; styles, lists, headers with logo, page numbers,
-footnotes and tracked changes as written.
+footnotes and tracked changes as written. Open a QindaNote page exported as
+Word: headings in the navigation pane, picture and handwriting present.
 
 ## M59 QindaNote AI gates (D-065)
 

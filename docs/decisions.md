@@ -58,6 +58,13 @@ the reader adds display-only state the writer never exports — see
 Write keeps one header set and one page layout per document; keep-with-next
 is not laid out yet.
 
+**QindaNote (M65).** *Export as Word Document* writes a page through
+`office_docx` rather than through QindaWrite: the title as Word's Title,
+Markdown headings as Heading 1–6, lists, colours and callouts as rich text,
+checklists as ☐ / ☑ lines, pictures with their own bytes, handwriting as one
+picture of the ink — in Calibri at the page's size, since the file is for
+Office users. *Open in QindaWrite* hands Write the same `.docx` (it was HTML).
+
 **Consequences.** LibreOffice is no longer needed for Office formats.
 Rendering can stay approximate for preserved content (a placeholder, or the
 picture fallback Word/PowerPoint embed) without losing it on save. The

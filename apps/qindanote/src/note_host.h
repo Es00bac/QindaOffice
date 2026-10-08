@@ -154,6 +154,8 @@ public:
     Q_INVOKABLE void splitCurrentPage();
     Q_INVOKABLE bool resolveUnclear(const QString &annotation, const QString &replacement);
     Q_INVOKABLE bool exportMarkdownTo(const QUrl &url);
+    // The open page as a Word document (note_word_export.h).
+    Q_INVOKABLE bool exportWordTo(const QUrl &url);
     Q_INVOKABLE void openInWrite();
     Q_INVOKABLE bool exportAnkiTo(const QUrl &url);
     // Ctrl+click on a [12:40] in the notes, or a section in the panel.
@@ -191,6 +193,7 @@ signals:
     void playRecordingRequested(qint64 ms);
     void sessionPanelToggleRequested(bool visible);
     void exportMarkdownRequested(const QString &suggestedPath);
+    void exportWordRequested(const QString &suggestedPath);
     void exportAnkiRequested(const QString &suggestedPath);
 
 protected:

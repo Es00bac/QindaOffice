@@ -70,7 +70,7 @@ QtObject {
                 { action: "noteSessionPanelAction", size: "large" }, "noteStudyPageAction",
                 "noteActionItemsToMailAction", "noteSplitByTopicAction"] },
             { id: "liveExport", label: qsTr("Export"), items: [
-                "noteExportMarkdownAction", "noteOpenInWriteAction", "noteExportAnkiAction"] },
+                "noteExportWordAction", "noteExportMarkdownAction", "noteOpenInWriteAction", "noteExportAnkiAction"] },
             { id: "liveFollowUp", label: qsTr("Follow-up"), items: [
                 "noteMeetingRecapAction", "noteProjectPlanAction", "noteTroubleshootingAction",
                 "noteFollowUpQuestionsAction", "noteAcceptDraftAction", "noteDiscardDraftAction"] },

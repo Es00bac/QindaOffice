@@ -213,6 +213,7 @@ Tk.Flex {
         wrap: Tk.Flex.Wrap
         gap: Tk.Theme.space.xs
         visible: panel.session.hasNotes
+        Tk.Button { objectName: "sessionExportWord"; small: true; iconName: "file-type"; text: qsTr("Word…"); onClicked: panel.note.actions.trigger("noteExportWordAction") }
         Tk.Button { objectName: "sessionExportMd"; small: true; iconName: "file-text"; text: qsTr("Markdown…"); onClicked: panel.note.actions.trigger("noteExportMarkdownAction") }
         Tk.Button { objectName: "sessionOpenWrite"; small: true; iconName: "square-pen"; text: qsTr("QindaWrite"); onClicked: panel.note.actions.trigger("noteOpenInWriteAction") }
         Tk.Button { objectName: "sessionAnki"; small: true; iconName: "layers"; text: qsTr("Anki…"); available: panel.session.hasCards; onClicked: panel.note.actions.trigger("noteExportAnkiAction") }

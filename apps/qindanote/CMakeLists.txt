@@ -85,6 +85,7 @@ qt_add_qml_module(qindanote_app
         src/note_live_settings.cpp
         src/note_markdown.cpp src/note_markdown.h
         src/note_markdown_style.cpp src/note_markdown_style.h
+        src/note_word_export.cpp src/note_word_export.h
         src/note_host_structure.cpp
         src/note_host_text.cpp
         src/note_page_history.cpp src/note_page_history.h
@@ -103,7 +104,7 @@ find_package(Qt6 REQUIRED COMPONENTS Multimedia)
 # poppler-qt6 reads prep-material PDFs (M56); QtMultimedia plays the session
 # recording in the Session panel.
 target_link_libraries(qindanote_app PUBLIC office_quick office_quickplugin office_ai office_aiplugin office_ink
-    office_speech Qt6::Multimedia PkgConfig::POPPLER_QT6)
+    office_speech office_docx Qt6::Multimedia PkgConfig::POPPLER_QT6)
 target_compile_definitions(qindanote_app PRIVATE QT_NO_CAST_FROM_ASCII)
 qqo_set_strict_warnings(qindanote_app)
 

@@ -7,6 +7,7 @@
 
 #include "note_host.h"
 #include "note_markdown.h"
+#include "note_word_export.h"
 
 #include "navigator_model.h"
 #include "note_blocks.h"
@@ -277,22 +278,37 @@ bool NoteHost::exportMarkdownTo(const QUrl &url)
     return true;
 }
 
+bool NoteHost::exportWordTo(const QUrl &url)
+{
+    const NotePage *page = currentPage();
+    const QString path = url.isLocalFile() ? url.toLocalFile() : url.toString();
+    if (page == nullptr || path.isEmpty()) {
+        return false;
+    }
+    flushPersist();
+    QString error;
+    const qreal width = m_pageItem != nullptr ? m_pageItem->sheetSize().width() : 760;
+    if (!exportPageAsWord(*page, width, path, &error)) {
+        showStatusMessage(tr("Export failed: %1").arg(error), 8000);
+        return false;
+    }
+    showStatusMessage(tr("Exported to %1").arg(QFileInfo(path).fileName()), 5000);
+    return true;
+}
+
 void NoteHost::openInWrite()
 {
     const QString dir = Core::stateDirFor(Core::appLeaf()) + QStringLiteral("/handoff");
     QDir().mkpath(dir);
     QString name = currentPageTitle().simplified();
     name.replace(QRegularExpression(QStringLiteral("[^\\w .-]")), QStringLiteral("_"));
-    // M57: HTML from the rendered notes, so QindaWrite gets the colours,
-    // callout boxes and tables, not the markup (Markdown export keeps it).
-    const QString path = dir + QLatin1Char('/') + (name.isEmpty() ? QStringLiteral("notes") : name) + QStringLiteral(".html");
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        showStatusMessage(tr("Export failed: %1").arg(file.errorString()), 8000);
+    // M65: a Word document of the page (note_word_export.h) — the rendered
+    // notes' colours, callout boxes and tables as before (M57 sent HTML),
+    // plus the pictures and the handwriting, which HTML left behind.
+    const QString path = dir + QLatin1Char('/') + (name.isEmpty() ? QStringLiteral("notes") : name) + QStringLiteral(".docx");
+    if (!exportWordTo(QUrl::fromLocalFile(path))) {
         return;
     }
-    file.write(markdownHtml(currentPageNotes()).toUtf8());
-    file.close();
     // AGENT-GUARD: QQO_NO_HANDOFF (set for the tests) writes the file but
     // launches nothing — a detached app inherits the test's output pipe and
     // ctest waits on it until it times out.

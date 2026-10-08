@@ -59,4 +59,15 @@ struct ParagraphSpacing {
 // resolved), or empty.
 [[nodiscard]] QString latinFont(const Ooxml::XmlElement *rFonts, const Ooxml::Theme &theme);
 
+// Write direction for content Word did not write.
+// The point size a run shows at: its own, or — for what Qt's HTML and
+// Markdown importers mark with a relative FontSizeAdjustment step (headings,
+// <big>, <font size>) — `defaultFont`'s size scaled the way Qt scales it.
+// 0 when the run inherits the default size.
+[[nodiscard]] qreal displayedPointSize(const QTextCharFormat &format, const QFont &defaultFont);
+// A family Word can find: Qt's generic names ("Sans Serif", "serif",
+// "monospace") become the Office faces fontconfig maps back to them;
+// every other name is returned unchanged.
+[[nodiscard]] QString wordFontFamily(const QString &family);
+
 } // namespace QindaOffice::Docx

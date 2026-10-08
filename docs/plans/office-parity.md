@@ -70,7 +70,7 @@ locally, contents never copied anywhere):
 | **M62** PowerPoint interchange | fix `.fodp` units and style links; extend `show_model` (tables, charts from cached data, gradients, dashes, arrowheads, flips, bullets/numbering, insets/anchoring/autofit, layouts/masters/placeholders, backgrounds, theme); native `.pptx` reader/writer with preservation | the 15 local decks open with tables, pictures, notes; saved packages validate against `pml.xsd`; reopen identical |
 | **M63** Books essentials | list import fix; logo, statements, recurring setup, budgets, sales-tax payments reachable; IIF import (QuickBooks Desktop lists + transactions); reports to `.xlsx`; Plan MSPDI round-trip preservation | QuickBooks sample IIF imports and balances; Project XML unknown task fields survive |
 | **M64** Mail essentials | contacts (vCard import/export, autocomplete); HTML message rendering with inline images; `.mbox`/`.msg` import; print | — |
-| **M65** Note / Diagram / Base | Note: formatted typing, `.docx` export/import through `office_docx`; Diagram: `.vsdx` import/export; Base: `.xlsx` import, picture/attachment fields | — |
+| **M65** Note / Diagram / Base | Note: formatted typing, `.docx` export (**landed**: *Export as Word Document*, Open in QindaWrite as `.docx`) and import through `office_docx`; Diagram: `.vsdx` import/export; Base: `.xlsx` import, picture/attachment fields | the exported page validates and reads back with every block kind |
 
 Every milestone follows AGENTS.md: ≤ 500 lines per file, tests headless,
 docs in the same commit, a `docs/decisions.md` entry, fixtures and grabs

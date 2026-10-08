@@ -377,7 +377,8 @@ XmlElementPtr BodyWriter::runProperties(const QTextCharFormat &f)
     }
     if (changed("family")) {
         rPr->removeChildren(kW, u"rFonts");
-        const QString family = now.value(QStringLiteral("family")).toString().section(QLatin1Char('|'), 0, 0);
+        const QString family =
+            wordFontFamily(now.value(QStringLiteral("family")).toString().section(QLatin1Char('|'), 0, 0));
         if (!family.isEmpty()) {
             XmlElement &fonts = wChild(*rPr, QStringLiteral("rFonts"));
             for (const char *attr : {"ascii", "hAnsi", "cs"}) {
@@ -385,9 +386,9 @@ XmlElementPtr BodyWriter::runProperties(const QTextCharFormat &f)
             }
         }
     }
-    if (changed("size") && f.fontPointSize() > 0) {
-        setChildVal(*rPr, QStringLiteral("sz"), halfPoints(f.fontPointSize()));
-        setChildVal(*rPr, QStringLiteral("szCs"), halfPoints(f.fontPointSize()));
+    if (const qreal points = displayedPointSize(f, m_document->defaultFont()); changed("size") && points > 0) {
+        setChildVal(*rPr, QStringLiteral("sz"), halfPoints(points));
+        setChildVal(*rPr, QStringLiteral("szCs"), halfPoints(points));
     }
     if (changed("weight")) {
         toggle(QStringLiteral("b"), QStringLiteral("bCs"), f.fontWeight() >= QFont::DemiBold);
@@ -470,9 +471,10 @@ XmlElementPtr BodyWriter::runProperties(const QTextCharFormat &f)
     }
     if (changed("baseline")) {
         rPr->removeChildren(kW, u"position");
-        if (f.baselineOffset() != 0 && f.fontPointSize() > 0) {
+        if (const qreal points = displayedPointSize(f, m_document->defaultFont());
+            f.baselineOffset() != 0 && points > 0) {
             setChildVal(*rPr, QStringLiteral("position"),
-                        QString::number(qRound(f.baselineOffset() / 100.0 * f.fontPointSize() * 2)));
+                        QString::number(qRound(f.baselineOffset() / 100.0 * points * 2)));
         }
     }
     sortChildren(*rPr);

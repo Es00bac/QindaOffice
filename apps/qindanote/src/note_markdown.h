@@ -18,6 +18,10 @@
 
 class QPainter;
 
+#include <memory>
+
+class QTextDocument;
+
 namespace QindaOffice::Apps::Notes {
 
 // Height of the rendered text at `width` (padding included).
@@ -27,6 +31,9 @@ void paintMarkdown(QPainter *painter, const QRectF &box, const QString &markdown
 // The rendered markdown as HTML, colours and callout boxes included (the
 // QindaWrite hand-off, M57).
 [[nodiscard]] QString markdownHtml(const QString &markdown);
+// The rendered markdown as a laid-out document at `width` — the one the
+// page paints — for exports that keep its formatting (Word, M65).
+[[nodiscard]] std::shared_ptr<QTextDocument> markdownDocument(const QString &markdown, qreal width);
 // Plain text of the rendered markdown (search, the assistant's context).
 [[nodiscard]] QString markdownPlainText(const QString &markdown);
 // The [mm:ss] / [h:mm:ss] time under `point` (block coordinates, padding

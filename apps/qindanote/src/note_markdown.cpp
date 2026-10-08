@@ -136,6 +136,11 @@ QString markdownHtml(const QString &markdown)
     return build(markdown, 700)->toHtml();
 }
 
+std::shared_ptr<QTextDocument> markdownDocument(const QString &markdown, qreal width)
+{
+    return build(markdown, width);
+}
+
 QString markdownPlainText(const QString &markdown)
 {
     return build(markdown, 600)->toPlainText();

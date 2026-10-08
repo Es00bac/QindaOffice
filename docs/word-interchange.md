@@ -103,6 +103,19 @@ The output is ECMA-376 Transitional with Word's prefixes; Microsoft
 extension namespaces are declared `mc:Ignorable`; package parts use the
 default namespace (LibreOffice refuses prefixed `Relationships`).
 
+Text that came from HTML or Markdown carries Qt's relative size steps
+(headings, `<big>`, `<font size>`) instead of point sizes; the writer emits
+the size the text shows at (`displayedPointSize`, Qt's ×0.7…×2.4 table over
+the document's default font). Qt's generic family names ("Sans Serif",
+"serif", "monospace") are written as Calibri, Times New Roman and Courier
+New, which Word has and fontconfig maps back (`wordFontFamily`).
+
+## Other apps writing Word
+
+QindaNote ▸ *Export as Word Document* (page menu, Live ▸ Export, the
+Session Review panel) and *Open in QindaWrite* write a page through
+`office_docx` (`apps/qindanote/src/note_word_export.*`, D-068 QindaNote).
+
 ## Known limits
 
 - One set of headers/footers and one page layout for the whole document;
@@ -124,4 +137,6 @@ edited notes and tables — XSD-validated with `QQO_OOXML_SCHEMA_DIR`),
 re-read, compare; aggregate counts only). `tests/qindawrite/tst_write_docx`
 covers WriteDocument (layout, headers, pictures, recovery, HTML, legacy
 formats through LibreOffice) and renders listed documents to PDF for
-review (`QQO_WRITE_RENDER_DOCX` + `QQO_GRAB_DIR`).
+review (`QQO_WRITE_RENDER_DOCX` + `QQO_GRAB_DIR`). `tests/qindanote/tst_note_word`
+exports a page with every block kind and ink, validates it, reads it back
+(`QQO_GRAB_DIR` keeps the `.docx` for a look in Word or LibreOffice).

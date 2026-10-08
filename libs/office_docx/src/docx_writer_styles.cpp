@@ -4,6 +4,7 @@
 // the source lacks; a complete styles part for a new document. The built-ins
 // mirror QindaWrite's StyleCatalog so a document looks the same in Word.
 
+#include "docx_format.h"
 #include "docx_writer_p.h"
 #include "ooxml_namespaces.h"
 
@@ -116,7 +117,7 @@ XmlElementPtr stylesPart(const WriteEnv &env, const QFont &defaultFont, const Oo
         root = std::make_shared<XmlElement>(kW, QStringLiteral("styles"));
         XmlElement &defaults = root->appendElement(kW, QStringLiteral("docDefaults"));
         XmlElement &rPr = defaults.appendElement(kW, QStringLiteral("rPrDefault")).appendElement(kW, QStringLiteral("rPr"));
-        QString family = defaultFont.family();
+        QString family = wordFontFamily(defaultFont.family());
         if (family.isEmpty() || family.contains(u"Sans", Qt::CaseInsensitive)) {
             family = QStringLiteral("Calibri");
         }

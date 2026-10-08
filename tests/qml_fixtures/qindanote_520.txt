@@ -133,6 +133,7 @@ QQuickRootItem#NoteWindow
             NoteSessionPanel#sessionPanel [hidden]
               Button#sessionAnki [hidden]
               Button#sessionExportMd [hidden]
+              Button#sessionExportWord [hidden]
               Button#sessionOpenWrite [hidden]
               Button#sessionSplit [hidden]
               Button#sessionStudy [hidden]

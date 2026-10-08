@@ -150,6 +150,11 @@ void NoteHost::createLiveNotes()
             &ActionEntry::triggered, this, [this] {
                 emit exportMarkdownRequested(QStringLiteral("%1.md").arg(currentPageTitle()));
             });
+    connect(model->add(QStringLiteral("noteExportWordAction"), tr("Export as &Word Document…"), {},
+                       QStringLiteral("file-type")),
+            &ActionEntry::triggered, this, [this] {
+                emit exportWordRequested(QStringLiteral("%1.docx").arg(currentPageTitle()));
+            });
     connect(model->add(QStringLiteral("noteOpenInWriteAction"), tr("Open in Qinda&Write"), {},
                        QStringLiteral("square-pen")),
             &ActionEntry::triggered, this, &NoteHost::openInWrite);
@@ -185,7 +190,8 @@ void NoteHost::createLiveNotes()
     menuTree()->appendTo(QStringLiteral("aiMenu"), MenuNode::separator());
     menuTree()->appendTo(QStringLiteral("aiMenu"), MenuNode::action(QStringLiteral("aiProvidersAction")));
     // Export sits with Export PDF in the Page menu.
-    for (const char *id : {"noteExportMarkdownAction", "noteOpenInWriteAction", "noteExportAnkiAction"}) {
+    for (const char *id : {"noteExportWordAction", "noteExportMarkdownAction", "noteOpenInWriteAction",
+                           "noteExportAnkiAction"}) {
         menuTree()->insertInto(QStringLiteral("notePageMenu"), QString(), MenuNode::action(QString::fromLatin1(id)));
     }
 }

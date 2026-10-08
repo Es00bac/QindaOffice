@@ -6,7 +6,7 @@
 # (tst_note_menu_export). Every test links the app's static QML module, so
 # a source added to apps/qindanote/CMakeLists.txt is in every test.
 foreach(name IN ITEMS tst_qindanote tst_note_blocks tst_note_input tst_note_ui tst_note_menu_export
-                     tst_note_markdown tst_note_agent)
+                     tst_note_markdown tst_note_agent tst_note_word)
     add_executable(${name} ${name}.cpp note_test_support.h)
     target_link_libraries(${name} PRIVATE qindanote_app qindanote_appplugin
         Qt6::Test Qt6::GuiPrivate)
