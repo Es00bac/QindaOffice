@@ -9,6 +9,7 @@
 #include "ooxml_theme.h"
 #include "ooxml_units.h"
 #include "ooxml_xml.h"
+#include "support/ooxml_schema.h"
 
 #include <QtTest>
 
@@ -32,6 +33,7 @@ private slots:
     void highlightNames();
     void units();
     void coreProperties();
+    void schemaHelperValidatesAndPreprocesses();
 };
 
 void OoxmlTest::parsesNamespacesAndNormalisesStrict()
@@ -336,6 +338,35 @@ void OoxmlTest::coreProperties()
     QCOMPARE(back.modified, props.modified);
     QVERIFY(package->data(QStringLiteral("docProps/app.xml")).contains("<ep:Application>QindaWrite</ep:Application>")
             || package->data(QStringLiteral("docProps/app.xml")).contains("Application>QindaWrite<"));
+}
+
+void OoxmlTest::schemaHelperValidatesAndPreprocesses()
+{
+    using namespace QindaOffice::Test;
+    if (!schemaValidationAvailable()) {
+        QSKIP("QQO_OOXML_SCHEMA_DIR or xmllint unavailable");
+    }
+    // Valid once Markup Compatibility drops the ignorable w14 attribute and
+    // resolves the AlternateContent to its Fallback.
+    const QByteArray good = R"(<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+ xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+ xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" mc:Ignorable="w14">
+ <w:body><w:p w14:paraId="1A2B3C4D"><w:pPr><w:spacing w:after="0"/><w:jc w:val="center"/></w:pPr>
+ <mc:AlternateContent><mc:Choice Requires="w14"><w:r><w14:foo/></w:r></mc:Choice>
+ <mc:Fallback><w:r><w:t>x</w:t></w:r></mc:Fallback></mc:AlternateContent></w:p><w:sectPr/></w:body></w:document>)";
+    // jc before spacing breaks the schema's sequence.
+    const QByteArray bad = R"(<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+ <w:body><w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr></w:p></w:body></w:document>)";
+    PackageWriter writer;
+    writer.addPart(QStringLiteral("word/document.xml"), good);
+    auto package = Package::fromData(writer.toZip());
+    QVERIFY(package);
+    QCOMPARE(validatePackage(*package), QStringList());
+    writer.addPart(QStringLiteral("word/document.xml"), bad);
+    package = Package::fromData(writer.toZip());
+    const QStringList errors = validatePackage(*package);
+    QCOMPARE(errors.size(), 1);
+    QVERIFY2(errors.first().contains(QStringLiteral("spacing")), qPrintable(errors.first()));
 }
 
 QTEST_GUILESS_MAIN(OoxmlTest)

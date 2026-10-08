@@ -5,6 +5,7 @@
 # Transitional XSDs) enables schema validation in the format tests.
 add_executable(tst_ooxml tst_ooxml.cpp)
 target_link_libraries(tst_ooxml PRIVATE office_ooxml Qt6::Test)
+target_include_directories(tst_ooxml PRIVATE ${PROJECT_SOURCE_DIR}/tests)
 qqo_set_strict_warnings(tst_ooxml)
 add_test(NAME tst_ooxml COMMAND tst_ooxml)
 set_tests_properties(tst_ooxml PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
