@@ -234,22 +234,24 @@ void DocxCorpusTest::readsEveryDocument()
             // Only errors our writer ADDS count: Word itself writes markup
             // the ECMA schemas reject (attributes from later versions), and
             // a copied part keeps whatever the source had.
+            // Every xmllint line counts (not just the first per part): the
+            // order differs once the writer sorts children, so a first-line
+            // comparison reported the source's own invalid values as new.
             auto messages = [](const QStringList &list) {
                 QSet<QString> out;
-                static const QRegularExpression kLine(QStringLiteral("^[^:]*: line:?\\d*:? *"));
-                for (QString e : list) {
-                    out.insert(e.remove(kLine).section(QLatin1Char('\n'), 0, 0));
+                static const QRegularExpression kLine(QStringLiteral("^line:?\\d*:? *"));
+                for (const QString &part : list) {
+                    for (QString line : part.section(QStringLiteral(": "), 1).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+                        out.insert(line.remove(kLine));
+                    }
                 }
                 return out;
             };
+            constexpr int kAllLines = 100000;
             const auto sourcePackage = Ooxml::Package::load(path);
-            const QSet<QString> before = sourcePackage ? messages(Test::validatePackage(*sourcePackage)) : QSet<QString>();
-            QStringList errors;
-            for (const QString &e : Test::validatePackage(*package)) {
-                if (!before.contains(messages({e}).values().value(0))) {
-                    errors.append(e);
-                }
-            }
+            const QSet<QString> before =
+                sourcePackage ? messages(Test::validatePackage(*sourcePackage, kAllLines)) : QSet<QString>();
+            const QStringList errors = (messages(Test::validatePackage(*package, kAllLines)) - before).values();
             if (!errors.isEmpty()) {
                 ++invalid;
                 for (const QString &e : errors) {

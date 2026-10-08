@@ -154,7 +154,7 @@ inline void preprocess(Ooxml::XmlElement &e, QSet<QString> ignorable)
 
 } // namespace detail
 
-inline QString validateXmlPart(const QByteArray &xml, const QString &xsdFile)
+inline QString validateXmlPart(const QByteArray &xml, const QString &xsdFile, int maxLines = 5)
 {
     QTemporaryFile file;
     if (!file.open()) {
@@ -177,11 +177,12 @@ inline QString validateXmlPart(const QByteArray &xml, const QString &xsdFile)
     for (QString &line : lines) {
         line.replace(file.fileName(), QStringLiteral("line"));
     }
-    return lines.mid(0, 5).join(QLatin1Char('\n'));
+    return lines.mid(0, maxLines).join(QLatin1Char('\n'));
 }
 
 // Validates every schema-checked XML part of a package. Empty = valid.
-inline QStringList validatePackage(const Ooxml::Package &package)
+// Each entry is "<part>: <xmllint lines>", at most `maxLines` per part.
+inline QStringList validatePackage(const Ooxml::Package &package, int maxLines = 5)
 {
     QStringList errors;
     for (const QString &name : package.partNames()) {
@@ -198,7 +199,7 @@ inline QStringList validatePackage(const Ooxml::Package &package)
             continue;
         }
         detail::preprocess(*root, {});
-        const QString error = validateXmlPart(Ooxml::serializeDocument(*root), xsd);
+        const QString error = validateXmlPart(Ooxml::serializeDocument(*root), xsd, maxLines);
         if (!error.isEmpty()) {
             errors.append(name + QStringLiteral(": ") + error);
         }
