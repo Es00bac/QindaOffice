@@ -115,6 +115,49 @@ inline constexpr int kCellSnapshot = kDocxBase + 37;  // QVariantMap
 // no row heights, so applyRowHeights() pads the cells (docx_text.h).
 inline constexpr int kRowHeight = kDocxBase + 38;     // qreal
 
+// ---- M70 (D-079): Word's table, paragraph and font formatting ----------------------
+// Word values Qt's formats cannot hold, read from the effective markup
+// (style chain included, unless "own" says otherwise), changed by
+// QindaWrite's formatting commands and dialogs, and part of the import
+// snapshots (blockSnapshot / charSnapshot / the table, row and cell
+// snapshots), so an untouched value is written from its source markup and
+// a changed one re-derived (D-068 rule 3). Offsets 44/45 belong to content
+// controls; M70 uses 60–81 (71 and 78 unused).
+// Block formats.
+// The paragraph's OWN spacing (w:spacing before/after in twips, and the
+// auto-spacing flags). Qt's top/bottom margins hold the gaps the reader
+// folded (Word adds after + before; Qt keeps the larger), so the writer
+// and the Paragraph dialog read this, never the margins.
+inline constexpr int kParagraphSpacing = kDocxBase + 60;   // QVariantList{int before, int after, bool autoBefore, bool autoAfter}
+inline constexpr int kContextualSpacing = kDocxBase + 61;  // bool: w:contextualSpacing (set only when true)
+inline constexpr int kOutlineLevel = kDocxBase + 62;       // int 0–8, 9 = body text: w:outlineLvl
+// Tab stops as Word positions them (from the text column's edge, twips)
+// with alignment and leader (tabStopsSpec, docx_paragraph_format.h); Qt's
+// QTextOption::Tab has no leader and measures from the left indent.
+inline constexpr int kTabStops = kDocxBase + 63;           // QString
+inline constexpr int kParagraphBorderSpec = kDocxBase + 64; // QString bordersSpec() of w:pBdr (docx_borders.h)
+// Char formats.
+inline constexpr int kUnderlineWord = kDocxBase + 66; // QString w:u/@w:val Qt's underline styles cannot say
+inline constexpr int kDoubleStrike = kDocxBase + 67;  // bool w:dstrike (drawn as one line)
+inline constexpr int kHiddenText = kDocxBase + 68;    // bool w:vanish (shown, kept)
+inline constexpr int kKerning = kDocxBase + 69;       // int w:kern, half-points (0 = none)
+// Table formats.
+// The table-level borders and default cell margins in effect (its style's
+// with its own w:tblPr over them); written as the table's own when changed.
+inline constexpr int kTableBorders = kDocxBase + 70;      // QString bordersSpec(): w:tblBorders
+inline constexpr int kTableWidth = kDocxBase + 72;        // QString widthSpec() of w:tblW
+inline constexpr int kTableIndent = kDocxBase + 73;       // int twips: w:tblInd
+inline constexpr int kTableLayout = kDocxBase + 74;       // QString "autofit" | "fixed": w:tblLayout
+inline constexpr int kTableCellMargins = kDocxBase + 75;  // QString marginsSpec(): w:tblCellMar
+// Cell formats; the row's own properties sit on its first cell, beside kRowXml.
+inline constexpr int kCellBorders = kDocxBase + 76;   // QString bordersSpec() of the cell's own w:tcBorders
+inline constexpr int kCellMargins = kDocxBase + 77;   // QString marginsSpec() of the cell's own w:tcMar
+inline constexpr int kRowHeightRule = kDocxBase + 79; // QString "atLeast" | "exact" (with kRowHeight)
+inline constexpr int kRowCantSplit = kDocxBase + 80;  // bool w:cantSplit
+// Display only: the padding applyRowHeights() added to a cell, so a new
+// row height replaces it instead of adding to it.
+inline constexpr int kRowPad = kDocxBase + 81; // qreal px
+
 // How QindaWrite shows a tracked change: blue underlined insertions, red
 // struck deletions — content colours, the same on screen, paper and PDF.
 // AGENT-CONTRACT: write_revisions.cpp marks with exactly these; the .docx

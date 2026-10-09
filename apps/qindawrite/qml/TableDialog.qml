@@ -21,9 +21,9 @@ Tk.Dialog {
     Tk.Flex {
         direction: Tk.Flex.Column
         gap: Tk.Theme.space.sm
-        Tk.PropertyRow { visible: !dialog.columnsMode; label: qsTr("Rows"); Tk.NumberField { id: rows; objectName: "tableRows"; from: 1; to: 200; value: 3; decimals: 0 } }
-        Tk.PropertyRow { visible: !dialog.columnsMode; label: qsTr("Columns"); Tk.NumberField { id: cols; objectName: "tableColumns"; from: 1; to: 20; value: 3; decimals: 0 } }
-        Tk.PropertyRow { visible: dialog.columnsMode; label: qsTr("Columns"); Tk.NumberField { id: columns; objectName: "textColumns"; from: 2; to: 4; value: 2; decimals: 0 } }
-        Tk.PropertyRow { visible: dialog.columnsMode; label: qsTr("Gutter"); Tk.NumberField { id: gutter; objectName: "textGutter"; from: 0; to: 96; value: 24; decimals: 0; suffix: " px" } }
+        Tk.PropertyRow { visible: !dialog.columnsMode; label: qsTr("Rows"); Tk.NumberField { id: rows; objectName: "tableRows"; from: 1; to: 200; value: 3; decimals: 0; onValueModified: function(v) { value = v } } }
+        Tk.PropertyRow { visible: !dialog.columnsMode; label: qsTr("Columns"); Tk.NumberField { id: cols; objectName: "tableColumns"; from: 1; to: 20; value: 3; decimals: 0; onValueModified: function(v) { value = v } } }
+        Tk.PropertyRow { visible: dialog.columnsMode; label: qsTr("Columns"); Tk.NumberField { id: columns; objectName: "textColumns"; from: 2; to: 4; value: 2; decimals: 0; onValueModified: function(v) { value = v } } }
+        Tk.PropertyRow { visible: dialog.columnsMode; label: qsTr("Gutter"); Tk.NumberField { id: gutter; objectName: "textGutter"; from: 0; to: 96; value: 24; decimals: 0; suffix: " px"; onValueModified: function(v) { value = v } } }
     }
 }

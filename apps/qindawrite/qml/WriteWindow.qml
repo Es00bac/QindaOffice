@@ -27,10 +27,18 @@ OfficeWindow {
         sizeSlot: sizeSlot
         textColorSlot: textColorSlot
         highlightSlot: highlightSlot
+        shadingSlot: shadingSlot
+        penStyleSlot: penStyleSlot
+        penWidthSlot: penWidthSlot
+        penColorSlot: penColorSlot
     }
     ribbonTabs: ribbonLayout.tabs
     ribbonContexts: tableContext.enabled ? ["table"] : []
-    readonly property ActionEntry tableContext: host.actions.entry("tableDeleteRowAction")
+    // Enabled exactly while the cursor is in a table (table_layout.h).
+    readonly property ActionEntry tableContext: host.actions.entry("writeTablePropertiesAction")
+    // Word's formatting (M70, D-079): the border pen, the dialogs' hosts.
+    readonly property QtObject borders: window.write.borders
+    readonly property QtObject tableLayout: window.write.tableLayout
 
     Component {
         id: fontSlot
@@ -65,7 +73,7 @@ OfficeWindow {
             color: "#202028"
             colors: ["#202028", "#7f7f7f", "#1c62d4", "#d21c1c", "#1f9d3a", "#f28c19", "#7d3ac1", "#8d5a2b", "#ffffff"]
             onColorSelected: function(c) { window.write.applyTextColor(c) }
-            onCustomRequested: { colorDialog.highlight = false; colorDialog.open() }
+            onCustomRequested: { colorDialog.target = "text"; colorDialog.open() }
         }
     }
     Component {
@@ -77,7 +85,55 @@ OfficeWindow {
             color: "#fff176"
             colors: ["#fff176", "#b9f6ca", "#b3e5fc", "#ffcdd2", "#e1bee7", "#ffe0b2", "#e0e0e0", "#ffffff"]
             onColorSelected: function(c) { window.write.applyHighlightColor(c) }
-            onCustomRequested: { colorDialog.highlight = true; colorDialog.open() }
+            onCustomRequested: { colorDialog.target = "highlight"; colorDialog.open() }
+        }
+    }
+    Component {
+        id: shadingSlot
+        Tk.ColorButton {
+            objectName: "shadingButton"
+            small: true
+            tooltip: qsTr("Shading")
+            color: window.borders.shadingColor
+            colors: ["#d9e2f3", "#deeaf6", "#e2efd9", "#fff2cc", "#fbe4d5", "#ededed", "#1f4e79", "#c00000", "#ffffff"]
+            onColorSelected: function(c) { window.borders.applyShading(c) }
+            onCustomRequested: { colorDialog.target = "shading"; colorDialog.open() }
+        }
+    }
+    Component {
+        id: penStyleSlot
+        Tk.ComboBox {
+            objectName: "penStyleCombo"
+            small: true
+            implicitWidth: 120
+            tooltip: qsTr("Line style")
+            model: window.borders.penStyles
+            currentIndex: window.borders.penStyleIndex
+            onActivated: function(index) { window.borders.penStyleIndex = index }
+        }
+    }
+    Component {
+        id: penWidthSlot
+        Tk.ComboBox {
+            objectName: "penWidthCombo"
+            small: true
+            implicitWidth: 76
+            tooltip: qsTr("Line weight")
+            model: window.borders.penSizes
+            currentIndex: window.borders.penSizeIndex
+            onActivated: function(index) { window.borders.penSizeIndex = index }
+        }
+    }
+    Component {
+        id: penColorSlot
+        Tk.ColorButton {
+            objectName: "penColorButton"
+            small: true
+            tooltip: qsTr("Pen colour")
+            color: window.borders.penColor.valid ? window.borders.penColor : "#000000"
+            colors: ["#000000", "#7f7f7f", "#1f4e79", "#2f5496", "#4472c4", "#c00000", "#ed7d31", "#70ad47", "#ffffff"]
+            onColorSelected: function(c) { window.borders.penColor = c }
+            onCustomRequested: { colorDialog.target = "pen"; colorDialog.open() }
         }
     }
 
@@ -159,8 +215,8 @@ OfficeWindow {
         function onZoomRequested(zoom) { pageHost.setZoom(zoom) }
         function onFindRequested(replace) { if (replace) findBar.openReplace(); else findBar.open() }
         function onAssistantToggleRequested(visible) { if (visible === dock.hiddenPanels.includes("assistant")) { if (visible) dock.showPanel("assistant"); else dock.hidePanel("assistant") } }
-        function onTextColorRequested(current) { colorDialog.highlight = false; colorDialog.selectedColor = current; colorDialog.open() }
-        function onHighlightRequested() { colorDialog.highlight = true; colorDialog.open() }
+        function onTextColorRequested(current) { colorDialog.target = "text"; colorDialog.selectedColor = current; colorDialog.open() }
+        function onHighlightRequested() { colorDialog.target = "highlight"; colorDialog.open() }
         function onTableDialogRequested() { tableDialog.columnsMode = false; tableDialog.open() }
         function onColumnsDialogRequested() { tableDialog.columnsMode = true; tableDialog.open() }
         function onImageDialogRequested() { imageDialog.open() }
@@ -189,6 +245,55 @@ OfficeWindow {
         function onProposalRequested(original, proposal) { proposalDialog.original = original; proposalDialog.proposal = proposal; proposalDialog.open() }
     }
 
+    // ---- Word's formatting dialogs (M70, D-079) ----
+    Connections {
+        target: window.write.paragraphFormat
+        function onParagraphDialogRequested() { paragraphDialog.load(target.paragraphInfo()); paragraphDialog.open() }
+        function onTabsDialogRequested() { tabsDialog.load(target.tabsInfo()); tabsDialog.open() }
+    }
+    Connections {
+        target: window.write.fontFormat
+        function onFontDialogRequested() {
+            fontDialog.families = window.write.fontFamilies
+            fontDialog.sizes = window.write.fontSizes
+            fontDialog.load(target.fontInfo())
+            fontDialog.open()
+        }
+    }
+    Connections {
+        target: window.borders
+        function onDialogRequested() { bordersDialog.load(target.dialogInfo()); bordersDialog.open() }
+    }
+    Connections {
+        target: window.tableLayout
+        function onPropertiesDialogRequested() { tableProperties.load(target.propertiesInfo()); tableProperties.open() }
+        function onSortDialogRequested() { sortDialog.load(target.sortInfo()); sortDialog.open() }
+        function onTextToTableDialogRequested() { textToTable.load(target.textToTableInfo("tab")); textToTable.open() }
+    }
+    ParagraphDialog {
+        id: paragraphDialog
+        onParagraphApplied: function(answer) { window.write.paragraphFormat.applyParagraph(answer) }
+        onTabsRequested: { tabsDialog.load(window.write.paragraphFormat.tabsInfo()); tabsDialog.open() }
+    }
+    TabsDialog { id: tabsDialog; onTabsApplied: function(answer) { window.write.paragraphFormat.applyTabs(answer) } }
+    FontDialog {
+        id: fontDialog
+        onFontApplied: function(answer) { window.write.fontFormat.applyFont(answer) }
+        onCustomColorRequested: function(what) { colorDialog.target = "font-" + what; colorDialog.open() }
+    }
+    BordersShadingDialog {
+        id: bordersDialog
+        borders: window.borders
+        onBordersApplied: function(answer) { window.borders.applyDialog(answer) }
+        onCustomColorRequested: function(what) { colorDialog.target = "borders-" + what; colorDialog.open() }
+    }
+    TablePropertiesDialog { id: tableProperties; onPropertiesApplied: function(answer) { window.tableLayout.applyProperties(answer) } }
+    SortDialog { id: sortDialog; onSortApplied: function(answer) { window.tableLayout.applySort(answer) } }
+    TextToTableDialog {
+        id: textToTable
+        onSeparatorPicked: function(separator) { textToTable.columns = window.tableLayout.textToTableInfo(separator).columns }
+        onConvertApplied: function(answer) { window.tableLayout.applyTextToTable(answer) }
+    }
     TableDialog {
         id: tableDialog
         onTableApplied: function(rows, columns) { window.write.insertTable(rows, columns) }
@@ -228,11 +333,23 @@ OfficeWindow {
         nameFilters: [qsTr("PDF (*.pdf)")]
         onAccepted: window.write.exportPdfTo(selectedFile)
     }
+    // One colour picker for every "Custom…": `target` says whose colour it is.
     Dialogs.ColorDialog {
         id: colorDialog
-        property bool highlight: false
-        title: highlight ? qsTr("Highlight colour") : qsTr("Text colour")
-        onAccepted: { if (highlight) window.write.applyHighlightColor(selectedColor); else window.write.applyTextColor(selectedColor) }
+        property string target: "text"
+        title: target === "highlight" ? qsTr("Highlight colour") : target === "text" ? qsTr("Text colour") : qsTr("Colour")
+        onAccepted: {
+            switch (target) {
+            case "highlight": window.write.applyHighlightColor(selectedColor); break
+            case "shading": window.borders.applyShading(selectedColor); break
+            case "pen": window.borders.penColor = selectedColor; break
+            case "borders-border": bordersDialog.penColor = selectedColor; bordersDialog.penAuto = false; break
+            case "borders-fill": bordersDialog.fill = String(selectedColor); bordersDialog.fillChanged = true; break
+            case "font-font": fontDialog.color = String(selectedColor); fontDialog.mark("color"); break
+            case "font-underline": fontDialog.underlineColor = String(selectedColor); fontDialog.mark("underlineColor"); break
+            default: window.write.applyTextColor(selectedColor)
+            }
+        }
     }
     Component.onCompleted: window.write.preferencesPageUrl = Qt.resolvedUrl("WritePreferencesPage.qml")
 }

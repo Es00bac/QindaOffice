@@ -5,6 +5,91 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-079: QindaWrite: Word's table, paragraph and font formatting
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart, "nothing missing that somebody would need"; M70,
+builds on D-068)
+
+**Context.** Of the owner's 590 Word documents 88 % have tables, 79 % cell
+shading and 41 % lists. QindaWrite read and kept Word's table and paragraph
+formatting (D-068) but could only insert or delete rows and columns and merge
+cells: no shading, no borders, no table, row or cell properties, and no
+Paragraph, Font, Tabs or Borders and Shading dialog. Insert ▸ Table made Qt's
+HTML-style table (a frame line around spaced cells), which has no per-edge
+borders to format. Qt's text model also lacks most of what those dialogs set:
+leaders on tab stops, a paragraph's own spacing (the reader folds Word's
+after + before into one margin), borders as Word writes them, underline
+styles beyond its six, double strikethrough, hidden text, kerning.
+
+**Decision.**
+1. **Word's values are the model of what Qt cannot hold**
+   (`docx_properties.h`, offsets 60–81): a paragraph's own spacing,
+   contextual spacing, outline level, tab stops with alignment and leader,
+   its borders; a run's Word underline name, double strikethrough, hidden,
+   kerning; a table's borders, preferred width, indent, layout and default
+   cell margins; a cell's own borders and margins; a row's height rule and
+   "can't split". Borders are kept in Word's terms (`docx_borders.h`: line
+   style, eighths of a point, RRGGBB or auto, space in points). The reader
+   sets them from the effective markup, the import snapshots include them,
+   and the writer re-derives only what changed (D-068 rule 3) — for borders
+   side by side, so a side the user did not touch keeps its source element,
+   theme colour included.
+2. **The display follows the Word value**, through the one set of
+   functions the commands use (`docx_table_format.h`,
+   `docx_paragraph_format.h`, `docx_metrics.h`): borders as Qt's collapsed
+   per-side cell borders, margins as padding, row heights as padding
+   (`kRowPad` remembers what a height added, so a new one replaces it), a
+   paragraph's spacing as the reader's folded margins moved by what Word's
+   sum moves by (the display extras stay), line spacing with Word's line
+   metrics, tab leaders painted by `drawTabLeaders` beside the paragraph
+   borders on screen, paper and PDF.
+3. **Commands do what Word does.** Borders on some cells go into those
+   cells' own `w:tcBorders`, and the cell across an outer edge takes the same
+   side (Word resolves a shared edge between both cells; Qt draws the wider);
+   on the whole table they go into `w:tblBorders` and the cells' own sides
+   they cover are dropped. A single-edge command toggles off only an edge
+   already drawn with the pen. Shading is `w:shd w:val="clear"
+   w:color="auto" w:fill="RRGGBB"` (no theme). Insert ▸ Table makes Word's
+   Table Grid table; a Qt table from HTML takes Word's model at its first
+   formatting command. Sort and Convert move whole rows with their cell
+   formats and Word markup. Paragraph, Tabs, Font, Borders and Shading and
+   Table Properties apply only what the user touched, so a mixed selection
+   keeps the rest.
+4. **Every command is a persistent `ActionEntry`** (ids `writeBorders…`,
+   `writeTable…`, `writeCase…`, `writeFontAction`, `writeParagraphAction`,
+   `writeTabsAction`, `writeShading…`, `writeTextToTableAction`) in the
+   menu tree and on the ribbon — Home (Font…, Change Case, Shading, Borders,
+   Paragraph…), Insert ▸ Tables, Layout ▸ Paragraph and Word's contextual
+   **Table Design** (shading slot, pen style, weight and colour, Borders)
+   and **Table Layout** (Select, Properties, Delete, rows and columns,
+   merge, AutoFit, distribute, the nine alignments, Sort, Repeat Header
+   Rows, Convert to Text) — one undo step each, the dialogs in QML with
+   QindaTK controls only.
+5. **Line and Page Breaks drive the pagination**: the Paragraph dialog asks
+   `KeepRules` (`write_pagination.h`) to lay the keep rules out again, and
+   repeated header rows repeat on each page through
+   `QTextTableFormat::headerRowCount`.
+
+**Consequences.** A table or paragraph formatted in QindaWrite opens in Word
+as Word would have written it, and an edited Word table keeps every
+untouched cell's markup. Typing into a shaded cell no longer gives the text
+the cell's shading (Qt hands out the cell's format at a cell's start;
+`withoutCellProperties` strips it, for typing and for a cell paragraph's
+mark). Write's existing numeric dialog fields (Insert Table, Page Setup,
+Picture) now reach the host: QindaTK's `NumberField` leaves `value` to the
+host (QindaTK D-198) and the dialogs never echoed it, so a typed value was
+lost. The ruler now moves each selected paragraph's indent and keeps the
+rest of that paragraph's format (it merged the caret paragraph's whole
+format, Word markup and tab stops included, into the others). Shown
+approximately, kept exactly: underline styles Qt lacks (double,
+thick, words, heavy, long) as one line, double strikethrough as one, hidden
+text shown, bar tabs not drawn, exact row heights as at least (Qt cannot
+clip a row), Word's automatic text colour on dark shading shown black, a
+table style's conditional borders not redrawn after a whole-table command.
+Paragraph borders do not reach HTML export (Qt's writer has none); table
+shading and borders do. Rows with vertically merged cells are not sorted.
+
 ## D-077: QindaBooks: purchase orders, time tracking, check printing workflow
 
 **Date:** 2026-10-08 · **Status:** accepted (owner request: every app at par

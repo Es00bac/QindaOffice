@@ -62,6 +62,7 @@ Tk.Dialog {
                 Tk.NumberField {
                     id: width_
                     objectName: "pictureWidth"
+                    onValueModified: function(v) { value = v }
                     from: 0.05; to: 60; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix
                     onValueChanged: if (!dialog.syncing && lock.checked) {
                         dialog.syncing = true
@@ -72,6 +73,7 @@ Tk.Dialog {
                 Tk.NumberField {
                     id: height_
                     objectName: "pictureHeight"
+                    onValueModified: function(v) { value = v }
                     from: 0.05; to: 60; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix
                     onValueChanged: if (!dialog.syncing && lock.checked) {
                         dialog.syncing = true

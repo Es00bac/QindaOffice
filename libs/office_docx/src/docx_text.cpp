@@ -3,6 +3,7 @@
 
 #include "docx_format.h"
 #include "docx_properties.h"
+#include "docx_table_format.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QImage>
@@ -82,6 +83,29 @@ void setBlockCharFormatKeepingCell(QTextCursor &cursor, const QTextCharFormat &f
     chars.clearProperty(QTextFormat::TextVerticalAlignment);
     merged.merge(chars);
     QTextTableCell(cell).setFormat(merged);
+}
+
+QTextCharFormat withoutCellProperties(QTextCharFormat format, const QTextCharFormat &cell)
+{
+    if (format.objectType() != QTextFormat::TableCellObject && !format.hasProperty(QTextFormat::TableCellRowSpan)) {
+        return format;
+    }
+    if (format.hasProperty(QTextFormat::BackgroundBrush) && format.background() == cell.background()) {
+        format.clearBackground();
+    }
+    const int alignment = format.intProperty(QTextFormat::TextVerticalAlignment);
+    if (alignment != QTextCharFormat::AlignSuperScript && alignment != QTextCharFormat::AlignSubScript) {
+        format.clearProperty(QTextFormat::TextVerticalAlignment);
+    }
+    for (int p = QTextFormat::TableCellRowSpan; p <= QTextFormat::TableCellRightBorderBrush; ++p) {
+        format.clearProperty(p);
+    }
+    for (const int p : {kCellXml, kRowXml, kCellSnapshot, kRowHeight, kCellBorders, kCellMargins, kRowHeightRule,
+                        kRowCantSplit, kRowPad}) {
+        format.clearProperty(p);
+    }
+    format.clearProperty(QTextFormat::ObjectType);
+    return format;
 }
 
 QString addPicture(QTextDocument *document, QHash<QString, QByteArray> *media, const QByteArray &bytes)
@@ -390,8 +414,8 @@ void padRows(QTextFrame *frame)
     for (QTextFrame *child : frame->childFrames()) {
         if (auto *table = qobject_cast<QTextTable *>(child)) {
             for (int r = 0; r < table->rows(); ++r) {
-                const QTextTableCell first = table->cellAt(r, 0);
-                const qreal wanted = first.row() == r ? first.format().doubleProperty(kRowHeight) : 0;
+                const QTextTableCell first = rowAnchor(table, r);
+                const qreal wanted = first.isValid() ? first.format().doubleProperty(kRowHeight) : 0;
                 if (wanted <= 0) {
                     continue;
                 }
@@ -415,6 +439,9 @@ void padRows(QTextFrame *frame)
                 if (target.isValid() && tallest < wanted - 0.5) {
                     QTextTableCellFormat f = target.format().toTableCellFormat();
                     f.setBottomPadding(f.bottomPadding() + wanted - tallest);
+                    // Remembered, so a new row height replaces it
+                    // (docx_table_format.h refreshRowHeight).
+                    f.setProperty(kRowPad, f.doubleProperty(kRowPad) + wanted - tallest);
                     target.setFormat(f);
                 }
             }

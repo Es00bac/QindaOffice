@@ -15,6 +15,10 @@
 #include "standard_actions.h"
 #include "style_catalog.h"
 #include "table_actions.h"
+#include "table_layout.h"
+#include "write_borders.h"
+#include "write_font.h"
+#include "write_paragraph.h"
 #include "write_review_actions.h"
 #include "write_revisions.h"
 #include "write_typography.h"
@@ -52,6 +56,12 @@ WriteHost::WriteHost()
     m_review = new WriteReviewActions(m_control, m_document, m_revisions, actions(), this);
     m_comments = new WriteComments(m_document, m_control, [this] { return m_revisions->author(); }, this);
     m_controls = new WriteControls(m_document, m_control, this);
+    // M70 (D-079): Word's table, paragraph and font formatting.
+    m_borders = new BordersController(m_control, m_document, actions(), this);
+    m_paragraph = new ParagraphController(m_control, m_document, actions(), this);
+    m_font = new FontController(m_control, m_document, actions(), this);
+    m_tableLayout = new TableLayoutController(m_control, m_document, actions(), this);
+    connect(m_tableLayout, &TableLayoutController::message, this, [this](const QString &text) { showStatusMessage(text, 6000); });
     connect(m_comments, &WriteComments::message, this, [this](const QString &text) { showStatusMessage(text); });
     connect(m_format, &FormatController::textColorRequested, this, &WriteHost::textColorRequested);
     connect(m_format, &FormatController::tableDialogRequested, this, &WriteHost::tableDialogRequested);

@@ -17,7 +17,9 @@
 // (docx_format.h) — and so the snapshot and the writer — read instead.
 
 #include <QFont>
+#include <QTextBlockFormat>
 
+class QTextBlock;
 class QTextDocument;
 
 namespace QindaOffice::Docx {
@@ -35,5 +37,11 @@ namespace QindaOffice::Docx {
 // whose line rule is auto, in `document` and its tables. Run once after
 // reading; a new paragraph Write makes keeps Qt's own line height.
 void applyWordLineMetrics(QTextDocument *document);
+
+// Sets `format`'s own line height (a QTextBlockFormat::LineHeightTypes and
+// its value) for the paragraph at `block`, with the same Word metrics
+// adjustment applyWordLineMetrics() gives a paragraph read from Word when
+// the height is single or a multiple (M70: the Paragraph dialog).
+void setWordLineSpacing(QTextBlockFormat &format, const QTextBlock &block, int type, qreal value);
 
 } // namespace QindaOffice::Docx

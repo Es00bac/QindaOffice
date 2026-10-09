@@ -106,6 +106,73 @@ direct formatting. A document without that style, or one not from Word,
 gets Write's built-in style. A restyled table-cell paragraph is shown
 without its table style's layers (Word, which has them, shows them).
 
+## Formatting tables, paragraphs and text (M70, D-079)
+
+Word's own commands, under Word's names, on Word's model:
+
+- **Table Design** (contextual tab while the caret is in a table): Shading
+  (a colour slot and the Shading / No Shading commands; written `w:shd
+  w:val="clear" w:color="auto" w:fill="RRGGBB"`), Borders — All, Outside,
+  Inside, Top, Bottom, Left, Right, Inside Horizontal, Inside Vertical, No
+  Border — drawn with the pen the Line Style, Line Weight (¼–6 pt) and Pen
+  Colour slots choose. On some cells a border goes into those cells'
+  `w:tcBorders`, and the cell across an outer edge takes the same side, as
+  Word keeps a shared edge; on the whole table it goes into `w:tblBorders`
+  and the cells' own sides it covers are dropped. An edge already drawn
+  with the pen is taken away (Word's toggle).
+- **Table Layout**: Select Cell / Row / Column / Table, Properties, Delete
+  Rows / Columns / Table, insert rows and columns (a new row or column —
+  Tab in the last cell included — takes its neighbour's cell formats, as in
+  Word), merge (a selection across
+  cells) and split, AutoFit Contents / Window / Fixed Column Width (`w:tblW`
+  auto or pct, `w:tcW` auto, pct or dxa, `w:tblLayout`), Distribute Rows /
+  Columns, the nine cell alignments (`w:vAlign` and the paragraphs'
+  `w:jc`), Sort (by a column as text, number or date, ascending or
+  descending, a header row kept; whole rows move with their formats), Repeat
+  Header Rows (`w:tblHeader`; Write's layout repeats them on every page) and
+  Convert to Text; Insert ▸ Table ▸ Convert Text to Table (tabs, commas,
+  paragraphs or another character).
+- **Table Properties**: preferred width (automatic, a length or a
+  percentage), alignment, indent, fixed layout, default cell margins
+  (`w:tblCellMar`); row height at least or exactly (`w:trHeight`), "allow
+  row to break across pages" (`w:cantSplit`), repeat as header row; column
+  width (`w:gridCol`, `w:tcW`); a cell's vertical alignment and own margins
+  (`w:tcMar`).
+- **Format ▸ Paragraph** (also Home ▸ Paragraph and the context menu):
+  alignment, outline level (`w:outlineLvl`), indents and the first-line or
+  hanging indent, spacing before and after with Auto, line spacing (single,
+  1.5, double, at least, exactly, multiple), "don't add space between
+  paragraphs of the same style" (`w:contextualSpacing`), and widow/orphan
+  control, keep with next, keep lines together and page break before — which
+  `write_pagination` lays out at once.
+- **Format ▸ Tabs**: stops left, center, right, decimal or bar with a
+  leader (dots, hyphens, underline), set, cleared or all cleared, and the
+  document's default stop (`w:defaultTabStop`). A stop the paragraph's
+  style sets and the user removed is written `w:val="clear"`. Leaders are
+  drawn on the page, on paper and in PDF.
+- **Format ▸ Borders and Shading**: the selected paragraphs (`w:pBdr`,
+  `w:shd`) or, in a table, the selected cells or the whole table — a
+  setting (none, box, all, grid, custom), style, colour, width, each edge,
+  and the fill.
+- **Format ▸ Font** (Ctrl+D): family, style, size, colour, underline style
+  (single, words, double, thick, dotted, dash, dot-dash, dot-dot-dash, wave)
+  and colour, strikethrough and double strikethrough, superscript,
+  subscript, small caps, all caps, hidden; spacing expanded or condensed
+  (`w:spacing`), scale (`w:w`), position raised or lowered (`w:position`),
+  kerning (`w:kern`). **Change Case** (Shift+F3 cycles lowercase →
+  UPPERCASE → Capitalize Each Word → Sentence case) keeps each letter's
+  formatting.
+
+What Qt's formats cannot hold is kept in Word's own values beside them
+(`docx_properties.h`, offsets 60–81; `docx_borders.h` for borders) and is
+part of the import snapshots: an untouched value is written from the source
+markup, a changed one re-derived — a border side by side, so the side the
+user did not touch keeps its source element. Each command and each dialog's
+answer is one undo step; the dialogs apply only what the user touched.
+Insert ▸ Table makes Word's Table Grid table; a table from HTML or an older
+Write takes Word's model (collapsed edges, its frame line as
+`w:tblBorders`) at its first formatting command.
+
 ## Reading (`docx_reader*`)
 
 Paragraph and run formatting is resolved the way Word resolves it
@@ -170,7 +237,8 @@ Each paragraph, run, table, row and cell read from Word carries its source
 markup and a snapshot of the values the reader mapped. On save, properties
 whose values still match the snapshot are written from the source markup;
 changed ones are re-derived (D-068 rule 3), and children are sorted into
-schema order. Lists keep their numbering instance unless their format
+schema order. An untouched cell keeps its own `w:tcW`, `w:vMerge` spelling
+and borders while the grid and its span are as read (M70). Lists keep their numbering instance unless their format
 changed. New content gets complete definitions: built-in styles mirroring
 `StyleCatalog`, nine-level numbering, `Table Grid`, footnote styles.
 
@@ -213,6 +281,15 @@ Session Review panel) and *Open in QindaWrite* write a page through
   the paragraph has three lines or more: a block format cannot break inside
   a paragraph. Keep rules inside a table apply to its leading rows only.
 - Floating pictures, text boxes and shapes are not editable as objects.
+- Formatting Qt cannot draw is kept and written but shown approximately
+  (M70): double, thick, words-only and heavy underlines as one line, double
+  strikethrough as one line, hidden text shown (and printed), bar tabs not
+  drawn, an exact row height as "at least" (Qt cannot clip a row), Word's
+  automatic text colour on a dark fill shown black (Word shows it white).
+  After a border command on the whole table, a table style's conditional
+  borders (header row lines, banding) are not redrawn until the document is
+  opened again. Paragraph borders do not reach HTML export (table shading
+  and borders do). Rows with vertically merged cells are not sorted.
 - Comment text is plain in Write: an edited comment is written as plain
   paragraphs (an untouched one keeps its formatting, links and mentions).
   Comments marked in headers, footers, notes or text boxes are kept on
@@ -230,6 +307,13 @@ Session Review panel) and *Open in QindaWrite* write a page through
 pictures, preservation, layout, headers, notes, links, revisions),
 `tst_docx_write` (new document, unchanged markup, carried parts,
 edited notes and tables — XSD-validated with `QQO_OOXML_SCHEMA_DIR`),
+`tst_docx_tables` and `tst_docx_paragraphs` (M70: shading, borders on
+cells and on the table, table / row / cell properties, AutoFit and
+Distribute, a Qt table taking Word's model; spacing folded as the reader
+folds it, outline and break switches, tab stops with leaders, paragraph
+borders and shading, every font effect — each written, XSD-validated and
+read back equal; an edited Word table's untouched cells keep their markup;
+LibreOffice renders a sample, `QQO_GRAB_DIR` keeps the PDF),
 `tst_docx_controls` (content controls: kinds, block and inline, round trip,
 patched check box / list / date / bound text, a copy without its id),
 `tst_docx_comments` (ranges, replies, resolved state; untouched set copied,
@@ -238,7 +322,9 @@ edited / new / deleted comments written, header-only comments kept),
 re-read, compare; aggregate counts only). `tests/qindawrite/tst_write_docx`
 covers WriteDocument (layout, headers, pictures, recovery, HTML, legacy
 formats through LibreOffice), `tst_write_comments` the Comments pane and
-its commands through the real window, `tst_write_controls` filling in a
+its commands through the real window, `tst_write_tables` and
+`tst_write_formatting` Word's formatting commands and dialogs through the
+real window (M70), `tst_write_controls` filling in a
 form (check box, list, calendar, placeholder) through the real window and renders listed documents to PDF for
 review (`QQO_WRITE_RENDER_DOCX` + `QQO_GRAB_DIR`). `tests/qindanote/tst_note_word`
 exports a page with every block kind and ink, validates it, reads it back

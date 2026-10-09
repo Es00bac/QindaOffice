@@ -2,6 +2,8 @@
 #include "page_text_control.h"
 
 #include "docx_properties.h"
+#include "docx_table_format.h"
+#include "docx_text.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QClipboard>
@@ -30,6 +32,15 @@ QTextCharFormat typingFormat(const QTextCursor &cursor)
 {
     QTextCharFormat format = cursor.charFormat();
     format.clearProperty(Docx::kCommentReference);
+    // AGENT-NOTE (M70, D-079): at the start of a table cell Qt hands out
+    // the CELL's format (the character before the caret is the cell's
+    // separator). Its shading, borders and Word cell markup are not the
+    // typed text's: typing into a shaded cell wrote run shading into the
+    // .docx and the HTML (docx_text.h withoutCellProperties).
+    if (const QTextTable *table = cursor.currentTable()) {
+        const QTextTableCell cell = table->cellAt(cursor);
+        format = Docx::withoutCellProperties(format, cell.isValid() ? cell.format() : QTextCharFormat());
+    }
     if (format.stringProperty(Docx::kRunStyleId) == u"PlaceholderText") {
         // Text typed into a form field's placeholder is its value (D-080).
         format.clearProperty(Docx::kRunStyleId);
@@ -310,7 +321,14 @@ void PageTextControl::moveToNextCell(bool backward)
         return;
     }
     if (index >= table->rows() * table->columns()) {
+        // Tab in the last cell adds a row like the one above it (Word);
+        // Qt's appendRows gives the new cells no format at all.
+        m_cursor.beginEditBlock();
         table->appendRows(1);
+        for (int column = 0; column < table->columns(); ++column) {
+            Docx::copyNeighbourFormat(table, table->rows() - 1, column, table->rows() - 2, column);
+        }
+        m_cursor.endEditBlock();
         index = (table->rows() - 1) * table->columns();
     }
     const QTextTableCell next = table->cellAt(index / table->columns(), index % table->columns());

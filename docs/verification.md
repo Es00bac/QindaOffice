@@ -33,6 +33,99 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M70 Write formatting gates (D-079)
+
+On qinda (only office_ooxml, office_docx, QindaWrite, their tests and
+`tst_note_word` built; `QQO_OOXML_SCHEMA_DIR` set, so every package a test
+writes is validated against the ECMA-376 Transitional schemas):
+`ctest -R "tst_write_|tst_docx_|tst_ooxml|tst_note_word"` 27/27 targets; 206
+test functions passed, 3 skipped (the corpus without `QQO_DOCX_CORPUS`, two
+opt-in renders).
+
+**office_docx.** `tst_docx_tables` 8/8 — in a Table Grid table read from
+Word: a shaded cell (`w:shd w:val="clear" w:color="auto" w:fill="FFF2CC"`),
+a double red line under the first row in its cells' `w:tcBorders` and the
+second row's top, the third row's cells (a theme fill, a theme-coloured
+border: cell, paragraph and run properties) and the table's `w:tblPr` /
+`w:tblGrid` identical to the source;
+Outside and Inside Vertical on the whole table as `w:tblBorders` with no
+cell keeping a side of its own; table properties (80 % wide, centred, fixed
+layout, cell margins, a header row), a row 0.5 in exactly that cannot
+split, a 2000-twip column and a cell's own margins written and read back
+equal; Distribute Columns / Rows and AutoFit Window (`w:tblW` 5000 pct,
+`w:tcW` pct), Contents (auto, no `w:tblLayout`) and Fixed; a new table as
+Word's Table Grid; a 120 × 6 table from HTML taking Word's model (grey frame
+line as `w:tblBorders`, padding as `w:tblCellMar`) and formatted in under
+three seconds. `tst_docx_paragraphs` 8/8 — spacing before and after
+re-folded exactly as a re-read of the saved file folds it, contextual
+spacing taking the gap away; outline level, widow control off, keep with
+next, keep lines, page break before, exact line spacing, hanging indent;
+tab stops replacing a style's dotted stop (written `w:val="clear"`) and the
+default stop in `settings.xml`; a paragraph box and shading, then nil
+sides; double underline in red, double strikethrough, small caps, hidden,
+2 pt spacing, 150 % scale, a raise, kerning — every one read back equal;
+LibreOffice renders the sample. The rest of the Word gates are unchanged
+and green: `tst_docx_read` 15/15, `tst_docx_write` 6/6, `tst_docx_restyle`
+3/3, `tst_docx_comments` 8/8, `tst_docx_controls` 7/7, `tst_ooxml` 24/24,
+`tst_note_word` 3/3.
+
+**QindaWrite, through the real window.** `tst_write_tables` 7/7 — the Table
+commands disabled outside a table and Convert Text to Table disabled inside
+one, Inside Vertical only in a table; shading the header row, a double red
+rule under it (pressed again it goes, Undo brings it back), a dashed
+outside border on the whole table, each one undo step with Redo; Align
+Bottom Right, AutoFit, Distribute, Repeat Header Rows (checked state follows
+the caret), Tab in the last cell adding a row with the grid lines and
+margins of the one above (one undo step), Select Column, Delete Table and
+its Undo; text to table (no empty paragraph left before what followed) and
+back, Sort by a number column descending under a header row (one undo
+step), Table Properties (60 %, centred, a header row 0.5 in exactly, one
+step); the saved `.docx` carries `w:shd`, `w:tcBorders`, `w:tblBorders`,
+`w:tblW`, `w:trHeight w:hRule="exact"`, `w:tblHeader` and no run shading
+from typing in a shaded cell; a 70-row table's header row repeats at the
+top of page two; HTML export keeps the fill and the double rule.
+`tst_write_formatting` 8/8 — the Paragraph dialog's answer (centred,
+indents, 12/6 pt, exactly 18 pt, level 2, contextual, widow off) in one step
+and its `w:pPr`; keep with next moving a heading to its next paragraph's
+page through `KeepRules`; dotted right tabs drawn and written, one step,
+the default stop in settings, a PDF kept; Outside Borders on two paragraphs
+drawn as one box, shading, the Borders and Shading dialog's double red box
+(each one step), No Border; the Font dialog's effects in one step and their
+`w:rPr`; Change Case cycling lowercase → UPPERCASE → Capitalize Each Word →
+Sentence case → lowercase on Shift+F3, tOGGLE cASE and Undo; each dialog
+opening from its command at 1280 and 520 px; the context menu offering Font…
+and Paragraph…. `tst_write_ui` 19/19: the ribbon gate at 1400 and 520 px
+with every contextual tab forced on (every menu command reachable, every
+icon known, every item inside the ribbon), the Word-model Insert Table, and
+the structural fixtures regenerated on purpose (`QQO_UPDATE_FIXTURES=1`: +30
+rows each, the five new Home items — Change Case, Font…, Shading, Borders,
+Paragraph…; the dialogs are popups and add none). `tst_write_menu_export`
+3/3 (every new id resolves in the ActionModel). The rest of the suite is
+unchanged and green: `tst_write_control` 8/8, `tst_write_view` 9/9,
+`tst_write_typography` 7/7 (line spacing now through Word's metrics),
+`tst_write_review` 13/13, `tst_write_formats` 6/6,
+`tst_write_probe_pagination` 7/7, `tst_write_tools` 3/3, `tst_write_docx`
+7/7 (2 opt-in skips), `tst_write_pagination` 8/8, `tst_write_story` 6/6,
+`tst_write_picture` 5/5, `tst_write_comments` 3/3, `tst_write_controls` 3/3.
+
+**Looked at** (`QQO_GRAB_DIR`): the shaded, bordered table at 1280 and 520
+px (pale and dark blue header rows, the double red rule, the dashed blue
+frame; at 520 the ribbon wraps its groups); the Table Design tab (shading
+slot, Shading, line style, pen colour, weight, Borders); a 70-row table
+with its header row repeated on page two; the Table Properties, Borders and
+Shading, Sort, Paragraph, Tabs and Font dialogs at both widths; the dotted
+leaders on the page and in the exported PDF; LibreOffice's PDF of the
+office_docx sample (dotted leader, double red box over pale yellow, dark
+blue header row, red dashed inner lines, thick blue outer frame).
+
+On the desktop (owner, Microsoft Word): open a Word document with a table in
+QindaWrite; shade its header row, give it a double bottom border and the
+table a thick outside border (Table Design); set right tab stops with dot
+leaders on two paragraphs (Format ▸ Tabs); give a paragraph a box and
+shading (Borders and Shading) and a word a double red underline (Font);
+save, open in Word — no repair prompt; the fill, borders, leaders, box,
+underline and table properties as set, every untouched cell as it was.
+
 ## M68 Books gates (D-077)
 
 Qualified on qinda (branch `m68-books-orders-time`, merged with

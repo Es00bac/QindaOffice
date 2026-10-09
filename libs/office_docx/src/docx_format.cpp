@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "docx_format.h"
 
+#include "docx_borders.h"
+#include "docx_paragraph_format.h"
 #include "docx_properties.h"
 #include "docx_styles.h"
 #include "ooxml_namespaces.h"
@@ -99,10 +101,6 @@ QTextCharFormat::UnderlineStyle underlineStyle(const QString &val)
     return QTextCharFormat::SingleUnderline; // single, words, double, thick
 }
 
-QString colorKey(const QBrush &brush, bool has)
-{
-    return has && brush.style() != Qt::NoBrush ? brush.color().name(QColor::HexArgb) : QString();
-}
 
 } // namespace
 
@@ -289,6 +287,29 @@ QTextBlockFormat blockFormatFromPPr(const XmlElement *pPr, const Ooxml::Theme &t
     if (onOff(pPr, u"bidi")) {
         f.setLayoutDirection(Qt::RightToLeft);
     }
+    // M70 (D-079): the Word values the formatting dialogs edit and the
+    // writer compares with the snapshot (docx_properties.h).
+    const XmlElement *spacing = pPr != nullptr ? pPr->child(kW, u"spacing") : nullptr;
+    f.setProperty(kParagraphSpacing,
+                  QVariantList{qRound(twipsAttr(spacing, u"before")), qRound(twipsAttr(spacing, u"after")),
+                               Units::parseOnOff(wAttr(spacing, u"beforeAutospacing"), false),
+                               Units::parseOnOff(wAttr(spacing, u"afterAutospacing"), false)});
+    if (onOff(pPr, u"contextualSpacing")) {
+        f.setProperty(kContextualSpacing, true);
+    }
+    if (const QString level = childVal(pPr, u"outlineLvl"); !level.isEmpty()) {
+        f.setProperty(kOutlineLevel, qBound(0, level.toInt(), 9));
+    }
+    if (const XmlElement *tabs = pPr != nullptr ? pPr->child(kW, u"tabs") : nullptr) {
+        if (const QList<TabStop> stops = readTabStops(tabs); !stops.isEmpty()) {
+            f.setProperty(kTabStops, tabStopsSpec(stops));
+        }
+    }
+    if (const XmlElement *pBdr = pPr != nullptr ? pPr->child(kW, u"pBdr") : nullptr) {
+        if (const WordBorders borders = readBorders(pBdr, theme); !borders.isEmpty()) {
+            setParagraphBorders(f, borders);
+        }
+    }
     return f;
 }
 
@@ -349,137 +370,30 @@ QTextCharFormat charFormatFromRPr(const XmlElement *rPr, const Ooxml::Theme &the
     if (!position.isEmpty() && position.toDouble() != 0 && halfPoints > 0) {
         f.setBaselineOffset(position.toDouble() / halfPoints * 100.0);
     }
+    // M70 (D-079): what Qt cannot draw is kept as Word wrote it (shown
+    // approximately: one underline, one strike line, hidden text shown).
+    static const QStringList kQtUnderlines{QStringLiteral("single"), QStringLiteral("dash"), QStringLiteral("dotted"),
+                                           QStringLiteral("dotDash"), QStringLiteral("dotDotDash"),
+                                           QStringLiteral("wave"), QStringLiteral("none")};
+    if (const QString uval = wAttr(u, u"val", u != nullptr ? QStringLiteral("single") : QString());
+        !uval.isEmpty() && !kQtUnderlines.contains(uval)) {
+        f.setProperty(kUnderlineWord, uval);
+    }
+    if (onOff(rPr, u"dstrike")) {
+        f.setProperty(kDoubleStrike, true);
+    }
+    if (onOff(rPr, u"vanish")) {
+        f.setProperty(kHiddenText, true);
+    }
+    if (const int kern = childVal(rPr, u"kern").toInt(); kern > 0) {
+        f.setProperty(kKerning, kern);
+    }
     return f;
 }
 
 QString paragraphBordersSpec(const XmlElement &pBdr, const Ooxml::Theme &theme)
 {
-    QStringList sides;
-    for (const XmlElement *side : pBdr.elements()) {
-        const QString val = wAttr(side, u"val", QStringLiteral("single"));
-        if (val == u"nil" || val == u"none") {
-            continue;
-        }
-        const QString name = side->name == u"start" ? QStringLiteral("left")
-            : side->name == u"end"                  ? QStringLiteral("right")
-                                                    : side->name;
-        if (name != u"top" && name != u"bottom" && name != u"left" && name != u"right" && name != u"between") {
-            continue;
-        }
-        // w:sz in eighths of a point, w:space in points.
-        const qreal width = qMax<qreal>(0.75, Units::ptToPx(wAttr(side, u"sz", QStringLiteral("4")).toDouble() / 8.0));
-        const QString style = val.startsWith(u"double") ? QStringLiteral("double")
-            : val.startsWith(u"dot")                    ? QStringLiteral("dot")
-            : val.startsWith(u"dash")                   ? QStringLiteral("dash")
-                                                        : QStringLiteral("solid");
-        QColor color = wordColor(side, theme, u"color");
-        if (!color.isValid()) {
-            color = Qt::black;
-        }
-        const qreal space = Units::ptToPx(wAttr(side, u"space", QStringLiteral("0")).toDouble());
-        sides.append(QStringLiteral("%1:%2:%3:%4:%5").arg(name).arg(width, 0, 'f', 2).arg(style, color.name()).arg(space, 0, 'f', 2));
-    }
-    return sides.join(QLatin1Char(';'));
-}
-
-QVariantMap blockSnapshot(const QTextBlockFormat &f)
-{
-    QStringList tabs;
-    for (const QTextOption::Tab &t : f.tabPositions()) {
-        tabs.append(QStringLiteral("%1:%2").arg(t.position, 0, 'f', 2).arg(int(t.type)));
-    }
-    return {
-        {QStringLiteral("align"), int(f.alignment() & Qt::AlignHorizontal_Mask)},
-        {QStringLiteral("left"), qRound(f.leftMargin() * 100)},
-        {QStringLiteral("right"), qRound(f.rightMargin() * 100)},
-        {QStringLiteral("indent"), qRound(f.textIndent() * 100)},
-        {QStringLiteral("top"), qRound(f.topMargin() * 100)},
-        {QStringLiteral("bottom"), qRound(f.bottomMargin() * 100)},
-        {QStringLiteral("lhType"), ownLineSpacing(f).type},
-        {QStringLiteral("lh"), qRound(ownLineSpacing(f).value * 100)},
-        {QStringLiteral("bg"), colorKey(f.background(), f.hasProperty(QTextFormat::BackgroundBrush))},
-        {QStringLiteral("break"), int(ownPageBreaks(f))},
-        {QStringLiteral("keep"), f.nonBreakableLines()},
-        {QStringLiteral("keepNext"), f.boolProperty(kKeepWithNext)},
-        {QStringLiteral("heading"), f.headingLevel()},
-        {QStringLiteral("tabs"), tabs.join(QLatin1Char(';'))},
-        {QStringLiteral("dir"), int(f.layoutDirection())},
-    };
-}
-
-QVariantMap charSnapshot(const QTextCharFormat &f)
-{
-    return {
-        {QStringLiteral("family"), f.hasProperty(QTextFormat::FontFamilies)
-                                       ? f.fontFamilies().toStringList().join(QLatin1Char('|'))
-                                       : QString()},
-        {QStringLiteral("size"), qRound(f.fontPointSize() * 100)},
-        {QStringLiteral("weight"), f.fontWeight()},
-        {QStringLiteral("italic"), f.fontItalic()},
-        {QStringLiteral("ustyle"), int(f.underlineStyle())},
-        {QStringLiteral("strike"), f.fontStrikeOut()},
-        {QStringLiteral("caps"), int(f.fontCapitalization())},
-        {QStringLiteral("fg"), colorKey(f.foreground(), f.hasProperty(QTextFormat::ForegroundBrush))},
-        {QStringLiteral("bg"), colorKey(f.background(), f.hasProperty(QTextFormat::BackgroundBrush))},
-        {QStringLiteral("valign"), int(f.verticalAlignment())},
-        {QStringLiteral("lspacing"), f.hasProperty(QTextFormat::FontLetterSpacing)
-                                         ? qRound(f.fontLetterSpacing() * 100)
-                                         : 0},
-        {QStringLiteral("stretch"), f.hasProperty(QTextFormat::FontStretch) ? f.fontStretch() : 0},
-        {QStringLiteral("baseline"), qRound(f.baselineOffset() * 100)},
-        {QStringLiteral("href"), f.anchorHref()},
-    };
-}
-
-qreal displayedPointSize(const QTextCharFormat &format, const QFont &defaultFont)
-{
-    if (format.fontPointSize() > 0) {
-        return format.fontPointSize();
-    }
-    if (!format.hasProperty(QTextFormat::FontSizeAdjustment)) {
-        return 0;
-    }
-    // AGENT-NOTE: the same table and index as QTextFormatPrivate::resolveFont
-    // (qtextformat.cpp, Qt 6): step 0 is the default size, +1 "large" ×1.2,
-    // +2 ×1.5 (Markdown "##"), +3 ×2 ("#"), -1 ×0.8, -2 ×0.7.
-    static constexpr qreal kScale[7] = {0.7, 0.8, 1.0, 1.2, 1.5, 2.0, 2.4};
-    const int step = qBound(0, format.intProperty(QTextFormat::FontSizeAdjustment) + 2, 6);
-    const qreal base = defaultFont.pointSizeF() > 0 ? defaultFont.pointSizeF() : 11.0;
-    return kScale[step] * base;
-}
-
-QString wordFontFamily(const QString &family)
-{
-    const QString key = family.trimmed().toLower().remove(QLatin1Char(' ')).remove(QLatin1Char('-'));
-    if (key == u"sansserif" || key == u"sans" || key == u"systemui" || key == u"uisansserif") {
-        return QStringLiteral("Calibri");
-    }
-    if (key == u"serif" || key == u"uiserif") {
-        return QStringLiteral("Times New Roman");
-    }
-    if (key == u"monospace" || key == u"mono" || key == u"uimonospace") {
-        return QStringLiteral("Courier New");
-    }
-    return family;
-}
-
-QTextFormat::PageBreakFlags ownPageBreaks(const QTextBlockFormat &format)
-{
-    if (format.hasProperty(kSyntheticBreak)) {
-        return QTextFormat::PageBreakFlags(format.intProperty(kSyntheticBreak));
-    }
-    return format.pageBreakPolicy();
-}
-
-LineSpacing ownLineSpacing(const QTextBlockFormat &format)
-{
-    if (format.lineHeightType() == QTextBlockFormat::LineDistanceHeight && format.hasProperty(kLineSpacingOwn)) {
-        const QVariantList own = format.property(kLineSpacingOwn).toList();
-        if (own.size() == 2) {
-            return {own.at(0).toInt(), own.at(1).toReal()};
-        }
-    }
-    return {format.lineHeightType(), format.lineHeight()};
+    return paragraphDisplaySpec(readBorders(&pBdr, theme));
 }
 
 } // namespace QindaOffice::Docx

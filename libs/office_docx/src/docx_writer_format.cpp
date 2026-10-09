@@ -5,6 +5,7 @@
 
 #include "docx_format.h"
 #include "docx_properties.h"
+#include "docx_text.h"
 #include "docx_writer_p.h"
 #include "ooxml_namespaces.h"
 #include "ooxml_theme.h"
@@ -253,7 +254,7 @@ XmlElementPtr BodyWriter::paragraphProperties(const QTextBlock &block)
             shd.setAttribute(kW, QStringLiteral("fill"), has ? hex(bf.background().color()) : QStringLiteral("auto"));
         }
     }
-    if (changed("tabs") || (changed("left") && !bf.tabPositions().isEmpty())) {
+    if (!bf.hasProperty(kTabStops) && (changed("tabs") || (changed("left") && !bf.tabPositions().isEmpty()))) {
         pPr->removeChildren(kW, u"tabs");
         if (!bf.tabPositions().isEmpty()) {
             XmlElement &tabs = wChild(*pPr, QStringLiteral("tabs"));
@@ -274,33 +275,7 @@ XmlElementPtr BodyWriter::paragraphProperties(const QTextBlock &block)
             wChild(*pPr, QStringLiteral("bidi"));
         }
     }
-    if (changed("top") || changed("bottom") || changed("lh") || changed("lhType")) {
-        XmlElement &spacing = wChild(*pPr, QStringLiteral("spacing"));
-        if (!imported || changed("top")) {
-            spacing.removeAttribute(kW, u"beforeAutospacing").removeAttribute(kW, u"beforeLines");
-            spacing.setAttribute(kW, QStringLiteral("before"), twips(bf.topMargin()));
-        }
-        if (!imported || changed("bottom")) {
-            spacing.removeAttribute(kW, u"afterAutospacing").removeAttribute(kW, u"afterLines");
-            spacing.setAttribute(kW, QStringLiteral("after"), twips(bf.bottomMargin()));
-        }
-        if (!imported || changed("lh") || changed("lhType")) {
-            const LineSpacing own = ownLineSpacing(bf);
-            QString line = QStringLiteral("240");
-            QString rule = QStringLiteral("auto");
-            if (own.type == QTextBlockFormat::ProportionalHeight) {
-                line = QString::number(qRound(own.value * 2.4));
-            } else if (own.type == QTextBlockFormat::FixedHeight) {
-                line = twips(own.value);
-                rule = QStringLiteral("exact");
-            } else if (own.type == QTextBlockFormat::MinimumHeight) {
-                line = twips(own.value);
-                rule = QStringLiteral("atLeast");
-            }
-            spacing.setAttribute(kW, QStringLiteral("line"), line);
-            spacing.setAttribute(kW, QStringLiteral("lineRule"), rule);
-        }
-    }
+    writeParagraphSpacing(*pPr, bf, imported, changed);
     const bool inList = block.textList() != nullptr;
     if (changed("left") || changed("right") || (changed("indent") && !inList)) {
         const qreal listIndent = inList ? block.textList()->format().indent() * m_document->indentWidth() : 0.0;
@@ -330,11 +305,20 @@ XmlElementPtr BodyWriter::paragraphProperties(const QTextBlock &block)
             setChildVal(*pPr, QStringLiteral("jc"), jc);
         }
     }
-    if (!imported && bf.headingLevel() > 0 && styleId.isEmpty()) {
+    writeParagraphExtras(*pPr, bf, imported, changed, m_env.sourceStyles, styleId);
+    if (!imported && bf.headingLevel() > 0 && styleId.isEmpty() && !bf.hasProperty(kOutlineLevel)) {
         setChildVal(*pPr, QStringLiteral("outlineLvl"), QString::number(bf.headingLevel() - 1));
     }
     if (!imported && pPr->child(kW, u"rPr") == nullptr) {
-        if (XmlElementPtr mark = runProperties(block.charFormat())) {
+        // A cell's first paragraph shares its char format with the cell.
+        QTextCharFormat markFormat = block.charFormat();
+        if (const QTextTable *table = QTextCursor(block).currentTable()) {
+            const QTextTableCell cell = table->cellAt(block.position());
+            if (cell.isValid() && cell.firstCursorPosition().block() == block) {
+                markFormat = withoutCellProperties(markFormat, cell.format());
+            }
+        }
+        if (XmlElementPtr mark = runProperties(markFormat)) {
             mark->name = QStringLiteral("rPr");
             pPr->appendElement(mark);
         }
@@ -436,23 +420,6 @@ XmlElementPtr BodyWriter::runProperties(const QTextCharFormat &f)
             }
         }
     }
-    if (changed("ustyle") && !(insertMark && f.underlineStyle() == QTextCharFormat::SingleUnderline)) {
-        rPr->removeChildren(kW, u"u");
-        static const QHash<int, QString> kNames{
-            {QTextCharFormat::SingleUnderline, QStringLiteral("single")},
-            {QTextCharFormat::DashUnderline, QStringLiteral("dash")},
-            {QTextCharFormat::DotLine, QStringLiteral("dotted")},
-            {QTextCharFormat::DashDotLine, QStringLiteral("dotDash")},
-            {QTextCharFormat::DashDotDotLine, QStringLiteral("dotDotDash")},
-            {QTextCharFormat::WaveUnderline, QStringLiteral("wave")},
-            {QTextCharFormat::SpellCheckUnderline, QStringLiteral("single")}};
-        const QString u = kNames.value(f.underlineStyle());
-        if (!u.isEmpty()) {
-            setChildVal(*rPr, QStringLiteral("u"), u);
-        } else if (imported) {
-            setChildVal(*rPr, QStringLiteral("u"), QStringLiteral("none"));
-        }
-    }
     if (changed("valign")) {
         rPr->removeChildren(kW, u"vertAlign");
         const auto v = f.verticalAlignment();
@@ -479,12 +446,16 @@ XmlElementPtr BodyWriter::runProperties(const QTextCharFormat &f)
     }
     if (changed("baseline")) {
         rPr->removeChildren(kW, u"position");
-        if (const qreal points = displayedPointSize(f, m_document->defaultFont());
+        // A run without a size of its own is raised against the document's.
+        if (const qreal points = displayedPointSize(f, m_document->defaultFont()) > 0
+                ? displayedPointSize(f, m_document->defaultFont())
+                : m_document->defaultFont().pointSizeF();
             f.baselineOffset() != 0 && points > 0) {
             setChildVal(*rPr, QStringLiteral("position"),
                         QString::number(qRound(f.baselineOffset() / 100.0 * points * 2)));
         }
     }
+    writeRunExtras(*rPr, f, imported, changed, insertMark);
     sortChildren(*rPr);
     return rPr->children.isEmpty() ? nullptr : rPr;
 }

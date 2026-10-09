@@ -26,6 +26,13 @@ namespace QindaOffice::Docx {
 // not, and wiped imported cell shading when a style was applied).
 void setBlockCharFormatKeepingCell(QTextCursor &cursor, const QTextCharFormat &format);
 
+// The reverse: a character format read where Qt keeps a table cell's own
+// format (a cell's first block's char format, a cursor at the cell's start)
+// without what belongs to the cell — its shading (when `cell` has the same),
+// borders, padding, spans, vertical alignment and Word cell markup (M70:
+// typing into a shaded cell, and a cell paragraph's mark, took the shading).
+[[nodiscard]] QTextCharFormat withoutCellProperties(QTextCharFormat format, const QTextCharFormat &cell);
+
 // Stores `bytes` in `media` under a fresh "qwmedia:imageN.ext" name,
 // registers the decoded image with `document`, and returns the name; empty
 // when the bytes are not an image Qt can decode.

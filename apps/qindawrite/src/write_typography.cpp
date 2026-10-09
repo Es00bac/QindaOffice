@@ -5,6 +5,10 @@
 #include "page_text_control.h"
 #include "standard_actions.h"
 #include "write_document.h"
+#include "write_selection.h"
+
+#include "docx_format.h"
+#include "docx_metrics.h"
 
 #include <QDateTime>
 #include <QLocale>
@@ -136,11 +140,16 @@ void WriteTypography::applyLineSpacing(qreal percent)
         return;
     }
     QTextCursor cursor = m_control->textCursor();
-    QTextBlockFormat format;
     // ProportionalHeight is a percentage of the line's natural height, which
-    // is what "1.5 lines" means everywhere else.
-    format.setLineHeight(percent, QTextBlockFormat::ProportionalHeight);
-    cursor.mergeBlockFormat(format);
+    // is what "1.5 lines" means everywhere else; a paragraph read from Word
+    // keeps Word's line metrics (docx_metrics.h, as the Paragraph dialog).
+    cursor.beginEditBlock();
+    for (const QTextBlock &block : selectedBlocks(cursor)) {
+        QTextBlockFormat format = block.blockFormat();
+        Docx::setWordLineSpacing(format, block, QTextBlockFormat::ProportionalHeight, percent);
+        QTextCursor(block).setBlockFormat(format);
+    }
+    cursor.endEditBlock();
     m_document->setDirty(true);
     syncFromCursor();
 }
@@ -277,9 +286,8 @@ void WriteTypography::syncFromCursor()
     m_superscript->setChecked(format.verticalAlignment() == QTextCharFormat::AlignSuperScript);
     m_subscript->setChecked(format.verticalAlignment() == QTextCharFormat::AlignSubScript);
     const QTextBlockFormat block = m_control->textCursor().blockFormat();
-    const qreal spacing = block.lineHeightType() == QTextBlockFormat::ProportionalHeight
-        ? block.lineHeight()
-        : 100.0;
+    const Docx::LineSpacing own = Docx::ownLineSpacing(block);
+    const qreal spacing = own.type == QTextBlockFormat::ProportionalHeight ? own.value : 100.0;
     if (spacing >= 190) {
         m_spacingDouble->setChecked(true);
     } else if (spacing >= 140) {

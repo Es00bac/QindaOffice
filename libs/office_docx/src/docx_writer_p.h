@@ -119,6 +119,27 @@ private:
 // the last known one.
 void sortChildren(Ooxml::XmlElement &element);
 
+// M70 (D-079) re-derivations of the Word values Qt's formats cannot hold
+// (docx_writer_paragraph.cpp). `changed(key)` is the caller's snapshot
+// comparison (true for content Word did not write).
+using ChangedFn = std::function<bool(const char *)>;
+void writeParagraphSpacing(Ooxml::XmlElement &pPr, const QTextBlockFormat &format, bool imported,
+                           const ChangedFn &changed);
+void writeParagraphExtras(Ooxml::XmlElement &pPr, const QTextBlockFormat &format, bool imported,
+                          const ChangedFn &changed, const StyleSheet &styles, const QString &styleId);
+void writeRunExtras(Ooxml::XmlElement &rPr, const QTextCharFormat &format, bool imported, const ChangedFn &changed,
+                    bool insertMark);
+
+// Table property re-derivations (docx_writer_table_props.cpp): w:tblPr
+// against the table snapshot, w:trPr from the row's first cell, w:tcPr's
+// borders and margins, and a cell's w:tcW from the column constraints.
+void writeTableProperties(Ooxml::XmlElement &tblPr, const QTextTableFormat &format, const QVariantMap &snapshot,
+                          bool imported);
+void writeRowProperties(Ooxml::XmlElement &trPr, const QTextCharFormat &anchor);
+void writeCellProperties(Ooxml::XmlElement &tcPr, const QTextTableCellFormat &format, bool imported);
+void writeCellWidth(Ooxml::XmlElement &tcPr, const QTextTable *table, int column, int span,
+                    const QList<qreal> &widthsPx);
+
 // Styles the writer may need in a document that lacks them (docx_writer_styles.cpp).
 [[nodiscard]] Ooxml::XmlElementPtr builtInStyle(const QString &styleId);
 [[nodiscard]] QString builtInStyleId(int writeStyleId);

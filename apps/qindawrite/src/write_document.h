@@ -96,6 +96,11 @@ public:
     [[nodiscard]] QString activeComment() const { return m_activeComment; }
     void setActiveComment(const QString &id);
 
+    // ---- default tab stops (Format ▸ Tabs, M70) ----------------------------------------
+    // Word's w:defaultTabStop in document px: the body's tab distance and
+    // what the .docx writer puts in settings.xml.
+    void setDefaultTabStop(qreal px);
+
     // ---- pictures ----------------------------------------------------------------------
     // Stores the bytes with the document and returns the resource name the
     // QTextImageFormat must carry; empty when the bytes are not an image.

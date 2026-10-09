@@ -3,6 +3,8 @@
 
 #include <QFile>
 
+#include "docx_properties.h"
+#include "docx_table_format.h"
 #include "menu_tree.h"
 #include "page_text_control.h"
 #include "write_document.h"
@@ -73,6 +75,9 @@ FormatController::FormatController(PageTextControl *control, WriteDocument *docu
     toggleFormat(m_actions.underline, [](bool on) {
         QTextCharFormat f;
         f.setFontUnderline(on);
+        // A Word underline Qt cannot draw (double, thick…) is not what
+        // Ctrl+U turns back on: Word's toggle gives a single line.
+        f.setProperty(Docx::kUnderlineWord, QString());
         return f;
     });
     toggleFormat(m_actions.strikeOut, [](bool on) {
@@ -228,13 +233,16 @@ void FormatController::clearDirectFormatting()
 
 void FormatController::insertTableAtCursor(int rows, int columns)
 {
+    // Word's Insert Table (M70, D-079): Table Grid's 0.5 pt lines, equal
+    // fixed columns across the text column, 0.08 in cell margins — the
+    // model the border, shading and layout commands work on.
     QTextCursor cursor = m_control->textCursor();
-    QTextTableFormat format;
-    format.setBorder(1);
-    format.setCellSpacing(2);
-    format.setCellPadding(4);
-    format.setWidth(QTextLength(QTextLength::PercentageLength, 100));
-    QTextTable *table = cursor.insertTable(qBound(1, rows, 200), qBound(1, columns, 20), format);
+    columns = qBound(1, columns, 63);
+    cursor.beginEditBlock();
+    QTextTable *table = cursor.insertTable(qBound(1, rows, 200), columns,
+                                           Docx::newWordTableFormat(columns, m_document->contentWidth()));
+    Docx::initWordTable(table);
+    cursor.endEditBlock();
     // Leave the cursor inside the first cell so table-scoped commands
     // enable immediately.
     m_control->setTextCursor(table->cellAt(0, 0).firstCursorPosition());

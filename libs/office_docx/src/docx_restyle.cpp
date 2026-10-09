@@ -2,10 +2,12 @@
 #include "docx_restyle.h"
 
 #include "docx_format.h"
+#include "docx_paragraph_format.h"
 #include "docx_properties.h"
 #include "docx_text.h"
 #include "ooxml_namespaces.h"
 #include "ooxml_package.h"
+#include "ooxml_units.h"
 
 #include <QSet>
 #include <QTextBlock>
@@ -14,6 +16,7 @@
 #include <QTextFragment>
 #include <QTextFrame>
 #include <QTextList>
+#include <QTextTable>
 
 namespace QindaOffice::Docx {
 
@@ -48,6 +51,25 @@ bool keptOnRestyle(const XmlElement &child)
     return child.ns == kW && kKept.contains(child.name);
 }
 
+// A paragraph's own spacing: what the Paragraph dialog set (M70,
+// kParagraphSpacing), else its style chain and markup.
+ParagraphSpacing spacingFor(const StyleSheet &styles, const QTextBlockFormat &format)
+{
+    if (format.hasProperty(kParagraphSpacing)) {
+        const OwnSpacing s = ownSpacing(format);
+        ParagraphSpacing out;
+        out.autoBefore = s.autoBefore;
+        out.autoAfter = s.autoAfter;
+        out.before = s.autoBefore ? Ooxml::Units::ptToPx(14) : Ooxml::Units::twipsToPx(s.before);
+        out.after = s.autoAfter ? Ooxml::Units::ptToPx(14) : Ooxml::Units::twipsToPx(s.after);
+        out.contextual = s.contextual;
+        return out;
+    }
+    const QString styleId = format.stringProperty(kParagraphStyleId);
+    const XmlElementPtr direct = Ooxml::parseFragment(format.stringProperty(kParagraphXml));
+    return spacingOf(mergeProperties(styles.paragraphProperties(styleId).get(), direct.get()).get());
+}
+
 // Word's added spacing between `block` and the paragraph before it, the way
 // the reader folds it (docx_reader_body.cpp, readParagraph); for a block
 // that starts its frame, or follows one Write made, just its own "before".
@@ -55,19 +77,18 @@ qreal foldedTop(const StyleSheet &styles, const QTextBlock &block)
 {
     const QTextBlockFormat format = block.blockFormat();
     const QString styleId = format.stringProperty(kParagraphStyleId);
-    const XmlElementPtr direct = Ooxml::parseFragment(format.stringProperty(kParagraphXml));
-    const ParagraphSpacing own = spacingOf(mergeProperties(styles.paragraphProperties(styleId).get(), direct.get()).get());
+    const ParagraphSpacing own = spacingFor(styles, format);
     const QTextBlock previous = block.previous();
     const QTextBlockFormat before = previous.isValid() ? previous.blockFormat() : QTextBlockFormat();
+    const QTextTable *table = QTextCursor(block).currentTable();
     const bool sameFrame = previous.isValid()
-        && QTextCursor(previous).currentFrame() == QTextCursor(block).currentFrame();
+        && QTextCursor(previous).currentFrame() == QTextCursor(block).currentFrame()
+        && (table == nullptr || table->cellAt(previous.position()) == table->cellAt(block.position()));
     if (!sameFrame || !before.hasProperty(kParagraphSnapshot) || before.boolProperty(kParagraphSynthetic)) {
         return own.before;
     }
     const QString previousStyle = before.stringProperty(kParagraphStyleId);
-    const XmlElementPtr previousDirect = Ooxml::parseFragment(before.stringProperty(kParagraphXml));
-    const ParagraphSpacing prior =
-        spacingOf(mergeProperties(styles.paragraphProperties(previousStyle).get(), previousDirect.get()).get());
+    const ParagraphSpacing prior = spacingFor(styles, before);
     const bool sameStyle = previousStyle == styleId;
     return ((own.contextual && sameStyle) ? 0.0 : own.before) + ((prior.contextual && sameStyle) ? 0.0 : prior.after);
 }

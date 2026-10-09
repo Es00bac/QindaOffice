@@ -16,6 +16,10 @@
 #include "standard_actions.h"
 #include "style_catalog.h"
 #include "table_actions.h"
+#include "table_layout.h"
+#include "write_borders.h"
+#include "write_font.h"
+#include "write_paragraph.h"
 #include "template_loader.h"
 #include "write_comments.h"
 #include "write_controls.h"
@@ -78,14 +82,22 @@ void WriteHost::insertMenus()
     formatItems.append(MenuNode::action(m_picture->id()));
     formatItems.append(MenuNode::separator());
     formatItems += m_typography->formatMenuItems();
+    // M70 (D-079): Word's Font, Paragraph, Tabs, Borders and Shading.
+    formatItems.append(MenuNode::separator());
+    formatItems += m_font->menuItems();
+    formatItems += m_paragraph->menuItems();
+    formatItems += m_borders->menuItems();
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("formatMenu"), tr("F&ormat"), formatItems));
 
+    QList<MenuNode> tableItems = m_tables->tableMenuItems();
+    tableItems.append(MenuNode::separator());
+    tableItems += m_tableLayout->tableMenuItems();
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
-                           MenuNode::submenu(QStringLiteral("tableMenu"), tr("&Table"),
-                                             m_tables->tableMenuItems()));
+                           MenuNode::submenu(QStringLiteral("tableMenu"), tr("&Table"), tableItems));
 
     QList<MenuNode> insertItems = m_format->insertMenuItems();
+    insertItems.append(MenuNode::action(m_tableLayout->textToTableId()));
     insertItems.append(MenuNode::separator());
     insertItems += m_typography->insertMenuItems();
     insertItems.append(MenuNode::separator());
@@ -262,6 +274,26 @@ QObject *WriteHost::controlsObject() const
     return m_controls;
 }
 
+QObject *WriteHost::bordersObject() const
+{
+    return m_borders;
+}
+
+QObject *WriteHost::paragraphObject() const
+{
+    return m_paragraph;
+}
+
+QObject *WriteHost::fontObject() const
+{
+    return m_font;
+}
+
+QObject *WriteHost::tableLayoutObject() const
+{
+    return m_tableLayout;
+}
+
 // Review > New Comment, Delete Comment, Previous / Next Comment, Show
 // Comments (write_comments.h); the pane itself is QML (CommentsPanel.qml).
 QList<MenuNode> WriteHost::commentMenuItems()
@@ -369,6 +401,12 @@ QVariantMap WriteHost::contextMenuNode() const
     }
     children.append(MenuNode::separator());
     children.append(MenuNode::action(QString::fromLatin1(ActionId::kEditSelectAll)));
+    // Word's context menu: Font…, Paragraph…, and in a table its properties.
+    children.append(MenuNode::separator());
+    for (const QString &id : {m_font->fontId(), m_paragraph->paragraphId(), QStringLiteral("writeBordersShadingAction"),
+                              QStringLiteral("writeTablePropertiesAction")}) {
+        children.append(MenuNode::action(id));
+    }
     return MenuNode::submenu(QStringLiteral("writePageContextMenu"), QString(), children).toVariant();
 }
 

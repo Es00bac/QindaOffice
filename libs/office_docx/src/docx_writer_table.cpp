@@ -4,7 +4,9 @@
 // .docx keep their w:tblPr / w:tblGrid / w:trPr / w:tcPr markup; merge
 // structure and changed properties are re-derived from the QTextTable.
 
+#include "docx_borders.h"
 #include "docx_properties.h"
+#include "docx_table_format.h"
 #include "docx_writer_p.h"
 #include "ooxml_namespaces.h"
 #include "ooxml_units.h"
@@ -102,25 +104,34 @@ void BodyWriter::writeTable(const QTextTable *table, XmlElement &container)
     if (!imported) {
         setChildVal(*tblPr, QStringLiteral("tblStyle"), QStringLiteral("TableGrid"));
         m_env.usedStyles.insert(QStringLiteral("TableGrid"));
-        XmlElement &w = wChild(*tblPr, QStringLiteral("tblW"));
-        const QTextLength width = tf.width();
-        if (width.type() == QTextLength::PercentageLength) {
-            w.setAttribute(kW, QStringLiteral("w"), QString::number(qRound(width.rawValue() * 50)));
-            w.setAttribute(kW, QStringLiteral("type"), QStringLiteral("pct"));
-        } else {
-            w.setAttribute(kW, QStringLiteral("w"), QStringLiteral("0"));
-            w.setAttribute(kW, QStringLiteral("type"), QStringLiteral("auto"));
+        // A table with Word's model (docx_table_format.h) says its width,
+        // borders and margins itself; one from HTML or an older Write
+        // keeps Qt's frame border and padding.
+        if (!tf.hasProperty(kTableWidth)) {
+            XmlElement &w = wChild(*tblPr, QStringLiteral("tblW"));
+            const QTextLength width = tf.width();
+            if (width.type() == QTextLength::PercentageLength) {
+                w.setAttribute(kW, QStringLiteral("w"), QString::number(qRound(width.rawValue() * 50)));
+                w.setAttribute(kW, QStringLiteral("type"), QStringLiteral("pct"));
+            } else {
+                w.setAttribute(kW, QStringLiteral("w"), QStringLiteral("0"));
+                w.setAttribute(kW, QStringLiteral("type"), QStringLiteral("auto"));
+            }
         }
-        XmlElement &borders = wChild(*tblPr, QStringLiteral("tblBorders"));
-        for (const char *side : {"top", "left", "bottom", "right", "insideH", "insideV"}) {
-            setBorder(borders, QString::fromLatin1(side), tf.border(), tf.borderBrush(),
-                      tf.border() > 0 ? QTextFrameFormat::BorderStyle_Solid : QTextFrameFormat::BorderStyle_None);
+        if (!tf.hasProperty(kTableBorders)) {
+            XmlElement &borders = wChild(*tblPr, QStringLiteral("tblBorders"));
+            for (const char *side : {"top", "left", "bottom", "right", "insideH", "insideV"}) {
+                setBorder(borders, QString::fromLatin1(side), tf.border(), tf.borderBrush(),
+                          tf.border() > 0 ? QTextFrameFormat::BorderStyle_Solid : QTextFrameFormat::BorderStyle_None);
+            }
         }
-        XmlElement &margins = wChild(*tblPr, QStringLiteral("tblCellMar"));
-        for (const char *side : {"left", "right"}) {
-            XmlElement &m = wChild(margins, QString::fromLatin1(side));
-            m.setAttribute(kW, QStringLiteral("w"), twips(qMax<qreal>(tf.cellPadding(), 0)));
-            m.setAttribute(kW, QStringLiteral("type"), QStringLiteral("dxa"));
+        if (!tf.hasProperty(kTableCellMargins)) {
+            XmlElement &margins = wChild(*tblPr, QStringLiteral("tblCellMar"));
+            for (const char *side : {"left", "right"}) {
+                XmlElement &m = wChild(margins, QString::fromLatin1(side));
+                m.setAttribute(kW, QStringLiteral("w"), twips(qMax<qreal>(tf.cellPadding(), 0)));
+                m.setAttribute(kW, QStringLiteral("type"), QStringLiteral("dxa"));
+            }
         }
         XmlElement &look = wChild(*tblPr, QStringLiteral("tblLook"));
         look.setAttribute(kW, QStringLiteral("val"), QStringLiteral("04A0"));
@@ -133,21 +144,18 @@ void BodyWriter::writeTable(const QTextTable *table, XmlElement &container)
     } else if (const XmlElement *style = tblPr->child(kW, u"tblStyle")) {
         m_env.usedStyles.insert(style->attr(u"val"));
     }
-    if (!imported || snapshot.value(QStringLiteral("align")).toInt() != int(tf.alignment())) {
-        tblPr->removeChildren(kW, u"jc");
-        const Qt::Alignment a = tf.alignment() & Qt::AlignHorizontal_Mask;
-        if (a == Qt::AlignHCenter || a == Qt::AlignRight || imported) {
-            setChildVal(*tblPr, QStringLiteral("jc"),
-                        a == Qt::AlignHCenter ? QStringLiteral("center")
-                            : a == Qt::AlignRight ? QStringLiteral("right")
-                                                  : QStringLiteral("left"));
-        }
-    }
+    writeTableProperties(*tblPr, tf, snapshot, imported);
     sortChildren(*tblPr);
     tbl.appendElement(tblPr);
 
+    QStringList gridTwips;
+    for (const qreal w : widths) {
+        gridTwips.append(twips(w));
+    }
+    const bool gridChanged = !imported || snapshot.value(QStringLiteral("columns")).toInt() != columns
+        || snapshot.value(QStringLiteral("grid")).toString() != gridTwips.join(QLatin1Char(','));
     XmlElementPtr grid = Ooxml::parseFragment(tf.stringProperty(kTableGridXml));
-    if (!grid || snapshot.value(QStringLiteral("columns")).toInt() != columns) {
+    if (!grid || gridChanged) {
         grid = std::make_shared<XmlElement>(kW, QStringLiteral("tblGrid"));
         for (const qreal w : widths) {
             grid->appendElement(kW, QStringLiteral("gridCol")).setAttribute(kW, QStringLiteral("w"), twips(w));
@@ -158,8 +166,9 @@ void BodyWriter::writeTable(const QTextTable *table, XmlElement &container)
     const int headerRows = tf.headerRowCount();
     for (int r = 0; r < rows; ++r) {
         XmlElement &tr = tbl.appendElement(kW, QStringLiteral("tr"));
-        const QTextTableCell first = table->cellAt(r, 0);
-        XmlElementPtr trPr = first.row() == r ? Ooxml::parseFragment(first.format().stringProperty(kRowXml)) : nullptr;
+        // The row's properties ride on its first cell (rowAnchor).
+        const QTextTableCell first = rowAnchor(table, r);
+        XmlElementPtr trPr = first.isValid() ? Ooxml::parseFragment(first.format().stringProperty(kRowXml)) : nullptr;
         if (!trPr) {
             trPr = std::make_shared<XmlElement>(kW, QStringLiteral("trPr"));
         }
@@ -171,6 +180,9 @@ void BodyWriter::writeTable(const QTextTable *table, XmlElement &container)
         trPr->removeChildren(kW, u"tblHeader");
         if (r < headerRows) {
             wChild(*trPr, QStringLiteral("tblHeader"));
+        }
+        if (first.isValid()) {
+            writeRowProperties(*trPr, first.format());
         }
         sortChildren(*trPr);
         if (!trPr->children.isEmpty()) {
@@ -185,10 +197,6 @@ void BodyWriter::writeTable(const QTextTable *table, XmlElement &container)
                 continue;
             }
             const int span = qMax(1, qMin(cell.columnSpan(), columns - c));
-            qreal width = 0;
-            for (int k = c; k < c + span && k < widths.size(); ++k) {
-                width += widths.at(k);
-            }
             XmlElement &tc = tr.appendElement(kW, QStringLiteral("tc"));
             const QTextTableCellFormat cf = cell.format().toTableCellFormat();
             XmlElementPtr tcPr = Ooxml::parseFragment(cf.stringProperty(kCellXml));
@@ -196,23 +204,35 @@ void BodyWriter::writeTable(const QTextTable *table, XmlElement &container)
             if (!tcPr) {
                 tcPr = std::make_shared<XmlElement>(kW, QStringLiteral("tcPr"));
             }
-            XmlElement &w = wChild(*tcPr, QStringLiteral("tcW"));
-            w.attributes.clear();
-            w.setAttribute(kW, QStringLiteral("w"), twips(width));
-            w.setAttribute(kW, QStringLiteral("type"), QStringLiteral("dxa"));
-            tcPr->removeChildren(kW, u"gridSpan");
-            tcPr->removeChildren(kW, u"hMerge");
-            tcPr->removeChildren(kW, u"vMerge");
-            if (span > 1) {
-                setChildVal(*tcPr, QStringLiteral("gridSpan"), QString::number(span));
-            }
-            const bool continuation = cell.row() != r;
-            if (continuation) {
-                wChild(*tcPr, QStringLiteral("vMerge"));
-            } else if (cell.rowSpan() > 1) {
-                setChildVal(*tcPr, QStringLiteral("vMerge"), QStringLiteral("restart"));
-            }
             const QVariantMap cellSnapshot = cf.property(kCellSnapshot).toMap();
+            // An untouched cell keeps its own w:tcW (pct, auto, …) while the
+            // grid and its span are as read.
+            if (!cellImported || gridChanged || cellSnapshot.value(QStringLiteral("span")).toInt() != span) {
+                writeCellWidth(*tcPr, table, c, span, widths);
+            }
+            // Merges are re-derived; the source spelling stays when it says
+            // the same (w:vMerge w:val="continue" is the bare w:vMerge).
+            const XmlElement *oldMerge = tcPr->child(kW, u"vMerge");
+            const QString oldMergeVal = oldMerge != nullptr ? wAttr(oldMerge, u"val", QStringLiteral("continue")) : QString();
+            const bool continuation = cell.row() != r;
+            const QString mergeVal = continuation ? QStringLiteral("continue")
+                : cell.rowSpan() > 1             ? QStringLiteral("restart")
+                                                 : QString();
+            if (mergeVal != oldMergeVal) {
+                tcPr->removeChildren(kW, u"vMerge");
+                if (continuation) {
+                    wChild(*tcPr, QStringLiteral("vMerge"));
+                } else if (!mergeVal.isEmpty()) {
+                    setChildVal(*tcPr, QStringLiteral("vMerge"), mergeVal);
+                }
+            }
+            if (childVal(tcPr.get(), u"gridSpan", QStringLiteral("1")).toInt() != span) {
+                tcPr->removeChildren(kW, u"gridSpan");
+                if (span > 1) {
+                    setChildVal(*tcPr, QStringLiteral("gridSpan"), QString::number(span));
+                }
+            }
+            tcPr->removeChildren(kW, u"hMerge");
             const QString bg = cf.hasProperty(QTextFormat::BackgroundBrush) ? cf.background().color().name() : QString();
             if (!cellImported || cellSnapshot.value(QStringLiteral("bg")).toString() != bg) {
                 tcPr->removeChildren(kW, u"shd");
@@ -233,7 +253,9 @@ void BodyWriter::writeTable(const QTextTable *table, XmlElement &container)
                                                                         : QStringLiteral("top"));
                 }
             }
-            if (!cellImported && (cf.topBorder() > 0 || cf.leftBorder() > 0 || cf.bottomBorder() > 0 || cf.rightBorder() > 0)) {
+            writeCellProperties(*tcPr, cf, cellImported);
+            if (!cellImported && !cf.hasProperty(kCellBorders)
+                && (cf.topBorder() > 0 || cf.leftBorder() > 0 || cf.bottomBorder() > 0 || cf.rightBorder() > 0)) {
                 XmlElement &borders = wChild(*tcPr, QStringLiteral("tcBorders"));
                 setBorder(borders, QStringLiteral("top"), cf.topBorder(), cf.topBorderBrush(), cf.topBorderStyle());
                 setBorder(borders, QStringLiteral("left"), cf.leftBorder(), cf.leftBorderBrush(), cf.leftBorderStyle());

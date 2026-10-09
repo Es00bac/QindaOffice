@@ -37,6 +37,16 @@ add_library(office_docx STATIC
     src/docx_writer_p.h
     src/docx_writer_styles.cpp
     src/docx_writer_table.cpp
+    src/docx_writer_table_props.cpp
+    src/docx_writer_paragraph.cpp
+    src/docx_borders.cpp
+    src/docx_borders.h
+    src/docx_format_snapshot.cpp
+    src/docx_paragraph_format.cpp
+    src/docx_paragraph_format.h
+    src/docx_table_format.cpp
+    src/docx_table_format.h
+    src/docx_table_props.cpp
 )
 
 target_include_directories(office_docx

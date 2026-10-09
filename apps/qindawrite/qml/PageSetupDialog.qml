@@ -106,24 +106,24 @@ Tk.Dialog {
             label: qsTr("Top / bottom")
             Tk.Flex {
                 gap: Tk.Theme.space.sm
-                Tk.NumberField { id: top; objectName: "pageMarginTop"; from: 0; to: 10; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix }
-                Tk.NumberField { id: bottom; objectName: "pageMarginBottom"; from: 0; to: 10; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix }
+                Tk.NumberField { id: top; objectName: "pageMarginTop"; from: 0; to: 10; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix; onValueModified: function(v) { value = v } }
+                Tk.NumberField { id: bottom; objectName: "pageMarginBottom"; from: 0; to: 10; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix; onValueModified: function(v) { value = v } }
             }
         }
         Tk.PropertyRow {
             label: qsTr("Left / right")
             Tk.Flex {
                 gap: Tk.Theme.space.sm
-                Tk.NumberField { id: left; objectName: "pageMarginLeft"; from: 0; to: 10; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix }
-                Tk.NumberField { id: right; objectName: "pageMarginRight"; from: 0; to: 10; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix }
+                Tk.NumberField { id: left; objectName: "pageMarginLeft"; from: 0; to: 10; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix; onValueModified: function(v) { value = v } }
+                Tk.NumberField { id: right; objectName: "pageMarginRight"; from: 0; to: 10; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix; onValueModified: function(v) { value = v } }
             }
         }
         Tk.PropertyRow {
             label: qsTr("Header / footer from edge")
             Tk.Flex {
                 gap: Tk.Theme.space.sm
-                Tk.NumberField { id: headerDistance; objectName: "pageHeaderDistance"; from: 0; to: 10; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix }
-                Tk.NumberField { id: footerDistance; objectName: "pageFooterDistance"; from: 0; to: 10; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix }
+                Tk.NumberField { id: headerDistance; objectName: "pageHeaderDistance"; from: 0; to: 10; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix; onValueModified: function(v) { value = v } }
+                Tk.NumberField { id: footerDistance; objectName: "pageFooterDistance"; from: 0; to: 10; stepSize: 0.1; decimals: 2; suffix: dialog.unitSuffix; onValueModified: function(v) { value = v } }
             }
         }
         Tk.CheckBox { id: firstPage; objectName: "pageFirstDifferent"; text: qsTr("Different first page") }

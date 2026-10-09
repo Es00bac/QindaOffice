@@ -2,6 +2,7 @@
 #include "page_text_item.h"
 
 #include "docx_comments.h"
+#include "docx_paragraph_format.h"
 #include "docx_text.h"
 
 #include "page_picture_tool.h"
@@ -244,8 +245,10 @@ void PageTextItem::paintPage(QPainter *painter, int index, const QRectF &clip)
         }
         m_control->drawContents(painter, pageArea);
     }
-    // Word paragraph borders: Qt's layout draws none (docx_text.h).
+    // Word paragraph borders and tab leaders: Qt's layout draws neither
+    // (docx_text.h, docx_paragraph_format.h).
     Docx::drawParagraphBorders(painter, *m_document->textDocument(), pageArea);
+    Docx::drawTabLeaders(painter, *m_document->textDocument(), pageArea);
     if (!storyOpen) {
         m_pictures->draw(painter, pageArea); // a selected picture's handles
     }

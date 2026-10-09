@@ -233,7 +233,9 @@ private slots:
         QVERIFY(table != nullptr);
         QCOMPARE(table->rows(), 2);
         QCOMPARE(table->columns(), 3);
-        QVERIFY(table->format().border() >= 1);
+        // Word's Insert Table (M70): collapsed Table Grid lines on every cell.
+        QVERIFY(table->format().borderCollapse());
+        QVERIFY(table->cellAt(1, 2).format().toTableCellFormat().bottomBorder() > 0);
         // Columns: a borderless 1xN table (QTextDocument has no native
         // text-column sections).
         scene.selectFirstWord();

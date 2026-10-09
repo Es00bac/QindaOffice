@@ -6,6 +6,7 @@
 #include "docx_writer_p.h"
 #include "ooxml_namespaces.h"
 #include "ooxml_properties.h"
+#include "ooxml_units.h"
 
 #include <QSaveFile>
 #include <QTextFrame>
@@ -430,6 +431,11 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
         mode.setAttribute(kW, QStringLiteral("val"), QStringLiteral("15"));
     } else if (env.copier) {
         env.copier->rewrite(*settings, sourceSettingsPart, QStringLiteral("word/settings.xml"));
+    }
+    // Format ▸ Tabs ▸ Default tab stops (M70): kept as read unless changed.
+    if (const QString tab = childVal(settings.get(), u"defaultTabStop");
+        tab.isEmpty() || qAbs(Ooxml::Units::twipsToPx(Ooxml::Units::parseTwips(tab, 720)) - parts.defaultTabStop) > 0.5) {
+        detail::setChildVal(*settings, QStringLiteral("defaultTabStop"), detail::twips(parts.defaultTabStop));
     }
     settings->removeChildren(kW, u"footnotePr");
     if (wroteFootnotes) {

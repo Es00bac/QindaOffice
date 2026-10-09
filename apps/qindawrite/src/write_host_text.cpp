@@ -7,6 +7,10 @@
 
 #include "write_host.h"
 
+#include "docx_paragraph_format.h"
+#include "docx_properties.h"
+#include "write_selection.h"
+
 #include "format_controller.h"
 #include "page_text_control.h"
 #include "pdf_exporter.h"
@@ -200,21 +204,35 @@ void WriteHost::applyRulerMarker(const QString &id, qreal rawDocX)
     const qreal rightMargin = m_document->pageLayout().margins.right();
     const qreal pageWidth = m_document->pageSize().width();
     const qreal docX = qBound(margin, rawDocX, pageWidth - rightMargin);
-    QTextCursor cursor = m_control->textCursor();
-    QTextBlockFormat format = cursor.blockFormat();
-    if (id == QLatin1String("indent-left")) {
-        // Dragging the left indent carries the first line with it, the way
-        // every word processor does — otherwise the hanging indent changes
-        // every time the paragraph moves.
-        format.setLeftMargin(qMax(0.0, docX - margin));
-    } else if (id == QLatin1String("indent-first")) {
-        format.setTextIndent(docX - margin - format.leftMargin());
-    } else if (id == QLatin1String("indent-right")) {
-        format.setRightMargin(qMax(0.0, pageWidth - rightMargin - docX));
-    } else {
+    if (id != QLatin1String("indent-left") && id != QLatin1String("indent-first")
+        && id != QLatin1String("indent-right")) {
         return;
     }
-    cursor.mergeBlockFormat(format);
+    // Each selected paragraph gets the marker's position; the rest of its
+    // format stays its own (merging the caret paragraph's whole format
+    // used to copy its tab stops and Word markup onto the others).
+    QTextCursor cursor = m_control->textCursor();
+    cursor.beginEditBlock();
+    for (const QTextBlock &block : selectedBlocks(cursor)) {
+        QTextBlockFormat format = block.blockFormat();
+        if (id == QLatin1String("indent-left")) {
+            // Dragging the left indent carries the first line with it, the way
+            // every word processor does — otherwise the hanging indent changes
+            // every time the paragraph moves.
+            format.setLeftMargin(qMax(0.0, docX - margin));
+        } else if (id == QLatin1String("indent-first")) {
+            format.setTextIndent(docX - margin - format.leftMargin());
+        } else {
+            format.setRightMargin(qMax(0.0, pageWidth - rightMargin - docX));
+        }
+        if (format.hasProperty(Docx::kTabStops)) {
+            // Word's tab stops stay where they are on the page; Qt measures
+            // them from the indent that just moved (docx_paragraph_format.h).
+            Docx::setTabStops(format, Docx::tabStops(format));
+        }
+        QTextCursor(block).setBlockFormat(format);
+    }
+    cursor.endEditBlock();
     m_document->textDocument()->setModified(true);
     emit rulerChanged();
 }

@@ -122,4 +122,25 @@ void applyWordLineMetrics(QTextDocument *document)
     }
 }
 
+void setWordLineSpacing(QTextBlockFormat &format, const QTextBlock &block, int type, qreal value)
+{
+    format.clearProperty(kLineSpacingOwn);
+    format.setLineHeight(type == QTextBlockFormat::SingleHeight ? 0 : value, type);
+    if (!format.hasProperty(kParagraphSnapshot) || block.document() == nullptr
+        || (type != QTextBlockFormat::SingleHeight && type != QTextBlockFormat::ProportionalHeight)) {
+        return; // a paragraph Write made keeps Qt's height; exact and at-least are Word's already
+    }
+    const qreal multiple = type == QTextBlockFormat::ProportionalHeight ? value / 100.0 : 1.0;
+    const Metrics m = metricsOf(paragraphFont(block, block.document()->defaultFont()));
+    if (m.word <= 0 || m.qt <= 0) {
+        return;
+    }
+    const qreal delta = m.word * multiple - m.qt;
+    if (qAbs(delta) < 0.05) {
+        return;
+    }
+    format.setProperty(kLineSpacingOwn, QVariantList{type, format.lineHeight()});
+    format.setLineHeight(delta, QTextBlockFormat::LineDistanceHeight);
+}
+
 } // namespace QindaOffice::Docx

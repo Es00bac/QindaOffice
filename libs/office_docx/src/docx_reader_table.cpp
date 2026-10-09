@@ -2,12 +2,14 @@
 // Tables of a .docx body: grid, merges, widths, borders, shading, padding
 // and the table style's conditional formats (header row, banding, …).
 
+#include "docx_borders.h"
 #include "docx_format.h"
 #include "docx_properties.h"
 #include "docx_reader_p.h"
 #include "ooxml_namespaces.h"
 #include "ooxml_units.h"
 
+#include <QSet>
 #include <QTextTable>
 
 #include <utility>
@@ -255,6 +257,16 @@ void BodyReader::readTable(const XmlElement &tbl, QTextCursor &cursor, Container
     if (tblPr != nullptr) {
         tf.setProperty(kTableXml, Ooxml::serializeFragment(*tblPr));
     }
+    // M70 (D-079): the Word values the table commands edit (docx_table_format.h).
+    tf.setProperty(kTableBorders, bordersSpec(readBorders(effTblPr->child(kW, u"tblBorders"), m_env.theme)));
+    if (const XmlElement *w = effTblPr->child(kW, u"tblW")) {
+        tf.setProperty(kTableWidth, widthSpec(readWidth(w)));
+    }
+    if (const XmlElement *ind = effTblPr->child(kW, u"tblInd"); ind != nullptr && wAttr(ind, u"type", QStringLiteral("dxa")) == u"dxa") {
+        tf.setProperty(kTableIndent, qRound(Units::parseTwips(wAttr(ind, u"w"))));
+    }
+    tf.setProperty(kTableLayout, wAttr(effTblPr->child(kW, u"tblLayout"), u"type", QStringLiteral("autofit")));
+    tf.setProperty(kTableCellMargins, marginsSpec(readMargins(effTblPr->child(kW, u"tblCellMar"))));
     if (const XmlElement *tblGrid = tbl.child(kW, u"tblGrid")) {
         tf.setProperty(kTableGridXml, Ooxml::serializeFragment(*tblGrid));
     }
@@ -265,9 +277,19 @@ void BodyReader::readTable(const XmlElement &tbl, QTextCursor &cursor, Container
 
     QTextTable *table = cursor.insertTable(int(rows.size()), columns, tf);
     QTextTableFormat stored = table->format();
+    QStringList gridTwips;
+    for (const qreal w : std::as_const(grid)) {
+        gridTwips.append(QString::number(qRound(Units::pxToTwips(w))));
+    }
     stored.setProperty(kTableSnapshot, QVariantMap{{QStringLiteral("columns"), columns},
                                                    {QStringLiteral("align"), int(stored.alignment())},
-                                                   {QStringLiteral("header"), headerRows}});
+                                                   {QStringLiteral("header"), headerRows},
+                                                   {QStringLiteral("borders"), stored.stringProperty(kTableBorders)},
+                                                   {QStringLiteral("width"), stored.stringProperty(kTableWidth)},
+                                                   {QStringLiteral("indent"), stored.hasProperty(kTableIndent) ? stored.intProperty(kTableIndent) : -1},
+                                                   {QStringLiteral("layout"), stored.stringProperty(kTableLayout)},
+                                                   {QStringLiteral("margins"), stored.stringProperty(kTableCellMargins)},
+                                                   {QStringLiteral("grid"), gridTwips.join(QLatin1Char(','))}});
     table->setFormat(stored);
     // The cells' paragraphs belong to the table, not to the control around it.
     const QStringList outerControls = std::exchange(m_blockControls, QStringList());
@@ -278,6 +300,7 @@ void BodyReader::readTable(const XmlElement &tbl, QTextCursor &cursor, Container
     }
 
     const XmlElement *tableBorders = effTblPr->child(kW, u"tblBorders");
+    QSet<int> anchored; // rows whose first cell carries their properties
     const int rowBand = qMax(1, childVal(effTblPr.get(), u"tblStyleRowBandSize", QStringLiteral("1")).toInt());
     const int colBand = qMax(1, childVal(effTblPr.get(), u"tblStyleColBandSize", QStringLiteral("1")).toInt());
     const int lastRow = int(rows.size()) - 1;
@@ -389,21 +412,38 @@ void BodyReader::readTable(const XmlElement &tbl, QTextCursor &cursor, Container
         if (tcPr != nullptr) {
             cf.setProperty(kCellXml, Ooxml::serializeFragment(*tcPr));
         }
-        if (s.column == 0 || owner.value({s.row, 0}, -1) < 0) {
+        // M70 (D-079): the cell's own borders and margins, as Word wrote them.
+        cf.setProperty(kCellBorders,
+                       bordersSpec(readBorders(tcPr != nullptr ? tcPr->child(kW, u"tcBorders") : nullptr, m_env.theme)));
+        cf.setProperty(kCellMargins, marginsSpec(readMargins(tcPr != nullptr ? tcPr->child(kW, u"tcMar") : nullptr)));
+        QVariantMap snapshot{
+            {QStringLiteral("bg"), cf.hasProperty(QTextFormat::BackgroundBrush) ? cf.background().color().name() : QString()},
+            {QStringLiteral("valign"), int(cf.verticalAlignment())},
+            {QStringLiteral("borders"), cf.stringProperty(kCellBorders)},
+            {QStringLiteral("margins"), cf.stringProperty(kCellMargins)},
+            {QStringLiteral("span"), s.columnSpan},
+        };
+        // The row's own properties ride on its first cell (docx_table_format.h
+        // rowAnchor): the leftmost cell that starts in the row.
+        if (!anchored.contains(s.row)) {
+            anchored.insert(s.row);
             if (const XmlElement *trPr = s.tr->child(kW, u"trPr")) {
                 cf.setProperty(kRowXml, Ooxml::serializeFragment(*trPr));
                 if (const XmlElement *height = trPr->child(kW, u"trHeight")) {
+                    const QString rule = wAttr(height, u"hRule", QStringLiteral("atLeast"));
                     // hRule auto means "as tall as the content": no minimum.
-                    if (wAttr(height, u"hRule", QStringLiteral("atLeast")) != u"auto" && s.rowSpan == 1) {
+                    if (rule != u"auto" && s.rowSpan == 1) {
                         cf.setProperty(kRowHeight, Units::twipsToPx(Units::parseTwips(wAttr(height, u"val"))));
+                        cf.setProperty(kRowHeightRule, rule == u"exact" ? QStringLiteral("exact") : QStringLiteral("atLeast"));
                     }
                 }
+                cf.setProperty(kRowCantSplit, onOff(trPr, u"cantSplit"));
             }
+            snapshot.insert(QStringLiteral("rowh"), qRound(Units::pxToTwips(cf.doubleProperty(kRowHeight))));
+            snapshot.insert(QStringLiteral("hrule"), cf.stringProperty(kRowHeightRule));
+            snapshot.insert(QStringLiteral("cantSplit"), cf.boolProperty(kRowCantSplit));
         }
-        cf.setProperty(kCellSnapshot, QVariantMap{
-            {QStringLiteral("bg"), cf.hasProperty(QTextFormat::BackgroundBrush) ? cf.background().color().name() : QString()},
-            {QStringLiteral("valign"), int(cf.verticalAlignment())},
-        });
+        cf.setProperty(kCellSnapshot, snapshot);
         cell.setFormat(cf);
 
         CellContext context{layer.pPr, layer.rPr};

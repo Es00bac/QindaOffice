@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "table_actions.h"
 
+#include "docx_table_format.h"
 #include "menu_tree.h"
 #include "page_text_control.h"
 #include "standard_actions.h"
@@ -73,41 +74,62 @@ QStringList TableController::stripIds() const
 
 void TableController::insertRows(int count, bool above)
 {
-    const QTextCursor cursor = m_control->textCursor();
+    QTextCursor cursor = m_control->textCursor();
     QTextTable *table = cursor.currentTable();
     if (table == nullptr) {
         return;
     }
     const QTextTableCell cell = table->cellAt(cursor);
-    table->insertRows(cell.row() + (above ? 0 : 1), count);
+    const int at = above ? cell.row() : cell.row() + cell.rowSpan();
+    cursor.beginEditBlock();
+    table->insertRows(at, count);
+    const int from = above ? at + count : at - 1;
+    for (int r = at; r < at + count; ++r) {
+        for (int c = 0; c < table->columns(); ++c) {
+            Docx::copyNeighbourFormat(table, r, c, from, c);
+        }
+    }
+    cursor.endEditBlock();
     m_document->setDirty(true);
     syncFromCursor();
 }
 
 void TableController::insertColumns(int count, bool left)
 {
-    const QTextCursor cursor = m_control->textCursor();
+    QTextCursor cursor = m_control->textCursor();
     QTextTable *table = cursor.currentTable();
     if (table == nullptr) {
         return;
     }
     const QTextTableCell cell = table->cellAt(cursor);
-    table->insertColumns(cell.column() + (left ? 0 : 1), count);
+    const int at = left ? cell.column() : cell.column() + cell.columnSpan();
+    cursor.beginEditBlock();
+    table->insertColumns(at, count);
+    const int from = left ? at + count : at - 1;
+    for (int c = at; c < at + count; ++c) {
+        for (int r = 0; r < table->rows(); ++r) {
+            Docx::copyNeighbourFormat(table, r, c, r, from);
+        }
+    }
+    cursor.endEditBlock();
     m_document->setDirty(true);
     syncFromCursor();
 }
 
 void TableController::deleteRows()
 {
-    const QTextCursor cursor = m_control->textCursor();
+    QTextCursor cursor = m_control->textCursor();
     QTextTable *table = cursor.currentTable();
     if (table == nullptr) {
         return;
     }
-    // v1: the cursor cell's row (multi-row selection arrives with ranged
-    // table selection in a later pass).
+    // The rows the selection covers (one row without a selection).
+    const Docx::CellRange range = Docx::selectedCells(cursor);
     const QTextTableCell cell = table->cellAt(cursor);
-    table->removeRows(cell.row(), 1);
+    if (range.rows >= table->rows()) {
+        return; // the last rows go with Delete Table
+    }
+    table->removeRows(range.row, range.rows);
     keepCursorInTable(table, cell);
     m_document->setDirty(true);
 }
@@ -147,8 +169,12 @@ void TableController::deleteColumns()
     if (table == nullptr) {
         return;
     }
+    const Docx::CellRange range = Docx::selectedCells(cursor);
     const QTextTableCell cell = table->cellAt(cursor);
-    table->removeColumns(cell.column(), 1);
+    if (range.columns >= table->columns()) {
+        return;
+    }
+    table->removeColumns(range.column, range.columns);
     keepCursorInTable(table, cell);
     m_document->setDirty(true);
 }
@@ -160,8 +186,14 @@ void TableController::mergeCells()
     if (table == nullptr) {
         return;
     }
-    // Merge the cursor cell with the one to its right; Qt expands the
-    // merged cell over the rectangular selection when one exists.
+    // A selection across cells merges into one, as in Word; without one
+    // the cursor's cell takes in its right-hand neighbour.
+    if (cursor.hasComplexSelection()) {
+        table->mergeCells(cursor);
+        m_document->setDirty(true);
+        syncFromCursor();
+        return;
+    }
     const QTextTableCell cell = table->cellAt(cursor);
     const int lastRow = qMin(cell.row() + cell.rowSpan() - 1, table->rows() - 1);
     const int lastCol = qMin(cell.column() + cell.columnSpan(), table->columns() - 1);
@@ -202,8 +234,9 @@ void TableController::syncFromCursor()
     const QTextTableCell cell = inTable ? table->cellAt(cursor) : QTextTableCell();
     m_actions.splitCell->setEnabled(inTable && cell.isValid()
                                     && (cell.rowSpan() > 1 || cell.columnSpan() > 1));
-    // Merge needs a neighbour to absorb.
-    m_actions.mergeCells->setEnabled(inTable && cell.isValid() && cell.column() + 1 < table->columns());
+    // Merge needs a selection across cells or a neighbour to absorb.
+    m_actions.mergeCells->setEnabled(inTable && cell.isValid()
+                                     && (cursor.hasComplexSelection() || cell.column() + 1 < table->columns()));
 }
 
 } // namespace QindaOffice::Apps::Write

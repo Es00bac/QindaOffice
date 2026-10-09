@@ -308,6 +308,19 @@ void WriteDocument::storyEdited()
     emit contentChanged();
 }
 
+void WriteDocument::setDefaultTabStop(qreal px)
+{
+    if (px <= 0 || qAbs(px - m_parts.defaultTabStop) < 0.01) {
+        return;
+    }
+    m_parts.defaultTabStop = px;
+    QTextOption option = m_text->defaultTextOption();
+    option.setTabStopDistance(px);
+    m_text->setDefaultTextOption(option);
+    m_text->setModified(true);
+    setDirty(true);
+}
+
 void WriteDocument::adoptParts(Docx::WordParts parts)
 {
     emit storiesAboutToBeReplaced();

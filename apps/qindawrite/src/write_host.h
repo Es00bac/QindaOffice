@@ -34,8 +34,12 @@ class ModelCatalog;
 
 namespace QindaOffice::Apps::Write {
 
+class BordersController;
+class FontController;
 class FormatController;
 class PageTextControl;
+class ParagraphController;
+class TableLayoutController;
 class SpellChecker;
 class TableController;
 class WriteReviewActions;
@@ -66,6 +70,12 @@ class WriteHost : public Quick::DocumentHost {
     Q_PROPERTY(QObject *comments READ commentsObject CONSTANT)
     // Word form fields: check boxes, lists, dates (write_controls.h).
     Q_PROPERTY(QObject *controls READ controlsObject CONSTANT)
+    // Word's formatting dialogs and the border pen (M70, D-079):
+    // write_borders.h, write_paragraph.h, write_font.h, table_layout.h.
+    Q_PROPERTY(QObject *borders READ bordersObject CONSTANT)
+    Q_PROPERTY(QObject *paragraphFormat READ paragraphObject CONSTANT)
+    Q_PROPERTY(QObject *fontFormat READ fontObject CONSTANT)
+    Q_PROPERTY(QObject *tableLayout READ tableLayoutObject CONSTANT)
 public:
     WriteHost();
     ~WriteHost() override;
@@ -80,6 +90,10 @@ public:
     [[nodiscard]] WriteReviewActions *reviewActions() const { return m_review; }
     [[nodiscard]] SpellChecker *spellChecker() const { return m_spell; }
     [[nodiscard]] Ai::AssistantController *assistant() const { return m_assistant; }
+    [[nodiscard]] BordersController *bordersController() const { return m_borders; }
+    [[nodiscard]] ParagraphController *paragraphController() const { return m_paragraph; }
+    [[nodiscard]] FontController *fontController() const { return m_font; }
+    [[nodiscard]] TableLayoutController *tableLayoutController() const { return m_tableLayout; }
 
     // The QML page item, once (WritePage.qml's Component.onCompleted).
     Q_INVOKABLE void attachPage(PageTextItem *item);
@@ -183,6 +197,10 @@ private:
     [[nodiscard]] QList<Quick::MenuNode> commentMenuItems();
     [[nodiscard]] QObject *commentsObject() const;
     [[nodiscard]] QObject *controlsObject() const;
+    [[nodiscard]] QObject *bordersObject() const;
+    [[nodiscard]] QObject *paragraphObject() const;
+    [[nodiscard]] QObject *fontObject() const;
+    [[nodiscard]] QObject *tableLayoutObject() const;
     void insertPageField(bool total);
     void syncStoryActions();
     void createSpellingEntries();
@@ -203,6 +221,10 @@ private:
     WriteRevisions *m_revisions = nullptr;
     WriteComments *m_comments = nullptr;
     WriteControls *m_controls = nullptr;
+    BordersController *m_borders = nullptr;
+    ParagraphController *m_paragraph = nullptr;
+    FontController *m_font = nullptr;
+    TableLayoutController *m_tableLayout = nullptr;
     WriteReviewActions *m_review = nullptr;
     SpellChecker *m_spell = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;

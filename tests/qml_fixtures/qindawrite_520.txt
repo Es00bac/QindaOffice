@@ -146,6 +146,12 @@ QQuickRootItem#WriteWindow
             RibbonGroup#ribbonGroup_font
               Overline#ribbonGroupCaption
               QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_changeCase
+                RibbonButton#ribbonAction_changeCase
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_fontFamily
                 ComboBox#fontFamilyCombo
                   QQuickText#comboDisplayText
@@ -212,6 +218,12 @@ QQuickRootItem#WriteWindow
               RibbonSlot#ribbonItem_textColor
                 ColorButton#textColorButton
                   QQuickRectangle#colorButtonSwatch
+              RibbonSlot#ribbonItem_writeFontAction
+                RibbonButton#ribbonAction_writeFontAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
             RibbonGroup#ribbonGroup_history
               Overline#ribbonGroupCaption
               QQuickRectangle#ribbonGroupCard
@@ -280,6 +292,24 @@ QQuickRootItem#WriteWindow
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_lineSpacing
                 RibbonButton#ribbonAction_lineSpacing
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_paragraphBorders
+                RibbonButton#ribbonAction_paragraphBorders
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_writeParagraphAction
+                RibbonButton#ribbonAction_writeParagraphAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_writeShadingAction
+                RibbonButton#ribbonAction_writeShadingAction
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
