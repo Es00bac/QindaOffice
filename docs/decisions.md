@@ -98,6 +98,171 @@ Project's (tests that counted exported elements were updated). Checks
 print from QindaBooks; a misaligned printer cannot yet be corrected in the
 app, and purchase orders and time tracking remain open (office-parity.md).
 
+## D-070: PowerPoint interchange
+
+**Date:** 2026-10-08 · **Status:** accepted (owner request: Office parity,
+"open, edit and save … openable in Microsoft Office"; M62, builds on D-068)
+
+**Context.** QindaShow reached every format except its own `.fodp` through
+LibreOffice and flat ODP, and the `.fodp` mapping itself was broken: the
+writer stored geometry as unit-less centimetres that the reader took as
+points (shapes shrank to 3.5 % on reopen, in crash recovery and in the
+shipped templates) and LibreOffice took as 1/100 mm (every `.pptx` save
+piled its shapes into a corner); shape styles were written but never
+linked; run and paragraph formatting sat as `fo:` attributes on
+`text:span`/`text:p` (invalid ODF, dropped by every consumer); bullets named
+undefined list styles; the arrow marker was never defined; rotation had the
+wrong sign and pivot; the reader ignored LibreOffice's own styles. Beyond
+the bugs, the model could not hold what PowerPoint decks are made of: the
+owner's decks are nearly all tables, pictures, placeholders inheriting from
+layouts and masters, theme colours, bullets and speaker notes.
+
+**Decision.**
+
+1. **`.fodp` is valid ODF 1.3 and lossless for the model** (step 1).
+   Lengths are written in points with their unit (`ptToLength`: the
+   shortest digits that read back bit-exact; ODF forbids exponents); a bare
+   number is read as the pre-M62 centimetres, since no conforming producer
+   writes one. Formatting lives in automatic styles that the body links
+   (`gr*` graphic, `P*` paragraph, `T*` text, `dp*` drawing-page, `L1` the
+   bullet list style), deduplicated by content (`fodp_styles.h`). Rotation is
+   ODF's `rotate(α) translate(x y)`, verified against LibreOffice 25.2:
+   `rotate` turns counter-clockwise about the shape's local origin and the
+   list applies left to right, so the writer solves for the translation that
+   keeps the model's (clockwise, centre-pivot) rectangle where it is. A line
+   keeps its direction (`svg:x1/y1` → `x2/y2` from the un-normalised rect),
+   the `Arrow` marker is defined in `office:styles`, white space is encoded
+   (`text:s`, `text:tab`, `text:line-break`) and never indented inside a
+   paragraph. What ODF cannot carry exactly (alpha, a colour invisible for
+   the shape kind, a non-bulleted outline level, the exact rect of a rotated
+   shape, builds, groups) rides `qq:` attributes; LibreOffice ignores them
+   and drops them on save, so they cannot go stale. The reader is a
+   namespace-aware tree walk (`odf_dom.h`) that resolves styles through
+   `style:parent-style-name` chains and the family defaults, so LibreOffice's
+   `gr*`/`P*`/`T*`/`dp*` styles, `text:list` outline levels and `draw:g`
+   groups read too, and files the pre-M62 writer produced (unit-less cm,
+   unlinked `shape-<name>` styles, `fo:` on spans, `qq-list-N` bullets, a
+   clockwise `rotate()` beside `svg:x/y`) keep their geometry and formatting.
+   The two shipped templates were regenerated through the fixed writer.
+2. **The model holds what a deck draws, as effective values** (step 2).
+   `show_model` gains (`show_text.h`, `show_style.h`, `show_table.h`,
+   `show_chart.h`, `presentation.h`; every pre-M62 field and its meaning
+   kept): flips, Office preset geometry by name with its adjust values,
+   custom geometry as a fragment, fills (none / solid / gradient / picture /
+   pattern), outlines (colour, width, dash, cap, join, head and tail ends),
+   text bodies (insets, anchor, autofit with font scale, wrap, vertical
+   text), paragraphs (alignment, margin, indent, level, bullet character /
+   auto-numbering / bullet font, colour and size, line and paragraph
+   spacing), runs (underline, strike, baseline, caps, letter spacing,
+   highlight, hyperlinks, fields), pictures (bytes in any format, MIME,
+   crop, natural size), tables (grid, rows, cells with margins, fills,
+   borders, merges, the table style's look), charts (type, categories,
+   series and point colours from the cached values — no Calc dependency),
+   nested groups with their child coordinate space, connectors and their
+   connection sites, placeholders, slide layouts, master decorations,
+   slide / layout / master backgrounds, hidden slides. Every value is the
+   EFFECTIVE one: the reader resolves the inheritance chain (presentation
+   default text style → master title/body/other style → master and layout
+   placeholder list styles → `p:style` font reference → the shape's list
+   style → the paragraph and run) before storing, so the editor, renderer
+   and writers never chase a style chain, and theme colours arrive resolved
+   through the master's colour map (8 bits a channel, as PowerPoint draws
+   them and as every spelling stores them). Office provenance (the source
+   XML of a shape, slide, layout, master and the package) rides
+   `Provenance<T>`, a shared pointer that never takes part in equality.
+3. **The renderer paints all of it** (step 2): preset outlines and
+   `a:custGeom` paths with their guides, gradient / picture / pattern fills,
+   dashes and arrowheads, flips and rotation, tables with style regions,
+   bar / column / line / area / pie / doughnut / scatter charts, cropped
+   pictures, groups, and the backdrop (master background and decorations,
+   layout background and decorations, the slide's own background, the
+   show-master-shapes switches) — the same code for the canvas, thumbnails,
+   the player, print and PDF. Text is laid out at 72 dpi with true point
+   sizes (the old renderer drew 18 pt as 24 slide points), so a deck's text
+   wraps where PowerPoint wraps it.
+4. **`.pptx` is read natively** (step 3, `pptx_reader.h`). Slides, masters,
+   layouts, the theme, placeholders with their inheritance, notes (the
+   notes slide's body placeholder), builds read from `p:timing` (appear,
+   fade, fly-in, zoom), transitions mapped onto the player's cut / fade /
+   slide / zoom. What QindaShow does not model is **preserved** — SmartArt,
+   media, OLE objects, ink, unknown graphic frames, `mc:AlternateContent`
+   it cannot choose — as the verbatim fragment and its source part, drawn
+   from the fallback picture or (SmartArt) the diagram's drawing part. Two
+   rules found in the owner's decks: an `a:ln` with neither a fill nor a
+   style draws nothing, and a table naming PowerPoint's default style
+   without defining it gets that style's look.
+5. **`.pptx` is written natively, to PowerPoint's rules** (step 4,
+   `pptx_writer.h`). Each shape takes one of three paths: **verbatim** (the
+   shape equals what the reader produced: the source XML, its relationship
+   ids carried by `RelationshipCopier`), **patched** (only the changed
+   aspects rewritten into the source XML, so effects, 3-D and extensions
+   survive) or **generated** (QindaShow's own shapes); a chart or preserved
+   frame whose source part is gone is written as a picture of its
+   rendering. A run or paragraph whose formatting equals one the reader
+   produced reuses that source `a:rPr` / `a:pPr`, keeping its theme links.
+   A deck read from `.pptx` carries its masters, layouts, theme, presProps,
+   viewProps and tableStyles; otherwise one master is generated with title
+   and body placeholders, the layouts Title Slide, Title and Content and
+   Blank, a theme and (when a slide has notes) a notes master; a model
+   master or layout whose source is gone is generated with its background
+   and decorations. Ids follow PowerPoint's rules: `sldId` ≥ 256,
+   `sldMasterId`/`sldLayoutId` ≥ 2147483648 and unique deck-wide, unique
+   shape ids per slide (kept where they were, fresh above them otherwise),
+   one layout relationship per slide, notes slides related to the notes
+   master, `[Content_Types]` overrides for every part. `p:timing` is kept
+   verbatim (pruned of deleted shapes) while the builds are unchanged and
+   regenerated otherwise; a transition's XML is kept while its mapped name
+   is unchanged; sections are dropped when the slide list changes and
+   custom shows always. The Transitional XSD's `a:buSzPct` is a percent
+   string, so bullet sizes are written as `a:buSzTx` (100 %) or `a:buSzPts`.
+   Every package written validates against the ECMA-376 Transitional
+   schemas and converts in LibreOffice; PowerPoint itself is not available
+   here, so its rules are checked structurally (`powerPointRules`).
+   In `office_ooxml`, `RelationshipCopier::mapPart` lets a slide's links to
+   other slides follow the slide, and the serializer no longer maps braced
+   GUIDs in ordinary attributes (`a:ext/@uri`) to namespace prefixes.
+6. **QindaShow opens and saves PowerPoint natively** (step 5). `.pptx`,
+   `.pptm`, `.potx` and `.ppsx` open through the native reader; `.ppt` and
+   `.odp` open through LibreOffice → `.pptx` → the native reader; `.fodp` is
+   native; saving `.odp` / `.ppt` writes the native `.pptx` and converts it.
+   **`.pptx` is the default save format** (first save filter, an untitled
+   deck saves as `.pptx`): it carries everything the model holds, and it is
+   the format Microsoft Office writes and opens. The crash journal holds a
+   `.pptx` for the same reason, under the journal's binary bound
+   (`recoveryPayloadLimit`, as QindaWrite's `.docx`); pre-M62 journals hold
+   `.fodp` and still recover. The `.desktop` MimeType list, `ShowDocument::mimeTypes()`
+   and the open filters name the same seven types. Editing keeps working on
+   PowerPoint text: the in-place editor shows bold, italic, colour, size,
+   family, underline and strike, and stashes the rest of each paragraph and
+   run (bullets, spacing, baseline, links, fields) so an edit keeps it.
+   Print and PDF export render each slide with its master, layout and
+   background; the player skips hidden slides.
+7. **`.fodp` keeps the extended model** (`fodp_extended.h`). A shape with
+   anything beyond the ODF subset also carries its exact clipboard JSON in
+   `qq:shape` (with its ids), which the reader prefers; LibreOffice sees the
+   ODF approximation — the preset's ODF twin where LibreOffice draws one
+   (`right-arrow`, `chevron`, … looked at in LibreOffice's PDF), a picture
+   of tables, charts, groups and preserved content, master decorations as
+   pictures on the master page, hidden slides as
+   `presentation:visibility="hidden"`. Slide backgrounds, master fills and
+   decorations, Office layouts and the notes size ride `qq:` attributes.
+
+**Consequences.** PowerPoint decks open in QindaShow with their tables,
+pictures, charts, notes, masters and layouts, draw as PowerPoint draws them,
+and save back to `.pptx` that the ECMA-376 Transitional schemas and
+LibreOffice accept and that keeps PowerPoint's id and relationship rules; an
+unedited deck round-trips to an equal model, unknown content byte for byte. `.fodp` files open at their real size in
+QindaShow and in LibreOffice; writing a read-back deck reproduces the file
+byte for byte. Pre-M62 `.fodp` files are read with their old meaning and
+written in the new form on the next save. Limits: charts draw from their
+cached values and are kept verbatim, not edited; SmartArt, media and OLE are
+carried and drawn from their fallbacks, not edited; table cells are not
+edited in place; animations beyond the builds above play as appear and keep
+their XML only while the builds are unchanged; through `.fodp` a deck keeps
+its look but not its PowerPoint structure (placeholders, Office ids,
+connections), so a later `.pptx` save generates masters and layouts and
+writes charts and preserved content as pictures.
+
 ## D-069: Excel interchange: typed cells, future-function prefixes, honest writer
 
 **Date:** 2026-10-08 · **Status:** accepted (M61, the Excel half of the owner's

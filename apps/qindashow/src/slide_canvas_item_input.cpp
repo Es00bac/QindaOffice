@@ -241,20 +241,28 @@ void SlideCanvasItem::keyPressEvent(QKeyEvent *event)
 QRectF SlideCanvasItem::editorRect() const
 {
     const ShowModel::Shape *shape = m_slide != nullptr ? m_slide->findShape(m_textShapeId) : nullptr;
-    return shape != nullptr ? shape->rect.normalized().adjusted(6, 4, -6, -4) : QRectF();
+    if (shape == nullptr) {
+        return {};
+    }
+    // The shape's own text insets (6/4 pt for QindaShow's, the file's for
+    // an Office shape).
+    const ShowModel::TextBodyStyle &body = shape->textBody;
+    return shape->rect.normalized().adjusted(body.insetLeft, body.insetTop, -body.insetRight, -body.insetBottom);
 }
 
 void SlideCanvasItem::beginTextEdit(const QString &shapeId)
 {
     commitTextEdit(false);
     ShowModel::Shape *shape = m_slide != nullptr ? m_slide->findShape(shapeId) : nullptr;
-    if (shape == nullptr) {
+    // Pictures, lines, groups, tables, charts and preserved Office content
+    // have no text of their own to edit in place.
+    if (shape == nullptr || !shape->holdsText()) {
         return;
     }
     m_textShapeId = shape->id;
     m_textOriginal = shape->paragraphs;
     m_textDocument = documentFromParagraphs(shape->paragraphs, this);
-    m_textDocument->setTextWidth(qMax<qreal>(shape->rect.width() - 12, 40));
+    m_textDocument->setTextWidth(qMax<qreal>(editorRect().width(), 40));
     m_selected = {shape->id};
     notifySelection();
     emit editingChanged();

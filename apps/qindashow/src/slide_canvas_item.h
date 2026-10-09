@@ -23,6 +23,7 @@
 // slide_canvas_item_order.cpp (multi-selection, z-order).
 
 #include "presentation.h"
+#include "slide_renderer.h"
 
 #include <QQuickPaintedItem>
 #include <QSet>
@@ -56,6 +57,10 @@ public:
     // The master the current slide renders with. A COPY, not a pointer: the
     // deck's master list reallocates whenever a master is added or removed.
     void setMaster(const ShowModel::SlideMaster *master);
+    // M62: what the slide paints over — background, master and layout
+    // decorations, a QindaShow master's type defaults (slide_renderer.h) —
+    // and the master itself (master() keeps answering for the dialogs).
+    void setBackdrop(const ShowModel::SlideBackdrop &backdrop, const ShowModel::SlideMaster *master);
     [[nodiscard]] const ShowModel::SlideMaster *master() const { return m_hasMaster ? &m_master : nullptr; }
     [[nodiscard]] ShowModel::Slide *slide() const { return m_slide; }
     [[nodiscard]] QSizeF slideSize() const { return m_slideSize; }
@@ -147,6 +152,7 @@ private:
     QSizeF m_slideSize{720.0, 405.0};
     ShowModel::SlideMaster m_master;
     bool m_hasMaster = false;
+    ShowModel::SlideBackdrop m_backdrop;
     QSet<QString> m_selected;
     // Gesture state (slide points).
     Gesture m_gesture = Gesture::None;

@@ -21,6 +21,7 @@ private slots:
     void parsesNamespacesAndNormalisesStrict();
     void keepsSignificantWhitespaceOnly();
     void rewritesPrefixListsThroughConventionalPrefixes();
+    void keepsBracedGuidAttributes();
     void escapesAndStripsInvalidCharacters();
     void fragmentsRoundTrip();
     void rejectsDtd();
@@ -30,6 +31,7 @@ private slots:
     void relativeTargets();
     void copierCarriesPartsOnceWithTheirRelationships();
     void copierDropsDanglingIds();
+    void copierResolvesMappedParts();
     void resolvesThemeColours();
     void highlightNames();
     void units();
@@ -91,6 +93,26 @@ void OoxmlTest::rewritesPrefixListsThroughConventionalPrefixes()
     QVERIFY2(out.contains("Requires=\"wps\""), out.constData());
     QVERIFY(out.contains("xmlns:w14=\"http://schemas.microsoft.com/office/word/2010/wordml\""));
     QVERIFY(out.contains("xmlns:wps=\"http://schemas.microsoft.com/office/word/2010/wordprocessingShape\""));
+}
+
+void OoxmlTest::keepsBracedGuidAttributes()
+{
+    // PowerPoint stamps braced GUIDs on nearly every shape; they are data,
+    // not namespace lists, and must survive verbatim.
+    const QByteArray xml = R"(<p:cNvPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+ xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" id="4" name="Title 3"><a:extLst>
+ <a:ext uri="{FF2B5EF4-FFF2-40B4-BE49-F238E27FC236}"><a16:creationId
+ xmlns:a16="http://schemas.microsoft.com/office/drawing/2014/main" id="{1A2B3C4D-0000-1111-2222-333344445555}"/>
+ </a:ext></a:extLst></p:cNvPr>)";
+    const XmlElementPtr root = parseXml(xml);
+    QVERIFY(root);
+    const QString out = serializeFragment(*root);
+    QVERIFY2(out.contains(QStringLiteral("uri=\"{FF2B5EF4-FFF2-40B4-BE49-F238E27FC236}\"")), qPrintable(out));
+    QVERIFY2(out.contains(QStringLiteral("id=\"{1A2B3C4D-0000-1111-2222-333344445555}\"")), qPrintable(out));
+    QVERIFY2(!out.contains(QStringLiteral("xmlns:ns0")), qPrintable(out));
+    const XmlElementPtr back = parseFragment(out);
+    QVERIFY(back);
+    QCOMPARE(serializeFragment(*back), out);
 }
 
 void OoxmlTest::escapesAndStripsInvalidCharacters()
@@ -284,6 +306,33 @@ void OoxmlTest::copierDropsDanglingIds()
     blip.setAttribute(QString::fromUtf16(Ns::R), QStringLiteral("embed"), QStringLiteral("rId404"));
     copier.rewrite(blip, QStringLiteral("word/document.xml"), QStringLiteral("word/document.xml"));
     QVERIFY(!blip.hasAttribute(QString::fromUtf16(Ns::R), u"embed"));
+}
+
+void OoxmlTest::copierResolvesMappedParts()
+{
+    // A part the caller regenerates (a slide) is mapped, not copied: a
+    // copied part that links to it gets the caller's part.
+    PackageWriter source;
+    source.addPart(QStringLiteral("ppt/slideMasters/slideMaster1.xml"), QByteArray("<m/>"), QStringLiteral("text/xml"));
+    source.addPart(QStringLiteral("ppt/slides/slide1.xml"), QByteArray("<old/>"), QStringLiteral("text/xml"));
+    const QString slideType = QString::fromUtf16(RelType::Slide);
+    source.addRelationshipWithId(QStringLiteral("ppt/slideMasters/slideMaster1.xml"), QStringLiteral("rId3"), slideType,
+                                 QStringLiteral("ppt/slides/slide1.xml"));
+    source.addRelationshipWithId(QString(), QStringLiteral("rId1"), QString::fromUtf16(RelType::OfficeDocument),
+                                 QStringLiteral("ppt/slideMasters/slideMaster1.xml"));
+    const auto package = Package::fromData(source.toZip());
+    QVERIFY(package);
+    PackageWriter out;
+    out.addPart(QStringLiteral("ppt/slides/slide7.xml"), QByteArray("<new/>"), QStringLiteral("text/xml"));
+    RelationshipCopier copier(package, &out);
+    copier.mapPart(QStringLiteral("ppt/slides/slide1.xml"), QStringLiteral("ppt/slides/slide7.xml"));
+    QCOMPARE(copier.copyPart(QStringLiteral("ppt/slideMasters/slideMaster1.xml")),
+             QStringLiteral("ppt/slideMasters/slideMaster1.xml"));
+    QVERIFY(!out.hasPart(QStringLiteral("ppt/slides/slide1.xml")));
+    const QList<Relationship> rels = out.relationshipsOf(QStringLiteral("ppt/slideMasters/slideMaster1.xml"));
+    QCOMPARE(rels.size(), 1);
+    QCOMPARE(rels.first().id, QStringLiteral("rId3"));
+    QCOMPARE(rels.first().target, QStringLiteral("ppt/slides/slide7.xml"));
 }
 
 void OoxmlTest::resolvesThemeColours()

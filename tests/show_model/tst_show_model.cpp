@@ -12,11 +12,16 @@
 #include "slide_renderer.h"
 #include "support/soffice_env.h"
 
+#include "ooxml_namespaces.h"
+#include "ooxml_package.h"
+
 #include <QGuiApplication>
 #include <QPainter>
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QtTest>
+
+#include <functional>
 
 using namespace QindaOffice::Show;
 
@@ -24,11 +29,27 @@ class ShowModelTest : public QObject {
     Q_OBJECT
 private slots:
     void fodpRoundTrip();
+    void fodpCarriesTheOfficeModel();
     void fodpConvertsToPptx();
     void rendererPaints();
     void buildsHideFutureShapes();
     void shapeJsonCodecRoundTrips();
 };
+
+static TextParagraph textParagraph(const QString &text, bool bold, const QColor &color, qreal size, int alignment,
+                                   bool bullet)
+{
+    TextRun run;
+    run.text = text;
+    run.bold = bold;
+    run.color = color;
+    run.pointSize = size;
+    TextParagraph paragraph;
+    paragraph.runs = {run};
+    paragraph.alignment = alignment;
+    paragraph.bullet = bullet;
+    return paragraph;
+}
 
 static Presentation sampleDeck()
 {
@@ -43,11 +64,8 @@ static Presentation sampleDeck()
         Shape title;
         title.kind = ShapeKind::TextBox;
         title.rect = QRectF(40, 30, 640, 80);
-        title.paragraphs.append({{{QStringLiteral("Quarterly %1").arg(i + 1), true, false,
-                                   QColor(Qt::darkBlue), 28, QString()}},
-                                 int(Qt::AlignHCenter),
-                                 false,
-                                 0});
+        title.paragraphs.append(textParagraph(QStringLiteral("Quarterly %1").arg(i + 1), true, QColor(Qt::darkBlue), 28,
+                                              int(Qt::AlignHCenter), false));
         slide.shapes.append(title);
 
         Shape body;
@@ -56,8 +74,7 @@ static Presentation sampleDeck()
         body.fill = QColor(200, 220, 255);
         body.stroke = QColor(Qt::black);
         body.strokeWidth = 1.5;
-        body.paragraphs.append({{{QStringLiteral("bullet one"), false, false, QColor(), 18, QString()}},
-                                0, true, 0});
+        body.paragraphs.append(textParagraph(QStringLiteral("bullet one"), false, QColor(), 18, 0, true));
         body.buildStep = i % 2; // every other slide animates its body
         slide.shapes.append(body);
 
@@ -92,24 +109,117 @@ void ShowModelTest::fodpRoundTrip()
     const Presentation back = readFodp(fodp, &error);
     QVERIFY2(error.isEmpty(), qPrintable(error));
     QCOMPARE(back.slides.size(), 5);
-    // ODF stores cm: allow sub-0.01pt drift on the round trip.
-    QVERIFY(qAbs(back.slideSize.width() - deck.slideSize.width()) < 0.01);
-    QVERIFY(qAbs(back.slideSize.height() - deck.slideSize.height()) < 0.01);
+    // Lengths travel in points with their unit: exact, not "close".
+    QCOMPARE(back.slideSize, deck.slideSize);
     for (int i = 0; i < 5; ++i) {
-        QCOMPARE(back.slides.at(i).title, deck.slides.at(i).title);
-        QCOMPARE(back.slides.at(i).transition, deck.slides.at(i).transition);
-        QCOMPARE(back.slides.at(i).notes, deck.slides.at(i).notes);
-        QCOMPARE(back.slides.at(i).shapes.size(), deck.slides.at(i).shapes.size());
-        QCOMPARE(back.slides.at(i).shapes.first().displayText(),
-                 deck.slides.at(i).shapes.first().displayText());
-        QCOMPARE(back.slides.at(i).shapes.at(1).buildStep,
-                 deck.slides.at(i).shapes.at(1).buildStep);
-        QVERIFY(back.slides.at(i).shapes.at(1).fill.isValid());
-        QCOMPARE(back.slides.at(i).shapes.at(3).kind, ShapeKind::Image);
-        QVERIFY(!back.slides.at(i).shapes.at(3).imagePng.isEmpty());
+        const Slide &was = deck.slides.at(i);
+        const Slide &is = back.slides.at(i);
+        QCOMPARE(is.title, was.title);
+        QCOMPARE(is.transition, was.transition);
+        QCOMPARE(is.notes, was.notes);
+        QCOMPARE(is.shapes.size(), was.shapes.size());
+        for (int s = 0; s < was.shapes.size(); ++s) {
+            // Geometry: the pre-M62 writer stored unit-less cm the reader
+            // took as points (shapes shrank to 3.5 % on reopen).
+            QCOMPARE(is.shapes.at(s).rect, was.shapes.at(s).rect);
+            QCOMPARE(is.shapes.at(s).kind, was.shapes.at(s).kind);
+            // Fills and outlines: the styles are linked now.
+            QCOMPARE(is.shapes.at(s).fill, was.shapes.at(s).fill);
+            QCOMPARE(is.shapes.at(s).stroke, was.shapes.at(s).stroke);
+            QCOMPARE(is.shapes.at(s).strokeWidth, was.shapes.at(s).strokeWidth);
+            QCOMPARE(is.shapes.at(s).buildStep, was.shapes.at(s).buildStep);
+            // Run formatting lives in T* styles, not invalid span attributes.
+            QCOMPARE(is.shapes.at(s).paragraphs, was.shapes.at(s).paragraphs);
+        }
+        QCOMPARE(is.shapes.at(3).imagePng, was.shapes.at(3).imagePng);
+        QCOMPARE(is, was);
     }
-    // Arrow geometry survived as a line with a marker.
+    QCOMPARE(back.slides.at(0).shapes.at(0).paragraphs.first().runs.first().color, QColor(Qt::darkBlue));
+    QVERIFY(back.slides.at(0).shapes.at(0).paragraphs.first().runs.first().bold);
+    QCOMPARE(back.slides.at(0).shapes.at(0).paragraphs.first().runs.first().pointSize, 28.0);
+    QCOMPARE(back.slides.at(0).shapes.at(0).paragraphs.first().alignment, int(Qt::AlignHCenter));
+    QVERIFY(back.slides.at(0).shapes.at(1).paragraphs.first().bullet);
+    // Arrow geometry survived as a line with a marker, in its direction.
     QCOMPARE(back.slides.at(0).shapes.at(2).kind, ShapeKind::Arrow);
+    QCOMPARE(back, deck);
+}
+
+void ShowModelTest::fodpCarriesTheOfficeModel()
+{
+    // What .fodp keeps beyond ODF (D-070): Office shapes and tables, slide
+    // backgrounds and visibility, master decorations and fills, layouts.
+    Presentation deck;
+    deck.notesSize = QSizeF(612, 792);
+    Shape logo;
+    logo.id = QStringLiteral("logo");
+    logo.kind = ShapeKind::Rectangle;
+    logo.rect = QRectF(650, 360, 50, 30);
+    logo.fill = QColor(Qt::green);
+    SlideMaster master;
+    master.id = QStringLiteral("m1");
+    master.typeDefaults = false;
+    master.backgroundStyle.kind = FillKind::Gradient;
+    master.backgroundStyle.stops = {{0, QColor(Qt::white)}, {1, QColor(Qt::gray)}};
+    master.shapes = {logo};
+    deck.masters = {master};
+    SlideLayout layout;
+    layout.id = QStringLiteral("l1");
+    layout.name = QStringLiteral("Banner");
+    layout.type = QStringLiteral("obj");
+    layout.master = master.id;
+    layout.background = {true, QColor(250, 240, 230), FillStyle()};
+    logo.id = QStringLiteral("band");
+    layout.shapes = {logo};
+    deck.layouts = {layout};
+    Slide &slide = deck.addSlide(QStringLiteral("Office"));
+    slide.master = master.id;
+    slide.layoutId = layout.id;
+    slide.hidden = true;
+    slide.showMasterShapes = false;
+    slide.background = {true, QColor(0, 0, 64), FillStyle()};
+    Shape arrow;
+    arrow.id = QStringLiteral("arrow");
+    arrow.kind = ShapeKind::AutoShape;
+    arrow.geometry = QStringLiteral("rightArrow");
+    arrow.adjust = {{QStringLiteral("adj1"), 40000}};
+    arrow.rect = QRectF(50, 50, 200, 80);
+    arrow.flipH = true;
+    arrow.fillStyle = master.backgroundStyle;
+    arrow.line.dash = QStringLiteral("dash");
+    arrow.textBody.anchor = TextAnchor::Middle;
+    TextRun run;
+    run.text = QStringLiteral("Next");
+    run.underline = QStringLiteral("sng");
+    run.baseline = 30000;
+    TextParagraph paragraph;
+    paragraph.runs = {run};
+    paragraph.marginLeft = 18;
+    paragraph.autoNumber = QStringLiteral("arabicPeriod");
+    arrow.paragraphs = {paragraph};
+    slide.shapes.append(arrow);
+    Shape table;
+    table.id = QStringLiteral("table");
+    table.kind = ShapeKind::Table;
+    table.rect = QRectF(50, 200, 300, 60);
+    table.table.columns = {150, 150};
+    TableCell cell;
+    cell.paragraphs = {paragraph};
+    cell.fill = QColor(Qt::yellow);
+    cell.gridSpan = 2;
+    TableCell covered;
+    covered.hMerge = true;
+    table.table.rows = {TableRow{30, {cell, covered}}, TableRow{30, {TableCell(), TableCell()}}};
+    slide.shapes.append(table);
+
+    QString error;
+    const QByteArray fodp = writeFodp(deck, &error);
+    const Presentation back = readFodp(fodp, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(back, deck);
+    QCOMPARE(writeFodp(back), fodp);
+    // LibreOffice's view: an arrow, a picture of the table, a hidden page.
+    QVERIFY(fodp.contains("draw:type=\"right-arrow\""));
+    QVERIFY(fodp.contains("presentation:visibility=\"hidden\""));
 }
 
 void ShowModelTest::fodpConvertsToPptx()
@@ -146,6 +256,39 @@ void ShowModelTest::fodpConvertsToPptx()
     const QString pptx = convert(fodpPath, QStringLiteral("pptx"));
     QVERIFY2(QFile::exists(pptx), "fodp -> pptx conversion failed");
 
+    // LibreOffice places the shapes where the model has them (the pre-M62
+    // unit-less lengths piled every shape into the top-left corner) and
+    // keeps their fills (the styles are linked).
+    namespace Ooxml = QindaOffice::Ooxml;
+    QString error;
+    const auto package = Ooxml::Package::load(pptx, &error);
+    QVERIFY2(package, qPrintable(error));
+    const Ooxml::XmlElementPtr slide = package->xml(QStringLiteral("ppt/slides/slide1.xml"));
+    QVERIFY(slide);
+    const QString a = QString::fromUtf16(Ooxml::Ns::A);
+    QList<QPointF> offsets;
+    QStringList fills;
+    const std::function<void(const Ooxml::XmlElement &)> walk = [&](const Ooxml::XmlElement &e) {
+        if (e.is(a, u"off")) {
+            offsets.append(QPointF(e.attr(u"x").toDouble() / 12700.0, e.attr(u"y").toDouble() / 12700.0));
+        }
+        if (e.is(a, u"srgbClr")) {
+            fills.append(e.attr(u"val").toLower());
+        }
+        for (const Ooxml::XmlElement *c : e.elements()) {
+            walk(*c);
+        }
+    };
+    walk(*slide);
+    const auto near = [&offsets](const QPointF &expected) {
+        return std::any_of(offsets.cbegin(), offsets.cend(), [&expected](const QPointF &p) {
+            return qAbs(p.x() - expected.x()) < 1.0 && qAbs(p.y() - expected.y()) < 1.0;
+        });
+    };
+    QVERIFY2(near(QPointF(40, 30)), "title box not at (40, 30) pt");
+    QVERIFY2(near(QPointF(60, 140)), "rectangle not at (60, 140) pt");
+    QVERIFY2(fills.contains(QStringLiteral("c8dcff")), "rectangle fill lost");
+
     // The pptx opens in Impress: convert it back to fodp and parse it.
     const QString back = convert(pptx, QStringLiteral("fodp"));
     if (!QFile::exists(back)) {
@@ -153,10 +296,13 @@ void ShowModelTest::fodpConvertsToPptx()
     }
     QFile file(back);
     QVERIFY(file.open(QIODevice::ReadOnly));
-    QString error;
     const Presentation reparsed = readFodp(file.readAll(), &error);
     QVERIFY2(error.isEmpty(), qPrintable(error));
     QCOMPARE(reparsed.slides.size(), 5);
+    // …and what LibreOffice wrote reads back at the right size and place.
+    const Shape &title = reparsed.slides.first().shapes.first();
+    QVERIFY2(qAbs(title.rect.x() - 40) < 1 && qAbs(title.rect.width() - 640) < 1,
+             qPrintable(QStringLiteral("%1 %2").arg(title.rect.x()).arg(title.rect.width())));
 }
 
 void ShowModelTest::rendererPaints()
@@ -253,7 +399,7 @@ void ShowModelTest::shapeJsonCodecRoundTrips()
     QCOMPARE(runBack.text, run.text);
     QVERIFY(runBack.bold && runBack.italic);
     QCOMPARE(runBack.color, run.color);
-    QCOMPARE(runBack.pointSize, 24);
+    QCOMPARE(runBack.pointSize, 24.0);
     QCOMPARE(runBack.fontFamily, run.fontFamily);
     QCOMPARE(decoded.paragraphs.first().alignment, paragraph.alignment);
     QVERIFY(decoded.paragraphs.first().bullet);

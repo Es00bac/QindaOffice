@@ -159,6 +159,7 @@ signals:
 
 protected:
     [[nodiscard]] QString filterString() const override;
+    [[nodiscard]] QString saveFilterString() const override;
     void applyPreferences() override;
     void documentReplaced() override;
     [[nodiscard]] Quick::PrintRenderCallback printRenderCallback() const override;

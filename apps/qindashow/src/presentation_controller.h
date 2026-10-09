@@ -3,8 +3,9 @@
 
 // PresentationController (plan section 7.5): the (slideIndex, buildStep)
 // pair that drives the player and the presenter. Advancing reveals builds
-// before slides; going back shows the previous slide fully revealed. Pure
-// logic over a live Presentation so tests exercise it without widgets.
+// before slides; going back shows the previous slide fully revealed;
+// hidden slides are skipped (M62). Pure logic over a live Presentation so
+// tests exercise it without widgets.
 
 #include "presentation.h"
 
@@ -52,6 +53,8 @@ signals:
     void stateChanged();
 
 private:
+    [[nodiscard]] int shownNeighbour(int from, int step) const;
+
     ShowModel::Presentation *m_deck;
     int m_slide = 0;
     int m_build = 0;

@@ -46,9 +46,20 @@ int PresentationController::buildDurationMs() const
     return longest;
 }
 
+int PresentationController::shownNeighbour(int from, int step) const
+{
+    // Hidden slides are skipped by the show, as PowerPoint skips them.
+    for (int i = from + step; i >= 0 && i < m_deck->slides.size(); i += step) {
+        if (!m_deck->slides.at(i).hidden) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 bool PresentationController::atEnd() const
 {
-    return m_slide >= m_deck->slides.size() - 1 && m_build >= buildCap(m_slide);
+    return m_build >= buildCap(m_slide) && shownNeighbour(m_slide, 1) < 0;
 }
 
 void PresentationController::goTo(int slide, int build)
@@ -63,8 +74,8 @@ void PresentationController::advance(int delta)
     if (delta > 0) {
         if (m_build < buildCap(m_slide)) {
             ++m_build;
-        } else if (m_slide < m_deck->slides.size() - 1) {
-            ++m_slide;
+        } else if (const int next = shownNeighbour(m_slide, 1); next >= 0) {
+            m_slide = next;
             m_build = 0;
         } else {
             return; // past the last slide is a no-op
@@ -72,8 +83,8 @@ void PresentationController::advance(int delta)
     } else if (delta < 0) {
         if (m_build > 0) {
             --m_build;
-        } else if (m_slide > 0) {
-            --m_slide;
+        } else if (const int previous = shownNeighbour(m_slide, -1); previous >= 0) {
+            m_slide = previous;
             m_build = buildCap(m_slide); // fully revealed
         } else {
             return;

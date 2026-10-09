@@ -13,6 +13,7 @@
 #include "qindashow/src/show_clipboard.h"
 #include "qindashow/src/show_commands.h"
 #include "qindashow/src/show_toolbox.h"
+#include "show_model/pptx_fixture_slides.h"
 #include "support/quick_dump.h"
 #include "support/ribbon_gate.h"
 
@@ -24,6 +25,7 @@
 #include <QImage>
 #include <QMimeData>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QUndoStack>
 
 using namespace ShowTest;
@@ -251,6 +253,50 @@ private slots:
         QVERIFY2(whitePixels > 100, qPrintable(QString::number(whitePixels)));
         // And it is the item's own paint, in slide points.
         QCOMPARE(scene.canvas->implicitWidth(), scene.doc->presentation()->slideSize.width());
+    }
+
+    // M62: a PowerPoint deck opens natively and paints on the canvas with
+    // its master's background, its table and its chart; a placeholder's
+    // text opens in the in-place editor inside its own insets. Grabs land
+    // in QQO_GRAB_DIR (qindashow_pptx_slideN.png).
+    void powerPointDeckOnTheCanvas()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("fixture.pptx"));
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(PptxFixture::build());
+        file.close();
+        Scene scene(QSize(1280, 800));
+        QVERIFY2(scene.ready(), qPrintable(scene.error));
+        QVERIFY2(scene.host.loadPath(path), "the .pptx did not open");
+        QCOMPARE(scene.host.slideCount(), 5);
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        for (const int row : {0, 1, 3}) {
+            scene.host.selectSlideRow(row);
+            QTest::qWait(150);
+            const QImage shot = scene.window->grabWindow();
+            QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindashow_pptx_slide%1").arg(row + 1));
+            int ivory = 0;
+            for (int y = 0; y < shot.height(); y += 4) {
+                for (int x = 0; x < shot.width(); x += 4) {
+                    ivory += QColor(shot.pixel(x, y)) == QColor(0xFF, 0xFF, 0xF0) ? 1 : 0;
+                }
+            }
+            QVERIFY2(ivory > 500, qPrintable(QStringLiteral("slide %1: %2").arg(row + 1).arg(ivory)));
+        }
+        scene.host.selectSlideRow(0);
+        const ShowModel::Shape &title = scene.canvas->slide()->shapes.first();
+        scene.canvas->beginTextEdit(title.id);
+        QCOMPARE(scene.canvas->editingShapeId(), title.id);
+        QCOMPARE(scene.canvas->editorRect(), title.rect.adjusted(7.2, 3.6, -7.2, -3.6));
+        scene.canvas->commitTextEdit(false);
+        QVERIFY(!scene.doc->isDirty()); // an unchanged edit is no edit
+        // A table holds no text box of its own to edit in place.
+        scene.host.selectSlideRow(1);
+        scene.canvas->beginTextEdit(scene.canvas->slide()->shapes.first().id);
+        QVERIFY(scene.canvas->editingShapeId().isEmpty());
     }
 
     void alignCentersSelectionAgainstTheSlide()

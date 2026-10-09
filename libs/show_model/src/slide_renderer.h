@@ -2,14 +2,50 @@
 #pragma once
 
 // SlideRenderer (plan section 7.5): paints a slide (up to a build step) to
-// a painter or pixmap. The player, the editor thumbnails, and the PDF
-// exporter all render through here so WYSIWYG holds everywhere.
+// a painter or pixmap. The player, the editor canvas and thumbnails, and
+// the PDF exporter all render through here so WYSIWYG holds everywhere.
+// Everything is in slide points.
+//
+// M62 (D-070): a slide paints over its BACKDROP — the background (the
+// slide's own, else its layout's, else its master's; plain, gradient or
+// picture) and the decorative shapes of its master and layout (logos,
+// rules; placeholders never) — and every shape kind of the extended model
+// (render_parts.h). renderSlide(painter, deck, slide) resolves the backdrop
+// from the deck; callers that hold no deck (the canvas keeps a copy, never
+// a pointer into the deck's lists) pass one from backdropFor().
 
 #include "presentation.h"
+
+#include <QImage>
 
 class QPainter;
 
 namespace QindaOffice::Show {
+
+struct SlideBackdrop {
+    QColor color = Qt::white; // the plain background
+    FillStyle style;          // when it is a gradient / picture / pattern
+    QList<Shape> shapes;      // master then layout decorations, behind the slide
+    // A QindaShow master's type defaults (withMasterDefaults); unset for an
+    // Office master, whose type the reader resolved into every run.
+    SlideMaster typeMaster;
+    bool hasTypeMaster = false;
+    bool operator==(const SlideBackdrop &) const = default;
+};
+
+// The backdrop `slide` paints over in `deck`.
+[[nodiscard]] SlideBackdrop backdropFor(const Presentation &deck, const Slide &slide);
+// The backdrop of a bare master (nullptr = white paper).
+[[nodiscard]] SlideBackdrop backdropFor(const SlideMaster *master);
+void paintBackdrop(QPainter *painter, const SlideBackdrop &backdrop, const QSizeF &slideSize);
+
+// Renders `slide` of `deck` with its backdrop, up to `buildStep`;
+// `buildProgress` is how far the shapes AT that step have animated in
+// (0..1, the player drives it; 1 = the finished slide).
+void renderSlide(QPainter *painter, const Presentation &deck, const Slide &slide, int buildStep = 1000,
+                 qreal buildProgress = 1.0);
+void renderSlide(QPainter *painter, const Slide &slide, const QSizeF &slideSize, const SlideBackdrop &backdrop,
+                 int buildStep = 1000, qreal buildProgress = 1.0);
 
 // Renders a slide up to `buildStep`. `master` supplies the background and
 // the default type (nullptr = plain white). `buildProgress` is how far the
@@ -30,5 +66,7 @@ void renderShape(QPainter *painter, const Shape &shape, const SlideMaster *maste
 [[nodiscard]] QPixmap renderSlideToPixmap(const Slide &slide, const QSizeF &slideSize,
                                           const QSize &pixels, int buildStep = 1000,
                                           const SlideMaster *master = nullptr);
+// `slide` of `deck` with its backdrop, as an image of `pixels`.
+[[nodiscard]] QImage renderSlideToImage(const Presentation &deck, const Slide &slide, const QSize &pixels);
 
 } // namespace QindaOffice::Show

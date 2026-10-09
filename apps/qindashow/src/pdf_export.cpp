@@ -31,7 +31,8 @@ bool exportDeckPdf(const ShowModel::Presentation &deck, const QString &path, boo
     for (int i = 0; i < deck.slides.size(); ++i) {
         painter.save();
         painter.scale(ptScale, ptScale);
-        ShowModel::renderSlide(&painter, deck.slides.at(i), deck.slideSize);
+        // With its master, layout and background (D-070).
+        ShowModel::renderSlide(&painter, deck, deck.slides.at(i));
         painter.restore();
         if (i + 1 < deck.slides.size()) {
             writer.newPage();
@@ -54,7 +55,7 @@ bool exportDeckPdf(const ShowModel::Presentation &deck, const QString &path, boo
                               - QPointF(deck.slideSize.width() * scale / 2.0,
                                         deck.slideSize.height() * scale / 2.0));
             painter.scale(scale, scale);
-            ShowModel::renderSlide(&painter, slide, deck.slideSize);
+            ShowModel::renderSlide(&painter, deck, slide);
             painter.restore();
             QTextDocument notes;
             notes.setHtml(slide.notes.toHtmlEscaped().replace(QLatin1String("\n"),

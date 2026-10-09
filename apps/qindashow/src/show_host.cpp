@@ -126,9 +126,10 @@ void ShowHost::switchSlide(int row)
         return;
     }
     m_currentRow = row;
-    // The master first: setSlide repaints, and every shape paints through
-    // the master's defaults.
-    m_canvas->setMaster(deck->masterFor(deck->slides.at(row)));
+    // The backdrop first (background, master and layout decorations, the
+    // master's type defaults): setSlide repaints.
+    const ShowModel::Slide &current = deck->slides.at(row);
+    m_canvas->setBackdrop(ShowModel::backdropFor(*deck, current), deck->masterFor(current));
     m_canvas->setSlide(&deck->slides[row], deck->slideSize);
     m_arrange->syncFromSelection();
     m_design->syncFromSelection();
@@ -358,9 +359,19 @@ void ShowHost::wireEditCommands()
 
 // ---- hooks ---------------------------------------------------------------------------
 
+// Mirrors ShowDocument::mimeTypes() and the .desktop MimeType list.
 QString ShowHost::filterString() const
 {
-    return tr("QindaShow presentations (*.fodp *.odp *.pptx);;All files (*)");
+    return tr("Presentations (*.pptx *.ppt *.odp *.fodp *.pptm *.potx *.ppsx);;"
+              "PowerPoint (*.pptx *.ppt *.pptm *.potx *.ppsx);;OpenDocument (*.odp *.fodp);;All files (*)");
+}
+
+QString ShowHost::saveFilterString() const
+{
+    // D-070: PowerPoint first, so Save As defaults to the format that
+    // opens in Microsoft Office and carries the whole deck.
+    return tr("PowerPoint Presentation (*.pptx);;OpenDocument Presentation (*.odp);;"
+              "Flat OpenDocument Presentation (*.fodp)");
 }
 
 void ShowHost::applyPreferences()
@@ -395,7 +406,7 @@ Quick::PrintRenderCallback ShowHost::printRenderCallback() const
             painter->save();
             painter->translate(page.center() - QPointF(slide.width() * scale / 2.0, slide.height() * scale / 2.0));
             painter->scale(scale, scale);
-            ShowModel::renderSlide(painter, deck->slides.at(i), slide, 1000, deck->masterFor(deck->slides.at(i)));
+            ShowModel::renderSlide(painter, *deck, deck->slides.at(i));
             painter->restore();
         }
     };

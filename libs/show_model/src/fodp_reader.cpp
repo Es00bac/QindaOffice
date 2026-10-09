@@ -1,427 +1,419 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "fodp_reader.h"
 
-#include <QXmlStreamReader>
+#include "fodp_extended.h"
+#include "fodp_read_styles.h"
+#include "fodp_read_text.h"
+#include "odf_dom.h"
+
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QtMath>
 
 namespace QindaOffice::Show {
 
 namespace {
 
-qreal lengthToPt(QStringView value)
+using namespace Odf;
+using Fodp::StyleSheet;
+
+QColor colorOrInvalid(const QString &value)
 {
-    // cm/mm/in/pt -> pt (plan section 7.5).
-    if (value.endsWith(QLatin1String("cm"))) {
-        return value.first(value.size() - 2).toDouble() * 72.0 / 2.54;
+    if (value.isEmpty() || value == u"none") {
+        return {};
     }
-    if (value.endsWith(QLatin1String("mm"))) {
-        return value.first(value.size() - 2).toDouble() * 72.0 / 25.4;
-    }
-    if (value.endsWith(QLatin1String("in"))) {
-        return value.first(value.size() - 2).toDouble() * 72.0;
-    }
-    if (value.endsWith(QLatin1String("pt"))) {
-        return value.first(value.size() - 2).toDouble();
-    }
-    return value.toDouble(); // bare numbers read as pt
+    return QColor::fromString(value);
 }
 
-// Reads the qq: extension attributes ODF has no home for. A field the
-// reader skips is a field the user loses on reopen, so this is paired with
-// writeShapeExtras in fodp_writer.cpp.
-void readShapeExtras(Shape &shape, const QXmlStreamAttributes &attrs)
+QRectF rectFrom(const QString &value)
 {
-    if (attrs.hasAttribute(QStringLiteral("qq:animation"))) {
-        const int animation = attrs.value(QStringLiteral("qq:animation")).toInt();
-        shape.animation = ShapeAnimation(qBound(0, animation, int(ShapeAnimation::Zoom)));
-        const int ms = attrs.value(QStringLiteral("qq:animation-ms")).toInt();
-        shape.animationMs = ms > 0 ? qBound(50, ms, 5000) : 350;
+    const QStringList parts = value.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    if (parts.size() != 4) {
+        return {};
     }
-    shape.groupId = attrs.value(QStringLiteral("qq:group")).toString();
+    return QRectF(parts.at(0).toDouble(), parts.at(1).toDouble(), parts.at(2).toDouble(), parts.at(3).toDouble());
 }
 
-struct GraphicStyle {
-    QColor fill;
-    QColor stroke;
-    qreal strokeWidth = 1.0;
+qreal percentValue(const QString &value)
+{
+    QString number = value;
+    number.remove(QLatin1Char('%'));
+    bool ok = false;
+    const qreal parsed = number.toDouble(&ok);
+    return ok ? parsed : 100.0;
+}
+
+class Reader {
+public:
+    explicit Reader(const OdfNode &document)
+        : m_sheet(document)
+    {
+    }
+
+    Presentation read(const OdfNode &document);
+
+private:
+    void readShapes(const OdfNode &container, Slide &slide, const QString &groupId);
+    bool readShape(const OdfNode &node, Shape &shape);
+    void readGeometry(const OdfNode &node, Shape &shape) const;
+    void readGraphicStyle(const OdfNode &node, Shape &shape) const;
+    void readExtras(const OdfNode &node, Shape &shape) const;
+    [[nodiscard]] QString graphicStyleName(const OdfNode &node, QString *family) const;
+    [[nodiscard]] QString transitionOf(const QString &pageStyle) const;
+
+    StyleSheet m_sheet;
+    int m_groups = 0;
 };
 
-QColor colorFrom(QStringView value)
+QString Reader::graphicStyleName(const OdfNode &node, QString *family) const
 {
-    return value.isEmpty() ? QColor() : QColor::fromString(value.toString());
-}
-
-TextRun readRun(const QXmlStreamAttributes &attrs, const QString &text)
-{
-    TextRun run;
-    run.text = text;
-    for (const QXmlStreamAttribute &attr : attrs) {
-        const QStringView name = attr.name();
-        const QStringView ns = attr.prefix();
-        if (ns == QLatin1String("fo") && name == QLatin1String("font-weight")) {
-            run.bold = attr.value() == QLatin1String("bold");
-        } else if (ns == QLatin1String("fo") && name == QLatin1String("font-style")) {
-            run.italic = attr.value() == QLatin1String("italic");
-        } else if (ns == QLatin1String("fo") && name == QLatin1String("color")) {
-            run.color = QColor::fromString(attr.value().toString());
-        } else if (ns == QLatin1String("fo") && name == QLatin1String("font-size")) {
-            run.pointSize = int(lengthToPt(attr.value()));
-        } else if (ns == QLatin1String("style") && name == QLatin1String("font-name")) {
-            run.fontFamily = attr.value().toString();
+    QString name = node.attr(kDraw, u"style-name");
+    *family = QStringLiteral("graphic");
+    if (name.isEmpty() && node.hasAttr(kPresentation, u"style-name")) {
+        name = node.attr(kPresentation, u"style-name");
+        *family = QStringLiteral("presentation");
+    }
+    // Pre-M62 QindaShow wrote a "shape-<name>" style per shape but never
+    // linked it; adopt it, so old files get their fills back.
+    if (name.isEmpty()) {
+        const QString legacy = QStringLiteral("shape-") + node.attr(kDraw, u"name");
+        if (m_sheet.hasStyle(legacy, QStringLiteral("graphic"))) {
+            name = legacy;
         }
     }
-    return run;
+    return name;
+}
+
+void Reader::readGraphicStyle(const OdfNode &node, Shape &shape) const
+{
+    QString family;
+    const QString style = graphicStyleName(node, &family);
+    const auto prop = [&](QStringView ns, QStringView local) {
+        return m_sheet.property(style, family, u"graphic-properties", ns, local);
+    };
+    // The model's exact values when this file is ours…
+    const QString exactFill = prop(kQq, u"fill-color");
+    if (!exactFill.isEmpty()) {
+        shape.fill = colorOrInvalid(exactFill);
+        shape.stroke = colorOrInvalid(prop(kQq, u"stroke-color"));
+        shape.strokeWidth = prop(kQq, u"stroke-width").toDouble();
+        return;
+    }
+    // …otherwise what ODF says (LibreOffice files, pre-M62 QindaShow).
+    const QString fill = prop(kDraw, u"fill");
+    if (fill == u"solid" || fill == u"gradient" || fill == u"hatch" || fill == u"bitmap") {
+        QColor color = colorOrInvalid(prop(kDraw, u"fill-color"));
+        if (!color.isValid()) {
+            color = QColor(0x72, 0x9f, 0xcf); // ODF's default fill colour
+        }
+        const QString opacity = prop(kDraw, u"opacity");
+        if (!opacity.isEmpty()) {
+            color.setAlphaF(float(qBound(0.0, percentValue(opacity) / 100.0, 1.0)));
+        }
+        shape.fill = color;
+    } else if (fill == u"none") {
+        shape.fill = Qt::transparent;
+    } else if (const QColor legacy = colorOrInvalid(prop(kDraw, u"fill-color")); legacy.isValid() && fill.isEmpty()
+               && style.startsWith(QLatin1String("shape-"))) {
+        shape.fill = legacy;
+    }
+    const QString stroke = prop(kDraw, u"stroke");
+    if (stroke == u"none") {
+        shape.strokeWidth = 0;
+    } else {
+        const QColor color = colorOrInvalid(prop(kSvg, u"stroke-color"));
+        if (color.isValid()) {
+            shape.stroke = color;
+        }
+        const QString width = prop(kSvg, u"stroke-width");
+        if (!width.isEmpty()) {
+            // ODF's 0 width is a hairline, not "no line".
+            shape.strokeWidth = qMax<qreal>(lengthToPt(width), 0.75);
+        }
+        const QString opacity = prop(kSvg, u"stroke-opacity");
+        if (!opacity.isEmpty() && shape.stroke.isValid()) {
+            shape.stroke.setAlphaF(float(qBound(0.0, percentValue(opacity) / 100.0, 1.0)));
+        }
+    }
+}
+
+void Reader::readGeometry(const OdfNode &node, Shape &shape) const
+{
+    const qreal width = lengthToPt(node.attr(kSvg, u"width"));
+    const qreal height = lengthToPt(node.attr(kSvg, u"height"));
+    const qreal x = lengthToPt(node.attr(kSvg, u"x"));
+    const qreal y = lengthToPt(node.attr(kSvg, u"y"));
+    shape.rect = QRectF(x, y, width, height);
+    const QString transform = node.attr(kDraw, u"transform");
+    if (!transform.isEmpty()) {
+        if (!transform.contains(QLatin1String("translate")) && node.hasAttr(kSvg, u"x")) {
+            // Pre-M62 QindaShow: svg:x/y kept, "rotate (a)" with the model's
+            // CLOCKWISE angle in radians (degrees in the oldest files).
+            const QString inner = transform.section(QLatin1Char('('), 1).section(QLatin1Char(')'), 0, 0);
+            const double raw = inner.trimmed().toDouble();
+            shape.rotation = qFabs(raw) > 2.0 * M_PI + 0.01 ? raw : qRadiansToDegrees(raw);
+        } else {
+            bool ok = false;
+            const QTransform matrix = parseTransform(transform, &ok);
+            if (ok) {
+                const QPointF origin = matrix.map(QPointF(0, 0));
+                const QPointF xAxis = matrix.map(QPointF(1, 0)) - origin;
+                const QPointF yAxis = matrix.map(QPointF(0, 1)) - origin;
+                const qreal sx = std::hypot(xAxis.x(), xAxis.y());
+                const qreal sy = std::hypot(yAxis.x(), yAxis.y());
+                const QPointF centre = matrix.map(QPointF(width / 2.0, height / 2.0));
+                const QSizeF size(width * sx, height * sy);
+                shape.rect = QRectF(centre - QPointF(size.width() / 2.0, size.height() / 2.0), size);
+                qreal degrees = qRadiansToDegrees(std::atan2(xAxis.y(), xAxis.x()));
+                if (degrees < 0) {
+                    degrees += 360.0;
+                }
+                shape.rotation = qFuzzyIsNull(degrees) || qFuzzyCompare(degrees, 360.0) ? 0.0 : degrees;
+            }
+        }
+    }
+    if (node.hasAttr(kQq, u"rotation")) {
+        shape.rotation = node.attr(kQq, u"rotation").toDouble();
+    }
+    if (node.hasAttr(kQq, u"rect")) {
+        shape.rect = rectFrom(node.attr(kQq, u"rect"));
+    }
+}
+
+// The qq: attributes ODF has no home for; paired with writeShapeExtras in
+// fodp_writer.cpp.
+void Reader::readExtras(const OdfNode &node, Shape &shape) const
+{
+    shape.id = node.attr(kDraw, u"name");
+    shape.buildStep = node.attr(kQq, u"build-step").toInt();
+    if (node.hasAttr(kQq, u"animation")) {
+        const int animation = node.attr(kQq, u"animation").toInt();
+        shape.animation = ShapeAnimation(qBound(0, animation, int(ShapeAnimation::Zoom)));
+    }
+    if (node.hasAttr(kQq, u"animation-ms")) {
+        const int ms = node.attr(kQq, u"animation-ms").toInt();
+        shape.animationMs = ms > 0 ? qBound(50, ms, 5000) : 350;
+    }
+    shape.groupId = node.attr(kQq, u"group");
+    const QString extra = node.attr(kQq, u"extra");
+    if (!extra.isEmpty()) {
+        shape.extra = QJsonDocument::fromJson(extra.toUtf8()).object().toVariantMap();
+    }
+}
+
+bool Reader::readShape(const OdfNode &node, Shape &shape)
+{
+    // The exact shape QindaShow wrote beside the ODF approximation.
+    if (node.hasAttr(kQq, u"shape")) {
+        if (std::optional<Shape> exact = Fodp::fromExtendedCopy(node.attr(kQq, u"shape"), node.attr(kDraw, u"name"))) {
+            shape = *exact;
+            shape.groupId = node.attr(kQq, u"group");
+            return true;
+        }
+    }
+    QString family;
+    const QString style = graphicStyleName(node, &family);
+    Fodp::TextDefaults text{node.attr(kDraw, u"text-style-name"), style, family};
+    readExtras(node, shape);
+    readGraphicStyle(node, shape);
+    if (node.is(kDraw, u"line") || node.is(kDraw, u"connector")) {
+        QPointF from(lengthToPt(node.attr(kSvg, u"x1")), lengthToPt(node.attr(kSvg, u"y1")));
+        QPointF to(lengthToPt(node.attr(kSvg, u"x2")), lengthToPt(node.attr(kSvg, u"y2")));
+        const bool startMarker = !m_sheet.property(style, family, u"graphic-properties", kDraw, u"marker-start").isEmpty();
+        const bool endMarker = !m_sheet.property(style, family, u"graphic-properties", kDraw, u"marker-end").isEmpty();
+        if (startMarker && !endMarker) {
+            std::swap(from, to); // the model's arrowhead sits at the end
+        }
+        shape.kind = startMarker || endMarker ? ShapeKind::Arrow : ShapeKind::Line;
+        // Un-normalised on purpose: the direction is the sign of w/h.
+        shape.rect = QRectF(from, to);
+        if (node.hasAttr(kQq, u"rect")) {
+            shape.rect = rectFrom(node.attr(kQq, u"rect"));
+            shape.rotation = node.attr(kQq, u"rotation").toDouble();
+        }
+        return true;
+    }
+    readGeometry(node, shape);
+    if (node.is(kDraw, u"frame")) {
+        if (const OdfNode *image = node.child(kDraw, u"image")) {
+            const OdfNode *binary = image->child(kOffice, u"binary-data");
+            if (binary != nullptr) {
+                QString base64;
+                for (const OdfNodePtr &c : binary->children) {
+                    base64 += c->text;
+                }
+                shape.kind = ShapeKind::Image;
+                shape.imagePng = QByteArray::fromBase64(base64.toLatin1());
+                return true;
+            }
+        }
+        if (const OdfNode *box = node.child(kDraw, u"text-box")) {
+            shape.kind = ShapeKind::TextBox;
+            shape.paragraphs = Fodp::readParagraphs(*box, m_sheet, text);
+            return true;
+        }
+        return false; // objects, tables, plug-ins: nothing the model can show
+    }
+    shape.kind = node.is(kDraw, u"ellipse") || node.is(kDraw, u"circle") ? ShapeKind::Ellipse : ShapeKind::Rectangle;
+    if (const OdfNode *geometry = node.child(kDraw, u"enhanced-geometry")) {
+        const QString type = geometry->attr(kDraw, u"type");
+        if (type == u"ellipse" || type == u"ooxml-ellipse" || type == u"circle") {
+            shape.kind = ShapeKind::Ellipse;
+        } else if (const QString preset = Fodp::presetForOdfType(type); !preset.isEmpty() && preset != u"rect") {
+            // A LibreOffice arrow, chevron, … keeps its outline.
+            shape.kind = ShapeKind::AutoShape;
+            shape.geometry = preset;
+        }
+    }
+    shape.paragraphs = Fodp::readParagraphs(node, m_sheet, text);
+    return true;
+}
+
+void Reader::readShapes(const OdfNode &container, Slide &slide, const QString &groupId)
+{
+    for (const OdfNode *node : container.elements()) {
+        if (node->is(kDraw, u"g")) {
+            // An ODF group becomes a QindaShow group: the members select and
+            // move as one.
+            readShapes(*node, slide, groupId.isEmpty() ? QStringLiteral("odf-group-%1").arg(++m_groups) : groupId);
+            continue;
+        }
+        const bool shapeElement = node->is(kDraw, u"frame") || node->is(kDraw, u"custom-shape")
+            || node->is(kDraw, u"rect") || node->is(kDraw, u"ellipse") || node->is(kDraw, u"circle")
+            || node->is(kDraw, u"line") || node->is(kDraw, u"connector");
+        if (!shapeElement) {
+            continue;
+        }
+        Shape shape;
+        if (!readShape(*node, shape)) {
+            continue;
+        }
+        if (!groupId.isEmpty() && shape.groupId.isEmpty()) {
+            shape.groupId = groupId;
+        }
+        slide.shapes.append(shape);
+    }
+}
+
+QString Reader::transitionOf(const QString &pageStyle) const
+{
+    const QString family = QStringLiteral("drawing-page");
+    const QString exact = m_sheet.property(pageStyle, family, u"drawing-page-properties", kQq, u"transition");
+    if (!exact.isEmpty()) {
+        return exact;
+    }
+    const QString type = m_sheet.property(pageStyle, family, u"drawing-page-properties", kSmil, u"type");
+    if (type.isEmpty()) {
+        return QStringLiteral("cut");
+    }
+    if (type == u"fade" || type == u"dissolve") {
+        return QStringLiteral("fade");
+    }
+    if (type == u"slide" || type == u"slideWipe" || type == u"pushWipe" || type == u"barWipe") {
+        return QStringLiteral("slide");
+    }
+    if (type == u"zoom" || type == u"irisWipe" || type == u"ellipseWipe") {
+        return QStringLiteral("zoom");
+    }
+    return QStringLiteral("fade"); // some effect the player approximates
+}
+
+Presentation Reader::read(const OdfNode &document)
+{
+    Presentation presentation;
+    if (const OdfNode *meta = document.child(kOffice, u"meta")) {
+        if (const OdfNode *title = meta->child(u"http://purl.org/dc/elements/1.1/", u"title")) {
+            for (const OdfNodePtr &c : title->children) {
+                presentation.title += c->text;
+            }
+        }
+    }
+    // Our masters (the ones carrying qq:background).
+    QHash<QString, QString> masterIds; // master page name → model id
+    for (const OdfNode *page : m_sheet.masterPages()) {
+        if (!page->hasAttr(kQq, u"background")) {
+            continue;
+        }
+        SlideMaster master;
+        const QString name = page->attr(kStyle, u"name");
+        master.id = page->attr(kQq, u"id", name);
+        master.name = page->attr(kQq, u"master-name");
+        master.background = QColor::fromString(page->attr(kQq, u"background"));
+        master.titleColor = QColor::fromString(page->attr(kQq, u"title-color"));
+        master.bodyColor = QColor::fromString(page->attr(kQq, u"body-color"));
+        master.fontFamily = page->attr(kQq, u"font");
+        master.typeDefaults = page->attr(kQq, u"type-defaults") != u"0";
+        if (page->hasAttr(kQq, u"background-style")) {
+            master.backgroundStyle = Fodp::backgroundFromJson(page->attr(kQq, u"background-style")).style;
+        }
+        if (page->hasAttr(kQq, u"shapes")) {
+            master.shapes = Fodp::shapesFromJson(page->attr(kQq, u"shapes"));
+        }
+        presentation.masters.append(master);
+        masterIds.insert(name, master.id);
+    }
+    const OdfNode *body = document.child(kOffice, u"body");
+    const OdfNode *deck = body != nullptr ? body->child(kOffice, u"presentation") : nullptr;
+    if (deck == nullptr) {
+        return presentation;
+    }
+    presentation.layouts = Fodp::layoutsFromJson(deck->attr(kQq, u"layouts"));
+    if (deck->hasAttr(kQq, u"notes-size")) {
+        const QStringList size = deck->attr(kQq, u"notes-size").split(QLatin1Char(' '));
+        if (size.size() == 2) {
+            presentation.notesSize = QSizeF(size.at(0).toDouble(), size.at(1).toDouble());
+        }
+    }
+    const QList<const OdfNode *> pages = deck->elements(kDraw, u"page");
+    const QSizeF size = m_sheet.masterPageSize(pages.isEmpty() ? QString()
+                                                                : pages.first()->attr(kDraw, u"master-page-name"));
+    if (size.width() > 0 && size.height() > 0) {
+        presentation.slideSize = size;
+    }
+    for (const OdfNode *page : pages) {
+        Slide slide;
+        slide.id = page->attr(kDraw, u"name");
+        slide.title = page->attr(kQq, u"title");
+        slide.layout = page->attr(kQq, u"layout", slide.layout);
+        const QString masterPage = page->attr(kDraw, u"master-page-name");
+        slide.master = page->attr(kQq, u"master", masterIds.value(masterPage));
+        slide.transition = transitionOf(page->attr(kDraw, u"style-name"));
+        slide.hidden = m_sheet.property(page->attr(kDraw, u"style-name"), QStringLiteral("drawing-page"),
+                                        u"drawing-page-properties", kPresentation, u"visibility")
+            == u"hidden";
+        slide.showMasterShapes = page->attr(kQq, u"show-master") != u"0";
+        if (page->hasAttr(kQq, u"background")) {
+            slide.background = Fodp::backgroundFromJson(page->attr(kQq, u"background"));
+        }
+        slide.layoutId = page->attr(kQq, u"layout-id");
+        readShapes(*page, slide, QString());
+        if (const OdfNode *notes = page->child(kPresentation, u"notes")) {
+            for (const OdfNode *frame : notes->elements(kDraw, u"frame")) {
+                if (frame->attr(kPresentation, u"class") == u"notes") {
+                    if (const OdfNode *box = frame->child(kDraw, u"text-box")) {
+                        slide.notes = Fodp::readPlainText(*box).trimmed();
+                    }
+                }
+            }
+        }
+        presentation.slides.append(slide);
+    }
+    return presentation;
 }
 
 } // namespace
 
 Presentation readFodp(const QByteArray &fodp, QString *error)
 {
-    Presentation presentation;
-    QXmlStreamReader xml(fodp);
-    if (xml.hasError()) {
-        if (error != nullptr) {
-            *error = xml.errorString();
-        }
-        return presentation;
+    const OdfNodePtr document = parseOdf(fodp, error);
+    if (!document) {
+        return {};
     }
-
-    QHash<QString, GraphicStyle> styles;
-    QHash<QString, QString> pageTransitions;
-    Slide currentSlide;
-    Shape currentShape;
-    bool inSlide = false;
-    bool inShape = false;
-    bool inParagraph = false;
-    TextParagraph currentParagraph;
-    bool inNotes = false;
-    QString notesText;
-
-    auto flushShape = [&]() {
-        if (inShape) {
-            currentSlide.shapes.append(currentShape);
-            currentShape = Shape{};
-            inShape = false;
-        }
-    };
-    auto flushParagraph = [&]() {
-        if (inParagraph) {
-            currentShape.paragraphs.append(currentParagraph);
-            currentParagraph = TextParagraph{};
-            inParagraph = false;
-        }
-    };
-    auto flushSlide = [&]() {
-        currentSlide.notes = notesText.trimmed();
-        notesText.clear();
-        presentation.slides.append(currentSlide);
-        currentSlide = Slide{};
-    };
-    // AGENT-GUARD: shapes arrive both framed (our earlier files) and as
-    // PAGE-LEVEL draw:rect / draw:ellipse / draw:custom-shape / draw:line
-    // elements (conforming ODF, as LibreOffice writes). Only reading the
-    // framed form made every .odp/.pptx import lose those shape kinds.
-    auto beginShapeFromAttrs = [&](const QXmlStreamAttributes &attrs) {
-        flushParagraph();
-        flushShape();
-        inShape = true;
-        currentShape = Shape{};
-        currentShape.id = attrs.value(QStringLiteral("draw:name")).toString();
-        currentShape.rect =
-            QRectF(lengthToPt(attrs.value(QStringLiteral("svg:x"))),
-                   lengthToPt(attrs.value(QStringLiteral("svg:y"))),
-                   lengthToPt(attrs.value(QStringLiteral("svg:width"))),
-                   lengthToPt(attrs.value(QStringLiteral("svg:height"))));
-        currentShape.buildStep =
-            attrs.value(QStringLiteral("qq:build-step")).toInt();
-        readShapeExtras(currentShape, attrs);
-        const QString shapeTransform = attrs.value(QStringLiteral("draw:transform")).toString();
-        if (shapeTransform.startsWith(QLatin1String("rotate ("))) {
-            const double raw = shapeTransform.mid(8, shapeTransform.indexOf(QLatin1Char(')')) - 8)
-                                   .toDouble();
-            currentShape.rotation = qFabs(raw) > 2.0 * M_PI + 0.01
-                ? raw // legacy degrees from the earlier release
-                : qRadiansToDegrees(raw);
-        }
-        const QString shapeStyle = attrs.value(QStringLiteral("draw:style-name")).toString();
-        if (styles.contains(shapeStyle)) {
-            const GraphicStyle style = styles.value(shapeStyle);
-            currentShape.fill = style.fill;
-            currentShape.stroke = style.stroke;
-            currentShape.strokeWidth = style.strokeWidth;
-        }
-    };
-
-    while (!xml.atEnd()) {
-        xml.readNext();
-        const QStringView name = xml.name();
-        const QStringView ns = xml.prefix();
-
-        if (xml.isStartElement() && ns == QLatin1String("style")
-            && name == QLatin1String("style")) {
-            const QString styleName =
-                xml.attributes().value(QStringLiteral("style:name")).toString();
-            if (styleName.startsWith(QLatin1String("trans-"))) {
-                if (xml.readNextStartElement() && xml.prefix() == QLatin1String("style")
-                    && xml.name() == QLatin1String("drawing-page-properties")) {
-                    const QString smil =
-                        xml.attributes().value(QStringLiteral("smil:type")).toString();
-                    pageTransitions.insert(styleName,
-                                           smil.isEmpty() ? QStringLiteral("cut") : smil);
-                }
-            }
-            if (styleName.startsWith(QLatin1String("shape-"))) {
-                GraphicStyle style;
-                if (xml.readNextStartElement() && xml.prefix() == QLatin1String("style")
-                    && xml.name() == QLatin1String("graphic-properties")) {
-                    const auto attrs = xml.attributes();
-                    style.fill = colorFrom(attrs.value(QStringLiteral("draw:fill-color")));
-                    style.stroke = colorFrom(attrs.value(QStringLiteral("svg:stroke-color")));
-                    style.strokeWidth =
-                        lengthToPt(attrs.value(QStringLiteral("svg:stroke-width")));
-                    styles.insert(styleName, style);
-                }
-            }
-        }
-
-        if (xml.isStartElement() && ns == QLatin1String("style")
-            && name == QLatin1String("page-layout")) {
-            while (!(xml.isEndElement() && xml.prefix() == QLatin1String("style")
-                     && xml.name() == QLatin1String("page-layout"))) {
-                xml.readNext();
-                if (xml.isStartElement() && xml.prefix() == QLatin1String("style")
-                    && xml.name() == QLatin1String("page-layout-properties")) {
-                    const auto attrs = xml.attributes();
-                    presentation.slideSize =
-                        QSizeF(lengthToPt(attrs.value(QStringLiteral("fo:page-width"))),
-                               lengthToPt(attrs.value(QStringLiteral("fo:page-height"))));
-                }
-            }
-        }
-
-        if (xml.isStartElement() && ns == QLatin1String("style")
-            && name == QLatin1String("master-page")) {
-            const auto attrs = xml.attributes();
-            const QString id = attrs.value(QStringLiteral("style:name")).toString();
-            // "Default" is the placeholder every fodp carries; it is not one
-            // of the deck's own masters.
-            if (!id.isEmpty() && id != QLatin1String("Default")
-                && attrs.hasAttribute(QStringLiteral("qq:background"))) {
-                SlideMaster master;
-                master.id = id;
-                master.name = attrs.value(QStringLiteral("qq:master-name")).toString();
-                master.background =
-                    QColor(attrs.value(QStringLiteral("qq:background")).toString());
-                master.titleColor =
-                    QColor(attrs.value(QStringLiteral("qq:title-color")).toString());
-                master.bodyColor =
-                    QColor(attrs.value(QStringLiteral("qq:body-color")).toString());
-                master.fontFamily = attrs.value(QStringLiteral("qq:font")).toString();
-                presentation.masters.append(master);
-            }
-            continue;
-        }
-
-        if (xml.isStartElement() && ns == QLatin1String("draw") && name == QLatin1String("page")) {
-            inSlide = true;
-            currentSlide = Slide{};
-            const auto attrs = xml.attributes();
-            currentSlide.id = attrs.value(QStringLiteral("draw:name")).toString();
-            currentSlide.title = attrs.value(QStringLiteral("qq:title")).toString();
-            currentSlide.layout = attrs.value(QStringLiteral("qq:layout")).toString();
-            const QString masterName =
-                attrs.value(QStringLiteral("draw:master-page-name")).toString();
-            // "Default" is the ODF placeholder the writer always emits for a
-            // slide with no master of its own.
-            currentSlide.master =
-                masterName == QLatin1String("Default") ? QString() : masterName;
-            const QString styleName = attrs.value(QStringLiteral("draw:style-name")).toString();
-            if (styleName.startsWith(QLatin1String("trans-"))) {
-                currentSlide.transition = pageTransitions.value(styleName, QStringLiteral("cut"));
-            }
-            continue;
-        }
-        if (xml.isEndElement() && ns == QLatin1String("draw") && name == QLatin1String("page")) {
-            flushShape();
-            flushSlide();
-            inSlide = false;
-            continue;
-        }
-
-        if (inSlide && xml.isStartElement() && ns == QLatin1String("draw")
-            && (name == QLatin1String("rect") || name == QLatin1String("ellipse"))) {
-            beginShapeFromAttrs(xml.attributes());
-            currentShape.kind = name == QLatin1String("rect") ? ShapeKind::Rectangle
-                                                              : ShapeKind::Ellipse;
-            if (xml.isEndElement()) {
-                flushShape(); // self-closing element has no further tokens
-            }
-            continue;
-        }
-        if (inSlide && xml.isStartElement() && ns == QLatin1String("draw")
-            && name == QLatin1String("custom-shape") && !inShape) {
-            beginShapeFromAttrs(xml.attributes());
-            // Kind resolves through enhanced-geometry below; self-closing
-            // (empty) shapes flush immediately.
-            if (xml.isEndElement()) {
-                flushShape();
-            }
-            continue;
-        }
-        if (inSlide && xml.isStartElement() && ns == QLatin1String("draw")
-            && name == QLatin1String("line") && !inShape) {
-            beginShapeFromAttrs(xml.attributes());
-            const auto attrs = xml.attributes();
-            currentShape.kind = attrs.hasAttribute(QStringLiteral("draw:marker-end"))
-                ? ShapeKind::Arrow
-                : ShapeKind::Line;
-            // draw:line endpoints are absolute page coordinates.
-            const QPointF from(lengthToPt(attrs.value(QStringLiteral("svg:x1"))),
-                               lengthToPt(attrs.value(QStringLiteral("svg:y1"))));
-            const QPointF to(lengthToPt(attrs.value(QStringLiteral("svg:x2"))),
-                             lengthToPt(attrs.value(QStringLiteral("svg:y2"))));
-            currentShape.rect = QRectF(from, to).normalized();
-            flushShape();
-            continue;
-        }
-        if (inSlide && xml.isEndElement() && ns == QLatin1String("draw")
-            && (name == QLatin1String("custom-shape") || name == QLatin1String("rect")
-                || name == QLatin1String("ellipse"))) {
-            flushParagraph();
-            flushShape();
-            continue;
-        }
-        if (inSlide && xml.isStartElement() && ns == QLatin1String("draw")
-            && name == QLatin1String("frame")) {
-            const auto attrs = xml.attributes();
-            const QString styleName = attrs.value(QStringLiteral("draw:style-name")).toString();
-            if (attrs.value(QStringLiteral("presentation:class"))
-                == QLatin1String("notes")) {
-                inNotes = true;
-                continue;
-            }
-            flushShape();
-            inShape = true;
-            currentShape = Shape{};
-            currentShape.id = attrs.value(QStringLiteral("draw:name")).toString();
-            currentShape.rect =
-                QRectF(lengthToPt(attrs.value(QStringLiteral("svg:x"))),
-                       lengthToPt(attrs.value(QStringLiteral("svg:y"))),
-                       lengthToPt(attrs.value(QStringLiteral("svg:width"))),
-                       lengthToPt(attrs.value(QStringLiteral("svg:height"))));
-            currentShape.buildStep =
-                attrs.value(QStringLiteral("qq:build-step")).toInt();
-            readShapeExtras(currentShape, attrs);
-            const QString transform = attrs.value(QStringLiteral("draw:transform")).toString();
-            if (transform.startsWith(QLatin1String("rotate ("))) {
-                // ODF rotate() is radians; files written by the earlier
-                // degrees-based release carry values in the ±360 range while
-                // conforming radians stay within ±2π — accept the legacy
-                // interpretation only for those out-of-range values.
-                const double raw =
-                    transform.mid(8, transform.indexOf(QLatin1Char(')')) - 8).toDouble();
-                currentShape.rotation = qFabs(raw) > 2.0 * M_PI + 0.01
-                    ? raw // legacy degrees
-                    : qRadiansToDegrees(raw);
-            }
-            if (styles.contains(styleName)) {
-                const GraphicStyle style = styles.value(styleName);
-                currentShape.fill = style.fill;
-                currentShape.stroke = style.stroke;
-                currentShape.strokeWidth = style.strokeWidth;
-            }
-            continue;
-        }
-        if (inShape && xml.isEndElement() && ns == QLatin1String("draw")
-            && name == QLatin1String("frame")) {
-            flushParagraph();
-            flushShape();
-            continue;
-        }
-
-        if (inShape && xml.isStartElement() && ns == QLatin1String("office")
-            && name == QLatin1String("binary-data")) {
-            xml.readNext();
-            currentShape.imagePng = QByteArray::fromBase64(xml.text().toString().toLatin1());
-            continue;
-        }
-        if (inShape && xml.isStartElement()) {
-            if (ns == QLatin1String("draw") && name == QLatin1String("text-box")) {
-                // A text-box child only DEFINES a text-box shape; inside a
-                // resolved custom shape it is just that shape's text host.
-                if (currentShape.kind == ShapeKind::TextBox
-                    || currentShape.kind == ShapeKind::Image) {
-                    currentShape.kind = ShapeKind::TextBox;
-                }
-            } else if (ns == QLatin1String("draw") && name == QLatin1String("custom-shape")) {
-                // geometry type resolves when enhanced-geometry appears
-            } else if (ns == QLatin1String("draw") && name == QLatin1String("enhanced-geometry")) {
-                const QString type =
-                    xml.attributes().value(QStringLiteral("draw:type")).toString();
-                currentShape.kind = type == QLatin1String("ellipse") ? ShapeKind::Ellipse
-                                                                     : ShapeKind::Rectangle;
-            } else if (ns == QLatin1String("draw") && name == QLatin1String("line")) {
-                currentShape.kind = ShapeKind::Line;
-                const auto attrs = xml.attributes();
-                if (attrs.hasAttribute(QStringLiteral("draw:marker-end"))) {
-                    currentShape.kind = ShapeKind::Arrow;
-                }
-            } else if (ns == QLatin1String("draw") && name == QLatin1String("image")) {
-                currentShape.kind = ShapeKind::Image;
-            } else if (ns == QLatin1String("text") && name == QLatin1String("p")) {
-                inParagraph = true;
-                currentParagraph = TextParagraph{};
-                const QString align =
-                    xml.attributes().value(QStringLiteral("fo:text-align")).toString();
-                if (align == QLatin1String("center")) {
-                    currentParagraph.alignment = int(Qt::AlignHCenter);
-                } else if (align == QLatin1String("right")) {
-                    currentParagraph.alignment = int(Qt::AlignRight);
-                }
-                const QString styleName =
-                    xml.attributes().value(QStringLiteral("text:style-name")).toString();
-                if (styleName.startsWith(QLatin1String("qq-list-"))) {
-                    currentParagraph.bullet = true;
-                    currentParagraph.listLevel = styleName.mid(8).toInt() - 1;
-                }
-            } else if (ns == QLatin1String("text") && name == QLatin1String("span")) {
-                // AGENT-GUARD: snapshot the attributes BEFORE readNext().
-                // QXmlStreamReader::attributes() is only valid on start
-                // elements; after readNext() it returns an empty set, which
-                // silently stripped every text run's formatting on load
-                // (and the next save baked the loss in).
-                const QXmlStreamAttributes spanAttrs = xml.attributes();
-                xml.readNext(); // text node
-                currentParagraph.runs.append(readRun(spanAttrs, xml.text().toString()));
-            }
-            continue;
-        }
-        if (inParagraph && xml.isEndElement() && ns == QLatin1String("text")
-            && name == QLatin1String("p")) {
-            flushParagraph();
-            continue;
-        }
-        if (inNotes && xml.isStartElement() && ns == QLatin1String("text")
-            && name == QLatin1String("p")) {
-            // Multi-paragraph notes need a separator — concatenation ran
-            // LibreOffice paragraphs together on import.
-            if (!notesText.isEmpty()) {
-                notesText += QLatin1Char('\n');
-            }
-            xml.readNext();
-            notesText += xml.text().toString();
-            continue;
-        }
-        if (inNotes && xml.isEndElement() && ns == QLatin1String("presentation")
-            && name == QLatin1String("notes")) {
-            inNotes = false;
-            continue;
-        }
+    if (error != nullptr) {
+        error->clear();
     }
-
-    if (xml.hasError() && error != nullptr) {
-        *error = xml.errorString();
-    }
-    return presentation;
+    Reader reader(*document);
+    return reader.read(*document);
 }
 
 } // namespace QindaOffice::Show

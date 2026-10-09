@@ -75,7 +75,7 @@ void SlideThumbItem::paint(QPainter *painter)
     const ShowModel::Slide &slide = deck->slides.at(m_slideIndex);
     painter->save();
     letterbox(painter, boundingRect(), deck->slideSize);
-    ShowModel::renderSlide(painter, slide, deck->slideSize, 1000, deck->masterFor(slide));
+    ShowModel::renderSlide(painter, *deck, slide);
     painter->restore();
 }
 
@@ -190,8 +190,7 @@ void SlideFrameItem::paint(QPainter *painter)
     const ShowModel::Slide &slide = deck->slides.at(slideIndex);
     painter->save();
     letterbox(painter, boundingRect(), deck->slideSize);
-    ShowModel::renderSlide(painter, slide, deck->slideSize, effectiveBuild(), deck->masterFor(slide),
-                           m_buildProgress);
+    ShowModel::renderSlide(painter, *deck, slide, effectiveBuild(), m_buildProgress);
     painter->restore();
 }
 

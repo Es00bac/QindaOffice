@@ -92,11 +92,11 @@ QString iconSourceFor(const AppEntry &app)
 QStringList openNameFilters()
 {
     return {QObject::tr("All office documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt "
-                        "*.xlsx *.ods *.xls *.xlsm *.csv *.tsv *.odp *.pptx *.fodp *.qbooks "
+                        "*.xlsx *.ods *.xls *.xlsm *.csv *.tsv *.odp *.pptx *.ppt *.fodp *.qbooks "
                         "*.qdiagram *.drawio *.qplan *.qbase *.ics *.eml)"),
             QObject::tr("Documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt)"),
             QObject::tr("Spreadsheets (*.xlsx *.ods *.xls *.xlsm *.csv *.tsv)"),
-            QObject::tr("Presentations (*.odp *.pptx *.fodp)"),
+            QObject::tr("Presentations (*.pptx *.ppt *.odp *.fodp)"),
             QObject::tr("Company books (*.qbooks)"),
             QObject::tr("Diagrams (*.qdiagram *.drawio)"),
             QObject::tr("Project plans (*.qplan)"),
@@ -127,6 +127,10 @@ QString appIdForPath(const QString &path)
         {QStringLiteral("tsv"), QStringLiteral("QindaCalc")},
         {QStringLiteral("odp"), QStringLiteral("QindaShow")},
         {QStringLiteral("pptx"), QStringLiteral("QindaShow")},
+        {QStringLiteral("ppt"), QStringLiteral("QindaShow")},
+        {QStringLiteral("pptm"), QStringLiteral("QindaShow")},
+        {QStringLiteral("potx"), QStringLiteral("QindaShow")},
+        {QStringLiteral("ppsx"), QStringLiteral("QindaShow")},
         {QStringLiteral("fodp"), QStringLiteral("QindaShow")},
         {QStringLiteral("qbooks"), QStringLiteral("QindaBooks")},
         {QStringLiteral("qdiagram"), QStringLiteral("QindaDiagram")},

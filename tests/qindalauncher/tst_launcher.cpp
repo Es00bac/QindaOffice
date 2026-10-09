@@ -116,6 +116,7 @@ void LauncherTest::pathsGoToTheAppThatOpensThem()
     QCOMPARE(appIdForPath(QStringLiteral("/tmp/a.xlsx")), QStringLiteral("QindaCalc"));
     QCOMPARE(appIdForPath(QStringLiteral("/tmp/a.csv")), QStringLiteral("QindaCalc"));
     QCOMPARE(appIdForPath(QStringLiteral("/tmp/a.fodp")), QStringLiteral("QindaShow"));
+    QCOMPARE(appIdForPath(QStringLiteral("/tmp/a.ppt")), QStringLiteral("QindaShow"));
     // A notebook is a directory with no suffix at all.
     QCOMPARE(appIdForPath(QStringLiteral("/tmp/Work")), QStringLiteral("QindaNote"));
 }

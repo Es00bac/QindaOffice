@@ -396,7 +396,9 @@ public:
             if (!a.ns.isEmpty() && a.ns != QStringView(Ns::XML)) {
                 prefixFor(a.ns);
             }
-            collectUris(a.value);
+            if (namesNamespaces(element, a)) {
+                collectUris(a.value);
+            }
         }
         for (const XmlChild &c : element.children) {
             if (c.element) {
@@ -427,7 +429,7 @@ public:
                 m_out += QLatin1Char(':');
             }
             m_out += a.name + QStringLiteral("=\"");
-            escape(a.value.contains(QLatin1Char('{')) ? urisToPrefixes(a.value) : a.value, true);
+            escape(namesNamespaces(element, a) ? urisToPrefixes(a.value) : a.value, true);
             m_out += QLatin1Char('"');
         }
         if (element.children.isEmpty()) {
@@ -450,6 +452,18 @@ public:
     QString take() { return std::move(m_out); }
 
 private:
+    // AGENT-GUARD: only attributes the parser rewrote to "{uri}" tokens map
+    // back to prefixes; braced GUIDs in ordinary attributes (a:ext/@uri,
+    // a16:creationId/@id) became "ns0" when every attribute was mapped.
+    static bool namesNamespaces(const XmlElement &element, const XmlAttribute &a)
+    {
+        if (isPrefixListAttribute(a.ns, a.name)) {
+            return true;
+        }
+        return a.ns.isEmpty() && a.name == u"Requires" && element.ns == QStringView(Ns::MC)
+            && element.name == u"Choice";
+    }
+
     void writeName(const QString &ns, const QString &name)
     {
         const QString prefix = m_prefixes.value(ns);

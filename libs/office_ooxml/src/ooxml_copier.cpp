@@ -69,6 +69,11 @@ QString RelationshipCopier::copyRelationship(const QString &sourcePart, const QS
     return newId;
 }
 
+void RelationshipCopier::mapPart(const QString &sourcePart, const QString &destPart)
+{
+    m_copiedParts.insert(sourcePart, destPart);
+}
+
 QString RelationshipCopier::copyPart(const QString &sourcePartName)
 {
     const auto memo = m_copiedParts.constFind(sourcePartName);

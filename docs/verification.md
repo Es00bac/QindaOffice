@@ -33,6 +33,152 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M62 PowerPoint interchange gates (D-070)
+
+Qualified on qinda (branch `m62-powerpoint-interchange`, rebased onto
+`m60-office-formats` 4c066e3) with `QQO_OOXML_SCHEMA_DIR=~/scratch/qqo/ecma-xsd`
+and xmllint: **152/153 CTest targets passed, 369.50 s** (full
+`cmake --build --preset dev`, then `ctest --preset dev`; no warning from
+the M62 files). The one failure is not M62's: `tst_write_pagination`
+`breaksStayOutOfTheFiles` (a reopened `.docx` lays out 0 keep-with-next
+breaks where 1 is expected) fails the same way on 4c066e3 alone in the
+same build tree. On 906a9f3, before that commit, the branch passed
+152/152 (372.39 s). QTest totals (test functions plus init/cleanup), none
+skipped — LibreOffice and the schema step ran: `tst_fodp` 7,
+`tst_show_model` 8, `tst_pptx_read` 17, `tst_pptx_write` 9, `tst_ooxml` 21,
+`tst_qindashow` 12, `tst_show_ui` 19, `tst_show_design` 10,
+`tst_show_menu_export` 3, `tst_show_tools` 3, `tst_launcher` 8. Each step
+commit below was also built on its own and passed these suites as they
+stood at that step.
+
+**Step 1 — `.fodp`** (automated: `tst_fodp`, `tst_show_model`):
+
+- `roundTripIsLossless`: a deck with rotated shapes, lines and arrows in all
+  four directions, alpha fills, invalid colours, spaces/tabs/line breaks,
+  five alignments, three outline levels of bullets, an un-bulleted level,
+  empty paragraphs and runs, builds, groups, extras and a master whose id
+  starts with a digit reads back `==` the model, and writing it again
+  reproduces the file byte for byte.
+- `writesValidOdf`: every `draw:style-name` / `text:style-name` /
+  `text:list` style / marker / master page the body names is defined; no
+  `fo:` attribute on `text:span` / `text:p`; every `svg:` length has a unit;
+  a rotated shape has `rotate … translate` and no `svg:x`.
+- `readsPreM62Files` (unit-less cm read as cm, the unlinked style adopted,
+  the old clockwise rotation kept) and `readsLibreOfficeStyles` (parent
+  chains, `rotate(π/6) translate(5cm 5cm)` = 330° clockwise centred at
+  (7.232 cm, 4.866 cm), a start-only marker, list levels without a label,
+  `draw:g`, `text:s` in notes).
+- `shippedTemplatesLoadAtSize`: both templates are 720×405 pt with every
+  shape inside the slide and every length carrying a unit.
+- `fodpConvertsToPptx` (LibreOffice live): after `.fodp → .pptx` the title
+  box is at (40, 30) pt and the rectangle at (60, 140) pt with its fill.
+- Looked at: LibreOffice's PDF of a regenerated template, and of a deck
+  with a 30° clockwise rectangle, both arrow directions and filled shapes.
+
+**Step 2 — the model and the renderer** (exercised through step 3's
+fixture; the pre-M62 suites stay green with true point sizes):
+
+- `rendersEverySlide`: every fixture slide draws on the master's ivory
+  background with the master's logo, none blank; the grabs
+  (`pptx_read_slide1..5.png`, `QQO_GRAB_DIR`) were looked at: placeholder
+  text at the master's and layout's sizes, bullets and numbering, the merged
+  table in the default style, the cropped picture, the nested group, the
+  chart from cached values, the gradient rounded rectangle and the dashed
+  connector.
+
+**Step 3 — the native reader** (automated: `tst_pptx_read`, a package
+built by hand in `pptx_fixture*.h`: master, layout, theme, five slides,
+notes, a picture, a chart part, an unknown frame):
+
+- `placeholdersInheritFromLayoutAndMaster`: a title takes the master's
+  position and 44 pt, a body the layout's position and its 20 pt accent2
+  level-1 style, `normAutofit` scale kept.
+- `themeColoursWithLumMod` (accent1 at 75 % luminance through the colour
+  map), `bulletsAndAutoNumbering` (`arabicPeriod`, `alphaLcParenR` from 3,
+  bullet characters per level, a line break, superscript),
+  `tableWithMerge` (grid span and `hMerge`, PowerPoint's default style
+  supplied when only named), `croppedPicture`, `nestedGroup` (child
+  transforms two levels deep), `chartFromCachedValues` (categories, two
+  series, colours), `unknownFrameIsPreserved` (fragment and part kept),
+  `styleMatrixConnectorAndHyperlink` (`p:style` fill/line/font references,
+  connection sites, dash, tail end, a click hyperlink),
+  `notesHiddenTransitionsBuilds`, `readsDeckAndMasters`,
+  `refusesWhatIsNotAPresentation`.
+
+**Step 4 — the native writer** (automated: `tst_pptx_write`, `tst_ooxml`):
+
+- `roundTripIsEqual`: fixture → model → `.pptx` → model is `==`, twice.
+- `unknownFrameComesBackByteForByte`: the unknown graphic frame is written
+  as it was read.
+- `editsAreWrittenAndTheRestKept`: a moved text box, a retitled placeholder
+  (still a placeholder, still 44 pt from the master), a recoloured group
+  member, an edited table cell, a deleted and an added slide — the edits
+  read back, everything else `==`, the hidden slide untouched.
+- `generatedDeckReadsBack`: a QindaShow deck (no source package) gets a
+  generated master, layouts, theme and notes master and reads back.
+- `packagesValidate` (`QQO_OOXML_SCHEMA_DIR`): the round trip, the edited
+  deck, the generated deck and the fixture through `.fodp` validate against
+  the ECMA-376 Transitional schemas (Markup Compatibility processed).
+- `powerPointRules`: `sldId` ≥ 256, unique `sldMasterId`/`sldLayoutId` ≥
+  2147483648, one layout relationship per slide, unique shape ids per
+  slide, notes slides → notes master, a content-type override per part —
+  for the fixture, an empty deck and the fixture through `.fodp`.
+- `libreOfficeConvertsToPdf` (LibreOffice live): our `.pptx` of the fixture
+  gives 4 pages (the hidden slide left out), the generated deck 2, and the
+  fixture's `.fodp` 4.
+- `tst_ooxml`: `keepsBracedGuidAttributes`, `copierResolvesMappedParts`.
+
+**Step 5 — QindaShow** (automated: `tst_qindashow`, `tst_show_ui`,
+`tst_launcher`):
+
+- `documentPptxSave`: an untitled deck saves as a real `.pptx` (`PK`),
+  reopens with its notes and hidden slide, and saves again carrying what it
+  was opened from.
+- `recoveryAndFiltersPreferPptx`: the journal is a `.pptx` under the
+  journal's binary bound, a pre-M62 `.fodp` journal still restores, `.pptx`
+  is the first save filter and `.ppt` opens.
+- `controllerSkipsHiddenSlides`; `textBridgeKeepsRuns` (an edit keeps
+  bullets, numbering, spacing, indents, baseline, underline, links).
+- `powerPointDeckOnTheCanvas`: the fixture opens in the real window (5
+  slides), slides 1, 2 and 4 grabbed show the ivory master; the title edits
+  in place inside its 7.2/3.6 pt insets and an unchanged edit leaves the
+  document clean; the table is not edited as text.
+- `tst_launcher`: `.ppt` opens QindaShow.
+
+**`.fodp` keeps the extended model** (automated: `tst_show_model`,
+`tst_pptx_read`, `tst_fodp`):
+
+- `clipboardCarriesEveryShape`: the clipboard codec that `qq:shape` uses is
+  total for the M62 model — each of the fixture's 10 shapes (table, chart,
+  group, preserved frame, connector included) pastes back `==` but for its
+  identity.
+- `fodpCarriesTheOfficeModel`: an Office arrow with adjust values, flip,
+  gradient, dashed outline and rich text, a merged table, a hidden slide
+  with its own background, a master with a gradient and a decoration, a
+  layout — read back `==` and re-written byte for byte; LibreOffice sees a
+  `right-arrow` and a hidden page.
+- `savedAsFodpLooksTheSame`: every fixture slide saved as `.fodp` draws
+  pixel for pixel as before, the file re-writes byte for byte, and the
+  `.pptx` written from it keeps the master's logo and background.
+- `readsLibreOfficeStyles`: LibreOffice's `right-arrow` and `ooxml-chevron`
+  read as those presets; `presentation:visibility="hidden"` hides a slide.
+- Looked at: LibreOffice's PDF of the fixture's `.fodp` (master background
+  and logo on every page, the table, group and chart as pictures, the
+  rotated rounded rectangle), and of every mapped ODF shape type.
+
+**Real decks** (a laptop-only probe; the decks never leave the laptop and
+only counts are recorded): the owner's 18 decks — 333 slides, 7834 shapes
+(4312 text boxes, 1240 preset shapes, 816 ellipses, 794 rectangles, 584
+pictures, 66 lines, 22 tables) — all read without a warning, round-trip to
+an equal model and write packages with 0 schema errors; saved as `.fodp`,
+333 of 333 slides draw pixel for pixel the same, all 18 re-write byte for
+byte, and the `.pptx` written from the `.fodp` reads back and validates for
+all 18. Seven sample decks (139 slides, 1336 shapes, 16 charts, 22 tables):
+all read, round-trip equal and draw the same through `.fodp` (139 of 139);
+5 of their written packages report schema errors (3, 6, 3, 2, 2), all in
+chart parts carried verbatim, which fail identically in the samples
+themselves (`c15:leaderLines` in a chart extension).
+
 ## M61 Excel interchange gates (D-069)
 
 Qualified on qinda (branch `m61-excel-interchange`, merged with

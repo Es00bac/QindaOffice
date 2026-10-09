@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // QindaShow gates (plan section 8): a deck round-trips through
-// ShowDocument (.fodp native, .pptx through LibreOffice live/skipped); the
+// ShowDocument (.fodp and .pptx native, recovery journals as .pptx); the
 // canvas item mutates the model (insert/delete/z-order/build) and reports
 // edits; the host wires the deck, notes and undo; the controller reveals
 // builds before advancing slides.
 
 #include "show_test_support.h"
 
+#include "fodp_writer.h"
+#include "recovery_journal.h"
 #include "qindashow/src/pdf_export.h"
 #include "qindashow/src/presentation_controller.h"
 #include "qindashow/src/show_ai.h"
@@ -27,6 +29,8 @@ class QindaShowTest : public QObject {
 private slots:
     void documentRoundTrip();
     void documentPptxSave();
+    void recoveryAndFiltersPreferPptx();
+    void controllerSkipsHiddenSlides();
     void canvasEditsModel();
     void hostWiresDeckNotesAndUndo();
     void controllerAdvancesBuildsBeforeSlides();
@@ -58,20 +62,52 @@ void QindaShowTest::documentRoundTrip()
 
 void QindaShowTest::documentPptxSave()
 {
-    QProcess probe;
-    QindaOffice::Test::startSoffice(probe, {QStringLiteral("--headless"), QStringLiteral("--version")});
-    if (!probe.waitForFinished(15000) || probe.exitCode() != 0) {
-        QSKIP("LibreOffice unavailable in this environment");
-    }
+    // D-070: .pptx is native both ways — no LibreOffice involved.
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     const QString path = dir.path() + QStringLiteral("/deck.pptx");
     ShowDocument doc;
-    Q_UNUSED(doc.presentation()->addSlide(QStringLiteral("Export")));
+    ShowModel::Slide &added = doc.presentation()->addSlide(QStringLiteral("Export"));
+    added.notes = QStringLiteral("spoken words");
+    added.hidden = true;
     QString error;
     QVERIFY2(doc.save(path, &error), qPrintable(error));
-    QVERIFY(QFile::exists(path));
-    QVERIFY(QFile(path).size() > 0);
+    QVERIFY(!doc.isDirty());
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    QVERIFY(file.read(2) == "PK");
+    ShowDocument back;
+    QVERIFY2(back.load(path, &error), qPrintable(error));
+    QCOMPARE(back.presentation()->slides.size(), 2);
+    QCOMPARE(back.presentation()->slides.first().shapes.first().displayText(), QStringLiteral("Click to add a title"));
+    QCOMPARE(back.presentation()->slides.at(1).notes, QStringLiteral("spoken words"));
+    QVERIFY(back.presentation()->slides.at(1).hidden);
+    // What it was opened from rides along: the next save carries it over.
+    QVERIFY(back.presentation()->origin);
+    QVERIFY2(back.save(path, &error), qPrintable(error));
+}
+
+void QindaShowTest::recoveryAndFiltersPreferPptx()
+{
+    ShowDocument doc;
+    doc.presentation()->slides.first().notes = QStringLiteral("journal me");
+    const QByteArray snapshot = doc.recoverySnapshot();
+    QVERIFY(snapshot.startsWith("PK")); // a .pptx: the format that carries the whole deck
+    // With its pictures: the journal's binary bound, not the 4 MiB text one.
+    QCOMPARE(doc.recoveryPayloadLimit(), QindaOffice::Core::RecoveryJournal::kMaxBinaryPayload);
+    ShowDocument restored;
+    QString error;
+    QVERIFY2(restored.loadRecovery(snapshot, &error), qPrintable(error));
+    QCOMPARE(restored.presentation()->slides.first().notes, QStringLiteral("journal me"));
+    QVERIFY(restored.isDirty());
+    // A journal written before M62 (.fodp) still restores.
+    ShowDocument legacy;
+    QVERIFY2(legacy.loadRecovery(ShowModel::writeFodp(*doc.presentation()), &error), qPrintable(error));
+    QCOMPARE(legacy.presentation()->slides.size(), 1);
+    QVERIFY(doc.mimeTypes().contains(QStringLiteral("application/vnd.ms-powerpoint")));
+    ShowHost host;
+    QVERIFY(host.saveNameFilters().first().contains(QLatin1String("*.pptx")));
+    QVERIFY(host.openNameFilters().first().contains(QLatin1String("*.ppt ")));
 }
 
 void QindaShowTest::canvasEditsModel()
@@ -180,6 +216,23 @@ void QindaShowTest::controllerAdvancesBuildsBeforeSlides()
     QCOMPARE(controller.build(), 2); // fully revealed going back
 }
 
+void QindaShowTest::controllerSkipsHiddenSlides()
+{
+    ShowModel::Presentation deck;
+    Q_UNUSED(deck.addSlide(QStringLiteral("One")));
+    deck.addSlide(QStringLiteral("Hidden")).hidden = true;
+    Q_UNUSED(deck.addSlide(QStringLiteral("Three")));
+    deck.addSlide(QStringLiteral("Hidden at the end")).hidden = true;
+    PresentationController controller(&deck);
+    controller.advance(1);
+    QCOMPARE(controller.slide(), 2);
+    QVERIFY(controller.atEnd());
+    controller.advance(1);
+    QCOMPARE(controller.slide(), 2);
+    controller.advance(-1);
+    QCOMPARE(controller.slide(), 0);
+}
+
 void QindaShowTest::slidesFromOutlineParse()
 {
     const QString outline = QStringLiteral("Here is your deck.\n"
@@ -235,8 +288,30 @@ void QindaShowTest::textBridgeKeepsRuns()
     QCOMPARE(back.first().runs.size(), 2);
     QCOMPARE(back.first().runs.at(0).text, QStringLiteral("Bold"));
     QVERIFY(back.first().runs.at(0).bold);
-    QCOMPARE(back.first().runs.at(0).pointSize, 32);
+    QCOMPARE(back.first().runs.at(0).pointSize, 32.0);
     QCOMPARE(back.first().runs.at(1).color, QColor(200, 30, 40));
+
+    // M62: what the editor does not show comes back untouched.
+    ShowModel::TextParagraph rich;
+    rich.bullet = true;
+    rich.autoNumber = QStringLiteral("romanUcPeriod");
+    rich.marginLeft = 27;
+    rich.indent = -27;
+    rich.spaceBefore = ShowModel::Spacing::points(6);
+    rich.listLevel = 1;
+    ShowModel::TextRun fancy;
+    fancy.text = QStringLiteral("fancy");
+    fancy.pointSize = 10.5;
+    fancy.underline = QStringLiteral("dbl");
+    fancy.baseline = -25000;
+    fancy.highlight = QColor(Qt::yellow);
+    fancy.hyperlink = QStringLiteral("https://example.org/");
+    rich.runs = {fancy};
+    QTextDocument *richDocument = documentFromParagraphs({rich});
+    const QList<ShowModel::TextParagraph> richBack = paragraphsFromDocument(*richDocument);
+    delete richDocument;
+    QCOMPARE(richBack.size(), 1);
+    QCOMPARE(richBack.first(), rich);
 }
 
 SHOW_TEST_MAIN(QindaShowTest)

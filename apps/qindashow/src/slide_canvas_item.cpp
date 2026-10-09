@@ -53,8 +53,14 @@ SlideCanvasItem::~SlideCanvasItem() = default;
 
 void SlideCanvasItem::setMaster(const ShowModel::SlideMaster *master)
 {
+    setBackdrop(ShowModel::backdropFor(master), master);
+}
+
+void SlideCanvasItem::setBackdrop(const ShowModel::SlideBackdrop &backdrop, const ShowModel::SlideMaster *master)
+{
     m_hasMaster = master != nullptr;
     m_master = master != nullptr ? *master : ShowModel::SlideMaster{};
+    m_backdrop = backdrop;
     update();
 }
 
@@ -320,7 +326,11 @@ bool restyleSelection(SlideCanvasItem *canvas, ShowModel::Slide *slide,
 
 void SlideCanvasItem::setSelectedFill(const QColor &color)
 {
-    restyleSelection(this, m_slide, [color](ShowModel::Shape &shape) { shape.fill = color; });
+    // A solid colour replaces a gradient / picture / pattern fill too.
+    restyleSelection(this, m_slide, [color](ShowModel::Shape &shape) {
+        shape.fill = color;
+        shape.fillStyle = ShowModel::FillStyle();
+    });
 }
 
 void SlideCanvasItem::setSelectedStroke(const QColor &color)
@@ -348,17 +358,17 @@ void SlideCanvasItem::setSelectedTextItalic(bool italic)
 
 void SlideCanvasItem::paint(QPainter *painter)
 {
-    const QRectF page(QPointF(0, 0), m_slideSize);
-    painter->fillRect(page, m_hasMaster && m_master.background.isValid() ? m_master.background : QColor(Qt::white));
+    ShowModel::paintBackdrop(painter, m_backdrop, m_slideSize);
     if (m_slide == nullptr) {
         return;
     }
+    const ShowModel::SlideMaster *typeMaster = m_backdrop.hasTypeMaster ? &m_backdrop.typeMaster : nullptr;
     for (const ShowModel::Shape &shape : m_slide->shapes) {
         // The shape being edited is drawn by the TextEdit over it.
         if (shape.id == m_textShapeId && shape.kind == ShowModel::ShapeKind::TextBox) {
             continue;
         }
-        ShowModel::renderShape(painter, shape, master());
+        ShowModel::renderShape(painter, shape, typeMaster);
     }
     painter->save();
     QPen pen(kSelection);

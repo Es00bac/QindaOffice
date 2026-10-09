@@ -47,6 +47,14 @@ public:
     // in the writer (kept when free, else made unique).
     QString copyPart(const QString &sourcePartName);
 
+    // Declares that `sourcePart` already has a counterpart in the writer
+    // (`destPart`, written by the caller): references to it resolve there
+    // and it is never copied. A format writer that regenerates some parts
+    // (show_model's pptx writer: slides, notes slides) maps them before
+    // copying anything that may point at them (a master's hyperlink to a
+    // slide), or the copier would drag the stale source part along.
+    void mapPart(const QString &sourcePart, const QString &destPart);
+
     [[nodiscard]] const std::shared_ptr<const Package> &source() const { return m_source; }
 
 private:

@@ -7,6 +7,6 @@ Exec=qindashow %F
 Icon=org.qindaqt.QindaShow
 Terminal=false
 Categories=Qt;Office;Presentation;
-MimeType=application/vnd.openxmlformats-officedocument.presentationml.presentation;application/vnd.oasis.opendocument.presentation;
+MimeType=application/vnd.openxmlformats-officedocument.presentationml.presentation;application/vnd.ms-powerpoint.presentation.macroEnabled.12;application/vnd.openxmlformats-officedocument.presentationml.template;application/vnd.openxmlformats-officedocument.presentationml.slideshow;application/vnd.ms-powerpoint;application/vnd.oasis.opendocument.presentation;application/vnd.oasis.opendocument.presentation-flat-xml;
 StartupNotify=true
 StartupWMClass=qindashow

@@ -1,32 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "slide_renderer.h"
 
-#include <QBuffer>
+#include "render_parts.h"
+
 #include <QPainter>
 #include <QPixmap>
-#include <QAbstractTextDocumentLayout>
-#include <QTextDocument>
-#include <QTextLayout>
-#include <QtMath>
 
 namespace QindaOffice::Show {
 
 namespace {
-
-void drawArrowHead(QPainter *painter, const QPointF &tip, const QPointF &from)
-{
-    const QLineF line(from, tip);
-    if (line.length() < 1) {
-        return;
-    }
-    const qreal angle = line.angle();
-    // AGENT-GUARD: barbs trail the tip — polar points at angle ± 150° land
-    // BEHIND the direction of travel. The earlier `tip - fromPolar(...)`
-    // negated the direction vector and drew every arrow backwards.
-    const QPointF left = tip + QLineF::fromPolar(12, angle + 150).p2();
-    const QPointF right = tip + QLineF::fromPolar(12, angle - 150).p2();
-    painter->drawPolygon({tip, left, right});
-}
 
 // Applies the shape's arrival animation at `progress` (0 = not yet there,
 // 1 = fully arrived). Returns false when the shape should not be drawn at
@@ -75,107 +57,20 @@ bool applyBuildAnimation(QPainter *painter, const Shape &shape, const QSizeF &sl
     return true;
 }
 
-void paintShape(QPainter *painter, const Shape &shape)
+void applyBackground(SlideBackdrop &backdrop, const Background &background)
 {
-    painter->save();
-    painter->translate(shape.rect.center());
-    painter->rotate(shape.rotation);
-    painter->translate(-shape.rect.center());
-
-    switch (shape.kind) {
-    case ShapeKind::Rectangle:
-    case ShapeKind::Ellipse: {
-        QRectF rect = shape.rect.normalized();
-        if (shape.fill.isValid() && shape.fill.alpha() > 0) {
-            painter->setBrush(shape.fill);
-        } else {
-            painter->setBrush(Qt::NoBrush);
-        }
-        QPen pen(shape.stroke);
-        pen.setWidthF(shape.strokeWidth);
-        painter->setPen(shape.strokeWidth > 0 ? pen : Qt::NoPen);
-        if (shape.kind == ShapeKind::Rectangle) {
-            painter->drawRect(rect);
-        } else {
-            painter->drawEllipse(rect);
-        }
-        break;
-    }
-    case ShapeKind::Line:
-    case ShapeKind::Arrow: {
-        QPen pen(shape.stroke);
-        pen.setWidthF(qMax<qreal>(shape.strokeWidth, 1.5));
-        painter->setPen(pen);
-        const QPointF from = shape.rect.topLeft();
-        const QPointF to = shape.rect.bottomRight();
-        painter->drawLine(from, to);
-        if (shape.kind == ShapeKind::Arrow) {
-            drawArrowHead(painter, to, from);
-        }
-        break;
-    }
-    case ShapeKind::Image: {
-        QImage image;
-        // Auto-detect the format: the canvas stores raw file bytes for any
-        // picked image, and forcing "PNG" rendered every JPEG as a dashed
-        // placeholder on canvas, in the player and in the PDF.
-        image.loadFromData(shape.imagePng);
-        if (!image.isNull()) {
-            painter->drawImage(shape.rect, image);
-        } else {
-            painter->setPen(Qt::DashLine);
-            painter->drawRect(shape.rect);
-        }
-        break;
-    }
-    case ShapeKind::TextBox:
-        if (shape.fill.isValid() && shape.fill.alpha() > 0) {
-            painter->fillRect(shape.rect.normalized(), shape.fill);
-        }
-        break; // text painted below
-    }
-
-    // Text (text boxes, rect/ellipse content).
-    if (!shape.paragraphs.isEmpty()) {
-        QRectF rect = shape.rect.normalized().adjusted(6, 4, -6, -4);
-        for (const TextParagraph &paragraph : shape.paragraphs) {
-            QTextDocument document;
-            QTextCursor cursor(&document);
-            for (const TextRun &run : paragraph.runs) {
-                QTextCharFormat format;
-                format.setFontPointSize(run.pointSize);
-                format.setFontWeight(run.bold ? QFont::Bold : QFont::Normal);
-                format.setFontItalic(run.italic);
-                format.setForeground(run.color);
-                if (!run.fontFamily.isEmpty()) {
-                    format.setFontFamilies(QStringList{run.fontFamily});
-                }
-                cursor.insertText(run.text, format);
-            }
-            QTextBlockFormat blockFormat;
-            blockFormat.setAlignment(Qt::Alignment(paragraph.alignment));
-            blockFormat.setTopMargin(2);
-            blockFormat.setBottomMargin(2);
-            cursor.select(QTextCursor::Document);
-            cursor.mergeBlockFormat(blockFormat);
-            document.setTextWidth(rect.width());
-            painter->save();
-            painter->translate(rect.topLeft());
-            QAbstractTextDocumentLayout::PaintContext context;
-            context.clip = QRectF(QPointF(0, 0), rect.size());
-            document.documentLayout()->draw(painter, context);
-            painter->restore();
-            rect.adjust(0, document.size().height(), 0, 0);
-        }
-    }
-    painter->restore();
+    backdrop.color = background.color.isValid() ? background.color : QColor(Qt::white);
+    backdrop.style = background.style;
 }
 
 } // namespace
 
 Shape withMasterDefaults(const Shape &shape, const SlideMaster *master)
 {
-    if (master == nullptr) {
+    // AGENT-NOTE: only QindaShow's own masters fill in type defaults (see
+    // SlideMaster::typeDefaults); an Office master's type is already in
+    // every run, and "black means unset" would repaint real black text.
+    if (master == nullptr || !master->typeDefaults) {
         return shape;
     }
     Shape styled = shape;
@@ -194,40 +89,103 @@ Shape withMasterDefaults(const Shape &shape, const SlideMaster *master)
     return styled;
 }
 
+SlideBackdrop backdropFor(const SlideMaster *master)
+{
+    SlideBackdrop backdrop;
+    if (master == nullptr) {
+        return backdrop;
+    }
+    backdrop.color = master->background.isValid() ? master->background : QColor(Qt::white);
+    backdrop.style = master->backgroundStyle;
+    backdrop.shapes = master->shapes;
+    if (master->typeDefaults) {
+        backdrop.typeMaster = *master;
+        backdrop.typeMaster.shapes.clear();
+        backdrop.hasTypeMaster = true;
+    }
+    return backdrop;
+}
+
+SlideBackdrop backdropFor(const Presentation &deck, const Slide &slide)
+{
+    const SlideMaster *master = deck.masterFor(slide);
+    const SlideLayout *layout = deck.layoutFor(slide);
+    SlideBackdrop backdrop = backdropFor(master);
+    backdrop.shapes.clear();
+    if (slide.showMasterShapes) {
+        if (master != nullptr && (layout == nullptr || layout->showMasterShapes)) {
+            backdrop.shapes += master->shapes;
+        }
+        if (layout != nullptr) {
+            backdrop.shapes += layout->shapes;
+        }
+    }
+    if (slide.background.set) {
+        applyBackground(backdrop, slide.background);
+    } else if (layout != nullptr && layout->background.set) {
+        applyBackground(backdrop, layout->background);
+    }
+    return backdrop;
+}
+
+void paintBackdrop(QPainter *painter, const SlideBackdrop &backdrop, const QSizeF &slideSize)
+{
+    painter->save();
+    const QRectF page(QPointF(0, 0), slideSize);
+    // A see-through or missing colour still leaves white paper under it.
+    painter->fillRect(page, Qt::white);
+    QPainterPath area;
+    area.addRect(page);
+    Render::paintFill(painter, area, backdrop.color, backdrop.style);
+    painter->setRenderHint(QPainter::Antialiasing);
+    for (const Shape &shape : backdrop.shapes) {
+        Render::paintShape(painter, shape);
+    }
+    painter->restore();
+}
+
 void renderShape(QPainter *painter, const Shape &shape, const SlideMaster *master)
 {
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
-    paintShape(painter, withMasterDefaults(shape, master));
+    Render::paintShape(painter, withMasterDefaults(shape, master));
     painter->restore();
 }
 
-void renderSlide(QPainter *painter, const Slide &slide, const QSizeF &slideSize, int buildStep,
-                 const SlideMaster *master, qreal buildProgress)
+void renderSlide(QPainter *painter, const Slide &slide, const QSizeF &slideSize, const SlideBackdrop &backdrop,
+                 int buildStep, qreal buildProgress)
 {
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
-    // The master owns the background; without one a slide is white paper.
-    painter->fillRect(QRectF(QPointF(0, 0), slideSize),
-                      master != nullptr && master->background.isValid() ? master->background
-                                                                        : QColor(Qt::white));
+    paintBackdrop(painter, backdrop, slideSize);
+    const SlideMaster *typeMaster = backdrop.hasTypeMaster ? &backdrop.typeMaster : nullptr;
     for (const Shape &shape : slide.shapes) {
         if (shape.buildStep > buildStep) {
             continue; // appears on a later click
         }
         // The master supplies defaults for runs that never chose their own,
         // so restyling a deck is one edit rather than one per text box.
-        const Shape styled = withMasterDefaults(shape, master);
         const bool arriving = shape.buildStep > 0 && shape.buildStep == buildStep;
         painter->save();
         const bool draw = !arriving
             || applyBuildAnimation(painter, shape, slideSize, qBound(0.0, buildProgress, 1.0));
         if (draw) {
-            paintShape(painter, styled);
+            Render::paintShape(painter, withMasterDefaults(shape, typeMaster));
         }
         painter->restore();
     }
     painter->restore();
+}
+
+void renderSlide(QPainter *painter, const Presentation &deck, const Slide &slide, int buildStep, qreal buildProgress)
+{
+    renderSlide(painter, slide, deck.slideSize, backdropFor(deck, slide), buildStep, buildProgress);
+}
+
+void renderSlide(QPainter *painter, const Slide &slide, const QSizeF &slideSize, int buildStep,
+                 const SlideMaster *master, qreal buildProgress)
+{
+    renderSlide(painter, slide, slideSize, backdropFor(master), buildStep, buildProgress);
 }
 
 QPixmap renderSlideToPixmap(const Slide &slide, const QSizeF &slideSize, const QSize &pixels,
@@ -242,6 +200,17 @@ QPixmap renderSlideToPixmap(const Slide &slide, const QSizeF &slideSize, const Q
     painter.scale(scaleX, scaleY);
     renderSlide(&painter, slide, slideSize, buildStep, master);
     return pixmap;
+}
+
+QImage renderSlideToImage(const Presentation &deck, const Slide &slide, const QSize &pixels)
+{
+    QImage image(pixels, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::white);
+    QPainter painter(&image);
+    painter.scale(pixels.width() / deck.slideSize.width(), pixels.height() / deck.slideSize.height());
+    renderSlide(&painter, deck, slide);
+    painter.end();
+    return image;
 }
 
 } // namespace QindaOffice::Show

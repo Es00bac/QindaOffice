@@ -6,6 +6,9 @@
 #include "fodp_reader.h"
 #include "fodp_writer.h"
 #include "libre_office_converter.h"
+#include "pptx_reader.h"
+#include "pptx_writer.h"
+#include "recovery_journal.h"
 
 #include <QDir>
 #include <QFile>
@@ -29,6 +32,33 @@ QString convertAndWait(const QString &input, const QString &targetExt, QString *
 QString suffixOf(const QString &path)
 {
     return QFileInfo(path).suffix().toLower();
+}
+
+// The PowerPoint Open XML family QindaShow reads natively (a template or
+// show is a presentation with another main content type).
+bool isOpenXml(const QString &suffix)
+{
+    return suffix == u"pptx" || suffix == u"pptm" || suffix == u"potx" || suffix == u"ppsx";
+}
+
+bool writeBytes(const QString &path, const QByteArray &bytes, QString *error)
+{
+    // QSaveFile: a failed or truncated write (ENOSPC, quota) must not be
+    // reported as a successful save with the dirty flag cleared.
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        if (error != nullptr) {
+            *error = QObject::tr("Could not open %1: %2").arg(path, file.errorString());
+        }
+        return false;
+    }
+    if (file.write(bytes) != bytes.size() || !file.commit()) {
+        if (error != nullptr) {
+            *error = file.errorString();
+        }
+        return false;
+    }
+    return true;
 }
 
 } // namespace
@@ -64,6 +94,7 @@ bool ShowDocument::load(const QString &path, QString *error)
 {
     const QString suffix = suffixOf(path);
     ShowModel::Presentation incoming;
+    QString readError;
     if (suffix == QLatin1String("fodp")) {
         QFile file(path);
         if (!file.open(QIODevice::ReadOnly)) {
@@ -72,27 +103,25 @@ bool ShowDocument::load(const QString &path, QString *error)
             }
             return false;
         }
-        incoming = ShowModel::readFodp(file.readAll(), error);
-        if (error != nullptr && !error->isEmpty()) {
-            return false;
-        }
+        incoming = ShowModel::readFodp(file.readAll(), &readError);
+    } else if (isOpenXml(suffix)) {
+        // D-070: PowerPoint natively — no LibreOffice in the way.
+        incoming = ShowModel::readPptxFile(path, &readError);
     } else {
-        const QString fodp = convertAndWait(path, QStringLiteral("fodp"), error);
-        if (fodp.isEmpty()) {
+        // .ppt, .odp and the rest: LibreOffice makes a .pptx in a private
+        // directory, the native reader reads that.
+        const QString converted = convertAndWait(path, QStringLiteral("pptx"), error);
+        if (converted.isEmpty()) {
             return false;
         }
-        QFile file(fodp);
-        if (!file.open(QIODevice::ReadOnly)) {
-            if (error != nullptr) {
-                *error = tr("Could not read converted file.");
-            }
-            return false;
+        incoming = ShowModel::readPptxFile(converted, &readError);
+        QFile::remove(converted);
+    }
+    if (!readError.isEmpty()) {
+        if (error != nullptr) {
+            *error = readError;
         }
-        incoming = ShowModel::readFodp(file.readAll(), error);
-        if (error != nullptr && !error->isEmpty()) {
-            return false;
-        }
-        QFile::remove(fodp);
+        return false;
     }
     m_presentation = incoming;
     // AGENT-GUARD: the undo stack must be cleared before the presentation is
@@ -112,8 +141,8 @@ bool ShowDocument::load(const QString &path, QString *error)
 bool ShowDocument::save(const QString &path, QString *error)
 {
     const QString suffix = suffixOf(path);
+    QString writeError;
     if (suffix == QLatin1String("fodp")) {
-        QString writeError;
         const QByteArray bytes = ShowModel::writeFodp(m_presentation, &writeError);
         if (bytes.isEmpty()) {
             if (error != nullptr) {
@@ -121,27 +150,24 @@ bool ShowDocument::save(const QString &path, QString *error)
             }
             return false;
         }
-        // QSaveFile: a failed or truncated write (ENOSPC, quota) must not be
-        // reported as a successful save with the dirty flag cleared.
-        QSaveFile file(path);
-        if (!file.open(QIODevice::WriteOnly)) {
+        if (!writeBytes(path, bytes, error)) {
+            return false;
+        }
+    } else if (isOpenXml(suffix) || suffix.isEmpty()) {
+        const QByteArray bytes = ShowModel::writePptx(m_presentation, &writeError);
+        if (bytes.isEmpty()) {
             if (error != nullptr) {
-                *error = tr("Could not open %1: %2").arg(path, file.errorString());
+                *error = writeError;
             }
             return false;
         }
-        if (file.write(bytes) != bytes.size() || !file.commit()) {
-            if (error != nullptr) {
-                *error = file.errorString();
-            }
+        if (!writeBytes(path, bytes, error)) {
             return false;
         }
     } else {
-        // Write the native intermediate, convert, move the result into
-        // place. The intermediate is created inside the converter
-        // directory so convertAndWait removes it; the target path is the
-        // user's file and is overwritten, never deleted as an
-        // "intermediate".
+        // .odp / .ppt: the native .pptx, converted by LibreOffice. The
+        // intermediate lives in a QTemporaryDir; the target path is the
+        // user's file and is overwritten, never deleted as an "intermediate".
         QTemporaryDir temp;
         if (!temp.isValid()) {
             if (error != nullptr) {
@@ -149,20 +175,14 @@ bool ShowDocument::save(const QString &path, QString *error)
             }
             return false;
         }
-        const QString intermediate = temp.path() + QStringLiteral("/deck.fodp");
-        QString writeError;
-        const QByteArray bytes = ShowModel::writeFodp(m_presentation, &writeError);
-        QFile staging(intermediate);
-        if (bytes.isEmpty() || !staging.open(QIODevice::WriteOnly)) {
+        const QString intermediate = temp.path() + QStringLiteral("/deck.pptx");
+        if (!ShowModel::writePptxFile(m_presentation, intermediate, &writeError)) {
             if (error != nullptr) {
-                *error = bytes.isEmpty() ? writeError : tr("Could not stage the conversion.");
+                *error = writeError.isEmpty() ? tr("Could not stage the conversion.") : writeError;
             }
             return false;
         }
-        staging.write(bytes);
-        staging.close();
-        const QString converted =
-            convertAndWait(intermediate, suffix.isEmpty() ? QStringLiteral("odp") : suffix, error);
+        const QString converted = convertAndWait(intermediate, suffix, error);
         if (converted.isEmpty()) {
             return false;
         }
@@ -171,27 +191,18 @@ bool ShowDocument::save(const QString &path, QString *error)
         // target is on the user's filesystem, so QFile::rename fails with
         // EXDEV. The old remove-then-rename destroyed the user's existing
         // file whenever that rename failed.
-        QSaveFile out(path);
-        if (!out.open(QIODevice::WriteOnly)) {
-            if (error != nullptr) {
-                *error = out.errorString();
-            }
-            return false;
-        }
         QFile convertedFile(converted);
         if (!convertedFile.open(QIODevice::ReadOnly)) {
             if (error != nullptr) {
                 *error = convertedFile.errorString();
             }
-            out.cancelWriting();
             return false;
         }
         const QByteArray payload = convertedFile.readAll();
-        if (payload.isEmpty() || out.write(payload) != payload.size() || !out.commit()) {
-            if (error != nullptr) {
+        if (payload.isEmpty() || !writeBytes(path, payload, error)) {
+            if (error != nullptr && error->isEmpty()) {
                 *error = tr("Could not move the converted file into place.");
             }
-            out.cancelWriting();
             return false;
         }
     }
@@ -203,20 +214,42 @@ bool ShowDocument::save(const QString &path, QString *error)
 
 QStringList ShowDocument::mimeTypes() const
 {
-    return {QStringLiteral("application/vnd.oasis.opendocument.presentation"),
-            QStringLiteral("application/vnd.openxmlformats-officedocument.presentationml.presentation")};
+    // Mirrors the .desktop MimeType list and ShowHost's open filters.
+    return {QStringLiteral("application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+            QStringLiteral("application/vnd.ms-powerpoint.presentation.macroEnabled.12"),
+            QStringLiteral("application/vnd.openxmlformats-officedocument.presentationml.template"),
+            QStringLiteral("application/vnd.openxmlformats-officedocument.presentationml.slideshow"),
+            QStringLiteral("application/vnd.ms-powerpoint"),
+            QStringLiteral("application/vnd.oasis.opendocument.presentation"),
+            QStringLiteral("application/vnd.oasis.opendocument.presentation-flat-xml")};
 }
 
 QByteArray ShowDocument::recoverySnapshot() const
 {
+    // AGENT-NOTE (D-070): the journal holds a .pptx, not a .fodp — the
+    // pptx mapping round-trips the whole model (tables, charts, preserved
+    // Office content, masters and layouts), .fodp only its ODF subset.
     QString error;
-    return ShowModel::writeFodp(m_presentation, &error);
+    return ShowModel::writePptx(m_presentation, &error);
+}
+
+qint64 ShowDocument::recoveryPayloadLimit() const
+{
+    // AGENT-CONTRACT (document.h): one of the journal's two bounds. A deck's
+    // snapshot is a packaged file with its pictures, as QindaWrite's .docx.
+    return Core::RecoveryJournal::kMaxBinaryPayload;
 }
 
 bool ShowDocument::loadRecovery(const QByteArray &snapshot, QString *error)
 {
-    m_presentation = ShowModel::readFodp(snapshot, error);
-    if (error != nullptr && !error->isEmpty()) {
+    QString readError;
+    // Journals written before M62 hold .fodp.
+    m_presentation = ShowModel::looksLikeZip(snapshot) ? ShowModel::readPptxData(snapshot, &readError)
+                                                       : ShowModel::readFodp(snapshot, &readError);
+    if (!readError.isEmpty()) {
+        if (error != nullptr) {
+            *error = readError;
+        }
         return false;
     }
     // Same raw-Slide* hazard as load(): drop commands that reference the
