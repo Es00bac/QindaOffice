@@ -35,6 +35,13 @@ runs never overwrite earlier evidence.
 
 ## M78 Calc gates (D-087)
 
+After merging (lead): the full suite on qinda 267/267 at 3e00dd4; the
+owner's 27 workbooks (laptop, XSD-validated): 0 failed, 0 cells or
+formula texts changed, 0 schema-invalid; 216 sheets with their own print
+settings, none changed by the round trip; 185 conditional-format rules
+and 168 validations all modelled, none kept-as-written, none lost (the
+earlier "skipped unmappable rule(s)" warnings are gone).
+
 Qualified on qinda (branch `m78-calc-whatif`, merged with
 `m60-office-formats` a994c60) with `QQO_OOXML_SCHEMA_DIR=~/scratch/qqo/ecma-xsd`
 and xmllint, as a targeted build (calc_engine, calc_io, office_ooxml,
@@ -185,6 +192,12 @@ them; every saved package validates against the Transitional XSDs):
   result is there. Check the dialogs in dark and light themes.
 
 ## M77 Write mailings gates (D-086)
+
+After merging (lead): the full suite on qinda 253/253 at a994c60; the
+owner's 590 `.docx` read and round-trip with 0 failures, 0 text/table/
+picture changes and 0 schema-invalid packages; page counts against Word
+unchanged for all 567 Word-paginated documents (anchored pictures now
+float without moving any page).
 
 On qinda (branch `m77-write-mailings`, merged with `m60-office-formats`
 4399244, then a57c0ee — M79 changes nothing these targets build, and the
