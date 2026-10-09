@@ -192,16 +192,20 @@ QJsonObject fillStyle(const FillStyle &s)
     for (const GradientStop &stop : s.stops) {
         stops.append(QJsonArray{stop.position, color(stop.color)});
     }
-    return {{QStringLiteral("kind"), int(s.kind)},
-            {QStringLiteral("stops"), stops},
-            {QStringLiteral("angle"), s.angle},
-            {QStringLiteral("path"), s.path},
-            {QStringLiteral("image"), QString::fromLatin1(s.image.toBase64())},
-            {QStringLiteral("imageMime"), s.imageMime},
-            {QStringLiteral("tile"), s.tile},
-            {QStringLiteral("pattern"), s.pattern},
-            {QStringLiteral("foreground"), color(s.foreground)},
-            {QStringLiteral("background"), color(s.background)}};
+    QJsonObject object{{QStringLiteral("kind"), int(s.kind)},
+                       {QStringLiteral("stops"), stops},
+                       {QStringLiteral("angle"), s.angle},
+                       {QStringLiteral("path"), s.path},
+                       {QStringLiteral("image"), QString::fromLatin1(s.image.toBase64())},
+                       {QStringLiteral("imageMime"), s.imageMime},
+                       {QStringLiteral("tile"), s.tile},
+                       {QStringLiteral("pattern"), s.pattern},
+                       {QStringLiteral("foreground"), color(s.foreground)},
+                       {QStringLiteral("background"), color(s.background)}};
+    if (s.imageAlpha < 1.0) {
+        object.insert(QStringLiteral("imageAlpha"), s.imageAlpha); // M75
+    }
+    return object;
 }
 
 FillStyle fillStyle(const QJsonObject &o)
@@ -220,7 +224,38 @@ FillStyle fillStyle(const QJsonObject &o)
     s.pattern = o.value(QStringLiteral("pattern")).toString();
     s.foreground = color(o.value(QStringLiteral("foreground")));
     s.background = color(o.value(QStringLiteral("background")));
+    s.imageAlpha = qBound(0.0, o.value(QStringLiteral("imageAlpha")).toDouble(1.0), 1.0);
     return s;
+}
+
+QJsonObject media(const MediaInfo &m)
+{
+    return {{QStringLiteral("kind"), int(m.kind)},
+            {QStringLiteral("data"), QString::fromLatin1(m.data.toBase64())},
+            {QStringLiteral("mime"), m.mime},
+            {QStringLiteral("link"), m.link},
+            {QStringLiteral("name"), m.name},
+            {QStringLiteral("durationMs"), m.durationMs},
+            {QStringLiteral("autoPlay"), m.autoPlay},
+            {QStringLiteral("loop"), m.loop},
+            {QStringLiteral("hideWhenStopped"), m.hideWhenStopped},
+            {QStringLiteral("volume"), m.volume}};
+}
+
+MediaInfo media(const QJsonObject &o)
+{
+    MediaInfo m;
+    m.kind = MediaKind(qBound(0, o.value(QStringLiteral("kind")).toInt(), int(MediaKind::Audio)));
+    m.data = QByteArray::fromBase64(o.value(QStringLiteral("data")).toString().toLatin1());
+    m.mime = o.value(QStringLiteral("mime")).toString();
+    m.link = o.value(QStringLiteral("link")).toString();
+    m.name = o.value(QStringLiteral("name")).toString();
+    m.durationMs = o.value(QStringLiteral("durationMs")).toInt();
+    m.autoPlay = o.value(QStringLiteral("autoPlay")).toBool();
+    m.loop = o.value(QStringLiteral("loop")).toBool();
+    m.hideWhenStopped = o.value(QStringLiteral("hideWhenStopped")).toBool();
+    m.volume = qBound(0, o.value(QStringLiteral("volume")).toInt(80), 100);
+    return m;
 }
 
 QJsonObject lineStyle(const LineStyle &s)

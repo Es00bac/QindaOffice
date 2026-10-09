@@ -13,10 +13,14 @@
 
 namespace QindaOffice::Show::Pptx {
 
-[[nodiscard]] Ooxml::XmlElementPtr slideElement(PartWriter &out, const Slide &slide);
+// `writtenIds` (optional) receives the Office id each top-level shape was
+// written with, by model id (M75: comments name their shapes by it).
+// AGENT-GUARD (M75): the source's p188:commentRel extension is left out —
+// writeSlideComments() (pptx_review.h) writes or carries the comments and
+// puts it back, so a changed comment list never drags the stale part along.
+[[nodiscard]] Ooxml::XmlElementPtr slideElement(PartWriter &out, const Slide &slide,
+                                                QHash<QString, quint32> *writtenIds = nullptr);
 // The p:notes for the slide; nullptr when it has no notes.
 [[nodiscard]] Ooxml::XmlElementPtr notesElement(PartWriter &out, const Slide &slide);
-// Relationships the slide XML never names (comments), carried across.
-void carryImplicitRelationships(PartWriter &out, const Slide &slide);
 
 } // namespace QindaOffice::Show::Pptx

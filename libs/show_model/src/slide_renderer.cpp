@@ -214,6 +214,18 @@ void renderSlide(QPainter *painter, const Slide &slide, const QSizeF &slideSize,
     // running show keeps a Grow/Shrink at 150 % after its step.
     const bool showing = buildStep < 1000;
     for (const Shape &shape : slide.shapes) {
+        // M75: a video or sound is on the slide before its play click; in
+        // the show one that hides while not playing is drawn by the player
+        // only while it plays.
+        if (shape.media.isMedia()) {
+            if (showing && shape.media.hideWhenStopped) {
+                continue;
+            }
+            painter->save();
+            Render::paintShape(painter, shape);
+            painter->restore();
+            continue;
+        }
         if (shape.buildStep > buildStep && !isEmphasis(shape.animation)) {
             continue; // appears on a later click
         }

@@ -5,7 +5,14 @@
 // canvas's old/new edit payloads; redo() is idempotent (the mutation
 // already happened when the command is pushed), so QUndoStack::push()
 // re-applying redo is harmless. SlideListCommand covers whole-deck
-// changes (add/duplicate/delete/reorder slide).
+// changes (add/duplicate/delete/reorder slide); DeckStateCommand (M75)
+// everything else deck-wide (themes, slide size, masters, sections).
+//
+// AGENT-GUARD (M75): every command finds its slide by id at undo/redo
+// time (SlideRef), never through a Slide* kept from when it was pushed —
+// a whole-deck command replaces the deck's slide list, and the canvas
+// detaches it again on the next refresh, so a kept pointer would edit a
+// list the deck no longer holds.
 
 #include "presentation.h"
 
@@ -18,14 +25,22 @@ namespace ShowModel = QindaOffice::Show;
 
 namespace QindaOffice::Apps::Show {
 
+// A slide located by id in a deck, each time it is needed.
+struct SlideRef {
+    ShowModel::Presentation *deck = nullptr;
+    QString slideId;
+    [[nodiscard]] ShowModel::Slide *get() const { return deck != nullptr ? deck->findSlide(slideId) : nullptr; }
+    bool operator==(const SlideRef &) const = default;
+};
+
 class InsertShapeCommand final : public QUndoCommand {
 public:
-    InsertShapeCommand(ShowModel::Slide *slide, QString shapeId, QUndoCommand *parent = nullptr);
+    InsertShapeCommand(SlideRef slide, QString shapeId, QUndoCommand *parent = nullptr);
     void redo() override;
     void undo() override;
 
 private:
-    ShowModel::Slide *m_slide;
+    SlideRef m_slide;
     QString m_shapeId;
     ShowModel::Shape m_copy;
     int m_index = -1;
@@ -33,20 +48,20 @@ private:
 
 class RemoveShapeCommand final : public QUndoCommand {
 public:
-    RemoveShapeCommand(ShowModel::Slide *slide, int index, ShowModel::Shape removed,
+    RemoveShapeCommand(SlideRef slide, int index, ShowModel::Shape removed,
                        QUndoCommand *parent = nullptr);
     void redo() override;
     void undo() override;
 
 private:
-    ShowModel::Slide *m_slide;
+    SlideRef m_slide;
     int m_index;
     ShowModel::Shape m_removed;
 };
 
 class GeometryCommand final : public QUndoCommand {
 public:
-    GeometryCommand(ShowModel::Slide *slide, QString shapeId, QRectF oldRect, QRectF newRect,
+    GeometryCommand(SlideRef slide, QString shapeId, QRectF oldRect, QRectF newRect,
                     QUndoCommand *parent = nullptr);
     void redo() override;
     void undo() override;
@@ -54,7 +69,7 @@ public:
     int id() const override { return 1; }
 
 private:
-    ShowModel::Slide *m_slide;
+    SlideRef m_slide;
     QString m_shapeId;
     QRectF m_oldRect;
     QRectF m_newRect;
@@ -62,13 +77,13 @@ private:
 
 class TextEditCommand final : public QUndoCommand {
 public:
-    TextEditCommand(ShowModel::Slide *slide, QString shapeId, QList<ShowModel::TextParagraph> oldText,
+    TextEditCommand(SlideRef slide, QString shapeId, QList<ShowModel::TextParagraph> oldText,
                     QList<ShowModel::TextParagraph> newText, QUndoCommand *parent = nullptr);
     void redo() override;
     void undo() override;
 
 private:
-    ShowModel::Slide *m_slide;
+    SlideRef m_slide;
     QString m_shapeId;
     QList<ShowModel::TextParagraph> m_oldText;
     QList<ShowModel::TextParagraph> m_newText;
@@ -76,13 +91,13 @@ private:
 
 class BuildStepCommand final : public QUndoCommand {
 public:
-    BuildStepCommand(ShowModel::Slide *slide, QString shapeId, int oldStep, int newStep,
+    BuildStepCommand(SlideRef slide, QString shapeId, int oldStep, int newStep,
                      QUndoCommand *parent = nullptr);
     void redo() override;
     void undo() override;
 
 private:
-    ShowModel::Slide *m_slide;
+    SlideRef m_slide;
     QString m_shapeId;
     int m_oldStep;
     int m_newStep;
@@ -90,14 +105,14 @@ private:
 
 class ShapeOrderCommand final : public QUndoCommand {
 public:
-    ShapeOrderCommand(ShowModel::Slide *slide, QStringList oldOrder, QStringList newOrder,
+    ShapeOrderCommand(SlideRef slide, QStringList oldOrder, QStringList newOrder,
                       QUndoCommand *parent = nullptr);
     void redo() override;
     void undo() override;
 
 private:
     void apply(const QStringList &order);
-    ShowModel::Slide *m_slide;
+    SlideRef m_slide;
     QStringList m_oldOrder;
     QStringList m_newOrder;
 };
@@ -107,7 +122,7 @@ private:
 // swaps between the two. Shape copies share the image payload implicitly.
 class ShapeStateCommand final : public QUndoCommand {
 public:
-    ShapeStateCommand(ShowModel::Slide *slide, QString shapeId, ShowModel::Shape before,
+    ShapeStateCommand(SlideRef slide, QString shapeId, ShowModel::Shape before,
                       ShowModel::Shape after, QUndoCommand *parent = nullptr);
     void redo() override;
     void undo() override;
@@ -115,7 +130,7 @@ public:
 private:
     void apply(const ShowModel::Shape &state);
 
-    ShowModel::Slide *m_slide;
+    SlideRef m_slide;
     QString m_shapeId;
     ShowModel::Shape m_before;
     ShowModel::Shape m_after;
@@ -179,6 +194,22 @@ private:
     QString m_slideId;
     QString m_before;
     QString m_after;
+};
+
+// A whole-deck change (M75, D-084): themes, slide size, master view edits,
+// sections, backgrounds applied to all — the deck before and after,
+// swapped wholesale (Qt's implicit sharing keeps the copies cheap).
+class DeckStateCommand final : public QUndoCommand {
+public:
+    DeckStateCommand(ShowModel::Presentation *deck, ShowModel::Presentation before, ShowModel::Presentation after,
+                     const QString &text, QUndoCommand *parent = nullptr);
+    void redo() override;
+    void undo() override;
+
+private:
+    ShowModel::Presentation *m_deck;
+    ShowModel::Presentation m_before;
+    ShowModel::Presentation m_after;
 };
 
 class SlideListCommand final : public QUndoCommand {

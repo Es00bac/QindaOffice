@@ -3,6 +3,8 @@
 // validator, and EVERY exported command must resolve in the host's
 // ActionModel (V5: the Widgets suite's panel was dead). Exactly one AI
 // menu, with the inline actions and deck generation after Assistant….
+// M75 (D-084): the Design and Review menus, Section, Video / Audio,
+// Playback and the Slide Master view's commands are exported too.
 
 #include "show_test_support.h"
 
@@ -45,7 +47,8 @@ private slots:
         }
         QCOMPARE(titles, (QStringList{QStringLiteral("File"), QStringLiteral("Edit"), QStringLiteral("View"),
                                       QStringLiteral("Slide"), QStringLiteral("Insert"), QStringLiteral("Shape"),
-                                      QStringLiteral("Arrange"), QStringLiteral("Table"), QStringLiteral("AI"), QStringLiteral("Settings"),
+                                      QStringLiteral("Arrange"), QStringLiteral("Table"), QStringLiteral("Design"),
+                                      QStringLiteral("Review"), QStringLiteral("AI"), QStringLiteral("Settings"),
                                       QStringLiteral("Help")}));
         QCOMPARE(titles.count(QStringLiteral("AI")), 1);
         QStringList ids;
@@ -65,6 +68,19 @@ private slots:
         QVERIFY(ids.contains(QStringLiteral("showSnapToGuidesAction"))); // appended to View
         QVERIFY(ids.filter(QStringLiteral("showAnim")).size() >= 7);
         QVERIFY(ids.filter(QStringLiteral("showTemplate_")).size() >= 1);
+        // M75: every built-in theme, colour, font and effect set, and the
+        // view, section, comment and media commands.
+        QVERIFY(ids.filter(QStringLiteral("showTheme_")).size() >= 7);
+        QVERIFY(ids.filter(QStringLiteral("showThemeColors_")).size() >= 8);
+        QVERIFY(ids.filter(QStringLiteral("showThemeFonts_")).size() >= 8);
+        QVERIFY(ids.filter(QStringLiteral("showThemeEffects_")).size() >= 3);
+        for (const char *id : {"showSlideSizeWidescreenAction", "showSlideSizeStandardAction", "showSlideSizeCustomAction",
+                               "showFormatBackgroundAction", "showThemeBrowseAction", "showSlideMasterViewAction",
+                               "showInsertLayoutAction", "showMasterTextStylesAction", "showAddSectionAction",
+                               "showCollapseSectionsAction", "showNewCommentAction", "showCommentsPaneAction",
+                               "showInsertVideoAction", "showInsertAudioAction", "showMediaPlayAction", "showMediaLoopAction"}) {
+            QVERIFY2(ids.contains(QString::fromLatin1(id)), id);
+        }
     }
 };
 

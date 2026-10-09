@@ -41,6 +41,10 @@ struct FillStyle {
     QByteArray image;
     QString imageMime;
     bool tile = false;
+    // M75: how opaque the picture is drawn (a:blip/a:alphaModFix; Format
+    // Background's Transparency is 1 - imageAlpha). Colours carry their own
+    // alpha.
+    qreal imageAlpha = 1.0;
     // Pattern (DrawingML preset name: "pct50", "dkHorz", "smGrid", …)
     QString pattern;
     QColor foreground;

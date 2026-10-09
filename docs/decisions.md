@@ -5,6 +5,169 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-084: QindaShow: PowerPoint's design, masters, sections, comments and media
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart, "nothing missing that somebody would need";
+M75, builds on D-070 and D-076)
+
+**Context.** QindaShow opened and edited what PowerPoint decks hold (D-070,
+D-076) but not PowerPoint's design layer: no Design tab (themes, variants,
+slide size, Format Background), masters only through a dialog of values, no
+Slide Master view; sections and comments were carried blind or dropped;
+audio and video were preserved as unknown frames and never played. The
+model holds EFFECTIVE values, so a change to what slides inherit cannot be
+pushed into the slides one value at a time without guessing what was
+inherited.
+
+**Decision.**
+1. **A design change is made where PowerPoint keeps it, and the deck is
+   re-resolved** (`pptx_design.h`): the theme part, a master or a layout is
+   changed in the model, the deck is written by the pptx writer and read
+   back by the same reader that opens a file — through
+   `Ooxml::Package::fromEntries()` / `PackageWriter::entries()`, no zip in
+   between, media bytes shared — so every slide inherits exactly as
+   PowerPoint will show it. QindaShow's own grouping and extension payloads
+   come back by position; ids of what QindaShow made since the last save
+   are renewed (selections are cleared). Each change is ONE undo step
+   (`DeckStateCommand`, the whole deck before and after); shape commands
+   locate their slide by id (`SlideRef`), so a renewed deck never leaves a
+   command pointing at a dead slide.
+2. **Themes** (`show_theme.h`, `show_theme_xml.h`): a `ThemeSpec` (name,
+   the twelve colour slots, heading and body fonts, effects, the source
+   part). Built in: Office Theme and six themes of QindaShow's own; eight
+   colour sets, eight font sets, three effect sets (Office, Flat, Soft
+   Shadow). A new theme part is written as PowerPoint writes one (colour
+   scheme, font scheme with Office's script fonts, three-level format
+   scheme, object defaults, `thm15:themeFamily`); Colors / Fonts / Effects
+   patch the deck's own theme part; Browse for Themes takes the theme of a
+   `.thmx`, `.potx` or `.pptx`. A theme-only change rewrites the theme part
+   and leaves the master's part as it was.
+3. **Slide size** (`pptx_resize.h`): a package transform — top-level
+   `xfrm`s of slides, layouts and masters (not a group's child space), text
+   sizes, spacing, indents, insets and table grids scaled by PowerPoint's
+   factor (Ensure Fit the smaller ratio, Maximize the larger), the content
+   centred; a placeholder without its own position keeps following its
+   layout. PowerPoint's question (Maximize / Ensure Fit) is asked exactly
+   when content would shrink (`resizeAsks`).
+4. **Format Background**: solid, gradient (linear or radial, stops, angle),
+   picture (a file, or one of six tiles QindaShow draws, written as tiled
+   pictures) and pattern, with transparency (`a:alphaModFix` for pictures);
+   this slide, or Apply to All (every master takes it, layouts and slides
+   let go of their own); Reset Background; Hide Background Graphics. In the
+   Slide Master view it edits the master or layout on the canvas.
+5. **Slide Master view** (`master_edit.h`, `show_master_view.h`): masters
+   and layouts as effective values — placeholders, the title / body /
+   other text styles (nine levels; a layout placeholder's look lives in its
+   `a:lstStyle`), backgrounds, decorations, z order. The canvas edits a
+   template slide made of the master or layout; the view puts it back
+   (`applyTemplateSlide`) queued after the canvas's gesture (an
+   AGENT-GUARD) and re-resolves. Insert, Duplicate, Delete (only a layout
+   no slide uses), Rename and Preserve layouts; a layout's Title and
+   Footers; Insert Placeholder (content, text, picture); Text Styles (Title
+   and levels 1–5: font with the theme fonts first, size, bold, italic,
+   underline, colour, bullet, alignment, indent). Writing
+   (`pptx_write_masters.h`): an unedited master with its layouts is copied
+   byte for byte; an edited one is patched — background, `p:txStyles`
+   level by level, the shape tree in model order, `p:sldLayoutIdLst`
+   rebuilt — and a new layout is `slideLayoutN.xml`. A deck QindaShow made
+   gets PowerPoint's structure (master, theme, layouts) when the view
+   first opens.
+6. **Sections** (`sections.h`): `SlideSection{id, name, slides}`, every
+   slide in exactly one once a deck has any (`normalizeSections` after
+   every slide-list change; a moved slide joins the section it lands in).
+   Add Section (PowerPoint's "Default Section" for the slides before it, a
+   name asked for), Rename, Remove (its slides join the section before),
+   Remove All, Move Up / Down (with their slides), Collapse / Expand (a
+   view state). Written as `p14:sectionLst` in `presentation.xml`.
+7. **Comments** (`pptx_review.h`): PowerPoint's modern comments
+   (`authors.xml`, `modernComment_<slide>_<creation id>.xml`,
+   `p188:commentRel`, anchors `ac:deMkLst` on a shape or `pc:sldMkLst` on
+   the slide, replies, resolved status) and legacy ones (`commentAuthors.xml`,
+   `commentN.xml`, `p:pos`, `p15:threadingInfo` replies) are read and
+   written; a deck keeps its kind until a comment is resolved (legacy
+   comments cannot say so) and then becomes modern; unchanged comment parts
+   are written byte for byte. The Comments pane (`CommentsPane.qml`)
+   adds on the selected shape or the slide, replies, edits, resolves,
+   reopens and deletes a thread; Previous / Next walk the deck; the canvas
+   shows numbered marks.
+8. **Audio and video** (`show_media.h`): Insert ▸ Video / Audio embeds the
+   file as PowerPoint does — a `p:pic` with `a:videoFile` / `a:audioFile`
+   (`r:link`) and `p14:media` (`r:embed`), the media and video / audio
+   relationships, `ppaction://media`, a poster frame (QindaShow's own: a
+   play mark and the file name; or Poster Frame from File) — and its
+   playback in `p:timing`: `mediacall playFrom(0.0)` at its click (Start
+   On Click, the click sequence) or with the slide (Start Automatically),
+   `p:video` / `p:audio` with volume, `showWhenStopped="0"` (Hide While Not
+   Playing) and `repeatCount="indefinite"` (Loop until Stopped). A deck's
+   own media is read (MP4/MOV/M4A, WAV, AVI, ASF, MP3, FLAC, Ogg, WebM and
+   MPEG probed for kind and length) and written verbatim while unchanged.
+   Playback goes through Qt Multimedia **loaded at run time**
+   (`apps/qindashow/media/MediaSurface.qml`, a plain resource, not a module
+   file), so QindaShow builds and runs without it: the show plays automatic
+   media with the slide and On Click media at their click, a click on a
+   video pauses or resumes it, the next slide stops everything; Playback ▸
+   Play plays the selected medium in place. Without Qt Multimedia (or with
+   `QQO_SHOW_MEDIA=off`, which every test sets) the poster frame is shown
+   and the status bar says why; `QQO_SHOW_MEDIA_SURFACE` (tests only)
+   names a silent stand-in.
+9. **The commands** are persistent `ActionEntry`s with new ids, in the menu
+   tree and on the ribbon (AGENTS.md rule 5; never renamed, never reused):
+   `showSlideSize{Widescreen,Standard,Custom}Action`,
+   `showFormatBackgroundAction`, `showHideBackgroundGraphicsAction`,
+   `showBackgroundApplyToAllAction`, `showBackgroundResetAction`,
+   `showThemeBrowseAction`, `showTheme_<Name>`, `showThemeColors_<Name>`,
+   `showThemeFonts_<Name>`, `showThemeEffects_<Name>` (one per built-in
+   set; the lists only grow); `showSlideMasterViewAction`,
+   `showCloseMasterViewAction`, `show{Insert,Duplicate,Delete,Rename}LayoutAction`,
+   `showPreserveLayoutAction`, `showLayoutTitleAction`,
+   `showLayoutFootersAction`,
+   `showInsert{Content,Text,Picture}PlaceholderAction`,
+   `showMasterTextStylesAction`; `showAddSectionAction`,
+   `showRenameSectionAction`, `showRemoveSectionAction`,
+   `showRemoveAllSectionsAction`, `showMoveSection{Up,Down}Action`,
+   `show{Collapse,Expand}SectionsAction`; `showNewCommentAction`,
+   `showDeleteCommentAction`, `show{Previous,Next}CommentAction`,
+   `showCommentsPaneAction`; `showInsert{Video,Audio}Action`,
+   `showMediaPlayAction`, `showMediaStart{OnClick,Automatically}Action`,
+   `showMediaLoopAction`, `showMediaHideAction`, `showMediaPosterAction`.
+   Menus: Design and Review; Slide ▸ Section; Insert ▸ Video / Audio;
+   Shape ▸ Playback; View ▸ Slide Master and Master Tools. Ribbon: the
+   Design tab (Themes, Customize), Review, Home ▸ Section, Insert ▸ Comments
+   and Media, View ▸ Master Views, and the contextual Slide Master (while
+   the view is open; it is shown on entering) and Playback (while a medium
+   is selected) tabs.
+
+**Consequences.** A PowerPoint deck's design can be changed in QindaShow and
+saved as PowerPoint's own markup: themes, masters and layouts where
+PowerPoint keeps them (untouched ones byte for byte), sections, comments of
+the kind the deck had, embedded media with PowerPoint's timing. Not done:
+Browse for Themes takes a file's theme, not its masters and layouts; the
+theme and variant galleries are menus of names, without live previews;
+modern comments are written without `p188:pos` (PowerPoint places them by
+their anchor), with no mentions or reactions, under the login name; media
+trimming, fades, bookmarks, captions, Play Across Slides, Rewind after
+Playing and a volume control are not offered, a trigger on a shape ("When
+Clicked On") becomes On Click once its playback is edited, and the poster
+is not grabbed from the video; textures are QindaShow's six, not Office's;
+New Slide in a PowerPoint deck still makes QindaShow's layout-less slide;
+M67's chart limits (combo charts, multi-level categories) remain. QindaTK gaps,
+reported and not worked around in the toolkit: `SlideMasterEditor` edits
+placeholder values, not a master or layout visually (the view is the app's
+canvas and `MasterPane.qml`); `SlideSorter` shows a section caption but has
+no collapsible section headers or section commands (QindaShow keeps its
+sorter); there is no media player control (QindaShow loads its own
+`MediaSurface.qml` over Qt Multimedia); `FillStyleEditor` has no picture or
+texture fill (Format Background composes Segmented, ColorField,
+GradientEditor, ComboBox and Slider itself); no gallery with live previews;
+`Tk.MenuBar` has no overflow, so with the Design and Review menus the local
+menu bar clips Help at 520 px (the command search and the panel reach it).
+QindaWrite's and QindaShow's comment panes are two copies (the apps' QML
+modules are separate); a shared one belongs in `office_quick`. PowerPoint
+itself is not available here: the markup follows PowerPoint's spelling and
+is checked by the ECMA-376 schemas (the parts they cover) and LibreOffice;
+the owner's check in PowerPoint is the manual gate (`docs/verification.md`).
+
 ## D-083: QindaCalc: PivotTables read, made, refreshed and written as Excel's
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

@@ -7,6 +7,7 @@
 #include "show_clipboard.h"
 #include "show_commands.h"
 #include "show_design_actions.h"
+#include "show_master_view.h"
 #include "show_toolbox.h"
 #include "slide_renderer.h"
 #include "standard_actions.h"
@@ -21,6 +22,7 @@
 #include <QUndoStack>
 
 #include <iterator>
+#include <optional>
 
 #include "desktop_settings.h"
 
@@ -71,7 +73,9 @@ ShowHost::ShowHost()
     });
     createAssistant();
     createEditing(); // M67: before the menus, which name its commands
+    createDesign();  // M75: likewise
     insertMenus();
+    designMenus();
     wireCanvasUndo();
     wireEditCommands();
     finalizeHost();
@@ -116,7 +120,10 @@ void ShowHost::fullRefresh()
     if (m_currentRow >= count) {
         m_currentRow = count - 1;
     }
-    if (m_currentRow >= 0) {
+    if (masterViewActive()) {
+        m_masterView->refreshCanvas(); // the canvas holds a master or layout (M75)
+        emit currentSlideChanged();
+    } else if (m_currentRow >= 0) {
         switchSlide(m_currentRow);
     } else {
         m_canvas->setSlide(nullptr, m_document->presentation()->slideSize);
@@ -146,6 +153,14 @@ void ShowHost::switchSlide(int row)
 
 void ShowHost::selectSlideRow(int row)
 {
+    if (masterViewActive()) {
+        // The canvas shows a master or layout: only the row moves (M75).
+        if (row >= 0 && row < slideCount()) {
+            m_currentRow = row;
+            emit currentSlideChanged();
+        }
+        return;
+    }
     if (row >= 0 && row < slideCount() && row != m_currentRow) {
         switchSlide(row);
     } else if (row == m_currentRow) {
@@ -273,10 +288,20 @@ void ShowHost::updateSlideStatus()
 
 void ShowHost::wireCanvasUndo()
 {
+    // AGENT-GUARD (M75, show_master_view.h): in the Slide Master view the
+    // canvas edits a master or layout that is not one of the deck's slides
+    // — the view commits those edits itself, so no slide command is pushed.
+    // Every command finds its slide by id (show_commands.h).
+    const auto slideRef = [this]() -> std::optional<SlideRef> {
+        if (masterViewActive() || m_canvas->slide() == nullptr) {
+            return std::nullopt;
+        }
+        return SlideRef{m_document->presentation(), m_canvas->slide()->id};
+    };
     // A gesture that touches several shapes brackets itself; everything
     // inside becomes one command instead of one per shape.
     connect(m_canvas, &SlideCanvasItem::compoundEditStarted, this, [this] {
-        if (m_canvas->slide() != nullptr) {
+        if (m_canvas->slide() != nullptr && !masterViewActive()) {
             m_compoundBefore = *m_canvas->slide();
             m_compoundEdit = true;
         }
@@ -285,40 +310,52 @@ void ShowHost::wireCanvasUndo()
         ShowModel::Slide *slide = m_canvas->slide();
         const bool active = m_compoundEdit;
         m_compoundEdit = false;
-        if (!active || slide == nullptr || *slide == m_compoundBefore) {
+        if (!active || slide == nullptr || *slide == m_compoundBefore || masterViewActive()) {
             return;
         }
         m_document->undoStack()->push(
             new SlideStateCommand(m_document->presentation(), slide->id, m_compoundBefore, *slide));
     });
-    connect(m_canvas, &SlideCanvasItem::shapeInserted, this, [this](const QString &shapeId) {
-        m_document->undoStack()->push(new InsertShapeCommand(m_canvas->slide(), shapeId));
+    connect(m_canvas, &SlideCanvasItem::shapeInserted, this, [this, slideRef](const QString &shapeId) {
+        if (const auto ref = slideRef()) {
+            m_document->undoStack()->push(new InsertShapeCommand(*ref, shapeId));
+        }
     });
-    connect(m_canvas, &SlideCanvasItem::shapeRemoved, this, [this](int index, const ShowModel::Shape &removed) {
-        m_document->undoStack()->push(new RemoveShapeCommand(m_canvas->slide(), index, removed));
+    connect(m_canvas, &SlideCanvasItem::shapeRemoved, this, [this, slideRef](int index, const ShowModel::Shape &removed) {
+        if (const auto ref = slideRef()) {
+            m_document->undoStack()->push(new RemoveShapeCommand(*ref, index, removed));
+        }
     });
     connect(m_canvas, &SlideCanvasItem::shapeGeometryEdited, this,
-            [this](const QString &shapeId, const QRectF &oldRect, const QRectF &newRect) {
-                if (!m_compoundEdit) {
-                    m_document->undoStack()->push(new GeometryCommand(m_canvas->slide(), shapeId, oldRect, newRect));
+            [this, slideRef](const QString &shapeId, const QRectF &oldRect, const QRectF &newRect) {
+                if (const auto ref = slideRef(); ref && !m_compoundEdit) {
+                    m_document->undoStack()->push(new GeometryCommand(*ref, shapeId, oldRect, newRect));
                 }
             });
     connect(m_canvas, &SlideCanvasItem::shapeTextEdited, this,
-            [this](const QString &shapeId, const QList<ShowModel::TextParagraph> &oldText,
-                   const QList<ShowModel::TextParagraph> &newText) {
-                m_document->undoStack()->push(new TextEditCommand(m_canvas->slide(), shapeId, oldText, newText));
+            [this, slideRef](const QString &shapeId, const QList<ShowModel::TextParagraph> &oldText,
+                             const QList<ShowModel::TextParagraph> &newText) {
+                if (const auto ref = slideRef()) {
+                    m_document->undoStack()->push(new TextEditCommand(*ref, shapeId, oldText, newText));
+                }
             });
     connect(m_canvas, &SlideCanvasItem::shapeBuildEdited, this,
-            [this](const QString &shapeId, int oldStep, int newStep) {
-                m_document->undoStack()->push(new BuildStepCommand(m_canvas->slide(), shapeId, oldStep, newStep));
+            [this, slideRef](const QString &shapeId, int oldStep, int newStep) {
+                if (const auto ref = slideRef()) {
+                    m_document->undoStack()->push(new BuildStepCommand(*ref, shapeId, oldStep, newStep));
+                }
             });
     connect(m_canvas, &SlideCanvasItem::shapesReordered, this,
-            [this](const QStringList &oldOrder, const QStringList &newOrder) {
-                m_document->undoStack()->push(new ShapeOrderCommand(m_canvas->slide(), oldOrder, newOrder));
+            [this, slideRef](const QStringList &oldOrder, const QStringList &newOrder) {
+                if (const auto ref = slideRef()) {
+                    m_document->undoStack()->push(new ShapeOrderCommand(*ref, oldOrder, newOrder));
+                }
             });
     connect(m_canvas, &SlideCanvasItem::shapeStyled, this,
-            [this](const QString &shapeId, const ShowModel::Shape &before, const ShowModel::Shape &after) {
-                m_document->undoStack()->push(new ShapeStateCommand(m_canvas->slide(), shapeId, before, after));
+            [this, slideRef](const QString &shapeId, const ShowModel::Shape &before, const ShowModel::Shape &after) {
+                if (const auto ref = slideRef()) {
+                    m_document->undoStack()->push(new ShapeStateCommand(*ref, shapeId, before, after));
+                }
             });
 }
 

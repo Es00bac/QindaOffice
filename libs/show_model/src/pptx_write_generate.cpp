@@ -48,8 +48,67 @@ XmlElement &nonVisual(PartWriter &out, XmlElement &shape, const char *wrapper, c
         cNvPr.appendElement(link);
     }
     XmlElement &specificProps = nv.appendElement(nsP(), QLatin1String(specific));
-    nv.appendElement(nsP(), QStringLiteral("nvPr"));
+    XmlElement &nvPr = nv.appendElement(nsP(), QStringLiteral("nvPr"));
+    // M75: a placeholder QindaShow writes itself (a new layout's, one a
+    // layout duplicate brought along) is a placeholder in the file too.
+    if (model.placeholder.isPlaceholder()) {
+        if (QLatin1String(specific) == QLatin1String("cNvSpPr")) {
+            set(specificProps.appendElement(nsA(), QStringLiteral("spLocks")), QStringLiteral("noGrp"), QStringLiteral("1"));
+        }
+        XmlElement &ph = nvPr.appendElement(nsP(), QStringLiteral("ph"));
+        if (model.placeholder.type != u"obj") {
+            set(ph, QStringLiteral("type"), model.placeholder.type);
+        }
+        if (!model.placeholder.orient.isEmpty()) {
+            set(ph, QStringLiteral("orient"), model.placeholder.orient);
+        }
+        if (!model.placeholder.size.isEmpty()) {
+            set(ph, QStringLiteral("sz"), model.placeholder.size);
+        }
+        if (model.placeholder.index >= 0) {
+            set(ph, QStringLiteral("idx"), QString::number(model.placeholder.index));
+        }
+    }
     return specificProps;
+}
+
+// M75 (D-084): a video or sound as PowerPoint embeds one — the media part
+// related twice from the slide (.../video or .../audio, and Office 2010's
+// .../media named by p14:media), clicking the picture plays it.
+void mediaReferences(PartWriter &out, XmlElement &pic, const MediaInfo &media)
+{
+    XmlElement *nv = pic.child(nsP(), u"nvPicPr");
+    XmlElement *cNvPr = nv != nullptr ? nv->child(nsP(), u"cNvPr") : nullptr;
+    XmlElement *nvPr = nv != nullptr ? nv->child(nsP(), u"nvPr") : nullptr;
+    if (cNvPr == nullptr || nvPr == nullptr) {
+        return;
+    }
+    if (cNvPr->child(nsA(), u"hlinkClick") == nullptr) {
+        XmlElement &link = cNvPr->insertElementBefore(make(nsA(), QStringLiteral("hlinkClick")), {u"hlinkHover", u"extLst"});
+        link.setAttribute(nsR(), QStringLiteral("id"), QString());
+        set(link, QStringLiteral("action"), QStringLiteral("ppaction://media"));
+    }
+    const bool audio = media.kind == MediaKind::Audio;
+    QString fileRel;
+    QString mediaRel;
+    const QString kindType = relType(audio ? "audio" : "video");
+    const QString mediaType = QStringLiteral("http://schemas.microsoft.com/office/2007/relationships/media");
+    if (media.data.isEmpty()) {
+        fileRel = out.relate(kindType, media.link, true);
+        mediaRel = out.relate(mediaType, media.link, true);
+    } else {
+        const QString part = out.session.mediaFile(media.data, media.mime, media.name);
+        fileRel = out.relate(kindType, part);
+        mediaRel = out.relate(mediaType, part);
+    }
+    XmlElement &file = nvPr->insertElementBefore(make(nsA(), audio ? QStringLiteral("audioFile") : QStringLiteral("videoFile")),
+                                                 {u"custDataLst", u"extLst"});
+    file.setAttribute(nsR(), QStringLiteral("link"), fileRel);
+    XmlElement &ext = nvPr->appendElement(nsP(), QStringLiteral("extLst")).appendElement(nsP(), QStringLiteral("ext"));
+    set(ext, QStringLiteral("uri"), QStringLiteral("{DAA4B4D4-6D71-4841-9C94-3DA2E9CE8D0B}"));
+    XmlElement &p14 = ext.appendElement(QStringLiteral("http://schemas.microsoft.com/office/powerpoint/2010/main"),
+                                         QStringLiteral("media"));
+    p14.setAttribute(nsR(), media.data.isEmpty() ? QStringLiteral("link") : QStringLiteral("embed"), mediaRel);
 }
 
 XmlElementPtr geometryElement(const Shape &shape)
@@ -148,6 +207,9 @@ XmlElementPtr picture(PartWriter &out, const Shape &shape, quint32 id, const QBy
     spPr.appendElement(geometryElement(shape));
     if (shape.framed) {
         spPr.appendElement(lineElement(shape.stroke, shape.strokeWidth, shape.line, shape.strokeWidth > 0));
+    }
+    if (shape.media.isMedia()) {
+        mediaReferences(out, *pic, shape.media);
     }
     return pic;
 }
@@ -271,6 +333,11 @@ XmlElementPtr generateShape(PartWriter &out, const Shape &shape, quint32 id)
     case ShapeKind::Arrow:
         return spShape(out, shape, id);
     case ShapeKind::Image:
+        if (shape.imagePng.isEmpty() && shape.media.isMedia()) {
+            // A video or sound without a poster gets QindaShow's (M75).
+            return picture(out, shape, id, mediaPoster(shape.media.kind, shape.media.name, QSize(640, 360)),
+                           QStringLiteral("image/png"));
+        }
         return shape.imagePng.isEmpty() ? nullptr : picture(out, shape, id, shape.imagePng, shape.image.mime);
     case ShapeKind::Group:
         return group(out, shape, id);

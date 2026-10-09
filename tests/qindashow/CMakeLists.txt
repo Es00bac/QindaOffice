@@ -6,10 +6,14 @@
 # — and the panel export through the desktop's validator
 # (tst_show_menu_export). M67 (D-076): tables in place (tst_show_table),
 # chart data, the notes pane and the presenter view (tst_show_chart_notes).
+# M75 (D-084): the Design tab, Format Background and the Slide Master view
+# (tst_show_design_tab); sections, comments, audio and video
+# (tst_show_review). QQO_SHOW_MEDIA=off keeps every test silent: nothing
+# is ever played (show_media_actions.h).
 # Every test links the app's static QML module, so a source added to
 # apps/qindashow/CMakeLists.txt is in every test.
 foreach(name IN ITEMS tst_qindashow tst_show_ui tst_show_design tst_show_menu_export tst_show_tools tst_show_table
-                      tst_show_chart_notes)
+                      tst_show_chart_notes tst_show_design_tab tst_show_review)
     add_executable(${name} ${name}.cpp show_test_support.h)
     target_link_libraries(${name} PRIVATE qindashow_app qindashow_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)
@@ -18,5 +22,5 @@ foreach(name IN ITEMS tst_qindashow tst_show_ui tst_show_design tst_show_menu_ex
     qqo_desktop_runtime(${name})
     add_test(NAME ${name} COMMAND ${name})
     set_tests_properties(${name} PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QQO_SHOW_MEDIA=off")
 endforeach()

@@ -51,4 +51,8 @@ struct PresentationParts {
 // The presentation-wide default text style (presentation.xml).
 [[nodiscard]] Ooxml::XmlElementPtr defaultTextStyleElement();
 
+// True for an ST_SlideLayoutType value (a model layout of another type is
+// written as "cust").
+[[nodiscard]] bool isLayoutType(const QString &type);
+
 } // namespace QindaOffice::Show::Pptx

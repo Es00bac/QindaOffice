@@ -29,5 +29,8 @@ namespace QindaOffice::Show::Json {
 [[nodiscard]] Table table(const QJsonObject &object);
 [[nodiscard]] QJsonObject chart(const ChartData &chart);
 [[nodiscard]] ChartData chart(const QJsonObject &object);
+// M75: a video's or sound's file and playback.
+[[nodiscard]] QJsonObject media(const MediaInfo &media);
+[[nodiscard]] MediaInfo media(const QJsonObject &object);
 
 } // namespace QindaOffice::Show::Json

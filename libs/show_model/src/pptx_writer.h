@@ -19,9 +19,18 @@
 
 #include "presentation.h"
 
+#include <memory>
+
+namespace QindaOffice::Ooxml {
+class PackageWriter;
+}
+
 namespace QindaOffice::Show {
 
 [[nodiscard]] QByteArray writePptx(const Presentation &deck, QString *error = nullptr);
 bool writePptxFile(const Presentation &deck, const QString &path, QString *error = nullptr);
+// The package writePptx() zips, before it is zipped (M75: pptx_design.h
+// edits it — a new slide size — before reading the deck back).
+[[nodiscard]] std::unique_ptr<Ooxml::PackageWriter> writePptxPackage(const Presentation &deck);
 
 } // namespace QindaOffice::Show

@@ -47,6 +47,11 @@ public:
     [[nodiscard]] static std::shared_ptr<const Package> load(const QString &path, QString *error = nullptr);
     [[nodiscard]] static std::shared_ptr<const Package> fromData(const QByteArray &zip,
                                                                QString *error = nullptr);
+    // A package from a PackageWriter's entries (PackageWriter::entries()),
+    // sharing their bytes — no zip in between (M75: QindaShow reads back a
+    // deck it just wrote to re-resolve it, without copying its media).
+    [[nodiscard]] static std::shared_ptr<const Package>
+    fromEntries(const QList<std::pair<QString, QByteArray>> &entries, QString *error = nullptr);
 
     [[nodiscard]] QStringList partNames() const;
     [[nodiscard]] bool contains(const QString &partName) const;
@@ -126,6 +131,9 @@ public:
     [[nodiscard]] QByteArray toZip(QString *error = nullptr) const;
     // toZip() written atomically through QSaveFile.
     bool save(const QString &path, QString *error = nullptr) const;
+    // The package's entries in toZip()'s order — [Content_Types].xml, the
+    // parts, the relationship parts — sharing the parts' bytes.
+    [[nodiscard]] QList<std::pair<QString, QByteArray>> entries() const;
 
 private:
     [[nodiscard]] QByteArray contentTypesXml() const;

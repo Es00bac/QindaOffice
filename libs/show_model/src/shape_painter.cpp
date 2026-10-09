@@ -220,6 +220,11 @@ void paintImage(QPainter *painter, const Shape &shape, const QPainterPath &clip)
     const QRectF target = shape.rect.normalized();
     QImage image;
     image.loadFromData(shape.imagePng);
+    if (image.isNull() && shape.media.isMedia()) {
+        // M75: a video or sound without a poster frame.
+        paintPlaceholderBox(painter, target, shape.media.kind == MediaKind::Audio ? QStringLiteral("Audio") : QStringLiteral("Video"));
+        return;
+    }
     if (image.isNull()) {
         // Formats Qt cannot decode (EMF/WMF) keep their bytes; show where.
         painter->save();
@@ -306,6 +311,7 @@ void paintFill(QPainter *painter, const QPainterPath &path, const QColor &plain,
         }
         painter->save();
         painter->setClipPath(path, Qt::IntersectClip);
+        painter->setOpacity(painter->opacity() * qBound(0.0, style.imageAlpha, 1.0));
         if (style.tile) {
             painter->fillPath(path, QBrush(image));
         } else {

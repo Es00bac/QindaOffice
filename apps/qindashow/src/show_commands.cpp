@@ -3,45 +3,58 @@
 
 namespace QindaOffice::Apps::Show {
 
-InsertShapeCommand::InsertShapeCommand(ShowModel::Slide *slide, QString shapeId,
+namespace {
+
+ShowModel::Shape *slideShape(const SlideRef &ref, const QString &shapeId)
+{
+    ShowModel::Slide *slide = ref.get();
+    return slide != nullptr ? slide->findShape(shapeId) : nullptr;
+}
+
+} // namespace
+
+InsertShapeCommand::InsertShapeCommand(SlideRef slide, QString shapeId,
                                        QUndoCommand *parent)
     : QUndoCommand(parent)
-    , m_slide(slide)
+    , m_slide(std::move(slide))
     , m_shapeId(std::move(shapeId))
 {
     setText(QObject::tr("Insert shape"));
-    for (int i = 0; i < m_slide->shapes.size(); ++i) {
-        if (m_slide->shapes.at(i).id == m_shapeId) {
-            m_index = i;
-            m_copy = m_slide->shapes.at(i);
-            break;
+    if (const ShowModel::Slide *target = m_slide.get()) {
+        for (int i = 0; i < target->shapes.size(); ++i) {
+            if (target->shapes.at(i).id == m_shapeId) {
+                m_index = i;
+                m_copy = target->shapes.at(i);
+                break;
+            }
         }
     }
 }
 
 void InsertShapeCommand::redo()
 {
-    if (m_slide->findShape(m_shapeId) == nullptr && m_index >= 0
-        && m_index <= m_slide->shapes.size()) {
+    ShowModel::Slide *target = m_slide.get();
+    if (target != nullptr && target->findShape(m_shapeId) == nullptr && m_index >= 0 && m_index <= target->shapes.size()) {
         ShowModel::Shape shape = m_copy;
         shape.id = m_shapeId;
-        m_slide->shapes.insert(m_index, shape);
+        target->shapes.insert(m_index, shape);
     }
 }
 
 void InsertShapeCommand::undo()
 {
-    if (ShowModel::Shape *shape = m_slide->findShape(m_shapeId)) {
+    ShowModel::Slide *target = m_slide.get();
+    if (ShowModel::Shape *shape = target != nullptr ? target->findShape(m_shapeId) : nullptr) {
         m_copy = *shape;
-        m_index = m_slide->shapes.indexOf(*shape);
-        m_slide->shapes.removeAll(*shape);
+        m_index = int(target->shapes.indexOf(*shape));
+        target->shapes.removeAll(m_copy);
     }
 }
 
-RemoveShapeCommand::RemoveShapeCommand(ShowModel::Slide *slide, int index, ShowModel::Shape removed,
+RemoveShapeCommand::RemoveShapeCommand(SlideRef slide, int index, ShowModel::Shape removed,
                                        QUndoCommand *parent)
     : QUndoCommand(parent)
-    , m_slide(slide)
+    , m_slide(std::move(slide))
     , m_index(index)
     , m_removed(std::move(removed))
 {
@@ -50,20 +63,24 @@ RemoveShapeCommand::RemoveShapeCommand(ShowModel::Slide *slide, int index, ShowM
 
 void RemoveShapeCommand::redo()
 {
-    if (ShowModel::Shape *shape = m_slide->findShape(m_removed.id)) {
-        m_slide->shapes.removeAll(*shape);
+    ShowModel::Slide *target = m_slide.get();
+    if (ShowModel::Shape *shape = target != nullptr ? target->findShape(m_removed.id) : nullptr) {
+        const ShowModel::Shape gone = *shape;
+        target->shapes.removeAll(gone);
     }
 }
 
 void RemoveShapeCommand::undo()
 {
-    m_slide->shapes.insert(qMin(m_index, m_slide->shapes.size()), m_removed);
+    if (ShowModel::Slide *target = m_slide.get()) {
+        target->shapes.insert(qMin(m_index, int(target->shapes.size())), m_removed);
+    }
 }
 
-GeometryCommand::GeometryCommand(ShowModel::Slide *slide, QString shapeId, QRectF oldRect,
+GeometryCommand::GeometryCommand(SlideRef slide, QString shapeId, QRectF oldRect,
                                  QRectF newRect, QUndoCommand *parent)
     : QUndoCommand(parent)
-    , m_slide(slide)
+    , m_slide(std::move(slide))
     , m_shapeId(std::move(shapeId))
     , m_oldRect(oldRect)
     , m_newRect(newRect)
@@ -73,14 +90,14 @@ GeometryCommand::GeometryCommand(ShowModel::Slide *slide, QString shapeId, QRect
 
 void GeometryCommand::redo()
 {
-    if (ShowModel::Shape *shape = m_slide->findShape(m_shapeId)) {
+    if (ShowModel::Shape *shape = slideShape(m_slide, m_shapeId)) {
         shape->rect = m_newRect;
     }
 }
 
 void GeometryCommand::undo()
 {
-    if (ShowModel::Shape *shape = m_slide->findShape(m_shapeId)) {
+    if (ShowModel::Shape *shape = slideShape(m_slide, m_shapeId)) {
         shape->rect = m_oldRect;
     }
 }
@@ -95,11 +112,11 @@ bool GeometryCommand::mergeWith(const QUndoCommand *other)
     return true;
 }
 
-TextEditCommand::TextEditCommand(ShowModel::Slide *slide, QString shapeId,
+TextEditCommand::TextEditCommand(SlideRef slide, QString shapeId,
                                  QList<ShowModel::TextParagraph> oldText,
                                  QList<ShowModel::TextParagraph> newText, QUndoCommand *parent)
     : QUndoCommand(parent)
-    , m_slide(slide)
+    , m_slide(std::move(slide))
     , m_shapeId(std::move(shapeId))
     , m_oldText(std::move(oldText))
     , m_newText(std::move(newText))
@@ -109,22 +126,22 @@ TextEditCommand::TextEditCommand(ShowModel::Slide *slide, QString shapeId,
 
 void TextEditCommand::redo()
 {
-    if (ShowModel::Shape *shape = m_slide->findShape(m_shapeId)) {
+    if (ShowModel::Shape *shape = slideShape(m_slide, m_shapeId)) {
         shape->paragraphs = m_newText;
     }
 }
 
 void TextEditCommand::undo()
 {
-    if (ShowModel::Shape *shape = m_slide->findShape(m_shapeId)) {
+    if (ShowModel::Shape *shape = slideShape(m_slide, m_shapeId)) {
         shape->paragraphs = m_oldText;
     }
 }
 
-BuildStepCommand::BuildStepCommand(ShowModel::Slide *slide, QString shapeId, int oldStep,
+BuildStepCommand::BuildStepCommand(SlideRef slide, QString shapeId, int oldStep,
                                    int newStep, QUndoCommand *parent)
     : QUndoCommand(parent)
-    , m_slide(slide)
+    , m_slide(std::move(slide))
     , m_shapeId(std::move(shapeId))
     , m_oldStep(oldStep)
     , m_newStep(newStep)
@@ -134,22 +151,22 @@ BuildStepCommand::BuildStepCommand(ShowModel::Slide *slide, QString shapeId, int
 
 void BuildStepCommand::redo()
 {
-    if (ShowModel::Shape *shape = m_slide->findShape(m_shapeId)) {
+    if (ShowModel::Shape *shape = slideShape(m_slide, m_shapeId)) {
         shape->buildStep = m_newStep;
     }
 }
 
 void BuildStepCommand::undo()
 {
-    if (ShowModel::Shape *shape = m_slide->findShape(m_shapeId)) {
+    if (ShowModel::Shape *shape = slideShape(m_slide, m_shapeId)) {
         shape->buildStep = m_oldStep;
     }
 }
 
-ShapeOrderCommand::ShapeOrderCommand(ShowModel::Slide *slide, QStringList oldOrder,
+ShapeOrderCommand::ShapeOrderCommand(SlideRef slide, QStringList oldOrder,
                                      QStringList newOrder, QUndoCommand *parent)
     : QUndoCommand(parent)
-    , m_slide(slide)
+    , m_slide(std::move(slide))
     , m_oldOrder(std::move(oldOrder))
     , m_newOrder(std::move(newOrder))
 {
@@ -168,25 +185,29 @@ void ShapeOrderCommand::undo()
 
 void ShapeOrderCommand::apply(const QStringList &order)
 {
+    ShowModel::Slide *target = m_slide.get();
+    if (target == nullptr) {
+        return;
+    }
     QList<ShowModel::Shape> reordered;
     for (const QString &id : order) {
-        if (ShowModel::Shape *shape = m_slide->findShape(id)) {
+        if (ShowModel::Shape *shape = target->findShape(id)) {
             reordered.append(*shape);
         }
     }
-    for (const ShowModel::Shape &shape : m_slide->shapes) {
+    for (const ShowModel::Shape &shape : std::as_const(target->shapes)) {
         if (!order.contains(shape.id)) {
             reordered.append(shape);
         }
     }
-    m_slide->shapes = reordered;
+    target->shapes = reordered;
 }
 
-ShapeStateCommand::ShapeStateCommand(ShowModel::Slide *slide, QString shapeId,
+ShapeStateCommand::ShapeStateCommand(SlideRef slide, QString shapeId,
                                      ShowModel::Shape before, ShowModel::Shape after,
                                      QUndoCommand *parent)
     : QUndoCommand(parent)
-    , m_slide(slide)
+    , m_slide(std::move(slide))
     , m_shapeId(std::move(shapeId))
     , m_before(std::move(before))
     , m_after(std::move(after))
@@ -196,7 +217,7 @@ ShapeStateCommand::ShapeStateCommand(ShowModel::Slide *slide, QString shapeId,
 
 void ShapeStateCommand::apply(const ShowModel::Shape &state)
 {
-    if (ShowModel::Shape *shape = m_slide->findShape(m_shapeId)) {
+    if (ShowModel::Shape *shape = slideShape(m_slide, m_shapeId)) {
         // Keep the id stable: state copies carry their own id, but the
         // slide looks the shape up by the original one.
         const QString id = shape->id;
@@ -321,6 +342,26 @@ bool NotesEditCommand::mergeWith(const QUndoCommand *other)
     }
     m_after = that->m_after;
     return true;
+}
+
+DeckStateCommand::DeckStateCommand(ShowModel::Presentation *deck, ShowModel::Presentation before,
+                                   ShowModel::Presentation after, const QString &text, QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_deck(deck)
+    , m_before(std::move(before))
+    , m_after(std::move(after))
+{
+    setText(text);
+}
+
+void DeckStateCommand::redo()
+{
+    *m_deck = m_after;
+}
+
+void DeckStateCommand::undo()
+{
+    *m_deck = m_before;
 }
 
 SlideListCommand::SlideListCommand(ShowModel::Presentation *deck, QList<ShowModel::Slide> before,

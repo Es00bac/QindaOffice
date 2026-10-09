@@ -28,7 +28,9 @@
 // slide_canvas_item_input.cpp (pointer and key events, the text editor),
 // slide_canvas_item_snap.cpp (snapping, guides, grouping),
 // slide_canvas_item_order.cpp (multi-selection, z-order),
-// slide_canvas_item_table.cpp (cells, boundaries, cell editing; M67).
+// slide_canvas_item_table.cpp (cells, boundaries, cell editing; M67),
+// slide_canvas_item_marks.cpp (placeholder frames, comment and media
+// marks; M75).
 
 #include "presentation.h"
 #include "slide_renderer.h"
@@ -140,6 +142,11 @@ public:
     // nothing.
     bool editShape(const QString &shapeId, const QString &label, const std::function<bool(ShowModel::Shape &)> &mutate);
 
+    // ---- M75: the Slide Master view's placeholder frames ----
+    // On: placeholders show dashed frames, as in PowerPoint's master view.
+    void setTemplateMode(bool on);
+    [[nodiscard]] bool templateMode() const { return m_templateMode; }
+
     // ---- in-place text editing (the window's TextEdit shows the document) ----
     Q_INVOKABLE void beginTextEdit(const QString &shapeId);
     Q_INVOKABLE void commitTextEdit(bool cancelled);
@@ -183,6 +190,11 @@ protected:
 
 private:
     enum class Gesture { None, Move, Resize, Marquee, Cells, ColumnBoundary, RowBoundary };
+
+    // slide_canvas_item_marks.cpp (M75): placeholder frames in the Slide
+    // Master view, the slide's comment markers, the play mark of media —
+    // the editor's own marks, never in the show, thumbnails or print.
+    void paintMarks(QPainter *painter) const;
 
     // slide_canvas_item_table.cpp
     bool tablePress(const QPointF &pos, Qt::KeyboardModifiers modifiers);
@@ -231,6 +243,7 @@ private:
     int m_boundary = -1;
     ShowModel::Shape m_tableBefore;
     std::function<ShowModel::TextRun()> m_tableTextLook;
+    bool m_templateMode = false;
 };
 
 } // namespace QindaOffice::Apps::Show

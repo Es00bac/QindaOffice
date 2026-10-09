@@ -2,6 +2,7 @@
 #include "pptx_write_parts.h"
 
 #include "pptx_write_shapes.h"
+#include "pptx_write_styles.h"
 #include "pptx_write_text.h"
 
 #include "ooxml_namespaces.h"
@@ -39,28 +40,55 @@ QByteArray document(const QString &body)
     return QByteArrayLiteral("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n") + body.toUtf8();
 }
 
-QString themeXml(const QString &name, const QString &major, const QString &minor)
-{
-    QString lines;
-    for (const char *w : {"6350", "12700", "19050"}) {
-        lines += QStringLiteral(R"(<a:ln w="%1" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/><a:miter lim="800000"/></a:ln>)")
-                     .arg(QLatin1String(w));
-    }
-    const QString fills = QStringLiteral(
-        R"(<a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"><a:tint val="50000"/></a:schemeClr></a:solidFill><a:solidFill><a:schemeClr val="phClr"><a:shade val="80000"/></a:schemeClr></a:solidFill>)");
-    return QStringLiteral(R"(<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="%1"><a:themeElements>)"
-                          R"(<a:clrScheme name="Office"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2><a:accent1><a:srgbClr val="4472C4"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2><a:accent3><a:srgbClr val="A5A5A5"/></a:accent3><a:accent4><a:srgbClr val="FFC000"/></a:accent4><a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme>)"
-                          R"(<a:fontScheme name="Office"><a:majorFont><a:latin typeface="%2"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="%3"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme>)"
-                          R"(<a:fmtScheme name="Office"><a:fillStyleLst>%4</a:fillStyleLst><a:lnStyleLst>%5</a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst>%4</a:bgFillStyleLst></a:fmtScheme>)"
-                          R"(</a:themeElements><a:objectDefaults/><a:extraClrSchemeLst/></a:theme>)")
-        .arg(escaped(name), escaped(major), escaped(minor), fills, lines);
-}
-
-QString addTheme(WriteSession &session, const QString &name, const QString &major, const QString &minor)
+// M75 (D-084): the theme a generated master relates to, written as
+// PowerPoint writes one (show_theme.h).
+QString addTheme(WriteSession &session, const ThemeSpec &theme)
 {
     const QString part = session.writer.uniquePartName(QStringLiteral("ppt/theme/theme"), QStringLiteral(".xml"));
-    session.writer.addPart(part, document(themeXml(name, major, minor)), QString::fromUtf16(Ooxml::ContentType::Theme));
+    session.writer.addPart(part, themePartXml(theme), QString::fromUtf16(Ooxml::ContentType::Theme));
     return part;
+}
+
+// The theme of a generated master: the model's own, else Office's in the
+// master's font and name (a QindaShow master from the Masters dialog).
+ThemeSpec generatedTheme(const SlideMaster *master)
+{
+    if (master != nullptr && !master->theme.isEmpty()) {
+        return master->theme;
+    }
+    ThemeSpec theme = officeTheme();
+    if (master != nullptr && !master->fontFamily.isEmpty()) {
+        theme.fonts = {QStringLiteral("Custom"), master->fontFamily, master->fontFamily};
+    }
+    if (master != nullptr && !master->name.isEmpty()) {
+        theme.name = master->name;
+    }
+    return theme;
+}
+
+// A generated master with the model's text styles where it has them.
+QByteArray withModelStyles(const QByteArray &bytes, const SlideMaster *master, const ThemeFonts &fonts)
+{
+    if (master == nullptr || (master->titleStyle.isEmpty() && master->bodyStyle.isEmpty() && master->otherStyle.isEmpty())) {
+        return bytes;
+    }
+    const Ooxml::XmlElementPtr root = Ooxml::parseXml(bytes);
+    Ooxml::XmlElement *styles = root ? root->child(nsP(), u"txStyles") : nullptr;
+    if (styles == nullptr) {
+        return bytes;
+    }
+    for (const auto &[name, levels] : {std::pair{"titleStyle", &master->titleStyle}, std::pair{"bodyStyle", &master->bodyStyle},
+                                       std::pair{"otherStyle", &master->otherStyle}}) {
+        if (levels->isEmpty()) {
+            continue;
+        }
+        for (Ooxml::XmlChild &child : styles->children) {
+            if (child.element && child.element->name == QLatin1String(name)) {
+                child.element = listStyleElement(nsP(), QLatin1String(name), *levels, fonts);
+            }
+        }
+    }
+    return Ooxml::serializeDocument(*root);
 }
 
 QString placeholder(int id, const QString &name, const QString &ph, const QString &xfrm, const QString &body)
@@ -100,6 +128,8 @@ QString layoutXml(const QString &type, const QString &name, const QString &shape
 
 const char *const kEmptyBody = R"(<a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="en-US"/></a:p>)";
 
+} // namespace
+
 // ST_SlideLayoutType: a model layout of another type is written as "cust".
 bool isLayoutType(const QString &type)
 {
@@ -116,6 +146,8 @@ bool isLayoutType(const QString &type)
         QStringLiteral("secHead"), QStringLiteral("twoTxTwoObj"), QStringLiteral("objTx"), QStringLiteral("picTx")};
     return types.contains(type);
 }
+
+namespace {
 
 // A generated master or layout part with the model's background and
 // decorations written in; `xml` is the part as generated.
@@ -156,10 +188,8 @@ GeneratedMaster generateMaster(WriteSession &session, const SlideMaster *master,
 {
     Ooxml::PackageWriter &w = session.writer;
     const QSizeF slide = session.deck.slideSize;
-    const QString font = master != nullptr && !master->fontFamily.isEmpty() ? master->fontFamily : QStringLiteral("Calibri");
-    const QString major = master != nullptr && !master->fontFamily.isEmpty() ? master->fontFamily : QStringLiteral("Calibri Light");
-    const QString themePart = addTheme(session, master != nullptr && !master->name.isEmpty() ? master->name : QStringLiteral("Office Theme"),
-                                       major, font);
+    const ThemeSpec theme = generatedTheme(master);
+    const QString themePart = addTheme(session, theme);
     GeneratedMaster out;
     out.themePart = themePart;
     out.part = w.uniquePartName(QStringLiteral("ppt/slideMasters/slideMaster"), QStringLiteral(".xml"));
@@ -203,21 +233,25 @@ GeneratedMaster generateMaster(WriteSession &session, const SlideMaster *master,
             continue;
         }
         const QString type = isLayoutType(layout.type) ? layout.type : QStringLiteral("cust");
-        const QString shapes = type == u"title" ? layouts[0].shapes
+        // M75: a layout that brought its placeholders writes them.
+        const bool own = !layout.placeholders.isEmpty();
+        const QString shapes = own              ? QString()
+            : type == u"title"                  ? layouts[0].shapes
             : type == u"blank"                  ? QString()
             : type == u"titleOnly"              ? placeholder(2, QStringLiteral("Title 1"), QStringLiteral(R"(<p:ph type="title"/>)"), QString(), empty)
                                                 : layouts[1].shapes;
         const QString part = w.uniquePartName(QStringLiteral("ppt/slideLayouts/slideLayout"), QStringLiteral(".xml"));
         const QString name = layout.name.isEmpty() ? QStringLiteral("Layout") : layout.name;
-        addLayout(part, decorated(session, part, layoutXml(type, name, shapes), layout.background, layout.shapes,
-                                  layout.showMasterShapes));
+        addLayout(part, decorated(session, part, layoutXml(type, name, shapes), layout.background,
+                                  own ? layout.placeholders + layout.shapes : layout.shapes, layout.showMasterShapes));
         out.modelLayouts.append({layout.id, layout.type, part});
     }
     w.addRelationship(out.part, relType("theme"), themePart);
     const QColor background = master != nullptr ? master->background : QColor(Qt::white);
     const QColor title = master != nullptr ? master->titleColor : QColor(Qt::black);
     const QColor body = master != nullptr ? master->bodyColor : QColor(Qt::black);
-    const QString shapes = placeholder(2, QStringLiteral("Title Placeholder 1"), QStringLiteral(R"(<p:ph type="title"/>)"),
+    const bool ownPlaceholders = master != nullptr && !master->placeholders.isEmpty();
+    const QString shapes = ownPlaceholders ? QString() : placeholder(2, QStringLiteral("Title Placeholder 1"), QStringLiteral(R"(<p:ph type="title"/>)"),
                                        box(slide, 0.06875, 0.0532, 0.8625, 0.1933),
                                        QStringLiteral(R"(<a:bodyPr vert="horz" anchor="ctr"><a:normAutofit/></a:bodyPr><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>Click to edit Master title style</a:t></a:r></a:p>)"))
         + placeholder(3, QStringLiteral("Text Placeholder 2"), QStringLiteral(R"(<p:ph type="body" idx="1"/>)"),
@@ -234,7 +268,11 @@ GeneratedMaster generateMaster(WriteSession &session, const SlideMaster *master,
         styled.color = master->background;
         styled.style = master->backgroundStyle;
     }
-    w.addPart(out.part, decorated(session, out.part, xml, styled, master != nullptr ? master->shapes : QList<Shape>()),
+    QList<Shape> drawn = master != nullptr ? master->shapes : QList<Shape>();
+    if (ownPlaceholders) {
+        drawn = master->placeholders + drawn;
+    }
+    w.addPart(out.part, withModelStyles(decorated(session, out.part, xml, styled, drawn), master, theme.fonts),
               pml("slideMaster+xml"));
     return out;
 }
@@ -253,8 +291,7 @@ QString generateNotesMaster(WriteSession &session)
                                        R"(<p:notesStyle><a:lvl1pPr marL="0" algn="l"><a:defRPr sz="1200"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="+mn-lt"/></a:defRPr></a:lvl1pPr></p:notesStyle></p:notesMaster>)")
                             .arg(QLatin1String(kNamespaces), QLatin1String(kGroupStart), shapes, QLatin1String(kColorMap));
     w.addPart(part, document(xml), pml("notesMaster+xml"));
-    w.addRelationship(part, relType("theme"), addTheme(session, QStringLiteral("Office Theme"), QStringLiteral("Calibri Light"),
-                                                       QStringLiteral("Calibri")));
+    w.addRelationship(part, relType("theme"), addTheme(session, officeTheme()));
     return part;
 }
 

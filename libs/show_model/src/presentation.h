@@ -20,14 +20,18 @@
 // content still equals what was read (D-068 rule 3).
 
 #include "show_chart.h"
+#include "show_comment.h"
+#include "show_media.h"
 #include "show_style.h"
 #include "show_table.h"
 #include "show_text.h"
+#include "show_theme.h"
 
 #include <QColor>
 #include <QPair>
 #include <QRectF>
 #include <QSize>
+#include <QStringList>
 #include <QUuid>
 #include <QVariant>
 
@@ -192,6 +196,10 @@ struct Shape {
     Connection end;
     QString hyperlink;      // a click on the shape; same forms as TextRun::hyperlink
     PreservedXml preserved; // Preserved and Chart kinds: the frame as written
+    // ---- M75 ----
+    // A video or a sound (show_media.h): an Image-kind shape whose picture
+    // is the poster frame.
+    MediaInfo media;
     Provenance<ShapeSource> origin;
 
     [[nodiscard]] QString displayText() const;
@@ -229,6 +237,23 @@ struct SlideMaster {
     bool typeDefaults = true;
     FillStyle backgroundStyle; // gradient/picture backgrounds (Plain = `background`)
     QList<Shape> shapes;       // drawn behind every slide (logos, rules; not placeholders)
+    // ---- M75 (D-084): what the Slide Master view edits ----
+    // The master's theme (colours, fonts, effects), its text styles as
+    // EFFECTIVE values per outline level — p:titleStyle, p:bodyStyle and
+    // p:otherStyle; each level a paragraph whose one empty run carries the
+    // level's run look — and its placeholders (title, body, date, footer,
+    // slide number) with their sample text. Empty for a master that never
+    // had them (QindaShow's own, from the Masters dialog): the pptx writer
+    // generates Office's defaults for those.
+    ThemeSpec theme;
+    QList<TextParagraph> titleStyle;
+    QList<TextParagraph> bodyStyle;
+    QList<TextParagraph> otherStyle;
+    QList<Shape> placeholders;
+    // The z order of placeholders and decorations together, by model id
+    // (the master view's slide; the file's shape tree). Empty: placeholders
+    // first, then decorations.
+    QStringList order;
     Provenance<MasterSource> origin;
     bool operator==(const SlideMaster &) const = default;
 };
@@ -243,6 +268,10 @@ struct SlideLayout {
     Background background;
     QList<Shape> shapes;     // decorative shapes (not placeholders)
     bool showMasterShapes = true;
+    // ---- M75 ----
+    QList<Shape> placeholders; // as effective values (inherited from the master's)
+    bool preserve = false;     // kept even while no slide uses it (p:sldLayout/@preserve)
+    QStringList order;         // z order by model id, as SlideMaster::order
     Provenance<LayoutSource> origin;
     bool operator==(const SlideLayout &) const = default;
 };
@@ -260,6 +289,8 @@ struct Slide {
     Background background;
     QString layoutId;             // SlideLayout id (Office decks)
     bool showMasterShapes = true;
+    // ---- M75 ----
+    QList<SlideComment> comments; // threads in order, replies after their first comment
     Provenance<SlideSource> origin;
 
     [[nodiscard]] Shape *findShape(const QString &id);
@@ -267,6 +298,17 @@ struct Slide {
     // an ungrouped shape is not "in the group of all ungrouped shapes".
     [[nodiscard]] QList<QString> shapeIdsInGroup(const QString &groupId) const;
     bool operator==(const Slide &) const = default;
+};
+
+// A section of the deck (M75, D-084; PowerPoint's p14:sectionLst): a named
+// run of consecutive slides. When a deck has sections every slide is in
+// exactly one, in deck order (sections.h keeps that true); a section may
+// be empty.
+struct SlideSection {
+    QString id;         // "{GUID}", as PowerPoint names sections
+    QString name;
+    QStringList slides; // model slide ids, in deck order
+    bool operator==(const SlideSection &) const = default;
 };
 
 struct Presentation {
@@ -277,6 +319,11 @@ struct Presentation {
     // ---- M62 ----
     QList<SlideLayout> layouts;
     QSizeF notesSize{540.0, 720.0}; // portrait 7.5 x 10 in
+    // ---- M75 ----
+    QList<SlideSection> sections;
+    // Comments are written as PowerPoint's legacy ones (the kind the deck
+    // came with) while none is resolved; modern ones otherwise.
+    bool legacyComments = false;
     Provenance<DeckSource> origin;
 
     [[nodiscard]] Slide &addSlide(const QString &title);

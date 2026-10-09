@@ -12,6 +12,8 @@ import QindaOffice.Show
 // Space/arrows advance, Backspace back, B/W blank, P pen and L laser
 // annotations (ephemeral, kept per slide for the session), E erases, Esc
 // ends the show. Left click advances, right click goes back, middle ends.
+// The slide's audio and video play over the frames (PlayerMedia.qml, M75);
+// a left click on a video plays or pauses it instead of advancing.
 Window {
     id: player
     required property ShowHost showHost
@@ -161,6 +163,15 @@ Window {
         target: player.controller
         function onStateChanged() { player.onStateChanged() }
     }
+    PlayerMedia {
+        id: playerMedia
+        anchors.fill: parent
+        z: 4
+        showHost: player.showHost
+        controller: player.controller
+        showing: player.active
+        opacity: transition.running ? 0 : 1
+    }
     Rectangle { anchors.fill: parent; visible: player.blank; color: player.blankColor; z: 5 }
     Canvas {
         id: ink
@@ -201,6 +212,7 @@ Window {
         cursorShape: player.tool === "none" ? Qt.BlankCursor : Qt.CrossCursor
         onPressed: function(mouse) {
             if (mouse.button === Qt.LeftButton && player.tool === "pen") { player.activeStroke = [Qt.point(mouse.x, mouse.y)]; return }
+            if (mouse.button === Qt.LeftButton && playerMedia.toggleAt(mouse.x, mouse.y)) return
             if (mouse.button === Qt.LeftButton) player.advance(1)
             else if (mouse.button === Qt.RightButton) player.advance(-1)
             else player.ended()

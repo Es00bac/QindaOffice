@@ -84,6 +84,7 @@ struct Scene {
     {                                                                                      \
         qputenv("QT_QPA_PLATFORM", "offscreen");                                           \
         qputenv("QT_QUICK_BACKEND", "software");                                           \
+        qputenv("QQO_SHOW_MEDIA", "off"); /* M75: never play media */                     \
         QTemporaryDir config;                                                              \
         qputenv("XDG_CONFIG_HOME", config.path().toUtf8());                                \
         qputenv("XDG_STATE_HOME", config.path().toUtf8());                                 \

@@ -49,12 +49,25 @@ namespace QindaOffice::Apps::Show {
 class ChartDataEditor;
 class PresentationController;
 class ShowArrangeActions;
+class ShowBackground;
+class ShowComments;
 class ShowDesignActions;
+class ShowDesignTab;
+class ShowMasterView;
+class ShowMedia;
+class ShowSections;
 class ShowTableActions;
 class ShowToolbox;
 
 class ShowHost : public Quick::DocumentHost {
     Q_OBJECT
+    // M75: the property types below are complete where moc needs them.
+    Q_MOC_INCLUDE("show_background.h")
+    Q_MOC_INCLUDE("show_comments.h")
+    Q_MOC_INCLUDE("show_design_tab.h")
+    Q_MOC_INCLUDE("show_master_view.h")
+    Q_MOC_INCLUDE("show_media_actions.h")
+    Q_MOC_INCLUDE("show_sections.h")
     QML_ELEMENT
     QML_UNCREATABLE("Created by the application.")
     Q_PROPERTY(int slideCount READ slideCount NOTIFY deckChanged)
@@ -79,6 +92,14 @@ class ShowHost : public Quick::DocumentHost {
     // M67: the show runs with the presenter view even on one screen
     // (Slide Show ▸ Presenter View); the player then stays hidden there.
     Q_PROPERTY(bool presenterView READ presenterView NOTIFY playerChanged)
+    // M75 (D-084): the Design tab, Format Background, the Slide Master
+    // view, sections, comments, audio and video.
+    Q_PROPERTY(QindaOffice::Apps::Show::ShowDesignTab *design READ designTab CONSTANT)
+    Q_PROPERTY(QindaOffice::Apps::Show::ShowBackground *background READ background CONSTANT)
+    Q_PROPERTY(QindaOffice::Apps::Show::ShowMasterView *masterView READ masterView CONSTANT)
+    Q_PROPERTY(QindaOffice::Apps::Show::ShowSections *sections READ sections CONSTANT)
+    Q_PROPERTY(QindaOffice::Apps::Show::ShowComments *comments READ comments CONSTANT)
+    Q_PROPERTY(QindaOffice::Apps::Show::ShowMedia *media READ media CONSTANT)
 public:
     ShowHost();
     ~ShowHost() override;
@@ -93,6 +114,23 @@ public:
     [[nodiscard]] ShowTableActions *tableActions() const { return m_tables; }
     [[nodiscard]] ChartDataEditor *chartData() const { return m_chartData; }
     [[nodiscard]] bool presenterView() const { return m_presenterView; }
+    [[nodiscard]] ShowDesignTab *designTab() const { return m_designTab; }
+    [[nodiscard]] ShowBackground *background() const { return m_background; }
+    [[nodiscard]] ShowMasterView *masterView() const { return m_masterView; }
+    [[nodiscard]] ShowSections *sections() const { return m_sections; }
+    [[nodiscard]] ShowComments *comments() const { return m_comments; }
+    [[nodiscard]] ShowMedia *media() const { return m_media; }
+    // M75: the deck's slide at the current row (not the canvas's slide,
+    // which in the Slide Master view is a master or layout); nullptr when
+    // the deck has none.
+    [[nodiscard]] ShowModel::Slide *currentSlide() const;
+    [[nodiscard]] bool masterViewActive() const;
+    // M75: a whole-deck change as ONE undo step named `label` — the deck
+    // becomes `after`, the current slide stays by position. False (nothing
+    // pushed) when `after` equals the deck.
+    bool applyDeckChange(const ShowModel::Presentation &after, const QString &label);
+    // Canvas, sorter and status again (the Slide Master view closing).
+    void refreshSlides() { fullRefresh(); }
 
     // Seats the canvas item under `container` (SlideCanvasView.qml's
     // Component.onCompleted) and names the TextEdit that shows the in-place
@@ -196,7 +234,6 @@ private:
     void updateSlideStatus();
     void markEdited();
     // show_host_slides.cpp
-    void pushSlideListCommand(const QList<ShowModel::Slide> &before);
     [[nodiscard]] QList<int> matches(const QString &needle, bool caseSensitive) const;
     void loadTemplate(const QString &path);
     // show_host_menus.cpp
@@ -206,6 +243,10 @@ private:
     // show_host_editing.cpp
     void createEditing();
     [[nodiscard]] QList<Quick::MenuNode> chartMenuItems() const;
+    // show_host_design.cpp (M75)
+    void createDesign();
+    void designMenus();
+    void pushSlideList(const ShowModel::Presentation &before, const QString &label);
 
     ShowDocument *m_document = nullptr;
     SlideCanvasItem *m_canvas = nullptr;
@@ -218,6 +259,12 @@ private:
     ShowTableActions *m_tables = nullptr;
     ChartDataEditor *m_chartData = nullptr;
     bool m_presenterView = false;
+    ShowDesignTab *m_designTab = nullptr;
+    ShowBackground *m_background = nullptr;
+    ShowMasterView *m_masterView = nullptr;
+    ShowSections *m_sections = nullptr;
+    ShowComments *m_comments = nullptr;
+    ShowMedia *m_media = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;
     Ai::AssistantController *m_assistant = nullptr;
     Ai::InlineActionFlow *m_inline = nullptr;

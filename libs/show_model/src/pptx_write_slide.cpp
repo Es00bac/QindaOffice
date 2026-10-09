@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pptx_write_slide.h"
 
+#include "pptx_review.h"
 #include "pptx_timing.h"
 #include "pptx_write_parts.h"
+
+#include <algorithm>
 
 namespace QindaOffice::Show::Pptx {
 
@@ -151,7 +154,7 @@ bool patchNotesBody(PartWriter &out, XmlElement &notes, const QString &text, con
 
 } // namespace
 
-XmlElementPtr slideElement(PartWriter &out, const Slide &slide)
+XmlElementPtr slideElement(PartWriter &out, const Slide &slide, QHash<QString, quint32> *writtenIds)
 {
     const SlideSource *source = slide.origin.get();
     const bool carry = source != nullptr && source->xml && out.session.copier != nullptr;
@@ -162,6 +165,14 @@ XmlElementPtr slideElement(PartWriter &out, const Slide &slide)
         sld->children.removeIf([](const Ooxml::XmlChild &c) {
             return c.element && (c.element->is(nsP(), u"cSld") || c.element->is(nsP(), u"timing") || isTransition(*c.element));
         });
+        if (XmlElement *list = sld->child(nsP(), u"extLst")) {
+            list->children.removeIf([](const Ooxml::XmlChild &c) {
+                return c.element && c.element->attr(u"uri") == QStringView(kCommentRelUri);
+            });
+            if (list->elements().isEmpty()) {
+                sld->removeChildren(nsP(), u"extLst");
+            }
+        }
         out.carry(*sld, source->part);
     } else {
         sld = make(nsP(), QStringLiteral("sld"));
@@ -184,6 +195,14 @@ XmlElementPtr slideElement(PartWriter &out, const Slide &slide)
     // names (a deleted picture's media, an edited chart's stale part and
     // workbook) into the package, each still related from the slide.
     XmlElementPtr cSld = sourceCSld != nullptr ? sourceCSld->clone() : make(nsP(), QStringLiteral("cSld"));
+    // M75: a QindaShow slide's title survives the round trip a design
+    // change makes (pptx_design.h) — the reader names untitled slides so.
+    const bool titled = std::any_of(slide.shapes.cbegin(), slide.shapes.cend(), [](const Shape &shape) {
+        return shape.placeholder.type == u"title" || shape.placeholder.type == u"ctrTitle";
+    });
+    if (sourceCSld == nullptr && !titled && !slide.title.isEmpty()) {
+        cSld->setAttribute(QString(), QStringLiteral("name"), slide.title);
+    }
     cSld->children.removeIf([](const Ooxml::XmlChild &c) {
         return c.element && (c.element->is(nsP(), u"bg") || c.element->is(nsP(), u"spTree"));
     });
@@ -205,6 +224,9 @@ XmlElementPtr slideElement(PartWriter &out, const Slide &slide)
         written.append(element ? id : 0);
         if (element) {
             tree->appendElement(element);
+            if (writtenIds != nullptr) {
+                writtenIds->insert(shape.id, id);
+            }
         }
     }
     if (const XmlElement *ext = sourceTree != nullptr ? sourceTree->child(nsP(), u"extLst") : nullptr) {
@@ -241,11 +263,24 @@ XmlElementPtr slideElement(PartWriter &out, const Slide &slide)
     } else {
         transition = transitionElement(slide.transition);
     }
-    // Builds: the source's timing while the builds are what was read.
+    // Builds: the source's timing while the builds (and, M75, every media
+    // shape's playback) are what was read.
     QList<BuildEntry> current;
     QList<BuildEntry> expected;
+    QList<MediaEntry> media;
+    bool mediaChanged = false;
     for (qsizetype i = 0; i < slide.shapes.size(); ++i) {
         const Shape &shape = slide.shapes.at(i);
+        if (shape.media.isMedia()) {
+            const MediaInfo &m = shape.media;
+            if (written.at(i) != 0) {
+                media.append({written.at(i), m.kind, m.autoPlay ? 0 : shape.buildStep, m.autoPlay, m.loop,
+                              m.hideWhenStopped, m.volume, m.durationMs});
+            }
+            const Shape *was = carry && shape.origin && written.at(i) == shape.nvId ? &shape.origin->pristine : nullptr;
+            mediaChanged = mediaChanged || was == nullptr || was->media != m || was->buildStep != shape.buildStep;
+            continue; // a media shape's step is its play click, not a build
+        }
         if (shape.buildStep > 0 && written.at(i) != 0) {
             current.append({written.at(i), shape.buildStep, shape.animation, shape.animationMs});
         }
@@ -259,13 +294,13 @@ XmlElementPtr slideElement(PartWriter &out, const Slide &slide)
         }
     }
     XmlElementPtr timing;
-    if (carry && source->timingXml && sorted(current) == sorted(expected)) {
+    if (carry && source->timingXml && sorted(current) == sorted(expected) && !mediaChanged) {
         timing = pruneTiming(*source->timingXml, out.usedIds());
         if (timing) {
             out.carry(*timing, source->part);
         }
     } else {
-        timing = timingElement(current);
+        timing = timingElement(current, media);
     }
     sld->children.clear();
     sld->appendElement(cSld);
@@ -301,19 +336,6 @@ XmlElementPtr notesElement(PartWriter &out, const Slide &slide)
         }
     }
     return notesSlideElement(slide.notes);
-}
-
-void carryImplicitRelationships(PartWriter &out, const Slide &slide)
-{
-    const SlideSource *source = slide.origin.get();
-    if (source == nullptr || out.session.copier == nullptr) {
-        return;
-    }
-    for (const Ooxml::Relationship &rel : out.session.source->relationships(source->part)) {
-        if (rel.type.endsWith(QLatin1String("/comments"))) {
-            out.session.copier->copyRelationship(source->part, rel.id, out.part);
-        }
-    }
 }
 
 } // namespace QindaOffice::Show::Pptx

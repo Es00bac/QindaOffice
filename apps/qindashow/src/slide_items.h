@@ -35,8 +35,13 @@ class SlideThumbItem : public QQuickPaintedItem {
     Q_PROPERTY(int slideIndex READ slideIndex WRITE setSlideIndex NOTIFY changed)
     // Bind to the host's deckRevision: any bump repaints.
     Q_PROPERTY(int revision READ revision WRITE setRevision NOTIFY changed)
+    // M75: ≥ 0 paints item `templateIndex` of the Slide Master view (the
+    // master or a layout, MasterPane.qml) instead of a slide.
+    Q_PROPERTY(int templateIndex READ templateIndex WRITE setTemplateIndex NOTIFY changed)
 public:
     explicit SlideThumbItem(QQuickItem *parent = nullptr);
+    [[nodiscard]] int templateIndex() const { return m_templateIndex; }
+    void setTemplateIndex(int index);
     [[nodiscard]] ShowHost *host() const { return m_host; }
     void setHost(ShowHost *host);
     [[nodiscard]] int slideIndex() const { return m_slideIndex; }
@@ -52,6 +57,7 @@ private:
     QPointer<ShowHost> m_host;
     int m_slideIndex = -1;
     int m_revision = 0;
+    int m_templateIndex = -1;
 };
 
 class SlideFrameItem : public QQuickPaintedItem {

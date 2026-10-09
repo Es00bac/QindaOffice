@@ -15,6 +15,7 @@ QQuickRootItem#ShowWindow
                   DockTabStrip#dockTabStrip_slides [hidden]
                   QQuickItem#dockContent_slides
                     QQuickItem#dockPanelContent_slides
+                      MasterPane#masterPane [hidden]
                       SlideSorter#slideSorter
                         Card#slideThumb_0
                           QQuickRectangle#boxFocusRing [hidden]
@@ -67,6 +68,7 @@ QQuickRootItem#ShowWindow
                     QQuickItem#viewportSurface
                       QQuickItem#viewportContent
                         QQuickItem#slideContainer
+                          QQuickLoader#editorMediaPreview
                           QQuickTextEdit#shapeTextEditor [hidden]
                           SlideCanvasItem#slideCanvas
               QQuickRectangle#splitterHandle
@@ -99,6 +101,99 @@ QQuickRootItem#ShowWindow
               Switch#assistantEditMode [hidden]
               TextField#assistantPrompt [hidden]
                 IconButton#fieldClear [hidden]
+          QQuickItem#dockPanelContent_comments [hidden]
+            CommentsPane#commentsPane [hidden]
+              Button#commentAdd [hidden]
+              Caption#commentsCount [hidden]
+              Caption#emptyText [hidden]
+              IconButton#commentNext [hidden]
+              IconButton#commentPrevious [hidden]
+              Overline#emptyTitle [hidden]
+              Scroll#commentsScroll [hidden]
+              TextArea#commentNewText [hidden]
+          QQuickItem#dockPanelContent_formatBackground [hidden]
+            FormatBackgroundPane#formatBackgroundPane [hidden]
+              Box#propertyEditor [hidden]
+                ColorField#backgroundColor [hidden]
+                  QQuickItem#colorSwatch [hidden]
+                  QQuickTextInput#colorHex [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#propertyEditor [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                Segmented#backgroundGradientType [hidden]
+                  QQuickAbstractButton#segment_0 [hidden]
+                    QQuickRectangle#segmentFocus_0 [hidden]
+                  QQuickAbstractButton#segment_1 [hidden]
+                    QQuickRectangle#segmentFocus_1 [hidden]
+              Box#propertyEditor [hidden]
+                NumberField#backgroundGradientAngle [hidden]
+                  Caption#numberLabel [hidden]
+                  QQuickItem#numberStepDown [hidden]
+                  QQuickItem#numberStepUp [hidden]
+                  QQuickText#numberMixedPlaceholder [hidden]
+                  QQuickTextInput#numberInput [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#propertyEditor [hidden]
+                ColorField#backgroundStopColor [hidden]
+                  QQuickItem#colorSwatch [hidden]
+                  QQuickTextInput#colorHex [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#propertyEditor [hidden]
+                Button#backgroundInsertPicture [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#propertyEditor [hidden]
+                ComboBox#backgroundTexture [hidden]
+                  QQuickText#comboDisplayText [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#propertyEditor [hidden]
+                ComboBox#backgroundPattern [hidden]
+                  QQuickText#comboDisplayText [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#propertyEditor [hidden]
+                ColorField#backgroundPatternForeground [hidden]
+                  QQuickItem#colorSwatch [hidden]
+                  QQuickTextInput#colorHex [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#propertyEditor [hidden]
+                ColorField#backgroundPatternBackground [hidden]
+                  QQuickItem#colorSwatch [hidden]
+                  QQuickTextInput#colorHex [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+              Box#propertyEditor [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                Slider#backgroundTransparency [hidden]
+              Button#backgroundApplyToAll [hidden]
+              Button#backgroundReset [hidden]
+              Caption#backgroundTarget [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              Caption#propertyLabel [hidden]
+              CheckBox#backgroundHideGraphics [hidden]
+              CheckBox#backgroundTile [hidden]
+              GradientEditor#backgroundGradientStops [hidden]
+                QQuickMouseArea#gradientPointer [hidden]
+                QQuickRectangle#gradientTrack [hidden]
+                  QQuickCanvasItem#gradientPreview [hidden]
+              Segmented#backgroundKind [hidden]
+                QQuickAbstractButton#segment_0 [hidden]
+                  QQuickRectangle#segmentFocus_0 [hidden]
+                QQuickAbstractButton#segment_1 [hidden]
+                  QQuickRectangle#segmentFocus_1 [hidden]
+                QQuickAbstractButton#segment_2 [hidden]
+                  QQuickRectangle#segmentFocus_2 [hidden]
+                QQuickAbstractButton#segment_3 [hidden]
+                  QQuickRectangle#segmentFocus_3 [hidden]
+          QQuickItem#dockPanelContent_textStyles [hidden]
+            TextStylesPane#textStylesPane [hidden]
+              Caption#emptyText [hidden]
+              Overline#emptyTitle [hidden]
   QQuickItem#appFooter
     Flex#appFindBar
       FindBar#findBar [hidden]
@@ -136,6 +231,7 @@ QQuickRootItem#ShowWindow
           QQuickTabButton#ribbonTab_file
           QQuickTabButton#ribbonTab_home
           QQuickTabButton#ribbonTab_insert
+          QQuickTabButton#ribbonTab_review
           QQuickTabButton#ribbonTab_slideShow
           QQuickTabButton#ribbonTab_view
         QQuickItem#ribbonGroupViewport
@@ -248,6 +344,12 @@ QQuickRootItem#ShowWindow
             RibbonGroup#ribbonGroup_slides
               Overline#ribbonGroupCaption
               QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_sectionMenu
+                RibbonButton#ribbonAction_sectionMenu
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_showSlideMoveDownAction
                 RibbonButton#ribbonAction_showSlideMoveDownAction
                   Icon#ribbonButtonIcon [hidden]

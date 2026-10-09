@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pptx_writer.h"
 
-#include "pptx_write_parts.h"
+#include "pptx_review.h"
+#include "pptx_write_masters.h"
 #include "pptx_write_slide.h"
+#include "sections.h"
 
 #include "ooxml_namespaces.h"
 #include "ooxml_properties.h"
@@ -18,96 +20,10 @@ using Ooxml::XmlElement;
 using Ooxml::XmlElementPtr;
 
 const QString kPresentationPart = QStringLiteral("ppt/presentation.xml");
-const QString kSections = QStringLiteral("{521415D9-36F7-43E2-AB2F-B90AF26B5E84}");
 
 QString pmlType(const char *kind)
 {
     return QStringLiteral("application/vnd.openxmlformats-officedocument.presentationml.") + QLatin1String(kind);
-}
-
-struct MasterOut {
-    QString modelId;
-    QString part;
-    quint32 masterId = 0;
-    bool generated = false;
-    GeneratedMaster made;
-    QList<std::tuple<QString, QString, QString>> layouts; // carried: model id, type, part
-};
-
-QList<quint32> layoutIdsOf(const QByteArray &masterXml)
-{
-    QList<quint32> ids;
-    const XmlElementPtr root = Ooxml::parseXml(masterXml);
-    const XmlElement *list = root ? root->child(nsP(), u"sldLayoutIdLst") : nullptr;
-    if (list != nullptr) {
-        for (const XmlElement *entry : list->elements(nsP(), u"sldLayoutId")) {
-            ids.append(entry->attr(u"id").toUInt());
-        }
-    }
-    return ids;
-}
-
-void setRunLook(XmlElement &style, const QColor &color, const QString &font)
-{
-    for (Ooxml::XmlChild &child : style.children) {
-        if (!child.element) {
-            continue;
-        }
-        XmlElement *level = child.element.get();
-        XmlElement *defRPr = level->child(nsA(), u"defRPr");
-        if (defRPr == nullptr) {
-            defRPr = &level->insertElementBefore(std::make_shared<XmlElement>(nsA(), QStringLiteral("defRPr")), {u"extLst"});
-        }
-        for (const char16_t *fill : {u"noFill", u"solidFill", u"gradFill", u"blipFill", u"pattFill", u"grpFill"}) {
-            defRPr->removeChildren(nsA(), fill);
-        }
-        auto solid = std::make_shared<XmlElement>(nsA(), QStringLiteral("solidFill"));
-        solid->appendElement(colorElement(color));
-        defRPr->insertElementBefore(solid, {u"effectLst", u"effectDag", u"highlight", u"uLnTx", u"uLn", u"uFillTx",
-                                           u"uFill", u"latin", u"ea", u"cs", u"sym", u"hlinkClick", u"hlinkMouseOver",
-                                           u"rtl", u"extLst"});
-        if (!font.isEmpty()) {
-            defRPr->removeChildren(nsA(), u"latin");
-            auto latin = std::make_shared<XmlElement>(nsA(), QStringLiteral("latin"));
-            latin->setAttribute(QString(), QStringLiteral("typeface"), font);
-            defRPr->insertElementBefore(latin, {u"ea", u"cs", u"sym", u"hlinkClick", u"hlinkMouseOver", u"rtl", u"extLst"});
-        }
-    }
-}
-
-// The Masters dialog restyled a master read from .pptx: write its new
-// background and title/body colours (and font) into the carried part.
-void patchMaster(WriteSession &session, const QString &part, const SlideMaster &master)
-{
-    const MasterSource *was = master.origin.get();
-    const bool fontChanged = was->fontFamily != master.fontFamily;
-    if (was->background == master.background && was->titleColor == master.titleColor
-        && was->bodyColor == master.bodyColor && !fontChanged) {
-        return;
-    }
-    XmlElementPtr root = Ooxml::parseXml(session.writer.partData(part));
-    if (!root) {
-        return;
-    }
-    if (XmlElement *cSld = root->child(nsP(), u"cSld"); cSld != nullptr && was->background != master.background) {
-        cSld->removeChildren(nsP(), u"bg");
-        auto bg = std::make_shared<XmlElement>(nsP(), QStringLiteral("bg"));
-        XmlElement &pr = bg->appendElement(nsP(), QStringLiteral("bgPr"));
-        auto solid = std::make_shared<XmlElement>(nsA(), QStringLiteral("solidFill"));
-        solid->appendElement(colorElement(master.background));
-        pr.appendElement(solid);
-        pr.appendElement(nsA(), QStringLiteral("effectLst"));
-        cSld->insertElementBefore(bg, {u"spTree"});
-    }
-    if (XmlElement *styles = root->child(nsP(), u"txStyles")) {
-        if (XmlElement *title = styles->child(nsP(), u"titleStyle"); title != nullptr && (was->titleColor != master.titleColor || fontChanged)) {
-            setRunLook(*title, master.titleColor, fontChanged ? master.fontFamily : QString());
-        }
-        if (XmlElement *body = styles->child(nsP(), u"bodyStyle"); body != nullptr && (was->bodyColor != master.bodyColor || fontChanged)) {
-            setRunLook(*body, master.bodyColor, fontChanged ? master.fontFamily : QString());
-        }
-    }
-    session.writer.addPart(part, Ooxml::serializeDocument(*root));
 }
 
 QString pickLayout(const MasterOut &master, const Slide &slide)
@@ -175,6 +91,12 @@ void insertInOrder(XmlElement &presentation, const XmlElementPtr &element)
 
 QByteArray writePptx(const Presentation &deck, QString *error)
 {
+    const std::unique_ptr<Ooxml::PackageWriter> package = writePptxPackage(deck);
+    return package->toZip(error);
+}
+
+std::unique_ptr<Ooxml::PackageWriter> writePptxPackage(const Presentation &deck)
+{
     WriteSession session(deck);
     Ooxml::PackageWriter &w = session.writer;
     const DeckSource *deckSource = deck.origin.get();
@@ -208,28 +130,10 @@ QByteArray writePptx(const Presentation &deck, QString *error)
         }
     }
 
-    // Masters: carried with their layouts and themes, or generated.
-    QList<MasterOut> masters;
+    // Masters: carried with their layouts and themes, edited, or generated
+    // (pptx_write_masters.h).
     quint32 nextId = 2147483648u;
-    for (const SlideMaster &master : deck.masters) {
-        MasterOut out;
-        out.modelId = master.id;
-        if (carry && master.origin && session.source->contains(master.origin->part)) {
-            out.part = session.copier->copyPart(master.origin->part);
-            out.masterId = master.origin->masterId;
-            for (const SlideLayout &layout : deck.layouts) {
-                if (layout.master == master.id && layout.origin) {
-                    out.layouts.append({layout.id, layout.type, session.copier->copyPart(layout.origin->part)});
-                }
-            }
-            patchMaster(session, out.part, master);
-            nextId = qMax(nextId, out.masterId + 1);
-            for (const quint32 id : layoutIdsOf(w.partData(out.part))) {
-                nextId = qMax(nextId, id + 1);
-            }
-        }
-        masters.append(out);
-    }
+    QList<MasterOut> masters = writeMasters(session, &nextId);
     QSet<quint32> masterIds;
     for (MasterOut &m : masters) {
         // A carried master keeps its id unless it is out of range or taken.
@@ -302,11 +206,20 @@ QByteArray writePptx(const Presentation &deck, QString *error)
         }
     }
     PartWriter presentation(session, kPresentationPart);
+    CommentState comments = prepareComments(session); // M75: the deck's comment kind and authors
+    QHash<QString, quint32> sldIdOf;
     for (const Slide &slide : deck.slides) {
         const QString part = session.slideParts.value(slide.id);
+        quint32 id = slide.origin ? slide.origin->sldId : 0;
+        if (id < 256 || usedSlideIds.contains(id)) {
+            id = nextSlideId++;
+        }
+        usedSlideIds.insert(id);
+        sldIdOf.insert(slide.id, id);
         PartWriter out(session, part);
         out.relate(relType("slideLayout"), pickLayout(masterFor(slide), slide));
-        const XmlElementPtr sld = slideElement(out, slide);
+        QHash<QString, quint32> writtenIds;
+        const XmlElementPtr sld = slideElement(out, slide, &writtenIds);
         if (const QString notesPart = notesParts.value(slide.id); !notesPart.isEmpty()) {
             PartWriter notesOut(session, notesPart);
             const XmlElementPtr notes = notesElement(notesOut, slide);
@@ -315,13 +228,8 @@ QByteArray writePptx(const Presentation &deck, QString *error)
             w.addXmlPart(notesPart, *notes, pmlType("notesSlide+xml"));
             out.relate(relType("notesSlide"), notesPart);
         }
-        carryImplicitRelationships(out, slide);
+        writeSlideComments(out, *sld, slide, id, writtenIds, comments);
         w.addXmlPart(part, *sld, pmlType("slide+xml"));
-        quint32 id = slide.origin ? slide.origin->sldId : 0;
-        if (id < 256 || usedSlideIds.contains(id)) {
-            id = nextSlideId++;
-        }
-        usedSlideIds.insert(id);
         slideIds.append({id, presentation.relate(relType("slide"), part)});
     }
 
@@ -333,19 +241,11 @@ QByteArray writePptx(const Presentation &deck, QString *error)
                                         u"sldSz", u"notesSz", u"custShowLst"}) {
             pres->removeChildren(nsP(), rebuilt);
         }
-        // Sections name slides by id: keep them only for an unchanged slide list.
-        QList<quint32> sourceIds;
-        if (const XmlElement *list = deckSource->presentation->child(nsP(), u"sldIdLst")) {
-            for (const XmlElement *entry : list->elements(nsP(), u"sldId")) {
-                sourceIds.append(entry->attr(u"id").toUInt());
-            }
-        }
-        QList<quint32> ids;
-        for (const auto &entry : slideIds) {
-            ids.append(entry.first);
-        }
-        if (XmlElement *ext = pres->child(nsP(), u"extLst"); ext != nullptr && ids != sourceIds) {
-            ext->children.removeIf([](const Ooxml::XmlChild &c) { return c.element && c.element->attr(u"uri") == kSections; });
+        // M75: the model's sections replace the source's (written below).
+        if (XmlElement *ext = pres->child(nsP(), u"extLst")) {
+            ext->children.removeIf([](const Ooxml::XmlChild &c) {
+                return c.element && c.element->attr(u"uri") == QStringView(kSectionsUri);
+            });
             if (ext->elements().isEmpty()) {
                 pres->removeChildren(nsP(), u"extLst");
             }
@@ -382,6 +282,20 @@ QByteArray writePptx(const Presentation &deck, QString *error)
     }
     insertInOrder(*pres, sizeElement("sldSz", deck.slideSize));
     insertInOrder(*pres, sizeElement("notesSz", deck.notesSize));
+    // M75: sections (p14:sectionLst) name the slide ids just written —
+    // every slide in one, in deck order, as PowerPoint requires.
+    Presentation sectioned;
+    sectioned.slides = deck.slides;
+    sectioned.sections = deck.sections;
+    normalizeSections(sectioned);
+    if (XmlElementPtr sections = sectionsExtension(sectioned.sections, sldIdOf)) {
+        XmlElement *list = pres->child(nsP(), u"extLst");
+        if (list == nullptr) {
+            list = &pres->appendElement(nsP(), QStringLiteral("extLst"));
+        }
+        list->children.prepend({sections, QString()});
+    }
+    writeCommentAuthors(presentation, comments);
     w.addXmlPart(kPresentationPart, *pres, pmlType("presentation.main+xml"));
     w.addRelationship(QString(), QString::fromUtf16(Ooxml::RelType::OfficeDocument), kPresentationPart);
 
@@ -390,8 +304,8 @@ QByteArray writePptx(const Presentation &deck, QString *error)
     if (carry) {
         for (const Ooxml::Relationship &rel : session.source->relationships(deckSource->presentationPart)) {
             const bool viewProps = rel.type == relType("viewProps");
+            // Comment authors are writeCommentAuthors()'s (M75).
             if (rel.type == relType("presProps") || rel.type == relType("tableStyles") || rel.type == relType("theme")
-                || rel.type.endsWith(QLatin1String("/commentAuthors")) || rel.type.endsWith(QLatin1String("/authors"))
                 || (viewProps && session.source->relationships(session.source->targetPart(deckSource->presentationPart, rel)).isEmpty())) {
                 session.copier->copyRelationship(deckSource->presentationPart, rel.id, kPresentationPart);
                 haveProps = haveProps || rel.type == relType("presProps");
@@ -427,7 +341,7 @@ QByteArray writePptx(const Presentation &deck, QString *error)
         core.created = core.modified;
     }
     Ooxml::writeProperties(w, core, QStringLiteral("QindaShow"));
-    return w.toZip(error);
+    return std::make_unique<Ooxml::PackageWriter>(std::move(w));
 }
 
 bool writePptxFile(const Presentation &deck, const QString &path, QString *error)

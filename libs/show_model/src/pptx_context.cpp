@@ -188,6 +188,10 @@ ResolvedFill fillFrom(const PartContext &ctx, const Ooxml::XmlElement *parent, c
                 const RelatedData data = relatedData(ctx, blip->attribute(nsR(), u"embed"));
                 fill.style.image = data.bytes;
                 fill.style.imageMime = data.mime;
+                // M75: Format Background's Transparency.
+                if (const Ooxml::XmlElement *alpha = blip->child(nsA(), u"alphaModFix")) {
+                    fill.style.imageAlpha = qBound(0.0, alpha->attr(u"amt", QStringLiteral("100000")).toDouble() / 100000.0, 1.0);
+                }
             }
             fill.style.tile = e->child(nsA(), u"tile") != nullptr;
             fill.plain = QColor(200, 200, 200);

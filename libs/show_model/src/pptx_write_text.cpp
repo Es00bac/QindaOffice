@@ -281,6 +281,10 @@ XmlElementPtr fillElement(PartWriter &out, const QColor &plain, const FillStyle 
         XmlElement &blip = blipFill->appendElement(nsA(), QStringLiteral("blip"));
         blip.setAttribute(nsR(), QStringLiteral("embed"),
                           out.relate(relType("image"), out.session.media(style.image, style.imageMime)));
+        if (style.imageAlpha < 1.0) {
+            set(blip.appendElement(nsA(), QStringLiteral("alphaModFix")), QStringLiteral("amt"),
+                number(qBound(0.0, style.imageAlpha, 1.0) * 100000));
+        }
         if (style.tile) {
             blipFill->appendElement(nsA(), QStringLiteral("tile"));
         } else {

@@ -77,6 +77,12 @@ constexpr std::array kPrefixes{
     PrefixRow{u"http://schemas.microsoft.com/office/drawing/2012/timeslicer", "tsle"},
     PrefixRow{u"urn:schemas-microsoft-com:office:excel", "x"},
     PrefixRow{u"urn:schemas-microsoft-com:office:powerpoint", "pvml"},
+    // PowerPoint's prefixes for the extension vocabularies QindaShow writes
+    // (M75, D-084): modern comments and their monikers, theme families.
+    PrefixRow{u"http://schemas.microsoft.com/office/powerpoint/2018/8/main", "p188"},
+    PrefixRow{u"http://schemas.microsoft.com/office/powerpoint/2013/main/command", "pc"},
+    PrefixRow{u"http://schemas.microsoft.com/office/drawing/2013/main/command", "ac"},
+    PrefixRow{u"http://schemas.microsoft.com/office/thememl/2012/main", "thm15"},
 };
 
 // Strict → Transitional (ISO/IEC 29500-1 Annex; ECMA-376 Part 1 §A).

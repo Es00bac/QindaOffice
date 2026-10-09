@@ -69,6 +69,9 @@ QJsonObject shapeToJson(const Shape &shape)
         object.insert(QStringLiteral("preserved"),
                       QJsonArray{shape.preserved.fragment, shape.preserved.part, shape.preserved.label});
     }
+    if (shape.media.isMedia()) {
+        object.insert(QStringLiteral("media"), Json::media(shape.media));
+    }
     // The id is metadata for the editor, not content; consumers assign a
     // fresh id on paste, so it is intentionally not encoded. Likewise the
     // Office identity (shape id, placeholder, connections, provenance): a
@@ -150,6 +153,9 @@ Shape shapeFromJson(const QJsonObject &object)
     const QJsonArray preserved = object.value(QStringLiteral("preserved")).toArray();
     if (preserved.size() == 3) {
         shape.preserved = {preserved.at(0).toString(), preserved.at(1).toString(), preserved.at(2).toString()};
+    }
+    if (object.contains(QStringLiteral("media"))) {
+        shape.media = Json::media(object.value(QStringLiteral("media")).toObject());
     }
     shape.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     return shape;

@@ -39,6 +39,21 @@ struct BuildEntry {
     bool operator==(const BuildEntry &) const = default;
 };
 
+// M75 (D-084): a media shape's playback as p:timing spells it — the click
+// that plays it (0: none), whether it starts with the slide, its media
+// node's loop, visibility when stopped and volume.
+struct MediaEntry {
+    quint32 shapeId = 0;
+    MediaKind kind = MediaKind::Video;
+    int step = 0;
+    bool autoPlay = false;
+    bool loop = false;
+    bool hideWhenStopped = false;
+    int volume = 80; // percent
+    int durationMs = 0;
+    bool operator==(const MediaEntry &) const = default;
+};
+
 struct SlideSource {
     QString part;                        // "ppt/slides/slide3.xml"
     Ooxml::XmlElementPtr xml;            // p:sld
@@ -48,11 +63,19 @@ struct SlideSource {
     Ooxml::XmlElementPtr transitionXml;  // p:transition, or the mc:AlternateContent around it
     Ooxml::XmlElementPtr timingXml;      // p:timing
     QList<BuildEntry> builds;            // the builds the reader mapped from p:timing
+    QList<MediaEntry> media;             // M75: the media playback it mapped from p:timing
     QString notesPart;                   // its notes slide ("" = none)
     QString notes;                       // the notes text as read
     QList<TextParagraph> notesParagraphs; // the notes body as read (M67: an edit reuses its spelling)
     Background background;               // the slide's own background as read
     QString layout;                      // the QindaShow layout name as read
+    // M75 (D-084): the comments as read, the parts they came from (one
+    // legacy or modern comments part) and the slide's p14:creationId, which
+    // modern comments name it by (0 = none).
+    QList<SlideComment> comments;
+    QString commentsPart;
+    bool modernComments = false;
+    quint32 creationId = 0;
     bool operator==(const SlideSource &) const = default;
 };
 
@@ -65,10 +88,15 @@ struct MasterSource {
     QColor titleColor;
     QColor bodyColor;
     QString fontFamily;
+    // M75 (D-084): the master as the reader made it (its own origin empty)
+    // — a master equal to it is carried byte for byte — and its theme part.
+    SlideMaster pristine;
+    QString themePart;
 };
 
 struct LayoutSource {
     QString part;
+    SlideLayout pristine; // M75: the layout as read (its own origin empty)
 };
 
 struct DeckSource {

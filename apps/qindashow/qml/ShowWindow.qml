@@ -9,9 +9,12 @@ import QindaOffice.Show
 // The QindaShow window (plan §5.3): the shared OfficeWindow over a
 // ShowHost, with the ribbon (ShowRibbonLayout.qml; the Shape tab appears
 // while shapes are selected, the Table Design / Table Layout tabs while a
-// table is, the Chart tab while a chart is — M67), the slide sorter docked
-// left, the slide in a page-fitting viewport with the notes pane under it
-// (SlideEditor.qml, M67), the transition / layout panel docked right, the
+// table is, the Chart tab while a chart is — M67; Slide Master in the
+// Slide Master view and Playback while a medium is selected — M75), the
+// slide sorter docked left (the masters and layouts in the Slide Master
+// view), the slide in a page-fitting viewport with the notes pane under it
+// (SlideEditor.qml, M67), the transition / layout panel docked right with
+// the Comments, Format Background and Text Styles panes (M75, D-084), the
 // find bar, the assistant dock, the player and presenter windows while a
 // show runs, and the dialogs the host asks for.
 OfficeWindow {
@@ -29,13 +32,26 @@ OfficeWindow {
         strokeSlot: strokeSlot
         shadingSlot: shadingSlot
         penSlot: penSlot
+        themeIds: window.showHost.design.themeIds
+        colorIds: window.showHost.design.colorIds
+        fontIds: window.showHost.design.fontIds
+        effectIds: window.showHost.design.effectIds
     }
     ribbonTabs: ribbonLayout.tabs
     ribbonContexts: (shapeContext.enabled ? ["shape"] : []).concat(tableContext.enabled ? ["table"] : [])
                     .concat(chartContext.enabled ? ["chart"] : [])
+                    .concat(window.showHost.masterView.active ? ["masterView"] : [])
+                    .concat(mediaContext.enabled ? ["media"] : [])
     readonly property ActionEntry shapeContext: host.actions.entry("showDeleteShapeAction")
     readonly property ActionEntry tableContext: host.actions.entry("showTableInsertRowBelowAction")
     readonly property ActionEntry chartContext: host.actions.entry("showChartEditDataAction")
+    readonly property ActionEntry mediaContext: host.actions.entry("showMediaPosterAction")
+    // A dock panel shown or hidden as its toggle command asks (M75).
+    function setPanel(panelId, visible) {
+        const hidden = dock.hiddenPanels.map(function(e) { return typeof e === "string" ? e : e.panelId }).includes(panelId)
+        if (visible && hidden) dock.showPanel(panelId)
+        else if (!visible && !hidden) dock.hidePanel(panelId)
+    }
 
     Component {
         id: fillSlot
@@ -112,7 +128,19 @@ OfficeWindow {
             extent: 220
             minWidth: 160
             closable: true
-            SlideSorter { showHost: window.showHost }
+            // M75: the Slide Master view shows the masters and layouts here.
+            SlideSorter {
+                id: sorter
+                anchors.fill: parent
+                visible: !window.showHost.masterView.active
+                showHost: window.showHost
+                onRenameSectionRequested: function(section, name) { sectionPrompt.ask(section, name) }
+            }
+            MasterPane {
+                anchors.fill: parent
+                visible: window.showHost.masterView.active
+                showHost: window.showHost
+            }
         }
         Tk.DockPanel {
             panelId: "slide"
@@ -123,6 +151,36 @@ OfficeWindow {
             minWidth: 200
             closable: true
             SlidePanel { showHost: window.showHost }
+        }
+        Tk.DockPanel {
+            panelId: "comments"
+            title: qsTr("Comments")
+            iconName: "message-square"
+            zone: "right"
+            mode: "hidden"
+            extent: 300
+            minWidth: 220
+            CommentsPane { id: commentsPane; comments: window.showHost.comments }
+        }
+        Tk.DockPanel {
+            panelId: "formatBackground"
+            title: qsTr("Format Background")
+            iconName: "paint-bucket"
+            zone: "right"
+            mode: "hidden"
+            extent: 300
+            minWidth: 220
+            FormatBackgroundPane { showHost: window.showHost }
+        }
+        Tk.DockPanel {
+            panelId: "textStyles"
+            title: qsTr("Text Styles")
+            iconName: "type"
+            zone: "right"
+            mode: "hidden"
+            extent: 300
+            minWidth: 220
+            TextStylesPane { showHost: window.showHost }
         }
         Tk.DockPanel {
             panelId: "assistant"
@@ -137,6 +195,9 @@ OfficeWindow {
         onHiddenPanelsChanged: {
             const hidden = dock.hiddenPanels.map(function(e) { return typeof e === "string" ? e : e.panelId })
             window.host.actions.setChecked("aiAssistantAction", !hidden.includes("assistant"))
+            window.host.actions.setChecked("showCommentsPaneAction", !hidden.includes("comments"))
+            window.host.actions.setChecked("showFormatBackgroundAction", !hidden.includes("formatBackground"))
+            window.host.actions.setChecked("showMasterTextStylesAction", !hidden.includes("textStyles"))
         }
     }
 
@@ -203,6 +264,87 @@ OfficeWindow {
         function onGenerateDeckRequested() { generatePrompt.text = ""; generatePrompt.open() }
         function onTemplateConsentRequested(path) { templateConsent.path = path; templateConsent.open() }
         function onProposalRequested(original, proposal) { proposalDialog.original = original; proposalDialog.proposal = proposal; proposalDialog.open() }
+    }
+
+    // ---- M75 (D-084): design, master view, sections, comments, media ----
+    Connections {
+        target: window.showHost.design
+        function onCustomSizeRequested(width, height) { slideSizeDialog.load(width, height); slideSizeDialog.open() }
+        function onScaleChoiceRequested(width, height) { scaleChoice.size = Qt.size(width, height); scaleChoice.open() }
+        function onThemeFileRequested() { themeDialog.open() }
+        function onBackgroundPaneRequested(visible) { window.setPanel("formatBackground", visible) }
+    }
+    Connections {
+        target: window.showHost.masterView
+        function onRenameRequested(current) { layoutPrompt.text = current; layoutPrompt.open() }
+        function onTextStylesRequested(visible) { window.setPanel("textStyles", visible) }
+        // PowerPoint shows the Slide Master tab while the view is open, and
+        // the tab one was on again after it closes.
+        property string tabBefore: ""
+        function onActiveChanged() {
+            if (window.showHost.masterView.active) {
+                tabBefore = window.ribbon.currentTabId
+                Qt.callLater(function() { window.ribbon.activateTab("slideMaster") })
+            } else {
+                window.setPanel("textStyles", false)
+                if (tabBefore.length > 0) Qt.callLater(function(tab) { window.ribbon.activateTab(tab) }, tabBefore)
+            }
+        }
+    }
+    Connections {
+        target: window.showHost.sections
+        function onRenameRequested(section, current) { sectionPrompt.ask(section, current) }
+    }
+    Connections {
+        target: window.showHost.comments
+        function onPaneRequested(visible, compose) {
+            window.setPanel("comments", visible)
+            if (visible && compose) commentsPane.compose()
+        }
+    }
+    Connections {
+        target: window.showHost.media
+        function onFileRequested(audio) { mediaDialog.audio = audio; mediaDialog.open() }
+        function onPosterRequested() { posterDialog.open() }
+    }
+    SlideSizeDialog { id: slideSizeDialog; onSizeChosen: function(width, height) { window.showHost.design.requestSlideSize(width, height) } }
+    Tk.MessageDialog {
+        id: scaleChoice; objectName: "slideScaleDialog"
+        property size size: Qt.size(0, 0)
+        title: qsTr("Slide Size"); variant: "question"
+        text: qsTr("You are scaling to a new slide size. Do you want to maximize the size of your content, or scale it down to ensure it will fit on the new slide?")
+        primaryText: qsTr("Maximize"); tertiaryText: qsTr("Ensure Fit"); secondaryText: qsTr("Cancel")
+        onAccepted: window.showHost.design.applySlideSize(size.width, size.height, true)
+        onTertiary: { window.showHost.design.applySlideSize(size.width, size.height, false); close() }
+    }
+    Tk.PromptDialog {
+        id: sectionPrompt; objectName: "renameSectionDialog"
+        property int section: -1
+        function ask(index, current) { section = index; text = current; open() }
+        title: qsTr("Rename Section"); label: qsTr("Section name"); primaryText: qsTr("Rename")
+        onAccepted: window.showHost.sections.rename(section, text)
+    }
+    Tk.PromptDialog {
+        id: layoutPrompt; objectName: "renameLayoutDialog"
+        title: qsTr("Rename Layout"); label: qsTr("Layout name"); primaryText: qsTr("Rename")
+        onAccepted: window.showHost.masterView.renameCurrent(text)
+    }
+    Dialogs.FileDialog {
+        id: themeDialog; title: qsTr("Browse for Themes"); fileMode: Dialogs.FileDialog.OpenFile
+        nameFilters: [qsTr("Office Themes and Themed Documents (*.thmx *.potx *.pptx)"), qsTr("All files (*)")]
+        onAccepted: window.showHost.design.applyThemeFile(selectedFile)
+    }
+    Dialogs.FileDialog {
+        id: mediaDialog; property bool audio: false; fileMode: Dialogs.FileDialog.OpenFile
+        title: audio ? qsTr("Insert Audio") : qsTr("Insert Video")
+        nameFilters: audio ? [qsTr("Audio files (*.mp3 *.m4a *.wav *.wma *.aac *.flac *.ogg *.oga *.opus *.aiff)"), qsTr("All files (*)")]
+                           : [qsTr("Video files (*.mp4 *.m4v *.mov *.wmv *.avi *.mpg *.mpeg *.webm *.mkv)"), qsTr("All files (*)")]
+        onAccepted: window.showHost.media.insertFile(selectedFile, audio)
+    }
+    Dialogs.FileDialog {
+        id: posterDialog; title: qsTr("Poster Frame"); fileMode: Dialogs.FileDialog.OpenFile
+        nameFilters: [qsTr("Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp)"), qsTr("All files (*)")]
+        onAccepted: window.showHost.media.setPosterFile(selectedFile)
     }
 
     MasterDialog { id: masterDialog; fontFamilies: window.showHost.fontFamilies; onMastersApplied: function(list) { window.showHost.applyMasters(list) } }

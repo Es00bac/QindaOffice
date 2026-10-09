@@ -4,6 +4,7 @@
 #include "presentation_controller.h"
 #include "show_document.h"
 #include "show_host.h"
+#include "show_master_view.h"
 #include "slide_renderer.h"
 
 #include <QPainter>
@@ -63,9 +64,28 @@ void SlideThumbItem::setRevision(int revision)
     update();
 }
 
+void SlideThumbItem::setTemplateIndex(int index)
+{
+    if (m_templateIndex == index) {
+        return;
+    }
+    m_templateIndex = index;
+    emit changed();
+    update();
+}
+
 void SlideThumbItem::paint(QPainter *painter)
 {
     const ShowModel::Presentation *deck = m_host != nullptr ? m_host->showDocument()->presentation() : nullptr;
+    if (deck != nullptr && m_templateIndex >= 0) {
+        painter->setRenderHint(QPainter::Antialiasing);
+        painter->setRenderHint(QPainter::SmoothPixmapTransform);
+        painter->save();
+        letterbox(painter, boundingRect(), deck->slideSize);
+        m_host->masterView()->renderItem(m_templateIndex, painter, deck->slideSize);
+        painter->restore();
+        return;
+    }
     if (deck == nullptr || m_slideIndex < 0 || m_slideIndex >= deck->slides.size()) {
         painter->fillRect(boundingRect(), Qt::white);
         return;

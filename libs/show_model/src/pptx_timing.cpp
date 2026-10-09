@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pptx_timing.h"
 
+#include "pptx_timing_builder.h"
+
+#include <algorithm>
+#include <functional>
 #include <optional>
 #include <string_view>
 
@@ -148,7 +152,9 @@ bool prune(Ooxml::XmlElement &node, const QSet<quint32> &present)
             continue;
         }
         Ooxml::XmlElement &e = *child.element;
-        const bool doomed = (e.is(nsP(), u"par") || e.name.startsWith(QLatin1String("bld")))
+        // M75: a media node (p:video / p:audio) names one shape, too.
+        const bool doomed = (e.is(nsP(), u"par") || e.name.startsWith(QLatin1String("bld")) || e.is(nsP(), u"video")
+                             || e.is(nsP(), u"audio"))
             && mentionsMissing(e, present) && !e.descendant(nsP(), u"par");
         if (doomed) {
             node.children.removeAt(i);
@@ -230,154 +236,76 @@ QList<BuildEntry> readBuilds(const Ooxml::XmlElement *timing)
     if (clicks == nullptr) {
         return builds;
     }
-    int step = 0;
-    for (const Ooxml::XmlElement *click : clicks->elements(nsP(), u"par")) {
-        collectEntrances(*click, ++step, builds);
+    const QList<const Ooxml::XmlElement *> pars = clicks->elements(nsP(), u"par");
+    const QList<int> steps = clickSteps(*clicks);
+    for (qsizetype i = 0; i < pars.size(); ++i) {
+        if (steps.at(i) > 0) {
+            collectEntrances(*pars.at(i), steps.at(i), builds);
+        }
     }
     return builds;
 }
 
-namespace {
-
-// Builders for p:timing: every time node needs a unique id.
-class TimingBuilder {
-public:
-    Ooxml::XmlElement &cTn(Ooxml::XmlElement &parent)
-    {
-        Ooxml::XmlElement &node = parent.appendElement(nsP(), QStringLiteral("cTn"));
-        node.setAttribute(QString(), QStringLiteral("id"), QString::number(++m_id));
-        return node;
-    }
-    static void delay(Ooxml::XmlElement &cTn, const QString &value)
-    {
-        cTn.appendElement(nsP(), QStringLiteral("stCondLst"))
-            .appendElement(nsP(), QStringLiteral("cond"))
-            .setAttribute(QString(), QStringLiteral("delay"), value);
-    }
-    void behaviour(Ooxml::XmlElement &parent, quint32 shapeId, int duration, const QString &attribute = {})
-    {
-        Ooxml::XmlElement &cBhvr = parent.appendElement(nsP(), QStringLiteral("cBhvr"));
-        Ooxml::XmlElement &node = cTn(cBhvr);
-        node.setAttribute(QString(), QStringLiteral("dur"), QString::number(qMax(1, duration)));
-        node.setAttribute(QString(), QStringLiteral("fill"), QStringLiteral("hold"));
-        if (duration <= 1) {
-            delay(node, QStringLiteral("0"));
-        }
-        cBhvr.appendElement(nsP(), QStringLiteral("tgtEl"))
-            .appendElement(nsP(), QStringLiteral("spTgt"))
-            .setAttribute(QString(), QStringLiteral("spid"), QString::number(shapeId));
-        if (!attribute.isEmpty()) {
-            cBhvr.appendElement(nsP(), QStringLiteral("attrNameLst"))
-                .appendElement(nsP(), QStringLiteral("attrName"))
-                .appendText(attribute);
-        }
-    }
-    // An animated property from `from` to its own value (ppt_x / ppt_y / ppt_w / ppt_h).
-    void slide(Ooxml::XmlElement &list, quint32 shapeId, int duration, const QString &attribute, const QString &from)
-    {
-        Ooxml::XmlElement &anim = list.appendElement(nsP(), QStringLiteral("anim"));
-        anim.setAttribute(QString(), QStringLiteral("calcmode"), QStringLiteral("lin"));
-        anim.setAttribute(QString(), QStringLiteral("valueType"), QStringLiteral("num"));
-        behaviour(anim, shapeId, duration, attribute);
-        anim.child(nsP(), u"cBhvr")->setAttribute(QString(), QStringLiteral("additive"), QStringLiteral("base"));
-        Ooxml::XmlElement &values = anim.appendElement(nsP(), QStringLiteral("tavLst"));
-        for (const auto &[time, value] : {std::pair{QStringLiteral("0"), from}, std::pair{QStringLiteral("100000"), QStringLiteral("#") + attribute}}) {
-            Ooxml::XmlElement &tav = values.appendElement(nsP(), QStringLiteral("tav"));
-            tav.setAttribute(QString(), QStringLiteral("tm"), time);
-            tav.appendElement(nsP(), QStringLiteral("val"))
-                .appendElement(nsP(), QStringLiteral("strVal"))
-                .setAttribute(QString(), QStringLiteral("val"), value);
-        }
-    }
-    void effect(Ooxml::XmlElement &list, const BuildEntry &build, bool first)
-    {
-        Ooxml::XmlElement &par = list.appendElement(nsP(), QStringLiteral("par"));
-        Ooxml::XmlElement &node = cTn(par);
-        int preset = 1;
-        int subtype = 0;
-        switch (build.animation) {
-        case ShapeAnimation::Appear: preset = 1; break;
-        case ShapeAnimation::Fade: preset = 10; break;
-        case ShapeAnimation::FlyInLeft: preset = 2; subtype = 8; break;
-        case ShapeAnimation::FlyInRight: preset = 2; subtype = 2; break;
-        case ShapeAnimation::FlyInTop: preset = 2; subtype = 1; break;
-        case ShapeAnimation::FlyInBottom: preset = 2; subtype = 4; break;
-        case ShapeAnimation::Zoom: preset = 53; subtype = 16; break;
-        case ShapeAnimation::Wipe: preset = 22; subtype = 4; break;   // from bottom
-        case ShapeAnimation::Split: preset = 16; subtype = 37; break; // vertical out
-        case ShapeAnimation::Spin: preset = 8; break;
-        case ShapeAnimation::GrowShrink: preset = 6; break;
-        }
-        const bool emphasis = isEmphasis(build.animation);
-        node.setAttribute(QString(), QStringLiteral("presetID"), QString::number(preset));
-        node.setAttribute(QString(), QStringLiteral("presetClass"), emphasis ? QStringLiteral("emph") : QStringLiteral("entr"));
-        node.setAttribute(QString(), QStringLiteral("presetSubtype"), QString::number(subtype));
-        node.setAttribute(QString(), QStringLiteral("fill"), QStringLiteral("hold"));
-        node.setAttribute(QString(), QStringLiteral("grpId"), QStringLiteral("0"));
-        node.setAttribute(QString(), QStringLiteral("nodeType"), first ? QStringLiteral("clickEffect") : QStringLiteral("withEffect"));
-        delay(node, QStringLiteral("0"));
-        Ooxml::XmlElement &children = node.appendElement(nsP(), QStringLiteral("childTnLst"));
-        if (emphasis) {
-            // On the slide already: it only turns (r, a full turn in
-            // 60000ths of a degree) or scales (to 150 %).
-            const int duration = build.durationMs > 0 ? build.durationMs : 2000;
-            if (build.animation == ShapeAnimation::Spin) {
-                Ooxml::XmlElement &rotate = children.appendElement(nsP(), QStringLiteral("animRot"));
-                rotate.setAttribute(QString(), QStringLiteral("by"), QStringLiteral("21600000"));
-                behaviour(rotate, build.shapeId, duration, QStringLiteral("r"));
-            } else {
-                Ooxml::XmlElement &scale = children.appendElement(nsP(), QStringLiteral("animScale"));
-                behaviour(scale, build.shapeId, duration);
-                Ooxml::XmlElement &by = scale.appendElement(nsP(), QStringLiteral("by"));
-                by.setAttribute(QString(), QStringLiteral("x"), QStringLiteral("150000"));
-                by.setAttribute(QString(), QStringLiteral("y"), QStringLiteral("150000"));
-            }
-            return;
-        }
-        Ooxml::XmlElement &set = children.appendElement(nsP(), QStringLiteral("set"));
-        behaviour(set, build.shapeId, 1, QStringLiteral("style.visibility"));
-        set.appendElement(nsP(), QStringLiteral("to"))
-            .appendElement(nsP(), QStringLiteral("strVal"))
-            .setAttribute(QString(), QStringLiteral("val"), QStringLiteral("visible"));
-        const int duration = build.durationMs > 0 ? build.durationMs : 500;
-        if (preset == 22 || preset == 16) {
-            Ooxml::XmlElement &reveal = children.appendElement(nsP(), QStringLiteral("animEffect"));
-            reveal.setAttribute(QString(), QStringLiteral("transition"), QStringLiteral("in"));
-            reveal.setAttribute(QString(), QStringLiteral("filter"), preset == 22 ? QStringLiteral("wipe(up)") : QStringLiteral("barn(outVertical)"));
-            behaviour(reveal, build.shapeId, duration);
-        }
-        if (preset == 10 || preset == 53) {
-            Ooxml::XmlElement &fade = children.appendElement(nsP(), QStringLiteral("animEffect"));
-            fade.setAttribute(QString(), QStringLiteral("transition"), QStringLiteral("in"));
-            fade.setAttribute(QString(), QStringLiteral("filter"), QStringLiteral("fade"));
-            behaviour(fade, build.shapeId, duration);
-        }
-        if (preset == 53) {
-            slide(children, build.shapeId, duration, QStringLiteral("ppt_w"), QStringLiteral("0"));
-            slide(children, build.shapeId, duration, QStringLiteral("ppt_h"), QStringLiteral("0"));
-        } else if (preset == 2) {
-            const bool horizontal = subtype == 2 || subtype == 8;
-            const QString from = subtype == 8 ? QStringLiteral("0-#ppt_w/2")
-                : subtype == 2               ? QStringLiteral("1+#ppt_w/2")
-                : subtype == 1               ? QStringLiteral("0-#ppt_h/2")
-                                             : QStringLiteral("1+#ppt_h/2");
-            slide(children, build.shapeId, duration, horizontal ? QStringLiteral("ppt_x") : QStringLiteral("ppt_y"), from);
-        }
-    }
-
-private:
-    int m_id = 0;
-};
-
-} // namespace
-
-Ooxml::XmlElementPtr timingElement(const QList<BuildEntry> &builds)
+bool startsWithSlide(const Ooxml::XmlElement &par)
 {
-    if (builds.isEmpty()) {
+    const Ooxml::XmlElement *cTn = par.child(nsP(), u"cTn");
+    const Ooxml::XmlElement *conditions = cTn != nullptr ? cTn->child(nsP(), u"stCondLst") : nullptr;
+    if (conditions == nullptr) {
+        return false;
+    }
+    for (const Ooxml::XmlElement *cond : conditions->elements(nsP(), u"cond")) {
+        if (cond->attr(u"evt") == u"onBegin") {
+            return true;
+        }
+    }
+    return false;
+}
+
+QList<int> clickSteps(const Ooxml::XmlElement &clicks)
+{
+    const std::function<bool(const Ooxml::XmlElement &)> builds = [&builds](const Ooxml::XmlElement &e) {
+        if (e.is(nsP(), u"cTn") && (e.attr(u"presetClass") == u"entr" || e.attr(u"presetClass") == u"emph")) {
+            return true;
+        }
+        const QList<const Ooxml::XmlElement *> children = e.elements();
+        return std::any_of(children.cbegin(), children.cend(), [&builds](const Ooxml::XmlElement *c) { return builds(*c); });
+    };
+    QList<int> steps;
+    int step = 0;
+    for (const Ooxml::XmlElement *par : clicks.elements(nsP(), u"par")) {
+        steps.append(startsWithSlide(*par) && !builds(*par) ? 0 : ++step);
+    }
+    return steps;
+}
+
+
+Ooxml::XmlElementPtr timingElement(const QList<BuildEntry> &builds, const QList<MediaEntry> &media)
+{
+    // M75: a media shape plays with the slide (autoPlay), at its click, or
+    // only when clicked on (no command — its media node alone).
+    QList<MediaEntry> automatic;
+    QList<MediaEntry> clicked;
+    for (const MediaEntry &entry : media) {
+        if (entry.autoPlay) {
+            automatic.append(entry);
+        } else if (entry.step > 0) {
+            clicked.append(entry);
+        }
+    }
+    if (builds.isEmpty() && media.isEmpty()) {
         return nullptr;
     }
     QList<BuildEntry> ordered = builds;
     std::stable_sort(ordered.begin(), ordered.end(), [](const BuildEntry &a, const BuildEntry &b) { return a.step < b.step; });
+    QList<int> steps;
+    for (const BuildEntry &entry : std::as_const(ordered)) {
+        steps.append(entry.step);
+    }
+    for (const MediaEntry &entry : std::as_const(clicked)) {
+        steps.append(entry.step);
+    }
+    std::sort(steps.begin(), steps.end());
+    steps.erase(std::unique(steps.begin(), steps.end()), steps.end());
     TimingBuilder b;
     auto timing = std::make_shared<Ooxml::XmlElement>(nsP(), QStringLiteral("timing"));
     Ooxml::XmlElement &rootPar = timing->appendElement(nsP(), QStringLiteral("tnLst")).appendElement(nsP(), QStringLiteral("par"));
@@ -385,34 +313,48 @@ Ooxml::XmlElementPtr timingElement(const QList<BuildEntry> &builds)
     root.setAttribute(QString(), QStringLiteral("dur"), QStringLiteral("indefinite"));
     root.setAttribute(QString(), QStringLiteral("restart"), QStringLiteral("never"));
     root.setAttribute(QString(), QStringLiteral("nodeType"), QStringLiteral("tmRoot"));
-    Ooxml::XmlElement &seq = root.appendElement(nsP(), QStringLiteral("childTnLst")).appendElement(nsP(), QStringLiteral("seq"));
-    seq.setAttribute(QString(), QStringLiteral("concurrent"), QStringLiteral("1"));
-    seq.setAttribute(QString(), QStringLiteral("nextAc"), QStringLiteral("seek"));
-    Ooxml::XmlElement &main = b.cTn(seq);
-    main.setAttribute(QString(), QStringLiteral("dur"), QStringLiteral("indefinite"));
-    main.setAttribute(QString(), QStringLiteral("nodeType"), QStringLiteral("mainSeq"));
-    Ooxml::XmlElement &clicks = main.appendElement(nsP(), QStringLiteral("childTnLst"));
-    for (qsizetype i = 0; i < ordered.size();) {
-        const int step = ordered.at(i).step;
-        Ooxml::XmlElement &click = b.cTn(clicks.appendElement(nsP(), QStringLiteral("par")));
-        click.setAttribute(QString(), QStringLiteral("fill"), QStringLiteral("hold"));
-        TimingBuilder::delay(click, QStringLiteral("indefinite"));
-        Ooxml::XmlElement &group = b.cTn(click.appendElement(nsP(), QStringLiteral("childTnLst")).appendElement(nsP(), QStringLiteral("par")));
-        group.setAttribute(QString(), QStringLiteral("fill"), QStringLiteral("hold"));
-        TimingBuilder::delay(group, QStringLiteral("0"));
-        Ooxml::XmlElement &effects = group.appendElement(nsP(), QStringLiteral("childTnLst"));
-        bool first = true;
-        for (; i < ordered.size() && ordered.at(i).step == step; ++i) {
-            b.effect(effects, ordered.at(i), first);
-            first = false;
+    Ooxml::XmlElement &rootChildren = root.appendElement(nsP(), QStringLiteral("childTnLst"));
+    if (!steps.isEmpty() || !automatic.isEmpty()) {
+        Ooxml::XmlElement &seq = rootChildren.appendElement(nsP(), QStringLiteral("seq"));
+        seq.setAttribute(QString(), QStringLiteral("concurrent"), QStringLiteral("1"));
+        seq.setAttribute(QString(), QStringLiteral("nextAc"), QStringLiteral("seek"));
+        Ooxml::XmlElement &main = b.cTn(seq);
+        main.setAttribute(QString(), QStringLiteral("dur"), QStringLiteral("indefinite"));
+        main.setAttribute(QString(), QStringLiteral("nodeType"), QStringLiteral("mainSeq"));
+        Ooxml::XmlElement &clicks = main.appendElement(nsP(), QStringLiteral("childTnLst"));
+        if (!automatic.isEmpty()) {
+            appendAutoPlay(b, clicks, main.attr(u"id"), automatic);
+        }
+        for (const int step : std::as_const(steps)) {
+            Ooxml::XmlElement &click = b.cTn(clicks.appendElement(nsP(), QStringLiteral("par")));
+            click.setAttribute(QString(), QStringLiteral("fill"), QStringLiteral("hold"));
+            TimingBuilder::delay(click, QStringLiteral("indefinite"));
+            Ooxml::XmlElement &group = b.cTn(click.appendElement(nsP(), QStringLiteral("childTnLst")).appendElement(nsP(), QStringLiteral("par")));
+            group.setAttribute(QString(), QStringLiteral("fill"), QStringLiteral("hold"));
+            TimingBuilder::delay(group, QStringLiteral("0"));
+            Ooxml::XmlElement &effects = group.appendElement(nsP(), QStringLiteral("childTnLst"));
+            bool first = true;
+            for (const BuildEntry &entry : std::as_const(ordered)) {
+                if (entry.step == step) {
+                    b.effect(effects, entry, first);
+                    first = false;
+                }
+            }
+            for (const MediaEntry &entry : std::as_const(clicked)) {
+                if (entry.step == step) {
+                    appendMediaCall(b, effects, entry, first);
+                    first = false;
+                }
+            }
+        }
+        for (const char16_t *list : {u"prevCondLst", u"nextCondLst"}) {
+            Ooxml::XmlElement &cond = seq.appendElement(nsP(), QString::fromUtf16(list)).appendElement(nsP(), QStringLiteral("cond"));
+            cond.setAttribute(QString(), QStringLiteral("evt"), list == std::u16string_view(u"prevCondLst") ? QStringLiteral("onPrev") : QStringLiteral("onNext"));
+            cond.setAttribute(QString(), QStringLiteral("delay"), QStringLiteral("0"));
+            cond.appendElement(nsP(), QStringLiteral("tgtEl")).appendElement(nsP(), QStringLiteral("sldTgt"));
         }
     }
-    for (const char16_t *list : {u"prevCondLst", u"nextCondLst"}) {
-        Ooxml::XmlElement &cond = seq.appendElement(nsP(), QString::fromUtf16(list)).appendElement(nsP(), QStringLiteral("cond"));
-        cond.setAttribute(QString(), QStringLiteral("evt"), list == std::u16string_view(u"prevCondLst") ? QStringLiteral("onPrev") : QStringLiteral("onNext"));
-        cond.setAttribute(QString(), QStringLiteral("delay"), QStringLiteral("0"));
-        cond.appendElement(nsP(), QStringLiteral("tgtEl")).appendElement(nsP(), QStringLiteral("sldTgt"));
-    }
+    appendMediaNodes(b, rootChildren, media);
     return timing;
 }
 

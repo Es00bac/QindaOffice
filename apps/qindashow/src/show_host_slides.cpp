@@ -11,6 +11,7 @@
 #include "presentation_controller.h"
 #include "show_commands.h"
 #include "show_design_actions.h"
+#include "sections.h"
 
 #include <QUndoStack>
 #include <QUrl>
@@ -104,21 +105,19 @@ int replaceInSlide(ShowModel::Slide &slide, const QString &needle, const QString
 // AGENT-GUARD (every caller): mutate first, then push. QUndoStack::push
 // runs redo() synchronously → indexChanged → fullRefresh(); the refresh
 // must observe the NEW state and the command's after-image must be it.
-void ShowHost::pushSlideListCommand(const QList<ShowModel::Slide> &before)
-{
-    ShowModel::Presentation *deck = m_document->presentation();
-    m_document->undoStack()->push(new SlideListCommand(deck, before, deck->slides));
-}
+// M75: pushSlideList (show_host_design.cpp) keeps the sections with the
+// slides, and the undo step restores both.
 
 void ShowHost::newDeck()
 {
     ShowModel::Presentation *deck = m_document->presentation();
-    const QList<ShowModel::Slide> before = deck->slides;
+    const ShowModel::Presentation before = *deck;
     deck->slides.clear();
+    deck->sections.clear();
     // A new deck opens with the layout's placeholder text boxes on it.
     deck->slides.append(makeSlide(tr("Slide 1"), QStringLiteral("title"), deck->slideSize));
     m_currentRow = 0;
-    pushSlideListCommand(before);
+    pushSlideList(before, tr("New deck"));
     m_document->setDirty(true);
     fullRefresh();
 }
@@ -128,10 +127,10 @@ void ShowHost::addSlide()
     ShowModel::Presentation *deck = m_document->presentation();
     const QStringList layouts = layoutNames();
     const QString layout = m_currentRow >= 0 ? layouts.at(layoutIndex()) : QStringLiteral("title+content");
-    const QList<ShowModel::Slide> before = deck->slides;
+    const ShowModel::Presentation before = *deck;
     deck->slides.append(makeSlide(tr("Slide %1").arg(deck->slides.size() + 1), layout, deck->slideSize));
     m_currentRow = int(deck->slides.size()) - 1;
-    pushSlideListCommand(before);
+    pushSlideList(before, tr("New slide"));
     m_document->setDirty(true);
     fullRefresh();
 }
@@ -142,7 +141,7 @@ void ShowHost::duplicateSlide()
     if (m_currentRow < 0 || m_currentRow >= deck->slides.size()) {
         return;
     }
-    const QList<ShowModel::Slide> before = deck->slides;
+    const ShowModel::Presentation before = *deck;
     ShowModel::Slide copy = deck->slides.at(m_currentRow);
     copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     for (ShowModel::Shape &shape : copy.shapes) {
@@ -150,7 +149,7 @@ void ShowHost::duplicateSlide()
     }
     deck->slides.insert(m_currentRow + 1, copy);
     m_currentRow += 1;
-    pushSlideListCommand(before);
+    pushSlideList(before, tr("Duplicate slide"));
     m_document->setDirty(true);
     fullRefresh();
 }
@@ -161,12 +160,12 @@ void ShowHost::deleteSlide()
     if (m_currentRow < 0 || m_currentRow >= deck->slides.size()) {
         return;
     }
-    const QList<ShowModel::Slide> before = deck->slides;
+    const ShowModel::Presentation before = *deck;
     deck->slides.removeAt(m_currentRow);
     if (m_currentRow >= deck->slides.size()) {
         m_currentRow = int(deck->slides.size()) - 1;
     }
-    pushSlideListCommand(before);
+    pushSlideList(before, tr("Delete slide"));
     m_document->setDirty(true);
     fullRefresh();
 }
@@ -177,12 +176,12 @@ void ShowHost::moveSlide(int from, int to)
     if (from < 0 || to < 0 || from >= deck->slides.size() || to >= deck->slides.size() || from == to) {
         return;
     }
-    const QList<ShowModel::Slide> before = deck->slides;
+    const ShowModel::Presentation before = *deck;
+    // M75: the slide joins the section it is dropped into (sections.h).
+    ShowModel::moveSlideInSections(*deck, deck->slides.at(from).id);
     deck->slides.move(from, to);
     m_currentRow = to;
-    auto *command = new SlideListCommand(deck, before, deck->slides);
-    command->setText(tr("Move slide"));
-    m_document->undoStack()->push(command);
+    pushSlideList(before, tr("Move slide"));
     m_document->setDirty(true);
     fullRefresh();
 }
@@ -193,10 +192,10 @@ void ShowHost::appendSlides(const QList<ShowModel::Slide> &slides)
         return;
     }
     ShowModel::Presentation *deck = m_document->presentation();
-    const QList<ShowModel::Slide> before = deck->slides;
+    const ShowModel::Presentation before = *deck;
     deck->slides.append(slides);
     m_currentRow = int(deck->slides.size()) - 1;
-    pushSlideListCommand(before);
+    pushSlideList(before, tr("Add slides"));
     m_document->setDirty(true);
     fullRefresh();
 }

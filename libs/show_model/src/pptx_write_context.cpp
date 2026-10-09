@@ -88,6 +88,33 @@ QString WriteSession::media(const QByteArray &bytes, const QString &mime)
     return part;
 }
 
+QString WriteSession::mediaFile(const QByteArray &bytes, const QString &mime, const QString &name)
+{
+    const QByteArray key = QCryptographicHash::hash(bytes, QCryptographicHash::Sha1);
+    const auto found = m_media.constFind(key);
+    if (found != m_media.constEnd()) {
+        return found.value();
+    }
+    QString extension = mediaExtensionForMime(mime);
+    if (extension.isEmpty()) {
+        extension = name.section(QLatin1Char('.'), -1).toLower();
+    }
+    if (extension.isEmpty() || extension == name.toLower()) {
+        extension = probeMedia(bytes).extension;
+    }
+    if (extension.isEmpty()) {
+        extension = QStringLiteral("bin");
+    }
+    QString type = mime.isEmpty() ? mediaMimeForExtension(extension) : mime;
+    if (type.isEmpty()) {
+        type = QStringLiteral("application/octet-stream");
+    }
+    const QString part = writer.uniquePartName(QStringLiteral("ppt/media/media"), QLatin1Char('.') + extension);
+    writer.addPart(part, bytes, type);
+    m_media.insert(key, part);
+    return part;
+}
+
 PartWriter::PartWriter(WriteSession &s, QString name)
     : session(s)
     , part(std::move(name))

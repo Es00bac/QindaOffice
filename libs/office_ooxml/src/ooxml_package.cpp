@@ -63,6 +63,23 @@ std::shared_ptr<const Package> Package::load(const QString &path, QString *error
     return package;
 }
 
+std::shared_ptr<const Package> Package::fromEntries(const QList<std::pair<QString, QByteArray>> &entries, QString *error)
+{
+    std::shared_ptr<Package> package(new Package);
+    for (const auto &[name, bytes] : entries) {
+        package->m_parts.insert(name, bytes);
+        package->m_lowerToName.insert(name.toLower(), name);
+    }
+    if (!package->m_lowerToName.contains(QStringLiteral("[content_types].xml"))) {
+        if (error != nullptr) {
+            *error = QStringLiteral("not an Office Open XML package: [Content_Types].xml is missing");
+        }
+        return nullptr;
+    }
+    package->parseContentTypes();
+    return package;
+}
+
 std::shared_ptr<const Package> Package::fromData(const QByteArray &zip, QString *error)
 {
     std::shared_ptr<Package> package(new Package);
@@ -457,8 +474,10 @@ QByteArray PackageWriter::toZip(QString *error) const
     bool ok = write(QStringLiteral("[Content_Types].xml"), contentTypesXml(), true);
     for (const QString &name : m_order) {
         const QString type = contentTypeOf(name);
-        const bool compressed = type.startsWith(u"image/") && !type.contains(u"svg")
-            && !type.contains(u"emf") && !type.contains(u"wmf") && !type.contains(u"bmp");
+        // Media that is compressed already is stored (M75: video and audio too).
+        const bool compressed = (type.startsWith(u"image/") && !type.contains(u"svg") && !type.contains(u"emf")
+                                 && !type.contains(u"wmf") && !type.contains(u"bmp"))
+            || type.startsWith(u"video/") || type.startsWith(u"audio/");
         ok = ok && write(name, m_parts.value(name), !compressed);
     }
     for (auto it = m_rels.cbegin(); it != m_rels.cend(); ++it) {
@@ -474,6 +493,21 @@ QByteArray PackageWriter::toZip(QString *error) const
         return {};
     }
     return buffer.data();
+}
+
+QList<std::pair<QString, QByteArray>> PackageWriter::entries() const
+{
+    QList<std::pair<QString, QByteArray>> out;
+    out.append({QStringLiteral("[Content_Types].xml"), contentTypesXml()});
+    for (const QString &name : m_order) {
+        out.append({name, m_parts.value(name)});
+    }
+    for (auto it = m_rels.cbegin(); it != m_rels.cend(); ++it) {
+        if (!it.value().isEmpty()) {
+            out.append({relationshipsPartFor(it.key()), relationshipsXml(it.key())});
+        }
+    }
+    return out;
 }
 
 bool PackageWriter::save(const QString &path, QString *error) const

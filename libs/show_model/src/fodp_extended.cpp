@@ -78,6 +78,29 @@ QList<Shape> shapesFromArray(const QJsonArray &array)
     return shapes;
 }
 
+// M75: a master's or layout's placeholders keep what they stand for.
+QJsonArray placeholdersArray(const QList<Shape> &shapes)
+{
+    QJsonArray array;
+    for (const Shape &shape : shapes) {
+        QJsonObject object = exactObject(shape);
+        object.insert(QStringLiteral("ph"), QJsonArray{shape.placeholder.type, double(shape.placeholder.index),
+                                                         shape.placeholder.size, shape.placeholder.orient});
+        array.append(object);
+    }
+    return array;
+}
+
+QList<Shape> placeholdersFromArray(const QJsonArray &array)
+{
+    QList<Shape> shapes = shapesFromArray(array);
+    for (qsizetype i = 0; i < shapes.size() && i < array.size(); ++i) {
+        const QJsonArray ph = array.at(i).toObject().value(QStringLiteral("ph")).toArray();
+        shapes[i].placeholder = {ph.at(0).toString(), qint64(ph.at(1).toDouble(-1)), ph.at(2).toString(), ph.at(3).toString()};
+    }
+    return shapes;
+}
+
 QJsonObject backgroundObject(const Background &background)
 {
     return {{QStringLiteral("color"), Json::color(background.color)},
@@ -216,6 +239,16 @@ std::optional<Shape> fromExtendedCopy(const QString &json, const QString &id)
     return shape;
 }
 
+QString placeholdersJson(const QList<Shape> &shapes)
+{
+    return compact(placeholdersArray(shapes));
+}
+
+QList<Shape> placeholdersFromJson(const QString &json)
+{
+    return placeholdersFromArray(QJsonDocument::fromJson(json.toUtf8()).array());
+}
+
 QString shapesJson(const QList<Shape> &shapes)
 {
     return compact(shapesArray(shapes));
@@ -239,6 +272,15 @@ QString layoutsJson(const QList<SlideLayout> &layouts)
         if (layout.background.set) {
             object.insert(QStringLiteral("background"), backgroundObject(layout.background));
         }
+        if (!layout.placeholders.isEmpty()) {
+            object.insert(QStringLiteral("placeholders"), placeholdersArray(layout.placeholders)); // M75
+        }
+        if (layout.preserve) {
+            object.insert(QStringLiteral("preserve"), true);
+        }
+        if (!layout.order.isEmpty()) {
+            object.insert(QStringLiteral("order"), QJsonArray::fromStringList(layout.order));
+        }
         array.append(object);
     }
     return compact(array);
@@ -257,6 +299,11 @@ QList<SlideLayout> layoutsFromJson(const QString &json)
         layout.showMasterShapes = object.value(QStringLiteral("showMaster")).toBool(true);
         layout.shapes = shapesFromArray(object.value(QStringLiteral("shapes")).toArray());
         layout.background = backgroundFrom(object.value(QStringLiteral("background")).toObject());
+        layout.placeholders = placeholdersFromArray(object.value(QStringLiteral("placeholders")).toArray());
+        layout.preserve = object.value(QStringLiteral("preserve")).toBool();
+        for (const QJsonValue &id : object.value(QStringLiteral("order")).toArray()) {
+            layout.order.append(id.toString());
+        }
         layouts.append(layout);
     }
     return layouts;

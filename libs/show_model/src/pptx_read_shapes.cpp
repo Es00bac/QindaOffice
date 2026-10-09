@@ -12,6 +12,7 @@
 #include "ooxml_units.h"
 
 #include <QBuffer>
+#include <QFileInfo>
 #include <QImageReader>
 
 namespace QindaOffice::Show::Pptx {
@@ -244,6 +245,64 @@ Shape readSp(const ShapeScope &scope, const Ooxml::XmlElementPtr &element, const
     return s;
 }
 
+// M75 (D-084): the video or sound a picture carries — the p14:media
+// relationship (the embedded file) or the a:videoFile / a:audioFile link
+// (embedded too when its target is a part; linked when external).
+MediaInfo readMediaInfo(const ShapeScope &scope, const Ooxml::XmlElement *nvPr)
+{
+    MediaInfo media;
+    if (nvPr == nullptr) {
+        return media;
+    }
+    const Ooxml::XmlElement *file = nullptr;
+    for (const char16_t *name : {u"videoFile", u"quickTimeFile", u"audioFile", u"wavAudioFile"}) {
+        if (file == nullptr) {
+            file = nvPr->child(nsA(), name);
+        }
+    }
+    const Ooxml::XmlElement *embedded = nvPr->descendant(kPresentation2010, u"media");
+    if (file == nullptr && embedded == nullptr) {
+        return media;
+    }
+    media.kind = file != nullptr && (file->name == u"audioFile" || file->name == u"wavAudioFile") ? MediaKind::Audio
+                                                                                                 : MediaKind::Video;
+    QStringList ids;
+    if (embedded != nullptr) {
+        ids.append(embedded->attribute(nsR(), u"embed"));
+        ids.append(embedded->attribute(nsR(), u"link"));
+    }
+    if (file != nullptr) {
+        ids.append(file->attribute(nsR(), u"link"));
+        ids.append(file->attribute(nsR(), u"embed"));
+    }
+    for (const QString &id : std::as_const(ids)) {
+        if (id.isEmpty() || !media.data.isEmpty() || !media.link.isEmpty()) {
+            continue;
+        }
+        const auto rel = scope.ctx.package ? scope.ctx.package->relationship(scope.ctx.part, id) : std::nullopt;
+        if (rel && rel->external) {
+            media.link = rel->target;
+            media.name = QFileInfo(rel->target).fileName();
+            continue;
+        }
+        const RelatedData data = relatedData(scope.ctx, id);
+        if (!data.bytes.isEmpty()) {
+            media.data = data.bytes;
+            media.mime = data.mime;
+            media.name = QFileInfo(data.partName).fileName();
+        }
+    }
+    const MediaProbe probe = probeMedia(media.data, media.name);
+    if (media.mime.isEmpty()) {
+        media.mime = probe.mime;
+    }
+    media.durationMs = probe.durationMs;
+    if (probe.kind != MediaKind::None && file == nullptr) {
+        media.kind = probe.kind;
+    }
+    return media;
+}
+
 Shape readPic(const ShapeScope &scope, const Ooxml::XmlElementPtr &element)
 {
     const Ooxml::XmlElement &e = *element;
@@ -253,15 +312,9 @@ Shape readPic(const ShapeScope &scope, const Ooxml::XmlElementPtr &element)
     const Ooxml::XmlElement *nv = e.child(ns, u"nvPicPr");
     readNonVisual(scope, nv != nullptr ? nv->child(ns, u"cNvPr") : nullptr, s);
     const Ooxml::XmlElement *nvPr = nv != nullptr ? nv->child(ns, u"nvPr") : nullptr;
-    QString media;
     if (nvPr != nullptr) {
-        if (nvPr->child(nsA(), u"videoFile") != nullptr || nvPr->child(nsA(), u"quickTimeFile") != nullptr) {
-            media = QStringLiteral("Video");
-        } else if (nvPr->child(nsA(), u"audioFile") != nullptr || nvPr->child(nsA(), u"wavAudioFile") != nullptr) {
-            media = QStringLiteral("Audio");
-        } else if (nvPr->descendant(kPresentation2010, u"media") != nullptr) {
-            media = QStringLiteral("Media");
-        }
+        // A video or a sound: its poster frame is the picture (M75).
+        s.media = readMediaInfo(scope, nvPr);
         if (const Ooxml::XmlElement *ph = nvPr->child(nsP(), u"ph")) {
             s.placeholder.type = ph->attr(u"type", QStringLiteral("obj"));
             s.placeholder.index = ph->hasAttribute(QString(), u"idx") ? ph->attr(u"idx").toLongLong() : -1;
@@ -303,11 +356,6 @@ Shape readPic(const ShapeScope &scope, const Ooxml::XmlElementPtr &element)
     applyFill(s, fillFrom(scope.ctx, spPr));
     applyLine(s, effectiveLine(scope.ctx, spPr, e.child(ns, u"style")));
     s.framed = s.strokeWidth > 0;
-    if (!media.isEmpty()) {
-        // A video or sound: the poster frame shows, the media part travels.
-        s.kind = ShapeKind::Preserved;
-        s.preserved = {Ooxml::serializeFragment(e), scope.ctx.part, media};
-    }
     return s;
 }
 

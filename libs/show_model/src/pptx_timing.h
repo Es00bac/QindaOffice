@@ -29,8 +29,20 @@ namespace QindaOffice::Show::Pptx {
 
 // The entrance builds of the main sequence, one step per click.
 [[nodiscard]] QList<BuildEntry> readBuilds(const Ooxml::XmlElement *timing);
-// A p:timing playing `builds` (empty list → nullptr).
-[[nodiscard]] Ooxml::XmlElementPtr timingElement(const QList<BuildEntry> &builds);
+// A p:timing playing `builds` and `media` (M75: each media shape's play
+// command in the main sequence — at its click, or with the slide — and its
+// media node); nullptr when there is nothing to play.
+[[nodiscard]] Ooxml::XmlElementPtr timingElement(const QList<BuildEntry> &builds, const QList<MediaEntry> &media = {});
+// M75 (pptx_timing_media.cpp): the media playback of `timing` — media
+// nodes (p:video / p:audio) and the play commands of the main sequence.
+[[nodiscard]] QList<MediaEntry> readMedia(const Ooxml::XmlElement *timing);
+// The click step of each p:par of the main sequence's list (`clicks`), as
+// both readers number them (M75): a group that starts with the slide and
+// holds no entrance or emphasis effect (an automatic media play) is not a
+// click (0); every other group is the next click.
+[[nodiscard]] QList<int> clickSteps(const Ooxml::XmlElement &clicks);
+// True when the main sequence group `par` starts with the slide (onBegin).
+[[nodiscard]] bool startsWithSlide(const Ooxml::XmlElement &par);
 // A copy of `timing` without anything aimed at a shape id outside
 // `present`; nullptr when nothing playable is left.
 [[nodiscard]] Ooxml::XmlElementPtr pruneTiming(const Ooxml::XmlElement &timing, const QSet<quint32> &present);

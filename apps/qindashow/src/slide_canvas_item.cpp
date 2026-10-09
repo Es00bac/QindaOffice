@@ -414,6 +414,7 @@ void SlideCanvasItem::paint(QPainter *painter)
         }
     }
     painter->restore();
+    paintMarks(painter);
 }
 
 } // namespace QindaOffice::Apps::Show

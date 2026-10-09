@@ -48,4 +48,19 @@ namespace QindaOffice::Show::Fodp {
 [[nodiscard]] QString layoutsJson(const QList<SlideLayout> &layouts);
 [[nodiscard]] QList<SlideLayout> layoutsFromJson(const QString &json);
 
+// ---- M75 (D-084): what the Slide Master view, sections and comments add ----
+// A master's or layout's placeholders (their placeholder identity kept).
+[[nodiscard]] QString placeholdersJson(const QList<Shape> &shapes);
+[[nodiscard]] QList<Shape> placeholdersFromJson(const QString &json);
+// fodp_design.cpp: a master's theme and text styles, the deck's sections,
+// a slide's comments.
+[[nodiscard]] QString themeJson(const ThemeSpec &theme);
+[[nodiscard]] ThemeSpec themeFromJson(const QString &json);
+[[nodiscard]] QString textStylesJson(const SlideMaster &master);
+void textStylesFromJson(const QString &json, SlideMaster &master);
+[[nodiscard]] QString sectionsJson(const QList<SlideSection> &sections);
+[[nodiscard]] QList<SlideSection> sectionsFromJson(const QString &json);
+[[nodiscard]] QString commentsJson(const QList<SlideComment> &comments);
+[[nodiscard]] QList<SlideComment> commentsFromJson(const QString &json);
+
 } // namespace QindaOffice::Show::Fodp

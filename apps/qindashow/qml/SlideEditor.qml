@@ -22,7 +22,8 @@ Tk.Splitter {
     }
     NotesPane {
         showHost: editor.showHost
-        visible: editor.showHost.actions.entry("showViewNotesAction").checked
+        // Notes belong to slides: none in the Slide Master view (M75).
+        visible: editor.showHost.actions.entry("showViewNotesAction").checked && !editor.showHost.masterView.active
         T.SplitView.preferredHeight: Tk.Theme.size.control * 3.5
         T.SplitView.minimumHeight: Tk.Theme.size.control * 1.5
     }

@@ -37,7 +37,8 @@ void ShowHost::createEditing()
     m_chartData = new ChartDataEditor(m_canvas, this);
     connect(m_canvas, &SlideCanvasItem::shapeEdited, this,
             [this](const QString &shapeId, const ShowModel::Shape &before, const ShowModel::Shape &after, const QString &label) {
-                if (m_canvas->slide() != nullptr) {
+                // M75: in the Slide Master view the view commits the edit.
+                if (m_canvas->slide() != nullptr && !masterViewActive()) {
                     m_document->undoStack()->push(new ShapeEditCommand(m_document->presentation(), m_canvas->slide()->id,
                                                                        shapeId, before, after, label));
                 }

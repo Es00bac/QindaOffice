@@ -36,6 +36,9 @@ public:
 
     // The media part holding `bytes` (one part per distinct image).
     QString media(const QByteArray &bytes, const QString &mime);
+    // M75: the part holding a video's or sound's bytes ("media<N>.<ext>",
+    // its type from the extension); one part per distinct file.
+    QString mediaFile(const QByteArray &bytes, const QString &mime, const QString &name);
 
 private:
     QHash<QByteArray, QString> m_media; // content hash → part

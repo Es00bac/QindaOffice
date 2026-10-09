@@ -33,6 +33,153 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M75 Show design, masters, review and media gates (D-084)
+
+Qualified on qinda (branch `m75-show-design`, merged with
+`m60-office-formats` fbb59cf) with
+`QQO_OOXML_SCHEMA_DIR=~/scratch/qqo/ecma-xsd`, xmllint and LibreOffice
+25.2, as a targeted build (office_ooxml, show_model, the QindaShow app and
+their tests only; qinda's disk is shared): **22/22 CTest targets passed,
+230.85 s** (`ctest --preset dev -R "show|pptx|fodp|ooxml"`). QtTest counts
+(init/cleanup included), none skipped — the schema and LibreOffice steps
+ran; every QindaShow test runs with `QQO_SHOW_MEDIA=off`, so nothing is
+ever played:
+
+- office_ooxml — `tst_ooxml` 24, **`tst_ooxml_entries` 4**.
+- show_model — `tst_show_model` 8, `tst_fodp` 7, `tst_pptx_read` 17,
+  `tst_pptx_write` 9, `tst_pptx_tables` 10, `tst_pptx_charts` 7,
+  `tst_show_effects` 5, **`tst_pptx_design` 13, `tst_pptx_masters` 10,
+  `tst_pptx_review` 12, `tst_pptx_media` 9**.
+- QindaShow — `tst_qindashow` 12, `tst_show_ui` 19, `tst_show_design` 11,
+  `tst_show_menu_export` 3, `tst_show_tools` 3, `tst_show_table` 8,
+  `tst_show_chart_notes` 5, **`tst_show_design_tab` 9, `tst_show_review`
+  10**: 215 QtTest functions in all (28 office_ooxml, 107 show_model, 80
+  QindaShow), 0 failed, 0 skipped.
+
+The fixtures are hand-built PowerPoint-shaped packages
+(`tests/show_model/pptx_fixture*.h`, `pptx_fixture_m75.h`: sections, modern
+and legacy comments, a video embedded as PowerPoint 2016 does, tiny MP4 and
+WAV files that say how long they play); no owner deck was opened.
+
+**Design** (automated: `tst_pptx_design`, `tst_show_design_tab`):
+
+- `themeIsRead`, `reresolutionIsStable` (an unedited deck re-resolved is
+  the same deck), `themeColorsFlowToSlides`, `themeFontsFlowToSlides`
+  (theme colours change, explicit ones do not; `+mj-lt` titles take the
+  new heading font), `wholeThemeWrittenAsPowerPointDoes` (`a:theme
+  name="Meadow"`, `a:extraClrSchemeLst`, `thm15:themeFamily`, Office's
+  script fonts and panose; read back equal), `themeFromAnotherFile` (a
+  `.potx` and a `.thmx`; a missing file fails cleanly),
+  `resizeAsksAsPowerPointDoes`, `slideSizeEnsureFit` (0.75 about the
+  top-left and centred: a 24 pt run becomes 18 pt, the master's 44 pt
+  title 33 pt; a title with no box of its own still inherits the master's,
+  scaled; the table grid and a group's box scaled, its child space not), `slideSizeMaximize`, `backgroundsWritten` (a
+  gradient on one slide, a picture at 40 % transparency tiled as a
+  texture, Apply to All on the master with the slides' own cleared),
+  `generatedDeckTakesATheme` (a deck QindaShow made gets a master, theme
+  and layouts and keeps its slides).
+- Through the window: `themesAndVariantsAreOneUndoStepEach` (Harbor,
+  Ember colours, Bookish fonts — the slides' title follows — Flat
+  effects: four steps, four undos back), `slideSizeAsksMaximizeOrEnsureFit`
+  (Widescreen → Standard asks; Ensure Fit scales by 0.75, one step, undone
+  exactly; Maximize; saved `p:sldSz` reads back 720 × 540),
+  `customSlideSizeDialogAnswersInPoints` (the dialog opens on
+  Widescreen; a banner asks, a larger size does not),
+  `formatBackgroundPaneEditsTheSlide` (solid, transparency, gradient,
+  pattern, texture — five steps; Hide Background Graphics; Apply to All;
+  Reset Background; the pane follows its command).
+
+**Slide Master view** (automated: `tst_pptx_masters`, `tst_show_design_tab`):
+
+- `mastersCarryPlaceholdersAndStyles`, `uneditedMastersByteForByte` (a
+  slide edit leaves master, layout and theme byte for byte; a master edit
+  leaves its unedited layout byte for byte), `titleStyleFlowsToSlides`,
+  `layoutPlaceholderFlowsToSlides`, `layoutPlaceholderLookInItsListStyle`,
+  `layoutOperations` (insert, duplicate right after the original, rename,
+  preserve, Title / Footers, placeholders; a layout five slides use cannot
+  be deleted; read back with their ids), `masterDecorationsAndBackground`
+  (a band behind the placeholders and a picture, drawn on every slide),
+  `masterSurvivesFodp`.
+- Through the window: `slideMasterViewEditsFlowToSlides` (the view, its
+  pane and the Slide Master tab — made current, and the Home tab again on
+  closing; insert, rename, delete a layout: three steps; the used layout's
+  Delete is off; a picture placeholder, undone),
+  `masterViewTextStylesReachTheSlides` (Title 50 pt bold in Text Styles:
+  the slides' title follows; undone back to 44),
+  `placeholderMovedOnTheLayoutMovesItsSlides` (a canvas move of the
+  layout's title is one step after the gesture; the slides move with it).
+
+**Sections and comments** (automated: `tst_pptx_review`, `tst_show_review`):
+
+- `sectionsRead`, `sectionOperations`, `sectionsFollowTheSlides`,
+  `sectionsWritten` (`p14:sectionLst` as read while unchanged; a new slide
+  joins its section; no sections, no list); `modernCommentsRead` (authors,
+  replies, the anchor on a shape, resolved), `unchangedCommentsByteForByte`
+  (modern and legacy parts, `authors.xml`, `commentAuthors.xml`),
+  `editedCommentsWrittenModern`, `legacyCommentsRoundTrip` (positions in
+  1/8 pt, threading, the next index; schema-valid),
+  `resolvingMakesThemModern`, `reviewThroughFodp`.
+- Through the window: `sectionsShowInTheSorterAndCollapse` (headers with
+  counts, collapse as a view state, a slide moved across a header joins
+  that section; saved and read back), `sectionCommandsAreOneUndoStepEach`
+  (Add asks for the name, Move Up, Remove, Remove All: five steps),
+  `commentsPaneThreadsAndRoundTrips` (New Comment opens the pane; on the
+  slide and on "TextBox 3"; reply, resolve; saved as modern comments with
+  the thread and its reply resolved; delete and undo),
+  `deckCommentsWalkWithPreviousAndNext` (modern and legacy threads; Next
+  selects the anchored shape, wraps around).
+
+**Audio and video** (automated: `tst_pptx_media`, `tst_show_review`,
+`tst_ooxml_entries`):
+
+- `probeKnowsTheContainers`, `powerPointVideoIsRead` (Start
+  Automatically, Loop, Hide While Not Playing, the poster),
+  `unchangedVideoWrittenVerbatim`, `playbackChangesRewriteTheTiming`,
+  `insertedMediaWrittenAsPowerPointEmbeds` (a video and a sound on a
+  PowerPoint deck and on a QindaShow deck: one media part named by the
+  media and video / audio relationships, `p14:media`, the mediacall, the
+  click sequence), `postersAndTheShow`, `libreOfficeConvertsTheDeck` (a
+  new size, background, theme, sections, comments and a video: LibreOffice's
+  PDF has the 4 shown slides); `entriesReadBackWithoutAZip` (video stored,
+  not deflated).
+- Through the window: `insertedVideoTakesPlaybackOptions` (Insert ▸ Video
+  makes a poster and an On Click step; the Playback tab; Start
+  Automatically, Loop, Hide: one step each; Play without Qt Multimedia
+  says why and loads nothing; a sound; saved and read back),
+  `deckMediaReachesTheShowSilently`, `showPlaysMediaWithTheSlideAndAtItsClick`
+  (through a silent stand-in surface: the video plays with the slide, the
+  hidden sound at its click, a click on the video pauses and resumes it,
+  the next slide stops both), `mediaSurfaceCompilesWhereQtMultimediaIs`
+  (compiled, never instantiated).
+
+**UI gates**: the structural fixtures `qindashow_{1280,520}.txt` were
+regenerated deliberately (`QQO_UPDATE_FIXTURES=1`; the diff is the new
+hidden panes — Comments, Format Background, Text Styles — the master pane
+beside the sorter, the editor's media loader and Home ▸ Section); the
+ribbon gate (every menu command on the ribbon, every icon real, every tab —
+Slide Master and Playback forced on with the others — inside the ribbon at
+1280 and 520 px) and the panel export's validator (Design and Review menus;
+every theme, colour, font and effect set) pass. Grabs looked at
+(`QQO_GRAB_DIR`): `qindashow_m75_theme` (the Design tab; Bookish fonts and
+Ember colours on the slides), `qindashow_m75_format_background`,
+`qindashow_m75_scale_choice`, `qindashow_m75_slide_size`,
+`qindashow_m75_slide_master` (dashed placeholder frames, the master and
+its layout in the pane, the Slide Master tab), `qindashow_m75_text_styles`,
+`qindashow_m75_sections`, `qindashow_m75_comments` (numbered marks, the
+Review tab), `qindashow_m75_video` (the poster, the Playback tab, the
+status message), and LibreOffice's pages of the converted deck.
+
+**On the desktop (manual, the owner):** open one of your decks in
+QindaShow; on the Design tab pick another theme, then other Colors and
+Fonts; change the slide size to 4:3 and choose Ensure Fit; open View ▸
+Slide Master, move the title placeholder of a layout and set the master's
+title to bold; add a section at slide 3 and rename it; select a shape and
+add a comment, reply to it; Insert ▸ Video (an `.mp4` of yours) and set it
+to Start Automatically; play the show to the video's slide (it plays) and
+press Playback ▸ Play in the editor; save as `.pptx` and open it in
+PowerPoint — the theme, size, master edits, section, comment thread and
+video (playing automatically in PowerPoint's slide show) are there.
+
 ## M74 Calc PivotTables gates (D-083)
 
 Qualified on qinda (branch `m74-calc-pivots`, merged with

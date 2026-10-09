@@ -222,6 +222,13 @@ void writeBody(QXmlStreamWriter &xml, StyleRegistry &styles, const Presentation 
                                                                 .arg(number(presentation.notesSize.width()),
                                                                      number(presentation.notesSize.height())));
     }
+    // M75 (D-084): sections and the comment kind ride qq: too.
+    if (!presentation.sections.isEmpty()) {
+        xml.writeAttribute(QStringLiteral("qq:sections"), Fodp::sectionsJson(presentation.sections));
+    }
+    if (presentation.legacyComments) {
+        xml.writeAttribute(QStringLiteral("qq:legacy-comments"), QStringLiteral("1"));
+    }
     for (qsizetype i = 0; i < presentation.slides.size(); ++i) {
         const Slide &slide = presentation.slides.at(i);
         xml.writeStartElement(QStringLiteral("draw:page"));
@@ -241,6 +248,9 @@ void writeBody(QXmlStreamWriter &xml, StyleRegistry &styles, const Presentation 
         }
         if (!slide.layoutId.isEmpty()) {
             xml.writeAttribute(QStringLiteral("qq:layout-id"), slide.layoutId);
+        }
+        if (!slide.comments.isEmpty()) {
+            xml.writeAttribute(QStringLiteral("qq:comments"), Fodp::commentsJson(slide.comments));
         }
         for (const Shape &shape : slide.shapes) {
             writeShape(xml, styles, shape);
@@ -304,6 +314,19 @@ void writeMasterStyles(QXmlStreamWriter &xml, StyleRegistry &styles, const Prese
         }
         if (!master.shapes.isEmpty()) {
             xml.writeAttribute(QStringLiteral("qq:shapes"), Fodp::shapesJson(master.shapes));
+        }
+        // M75: the theme, text styles and placeholders the master view edits.
+        if (!master.theme.isEmpty()) {
+            xml.writeAttribute(QStringLiteral("qq:theme"), Fodp::themeJson(master.theme));
+        }
+        if (!master.titleStyle.isEmpty() || !master.bodyStyle.isEmpty() || !master.otherStyle.isEmpty()) {
+            xml.writeAttribute(QStringLiteral("qq:text-styles"), Fodp::textStylesJson(master));
+        }
+        if (!master.placeholders.isEmpty()) {
+            xml.writeAttribute(QStringLiteral("qq:placeholders"), Fodp::placeholdersJson(master.placeholders));
+        }
+        if (!master.order.isEmpty()) {
+            xml.writeAttribute(QStringLiteral("qq:order"), master.order.join(QLatin1Char(' ')));
         }
         writeMasterDecorations(xml, styles, master);
         xml.writeEndElement(); // style:master-page

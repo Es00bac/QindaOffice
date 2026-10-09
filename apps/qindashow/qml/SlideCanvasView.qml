@@ -9,6 +9,8 @@ import QindaOffice.Show
 // scale, D-009), the in-place editor is a TextEdit over the shape — or the
 // table cell (M67) — being edited, showing its own QTextDocument (runs and
 // all), and a right press pops the arrange / group / clipboard context menu.
+// Playback ▸ Play (M75, D-084) plays the selected video or audio in place
+// through media/MediaSurface.qml, loaded only while it plays.
 Tk.Viewport {
     id: viewport
     required property ShowHost showHost
@@ -50,6 +52,30 @@ Tk.Viewport {
             // M67: in a table cell Tab / Shift+Tab move to the next / previous cell.
             Keys.onTabPressed: function(event) { event.accepted = viewport.showHost.canvas.editingCell && viewport.showHost.canvas.moveCellEdit(1) }
             Keys.onBacktabPressed: function(event) { event.accepted = viewport.showHost.canvas.editingCell && viewport.showHost.canvas.moveCellEdit(-1) }
+        }
+        Loader {
+            id: mediaPreview
+            objectName: "editorMediaPreview"
+            readonly property var medium: viewport.showHost.media.selected
+            z: 3
+            active: viewport.showHost.media.playing && viewport.showHost.media.available && medium.url !== undefined
+            x: medium.x !== undefined ? medium.x : 0
+            y: medium.y !== undefined ? medium.y : 0
+            width: medium.width !== undefined ? medium.width : 0
+            height: medium.height !== undefined ? medium.height : 0
+            source: viewport.showHost.media.surface
+            onLoaded: {
+                item.source = medium.url
+                item.video = medium.kind === "video"
+                item.loop = medium.loop
+                item.volume = medium.volume / 100
+                item.playing = true
+            }
+        }
+        Connections {
+            target: mediaPreview.item
+            ignoreUnknownSignals: true
+            function onFinished() { viewport.showHost.media.playing = false }
         }
     }
     MenuFromNode {

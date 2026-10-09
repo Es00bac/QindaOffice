@@ -355,6 +355,18 @@ Presentation Reader::read(const OdfNode &document)
         if (page->hasAttr(kQq, u"shapes")) {
             master.shapes = Fodp::shapesFromJson(page->attr(kQq, u"shapes"));
         }
+        if (page->hasAttr(kQq, u"theme")) {
+            master.theme = Fodp::themeFromJson(page->attr(kQq, u"theme"));
+        }
+        if (page->hasAttr(kQq, u"text-styles")) {
+            Fodp::textStylesFromJson(page->attr(kQq, u"text-styles"), master);
+        }
+        if (page->hasAttr(kQq, u"placeholders")) {
+            master.placeholders = Fodp::placeholdersFromJson(page->attr(kQq, u"placeholders"));
+        }
+        if (page->hasAttr(kQq, u"order")) {
+            master.order = page->attr(kQq, u"order").split(QLatin1Char(' '), Qt::SkipEmptyParts);
+        }
         presentation.masters.append(master);
         masterIds.insert(name, master.id);
     }
@@ -364,6 +376,8 @@ Presentation Reader::read(const OdfNode &document)
         return presentation;
     }
     presentation.layouts = Fodp::layoutsFromJson(deck->attr(kQq, u"layouts"));
+    presentation.sections = Fodp::sectionsFromJson(deck->attr(kQq, u"sections"));
+    presentation.legacyComments = deck->attr(kQq, u"legacy-comments") == u"1";
     if (deck->hasAttr(kQq, u"notes-size")) {
         const QStringList size = deck->attr(kQq, u"notes-size").split(QLatin1Char(' '));
         if (size.size() == 2) {
@@ -392,6 +406,9 @@ Presentation Reader::read(const OdfNode &document)
             slide.background = Fodp::backgroundFromJson(page->attr(kQq, u"background"));
         }
         slide.layoutId = page->attr(kQq, u"layout-id");
+        if (page->hasAttr(kQq, u"comments")) {
+            slide.comments = Fodp::commentsFromJson(page->attr(kQq, u"comments"));
+        }
         readShapes(*page, slide, QString());
         if (const OdfNode *notes = page->child(kPresentation, u"notes")) {
             for (const OdfNode *frame : notes->elements(kDraw, u"frame")) {
