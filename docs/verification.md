@@ -35,6 +35,11 @@ runs never overwrite earlier evidence.
 
 ## M73 Write lists and styles gates (D-082)
 
+After merging (lead): the full suite on qinda 221/221 at f1a2aee; the
+owner's 590 `.docx` read and round-trip with 0 failures, 0 text/table/
+picture changes and 0 schema-invalid packages; page counts against Word
+unchanged for all 567 Word-paginated documents.
+
 On qinda (branch `m73-write-lists`, merged with `m60-office-formats`
 6de7b18; only office_ooxml, office_docx, QindaWrite, their tests and
 `tst_note_word` built; `QQO_OOXML_SCHEMA_DIR` set, so every package a test
