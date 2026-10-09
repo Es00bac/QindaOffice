@@ -23,6 +23,10 @@
 // whitespace in an element WITHOUT child elements is kept — that is how
 // <w:t xml:space="preserve"> </w:t> survives. Changing this rule either
 // loses spaces in documents or bloats every tree with indentation nodes.
+// The one exception is XML's own: inside an element where xml:space is
+// "preserve" (declared on it or an ancestor) nothing is dropped. Visio puts
+// that on every part's root because its <Text> is mixed content — a space
+// between two <cp/> run markers is a character of the shape's text (M65).
 
 #include <QByteArray>
 #include <QList>

@@ -21,6 +21,8 @@ add_library(office_ooxml STATIC
     src/ooxml_units.h
     src/ooxml_xml.cpp
     src/ooxml_xml.h
+    src/ooxml_xml_p.h
+    src/ooxml_xml_write.cpp
 )
 
 target_include_directories(office_ooxml

@@ -4,8 +4,11 @@
 Flowcharts, org charts, network diagrams and everyday business drawings
 (M50, decision [D-050](decisions.md#d-050-qindadiagram-a-drawing-model-of-its-own-on-the-toolkits-canvas-stack)).
 Microsoft Visio is the reference for *scope* — stencils, glued connectors,
-containers and swimlanes, shape data, pages, auto-layout — not for look or
-file format.
+containers and swimlanes, shape data, pages, auto-layout — not for look.
+Since M65 its file format too: `.vsdx`, `.vsdm`, `.vstx` and `.vstm` open
+and save natively, with what the user did not change kept as Visio wrote it
+([visio-interchange.md](visio-interchange.md), decision
+[D-073](decisions.md#d-073-visio-interchange-for-qindadiagram)).
 
 | Target | Depends on | What it is |
 | --- | --- | --- |
@@ -30,7 +33,11 @@ background colour, a grid setting, a line-jump setting, **shapes** and
   width and pattern, corner radius, shadow, opacity), **shape data**
   (ordered key/value fields), an optional group id, locked and
   aspect-locked flags and, for pictures and org cards, the author's
-  encoded image bytes.
+  encoded image bytes. A shape read from Visio (M65) may carry its own
+  outline instead of a stencil's — `paths` (`shape_path.h`: closed or open
+  subpaths of lines, arcs and curves in the shape's 0–1 frame, each with
+  fill/stroke flags; the hidden `path` stencil draws them) — and its own
+  text box and connection points.
 - **Connectors** carry two **endpoints** — glued to a shape's connection
   point (`port`), glued to its outline (`port = -1`, dynamic glue), or free
   at a page point — a routing (right-angle, straight, curved), line colour,
@@ -134,10 +141,18 @@ shapes and connectors as the model above (colours as `#rrggbb` /
   source/target glue (exit/entry points map to the nearest connection
   point), style (orthogonal/curved/straight), arrows and labels (edge
   label children included).
+- **Visio** (M65, D-073): `.vsdx`/`.vsdm`/`.vstx`/`.vstm` open as
+  drawings — masters, styles and themes resolved, geometry as custom
+  outlines, groups flattened, glued connectors, pictures — and save as
+  Visio packages, unchanged shapes verbatim and edited ones merged into
+  their source ([visio-interchange.md](visio-interchange.md)). File ▸ Save
+  As offers *Visio Drawing (*.vsdx)*; a drawing opened from Visio saves
+  back to it. The Visio 2003–2010 formats (`.vsd`, `.vdx`, …) are refused
+  with what to do in Visio.
 - **Not supported**: compressed draw.io diagrams (refused with the
-  diagrams.net setting that turns compression off); Visio `.vsdx`/`.vsd`
-  import or export (out of scope, D-050); rich text runs inside one shape
-  (one run per shape); per-page zoom memory (each page opens fitted).
+  diagrams.net setting that turns compression off); rich text runs inside
+  one shape (one run per shape); per-page zoom memory (each page opens
+  fitted).
 
 ## DrawingDocument and undo
 
@@ -169,6 +184,14 @@ group-expanded), the tool (`pointer` / `connector` / `text`, mirrored by
 the tool radio group Ctrl+1/2/3), the format painter, item maps with
 fixed keys, and one undo step per edit call; refusals come back as
 `notify(title, text, "warning")`.
+
+Open lists QindaDiagram and Visio drawings (the Visio 2003–2010 formats
+too, so they can be refused with what to do); Save As offers QindaDiagram,
+Visio drawing and Visio template, and the suffix decides the format. A
+Visio file opened says on the status bar what it shows approximately or
+only keeps (`DrawingDocument::loadWarnings`). The desktop entry declares
+the Visio MIME types and the launcher routes `.vsdx`/`.vsdm`/`.vstx`/
+`.vstm` here (M65).
 
 ### The canvas (D-050)
 

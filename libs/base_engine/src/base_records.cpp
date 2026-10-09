@@ -3,6 +3,8 @@
 // resolution and constraint messages. Edits are in base_records_edit.cpp.
 #include "base_records.h"
 
+#include "base_file_field.h"
+
 #include <QRegularExpression>
 
 #include <algorithm>
@@ -15,6 +17,26 @@ namespace {
 QString q(const QString &identifier)
 {
     return quoteIdentifier(identifier);
+}
+
+// What a read selects for a column: a File column's length, never its
+// bytes (base_file_field.h).
+QString selected(const ColumnInfo &c)
+{
+    return c.type == FieldType::File ? QStringLiteral("length(%1)").arg(q(c.name)) : q(c.name);
+}
+
+// Turns the lengths a read selected for File columns into summaries.
+void summarizeFiles(const BaseFile &file, const QString &table, const QList<ColumnInfo> &columns, qint64 rowid,
+                    QVariantList *row)
+{
+    for (int c = 0; c < columns.size() && c < row->size(); ++c) {
+        const QVariant &v = row->at(c);
+        if (columns.at(c).type == FieldType::File && v.isValid() && !v.isNull()) {
+            (*row)[c] = fileSummary(v.toLongLong(),
+                                    file.db().blobHead(table, columns.at(c).name, rowid, kFileSummaryHead));
+        }
+    }
 }
 
 QString likePattern(const QString &text)
@@ -69,7 +91,7 @@ QList<ColumnInfo> Records::columns(const BaseFile &file, const QString &table)
         c.type = f.type;
         c.required = f.required;
         c.primaryKey = f.primaryKey;
-        c.readOnly = f.type == FieldType::AutoNumber || f.type == FieldType::Other || def->withoutRowid;
+        c.readOnly = !isTypable(f.type) || def->withoutRowid; // a file changes through setFile
         c.defaultValue = f.defaultValue;
         c.lookup = f.lookup;
         if (!c.lookup.isSet()) {
@@ -115,6 +137,10 @@ QString Records::whereClause(const QList<ColumnInfo> &columns, const QList<Filte
         if (f.op == QLatin1String("isNotNull")) {
             parts.append(field + QStringLiteral(" IS NOT NULL"));
             continue;
+        }
+        if (column->type == FieldType::File) {
+            *error = QStringLiteral("%1 can only be filtered for having a file or not.").arg(column->label());
+            return {};
         }
         if (f.op == QLatin1String("contains") || f.op == QLatin1String("notContains")) {
             parts.append(QStringLiteral("%1 %2LIKE ? ESCAPE '\\'")
@@ -171,12 +197,13 @@ RowSet Records::read(const BaseFile &file, const QString &table, const RowQuery 
     }
     QStringList names;
     for (const ColumnInfo &c : set.columns) {
-        names.append(q(c.name));
+        names.append(selected(c));
     }
     QStringList order;
     for (const SortKey &k : query.sort) {
-        if (set.columnIndex(k.field) >= 0) {
-            order.append(q(k.field) + (k.descending ? QStringLiteral(" DESC") : QStringLiteral(" ASC")));
+        if (const int i = set.columnIndex(k.field); i >= 0) {
+            // A File column sorts by size (sorting its bytes would read them all).
+            order.append(selected(set.columns.at(i)) + (k.descending ? QStringLiteral(" DESC") : QStringLiteral(" ASC")));
         }
     }
     const QString rowid = def && def->withoutRowid ? QStringLiteral("0") : QStringLiteral("rowid");
@@ -194,12 +221,14 @@ RowSet Records::read(const BaseFile &file, const QString &table, const RowQuery 
     const int count = int(set.columns.size());
     Statement::Step step = statement.step();
     while (step == Statement::Step::Row) {
-        set.rowids.append(statement.value(0).toLongLong());
+        const qint64 id = statement.value(0).toLongLong();
+        set.rowids.append(id);
         QVariantList row;
         row.reserve(count);
         for (int c = 0; c < count; ++c) {
             row.append(statement.value(c + 1));
         }
+        summarizeFiles(file, table, set.columns, id, &row);
         set.values.append(row);
         step = statement.step();
     }
@@ -215,7 +244,7 @@ std::optional<QVariantList> Records::readRow(const BaseFile &file, const QString
 {
     QStringList names;
     for (const ColumnInfo &c : columns) {
-        names.append(q(c.name));
+        names.append(selected(c));
     }
     const QList<QVariantList> rows =
         file.db().rows(QStringLiteral("SELECT %1 FROM %2 WHERE rowid = ?").arg(names.join(QStringLiteral(", ")), q(table)),
@@ -223,7 +252,9 @@ std::optional<QVariantList> Records::readRow(const BaseFile &file, const QString
     if (rows.isEmpty()) {
         return std::nullopt;
     }
-    return rows.first();
+    QVariantList row = rows.first();
+    summarizeFiles(file, table, columns, rowid, &row);
+    return row;
 }
 
 QVariant Records::total(const BaseFile &file, const QString &table, const QString &field, const QString &function,

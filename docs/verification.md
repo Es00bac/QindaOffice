@@ -33,6 +33,102 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M65 Diagram and Base gates (D-073, D-074)
+
+Qualified on qinda (branch `m65-visio-base`, merged with `m60-office-formats`
+1e398a9) with LibreOffice and `pdftotext` present and mdb-tools absent.
+Targeted builds only (qinda's disk is nearly full, so the suite was not
+rebuilt whole): the 23 CTest targets M65 touches all pass, no warning from
+the M65 files. QTest totals (test functions plus init/cleanup):
+`tst_ooxml` 23 (1 skipped: the schema helper without
+`QQO_OOXML_SCHEMA_DIR`), `tst_launcher` 8, `tst_diagram_model` 12,
+`tst_diagram_ops` 13, `tst_diagram_output` 10, `tst_diagram_visio_read` 12,
+`tst_diagram_visio_write` 6 (the LibreOffice check ran),
+`tst_diagram_visio_roundtrip` 7 with `QQO_VISIO_CORPUS` (6 + 1 skipped
+without), `tst_qindadiagram_host` 10, `tst_qindadiagram_menu_export` 4,
+`tst_qindadiagram_ui` 9, `tst_base_types` 6, `tst_base_file` 12,
+`tst_base_schema` 11, `tst_base_records` 9, `tst_base_query` 9,
+`tst_base_io` 7, `tst_base_access` 7, `tst_qindabase_service` 9,
+`tst_qindabase_interchange` 6, `tst_qindabase_host` 7,
+`tst_qindabase_menu_export` 4, `tst_qindabase_ui` 13.
+
+**Visio (automated)** — on hand-built packages (`visio_fixture.h`):
+
+- `tst_diagram_visio_read`: masters lend cells, rows and text (deleted rows
+  stay deleted); style chains; groups flatten with composed transforms;
+  connectors glue through `<Connects>` and `PAR(PNT(…))`/`_WALKGLUE`; text
+  runs, block and fields; every geometry row kind becomes a path; pictures
+  keep their bytes; page names, sizes and scale; themed colours; the
+  2003–2010 formats refused with the message.
+- `tst_diagram_visio_write`: a fresh drawing's package (content types,
+  properties with `RecalcDocument`, the six standard style sheets, explicit
+  geometry, text, glued connectors with `<Connects>`, pictures, page size;
+  cells before sections), template and macro kinds, DrawingDocument open /
+  save / crash recovery, and **LibreOffice**: the fresh and the edited
+  export converted to PDF headless, every label found by `pdftotext`.
+- `tst_diagram_visio_roundtrip`: an unchanged drawing writes every shape
+  element as read; an edit rewrites only what changed; a moved group moves
+  as one; a resized page keeps shapes in place. Corpus (`QQO_VISIO_CORPUS`,
+  run locally on two public Microsoft Visio 2013 sample files, never
+  committed): **2 files, 2 pages, 41 shapes, 14 connectors, 0 failures**
+  (read, write, re-read, compare).
+- `tst_qindadiagram_host` `visioDrawingsOpenAndSave` (open, edit, save,
+  reopen, the status-bar warnings) and `tst_qindadiagram_ui`
+  `visioDrawingRenders`.
+- Looked at: `qindadiagram_visio_1320` (the fixture in the window),
+  LibreOffice's renders of the fresh and the edited export and of the two
+  sample drawings after a round trip.
+
+**Base (automated)**:
+
+- `tst_base_types` `fileFieldsKnowWhatTheyHold` (the type row, signatures,
+  summaries, sizes, names, the 32 MB bound) and `tst_base_records`
+  `fileFieldsPersistUndoAndStayOutOfReads` (FILE columns, BLOB storage,
+  reads that summarise, undo, refusals, filter by presence, a rebuild, no
+  conversions, the form mirror leaves them out).
+- `tst_base_access` over hand-written captures of mdbtools 1.0's output
+  (`mdb-schema … postgres`, `mdb-export -b hex/-b strip`, `mdb-queries`):
+  the schema parser (types, required, descriptions, keys, indexes,
+  enforced and unenforced relationships), the query conversion (criteria,
+  TOP, sorts, expressions, Between, aliases for renamed tables, and every
+  refusal with its reason), a whole import through fake mdb-tools programs
+  with the real command lines (design, AutoNumber values, Currency vs
+  sub-cent decimals, dates, GUIDs, OLE bytes as a file field, a multi-field
+  index, the cascade relationship, four converted queries that compile and
+  run, five reported ones and the hidden `~sq_` one skipped, a one-step
+  undo), and the no-schema fallback.
+- `tst_qindabase_interchange`: Excel format codes and serials; an Excel
+  sheet (a cover sheet first, a blank row, every cell kind) proposes the
+  `id` key, Short text (a leading-zero code too), Date, Date & time,
+  Currency, Decimal number, Yes/No, Long text and a mixed column as text,
+  and imports as one step; `.xls` refused; a table of
+  every type exported to `.xlsx` and imported again has the same types and
+  values; file fields through the service (insert, preview, save, remove,
+  undo, the 32 MB refusal, the datasheet's text, icon and filter, CSV
+  export).
+- `tst_qindabase_ui` `excelAccessAndFilesRender`; the ribbon gate (every
+  new command on the ribbon) and `tst_qindabase_menu_export` (56 commands,
+  each once, each triggering).
+- Fixtures `qindabase_1280/520.txt` regenerated deliberately
+  (`QQO_UPDATE_FIXTURES=1`): the hidden datasheet file panel and form file
+  strip, the Home tab's File field group, three large Home buttons squeezed
+  one step at 1280 px, three fewer grid rows at 520 px under the taller
+  ribbon.
+- Looked at: `qindabase_excelimport_1280` (sheet chooser, cell-typed
+  columns, first rows), `qindabase_import_1280` (CSV with the preview),
+  `qindabase_accessreport_1280`, `qindabase_filefield_1280` (icon in the
+  cell, thumbnail panel, File field group enabled) and
+  `qindabase_formfiles_1280`.
+
+**Desktop checks (owner, not run here)**: open an exported `.vsdx` (fresh
+and edited) in Microsoft Visio — no repair prompt, shapes, text, glue and
+pictures as shown; open a `.vsdm` and check its macros are still there;
+double-click a `.vsdx` in the file manager (MIME → QindaDiagram); with
+`app-office/mdbtools` installed, import a real `.accdb` and an old `.mdb`
+and read the report; open QindaBase's `.xlsx` export in Excel (dates are
+dates, money shows its symbol); insert a large photo into a file field and
+check the thumbnail and Save File As in the dark and the light theme.
+
 ## M64 Mail essentials gates (D-072)
 
 Qualified on qinda (branch `m64-mail-essentials` over `m60-office-formats`):

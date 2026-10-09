@@ -299,12 +299,6 @@ QQuickRootItem#BaseWindow
                     QQuickMouseArea#gridRowResize_r19
                   QQuickItem#gridRowHeader_r2
                     QQuickMouseArea#gridRowResize_r2
-                  QQuickItem#gridRowHeader_r20
-                    QQuickMouseArea#gridRowResize_r20
-                  QQuickItem#gridRowHeader_r21
-                    QQuickMouseArea#gridRowResize_r21
-                  QQuickItem#gridRowHeader_r22
-                    QQuickMouseArea#gridRowResize_r22
                   QQuickItem#gridRowHeader_r3
                     QQuickMouseArea#gridRowResize_r3
                   QQuickItem#gridRowHeader_r4
@@ -518,60 +512,6 @@ QQuickRootItem#BaseWindow
                     QQuickLoader#gridCellHashes
                     QQuickRectangle#gridCellBackground
                     QQuickRectangle#gridCellDataBar [hidden]
-                  GridCellDelegate#gridCell_r20_email
-                    Icon#gridCellIcon [hidden]
-                    Label#gridCellText
-                    QQuickLoader#gridCellHashes
-                    QQuickRectangle#gridCellBackground
-                    QQuickRectangle#gridCellDataBar [hidden]
-                  GridCellDelegate#gridCell_r20_id
-                    Icon#gridCellIcon [hidden]
-                    Label#gridCellText
-                    QQuickLoader#gridCellHashes
-                    QQuickRectangle#gridCellBackground
-                    QQuickRectangle#gridCellDataBar [hidden]
-                  GridCellDelegate#gridCell_r20_name
-                    Icon#gridCellIcon [hidden]
-                    Label#gridCellText
-                    QQuickLoader#gridCellHashes
-                    QQuickRectangle#gridCellBackground
-                    QQuickRectangle#gridCellDataBar [hidden]
-                  GridCellDelegate#gridCell_r21_email
-                    Icon#gridCellIcon [hidden]
-                    Label#gridCellText
-                    QQuickLoader#gridCellHashes
-                    QQuickRectangle#gridCellBackground
-                    QQuickRectangle#gridCellDataBar [hidden]
-                  GridCellDelegate#gridCell_r21_id
-                    Icon#gridCellIcon [hidden]
-                    Label#gridCellText
-                    QQuickLoader#gridCellHashes
-                    QQuickRectangle#gridCellBackground
-                    QQuickRectangle#gridCellDataBar [hidden]
-                  GridCellDelegate#gridCell_r21_name
-                    Icon#gridCellIcon [hidden]
-                    Label#gridCellText
-                    QQuickLoader#gridCellHashes
-                    QQuickRectangle#gridCellBackground
-                    QQuickRectangle#gridCellDataBar [hidden]
-                  GridCellDelegate#gridCell_r22_email
-                    Icon#gridCellIcon [hidden]
-                    Label#gridCellText
-                    QQuickLoader#gridCellHashes
-                    QQuickRectangle#gridCellBackground
-                    QQuickRectangle#gridCellDataBar [hidden]
-                  GridCellDelegate#gridCell_r22_id
-                    Icon#gridCellIcon [hidden]
-                    Label#gridCellText
-                    QQuickLoader#gridCellHashes
-                    QQuickRectangle#gridCellBackground
-                    QQuickRectangle#gridCellDataBar [hidden]
-                  GridCellDelegate#gridCell_r22_name
-                    Icon#gridCellIcon [hidden]
-                    Label#gridCellText
-                    QQuickLoader#gridCellHashes
-                    QQuickRectangle#gridCellBackground
-                    QQuickRectangle#gridCellDataBar [hidden]
                   GridCellDelegate#gridCell_r2_email
                     Icon#gridCellIcon [hidden]
                     Label#gridCellText
@@ -726,11 +666,23 @@ QQuickRootItem#BaseWindow
                       QQuickItem#gridRangePane_0
                         QQuickRectangle#gridRangeBorder_0
                 QQuickRectangle#gridCornerHeader
+              FileFieldPanel#datasheetFilePanel [hidden]
+                Caption#fileFieldKind [hidden]
+                IconButton#fileFieldInsert [hidden]
+                IconButton#fileFieldRemove [hidden]
+                IconButton#fileFieldSave [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                Thumbnail#fileFieldThumbnail [hidden]
+                  Icon#thumbnailPlaceholder [hidden]
+                  QQuickImage#thumbnailImage [hidden]
+                  QQuickRectangle#thumbnailCaptionBand [hidden]
+                    Caption#thumbnailCaption [hidden]
               FilterBar#datasheetFilterBar [hidden]
                 Button#filterAdd [hidden]
                 ComboBox#filterConjunction [hidden]
                   QQuickText#comboDisplayText [hidden]
                 Label#filterValidation [hidden]
+              Flex#formFiles [hidden]
               Flex#queryGrid [hidden]
                 Button#queryAddColumn [hidden]
                 QQuickRectangle#boxFocusRing [hidden]
@@ -1018,6 +970,27 @@ QQuickRootItem#BaseWindow
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_editPasteAction
                 RibbonButton#ribbonAction_editPasteAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_fileField
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_baseFileInsertAction
+                RibbonButton#ribbonAction_baseFileInsertAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseFileRemoveAction
+                RibbonButton#ribbonAction_baseFileRemoveAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseFileSaveAction
+                RibbonButton#ribbonAction_baseFileSaveAction
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground

@@ -116,6 +116,7 @@ void LauncherTest::pathsGoToTheAppThatOpensThem()
     QCOMPARE(appIdForPath(QStringLiteral("/tmp/a.xlsx")), QStringLiteral("QindaCalc"));
     QCOMPARE(appIdForPath(QStringLiteral("/tmp/a.csv")), QStringLiteral("QindaCalc"));
     QCOMPARE(appIdForPath(QStringLiteral("/tmp/a.fodp")), QStringLiteral("QindaShow"));
+    QCOMPARE(appIdForPath(QStringLiteral("/tmp/a.vsdx")), QStringLiteral("QindaDiagram"));
     QCOMPARE(appIdForPath(QStringLiteral("/tmp/a.ppt")), QStringLiteral("QindaShow"));
     // M64: mail files open in QindaMail.
     for (const char *suffix : {"eml", "MSG", "mbox", "vcf"})

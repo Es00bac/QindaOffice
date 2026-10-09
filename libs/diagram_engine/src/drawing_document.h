@@ -16,9 +16,16 @@
 #include "document.h"
 #include "drawing.h"
 
+#include <QStringList>
+
 #include <functional>
+#include <memory>
 
 namespace QindaOffice::Diagram {
+
+namespace Visio {
+struct Source;
+}
 
 class DrawingDocument : public Core::Document {
     Q_OBJECT
@@ -33,8 +40,16 @@ public:
     // Replaces the whole drawing as one undo step (imports, templates).
     bool replace(const QString &label, const Drawing &drawing);
 
+    // .qdiagram, or a Visio drawing/template (M65, D-073: visio_io.h) —
+    // the suffix decides, on open and on save.
     bool load(const QString &path, QString *error = nullptr) override;
     bool save(const QString &path, QString *error = nullptr) override;
+    // What the last load could only show approximately (Visio), for the
+    // status bar; empty for a .qdiagram.
+    [[nodiscard]] QStringList loadWarnings() const { return m_loadWarnings; }
+    // True when the drawing was read from a Visio file whose source the
+    // document still holds (unchanged shapes are written back verbatim).
+    [[nodiscard]] bool hasVisioSource() const { return m_visio != nullptr; }
     [[nodiscard]] QStringList mimeTypes() const override;
     [[nodiscard]] QByteArray recoverySnapshot() const override;
     bool loadRecovery(const QByteArray &snapshot, QString *error = nullptr) override;
@@ -49,7 +64,15 @@ signals:
     void drawingReset();
 
 private:
+    // AGENT-CONTRACT (D-068 rule 3 for Visio): the package the drawing was
+    // read from, immutable and shared with every save; the items carry its
+    // token (visio_io.h). Recovery restores the drawing without it, and a
+    // later Visio save looks for it again at the document's path.
+    void reattachVisioSource();
+
     Drawing m_drawing;
+    std::shared_ptr<const Visio::Source> m_visio;
+    QStringList m_loadWarnings;
 };
 
 } // namespace QindaOffice::Diagram

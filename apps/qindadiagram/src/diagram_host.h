@@ -88,7 +88,11 @@ signals:
     void inspectorRequested(const QString &section);
 
 protected:
+    // QindaDiagram drawings and Visio 2013+ drawings and templates open
+    // (M65, D-073); Visio 2003–2010 files are offered so they meet a clear
+    // refusal. Save As writes .qdiagram, .vsdx or .vstx.
     [[nodiscard]] QString filterString() const override;
+    [[nodiscard]] QString saveFilterString() const override;
     void documentReplaced() override;
     [[nodiscard]] Quick::PrintRenderCallback printRenderCallback() const override;
 

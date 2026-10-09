@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "geometry.h"
 
+#include "shape_path.h"
 #include "stencils.h"
 
 #include <QLineF>
@@ -58,8 +59,10 @@ bool shapeContains(const Shape &shape, QPointF pagePoint)
     if (path.contains(local)) {
         return true;
     }
-    // Shapes without a painted outline (text, actor) pick on their box.
-    return !paintsOutline(shape) && QRectF(0, 0, shape.rect.width(), shape.rect.height()).contains(local);
+    // Shapes without a painted outline (text, actor) pick on their box, and
+    // so do custom outlines made only of lines (M65).
+    const bool box = !paintsOutline(shape) || (!shape.paths.isEmpty() && !customOutlineFills(shape));
+    return box && QRectF(0, 0, shape.rect.width(), shape.rect.height()).contains(local);
 }
 
 int portCount(const Shape &shape)

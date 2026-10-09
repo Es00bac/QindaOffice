@@ -5,10 +5,13 @@
 // the Shapes panel searches across stencils; a selection fills the
 // inspector; a drag from the panel drops a shape where it is released; the
 // connector tool glues; keyboard nudges and undo; the ribbon gate at 1320
-// and 520 px; structural fixtures. QQO_GRAB_DIR saves PNGs of each view.
+// and 520 px; structural fixtures; a Visio drawing opened in the window
+// (M65, D-073; QQO_VISIO_UI_FILE swaps in a real .vsdx for a manual look).
+// QQO_GRAB_DIR saves PNGs of each view.
 
 #include "diagram_app_test_support.h"
 
+#include "diagram_engine/visio_fixture.h"
 #include "support/quick_dump.h"
 #include "support/ribbon_gate.h"
 
@@ -109,6 +112,26 @@ private slots:
             QCOMPARE(scene.item(str("diagramShapesSlot"))->isVisible(), width > 900);
             QCOMPARE(scene.item(str("diagramDrawerButtons"))->isVisible(), width < 900);
         }
+    }
+
+    void visioDrawingRenders()
+    {
+        QTemporaryDir dir;
+        QString path = qEnvironmentVariable("QQO_VISIO_UI_FILE");
+        if (path.isEmpty()) {
+            path = dir.filePath(str("plan.vsdx"));
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write(VisioFixture::officePackage());
+        }
+        Scene scene(QSize(1320, 840), false);
+        QVERIFY2(scene.window != nullptr, qPrintable(scene.error));
+        QVERIFY(scene.host.loadPath(path));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        scene.settle();
+        QVERIFY(!scene.host.diagram()->pages().isEmpty());
+        QVERIFY(scene.item(str("diagramCanvas"))->property("zoom").toDouble() > 0.1);
+        QindaOffice::Test::saveGrab(scene.window, grabName("visio", 1320));
     }
 
     void selectionFillsTheInspector()

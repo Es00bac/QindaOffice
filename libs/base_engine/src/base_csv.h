@@ -14,13 +14,23 @@
 
 #include <QVariantMap>
 
+#include <optional>
+
 namespace QindaOffice::Base {
 
+// AGENT-CONTRACT (with the Excel and Access readers, M65): a table read
+// from a typed source carries `types` — one entry per column, set where
+// the source states the type (an Excel column's cells and formats, an
+// Access schema) — and proposeImport takes them instead of guessing from
+// the text. Its cells are then canonical text every parseInput accepts
+// (C-locale numbers, ISO dates, "Yes"/"No"); a file field's cells are the
+// bytes as hexadecimal digits (mdb-export -b hex), which importCsv decodes.
 struct CsvTable {
     QStringList header;
     QList<QStringList> rows;
     QChar delimiter = QLatin1Char(',');
     bool headerRow = true;
+    QList<std::optional<FieldType>> types; // empty, or one per column
 };
 
 struct CsvColumnPlan {

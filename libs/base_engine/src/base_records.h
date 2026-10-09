@@ -114,6 +114,17 @@ public:
                             int *inserted);
     [[nodiscard]] static QList<QStringList> parseTabular(const QString &text);
 
+    // ---- file fields (base_file_field.h; base_records_file.cpp) ----
+    // The bytes in one File cell: empty for no file; nullopt with `error`
+    // when the record or the field is missing.
+    [[nodiscard]] static std::optional<QByteArray> readFile(const BaseFile &file, const QString &table, qint64 rowid,
+                                                            const QString &field, QString *error);
+    // Puts `bytes` in a File cell (a null QByteArray clears it) as one
+    // captured Change. Refuses a field that is not a File field and files
+    // over kFileFieldLimit.
+    static Result setFile(BaseFile &file, const QString &table, qint64 rowid, const QString &field,
+                          const QByteArray &bytes, Change *change);
+
     // SQLite's constraint messages in the user's words.
     [[nodiscard]] static QString explain(const QString &sqliteError, const QList<ColumnInfo> &columns,
                                          const QString &table);

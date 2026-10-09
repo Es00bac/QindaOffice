@@ -70,13 +70,26 @@ DiagramHost::~DiagramHost() = default;
 
 QString DiagramHost::filterString() const
 {
-    return tr("QindaDiagram drawing (*.qdiagram);;All files (*)");
+    return tr("Drawings (*.qdiagram *.vsdx *.vsdm *.vstx *.vstm);;QindaDiagram drawing (*.qdiagram);;"
+              "Visio drawing (*.vsdx *.vsdm *.vstx *.vstm);;Visio 2003–2010 drawing (*.vsd *.vdx);;All files (*)");
+}
+
+QString DiagramHost::saveFilterString() const
+{
+    // AGENT-NOTE: the suffix decides the format (DrawingDocument::save), and
+    // the first pattern of the chosen filter is what a bare name gets.
+    return tr("QindaDiagram drawing (*.qdiagram);;Visio drawing (*.vsdx);;Visio template (*.vstx)");
 }
 
 void DiagramHost::documentReplaced()
 {
     syncEnablement();
     syncChecks();
+    // What a Visio file holds that is shown approximately or only kept.
+    const QStringList warnings = m_document->loadWarnings();
+    if (!warnings.isEmpty()) {
+        showStatusMessage(warnings.join(QLatin1Char(' ')), 12000);
+    }
 }
 
 Quick::PrintRenderCallback DiagramHost::printRenderCallback() const

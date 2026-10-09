@@ -84,6 +84,8 @@ Result writeSnapshot(const QString &path, const QString &table, const QList<Snap
                 v = col.lookupDisplay.value(key(v), v.toString());
             } else if (col.type == FieldType::Currency && v.metaType().id() == QMetaType::LongLong) {
                 v = double(v.toLongLong()) / scale;
+            } else if (col.type == FieldType::File && v.isValid()) {
+                v = displayText(FieldType::File, v, currency); // reports show what the cell holds
             }
             values.append(v);
         }
@@ -109,6 +111,9 @@ Result writeFormMirror(const BaseFile &file, const QString &path, const QString 
     const QList<ColumnInfo> columns = Records::columns(file, table);
     QStringList defs;
     for (const ColumnInfo &c : columns) {
+        if (c.type == FieldType::File) {
+            continue; // the form shows files beside the designer (FormFilesPanel.qml), not in it
+        }
         QString declared = c.lookup.isSet() && !c.lookup.displayField.isEmpty() ? QStringLiteral("TEXT")
                                                                                    : declaredType(c.type);
         QString sql = quoteIdentifier(c.name) + QLatin1Char(' ') + declared;

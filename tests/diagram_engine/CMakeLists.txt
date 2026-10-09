@@ -4,8 +4,9 @@
 # (tst_diagram_model), edit operations (tst_diagram_ops), routing, layout,
 # importers and output (tst_diagram_output). Headless (offscreen).
 function(qqo_add_diagram_engine_test name)
-    add_executable(${name} ${name}.cpp diagram_fixture.h)
+    add_executable(${name} ${name}.cpp diagram_fixture.h visio_fixture.h)
     target_link_libraries(${name} PRIVATE diagram_engine Qt6::Test)
+    target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/tests)
     qqo_set_strict_warnings(${name})
     add_test(NAME ${name} COMMAND ${name})
     set_tests_properties(${name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
@@ -14,3 +15,7 @@ endfunction()
 qqo_add_diagram_engine_test(tst_diagram_model)
 qqo_add_diagram_engine_test(tst_diagram_ops)
 qqo_add_diagram_engine_test(tst_diagram_output)
+# Visio interchange (M65, D-073): the reader, the writer and its preservation.
+qqo_add_diagram_engine_test(tst_diagram_visio_read)
+qqo_add_diagram_engine_test(tst_diagram_visio_write)
+qqo_add_diagram_engine_test(tst_diagram_visio_roundtrip)

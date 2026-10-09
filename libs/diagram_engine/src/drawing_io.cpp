@@ -2,6 +2,7 @@
 #include "drawing_io.h"
 
 #include "routing.h"
+#include "shape_path.h"
 
 #include <QCoreApplication>
 #include <QFile>
@@ -222,6 +223,7 @@ QJsonObject shapeToJson(const Shape &s)
     if (!s.image.isEmpty()) {
         known.insert(QStringLiteral("image"), QString::fromLatin1(s.image.toBase64()));
     }
+    customToJson(s, known);
     return merged(s.extra, known);
 }
 
@@ -251,8 +253,9 @@ Shape shapeFromJson(const QJsonObject &o)
     s.locked = o.value(QLatin1String("locked")).toBool();
     s.aspectLocked = o.value(QLatin1String("aspectLocked")).toBool();
     s.image = QByteArray::fromBase64(o.value(QLatin1String("image")).toString().toLatin1());
+    customFromJson(o, s);
     s.extra = unknown(o, {"id", "type", "x", "y", "w", "h", "rotation", "flipX", "flipY", "text", "textStyle", "style",
-                          "data", "group", "locked", "aspectLocked", "image"});
+                          "data", "group", "locked", "aspectLocked", "image", "paths", "textBox", "ports"});
     return s;
 }
 

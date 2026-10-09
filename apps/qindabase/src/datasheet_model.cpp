@@ -416,8 +416,10 @@ bool DatasheetModel::filterBySelection(const QString &rowId, const QString &colu
     const QVariant v = m_values.at(row).at(column);
     Engine::FilterClause clause;
     clause.field = m_columns.at(column).name;
-    if (!v.isValid()) {
-        clause.op = exclude ? QStringLiteral("isNotNull") : QStringLiteral("isNull");
+    if (!v.isValid() || m_columns.at(column).type == Engine::FieldType::File) {
+        // A file filters by having one or not (its bytes are no filter value).
+        const bool none = !v.isValid();
+        clause.op = exclude == none ? QStringLiteral("isNotNull") : QStringLiteral("isNull");
     } else {
         clause.op = exclude ? QStringLiteral("ne") : QStringLiteral("eq");
         // The stored value's own text (a lookup filters by its key).

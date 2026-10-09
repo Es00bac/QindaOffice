@@ -4,14 +4,22 @@
 // pane and a datasheet with totals, the table designer with a
 // relationship, the query designer with a join and totals, a form and a
 // report preview render at 1280 and 520 px; the main interactions work;
-// the ribbon gate holds; structural fixtures. QQO_GRAB_DIR saves PNGs.
+// the Excel import, the Access report and file fields render (M65); the
+// ribbon gate holds; structural fixtures. QQO_GRAB_DIR saves PNGs.
 
 #include "base_app_test_support.h"
 
 #include "support/quick_dump.h"
 #include "support/ribbon_gate.h"
 
+#include "base_records.h"
+
+#include <workbook.h>
+#include <xlsx_bridge.h>
+
+#include <QBuffer>
 #include <QFile>
+#include <QImage>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQuickItem>
@@ -263,7 +271,7 @@ private slots:
                    "Grace Hopper,grace@example.org,503-555-0102,3,2/1/2026,no\nAlan Turing,alan@example.org,,7.25,2026-02-11,yes\n");
         file.close();
         QObject *import = scene.view("importCsvDialog");
-        QMetaObject::invokeMethod(import, "openFor", Q_ARG(QVariant, QUrl::fromLocalFile(csv)));
+        QMetaObject::invokeMethod(import, "openFor", Q_ARG(QVariant, QUrl::fromLocalFile(csv)), Q_ARG(QVariant, str("csv")));
         QTRY_VERIFY(import->property("opened").toBool());
         scene.settle(300);
         QindaOffice::Test::saveGrab(scene.window, str("qindabase_import_1280"));
@@ -290,6 +298,87 @@ private slots:
         scene.settle(300);
         QCOMPARE(scene.item(str("sqlResults"))->property("count").toInt(), 4);
         QindaOffice::Test::saveGrab(scene.window, str("qindabase_sql_1280"));
+    }
+
+    void excelAccessAndFilesRender()
+    {
+        Scene scene(QSize(1280, 800));
+        QVERIFY2(scene.window != nullptr, qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        // Excel import: the sheet chooser, cell-typed columns, the first rows.
+        QindaOffice::Calc::Workbook book;
+        book.addSheet(str("Volunteers"));
+        QindaOffice::Calc::CellStyle dateStyle;
+        dateStyle.numberFormat = str("m/d/yyyy");
+        const qint32 date = book.addStyle(dateStyle);
+        const QStringList header{str("Name"), str("Hours"), str("Joined"), str("Active")};
+        for (int c = 0; c < header.size(); ++c) {
+            book.setCellValue(0, {0, c}, QindaOffice::Calc::Value(header.at(c)));
+        }
+        const char *const names[] = {"Ada Lovelace", "Grace Hopper", "Alan Turing"};
+        for (int r = 1; r <= 3; ++r) {
+            book.setCellValue(0, {r, 0}, QindaOffice::Calc::Value(str(names[r - 1])));
+            book.setCellValue(0, {r, 1}, QindaOffice::Calc::Value(2.5 * r));
+            book.setCellValue(0, {r, 2}, QindaOffice::Calc::Value(46020.0 + r * 9));
+            book.sheetAt(0).setStyleIdAt({r, 2}, date);
+            book.setCellValue(0, {r, 3}, QindaOffice::Calc::Value(r != 2));
+        }
+        const QString xlsx = scene.dir.filePath(str("volunteers.xlsx"));
+        QVERIFY(QindaOffice::Calc::IO::writeXlsxFile(book, xlsx));
+        QObject *import = scene.view("importCsvDialog");
+        QMetaObject::invokeMethod(import, "openFor", Q_ARG(QVariant, QUrl::fromLocalFile(xlsx)), Q_ARG(QVariant, str("xlsx")));
+        QTRY_VERIFY(import->property("opened").toBool());
+        scene.settle(300);
+        QCOMPARE(import->property("sheet").toString(), str("Volunteers"));
+        QindaOffice::Test::saveGrab(scene.window, str("qindabase_excelimport_1280"));
+        QMetaObject::invokeMethod(import, "reject");
+        QTRY_VERIFY(!import->property("visible").toBool());
+        // The Access import report.
+        QObject *access = scene.view("accessImportDialog");
+        const QVariantMap report{
+            {str("ok"), true},
+            {str("tables"), QVariantList{QVariantMap{{str("source"), str("Members")}, {str("table"), str("Members")}, {str("rows"), 3}},
+                                         QVariantMap{{str("source"), str("Dues")}, {str("table"), str("Dues")}, {str("rows"), 3}}}},
+            {str("relationships"), QStringList{str("Dues.MemberID → Members.MemberID")}},
+            {str("queries"), QStringList{str("Active members"), str("Big dues")}},
+            {str("notes"), QStringList{str("Events.Fee holds fractions of a cent, so it became a decimal number.")}},
+            {str("skipped"), QStringList{str("Members.Badges: an attachment or multi-valued field, which mdb-tools cannot read."),
+                                         str("Query Overdue: it joins 2 tables, and mdb-queries does not give the join.")}}};
+        QMetaObject::invokeMethod(access, "showReport", Q_ARG(QVariant, report));
+        QTRY_VERIFY(access->property("opened").toBool());
+        scene.settle(300);
+        QindaOffice::Test::saveGrab(scene.window, str("qindabase_accessreport_1280"));
+        QMetaObject::invokeMethod(access, "accept");
+        QTRY_VERIFY(!access->property("visible").toBool());
+        // A file field: the datasheet's panel shows the picture; the form lists it.
+        QindaOffice::Base::BaseFile &file = *scene.host.base()->file();
+        QVERIFY(file.db().exec(str("CREATE TABLE badges(id INTEGER PRIMARY KEY AUTOINCREMENT, holder TEXT, photo FILE)")).ok);
+        QVERIFY(file.db().run(str("INSERT INTO badges(holder) VALUES('Ada Lovelace'), ('Grace Hopper')")).ok);
+        QImage picture(160, 120, QImage::Format_RGB32);
+        picture.fill(QColor(220, 140, 40));
+        QByteArray png;
+        QBuffer buffer(&png);
+        buffer.open(QIODevice::WriteOnly);
+        picture.save(&buffer, "PNG");
+        QVERIFY(QindaOffice::Base::Records::setFile(file, str("badges"), 1, str("photo"), png, nullptr).ok);
+        emit scene.host.base()->objectsChanged();
+        scene.open("table", "badges");
+        scene.settle(200); // a fresh source puts the cursor on its first cell first
+        QObject *grid = scene.view("datasheetView")->property("grid").value<QObject *>();
+        QMetaObject::invokeMethod(grid, "setCurrent", Q_ARG(QVariant, 0), Q_ARG(QVariant, 2), Q_ARG(QVariant, false));
+        QTRY_VERIFY(scene.host.fileTarget().value(str("hasFile")).toBool());
+        QTRY_COMPARE(scene.item(str("datasheetFilePanel"))->property("visible").toBool(), true);
+        QTRY_COMPARE(findNamed(scene.item(str("datasheetFilePanel")), str("fileFieldThumbnail"))->property("loadState").toString(),
+                     str("ready"));
+        QVERIFY(scene.host.actions()->entry(str("baseFileSaveAction"))->isEnabled());
+        scene.settle(200);
+        QindaOffice::Test::saveGrab(scene.window, str("qindabase_filefield_1280"));
+        QVERIFY(ok(scene.host.base()->createForm(str("Badge"), str("badges"), str("Badge"), {})));
+        scene.open("form", "Badge");
+        scene.settle(400);
+        QVERIFY(scene.item(str("formFiles")) != nullptr && scene.item(str("formFiles"))->isVisible());
+        QTRY_VERIFY(scene.host.fileTarget().value(str("hasFile")).toBool());
+        QindaOffice::Test::saveGrab(scene.window, str("qindabase_formfiles_1280"));
     }
 
     void ribbonGateHolds()

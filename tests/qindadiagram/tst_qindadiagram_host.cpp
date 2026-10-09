@@ -5,12 +5,14 @@
 // pages; styles and the format painter; the canvas adapter's projection
 // and one-step commits; copy/paste between two windows; org chart CSV and
 // draw.io import through the service; PNG/SVG export and the print
-// callback's PDF (one sheet per page); save/load through the document.
+// callback's PDF (one sheet per page); save/load through the document;
+// Visio drawings open, save and reopen through the host (M65, D-073).
 
 #include "diagram_app_test_support.h"
 
 #include "qindadiagram/src/canvas_adapter.h"
 
+#include "diagram_engine/visio_fixture.h"
 #include "drawing_document.h"
 #include "drawing_io.h"
 
@@ -246,6 +248,40 @@ private slots:
         QVERIFY(reopened.loadPath(path));
         QCOMPARE(reopened.diagram()->pages().size(), 2);
         QVERIFY(reopened.drawingDocument()->drawing() == host.drawingDocument()->drawing());
+    }
+
+    void visioDrawingsOpenAndSave()
+    {
+        DiagramHost host;
+        QVERIFY(host.openNameFilters().join(QLatin1Char(' ')).contains(str("*.vsdx")));
+        QVERIFY(host.saveNameFilters().contains(str("Visio drawing (*.vsdx)")));
+        QTemporaryDir dir;
+        const QString source = dir.filePath(str("plan.vsdx"));
+        QVERIFY(writeFile(source, VisioFixture::officePackage()));
+        QVERIFY(host.loadPath(source));
+        DiagramService *d = host.diagram();
+        QCOMPARE(d->pages().size(), 2);
+        QCOMPARE(d->pages().first().toMap().value(str("name")).toString(), str("Plan"));
+        QVERIFY(host.drawingDocument()->hasVisioSource());
+        // Edit, save as Visio, reopen: the edit is there, the rest kept.
+        d->setCurrentPageId(d->pages().first().toMap().value(str("id")).toString());
+        const QString added = d->addShape(str("process"), 400, 600);
+        d->setText(added, str("Added in QindaDiagram"));
+        QString error;
+        const QString saved = dir.filePath(str("plan-edited.vsdx"));
+        QVERIFY2(host.drawingDocument()->save(saved, &error), qPrintable(error));
+        DiagramHost reopened;
+        QVERIFY(reopened.loadPath(saved));
+        const QindaOffice::Diagram::Drawing &drawing = reopened.drawingDocument()->drawing();
+        QCOMPARE(drawing.pages.size(), 2);
+        QCOMPARE(drawing.pages.first().shapes.size(), 8);
+        QVERIFY(std::any_of(drawing.pages.first().shapes.cbegin(), drawing.pages.first().shapes.cend(),
+                            [](const QindaOffice::Diagram::Shape &s) { return s.text == str("Added in QindaDiagram"); }));
+        // A Visio 2003–2010 file meets a clear refusal, not a broken window.
+        const QString legacy = dir.filePath(str("old.vsd"));
+        QVERIFY(writeFile(legacy, QByteArray("\xd0\xcf\x11\xe0", 4)));
+        QVERIFY(!host.drawingDocument()->load(legacy, &error));
+        QVERIFY(error.contains(str(".vsdx")));
     }
 };
 

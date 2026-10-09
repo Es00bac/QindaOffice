@@ -162,6 +162,32 @@ QtObject {
         })
     }
 
+    // File fields (M65, D-074): `t` = {table, rowid, field, hasFile}, the
+    // host's fileTarget or a FileFieldPanel's own field.
+    function insertFile(t) {
+        if (!t || !t.field) return
+        window.importDialog.ask([qsTr("All files (*)"), qsTr("Pictures (*.png *.jpg *.jpeg *.gif *.bmp *.webp *.svg)"),
+                                 qsTr("PDF documents (*.pdf)")], function(url) {
+            const r = base.insertFile(t.table, t.rowid, t.field, url)
+            if (!r.ok) window.notify(qsTr("No file inserted"), r.error, "danger")
+        })
+    }
+    function saveFile(t) {
+        if (!t || !t.hasFile) return
+        const info = base.fileInfo(t.table, t.rowid, t.field)
+        window.exportDialog.ask([qsTr("All files (*)")], info.suggestedName || t.field, function(url) {
+            const r = base.saveFile(t.table, t.rowid, t.field, url)
+            window.notify(r.ok ? qsTr("Saved") : qsTr("Not saved"), r.ok ? r.path : r.error, r.ok ? "success" : "danger")
+        })
+    }
+    function removeFile(t) {
+        if (!t || !t.hasFile) return
+        window.confirmDialog.ask(qsTr("Remove the file?"), qsTr("Undo brings it back."), "warning", qsTr("Remove"), function() {
+            const r = base.removeFile(t.table, t.rowid, t.field)
+            if (!r.ok) window.notify(qsTr("Not removed"), r.error, "danger")
+        })
+    }
+
     function handle(id) {
         const sel = selected()
         switch (id) {
@@ -237,8 +263,15 @@ QtObject {
         case "baseReportWizardAction": window.reportWizard.openFor(sel.kind, sel.name); break
         case "baseImportCsvAction":
             window.importDialog.ask([qsTr("Text and CSV (*.csv *.tsv *.txt)"), qsTr("All files (*)")],
-                                    function(url) { window.importCsvDialog.openFor(url) })
+                                    function(url) { window.importCsvDialog.openFor(url, "csv") })
             break
+        case "baseImportExcelAction":
+            window.importDialog.ask([qsTr("Excel workbook (*.xlsx *.xlsm)"), qsTr("All files (*)")],
+                                    function(url) { window.importCsvDialog.openFor(url, "xlsx") })
+            break
+        case "baseFileInsertAction": insertFile(host.fileTarget); break
+        case "baseFileSaveAction": saveFile(host.fileTarget); break
+        case "baseFileRemoveAction": removeFile(host.fileTarget); break
         case "baseImportAccessAction":
             const tools = base.accessTools()
             if (!tools.available) { window.confirmDialog.ask(qsTr("Access import"), tools.message, "info", qsTr("OK"), null); break }

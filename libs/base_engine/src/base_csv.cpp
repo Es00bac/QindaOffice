@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "base_csv.h"
 
+#include "base_file_field.h"
+
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSet>
@@ -74,6 +76,24 @@ QList<QStringList> split(const QString &text, QChar delimiter)
         rows.append(row);
     }
     return rows;
+}
+
+// A file field's cell: the bytes as hexadecimal digits (CsvTable).
+Parsed parseHexFile(const QString &text)
+{
+    const QString digits = text.trimmed();
+    if (digits.isEmpty()) {
+        return {true, {}, {}};
+    }
+    static const QRegularExpression hex(QStringLiteral("^(?:[0-9A-Fa-f]{2})+$"));
+    if (!hex.match(digits).hasMatch()) {
+        return {false, {}, QStringLiteral("needs the file's bytes as hexadecimal digits")};
+    }
+    const QByteArray bytes = QByteArray::fromHex(digits.toLatin1());
+    if (bytes.size() > kFileFieldLimit) {
+        return {false, {}, QStringLiteral("holds files up to %1").arg(formatByteSize(kFileFieldLimit))};
+    }
+    return {true, bytes, {}};
 }
 
 QString cleanName(QString name, int index)
@@ -249,7 +269,8 @@ CsvImportPlan proposeImport(const BaseFile &file, const CsvTable &csv, const QSt
                 unique = QStringLiteral("%1_%2").arg(col.name).arg(n);
             }
             col.name = unique;
-            col.type = detectType(values, csv.header.at(c));
+            const std::optional<FieldType> stated = csv.types.value(c);
+            col.type = stated ? *stated : detectType(values, csv.header.at(c));
             // An "id" of unique whole numbers keeps its values as the key.
             if (col.name.compare(QLatin1String("id"), Qt::CaseInsensitive) == 0 && col.type == FieldType::Integer) {
                 QSet<QString> seen(values.cbegin(), values.cend());
@@ -342,7 +363,9 @@ ImportResult importCsv(BaseFile &file, const CsvTable &csv, const CsvImportPlan 
             QString problem;
             QVariantList values;
             for (int c = 0; c < included.size() && problem.isEmpty(); ++c) {
-                const Parsed p = parseInput(types.at(c), row.value(included.at(c).source), currency);
+                const Parsed p = types.at(c) == FieldType::File ? parseHexFile(row.value(included.at(c).source))
+                                                                : parseInput(types.at(c), row.value(included.at(c).source),
+                                                                             currency);
                 if (!p.ok) {
                     problem = QStringLiteral("Line %1, %2 %3 (\"%4\").")
                                   .arg(r + 1 + headerLines)

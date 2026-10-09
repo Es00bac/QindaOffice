@@ -3,6 +3,8 @@
 
 #include "datasheet_model.h"
 
+#include "base_file_field.h"
+
 namespace QindaOffice::Apps::Base {
 
 namespace Engine = ::QindaOffice::Base;
@@ -41,7 +43,6 @@ QVariant DatasheetSource::editValue(const QString &rowId, const QString &columnI
 
 QVariantMap DatasheetSource::cellStyle(const QString &rowId, const QString &columnId) const
 {
-    Q_UNUSED(rowId);
     const int column = m_model->columnIndex(columnId);
     if (column < 0) {
         return {};
@@ -53,6 +54,16 @@ QVariantMap DatasheetSource::cellStyle(const QString &rowId, const QString &colu
     }
     if (c.type == Engine::FieldType::YesNo) {
         return {{QStringLiteral("horizontalAlignment"), QStringLiteral("center")}};
+    }
+    if (c.type == Engine::FieldType::File) {
+        // QindaTK's grid cells draw an icon, not a picture (the datasheet's
+        // file panel shows the thumbnail — FileFieldPanel.qml).
+        const int row = m_model->rowOf(rowId);
+        const std::optional<Engine::FileInfo> info =
+            row >= 0 ? Engine::fileInfo(m_model->m_values.at(row).value(column)) : std::nullopt;
+        if (info) {
+            return {{QStringLiteral("icon"), info->image ? QStringLiteral("image") : QStringLiteral("paperclip")}};
+        }
     }
     return {};
 }

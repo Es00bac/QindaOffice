@@ -3,7 +3,7 @@ import QtQuick
 import QindaOffice.Shell
 
 // QindaBase's ribbon (D-041, D-049): File · Home (views, clipboard,
-// records, sort & filter, find) · Create · External Data · Database Tools ·
+// records, sort & filter, find, file field) · Create · External Data · Database Tools ·
 // View, plus the contextual Table Design, Query Design and Form & Report
 // Design tabs the host offers while a designer is open (BaseHost
 // ribbonContexts). Every string is an ActionEntry id BaseHost registers.
@@ -30,6 +30,9 @@ QtObject {
             { id: "find", label: qsTr("Find"), items: [
                 { action: "editFindAction", size: "large" },
                 { action: "editSelectAllAction", iconName: "text-select" }] },
+            { id: "fileField", label: qsTr("File field"), items: [
+                { action: "baseFileInsertAction", size: "large" },
+                "baseFileSaveAction", "baseFileRemoveAction"] },
             { id: "object", label: qsTr("Object"), items: [
                 "baseRenameObjectAction", "baseDeleteObjectAction"] }
         ] },
@@ -45,7 +48,7 @@ QtObject {
         ] },
         { id: "external", label: qsTr("External Data"), keyTip: "X", groups: [
             { id: "import", label: qsTr("Import"), items: [
-                { action: "baseImportCsvAction", size: "large" }, "baseImportAccessAction"] },
+                { action: "baseImportCsvAction", size: "large" }, "baseImportExcelAction", "baseImportAccessAction"] },
             { id: "export", label: qsTr("Export"), items: [
                 { action: "baseExportCsvAction", size: "large" }, "baseExportXlsxAction"] }
         ] },

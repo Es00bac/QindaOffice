@@ -47,6 +47,11 @@ inline constexpr char16_t W15[] = u"http://schemas.microsoft.com/office/word/201
 inline constexpr char16_t A14[] = u"http://schemas.microsoft.com/office/drawing/2010/main";
 inline constexpr char16_t P14[] = u"http://schemas.microsoft.com/office/powerpoint/2010/main";
 
+// Microsoft Visio 2013+ (VSDX, [MS-VSDX]) and custom document properties.
+inline constexpr char16_t VISIO[] = u"http://schemas.microsoft.com/office/visio/2012/main";
+inline constexpr char16_t CUSTOM_PROPERTIES[] =
+    u"http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+
 // Package-level vocabularies.
 inline constexpr char16_t CT[] = u"http://schemas.openxmlformats.org/package/2006/content-types";
 inline constexpr char16_t RELS[] = u"http://schemas.openxmlformats.org/package/2006/relationships";
@@ -63,7 +68,9 @@ inline constexpr char16_t VT[] = u"http://schemas.openxmlformats.org/officeDocum
 [[nodiscard]] QString conventionalPrefix(QStringView uri);
 
 // True for vocabularies Office writes as the DEFAULT namespace (no prefix):
-// [Content_Types].xml, the .rels parts and docProps/app.xml.
+// [Content_Types].xml, the .rels parts, docProps/app.xml and custom.xml,
+// and every Visio part (libvisio, LibreOffice's Visio reader, matches
+// element names literally: <ns0:Shape> is not a shape to it).
 // AGENT-GUARD: LibreOffice refuses a package whose relationships part is
 // <ns0:Relationships xmlns:ns0="…"> ("source file could not be loaded") —
 // legal XML, but OPC consumers match these roots literally.

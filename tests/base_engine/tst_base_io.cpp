@@ -214,7 +214,8 @@ private slots:
             f.setPermissions(f.permissions() | QFileDevice::ExeOwner);
         };
         script("mdb-tables", "printf 'MSysObjects\\nMembers\\nDues\\n'\n");
-        script("mdb-export", "if [ \"$4\" = Members ]; then printf 'ID,Name,Joined\\n1,\"Ada\",\"2026-03-14 00:00:00\"\\n'; "
+        // The table is the last argument (base_access.cpp exportArguments).
+        script("mdb-export", "eval t=\\${$#}\nif [ \"$t\" = Members ]; then printf 'ID,Name,Joined\\n1,\"Ada\",\"2026-03-14 00:00:00\"\\n'; "
                              "else exit 3; fi\n");
         tools = findAccessTools();
         QVERIFY(tools.available);

@@ -2,7 +2,10 @@
 #include "drawing_document.h"
 
 #include "drawing_io.h"
+#include "visio_io.h"
+#include "visio_source.h"
 
+#include <QFileInfo>
 #include <QUndoCommand>
 #include <QUndoStack>
 
@@ -94,9 +97,21 @@ void DrawingDocument::restore(const Drawing &drawing)
 bool DrawingDocument::load(const QString &path, QString *error)
 {
     Drawing loaded;
-    if (!loadDrawing(path, &loaded, error)) {
+    QStringList warnings;
+    std::shared_ptr<const Visio::Source> source;
+    if (Visio::isVisioPath(path) || Visio::isLegacyVisioPath(path)) {
+        Visio::ReadResult result;
+        if (!Visio::read(path, &result, error)) {
+            return false;
+        }
+        loaded = result.drawing;
+        warnings = result.warnings;
+        source = result.source;
+    } else if (!loadDrawing(path, &loaded, error)) {
         return false;
     }
+    m_visio = source;
+    m_loadWarnings = warnings;
     m_drawing = loaded;
     m_undoStack->clear();
     setCanonicalPath(path);
@@ -109,7 +124,18 @@ bool DrawingDocument::load(const QString &path, QString *error)
 
 bool DrawingDocument::save(const QString &path, QString *error)
 {
-    if (!saveDrawing(path, m_drawing, error)) {
+    if (Visio::isLegacyVisioPath(path)) {
+        if (error != nullptr) {
+            *error = tr("QindaDiagram cannot write the Visio 2003–2010 format; save as Visio Drawing (*.vsdx).");
+        }
+        return false;
+    }
+    if (Visio::isVisioPath(path)) {
+        reattachVisioSource();
+        if (!Visio::save(path, m_drawing, m_visio.get(), error)) {
+            return false;
+        }
+    } else if (!saveDrawing(path, m_drawing, error)) {
         return false;
     }
     setCanonicalPath(path);
@@ -121,7 +147,23 @@ bool DrawingDocument::save(const QString &path, QString *error)
 
 QStringList DrawingDocument::mimeTypes() const
 {
-    return {QString::fromLatin1(kFileMime)};
+    return {QString::fromLatin1(kFileMime), QStringLiteral("application/vnd.ms-visio.drawing.main+xml"),
+            QStringLiteral("application/vnd.ms-visio.drawing.macroEnabled.main+xml"),
+            QStringLiteral("application/vnd.ms-visio.template.main+xml"),
+            QStringLiteral("application/vnd.ms-visio.template.macroEnabled.main+xml")};
+}
+
+void DrawingDocument::reattachVisioSource()
+{
+    const QString token = Visio::referencedToken(m_drawing);
+    if (m_visio != nullptr || token.isEmpty() || !Visio::isVisioPath(m_path) || !QFileInfo::exists(m_path)) {
+        return;
+    }
+    // After crash recovery: the file the drawing came from, if unchanged.
+    Visio::ReadResult result;
+    if (Visio::read(m_path, &result, nullptr) && result.source && Visio::sourceToken(*result.source) == token) {
+        m_visio = result.source;
+    }
 }
 
 QByteArray DrawingDocument::recoverySnapshot() const

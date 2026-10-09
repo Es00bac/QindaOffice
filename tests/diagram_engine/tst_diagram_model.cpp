@@ -217,7 +217,9 @@ private slots:
         QVERIFY(other.loadRecovery(snapshot));
         QVERIFY(other.drawing() == doc.drawing());
         QVERIFY(other.isDirty());
-        QCOMPARE(other.mimeTypes(), QStringList{s("application/x-qindadiagram")});
+        // The native format first, then the Visio drawings it opens (M65).
+        QCOMPARE(other.mimeTypes().first(), s("application/x-qindadiagram"));
+        QVERIFY(other.mimeTypes().contains(s("application/vnd.ms-visio.drawing.main+xml")));
     }
 
     void documentSavesAndLoads()

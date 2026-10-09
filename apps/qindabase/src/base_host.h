@@ -25,6 +25,9 @@
 //    before the document's own no-op save.
 //  * `designHistory` true routes Edit ▸ Undo/Redo to the designer's own
 //    history (the QML answers actionRequested("editUndoAction")).
+//  * `fileTarget` is the file field the File commands act on (M65): the
+//    datasheet's current cell or the form's chosen file field, as
+//    {table, rowid, field, hasFile}; empty when there is none.
 
 #include "base_service.h"
 #include "document_host.h"
@@ -56,6 +59,7 @@ class BaseHost : public Quick::DocumentHost {
     Q_PROPERTY(bool designHistory READ designHistory WRITE setDesignHistory NOTIFY designChanged)
     Q_PROPERTY(bool designCanUndo READ designCanUndo WRITE setDesignCanUndo NOTIFY designChanged)
     Q_PROPERTY(bool designCanRedo READ designCanRedo WRITE setDesignCanRedo NOTIFY designChanged)
+    Q_PROPERTY(QVariantMap fileTarget READ fileTarget WRITE setFileTarget NOTIFY fileTargetChanged)
     Q_PROPERTY(bool navigationVisible READ navigationVisible NOTIFY navigationChanged)
     Q_PROPERTY(qreal zoom READ zoom NOTIFY zoomChanged)
     Q_PROPERTY(bool printable READ printable NOTIFY printSourceChanged)
@@ -83,6 +87,8 @@ public:
     void setDesignCanUndo(bool can);
     [[nodiscard]] bool designCanRedo() const { return m_designCanRedo; }
     void setDesignCanRedo(bool can);
+    [[nodiscard]] QVariantMap fileTarget() const { return m_fileTarget; }
+    void setFileTarget(const QVariantMap &target);
     [[nodiscard]] bool navigationVisible() const { return m_navigationVisible; }
     [[nodiscard]] qreal zoom() const { return m_zoom; }
     [[nodiscard]] bool printable() const { return !m_report.isNull(); }
@@ -101,6 +107,7 @@ signals:
     void selectionChanged();
     void designChanged();
     void navigationChanged();
+    void fileTargetChanged();
     void zoomChanged();
     void printSourceChanged();
     void actionRequested(const QString &id);
@@ -127,6 +134,7 @@ private:
     QString m_name;
     QString m_selectedKind;
     QString m_selectedName;
+    QVariantMap m_fileTarget;
     qreal m_zoom = 1.0;
     bool m_designDirty = false;
     bool m_designHistory = false;

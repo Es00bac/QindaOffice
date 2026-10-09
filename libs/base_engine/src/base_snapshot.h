@@ -9,9 +9,11 @@
 //  * a FORM MIRROR: the table's columns with no rows, where a lookup field
 //    is TEXT (the form shows and accepts the related record's name) and
 //    currency keeps its CURRENCY type (the form passes it as text, which
-//    the engine parses exactly);
+//    the engine parses exactly); file fields are left out (the app shows
+//    them beside the form);
 //  * a REPORT SNAPSHOT: the rows of a table or a saved select query, with
-//    lookup fields as their display text and currency as REAL units.
+//    lookup fields as their display text, currency as REAL units and file
+//    fields as their display text ("PNG image · 24 KB").
 //
 // AGENT-NOTE: the report engine totals in double precision (QindaTK
 // query_core: "a host requiring exact currency arithmetic must provide its

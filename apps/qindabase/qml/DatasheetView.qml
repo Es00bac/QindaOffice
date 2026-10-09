@@ -20,6 +20,18 @@ Item {
     property bool findVisible: false
     property string mode: "datasheet" // datasheet | pivot
     readonly property alias grid: grid
+    // The current cell when it is a file field of a saved record (M65).
+    readonly property var fileColumn: {
+        if (sheet === null || sheet.sourceKind !== "table" || grid.activeRowId.length === 0 || grid.activeRowId === "new") return null
+        const columns = sheet.columns
+        for (let i = 0; i < columns.length; ++i)
+            if (columns[i].name === grid.activeColumnId && columns[i].type === "file") return columns[i]
+        return null
+    }
+    readonly property var fileTarget: fileColumn === null ? ({})
+        : { table: sheet.sourceName, rowid: Number(grid.activeRowId.slice(1)), field: fileColumn.name, hasFile: filePanel.hasFile }
+    onFileTargetChanged: if (window !== null && visible) window.baseHost.fileTarget = fileTarget
+    onVisibleChanged: if (window !== null && visible) window.baseHost.fileTarget = fileTarget
 
     function refresh() { if (sheet !== null) sheet.refresh() }
     function activeRange() {
@@ -193,50 +205,69 @@ Item {
             variant: view.sheet !== null && view.sheet.error.length > 0 ? "danger" : "info"
             text: view.sheet === null ? "" : view.sheet.error.length > 0 ? view.sheet.error : view.sheet.pendingMessage
         }
-        Item {
+        Tk.Flex {
             Tk.Flex.grow: 1
             Tk.Flex.basis: 0
-            Tk.EditableGrid {
-                id: grid
-                objectName: "datasheetGrid"
-                anchors.fill: parent
-                visible: view.mode === "datasheet"
-                model: view.sheet !== null ? view.sheet.grid : null
-                tooltip: view.sheet !== null ? view.sheet.sourceName : qsTr("Datasheet")
-                alternatingRows: true
-                fillHandleEnabled: false
-                rowHeaderWidth: Tk.Theme.size.control * 1.6
-                columnLabel: function(id, index) { return view.sheet !== null ? view.sheet.columnLabel(id) : id }
-                rowLabel: function(id, index) { return id === "new" ? "✱" : String(index + 1) }
-                Keys.onPressed: function(event) {
-                    if (event.key === Qt.Key_Escape && grid.activeRowId === "new" && !grid.cellEditing) {
-                        view.sheet.cancelPendingRecord()
-                        event.accepted = true
-                    } else if (event.key === Qt.Key_Delete && !grid.cellEditing && view.sheet.editable) {
-                        const r = view.activeRange()
-                        view.sheet.clearCells(r.firstRow, r.firstColumn, r.lastRow, r.lastColumn)
-                        event.accepted = true
+            direction: Tk.Flex.Row
+            gap: 0
+            Item {
+                Tk.Flex.grow: 1
+                Tk.Flex.basis: 0
+                Tk.EditableGrid {
+                    id: grid
+                    objectName: "datasheetGrid"
+                    anchors.fill: parent
+                    visible: view.mode === "datasheet"
+                    model: view.sheet !== null ? view.sheet.grid : null
+                    tooltip: view.sheet !== null ? view.sheet.sourceName : qsTr("Datasheet")
+                    alternatingRows: true
+                    fillHandleEnabled: false
+                    rowHeaderWidth: Tk.Theme.size.control * 1.6
+                    columnLabel: function(id, index) { return view.sheet !== null ? view.sheet.columnLabel(id) : id }
+                    rowLabel: function(id, index) { return id === "new" ? "✱" : String(index + 1) }
+                    Keys.onPressed: function(event) {
+                        if (event.key === Qt.Key_Escape && grid.activeRowId === "new" && !grid.cellEditing) {
+                            view.sheet.cancelPendingRecord()
+                            event.accepted = true
+                        } else if (event.key === Qt.Key_Delete && !grid.cellEditing && view.sheet.editable) {
+                            const r = view.activeRange()
+                            view.sheet.clearCells(r.firstRow, r.firstColumn, r.lastRow, r.lastColumn)
+                            event.accepted = true
+                        }
                     }
                 }
+                TapHandler {
+                    acceptedButtons: Qt.RightButton
+                    enabled: view.mode === "datasheet"
+                    onTapped: function(point) { contextMenu.popup(grid, point.position.x, point.position.y) }
+                }
+                PivotPanel {
+                    anchors.fill: parent
+                    visible: view.mode === "pivot"
+                    sheet: view.sheet
+                }
+                Tk.EmptyState {
+                    anchors.centerIn: parent
+                    visible: view.sheet !== null && view.sheet.recordCount === 0 && !view.sheet.editable
+                             && view.sheet.sourceKind.length > 0 && view.mode === "datasheet"
+                    iconName: "search"
+                    title: qsTr("No records")
+                    text: view.sheet !== null && view.sheet.filters.length > 0 ? qsTr("Nothing matches the filters.")
+                                                                               : qsTr("The query returned no rows.")
+                }
             }
-            TapHandler {
-                acceptedButtons: Qt.RightButton
-                enabled: view.mode === "datasheet"
-                onTapped: function(point) { contextMenu.popup(grid, point.position.x, point.position.y) }
-            }
-            PivotPanel {
-                anchors.fill: parent
-                visible: view.mode === "pivot"
-                sheet: view.sheet
-            }
-            Tk.EmptyState {
-                anchors.centerIn: parent
-                visible: view.sheet !== null && view.sheet.recordCount === 0 && !view.sheet.editable
-                         && view.sheet.sourceKind.length > 0 && view.mode === "datasheet"
-                iconName: "search"
-                title: qsTr("No records")
-                text: view.sheet !== null && view.sheet.filters.length > 0 ? qsTr("Nothing matches the filters.")
-                                                                           : qsTr("The query returned no rows.")
+            FileFieldPanel {
+                id: filePanel
+                objectName: "datasheetFilePanel"
+                window: view.window
+                visible: view.fileColumn !== null && view.mode === "datasheet"
+                Tk.Flex.basis: Tk.Theme.size.panelMinWidth
+                Tk.Flex.shrink: 0
+                table: view.fileColumn !== null ? view.sheet.sourceName : ""
+                rowid: view.fileColumn !== null ? Number(view.grid.activeRowId.slice(1)) : 0
+                field: view.fileColumn !== null ? view.fileColumn.name : ""
+                label: view.fileColumn !== null ? view.fileColumn.label : ""
+                editable: view.sheet !== null && view.sheet.editable
             }
         }
         DatasheetFooter {

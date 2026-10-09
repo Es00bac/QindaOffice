@@ -5,7 +5,9 @@
 
 #include "base_fixture.h"
 
+#include "base_file_field.h"
 #include "base_records.h"
+#include "base_snapshot.h"
 
 using namespace BaseTest;
 
@@ -187,6 +189,67 @@ private slots:
         const auto choices = Records::lookupChoices(*db.file, {str("donors"), str("id"), str("name")});
         QCOMPARE(choices.size(), 3);
         QCOMPARE(choices.first().second, str("Ada Lovelace")); // sorted by name
+    }
+
+    void fileFieldsPersistUndoAndStayOutOfReads()
+    {
+        Db db;
+        QVERIFY(db.create(table("members", {field("id", FieldType::AutoNumber), field("name", FieldType::Text),
+                                            field("photo", FieldType::File)}))
+                    .ok);
+        // A file field can be no key, index, default or required field.
+        QVERIFY(!planCreateTable(*db.file, table("bad", {field("id", FieldType::AutoNumber),
+                                                          field("doc", FieldType::File, true)}))
+                     .ok());
+        QCOMPARE(db.scalar(str("SELECT type FROM pragma_table_info('members') WHERE name='photo'")).toString(), str("FILE"));
+        QCOMPARE(readTable(*db.file, str("members"))->fields.at(2).type, FieldType::File);
+        QVERIFY(db.exec(str("INSERT INTO members(name) VALUES('Ada')")).ok);
+        const QByteArray png = QByteArray::fromHex("89504E470D0A1A0A0000000D49484452") + QByteArray(100000, 'p');
+        Change change;
+        QVERIFY(Records::setFile(*db.file, str("members"), 1, str("photo"), png, &change).ok);
+        QCOMPARE(db.scalar(str("SELECT typeof(photo) FROM members")).toString(), str("blob"));
+        QString error;
+        QCOMPARE(Records::readFile(*db.file, str("members"), 1, str("photo"), &error).value(), png);
+        // Reads summarize (never the bytes); the datasheet shows kind and size.
+        const RowSet rows = Records::read(*db.file, str("members"));
+        const QString summary = rows.values.first().at(2).toString();
+        QVERIFY2(summary.startsWith(str("100016:89504e47")), qPrintable(summary));
+        QCOMPARE(displayText(FieldType::File, rows.values.first().at(2)), str("PNG image · 98 KB"));
+        QVERIFY(rows.columns.at(2).readOnly);
+        QCOMPARE(Records::readRow(*db.file, str("members"), 1, rows.columns)->at(2).toString(), summary);
+        // Typing into it is refused; a filter only asks "has a file?".
+        QVERIFY(!Records::updateCells(*db.file, str("members"), {{1, str("photo"), str("x")}}, nullptr).ok);
+        RowQuery having;
+        having.filters = {{str("photo"), str("isNotNull"), QString()}};
+        having.sort = {{str("photo"), true}};
+        QCOMPARE(Records::read(*db.file, str("members"), having).rowids.size(), 1);
+        having.filters = {{str("photo"), str("contains"), str("x")}};
+        QVERIFY(!Records::read(*db.file, str("members"), having).error.isEmpty());
+        // Undo empties the cell again.
+        QVERIFY(db.file->applyChange(change, true).ok);
+        QCOMPARE(db.scalar(str("SELECT photo IS NULL FROM members")).toInt(), 1);
+        // Over the limit, not a file field, no such record: refused.
+        QVERIFY(!Records::setFile(*db.file, str("members"), 1, str("photo"), QByteArray(kFileFieldLimit + 1, 'x'), nullptr).ok);
+        QVERIFY(!Records::setFile(*db.file, str("members"), 1, str("name"), png, nullptr).ok);
+        QVERIFY(!Records::setFile(*db.file, str("members"), 99, str("photo"), png, nullptr).ok);
+        // A null array clears it; a rebuild keeps the bytes.
+        QVERIFY(Records::setFile(*db.file, str("members"), 1, str("photo"), png, nullptr).ok);
+        const TableDef before = readTable(*db.file, str("members")).value();
+        TableDef after = before;
+        after.fields.move(2, 1); // a reorder rebuilds the table
+        QVERIFY(db.apply(planAlterTable(*db.file, before, after)).ok);
+        QCOMPARE(Records::readFile(*db.file, str("members"), 1, str("photo"), &error).value(), png);
+        // It never converts to or from another type.
+        TableDef retyped = readTable(*db.file, str("members")).value();
+        retyped.fields[1].type = FieldType::LongText;
+        QVERIFY(!planAlterTable(*db.file, readTable(*db.file, str("members")).value(), retyped).ok());
+        QVERIFY(Records::setFile(*db.file, str("members"), 1, str("photo"), QByteArray(), nullptr).ok);
+        QCOMPARE(db.scalar(str("SELECT photo IS NULL FROM members")).toInt(), 1);
+        // Forms show files beside the designer: the mirror leaves them out.
+        QVERIFY(writeFormMirror(*db.file, db.path("mirror.sqlite"), str("members")).ok);
+        Connection mirror;
+        QVERIFY(mirror.open(db.path("mirror.sqlite"), false, true, nullptr));
+        QCOMPARE(mirror.scalar(str("SELECT count(*) FROM pragma_table_info('members')")).toInt(), 2);
     }
 };
 

@@ -93,12 +93,12 @@ QStringList openNameFilters()
 {
     return {QObject::tr("All office documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt "
                         "*.xlsx *.ods *.xls *.xlsm *.csv *.tsv *.odp *.pptx *.ppt *.fodp *.qbooks "
-                        "*.qdiagram *.drawio *.qplan *.qbase *.ics *.eml *.msg *.mbox *.vcf)"),
+                        "*.qdiagram *.drawio *.vsdx *.vsdm *.vstx *.vstm *.qplan *.qbase *.ics *.eml *.msg *.mbox *.vcf)"),
             QObject::tr("Documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt)"),
             QObject::tr("Spreadsheets (*.xlsx *.ods *.xls *.xlsm *.csv *.tsv)"),
             QObject::tr("Presentations (*.pptx *.ppt *.odp *.fodp)"),
             QObject::tr("Company books (*.qbooks)"),
-            QObject::tr("Diagrams (*.qdiagram *.drawio)"),
+            QObject::tr("Diagrams (*.qdiagram *.drawio *.vsdx *.vsdm *.vstx *.vstm)"),
             QObject::tr("Project plans (*.qplan)"),
             QObject::tr("Databases (*.qbase)"),
             QObject::tr("Mail, contacts and calendars (*.eml *.msg *.mbox *.vcf *.ics)"),
@@ -135,6 +135,12 @@ QString appIdForPath(const QString &path)
         {QStringLiteral("qbooks"), QStringLiteral("QindaBooks")},
         {QStringLiteral("qdiagram"), QStringLiteral("QindaDiagram")},
         {QStringLiteral("drawio"), QStringLiteral("QindaDiagram")},
+        // Visio (M65, D-073); a .vsd reaches QindaDiagram, which explains it.
+        {QStringLiteral("vsdx"), QStringLiteral("QindaDiagram")},
+        {QStringLiteral("vsdm"), QStringLiteral("QindaDiagram")},
+        {QStringLiteral("vstx"), QStringLiteral("QindaDiagram")},
+        {QStringLiteral("vstm"), QStringLiteral("QindaDiagram")},
+        {QStringLiteral("vsd"), QStringLiteral("QindaDiagram")},
         {QStringLiteral("qplan"), QStringLiteral("QindaPlan")},
         {QStringLiteral("qbase"), QStringLiteral("QindaBase")},
         {QStringLiteral("ics"), QStringLiteral("QindaMail")},

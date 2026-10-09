@@ -20,8 +20,10 @@ namespace QindaOffice::Diagram::TextPaint {
 [[nodiscard]] QFont referenceFont(const TextStyle &style, bool bold, double sizeFactor = 1.0);
 [[nodiscard]] double pageScale(const TextStyle &style, double sizeFactor = 1.0);
 
-// Draws `text` wrapped inside `box` with the style's alignment.
-void drawBlock(QPainter *painter, const QString &text, const TextStyle &style, const QRectF &box);
+// Draws `text` wrapped inside `box` with the style's alignment, clipped to
+// the box unless `clip` is false (a Visio text block: Visio lets text that
+// does not fit run over its block, M65).
+void drawBlock(QPainter *painter, const QString &text, const TextStyle &style, const QRectF &box, bool clip = true);
 // Size `text` needs (unwrapped lines), page units.
 [[nodiscard]] QSizeF measure(const QString &text, const TextStyle &style);
 // Height of one line of `style`, page units.

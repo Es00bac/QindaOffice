@@ -24,7 +24,9 @@
 // Files: base_service.cpp (file, navigation, objects, settings),
 // base_service_tables.cpp (table design, relationships, SQL console),
 // base_service_queries.cpp (queries), base_service_forms.cpp (forms and
-// reports), base_service_io.cpp (import/export, maintenance).
+// reports), base_service_import.cpp (CSV, Excel and Access import),
+// base_service_io.cpp (export, maintenance), base_service_files.cpp (file
+// fields).
 
 #include "datasheet_model.h"
 
@@ -34,6 +36,10 @@
 #include <QUrl>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
+
+namespace QindaOffice::Base {
+struct CsvTable;
+}
 
 namespace QindaOffice::Apps::Base {
 
@@ -128,19 +134,40 @@ public:
     Q_INVOKABLE QVariantMap saveReportDesign(const QString &name, const QVariantMap &design);
     Q_INVOKABLE QVariantList sourceFields(const QString &kind, const QString &name) const;
 
-    // ---- import, export, maintenance (base_service_io.cpp) ----
+    // ---- import (base_service_import.cpp) ----
+    // A proposal is {ok, plan, header, preview (first rows), rowCount} plus
+    // the detected delimiter (CSV) or {sheets, sheet} (Excel); the import
+    // runs the plan the dialog edited as one undo step.
     Q_INVOKABLE QVariantMap csvProposal(const QUrl &url, const QString &table, const QString &delimiter,
                                         bool headerRow);
     Q_INVOKABLE QVariantMap importCsv(const QUrl &url, const QVariantMap &plan, const QString &delimiter,
                                       bool headerRow);
-    Q_INVOKABLE QVariantMap exportObject(const QString &kind, const QString &name, const QUrl &url,
-                                         const QString &format);
+    // `sheet` "" = the first sheet holding data (base_xlsx_import.h).
+    Q_INVOKABLE QVariantMap xlsxProposal(const QUrl &url, const QString &sheet, const QString &table, bool headerRow);
+    Q_INVOKABLE QVariantMap importXlsx(const QUrl &url, const QVariantMap &plan, const QString &sheet, bool headerRow);
     Q_INVOKABLE QVariantMap accessTools() const;
     Q_INVOKABLE QVariantMap accessTables(const QUrl &url) const;
-    Q_INVOKABLE QVariantMap importAccess(const QUrl &url, const QStringList &tables);
+    // The chosen tables with their design, the relationships between them
+    // and (with `queries`) the select queries — one undo step. The result
+    // is the import report (AccessImportReport::toMap, base_access_import.h).
+    Q_INVOKABLE QVariantMap importAccess(const QUrl &url, const QStringList &tables, bool queries = true);
+
+    // ---- export, maintenance (base_service_io.cpp) ----
+    Q_INVOKABLE QVariantMap exportObject(const QString &kind, const QString &name, const QUrl &url,
+                                         const QString &format);
     Q_INVOKABLE QVariantMap compactAndRepair();
     Q_INVOKABLE QVariantMap checkIntegrity() const;
     Q_INVOKABLE QVariantMap backupNow();
+
+    // ---- file fields (base_service_files.cpp, base_file_field.h) ----
+    // {ok, hasFile, kind, label, size, sizeText, image, previewUrl,
+    // suggestedName}; a picture Qt can decode gets a preview file in the
+    // scratch folder (named by its content, so a changed file is a new URL).
+    Q_INVOKABLE QVariantMap fileInfo(const QString &table, qint64 rowid, const QString &field) const;
+    // Each a single undo step.
+    Q_INVOKABLE QVariantMap insertFile(const QString &table, qint64 rowid, const QString &field, const QUrl &url);
+    Q_INVOKABLE QVariantMap removeFile(const QString &table, qint64 rowid, const QString &field);
+    Q_INVOKABLE QVariantMap saveFile(const QString &table, qint64 rowid, const QString &field, const QUrl &url) const;
 
     // Scratch folder for presentation databases and design files.
     [[nodiscard]] QString scratchPath(const QString &name) const;
@@ -148,11 +175,15 @@ public:
 signals:
     void fileChanged();
     void objectsChanged();
+    // Any records changed (edits, imports, undo) — views showing one
+    // record's files reload on it.
+    void recordsChanged();
     // A toast: variant "info" | "success" | "warning" | "danger".
     void notify(const QString &title, const QString &text, const QString &variant);
 
 private:
     void bindFile();
+    QVariantMap importTable(const QindaOffice::Base::CsvTable &table, const QVariantMap &plan, const QString &source);
     [[nodiscard]] QVariantMap needsSystemTables() const;
 
     QPointer<BaseDocument> m_document;

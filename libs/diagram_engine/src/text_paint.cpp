@@ -56,7 +56,7 @@ QSizeF measure(const QString &text, const TextStyle &style)
     return {width * k, metrics.lineSpacing() * k * double(lines.size())};
 }
 
-void drawBlock(QPainter *painter, const QString &text, const TextStyle &style, const QRectF &box)
+void drawBlock(QPainter *painter, const QString &text, const TextStyle &style, const QRectF &box, bool clip)
 {
     if (text.isEmpty() || box.width() <= 0) {
         return;
@@ -67,7 +67,8 @@ void drawBlock(QPainter *painter, const QString &text, const TextStyle &style, c
     painter->scale(k, k);
     painter->setFont(referenceFont(style, style.bold));
     painter->setPen(style.color);
-    painter->drawText(QRectF(0, 0, box.width() / k, box.height() / k), qtAlign(style.align) | Qt::TextWordWrap, text);
+    painter->drawText(QRectF(0, 0, box.width() / k, box.height() / k),
+                      qtAlign(style.align) | Qt::TextWordWrap | (clip ? 0 : int(Qt::TextDontClip)), text);
     painter->restore();
 }
 

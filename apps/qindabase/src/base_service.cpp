@@ -69,6 +69,7 @@ void BaseService::bindFile()
     }
     connect(f, &Engine::BaseFile::schemaChanged, this, &BaseService::objectsChanged);
     connect(f, &Engine::BaseFile::objectsChanged, this, &BaseService::objectsChanged);
+    connect(f, &Engine::BaseFile::dataChanged, this, &BaseService::recordsChanged);
 }
 
 Engine::BaseFile *BaseService::file() const

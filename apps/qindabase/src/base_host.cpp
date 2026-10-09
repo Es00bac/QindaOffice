@@ -126,6 +126,15 @@ void BaseHost::setSelectedName(const QString &name)
     }
 }
 
+void BaseHost::setFileTarget(const QVariantMap &target)
+{
+    if (m_fileTarget != target) {
+        m_fileTarget = target;
+        emit fileTargetChanged();
+        syncEnablement();
+    }
+}
+
 void BaseHost::setDesignDirty(bool dirty)
 {
     if (m_designDirty == dirty) {

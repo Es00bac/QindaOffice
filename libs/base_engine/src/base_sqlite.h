@@ -95,6 +95,10 @@ public:
     [[nodiscard]] QList<QVariantList> rows(const QString &sql, const QVariantList &bindings = {},
                                            QString *error = nullptr) const;
     [[nodiscard]] Statement prepare(const QString &sql, QString *error = nullptr) const;
+    // The first `bytes` bytes of one TEXT/BLOB cell of a rowid table, read
+    // through incremental blob I/O (only the pages they live on); empty for
+    // NULL, other storage classes or a missing row.
+    [[nodiscard]] QByteArray blobHead(const QString &table, const QString &column, qint64 rowid, int bytes) const;
     [[nodiscard]] qint64 lastInsertRowId() const;
     [[nodiscard]] qint64 changes() const;
     [[nodiscard]] QString lastError() const;

@@ -2,6 +2,7 @@
 #include "painter.h"
 
 #include "geometry.h"
+#include "shape_path.h"
 #include "stencils.h"
 #include "text_paint.h"
 #include "themes.h"
@@ -73,7 +74,7 @@ void paintShapeText(QPainter *painter, const Shape &shape)
         painter->rotate(-90);
         TextPaint::drawBlock(painter, shape.text, shape.textStyle, QRectF(0, 0, box.height(), box.width()));
     } else {
-        TextPaint::drawBlock(painter, shape.text, shape.textStyle, box);
+        TextPaint::drawBlock(painter, shape.text, shape.textStyle, box, shape.textBox.isEmpty());
     }
     painter->restore();
 }
@@ -99,6 +100,45 @@ void paintBelowLabel(QPainter *painter, const Shape &shape, const QColor &plate)
     painter->drawRoundedRect(QRectF(box.center().x() - w / 2, box.top() - 1, w, size.height() + 3), 3, 3);
     paintShapeText(painter, shape);
     painter->restore();
+}
+
+// A custom outline (M65, Visio geometry): every filled subpath forms ONE
+// path filled even-odd, so a section drawn inside another cuts a hole as in
+// Visio; then each stroked subpath is outlined.
+void paintCustom(QPainter *painter, const Shape &shape)
+{
+    const ShapeStyle &style = shape.style;
+    QPainterPath fill;
+    fill.setFillRule(Qt::OddEvenFill);
+    for (const ShapePath &p : shape.paths) {
+        if (p.fill) {
+            fill.addPath(scaledPath(p.path, shape.rect.size()));
+        }
+    }
+    if (style.shadow && !fill.isEmpty()) {
+        painter->setPen(Qt::NoPen);
+        painter->fillPath(fill.translated(1.5, 2.5), QColor(15, 23, 42, 22));
+        painter->fillPath(fill.translated(3, 5), QColor(15, 23, 42, 16));
+    }
+    if (visible(style.fill) && !fill.isEmpty()) {
+        if (visible(style.gradient)) {
+            QLinearGradient gradient(0, 0, 0, shape.rect.height());
+            gradient.setColorAt(0, style.fill);
+            gradient.setColorAt(1, style.gradient);
+            painter->fillPath(fill, gradient);
+        } else {
+            painter->fillPath(fill, style.fill);
+        }
+    }
+    if (!visible(style.line) || style.lineWidth <= 0) {
+        return;
+    }
+    const QPen pen = linePen(style.line, style.lineWidth, style.pattern);
+    for (const ShapePath &p : shape.paths) {
+        if (p.stroke) {
+            painter->strokePath(scaledPath(p.path, shape.rect.size()), pen);
+        }
+    }
 }
 
 } // namespace
@@ -169,28 +209,32 @@ void paintShape(QPainter *painter, const Shape &shape, bool withText)
     painter->setRenderHint(QPainter::Antialiasing);
     painter->setOpacity(painter->opacity() * std::clamp(style.opacity, 0.0, 1.0));
     painter->setTransform(shapeTransform(shape), true);
-    const QPainterPath path = outline(shape);
-    const bool drawOutline = paintsOutline(shape);
-    if (drawOutline && style.shadow) {
-        // A two-step soft drop shadow, below and to the right.
-        painter->setPen(Qt::NoPen);
-        painter->fillPath(path.translated(1.5, 2.5), QColor(15, 23, 42, 22));
-        painter->fillPath(path.translated(3, 5), QColor(15, 23, 42, 16));
-    }
-    if (drawOutline && visible(style.fill)) {
-        if (visible(style.gradient)) {
-            QLinearGradient gradient(0, 0, 0, shape.rect.height());
-            gradient.setColorAt(0, style.fill);
-            gradient.setColorAt(1, style.gradient);
-            painter->fillPath(path, gradient);
-        } else {
-            painter->fillPath(path, style.fill);
+    if (!shape.paths.isEmpty()) {
+        paintCustom(painter, shape);
+    } else {
+        const QPainterPath path = outline(shape);
+        const bool drawOutline = paintsOutline(shape);
+        if (drawOutline && style.shadow) {
+            // A two-step soft drop shadow, below and to the right.
+            painter->setPen(Qt::NoPen);
+            painter->fillPath(path.translated(1.5, 2.5), QColor(15, 23, 42, 22));
+            painter->fillPath(path.translated(3, 5), QColor(15, 23, 42, 16));
         }
-    }
-    const QColor ink = visible(style.line) ? style.line : shape.textStyle.color;
-    paintGlyph(painter, shape, ink);
-    if (drawOutline && visible(style.line) && style.lineWidth > 0) {
-        painter->strokePath(path, linePen(style.line, style.lineWidth, style.pattern));
+        if (drawOutline && visible(style.fill)) {
+            if (visible(style.gradient)) {
+                QLinearGradient gradient(0, 0, 0, shape.rect.height());
+                gradient.setColorAt(0, style.fill);
+                gradient.setColorAt(1, style.gradient);
+                painter->fillPath(path, gradient);
+            } else {
+                painter->fillPath(path, style.fill);
+            }
+        }
+        const QColor ink = visible(style.line) ? style.line : shape.textStyle.color;
+        paintGlyph(painter, shape, ink);
+        if (drawOutline && visible(style.line) && style.lineWidth > 0) {
+            painter->strokePath(path, linePen(style.line, style.lineWidth, style.pattern));
+        }
     }
     painter->restore();
     if (withText) {
@@ -307,6 +351,8 @@ QRectF itemsBounds(const Page &page, const QSet<QString> &ids)
             const QRectF box = textBox(shape);
             const double w = std::min(box.width(), text.width() + 4);
             r |= QRectF(box.center().x() - w / 2, box.top(), w, text.height() + 4);
+        } else if (!shape.textBox.isEmpty() && !shape.text.isEmpty()) {
+            r |= textBox(shape); // a Visio text block may sit outside the shape
         }
         bounds = bounds.isNull() ? r : bounds | r;
     }

@@ -8,7 +8,10 @@ import QindaTK as Tk
 // presentation mirror of the table (base_snapshot.h), with record
 // navigation — first / previous / n of N / next / last / new / delete.
 // Saves go through BaseService (typed, validated, one undo step each); the
-// designer shows the engine's refusals as its validation messages.
+// designer shows the engine's refusals as its validation messages. File
+// fields (M65) are not in the designer's mirror: each shows as a
+// FileFieldPanel under the form, and the File commands act on the one
+// last used (the first by default).
 Item {
     id: view
 
@@ -25,6 +28,12 @@ Item {
     readonly property var designDocument: session !== null ? session.model : null
     readonly property bool designDirty: designDocument !== null && designDocument.revision !== savedRevision
     readonly property bool designing: designer.mode === "design"
+    property var fileFields: []      // the table's file fields [{name, caption}]
+    property string fileField: ""    // the one the File commands act on
+    property var fileHas: ({})       // file field → holds a file (the panels report it)
+    readonly property var fileTarget: fileField.length === 0 || position < 0 ? ({})
+        : { table: table, rowid: Number(rowIds[position]), field: fileField, hasFile: fileHas[fileField] === true }
+    onFileTargetChanged: if (window !== null && visible) window.baseHost.fileTarget = fileTarget
 
     function open(name, mode) {
         const r = base.openForm(name)
@@ -38,6 +47,8 @@ Item {
         table = r.table
         title = r.title
         notice = r.notice || ""
+        fileFields = base.tableFields(table).filter(function(f) { return f.type === "file" })
+        fileField = fileFields.length > 0 ? fileFields[0].name : ""
         designer.mode = mode === "design" ? "design" : "edit"
         reloadRows(0)
         syncHost()
@@ -56,7 +67,7 @@ Item {
     }
     onDesignDirtyChanged: syncHost()
     onDesigningChanged: syncHost()
-    onVisibleChanged: if (visible) { syncHost(); if (table.length) reloadRows(position) }
+    onVisibleChanged: if (visible) { syncHost(); if (table.length) reloadRows(position); window.baseHost.fileTarget = fileTarget }
 
     function reloadRows(at) {
         rowIds = base.formRowIds(table)
@@ -158,6 +169,35 @@ Item {
                         onDesignSaveRequested: function(requestId, design) {
                             const ok = view.save()
                             designer.acknowledge(requestId, ok ? "accepted" : "rejected", ok ? qsTr("Layout saved") : qsTr("Not saved"))
+                        }
+                    }
+                }
+                Tk.Flex {
+                    objectName: "formFiles"
+                    visible: view.fileFields.length > 0 && !view.designing
+                    width: Math.min(body.width - Tk.Theme.space.lg * 2, Tk.Theme.size.fieldWidth * 4)
+                    direction: Tk.Flex.Row
+                    wrap: Tk.Flex.Wrap
+                    gap: Tk.Theme.space.sm
+                    Repeater {
+                        model: view.fileFields
+                        delegate: FileFieldPanel {
+                            id: fileFieldItem
+                            required property var modelData
+                            window: view.window
+                            table: view.table
+                            rowid: view.position >= 0 ? Number(view.rowIds[view.position]) : 0
+                            field: modelData.name
+                            label: modelData.caption || modelData.name
+                            pictureHeight: Tk.Theme.size.thumbnailHeight * 1.5
+                            Tk.Flex.basis: Tk.Theme.size.panelMinWidth
+                            Tk.Flex.shrink: 0
+                            onHasFileChanged: {
+                                const next = Object.assign({}, view.fileHas)
+                                next[field] = hasFile
+                                view.fileHas = next
+                            }
+                            TapHandler { onTapped: view.fileField = fileFieldItem.field }
                         }
                     }
                 }

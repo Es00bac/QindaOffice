@@ -97,7 +97,8 @@ QString conventionalPrefix(QStringView uri)
 
 bool isDefaultNamespace(QStringView uri)
 {
-    return uri == QStringView(CT) || uri == QStringView(RELS) || uri == QStringView(EP);
+    return uri == QStringView(CT) || uri == QStringView(RELS) || uri == QStringView(EP) || uri == QStringView(VISIO)
+        || uri == QStringView(CUSTOM_PROPERTIES);
 }
 
 QString normalizeNamespace(QStringView uri)

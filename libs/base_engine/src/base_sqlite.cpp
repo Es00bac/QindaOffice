@@ -3,6 +3,7 @@
 
 #include <sqlite3.h>
 
+#include <algorithm>
 #include <utility>
 
 namespace QindaOffice::Base {
@@ -312,6 +313,23 @@ QList<QVariantList> Connection::rows(const QString &sql, const QVariantList &bin
 Statement Connection::prepare(const QString &sql, QString *error) const
 {
     return Statement(m_db, sql, error);
+}
+
+QByteArray Connection::blobHead(const QString &table, const QString &column, qint64 rowid, int bytes) const
+{
+    sqlite3_blob *blob = nullptr;
+    if (m_db == nullptr
+        || sqlite3_blob_open(m_db, "main", table.toUtf8().constData(), column.toUtf8().constData(), rowid, 0, &blob)
+               != SQLITE_OK) {
+        sqlite3_blob_close(blob); // a failed open may still hand back a handle (NULL is a no-op)
+        return {};
+    }
+    QByteArray out(std::min(bytes, sqlite3_blob_bytes(blob)), Qt::Uninitialized);
+    if (!out.isEmpty() && sqlite3_blob_read(blob, out.data(), int(out.size()), 0) != SQLITE_OK) {
+        out.clear();
+    }
+    sqlite3_blob_close(blob);
+    return out;
 }
 
 qint64 Connection::lastInsertRowId() const

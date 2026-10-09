@@ -6,7 +6,8 @@ Office: tables, queries, forms and reports for the records a small office
 keeps (donors and gifts, volunteers and shifts, clients and projects,
 stock). One database is one `.qbase` file and one window (rule 1). It
 pairs with QindaBooks without sharing its file format: the books stay in
-`.qbooks` files, the records in `.qbase` files. Decision: [D-049](decisions.md#d-049-qindabase-one-sqlite-file-exact-money-every-change-previewed-and-undoable).
+`.qbooks` files, the records in `.qbase` files. Decisions: [D-049](decisions.md#d-049-qindabase-one-sqlite-file-exact-money-every-change-previewed-and-undoable);
+Excel import, the complete Access import and file fields: [D-074](decisions.md#d-074-qindabase-excel-import-the-complete-access-import-file-fields) (M65).
 
 | Part | Where |
 | --- | --- |
@@ -48,6 +49,7 @@ are never changed.
 | Yes/No | `BOOLEAN` | 0 / 1 | accepts yes/no/true/false/y/n/1/0 |
 | Date | `DATE` | `yyyy-MM-dd` text | accepts ISO, US m/d/yyyy, "Mar 14, 2026" |
 | Date & time | `DATETIME` | `yyyy-MM-dd HH:mm:ss` text | accepts AM/PM |
+| File or picture | `FILE` | BLOB, at most 32 MB | M65: the bytes only (see *File fields*) |
 
 The declared type is the source of truth, so other tools see sensible
 types. Columns of foreign files map by SQLite affinity (`VARCHAR(40)` →
@@ -56,6 +58,22 @@ Short text, `DECIMAL(8,2)` → Decimal number, `TIMESTAMP` → Date & time,
 redesign. Currency uses the database's symbol and decimal places (0–4,
 Database Properties); the number of decimals is fixed once a Currency
 field holds amounts, because stored amounts are minor units.
+
+**File fields** (`base_file_field.h`). A record's picture or document is
+kept inside the file; a saved copy is named after its record
+("Members-12-Photo.png") because the original name is not kept, and the
+kind (PNG, JPEG, PDF, ZIP, Office 97–2003, text, …) comes from the bytes'
+signature. Reads never load the bytes: the datasheet shows "PNG image ·
+24 KB" with an icon from `length()` and the first 32 bytes (incremental
+blob I/O), and the bytes are read only to preview or save them. Insert
+File…, Save File As… and Remove File (Records menu, Home ▸ File field, the
+panel's own buttons) act on the datasheet's current cell or a form's file
+field, each one undo step; a picture Qt can decode previews as a thumbnail
+in a panel beside the datasheet and under a form (QindaTK's grid cells
+draw text and an icon only). A file field can be no key, index, default,
+lookup or required field, filters only by having a file or not, and
+converts to or from nothing but a foreign `BLOB` column; exports write its
+description.
 
 **Decision on "number"**: Decimal number is REAL (binary floating point),
 not text-decimal. It is what SQLite, spreadsheets and Access's Double do,
@@ -217,14 +235,37 @@ row and queries total in integer minor units.
   don't fit" is on; the new table and its rows are one undo step.
 * **CSV export** of what the datasheet shows (filters, sort, a query's
   parameters), RFC 4180, UTF-8.
+* **Excel (.xlsx) import** (M65) through `calc_io`, the reader QindaCalc
+  opens workbooks with, in the same dialog and plan as CSV: the sheet (the
+  first holding data unless chosen), whether the first row holds the
+  names, and each column's type **from its cells** — TRUE/FALSE → Yes/No,
+  a date format → Date or Date & time, a currency format → Currency, whole
+  numbers → Whole number, other numbers → Decimal number, any text → the
+  CSV rules — with the first rows previewed. Formulas import as their
+  values; blank rows are skipped; `.xls` is refused ("save it as .xlsx").
 * **Excel (.xlsx) export** through the suite's own `calc_io` writer (the
   one QindaCalc saves with): a bold header row, frozen, numbers as numbers,
-  money in units with a money format, Yes/No as booleans.
-* **Access (.accdb/.mdb) import** through `mdb-tools` — only when its
-  `mdb-tables` and `mdb-export` programs are on `PATH` (Gentoo:
-  `app-office/mdbtools`); otherwise the command says what to install.
-  Tables and records come across with detected types; Access queries,
-  forms, reports and relationships do not.
+  money in units under a format showing the database's symbol, Yes/No as
+  booleans, dates and date-times as date serials with a date format, file
+  fields as their description — so an export imports back with the same
+  types.
+* **Access (.accdb/.mdb) import** (M49, completed in M65) through
+  `mdb-tools` — only when its `mdb-tables` and `mdb-export` programs are on
+  `PATH` (Gentoo: `app-office/mdbtools`); otherwise the command says what
+  to install. With `mdb-schema` each table keeps its design: types
+  (AutoNumber with Access's own numbers, Currency, Date vs Date/Time, Memo,
+  OLE and binary as file fields), the primary key, required fields,
+  descriptions, unique and plain indexes (several fields: kept as the
+  table's own index). The relationships Access enforces follow with their
+  cascades. With `mdb-queries`, saved select queries that read one
+  imported table and total nothing become designer queries (prompts become
+  parameters). The whole import is one undo step, and the dialog then
+  shows a report: what came across, what changed on the way (a Currency
+  field with fractions of a cent becomes a Decimal number), and every
+  table, field, relationship and query left out with the reason —
+  attachment and multi-valued fields (mdb-tools cannot read them),
+  relationships Access does not enforce, joins, totals, form references
+  and action queries. Access forms, reports and macros do not come across.
 
 ## Starter templates
 
@@ -246,7 +287,8 @@ counts and descriptions, search, create, F2 rename in place and a context
 menu (open, design, export, new form/report, rename, delete — deletes
 say what they take with them and refuse while other records depend on a
 table). The ribbon: File (database: back up, properties, compact) · Home
-(views, clipboard, history, records, sort & filter, find, object) · Create
+(views, clipboard, history, records, sort & filter, find, file field,
+object) · Create
 · External Data · Database Tools (relationships, SQL, integrity) · View,
 and contextual **Table Design**, **Query Design** and **Form & Report**
 tabs that come forward with their designer. Database Tools ▸
@@ -270,9 +312,14 @@ every call returns a map with `ok` and `error`. Groups: database
 `previewSql`), forms and reports (`createForm`, `openForm`,
 `saveFormDesign`, `formRowIds`, `formRecord`, `saveFormRecord`,
 `deleteFormRecord`, `createReport`, `reportParameters`, `openReport`,
-`saveReportDesign`, `sourceFields`) and I/O (`csvProposal`, `importCsv`,
-`exportObject`, `accessTools`, `accessTables`, `importAccess`,
-`compactAndRepair`, `checkIntegrity`, `backupNow`). `base.datasheet` is the
-`DatasheetModel`. Commands are `base…Action` ids (`base_host_actions.cpp`,
-52 of them); the host announces them as `actionRequested(id)` and
-`BaseCommands.qml` answers.
+`saveReportDesign`, `sourceFields`), import (`csvProposal`, `importCsv`,
+`xlsxProposal`, `importXlsx`, `accessTools`, `accessTables`,
+`importAccess(url, tables, queries)` → the import report), export and
+maintenance (`exportObject`, `compactAndRepair`, `checkIntegrity`,
+`backupNow`) and file fields (`fileInfo`, `insertFile`, `saveFile`,
+`removeFile`). `base.datasheet` is the `DatasheetModel`; the service's
+`recordsChanged()` tells views showing one record's files to reload.
+Commands are `base…Action` ids (`base_host_actions.cpp`, 56 of them); the
+host announces them as `actionRequested(id)` and `BaseCommands.qml`
+answers. `BaseHost.fileTarget` ({table, rowid, field, hasFile}) names the
+file field the File commands act on.

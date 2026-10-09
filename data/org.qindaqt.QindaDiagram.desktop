@@ -8,6 +8,6 @@ Icon=org.qindaqt.QindaDiagram
 Terminal=false
 Categories=Qt;Office;FlowChart;
 Keywords=diagram;flowchart;org chart;network;visio;swimlane;drawio;
-MimeType=application/x-qindadiagram;
+MimeType=application/x-qindadiagram;application/vnd.ms-visio.drawing.main+xml;application/vnd.ms-visio.drawing.macroEnabled.main+xml;application/vnd.ms-visio.template.main+xml;application/vnd.ms-visio.template.macroEnabled.main+xml;application/vnd.visio;
 StartupNotify=true
 StartupWMClass=qindadiagram

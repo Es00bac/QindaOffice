@@ -2,6 +2,8 @@
 // Stencil geometry in local space: outlines, text boxes and header bands.
 #include "stencils.h"
 
+#include "shape_path.h"
+
 #include <QPolygonF>
 
 #include <algorithm>
@@ -103,6 +105,9 @@ QPainterPath outline(const Shape &s)
 {
     const double w = std::max(1.0, s.rect.width());
     const double h = std::max(1.0, s.rect.height());
+    if (!s.paths.isEmpty()) {
+        return customOutline(s); // M65: geometry read from Visio
+    }
     if (is(s, "ellipse") || is(s, "circle") || is(s, "umlUseCase") || is(s, "onPage")) {
         QPainterPath path;
         path.addEllipse(QRectF(0, 0, w, h));
@@ -215,6 +220,9 @@ QRectF textRect(const Shape &s)
 {
     const double w = s.rect.width();
     const double h = s.rect.height();
+    if (!s.textBox.isEmpty()) {
+        return {s.textBox.x() * w, s.textBox.y() * h, s.textBox.width() * w, s.textBox.height() * h};
+    }
     const Stencil *stencil = Diagram::stencil(s.type);
     const TextPlacement placement = stencil != nullptr ? stencil->text : TextPlacement::Inside;
     constexpr double pad = 6;

@@ -110,6 +110,8 @@ constexpr Row kRows[] = {
     {"calloutOval", "arrows", QT_TRANSLATE_NOOP("Stencils", "Speech bubble"), QT_TRANSLATE_NOOP("Stencils", "callout talk oval"), 150, 90, QT_TRANSLATE_NOOP("Stencils", "Say something"), SR::Note, TP::Inside, 0},
     // Inserted by commands, not offered in the panel.
     {"picture", "basic", QT_TRANSLATE_NOOP("Stencils", "Picture"), "", 240, 160, "", SR::Plain, TP::Below, kAspect | kHidden},
+    // M65 (D-073): a shape whose outline is Shape::paths (read from Visio).
+    {"path", "basic", QT_TRANSLATE_NOOP("Stencils", "Custom shape"), "", 120, 72, "", SR::Primary, TP::Inside, kHidden},
 };
 
 struct Catalogue {
@@ -191,6 +193,9 @@ QString categoryTitle(const QString &categoryId)
 
 QVector<QPointF> portsOf(const Shape &shape)
 {
+    if (!shape.ports.isEmpty()) {
+        return QVector<QPointF>(shape.ports.cbegin(), shape.ports.cend());
+    }
     const Stencil *s = stencil(shape.type);
     return s != nullptr ? s->ports : sides();
 }

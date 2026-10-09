@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "base_types.h"
 
+#include "base_file_field.h"
+
 #include <QDate>
 #include <QDateTime>
 #include <QLocale>
@@ -30,6 +32,7 @@ constexpr TypeRow kTypes[] = {
     {FieldType::YesNo, "yesNo", "Yes/No", "BOOLEAN"},
     {FieldType::Date, "date", "Date", "DATE"},
     {FieldType::DateTime, "dateTime", "Date & time", "DATETIME"},
+    {FieldType::File, "file", "File or picture", "FILE"},
     {FieldType::Other, "other", "Other (read-only)", "BLOB"},
 };
 
@@ -151,8 +154,9 @@ QString typeLabel(FieldType type)
 
 QList<FieldType> designableTypes()
 {
-    return {FieldType::AutoNumber, FieldType::Text,     FieldType::LongText, FieldType::Integer, FieldType::Number,
-            FieldType::Currency,   FieldType::YesNo,    FieldType::Date,     FieldType::DateTime};
+    return {FieldType::AutoNumber, FieldType::Text,  FieldType::LongText, FieldType::Integer,
+            FieldType::Number,     FieldType::Currency, FieldType::YesNo,    FieldType::Date,
+            FieldType::DateTime,   FieldType::File};
 }
 
 QString declaredType(FieldType type)
@@ -163,6 +167,9 @@ QString declaredType(FieldType type)
 FieldType typeFromDeclared(const QString &declared, bool rowidPrimaryKey)
 {
     const QString t = declared.trimmed().toUpper();
+    if (t == QLatin1String("FILE")) {
+        return FieldType::File;
+    }
     if (t.contains(QLatin1String("BOOL")) || t == QLatin1String("BIT") || t == QLatin1String("YESNO")) {
         return FieldType::YesNo;
     }
@@ -198,6 +205,11 @@ bool isNumeric(FieldType type)
 {
     return type == FieldType::AutoNumber || type == FieldType::Integer || type == FieldType::Number
            || type == FieldType::Currency;
+}
+
+bool isTypable(FieldType type)
+{
+    return type != FieldType::AutoNumber && type != FieldType::File && type != FieldType::Other;
 }
 
 std::optional<qint64> parseMoney(const QString &raw, int decimals, QString *error)
@@ -341,6 +353,8 @@ Parsed parseInput(FieldType type, const QString &raw, const CurrencyFormat &curr
         return dt ? value(dt->toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")))
                   : fail(QStringLiteral("needs a date and time (yyyy-mm-dd hh:mm)"));
     }
+    case FieldType::File:
+        return fail(QStringLiteral("takes a file (use Insert File)"));
     case FieldType::Other:
         return fail(QStringLiteral("cannot be edited here"));
     }
@@ -353,6 +367,16 @@ Parsed parseValue(FieldType type, const QVariant &input, const CurrencyFormat &c
         return value({});
     }
     const int id = input.metaType().id();
+    if (type == FieldType::File) {
+        if (id != QMetaType::QByteArray) {
+            return parseInput(type, input.toString(), currency);
+        }
+        const QByteArray bytes = input.toByteArray();
+        if (bytes.size() > kFileFieldLimit) {
+            return fail(QStringLiteral("holds files up to %1").arg(formatByteSize(kFileFieldLimit)));
+        }
+        return value(bytes);
+    }
     if (id == QMetaType::Bool) {
         if (type == FieldType::YesNo) {
             return value(QVariant::fromValue<qint64>(input.toBool() ? 1 : 0));
@@ -424,6 +448,10 @@ QString displayText(FieldType type, const QVariant &stored, const CurrencyFormat
         return stored.toString();
     case FieldType::Number:
         return id == QMetaType::Double ? formatNumber(stored.toDouble()) : stored.toString();
+    case FieldType::File: {
+        const std::optional<FileInfo> info = fileInfo(stored);
+        return info ? fileDisplayText(*info) : stored.toString();
+    }
     case FieldType::Other:
         if (id == QMetaType::QByteArray) {
             return QStringLiteral("(binary, %1 bytes)").arg(stored.toByteArray().size());

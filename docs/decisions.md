@@ -5,6 +5,140 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-074: QindaBase: Excel import, the complete Access import, file fields
+
+**Date:** 2026-10-08 · **Status:** accepted (M65, the Base half of the owner's
+Office-interchange request in D-068; docs/plans/office-parity.md)
+
+**Context.** M49 (D-049 §7) imported an Access database as bare tables: types
+guessed from text, no keys, no relationships, no queries, binary columns
+garbled by mdb-export's raw output, and short date-times printed in the C
+locale's two-digit years. There was no Excel import, the Excel export wrote
+dates as text, and a record could not hold a picture or a document — the
+everyday "staff photo" or "signed contract" field an Access user has.
+
+**Decision.**
+
+1. **Excel comes in through calc_io**, the reader QindaCalc opens workbooks
+   with (formulas arrive as their cached values), and through the same plan
+   and dialog as CSV. The cells state the types the text would only suggest
+   (`base_xlsx_import.h`): all TRUE/FALSE → Yes/No; numbers under a date
+   format → Date, or Date & time when the format shows a time or a value has
+   one; numbers under a currency format (a currency sign, a `[$€-…]` tag or
+   the file's own symbol) → Currency when every value fits its decimals;
+   whole numbers → Whole number; other numbers → Decimal number; a column
+   with any text cell → the CSV text rules. `CsvTable::types` carries the
+   stated types (AGENT-CONTRACT in `base_csv.h`); the dialog picks the sheet
+   and previews the first rows. `.xls` is refused with "save as .xlsx".
+2. **Excel export is typed so it reads back as itself**: dates and
+   date-times are date serials under `yyyy-mm-dd[ hh:mm:ss]`, money is units
+   under a format that shows the file's symbol, Yes/No booleans, file fields
+   their description. A table exported and imported again has the same
+   types and values (a Decimal column whose values are all whole comes back
+   as Whole number — Excel does not tell them apart).
+3. **Access keeps its design.** The import reads `mdb-schema FILE postgres`
+   — the one mdb-tools backend that prints keys, indexes, required fields,
+   descriptions and relationships and keeps AutoNumber (`SERIAL`), Currency
+   (`NUMERIC(15,2)`) and short dates (`DATE`) apart; it lower-cases names,
+   so they are matched back case-blind to mdb-export's spelling — and
+   `mdb-export -b hex` with ISO date formats, so OLE and binary columns
+   arrive as bytes (file fields) and Replication IDs as their GUID text.
+   AutoNumber keys keep Access's values (relationships depend on them).
+   Relationships Access enforces are added with their cascades through the
+   ordinary relationship plan; one Access does not enforce is reported, not
+   created. A Currency column holding fractions of a cent becomes a Decimal
+   number, and says so. Without mdb-schema the old text detection runs and
+   the report says what that loses.
+4. **Saved queries come across only when their text is complete.**
+   mdb-queries rebuilds a query from MSysQueries without its joins, Group
+   By, Having, aliases and second sort keys, so a query is converted into a
+   designer query only when it reads one imported table, totals nothing,
+   refers to no form and has no TOP … PERCENT; MSysObjects' Flags (read
+   with `mdb-export -b strip`) skip action, crosstab and union queries; the
+   ordinary query compiler is the final check (and turns `[Prompts]` into
+   parameters, as Access does). Every query, table, field and relationship
+   left out is listed with its reason in the import report the dialog shows;
+   attachment and multi-valued fields cannot be read by mdb-tools at all.
+5. **The whole Access import is one undo step**; a table whose records
+   cannot be imported is removed again, never left half-filled.
+6. **File fields** (`FieldType::File`, declared `FILE`, a BLOB of at most
+   32 MB; `base_file_field.h`). Only the bytes are kept — a saved copy is
+   named after its record ("Members-12-Photo.png") — and the kind comes from
+   the bytes' signature, never a name. Reads never load the bytes: the
+   datasheet selects `length()` and reads the first 32 bytes through
+   SQLite's incremental blob I/O, giving the summary that shows as
+   "PNG image · 24 KB" with an icon. `Records::setFile` / `readFile` are the
+   only writers and readers (one captured change each). A file field can be
+   no key, index, default, lookup or required field, and converts to or from
+   nothing but a foreign BLOB column. Forms leave it out of the toolkit
+   designer's mirror and show it beside the record. Insert File… / Save File
+   As… / Remove File are new commands (`baseFile…Action`, Records menu and
+   the Home ribbon's File field group); the datasheet filters a file field by
+   having one or not.
+
+**Consequences.** An Access database arrives as a working database: keys,
+lookups through its relationships, its photos, its simple queries — and a
+report naming the rest. Excel round-trips with its types. QindaTK's grid
+cells draw text and an icon, not a picture (a toolkit gap, reported), so
+the thumbnail lives in a panel beside the datasheet and under a form. An
+Access table is read whole (hex doubles an OLE column's size in memory);
+mdb-tools stays an optional runtime dependency, and with mdb-tools absent on
+the build machines the format is pinned by hand-written captures of
+mdbtools 1.0's own output code (tests/base_engine/tst_base_access.cpp).
+
+## D-073: Visio interchange for QindaDiagram
+
+**Date:** 2026-10-08 · **Status:** accepted (M65, the Diagram half of the
+owner's Office-interchange request in D-068; supersedes D-050's "Visio out
+of scope")
+
+**Context.** QindaDiagram opened `.qdiagram` and draw.io files only, so a
+Visio user could not bring a drawing in or hand one back. LibreOffice reads
+Visio but cannot write it, so the route QindaWrite takes for `.doc` (convert
+through LibreOffice, D-068) offers nothing for saving.
+
+**Decision.**
+
+1. **Native reader and writer** in `diagram_engine` (`visio_*.cpp`, details
+   in docs/visio-interchange.md) over `office_ooxml`'s package, XML tree and
+   relationship copier: `.vsdx`, `.vsdm` (its VBA project carried, never
+   run), `.vstx`, `.vstm`. The Visio 2003–2010 formats are refused with what
+   to do in Visio. The desktop entry, the open/save dialogs and the launcher
+   know all four.
+2. **The ShapeSheet is read, not evaluated**: each cell's cached value,
+   inherited local → master shape → style chain, rows merged by index with
+   deletions honoured, `V="Themed"` resolved through the theme. A document
+   we write asks Visio to recalculate on open (`RecalcDocument`), so Visio
+   recomputes the formulas we kept but did not run.
+3. **The model learns Visio's shapes instead of guessing a stencil**:
+   custom outlines (`Shape::paths`, from every geometry row kind including
+   arcs, elliptical arcs, polylines and NURBS), a separate text box and
+   connection points, drawn by the one painter everywhere (canvas, print,
+   PDF, PNG, SVG). Groups flatten to the model's one level.
+4. **D-068's preservation, per item**: the reader records each item as it
+   made it (`Source`, immutable and shared); the writer writes an unchanged
+   item's `<Shape>` verbatim, a changed one as its source element with only
+   the mapped cells rewritten, and a new one fresh; a moved group moves as
+   one; IDs, names and z-order stay; masters, theme, VBA and every other part
+   are copied. Items carry `extra["vsdx"]` = {source token, key}, so a copy
+   in another drawing is never mistaken for the original.
+5. **The XML layer honours `xml:space="preserve"`** (Visio's text is mixed
+   content: the space between two run markers is text) and writes braced
+   values (`UniqueID="{…}"`) as read — the second fix M62 made too; the
+   merge kept one implementation.
+
+**Consequences.** A drawing opened from Visio saves back to Visio with what
+the user did not touch exactly as Visio wrote it; real Visio 2013 sample
+drawings read, write and read back equal (run locally, never committed),
+and headless LibreOffice renders our exports with their text. What is
+approximate is reported on opening (metafile pictures and OLE objects as
+frames, kept shapes not shown, multi-format text, background pages as
+ordinary pages). Limits: one text format per shape, connector routes
+recomputed, one group level, layers and hyperlinks kept but not editable,
+theme effects approximated by plain colours, and no theme part in a drawing
+written from scratch. Visio itself is not on the build machines: "opens
+without repair" is a manual check (docs/verification.md).
+
 ## D-072: Mail essentials: contacts, safe HTML, message files
 
 **Date:** 2026-10-08 · **Status:** accepted (M64, the mail part of the owner's

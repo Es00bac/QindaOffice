@@ -51,7 +51,9 @@ QVariantMap BaseService::createForm(const QString &name, const QString &table, c
     QVariantList list;
     const QList<Engine::ColumnInfo> columns = Engine::Records::columns(*f, table);
     for (const Engine::ColumnInfo &c : columns) {
-        const bool wanted = fields.isEmpty() ? c.type != Engine::FieldType::AutoNumber : fields.contains(c.name);
+        // File fields show beside the designer (FormView.qml), not in it.
+        const bool wanted = c.type != Engine::FieldType::File
+                            && (fields.isEmpty() ? c.type != Engine::FieldType::AutoNumber : fields.contains(c.name));
         if (wanted) {
             list.append(QVariantMap{{s("name"), c.name}, {s("label"), c.label()}, {s("hidden"), false}});
         }
@@ -105,8 +107,12 @@ QVariantMap BaseService::openForm(const QString &name)
         QindaTK::LocalDataDesignDocument doc;
         QStringList names;
         const QVariantList specFields = o->definition.value(s("fields")).toList();
+        const QHash<QString, Engine::FieldType> types = Engine::fieldTypes(*f, table);
         for (const QVariant &v : specFields) {
-            names.append(v.toMap().value(s("name")).toString());
+            const QString field = v.toMap().value(s("name")).toString();
+            if (types.value(field) != Engine::FieldType::File) { // not in the mirror (base_snapshot.h)
+                names.append(field);
+            }
         }
         if (!doc.bindTable(&provider, table, names)) {
             return failed(doc.lastError());
@@ -196,6 +202,9 @@ QVariantMap BaseService::formRecord(const QString &table, qint64 rowid) const
         const Engine::CurrencyFormat currency = f->currency();
         for (int i = 0; i < columns.size(); ++i) {
             const Engine::ColumnInfo &c = columns.at(i);
+            if (c.type == Engine::FieldType::File) {
+                continue; // FileFieldPanel shows it
+            }
             const QVariant v = values->at(i);
             QVariant shown = v;
             if (!v.isValid()) {

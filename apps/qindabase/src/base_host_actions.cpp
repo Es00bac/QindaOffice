@@ -60,9 +60,14 @@ constexpr Command kCommands[] = {
     // External data
     {"baseImportCsvAction", QT_TRANSLATE_NOOP("BaseHost", "Import &Text or CSV…"), "", "file-input"},
     {"baseImportAccessAction", QT_TRANSLATE_NOOP("BaseHost", "Import &Access Database…"), "", "import"},
+    {"baseImportExcelAction", QT_TRANSLATE_NOOP("BaseHost", "Import Exc&el Workbook…"), "", "sheet"},
     {"baseExportCsvAction", QT_TRANSLATE_NOOP("BaseHost", "Export as &CSV…"), "", "file-output"},
     {"baseExportXlsxAction", QT_TRANSLATE_NOOP("BaseHost", "Export as E&xcel Workbook…"), "", "file-spreadsheet"},
     {"baseExportPdfAction", QT_TRANSLATE_NOOP("BaseHost", "Export Report as &PDF…"), "", "file-down"},
+    // File fields (M65): the datasheet's current cell or the form's chosen field
+    {"baseFileInsertAction", QT_TRANSLATE_NOOP("BaseHost", "&Insert File…"), "", "paperclip"},
+    {"baseFileSaveAction", QT_TRANSLATE_NOOP("BaseHost", "Save Fi&le As…"), "", "download"},
+    {"baseFileRemoveAction", QT_TRANSLATE_NOOP("BaseHost", "Re&move File"), "", "file-minus"},
     // Database tools
     {"baseRelationshipsAction", QT_TRANSLATE_NOOP("BaseHost", "&Relationships"), "", "git-branch"},
     {"baseSqlConsoleAction", QT_TRANSLATE_NOOP("BaseHost", "&SQL"), "", "terminal"},
@@ -190,7 +195,9 @@ void BaseHost::insertMenus()
                                                       a("baseTotalsRowAction"), MenuNode::separator(),
                                                       a("baseSortAscendingAction"), a("baseSortDescendingAction"),
                                                       a("baseFilterBySelectionAction"), a("baseFilterExcludingAction"),
-                                                      a("baseFilterAction"), a("baseClearFiltersAction")}));
+                                                      a("baseFilterAction"), a("baseClearFiltersAction"),
+                                                      MenuNode::separator(), a("baseFileInsertAction"),
+                                                      a("baseFileSaveAction"), a("baseFileRemoveAction")}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("baseCreateMenu"), tr("&Create"),
                                                      {a("baseNewTableAction"), a("baseTableDesignAction"),
                                                       MenuNode::separator(), a("baseQueryDesignAction"),
@@ -198,7 +205,8 @@ void BaseHost::insertMenus()
                                                       a("baseFormWizardAction"), MenuNode::separator(),
                                                       a("baseNewReportAction"), a("baseReportWizardAction")}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("baseExternalMenu"), tr("E&xternal Data"),
-                                                     {a("baseImportCsvAction"), a("baseImportAccessAction"),
+                                                     {a("baseImportCsvAction"), a("baseImportExcelAction"),
+                                                      a("baseImportAccessAction"),
                                                       MenuNode::separator(), a("baseExportCsvAction"),
                                                       a("baseExportXlsxAction"), a("baseExportPdfAction")}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("baseDesignMenu"), tr("&Design"),
@@ -263,7 +271,8 @@ void BaseHost::syncEnablement()
     actions()->setEnabled({id("baseExportCsvAction"), id("baseExportXlsxAction")}, datasheet || dataObject);
     actions()->setEnabled(id("baseExportPdfAction"), printable());
     for (const char *raw : {"baseNewTableAction", "baseTableDesignAction", "baseQueryDesignAction", "baseFormWizardAction",
-                            "baseReportWizardAction", "baseImportCsvAction", "baseImportAccessAction",
+                            "baseReportWizardAction", "baseImportCsvAction", "baseImportExcelAction",
+                            "baseImportAccessAction",
                             "baseCompactRepairAction", "baseDatabasePropertiesAction"}) {
         actions()->setEnabled(id(raw), writable);
     }
@@ -281,6 +290,13 @@ void BaseHost::syncEnablement()
     for (const Command &c : kQueryTypes) {
         actions()->setEnabled(id(c.id), queryDesign && writable);
     }
+    // File commands: a file field of a saved record in an editable table.
+    const bool fileField = writable && !m_fileTarget.value(QStringLiteral("field")).toString().isEmpty()
+                           && m_fileTarget.value(QStringLiteral("rowid")).toLongLong() > 0
+                           && (tableSheet || form);
+    const bool hasFile = fileField && m_fileTarget.value(QStringLiteral("hasFile")).toBool();
+    actions()->setEnabled(id("baseFileInsertAction"), fileField);
+    actions()->setEnabled({id("baseFileSaveAction"), id("baseFileRemoveAction")}, hasFile);
     actions()->setEnabled(id("baseFormPreviewAction"), form);
     actions()->setEnabled(id("baseReportRefreshAction"), db && m_view == QLatin1String("report"));
     // Undo/redo: the designer's history while one is active, else the database's.

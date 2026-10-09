@@ -4,6 +4,8 @@
 
 #include "base_fixture.h"
 
+#include "base_file_field.h"
+
 using namespace BaseTest;
 
 class BaseTypesTest final : public QObject {
@@ -78,6 +80,38 @@ private slots:
         QCOMPARE(parseValue(FieldType::YesNo, QVariant(true)).value.toLongLong(), qint64(1));
         QCOMPARE(parseValue(FieldType::Integer, QVariant(42.0)).value.toLongLong(), qint64(42));
         QVERIFY(!parseValue(FieldType::Integer, QVariant(4.5)).ok);
+    }
+
+    void fileFieldsKnowWhatTheyHold()
+    {
+        QCOMPARE(typeFromDeclared(str("FILE")), FieldType::File);
+        QVERIFY(designableTypes().contains(FieldType::File));
+        QVERIFY(!isTypable(FieldType::File));
+        const QByteArray png = QByteArray::fromHex("89504E470D0A1A0A0000000D49484452") + QByteArray(2000, 'x');
+        const FileInfo info = sniffFile(png.left(kFileSummaryHead), png.size());
+        QCOMPARE(info.kind, str("PNG image"));
+        QCOMPARE(info.extension, str("png"));
+        QVERIFY(info.image);
+        // A read gives the summary text; it and the bytes display alike.
+        const QString summary = fileSummary(png.size(), png.left(kFileSummaryHead));
+        QCOMPARE(displayText(FieldType::File, summary), str("PNG image · 2.0 KB"));
+        QCOMPARE(displayText(FieldType::File, png), str("PNG image · 2.0 KB"));
+        QCOMPARE(sniffFile(QByteArray("%PDF-1.7\n"), 9).kind, str("PDF document"));
+        QCOMPARE(sniffFile(QByteArray("\xFF\xD8\xFF\xE0"), 4).extension, str("jpg"));
+        QCOMPARE(sniffFile(QByteArray("II*\0", 4), 4).extension, str("tif"));
+        QCOMPARE(sniffFile(QByteArray("\0\0\1\0\1\0", 6), 6).extension, str("ico"));
+        QCOMPARE(sniffFile(QByteArray("\x15\x1C\x32\0", 4), 4).kind, str("Access OLE object"));
+        QCOMPARE(sniffFile(QByteArray("plain words\n"), 12).kind, str("Text"));
+        QCOMPARE(sniffFile(QByteArray("\x01\x02\x03", 3), 3).kind, str("File"));
+        QVERIFY(!fileInfo(QVariant()));
+        QVERIFY(!fileInfo(str("not a summary")));
+        QCOMPARE(formatByteSize(512), str("512 bytes"));
+        QCOMPARE(formatByteSize(3 * 1024 * 1024 / 2), str("1.5 MB"));
+        QCOMPARE(suggestedFileName(str("Members"), 12, str("Photo/ID"), info), str("Members-12-Photo_ID.png"));
+        // Typed text never goes into a file field; bytes do, up to the limit.
+        QVERIFY(!parseInput(FieldType::File, str("hello")).ok);
+        QCOMPARE(parseValue(FieldType::File, QVariant(png)).value.toByteArray(), png);
+        QVERIFY(!parseValue(FieldType::File, QVariant(QByteArray(kFileFieldLimit + 1, 'x'))).ok);
     }
 };
 

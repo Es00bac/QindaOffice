@@ -8,7 +8,9 @@
 #
 # AGENT-NOTE (runtime dependency, optional): Access import runs the
 # mdb-tools programs when they are on PATH (base_access.h); nothing links
-# them and the command says what to install when they are missing.
+# them and the command says what to install when they are missing. Excel
+# import and export go through calc_io (base_xlsx_import.h,
+# base_xlsx_export.h).
 
 set(qindabase_qml
     qml/BaseWindow.qml
@@ -32,6 +34,7 @@ set(qindabase_qml
     qml/ParametersDialog.qml
     qml/ImportCsvDialog.qml
     qml/AccessImportDialog.qml
+    qml/FileFieldPanel.qml
     qml/FormWizardDialog.qml
     qml/ReportWizardDialog.qml
     qml/BasePreferencesPage.qml
@@ -54,12 +57,15 @@ qt_add_qml_module(qindabase_app
         src/base_host.cpp src/base_host.h
         src/base_host_actions.cpp
         src/base_service.cpp src/base_service.h
+        src/base_service_files.cpp
         src/base_service_forms.cpp
+        src/base_service_import.cpp
         src/base_service_io.cpp
         src/base_service_queries.cpp
         src/base_service_reports.cpp
         src/base_service_tables.cpp
         src/base_xlsx_export.cpp src/base_xlsx_export.h
+        src/base_xlsx_import.cpp src/base_xlsx_import.h
         src/design_files.h
         src/datasheet_edit.cpp
         src/datasheet_model.cpp src/datasheet_model.h

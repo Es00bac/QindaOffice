@@ -1482,11 +1482,23 @@ QQuickRootItem#BaseWindow
                       QQuickItem#gridRangePane_0
                         QQuickRectangle#gridRangeBorder_0
                 QQuickRectangle#gridCornerHeader
+              FileFieldPanel#datasheetFilePanel [hidden]
+                Caption#fileFieldKind [hidden]
+                IconButton#fileFieldInsert [hidden]
+                IconButton#fileFieldRemove [hidden]
+                IconButton#fileFieldSave [hidden]
+                QQuickRectangle#boxFocusRing [hidden]
+                Thumbnail#fileFieldThumbnail [hidden]
+                  Icon#thumbnailPlaceholder [hidden]
+                  QQuickImage#thumbnailImage [hidden]
+                  QQuickRectangle#thumbnailCaptionBand [hidden]
+                    Caption#thumbnailCaption [hidden]
               FilterBar#datasheetFilterBar [hidden]
                 Button#filterAdd [hidden]
                 ComboBox#filterConjunction [hidden]
                   QQuickText#comboDisplayText [hidden]
                 Label#filterValidation [hidden]
+              Flex#formFiles [hidden]
               Flex#queryGrid [hidden]
                 Button#queryAddColumn [hidden]
                 QQuickRectangle#boxFocusRing [hidden]
@@ -1774,10 +1786,31 @@ QQuickRootItem#BaseWindow
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_editPasteAction
                 RibbonButton#ribbonAction_editPasteAction
-                  Icon#ribbonButtonIcon
+                  Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_fileField
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_baseFileInsertAction
+                RibbonButton#ribbonAction_baseFileInsertAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseFileRemoveAction
+                RibbonButton#ribbonAction_baseFileRemoveAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_baseFileSaveAction
+                RibbonButton#ribbonAction_baseFileSaveAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
             RibbonGroup#ribbonGroup_find
               Overline#ribbonGroupCaption
               QQuickRectangle#ribbonGroupCard
@@ -1834,10 +1867,10 @@ QQuickRootItem#BaseWindow
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_baseNewRecordAction
                 RibbonButton#ribbonAction_baseNewRecordAction
-                  Icon#ribbonButtonIcon
+                  Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel
+                  QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_baseRefreshAction
                 RibbonButton#ribbonAction_baseRefreshAction
                   Icon#ribbonButtonIcon [hidden]
@@ -1900,10 +1933,10 @@ QQuickRootItem#BaseWindow
               QQuickRectangle#ribbonGroupCard
               RibbonSlot#ribbonItem_baseOpenObjectAction
                 RibbonButton#ribbonAction_baseOpenObjectAction
-                  Icon#ribbonButtonIcon
+                  Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel
+                  QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_baseViewDesignAction
                 RibbonButton#ribbonAction_baseViewDesignAction
                   Icon#ribbonButtonIcon [hidden]

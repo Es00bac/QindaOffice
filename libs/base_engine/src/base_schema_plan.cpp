@@ -67,6 +67,8 @@ QString expectedStorage(FieldType type)
         return QStringLiteral("'integer'");
     case FieldType::Number:
         return QStringLiteral("'integer','real'");
+    case FieldType::File:
+        return QStringLiteral("'blob'");
     case FieldType::Other:
         return QStringLiteral("'blob','text','integer','real'");
     default:
@@ -170,6 +172,16 @@ QString validateTable(const BaseFile &file, const TableDef &table, const QString
         }
         if (f.type == FieldType::Other && f.originalName.isEmpty()) {
             return QStringLiteral("Choose a type for %1.").arg(f.name);
+        }
+        // AGENT-GUARD (D-074): a file field holds bytes the user inserts after
+        // the record exists — it can be no key, index, default or lookup, and
+        // not required (no record could be saved before its file).
+        if (f.type == FieldType::File
+            && (f.primaryKey || f.unique || f.indexed || f.required || !f.defaultValue.trimmed().isEmpty()
+                || f.lookup.isSet())) {
+            return QStringLiteral("The file field %1 cannot be a key, unique, indexed, required, looked up or have a "
+                                  "default value.")
+                .arg(f.name);
         }
         if (f.lookup.isSet()) {
             const bool self = f.lookup.table.compare(table.name, Qt::CaseInsensitive) == 0;

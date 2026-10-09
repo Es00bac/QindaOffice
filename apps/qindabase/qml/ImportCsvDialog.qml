@@ -3,57 +3,82 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QindaTK as Tk
 
-// Import a text/CSV file into a new or an existing table. The engine
-// proposes: the delimiter, whether the first row is a header, and each
-// column's type from its values (codes with leading zeros stay text; money
-// needs a currency sign or a money word in the header). The user adjusts
-// names, types and which columns come in; the import is all-or-nothing
-// unless "skip rows that don't fit" is on, and is one undo step.
+// Import a text/CSV file or one sheet of an Excel workbook (M65) into a new
+// or an existing table. The engine proposes: for CSV the delimiter, for
+// Excel the sheet (the first holding data); whether the first row holds the
+// names; and each column's type — from the text for CSV (codes with leading
+// zeros stay text; money needs a currency sign or a money word in the
+// header), from the cells themselves for Excel (base_xlsx_import.h). The
+// user adjusts names, types and which columns come in, with the first rows
+// previewed; the import is all-or-nothing unless "skip rows that don't
+// fit" is on, and is one undo step.
 Tk.Dialog {
     id: dialog
 
     property var window: null
     readonly property var base: window !== null ? window.base : null
     property url source: ""
+    property string format: "csv" // csv | xlsx
     property var proposal: ({})
     property var plan: ({ columns: [] })
     property string delimiter: ""
+    property string sheet: ""
     property bool headerRow: true
     property bool intoExisting: false
-    readonly property var types: base !== null ? base.fieldTypes.filter(function(t) { return t.id !== "autoNumber" }) : []
+    readonly property bool excel: format === "xlsx"
+    readonly property var types: base !== null ? base.fieldTypes.filter(function(t) { return t.id !== "autoNumber" && t.id !== "file" }) : []
+    readonly property Component columnComponent: Component { Tk.TableColumn { } }
     readonly property var delimiters: [{ id: "", label: qsTr("Detect") }, { id: ",", label: qsTr("Comma") },
                                        { id: ";", label: qsTr("Semicolon") }, { id: "tab", label: qsTr("Tab") },
                                        { id: "|", label: qsTr("Bar |") }]
 
-    title: qsTr("Import text or CSV")
+    title: excel ? qsTr("Import an Excel workbook") : qsTr("Import text or CSV")
     subtitle: String(source).replace(/^.*\//, "")
     dialogWidth: Tk.Theme.size.dialogWidth * 1.6
     primaryText: qsTr("Import")
     secondaryText: qsTr("Cancel")
     primaryEnabled: proposal.ok === true && (plan.table || "").length > 0
 
-    function openFor(url) {
+    function openFor(url, kind) {
         source = url
+        format = kind || "csv"
         delimiter = ""
+        sheet = ""
         headerRow = true
         intoExisting = false
         propose("")
         open()
     }
     function propose(table) {
-        proposal = base.csvProposal(source, table, delimiter, headerRow)
-        if (!proposal.ok) { plan = ({ columns: [] }); return }
+        proposal = excel ? base.xlsxProposal(source, sheet, table, headerRow)
+                         : base.csvProposal(source, table, delimiter, headerRow)
+        if (!proposal.ok) { plan = ({ columns: [] }); fillPreview(); return }
         plan = proposal.plan
         intoExisting = !plan.createNew
-        if (delimiter === "") delimiter = proposal.delimiter === "tab" ? "tab" : proposal.delimiter
+        if (excel) sheet = proposal.sheet
+        else if (delimiter === "") delimiter = proposal.delimiter === "tab" ? "tab" : proposal.delimiter
+        fillPreview()
     }
     function setColumn(i, key, value) {
         const next = JSON.parse(JSON.stringify(plan))
         next.columns[i][key] = value
         plan = next
     }
+    // The first rows as a Tk.DataTable (columns made per file, as SqlView does).
+    function fillPreview() {
+        const header = proposal.header || []
+        const cols = []
+        for (let i = 0; i < header.length; ++i)
+            cols.push(dialog.columnComponent.createObject(previewTable, { key: "c" + i, title: header[i], width: Tk.Theme.size.tableColumn }))
+        previewTable.columns = cols
+        previewTable.model = (proposal.preview || []).map(function(row) {
+            const record = {}
+            for (let i = 0; i < header.length; ++i) record["c" + i] = row[i]
+            return record
+        })
+    }
     onAccepted: {
-        const r = base.importCsv(source, plan, delimiter, headerRow)
+        const r = excel ? base.importXlsx(source, plan, sheet, headerRow) : base.importCsv(source, plan, delimiter, headerRow)
         if (!r.ok) { window.notify(qsTr("Nothing was imported"), r.error, "danger"); return }
         window.baseHost.selectedKind = "table"
         window.baseHost.selectedName = r.table
@@ -100,12 +125,14 @@ Tk.Dialog {
             }
         }
         Tk.PropertyRow {
-            label: qsTr("File")
+            label: dialog.excel ? qsTr("Sheet") : qsTr("File")
             Tk.Flex {
                 direction: Tk.Flex.Row
                 gap: Tk.Theme.space.sm
                 align: Tk.Flex.Center
                 Tk.ComboBox {
+                    objectName: "importDelimiter"
+                    visible: !dialog.excel
                     small: true
                     textRole: "label"
                     model: dialog.delimiters
@@ -113,7 +140,17 @@ Tk.Dialog {
                     tooltip: qsTr("Delimiter")
                     onActivated: function(i) { dialog.delimiter = dialog.delimiters[i].id; dialog.propose(dialog.plan.table || "") }
                 }
+                Tk.ComboBox {
+                    objectName: "importSheet"
+                    visible: dialog.excel
+                    small: true
+                    model: dialog.proposal.sheets || []
+                    currentIndex: model.indexOf(dialog.sheet)
+                    tooltip: qsTr("The sheet to import")
+                    onActivated: function(i) { dialog.sheet = model[i]; dialog.propose("") }
+                }
                 Tk.CheckBox {
+                    objectName: "importHeaderRow"
                     text: qsTr("First row holds the names")
                     checked: dialog.headerRow
                     onToggled: { dialog.headerRow = checked; dialog.propose(dialog.plan.table || "") }
@@ -162,6 +199,15 @@ Tk.Dialog {
                     Tk.Flex.basis: 0
                 }
             }
+        }
+        Tk.Overline { title: qsTr("FIRST ROWS"); visible: (dialog.proposal.preview || []).length > 0 }
+        Tk.DataTable {
+            id: previewTable
+            objectName: "importPreview"
+            visible: (dialog.proposal.preview || []).length > 0
+            Tk.Flex.basis: Tk.Theme.size.row * (Math.min(8, (dialog.proposal.preview || []).length) + 1.5)
+            Tk.Flex.shrink: 0
+            tooltip: qsTr("The first rows as they will be read")
         }
         Tk.CheckBox {
             visible: !dialog.intoExisting

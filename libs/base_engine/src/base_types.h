@@ -16,6 +16,7 @@
 //   yesNo       BOOLEAN         INTEGER 0/1
 //   date        DATE            TEXT yyyy-MM-dd
 //   dateTime    DATETIME        TEXT yyyy-MM-dd HH:mm:ss
+//   file        FILE            BLOB, at most 32 MB (base_file_field.h, M65)
 // The declared type is the source of truth for a column's QindaBase type;
 // qb_fields.type only disambiguates (autoNumber). Foreign SQLite files map
 // by affinity (typeFromDeclared); BLOB columns are `other` (read-only).
@@ -33,7 +34,7 @@
 
 namespace QindaOffice::Base {
 
-enum class FieldType { AutoNumber, Text, LongText, Integer, Number, Currency, YesNo, Date, DateTime, Other };
+enum class FieldType { AutoNumber, Text, LongText, Integer, Number, Currency, YesNo, Date, DateTime, File, Other };
 
 struct CurrencyFormat {
     QString symbol = QStringLiteral("$");
@@ -52,6 +53,8 @@ constexpr int kShortTextLimit = 255;
 // or when `autoIncrement` is known).
 [[nodiscard]] FieldType typeFromDeclared(const QString &declared, bool rowidPrimaryKey = false);
 [[nodiscard]] bool isNumeric(FieldType type); // integer/number/currency/autoNumber
+// Typed in as text (every type but autoNumber, file and other).
+[[nodiscard]] bool isTypable(FieldType type);
 
 struct Parsed {
     bool ok = true;
@@ -59,14 +62,17 @@ struct Parsed {
     QString error;  // "needs a number", … (without the field name)
 };
 
-// User text → storage value. Empty text is NULL. Accepts: grouping commas,
+// User text → storage value. Empty text is NULL. A file field takes no
+// text (Records::setFile writes it). Accepts: grouping commas,
 // currency symbols and (parentheses) for negative money, yes/no/true/false/
 // 1/0, ISO dates and US month/day/year dates, date-times with optional
 // seconds and AM/PM.
 [[nodiscard]] Parsed parseInput(FieldType type, const QString &text, const CurrencyFormat &currency = {});
-// Any QVariant (a QML number or bool, or text) → storage value.
+// Any QVariant (a QML number or bool, or text) → storage value; a
+// QByteArray is a file field's bytes.
 [[nodiscard]] Parsed parseValue(FieldType type, const QVariant &value, const CurrencyFormat &currency = {});
-// Storage value → display text ("$1,250.00", "Yes", "2026-03-01").
+// Storage value → display text ("$1,250.00", "Yes", "2026-03-01",
+// "PNG image · 24 KB").
 [[nodiscard]] QString displayText(FieldType type, const QVariant &stored, const CurrencyFormat &currency = {});
 // Storage value → the text an editor starts from ("1250.00", "Yes").
 [[nodiscard]] QString editText(FieldType type, const QVariant &stored, const CurrencyFormat &currency = {});

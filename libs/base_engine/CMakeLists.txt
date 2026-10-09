@@ -5,8 +5,9 @@
 # field types and exact currency, table designs and schema plans (preview,
 # rebuild, backup), relationships, captured changes for undo, datasheet
 # reads and edits, the query designer's SQL, action queries, saved objects,
-# CSV import/export, Access import through mdb-tools, starter templates
-# and report snapshots.
+# CSV import/export, Access import through mdb-tools (tables with their
+# design, relationships and select queries — M65), file fields, starter
+# templates and report snapshots.
 # Qt Core + the SQLite C API only: no Gui, no Quick, no desktop archives
 # (AGENTS.md rules 8/9), so every behaviour is testable offscreen.
 #
@@ -31,6 +32,12 @@ endif()
 add_library(base_engine STATIC
     src/base_access.cpp
     src/base_access.h
+    src/base_access_import.cpp
+    src/base_access_import.h
+    src/base_access_query.cpp
+    src/base_access_query.h
+    src/base_access_schema.cpp
+    src/base_access_schema.h
     src/base_changes.cpp
     src/base_csv.cpp
     src/base_csv.h
@@ -50,6 +57,9 @@ add_library(base_engine STATIC
     src/base_records.cpp
     src/base_records.h
     src/base_records_edit.cpp
+    src/base_records_file.cpp
+    src/base_file_field.cpp
+    src/base_file_field.h
     src/base_schema.h
     src/base_schema_alter.cpp
     src/base_schema_p.h

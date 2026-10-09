@@ -148,6 +148,15 @@ SchemaPlan planAlterTable(const BaseFile &file, const TableDef &before, const Ta
             || (old.indexed && !f.indexed && !f.unique)) {
             rebuild = true;
         }
+        // A foreign BLOB column (Other) may become a file field; nothing else
+        // converts to or from one (bytes are not text).
+        if (f.type != old.type && (f.type == FieldType::File || old.type == FieldType::File)
+            && !(old.type == FieldType::Other && f.type == FieldType::File)) {
+            plan.error = QStringLiteral("%1 cannot change between a file field and another type; add a new field "
+                                        "instead.")
+                             .arg(f.name);
+            return plan;
+        }
         if (f.required && !old.required) {
             const qint64 blanks =
                 db.scalar(QStringLiteral("SELECT count(*) FROM %1 WHERE %2 IS NULL").arg(table, q(old.name))).toLongLong();

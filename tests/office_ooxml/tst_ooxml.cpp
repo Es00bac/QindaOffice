@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // M60 gates for office_ooxml: the XML tree, the OPC package round trip,
-// relationship copying, DrawingML colours and units.
+// relationship copying, DrawingML colours and units. M65 (D-073): braced
+// values that are not prefix lists, xml:space="preserve", Visio parts.
 
 #include "ooxml_copier.h"
 #include "ooxml_namespaces.h"
@@ -21,6 +22,9 @@ private slots:
     void parsesNamespacesAndNormalisesStrict();
     void keepsSignificantWhitespaceOnly();
     void rewritesPrefixListsThroughConventionalPrefixes();
+    void bracedValuesAreNotPrefixLists();
+    void honoursXmlSpacePreserve();
+    void visioPartsUseTheDefaultNamespace();
     void keepsBracedGuidAttributes();
     void escapesAndStripsInvalidCharacters();
     void fragmentsRoundTrip();
@@ -93,6 +97,46 @@ void OoxmlTest::rewritesPrefixListsThroughConventionalPrefixes()
     QVERIFY2(out.contains("Requires=\"wps\""), out.constData());
     QVERIFY(out.contains("xmlns:w14=\"http://schemas.microsoft.com/office/word/2010/wordml\""));
     QVERIFY(out.contains("xmlns:wps=\"http://schemas.microsoft.com/office/word/2010/wordprocessingShape\""));
+}
+
+void OoxmlTest::bracedValuesAreNotPrefixLists()
+{
+    // GUIDs in braces (Visio's UniqueID, DrawingML's a16:creationId) are
+    // values, not "{uri}" tokens: written back as they were read.
+    const QByteArray xml = R"(<p:sp xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+ xmlns:a16="http://schemas.microsoft.com/office/drawing/2014/main" a16:id="{6B5C1D3E-0000-4000-8000-000000000001}"
+ name="{not a namespace}"/>)";
+    const XmlElementPtr root = parseXml(xml);
+    QVERIFY(root);
+    const QByteArray out = serializeDocument(*root);
+    QVERIFY2(out.contains("a16:id=\"{6B5C1D3E-0000-4000-8000-000000000001}\""), out.constData());
+    QVERIFY2(out.contains("name=\"{not a namespace}\""), out.constData());
+    QVERIFY(!out.contains("ns0"));
+}
+
+void OoxmlTest::honoursXmlSpacePreserve()
+{
+    // Visio <Text> is mixed content: the space between two run markers is
+    // text, and the part's root declares xml:space="preserve".
+    const QByteArray xml = "<Shape xmlns=\"http://schemas.microsoft.com/office/visio/2012/main\" xml:space=\"preserve\">"
+                           "<Text><cp IX=\"0\"/>A<cp IX=\"1\"/> <cp IX=\"0\"/>B</Text></Shape>";
+    const XmlElementPtr root = parseXml(xml);
+    QVERIFY(root);
+    const XmlElement *text = root->child(QString::fromUtf16(Ns::VISIO), u"Text");
+    QVERIFY(text);
+    QCOMPARE(text->text(), QStringLiteral("A B"));
+    QVERIFY(serializeFragment(*text).contains(QStringLiteral("<cp IX=\"1\"/> <cp IX=\"0\"/>")));
+}
+
+void OoxmlTest::visioPartsUseTheDefaultNamespace()
+{
+    // libvisio (LibreOffice's Visio reader) matches element names literally.
+    XmlElement root(QString::fromUtf16(Ns::VISIO), QStringLiteral("PageContents"));
+    XmlElement &rel = root.appendElement(QString::fromUtf16(Ns::VISIO), QStringLiteral("Rel"));
+    rel.setAttribute(QString::fromUtf16(Ns::R), QStringLiteral("id"), QStringLiteral("rId1"));
+    const QByteArray out = serializeDocument(root);
+    QVERIFY2(out.contains("<PageContents xmlns=\"http://schemas.microsoft.com/office/visio/2012/main\""), out.constData());
+    QVERIFY(out.contains("<Rel r:id=\"rId1\"/>"));
 }
 
 void OoxmlTest::keepsBracedGuidAttributes()

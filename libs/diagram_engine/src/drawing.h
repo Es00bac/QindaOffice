@@ -22,6 +22,7 @@
 #include <QColor>
 #include <QJsonObject>
 #include <QList>
+#include <QPainterPath>
 #include <QPointF>
 #include <QRectF>
 #include <QSizeF>
@@ -67,6 +68,17 @@ struct DataField {
     friend bool operator==(const DataField &, const DataField &) = default;
 };
 
+// One subpath of a custom outline (M65, D-073: geometry read from Visio).
+// `path` is in the shape's local box NORMALIZED to 0..1 (y down), so it
+// scales with the shape; `fill`/`stroke` are per subpath, as Visio's
+// NoFill/NoLine are per Geometry section.
+struct ShapePath {
+    QPainterPath path;
+    bool fill = true;
+    bool stroke = true;
+    friend bool operator==(const ShapePath &, const ShapePath &) = default;
+};
+
 struct Shape {
     QString id;
     QString type;            // stencil id (stencils.h)
@@ -82,6 +94,10 @@ struct Shape {
     bool locked = false;
     bool aspectLocked = false;
     QByteArray image;        // encoded picture bytes (picture / photo shapes)
+    // M65 (D-073), all empty for the stencils' own look:
+    QList<ShapePath> paths;  // a custom outline replacing the stencil's
+    QRectF textBox;          // the text area, normalized like `paths`
+    QList<QPointF> ports;    // connection points, normalized (0..1, 0..1)
     QJsonObject extra;
     friend bool operator==(const Shape &, const Shape &) = default;
 };
