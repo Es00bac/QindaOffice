@@ -26,7 +26,7 @@ private slots:
         QTemporaryDir dir;
         const QString path = dir.filePath(QStringLiteral("studio.qbooks"));
         CompanySettings s;
-        s.legalName = QStringLiteral("Sloom Studio LLC");
+        s.legalName = QStringLiteral("Example Studio LLC");
         s.currency = QStringLiteral("eur");
         s.fiscalYearStartMonth = 7;
         {
@@ -43,7 +43,7 @@ private slots:
         ErrorCode code = ErrorCode::None;
         auto reopened = CompanyFile::open(path, nullptr, &code);
         QVERIFY(reopened);
-        QCOMPARE(reopened->settings().legalName, QStringLiteral("Sloom Studio LLC"));
+        QCOMPARE(reopened->settings().legalName, QStringLiteral("Example Studio LLC"));
         QCOMPARE(reopened->settings().fiscalYearStartMonth, 7);
         QCOMPARE(reopened->settings().fiscalYearStart(QDate(2026, 3, 1)), QDate(2025, 7, 1));
         QCOMPARE(Sql::scalar(reopened->database(), QStringLiteral("PRAGMA journal_mode")).toString(),
