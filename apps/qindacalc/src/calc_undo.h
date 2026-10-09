@@ -54,6 +54,10 @@ struct SheetSnapshot {
     // M74 (D-083): the sheet's PivotTables — their layouts ride along (shared,
     // so a snapshot copies pointers), and restore lays out any that lack one.
     QList<CalcEng::PivotTable> pivots;
+    // M78 (D-087): scenarios, data tables and the rules kept as written.
+    CalcEng::ScenarioSet scenarios;
+    QList<CalcEng::DataTableSpec> dataTables;
+    QList<CalcEng::KeptRule> keptRules;
 };
 
 struct WorkbookSnapshot {

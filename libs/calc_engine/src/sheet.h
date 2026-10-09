@@ -2,10 +2,12 @@
 #pragma once
 
 #include "cell.h"
+#include "data_table.h"
 #include "hyperlink.h"
 #include "outline.h"
 #include "pivot.h"
 #include "protection.h"
+#include "scenario.h"
 #include "sheet_rules.h"
 #include "sheet_source.h"
 
@@ -118,7 +120,15 @@ public:
     [[nodiscard]] CellAddr cursor() const { return m_cursor; }
     void setCursor(const CellAddr &addr) { m_cursor = addr; }
     [[nodiscard]] const std::optional<CellRange> &printArea() const { return m_printArea; }
-    void setPrintArea(std::optional<CellRange> area) { m_printArea = area; }
+    // AGENT-GUARD (M78, D-087): setting (or clearing) the print area
+    // replaces EVERY area, as Excel's Set Print Area does — the further
+    // areas of a multi-area print area (PageSetup::morePrintAreas) go too.
+    // Whoever restores both (undo, the reader) sets the page setup after.
+    void setPrintArea(std::optional<CellRange> area)
+    {
+        m_printArea = area;
+        m_pageSetup.morePrintAreas.clear();
+    }
     // Rows/columns repeated on every printed page (Excel's Print_Titles).
     [[nodiscard]] const std::optional<CellRange> &printTitleRows() const { return m_printTitleRows; }
     [[nodiscard]] const std::optional<CellRange> &printTitleCols() const { return m_printTitleCols; }
@@ -127,14 +137,77 @@ public:
         m_printTitleRows = rows;
         m_printTitleCols = cols;
     }
+    // Page Layout (M37; since M78, D-087, all of Excel's Page Setup): the
+    // file's <pageSetup>, <pageMargins>, <printOptions>, <headerFooter>,
+    // <rowBreaks>/<colBreaks> and sheetPr's fitToPage. page_layout.h cuts
+    // the pages from it; the header and footer codes are header_footer.h's.
     struct PageSetup {
         int orientation = 0; // 0 portrait, 1 landscape
-        int fitToWidth = 0;  // pages wide (0 = unconstrained)
-        int fitToHeight = 0; // pages tall
+        // AGENT-NOTE (M78, D-087): 1 × 1 is the file's default (and Excel's
+        // dialog's); the counts only matter under fitToPage. Before M78 the
+        // defaults were 0 and a non-zero count meant "fit".
+        int fitToWidth = 1;  // Fit to: pages wide (0 = automatic)
+        int fitToHeight = 1; // pages tall (0 = automatic)
+        // ---- M78 (D-087) ----
+        // Scaling: "Fit to" (fitToWidth × fitToHeight) when set, else
+        // "Adjust to" `scale` percent (10–400).
+        bool fitToPage = false;
+        int scale = 100;
+        int paperSize = 0;       // Excel's paperSize code (page_layout.h); 0: not stated (Letter)
+        int firstPageNumber = 1; // used when useFirstPageNumber ("First page number": Auto otherwise)
+        bool useFirstPageNumber = false;
+        bool overThenDown = false; // page order: over, then down (default: down, then over)
+        bool blackAndWhite = false;
+        bool draft = false;
+        int cellComments = 0;    // 0 none, 1 at end of sheet, 2 as displayed
+        int errors = 0;          // cell errors as: 0 displayed, 1 <blank>, 2 --, 3 #N/A
+        // Margins in inches (Excel's unit), Normal by default.
+        double marginLeft = 0.7;
+        double marginRight = 0.7;
+        double marginTop = 0.75;
+        double marginBottom = 0.75;
+        double marginHeader = 0.3;
+        double marginFooter = 0.3;
+        bool centerHorizontally = false;
+        bool centerVertically = false;
+        bool gridLines = false;  // Sheet Options ▸ Gridlines ▸ Print
+        bool headings = false;   // Sheet Options ▸ Headings ▸ Print
+        // Headers and footers as Excel's codes (&L&C&R, &P, &N, &D, …).
+        QString oddHeader;
+        QString oddFooter;
+        QString evenHeader;
+        QString evenFooter;
+        QString firstHeader;
+        QString firstFooter;
+        bool differentOddEven = false;
+        bool differentFirst = false;
+        bool scaleWithDoc = true;
+        bool alignWithMargins = true;
+        // Manual page breaks: the 0-based rows (columns) a new page starts
+        // at — the file's brk id. Ascending, no duplicates.
+        QList<qint32> rowBreaks;
+        QList<qint32> colBreaks;
+        // The areas after the first of a multi-area print area (Excel's
+        // _xlnm.Print_Area "A1:D20,F1:H20"); each prints on pages of its
+        // own. The first area is Sheet::printArea.
+        QList<CellRange> morePrintAreas;
         bool operator==(const PageSetup &) const = default;
     };
     [[nodiscard]] const PageSetup &pageSetup() const { return m_pageSetup; }
     void setPageSetup(const PageSetup &setup) { m_pageSetup = setup; }
+
+    // ---- M78 (D-087): what-if analysis and the rules kept as written ----
+    // The sheet's scenarios (scenario.h) and data tables (data_table.h):
+    // moved by structural edits (structure_whatif.cpp), carried by undo and
+    // recovery.
+    [[nodiscard]] const ScenarioSet &scenarios() const { return m_scenarios; }
+    void setScenarios(ScenarioSet scenarios) { m_scenarios = std::move(scenarios); }
+    [[nodiscard]] const QList<DataTableSpec> &dataTables() const { return m_dataTables; }
+    void setDataTables(QList<DataTableSpec> tables) { m_dataTables = std::move(tables); }
+    // Conditional formats and validations QindaCalc does not model, kept
+    // as the file wrote them (sheet_rules.h, KeptRule).
+    [[nodiscard]] const QList<KeptRule> &keptRules() const { return m_keptRules; }
+    void setKeptRules(QList<KeptRule> rules) { m_keptRules = std::move(rules); }
 
     // --- M66 (D-075): hyperlinks, outlines and hidden lines, protection,
     // and the sheet's tie to its source package. Range-addressed state
@@ -208,6 +281,9 @@ private:
     SheetSource m_source;
     bool m_chartSheet = false;
     QList<PivotTable> m_pivots;
+    ScenarioSet m_scenarios;           // M78
+    QList<DataTableSpec> m_dataTables; // M78
+    QList<KeptRule> m_keptRules;       // M78
 };
 
 } // namespace QindaOffice::Calc

@@ -11,6 +11,7 @@
 
 #include "spreadsheet_item.h"
 
+#include "calc_cell_look.h"
 #include "spreadsheet_document.h"
 
 #include "number_format.h"
@@ -212,17 +213,16 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                 } else if (style != nullptr && style->bg.has_value()) {
                     p.fillRect(cell, QColor((*style->bg).r, (*style->bg).g, (*style->bg).b));
                 }
-                // A data bar under the text, translucent the way Excel's
-                // bars sit over the cell's own fill.
+                // A data bar under the text (M78: Excel 2010's bars too).
                 if (conditional.dataBar.has_value()) {
-                    const DataBarFill &bar = *conditional.dataBar;
-                    QRectF barRect = cell;
-                    barRect.setWidth(cell.width() * bar.fraction);
-                    p.fillRect(barRect,
-                               QColor(bar.color.r, bar.color.g, bar.color.b, 115));
+                    paintDataBar(p, cell, *conditional.dataBar);
                 }
             }
-            if (cellData != nullptr && !isBlank(cellData->value)) {
+            // An icon set's icon at the cell's left edge (M78, D-087).
+            if (conditional.icon.has_value()) {
+                paintCfIcon(p, iconBox(cell), *conditional.icon);
+            }
+            if (cellData != nullptr && !isBlank(cellData->value) && !conditional.hideValue) {
                 const FormattedText formatted =
                     NumberFormat(style != nullptr && !style->numberFormat.isEmpty()
                                      ? style->numberFormat
@@ -255,6 +255,12 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                 }
                 if (conditional.italic) {
                     cellFont.setItalic(*conditional.italic);
+                }
+                if (conditional.underline) {
+                    cellFont.setUnderline(*conditional.underline);
+                }
+                if (conditional.strikeout) {
+                    cellFont.setStrikeOut(*conditional.strikeout);
                 }
                 p.setFont(cellFont);
                 if (inSelection && isCursor) {
@@ -297,8 +303,10 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                     flags = (flags & ~int(Qt::AlignVertical_Mask)) | int(Qt::AlignTop)
                         | int(Qt::TextWordWrap);
                 }
-                // A compact form's label sits one indent per level (M74).
-                const qreal indent = pivotLook ? pivotLook->indent * 12.0 * m_zoom : 0.0;
+                // A compact form's label sits one indent per level (M74);
+                // an icon set's icon keeps the text clear of it (M78).
+                const qreal indent = (pivotLook ? pivotLook->indent * 12.0 * m_zoom : 0.0)
+                    + (conditional.icon.has_value() && !(alignment & Qt::AlignRight) ? iconBox(cell).width() + 2 : 0.0);
                 p.drawText(cell.adjusted(4 + indent, 1, -4, -1), flags, formatted.text);
             }
             // A comment marker: the small corner triangle every spreadsheet
@@ -355,6 +363,8 @@ void SpreadsheetItem::paintGrid(QPainter &p)
 
     paintPivotPlaceholders(p); // an empty PivotTable (M74)
     paintImages(p);
+    paintPageBreaks(p);     // Page Break Preview (M78)
+    paintInvalidCircles(p); // Circle Invalid Data (M78)
 
     paintSpillBorder(p);
 

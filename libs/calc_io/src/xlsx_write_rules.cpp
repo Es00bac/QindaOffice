@@ -75,10 +75,12 @@ QString existingListRange(const Workbook &wb, const QStringList &items)
     return {};
 }
 
+} // namespace
+
 // The formula1 of a list validation: the live source it was read from, the
 // inline list when Excel can take it, a range of the workbook, or a column
 // of the hidden list sheet.
-QString listFormula(const ValidationRule &rule, const Workbook &wb, HiddenLists *lists)
+QString validationListFormula(const ValidationRule &rule, const Workbook &wb, HiddenLists *lists)
 {
     if (!rule.listSource.isEmpty()) {
         return formulaForFile(rule.listSource);
@@ -102,8 +104,6 @@ QString listFormula(const ValidationRule &rule, const Workbook &wb, HiddenLists 
         + QLatin1Char(':') + addrText({qint32(rule.list.size()) - 1, col}, true, true);
 }
 
-} // namespace
-
 QString hiddenListsSheetName(const Workbook &wb)
 {
     QString name = QStringLiteral("QindaLists");
@@ -124,7 +124,7 @@ void writeValidations(QXlsx::Worksheet *worksheet, const Workbook &wb, const She
                 continue; // nothing to offer: no valid list validation exists
             }
             validation.setValidationType(QXlsx::DataValidation::List);
-            validation.setFormula1(listFormula(rule, wb, lists));
+            validation.setFormula1(validationListFormula(rule, wb, lists));
             break;
         }
         case ValidationRule::Kind::WholeNumber:
@@ -152,6 +152,16 @@ void writeValidations(QXlsx::Worksheet *worksheet, const Workbook &wb, const She
             validation.setFormula1(QStringLiteral("LEN(TRIM(%1))>0")
                                        .arg(addrText(rule.range.topLeft)));
             break;
+        case ValidationRule::Kind::Custom:
+            validation.setValidationType(QXlsx::DataValidation::Custom);
+            validation.setFormula1(formulaForFile(rule.formula1));
+            break;
+        case ValidationRule::Kind::Date:
+        case ValidationRule::Kind::Time:
+        case ValidationRule::Kind::Any:
+            // M78 (D-087): the post-pass writes these (xlsx_rules.h); the
+            // QXlsx-only path has no file to keep them in.
+            continue;
         }
         if (!rule.message.isEmpty()) {
             validation.setErrorMessage(rule.message);
@@ -212,6 +222,11 @@ void writeCondFormats(QXlsx::Worksheet *worksheet, const Sheet &sheet)
         case Op::DataBar:
             cf.addDataBarRule(QColor(rule.barColor.r, rule.barColor.g, rule.barColor.b),
                               true, rule.stopIfTrue);
+            break;
+        default:
+            // M78 (D-087): every other kind is the post-pass's
+            // (xlsx_rules.h); the QXlsx-only path cannot spell them.
+            added = false;
             break;
         }
         if (!added) {

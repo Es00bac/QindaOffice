@@ -3,75 +3,83 @@ import QtQuick
 import QindaTK as Tk
 import QindaOffice.Calc
 
-// Conditional formatting for the sheet: the existing rules (remove one),
-// and a new rule over the selection. The whole list goes back to the host
-// on Apply, so one visit is ONE undo step.
+// Conditional Formatting Rules Manager (M78, D-087; the M21 dialog grew
+// into Excel's): the sheet's rules in precedence order with what each does
+// and where — New Rule and Edit Rule open CondFormatRuleDialog.qml, Delete
+// Rule and the two Move buttons change the list at once (one undo step
+// each) — and, read-only, the rules QindaCalc keeps for Excel as the file
+// wrote them, with why.
 Tk.Dialog {
     id: dialog
 
     required property CalcHost host
     property var rules: []
-    property string range: ""
+    property var kept: []
     property int selected: -1
 
-    objectName: "condFormatDialog"
-    title: qsTr("Conditional formatting")
-    dialogWidth: 520
-    primaryText: qsTr("Apply")
+    signal ruleRequested(int index)
 
-    readonly property var ops: [qsTr("greater than"), qsTr("less than"), qsTr("between"), qsTr("equal to"),
-                                qsTr("not equal to"), qsTr("contains text"), qsTr("is empty"), qsTr("is not empty")]
-    readonly property int op: opBox.currentIndex
-    readonly property bool numeric: op <= 4
-    readonly property bool textual: op === 5 || op === 3 || op === 4
+    objectName: "condFormatDialog"
+    title: qsTr("Conditional Formatting Rules Manager")
+    dialogWidth: Tk.Theme.size.dialogWidth * 1.3
+    primaryText: qsTr("Close")
+    secondaryText: ""
 
     function load() {
         dialog.rules = dialog.host.condFormatRules()
-        dialog.range = dialog.host.selectionRangeText()
-        dialog.selected = -1
+        dialog.kept = dialog.host.keptRuleList()
+        if (dialog.selected >= dialog.rules.length) dialog.selected = dialog.rules.length - 1
     }
-    function describe(rule) {
-        if (rule.imported) {
-            // Import-only shapes (formula rules, data bars, or-equal
-            // comparisons): shown so the user knows they exist, never
-            // editable here — the host re-inserts them verbatim.
-            if (rule.op === 10) return rule.range + ": " + qsTr("formula “%1” (imported)").arg(rule.formula)
-            if (rule.op === 11) return rule.range + ": " + qsTr("data bar (imported)")
-            if (rule.op === 8) return rule.range + ": " + qsTr("greater than or equal %1 (imported)").arg(rule.first)
-            return rule.range + ": " + qsTr("less than or equal %1 (imported)").arg(rule.first)
-        }
-        let condition = dialog.ops[rule.op]
-        if (rule.op <= 1 || rule.op === 3 || rule.op === 4) condition += " " + rule.first
-        if (rule.op === 2) condition += " " + rule.first + " – " + rule.second
-        if (rule.op === 5) condition += " “" + rule.text + "”"
-        return rule.range + ": " + condition
+    // The list back to the host in its new order (indices name the rules).
+    function commit(order) {
+        dialog.host.setCondFormatRules(order.map(function(i) { return { index: i } }))
+        dialog.load()
     }
-    function addRule() {
-        const list = dialog.rules.slice()
-        list.push({ range: dialog.range, op: dialog.op, first: first.value, second: second.value, text: text.text,
-                    background: bgOn.checked ? background.color.toString() : "",
-                    foreground: fgOn.checked ? foreground.color.toString() : "",
-                    bold: bold.checked, italic: italic.checked })
-        dialog.rules = list
+    function move(delta) {
+        const order = dialog.rules.map(function(r) { return r.index })
+        const to = dialog.selected + delta
+        if (dialog.selected < 0 || to < 0 || to >= order.length) return
+        const moved = order.splice(dialog.selected, 1)[0]
+        order.splice(to, 0, moved)
+        dialog.selected = to
+        dialog.commit(order)
     }
     function removeSelected() {
         if (dialog.selected < 0) return
-        // Import-only rules are read-only; they cannot be removed here.
-        if (dialog.rules[dialog.selected].imported) return
-        const list = dialog.rules.slice()
-        list.splice(dialog.selected, 1)
-        dialog.rules = list
-        dialog.selected = -1
+        dialog.commit(dialog.rules.map(function(r) { return r.index }).filter(function(i, at) { return at !== dialog.selected }))
+        dialog.selected = Math.min(dialog.selected, dialog.rules.length - 1)
     }
-    onAccepted: dialog.host.setCondFormatRules(dialog.rules.filter(rule => !rule.imported))
 
     Tk.Flex {
         direction: Tk.Flex.Column
         gap: Tk.Theme.space.sm
-        Tk.Overline { text: qsTr("Rules on this sheet") }
+        Tk.Flex {
+            direction: Tk.Flex.Row
+            gap: Tk.Theme.space.xs
+            wrap: Tk.Flex.Wrap
+            Tk.Button { objectName: "condFormatNew"; small: true; iconName: "list-plus"; text: qsTr("New Rule…"); onClicked: dialog.ruleRequested(-1) }
+            Tk.Button {
+                objectName: "condFormatEdit"; small: true; iconName: "pencil"; text: qsTr("Edit Rule…"); available: dialog.selected >= 0
+                onClicked: dialog.ruleRequested(dialog.rules[dialog.selected].index)
+            }
+            Tk.Button {
+                objectName: "condFormatRemove"; small: true; iconName: "trash-2"; text: qsTr("Delete Rule"); available: dialog.selected >= 0
+                onClicked: dialog.removeSelected()
+            }
+            Tk.IconButton {
+                objectName: "condFormatUp"; iconName: "chevron-up"; tooltip: qsTr("Move Up"); enabled: dialog.selected > 0
+                onClicked: dialog.move(-1)
+            }
+            Tk.IconButton {
+                objectName: "condFormatDown"; iconName: "chevron-down"; tooltip: qsTr("Move Down")
+                enabled: dialog.selected >= 0 && dialog.selected + 1 < dialog.rules.length
+                onClicked: dialog.move(1)
+            }
+        }
+        Tk.SectionHeader { title: qsTr("Rules (applied in the order shown)"); count: String(dialog.rules.length) }
         Tk.Scroll {
             objectName: "condFormatList"
-            implicitHeight: 110
+            implicitHeight: Tk.Theme.size.row * 6
             Tk.Flex {
                 direction: Tk.Flex.Column
                 gap: 0
@@ -81,42 +89,32 @@ Tk.Dialog {
                         required property var modelData
                         required property int index
                         objectName: "condFormatRule_" + index
-                        text: dialog.describe(modelData)
-                        enabled: !modelData.imported
+                        text: modelData.description
+                        secondaryText: qsTr("Applies to %1").arg(modelData.range) + (modelData.stopIfTrue ? qsTr(" · Stop If True") : "")
                         selected: dialog.selected === index
                         onClicked: dialog.selected = index
+                        onDoubleClicked: dialog.ruleRequested(modelData.index)
                     }
                 }
-                Tk.Caption { visible: dialog.rules.length === 0; text: qsTr("No rules yet."); muted: true }
+                Tk.Caption { visible: dialog.rules.length === 0; text: qsTr("No rules on this sheet."); muted: true }
             }
         }
-        Tk.Flex {
-            direction: Tk.Flex.Row
-            Tk.Spacer { }
-            Tk.Button { objectName: "condFormatRemove"; text: qsTr("Remove rule"); small: true; available: dialog.selected >= 0; onClicked: dialog.removeSelected() }
+        Tk.SectionHeader {
+            visible: dialog.kept.length > 0
+            title: qsTr("Kept as Excel wrote them (not shown here)")
+            count: String(dialog.kept.length)
         }
-        Tk.Divider { }
-        Tk.Overline { text: qsTr("New rule for %1").arg(dialog.range) }
-        Tk.PropertyRow { label: qsTr("Condition"); Tk.ComboBox { id: opBox; objectName: "condFormatOp"; model: dialog.ops } }
-        Tk.PropertyRow { label: qsTr("Value"); Tk.NumberField { id: first; objectName: "condFormatFirst"; enabled: dialog.numeric; from: -1e12; to: 1e12; decimals: 4 } }
-        Tk.PropertyRow { label: qsTr("and"); Tk.NumberField { id: second; objectName: "condFormatSecond"; enabled: dialog.op === 2; from: -1e12; to: 1e12; decimals: 4 } }
-        Tk.PropertyRow { label: qsTr("Text"); Tk.TextField { id: text; objectName: "condFormatText"; enabled: dialog.textual } }
-        Tk.PropertyRow {
-            label: qsTr("Format")
-            Tk.Flex {
-                direction: Tk.Flex.Row; gap: Tk.Theme.space.sm; align: Tk.Flex.Center
-                Tk.CheckBox { id: bgOn; text: qsTr("Fill") }
-                Tk.ColorButton { id: background; objectName: "condFormatBackground"; small: true; color: "#fff3b0"; enabled: bgOn.checked; onColorSelected: bgOn.checked = true }
-                Tk.CheckBox { id: fgOn; text: qsTr("Text") }
-                Tk.ColorButton { id: foreground; objectName: "condFormatForeground"; small: true; color: "#d21c1c"; enabled: fgOn.checked; onColorSelected: fgOn.checked = true }
-                Tk.CheckBox { id: bold; objectName: "condFormatBold"; text: qsTr("Bold") }
-                Tk.CheckBox { id: italic; objectName: "condFormatItalic"; text: qsTr("Italic") }
+        Repeater {
+            model: dialog.kept
+            Tk.ListRow {
+                required property var modelData
+                required property int index
+                objectName: "keptRule_" + index
+                iconName: "lock"
+                enabled: false
+                text: modelData.kind + " · " + modelData.range
+                secondaryText: modelData.reason
             }
-        }
-        Tk.Flex {
-            direction: Tk.Flex.Row
-            Tk.Spacer { }
-            Tk.Button { objectName: "condFormatAdd"; text: qsTr("Add rule"); small: true; onClicked: dialog.addRule() }
         }
     }
 }

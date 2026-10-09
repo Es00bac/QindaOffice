@@ -30,3 +30,22 @@ qqo_add_calc_test(tst_calc_arrays)
 qqo_add_calc_test(tst_calc_pivot)
 qqo_add_calc_test(tst_calc_pivot_values)
 qqo_add_calc_test(tst_calc_pivot_edit)
+# M78 (D-087): the data tools — Text to Columns, Remove Duplicates and
+# Consolidate (tst_calc_datatools) and Flash Fill's patterns
+# (tst_calc_flashfill).
+qqo_add_calc_test(tst_calc_datatools)
+qqo_add_calc_test(tst_calc_flashfill)
+# M78 (D-087): Goal Seek and the Scenario Manager; data tables.
+qqo_add_calc_test(tst_calc_whatif)
+qqo_add_calc_test(tst_calc_datatables)
+# M78 (D-087): sheet printing — pages cut by Excel's rules (paper, margins,
+# scale, Fit to, breaks, titles, headings, page order, print areas), the
+# Breaks commands, print settings through structural edits, and the header
+# and footer codes.
+qqo_add_calc_test(tst_calc_pagelayout)
+# M78 (D-087): every conditional-format kind (cellIs with formula operands,
+# text, blanks, errors, Top 10, averages, duplicates, dates occurring, colour
+# scales, Excel 2007 and 2010 data bars, icon sets) over a rule's whole
+# sqref, and every validation kind and operator.
+qqo_add_calc_test(tst_calc_condformat)
+qqo_add_calc_test(tst_calc_validation)

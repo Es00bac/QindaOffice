@@ -172,10 +172,11 @@ bool ensureDrawingPart(QHash<QString, QByteArray> *parts, const QString &sheetPa
     }
     // <drawing> precedes legacyDrawing/picture/tableParts/extLst in the
     // worksheet schema; the close tag is the fallback anchor.
-    if (!insertBeforeFirst(&(*parts)[sheetPart],
-                           {QStringLiteral("<legacyDrawing"), QStringLiteral("<picture"),
-                            QStringLiteral("<tableParts"), QStringLiteral("<extLst"),
-                            QStringLiteral("</worksheet>")},
+    if (!insertBeforeAny(&(*parts)[sheetPart],
+                         {QStringLiteral("legacyDrawing"), QStringLiteral("legacyDrawingHF"),
+                          QStringLiteral("drawingHF"), QStringLiteral("picture"), QStringLiteral("oleObjects"),
+                          QStringLiteral("controls"), QStringLiteral("webPublishItems"),
+                          QStringLiteral("tableParts"), QStringLiteral("extLst"), QStringLiteral("/worksheet")},
                            QByteArrayLiteral("<drawing r:id=\"") + drawingRid.toUtf8()
                                + QByteArrayLiteral("\"/>"))) {
         if (error != nullptr) {

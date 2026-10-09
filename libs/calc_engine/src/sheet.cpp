@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "sheet.h"
 
+#include "cond_format_internal.h"
+
 namespace QindaOffice::Calc {
 
 namespace {
@@ -100,14 +102,14 @@ void Sheet::replaceContents(QHash<quint64, Cell> cells, QHash<quint64, qint32> s
 CondFormat Sheet::condFormatFor(const CellAddr &addr, const Value &value) const
 {
     // The classic-ops path (tests and callers without a workbook); the app
-    // evaluates through Workbook::condFormatFor, which also resolves
-    // Expression and DataBar rules against live values. The merge is
-    // first-wins-per-field with stopIfTrue, Excel's model: the list is in
-    // precedence order, so a field an earlier rule set is final.
+    // evaluates through Workbook::condFormatFor, which also resolves the
+    // kinds that need the workbook — formulas, statistics, scales, bars and
+    // icons (condRuleNeedsHost). The merge is first-wins-per-field with
+    // stopIfTrue, Excel's model: the list is in precedence order, so a field
+    // an earlier rule set is final.
     CondFormat merged;
     for (const CondFormatRule &rule : m_condFormats) {
-        if (rule.op == CondFormatRule::Op::Expression || rule.op == CondFormatRule::Op::DataBar
-            || !rule.range.contains(addr) || !condRuleMatches(rule, value)) {
+        if (condRuleNeedsHost(rule) || !rule.covers(addr) || !condRuleMatches(rule, value)) {
             continue;
         }
         if (!merged.background.has_value() && rule.format.background.has_value()) {
@@ -122,6 +124,12 @@ CondFormat Sheet::condFormatFor(const CellAddr &addr, const Value &value) const
         if (!merged.italic.has_value() && rule.format.italic.has_value()) {
             merged.italic = rule.format.italic;
         }
+        if (!merged.underline.has_value() && rule.format.underline.has_value()) {
+            merged.underline = rule.format.underline;
+        }
+        if (!merged.strikeout.has_value() && rule.format.strikeout.has_value()) {
+            merged.strikeout = rule.format.strikeout;
+        }
         if (rule.stopIfTrue) {
             break;
         }
@@ -132,7 +140,7 @@ CondFormat Sheet::condFormatFor(const CellAddr &addr, const Value &value) const
 const ValidationRule *Sheet::validationAt(const CellAddr &addr) const
 {
     for (const ValidationRule &rule : m_validations) {
-        if (rule.range.contains(addr)) {
+        if (rule.covers(addr)) {
             return &rule;
         }
     }

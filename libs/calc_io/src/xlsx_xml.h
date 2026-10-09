@@ -43,14 +43,24 @@ void appendContentTypeDefault(QByteArray *contentTypesXml, const QString &extens
 // Inserts `fragment` into a worksheet part directly before the FIRST of the
 // `beforeTags` anchors found (schema order, e.g. autoFilter goes before
 // mergeCells). Returns false when no anchor exists — the caller then fails
-// the save loudly.
+// the save loudly. M78 (D-087): an anchor is a CHILD of the root element
+// ("extLst"; "<extLst" is accepted too) or the root's end tag
+// ("/worksheet", "</worksheet>"); an element of the same name deeper down —
+// a conditional format's own <extLst> — never counts.
 [[nodiscard]] bool insertBeforeAny(QByteArray *sheetXml, const QStringList &beforeTags,
                                    const QByteArray &fragment);
 
-// Inserts `fragment` directly after the closing `</tag>` (schema order when
-// the predecessor is unconditional — autoFilter follows </sheetData>).
-// Returns false when the tag is absent.
+// Inserts `fragment` directly after the closing `</tag>` of the root's
+// child `tag` (schema order when the predecessor is unconditional —
+// autoFilter follows </sheetData>). Returns false when the tag is absent.
 [[nodiscard]] bool insertAfterTag(QByteArray *sheetXml, const QString &tag,
                                   const QByteArray &fragment);
+
+// M78 (D-087): where the first of `tags` starts among the root element's
+// children (or the root's end tag, "/worksheet"), or -1.
+[[nodiscard]] qsizetype topLevelTagOffset(const QByteArray &xml, const QStringList &tags);
+// Where the end tag (</name>) of the root's child `name` starts, or -1
+// (a self-closing child has none).
+[[nodiscard]] qsizetype topLevelElementEnd(const QByteArray &xml, const QString &name);
 
 } // namespace QindaOffice::Calc::IO

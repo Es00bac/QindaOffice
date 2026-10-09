@@ -163,7 +163,7 @@ bool replaceCols(QByteArray *xml, const QByteArray &cols)
 
 QByteArray sheetPrXml(const PatchManifest::SheetPatch &patch)
 {
-    const bool fitToPage = patch.pageSetupXml.contains("fitTo");
+    const bool fitToPage = patch.fitToPage; // M78: Page Setup's "Fit to"
     if (patch.source.codeName.isEmpty() && patch.summaryBelow && patch.summaryRight && !fitToPage) {
         return {};
     }

@@ -22,12 +22,15 @@
 #include "spreadsheet_document.h"
 #include "spreadsheet_item.h"
 
+#include <QPageLayout>
 #include <QPointer>
 #include <QUrl>
 #include <QVariantList>
 #include <QtQml/qqmlregistration.h>
 
 #include <functional>
+#include <memory>
+#include <optional>
 
 namespace QindaOffice::Ai {
 class ModelCatalog;
@@ -62,6 +65,11 @@ class CalcHost : public Quick::DocumentHost {
     // the PivotTable Fields pane's model (calc_host_pivot_pane.cpp).
     Q_PROPERTY(bool pivotActive READ pivotActive NOTIFY pivotChanged)
     Q_PROPERTY(QVariantMap pivotPane READ pivotPane NOTIFY pivotChanged)
+    // M78 (D-087): the Page Layout tab's paper sizes (calcPaperSize_<code>
+    // ids, Excel's order) and Scale to Fit's state {fitToPage, fitToWidth,
+    // fitToHeight, scale} for the ribbon's slots.
+    Q_PROPERTY(QStringList paperSizeIds READ paperSizeIds CONSTANT)
+    Q_PROPERTY(QVariantMap scaling READ scaling NOTIFY pageLayoutChanged)
 public:
     CalcHost();
     ~CalcHost() override;
@@ -198,6 +206,77 @@ public:
     Q_INVOKABLE void applyPivotGroup(int field, const QVariantMap &group);
     Q_INVOKABLE QVariantMap pivotOptionsState() const;
     Q_INVOKABLE void applyPivotOptions(const QVariantMap &options);
+    // ---- M78 (D-087): Page Layout (calc_host_pagelayout.cpp) ----
+    // Page Setup's state for the active sheet: {orientation, paperSize,
+    // papers:[{code,name}], fitToPage, scale, fitToWidth, fitToHeight,
+    // firstPageNumber ("" = Auto), margins {left,right,top,bottom,header,
+    // footer} in inches, centerHorizontally, centerVertically, header /
+    // footer parts {oddHeader:{left,center,right}, …}, differentOddEven,
+    // differentFirst, scaleWithDoc, alignWithMargins, presets:[{code,label}],
+    // printArea, titleRows ("$1:$2"), titleCols ("$A:$B"), gridLines,
+    // headings, blackAndWhite, draft, overThenDown, cellComments, errors}.
+    [[nodiscard]] QStringList paperSizeIds() const;
+    [[nodiscard]] QVariantMap scaling() const;
+    Q_INVOKABLE QVariantMap pageSetupState() const;
+    // The dialog's answer: one undo step. Returns "" or what is wrong
+    // (Excel's messages for a print area or titles it cannot read).
+    Q_INVOKABLE QString applyPageSetup(const QVariantMap &state);
+    // The ribbon's Scale to Fit slots: pages wide / tall (0 = Automatic)
+    // and the scale percent (Adjust to).
+    Q_INVOKABLE void setFitTo(int width, int height);
+    Q_INVOKABLE void setScalePercent(int percent);
+    // The Header & Footer preview text of a code for the dialog (fields
+    // filled in for page 1).
+    Q_INVOKABLE QString headerFooterPreview(const QString &left, const QString &center, const QString &right) const;
+    // ---- M78: What-If Analysis (calc_host_whatif.cpp) ----
+    // Goal Seek: {setCell, changingCell} prefilled from the cursor.
+    Q_INVOKABLE QVariantMap goalSeekState() const;
+    // Runs it and keeps the workbook as Goal Seek leaves it until
+    // finishGoalSeek: {ok, error, found, setCell, target, current, iterations}.
+    Q_INVOKABLE QVariantMap runGoalSeek(const QString &setCell, double target, const QString &changingCell);
+    // Goal Seek Status: OK keeps the value (one undo step), Cancel restores.
+    Q_INVOKABLE void finishGoalSeek(bool keep);
+    // Scenario Manager: [{name, cells, comment, hidden, locked}] of the active sheet.
+    Q_INVOKABLE QVariantList scenarioList() const;
+    // {name, cells: "B1,B2", values: [..], comment, locked, hidden} of one
+    // scenario (index -1: a new one over the selection, with its values).
+    Q_INVOKABLE QVariantMap scenarioState(int index) const;
+    // The current values of `cells` ("B1,B2" or "B1:B2").
+    Q_INVOKABLE QStringList scenarioCellValues(const QString &cells) const;
+    // Add (index -1) or edit: "" or Excel's message; one undo step.
+    Q_INVOKABLE QString saveScenario(int index, const QVariantMap &scenario);
+    Q_INVOKABLE void deleteScenario(int index);
+    Q_INVOKABLE QString showScenarioAt(int index);
+    // Summary: a new "Scenario Summary" sheet for `resultCells` ("B5,B6").
+    Q_INVOKABLE QString scenarioSummaryFor(const QString &resultCells);
+    // Data Table over the selection with the input cells ("" = none).
+    Q_INVOKABLE QString createDataTable(const QString &rowInput, const QString &colInput);
+    // ---- M78: Data Tools (calc_host_datatools.cpp) ----
+    // Text to Columns: {lines (the selected column's texts, first 200),
+    // destination, breaks (guessed fixed widths)}; the preview of options;
+    // the answer ("" done, "confirm" = destination not empty and
+    // `overwrite` false, else what is wrong).
+    Q_INVOKABLE QVariantMap textToColumnsState() const;
+    Q_INVOKABLE QVariantList textToColumnsPreview(const QVariantMap &options) const;
+    Q_INVOKABLE QString applyTextToColumns(const QVariantMap &options, bool overwrite);
+    // Remove Duplicates: {range, header, columns: [{index, name}]}; the answer
+    // is Excel's message ("2 duplicate values found and removed; 5 unique values remain.").
+    Q_INVOKABLE QVariantMap removeDuplicatesState(bool header) const;
+    Q_INVOKABLE QString applyRemoveDuplicates(const QVariantList &columns, bool header);
+    // Consolidate: {function, references: [], topRow, leftColumn, functions};
+    // apply puts the block at the cursor ("" or what is wrong).
+    Q_INVOKABLE QVariantMap consolidateState() const;
+    Q_INVOKABLE QString applyConsolidate(const QVariantMap &options);
+    // ---- M78: conditional formats (calc_host_condformat.cpp) ----
+    // One rule as the New / Edit Formatting Rule dialog edits it (index -1:
+    // a new rule over the selection); the answer: "" or what is wrong.
+    Q_INVOKABLE QVariantMap condFormatRuleState(int index) const;
+    Q_INVOKABLE QString saveCondFormatRule(int index, const QVariantMap &rule);
+    // The rules Manage Rules lists that QindaCalc keeps as written.
+    Q_INVOKABLE QVariantList keptRuleList() const;
+    // The validation dialog's answer when the input is refused or
+    // questioned (Warning: Yes keeps it; Information: OK keeps it).
+    Q_INVOKABLE void answerQuestionedInput(bool keep);
     // How a link leaves the app (default QDesktopServices::openUrl, which
     // goes through the desktop portal when sandboxed). Tests record here.
     void setUrlOpener(std::function<bool(const QUrl &)> opener) { m_openUrl = std::move(opener); }
@@ -239,6 +318,19 @@ signals:
     void pivotGroupRequested(int field);
     void pivotOptionsRequested();
     void pivotFieldListToggleRequested(bool visible);
+    // M78 (D-087): Page Setup ("page", "margins", "header", "sheet"), the
+    // what-if and data-tool dialogs, a conditional-format rule (-1 new),
+    // and a validation Warning / Information question after an input.
+    void pageSetupRequested(const QString &tab);
+    void goalSeekRequested();
+    void scenarioManagerRequested();
+    void dataTableRequested(const QString &selection);
+    void textToColumnsRequested();
+    void removeDuplicatesRequested();
+    void consolidateRequested();
+    void condFormatRuleRequested(int index);
+    void inputQuestioned(const QString &title, const QString &message, bool warning);
+    void pageLayoutChanged();
 
 protected:
     [[nodiscard]] QString filterString() const override;
@@ -246,6 +338,9 @@ protected:
     void applyPreferences() override;
     void documentReplaced() override;
     [[nodiscard]] Quick::PrintRenderCallback printRenderCallback() const override;
+    // M78 (D-087): the sheet's paper and orientation (calc_print.cpp).
+    [[nodiscard]] bool printPrefersLandscape() const override;
+    [[nodiscard]] std::optional<QPageLayout> printPageLayout() const override;
 
 private:
     // calc_host.cpp
@@ -308,6 +403,25 @@ private:
     void groupAtCursor();
     [[nodiscard]] std::optional<CalcEng::PivotSource> pivotSourceFrom(const QString &text) const;
     [[nodiscard]] std::optional<QPair<qint32, CalcEng::CellAddr>> pivotPlaceFrom(const QString &text) const;
+    // calc_host_pagelayout.cpp (M78)
+    void createPageLayoutActions();
+    void insertPageLayoutMenus();
+    void syncPageLayoutFromCursor();
+    void changePageSetup(const std::function<void(CalcEng::Sheet::PageSetup &)> &change, const QString &undoText);
+    void refreshPageBreakView();
+    // calc_host_whatif.cpp / calc_host_datatools.cpp / calc_host_condformat.cpp (M78)
+    void createWhatIfActions();
+    void createDataToolActions();
+    void createCondFormatActions();
+    void insertDataToolMenus();
+    void syncDataToolsFromCursor();
+    void flashFillAtCursor();
+    void refreshInvalidCircles();
+    void quickCondFormat(CalcEng::CondFormatRule rule, const QString &undoText);
+    // A cell reference typed in a dialog ("B2", "$B$2", "Sheet1!B2") on the
+    // active sheet; invalid when it is not one.
+    [[nodiscard]] CalcEng::CellAddr cellFromText(const QString &text) const;
+    [[nodiscard]] QList<CalcEng::CellAddr> cellsFromText(const QString &text) const;
 
     SpreadsheetDocument *m_document = nullptr;
     QPointer<SpreadsheetItem> m_grid;
@@ -321,6 +435,11 @@ private:
     bool m_syncing = false;
     CalcEng::PivotRef m_lastPivot;          // the pivot the cursor was in (pivotChanged)
     CalcEng::PivotRef m_readOnlyPivotNoted; // the read-only pivot whose note was shown
+    // M78 (D-087): the workbook before Goal Seek changed it (Cancel puts it
+    // back, OK makes the change one undo step), and Circle Invalid Data on.
+    std::shared_ptr<WorkbookSnapshot> m_goalSeekBefore;
+    bool m_circlesOn = false;
+    QString m_condPreset; // the rule kind a gallery command opens the rule dialog on
 };
 
 } // namespace QindaOffice::Apps::QindaCalc

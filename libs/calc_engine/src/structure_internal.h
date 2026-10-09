@@ -7,6 +7,7 @@
 // (D-075) so the files that move different kinds of state use ONE
 // definition of where an index lands.
 
+#include "parser.h"
 #include "structure.h"
 
 namespace QindaOffice::Calc {
@@ -129,6 +130,28 @@ void moveSheetFeatures(Workbook &book, const StructureEdit &edit);
 // A sheet rename re-points internal link locations; a removal (`to`
 // empty) leaves them as they are — a dead link, the way Excel keeps one.
 void requalifyLinkLocations(Workbook &book, const QString &from, const QString &to);
+
+// M78 (D-087): a formula AST through the edit (structure.cpp's own walk):
+// references into a removed band become #REF!. For the formulas that live
+// outside cells — conditional formats, validations.
+[[nodiscard]] NodePtr adjustFormulaNode(const NodePtr &node, const StructureEdit &edit, bool ownerIsEdited,
+                                        const QString &editedSheetName);
+// M78 (D-087), structure_rules.cpp: the formulas of every sheet's
+// conditional formats and validations (operands, Expression and Custom
+// formulas, cfvo formulas, a list's formula source) through the edit, as
+// formulas placed at their rule's anchor — shifted first to the anchor the
+// rule keeps when the edit removes its own. Called by applyStructureEdit
+// BEFORE the cells move.
+void moveRuleFormulas(Workbook &book, const StructureEdit &edit);
+// M78 (D-087), structure_print.cpp: the edited sheet's print area, print
+// titles and manual page breaks, and the ranges of the rules it keeps as
+// written (KeptRule). Called by moveSheetContents.
+void moveSheetPrintAndKept(Sheet &sheet, const StructureEdit &edit);
+// M78 (D-087), structure_whatif.cpp: the edited sheet's scenarios
+// (changing cells, summary result cells) and data tables (results, input
+// cells — a deleted input cell marks the table del1/del2, Excel's #REF!).
+// Called by applyStructureEdit before the cells move.
+void moveWhatIfForEdit(Workbook &book, const StructureEdit &edit);
 
 // M69 (D-078), structure_tables.cpp: Excel tables through the edit.
 // BEFORE the cells move: structured references to columns or tables the

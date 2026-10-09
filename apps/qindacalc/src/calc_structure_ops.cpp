@@ -363,6 +363,14 @@ void SpreadsheetDocument::duplicateSheet(qint32 index, const QString &name)
     copy.setHyperlinks(source.hyperlinks());
     copy.setOutline(source.outline());
     copy.setProtection(source.protection());
+    // M78 (D-087): its Page Setup, print area and titles, scenarios, data
+    // tables and the rules kept as written come along too.
+    copy.setPageSetup(source.pageSetup());
+    copy.setPrintArea(source.printArea());
+    copy.setPrintTitles(source.printTitleRows(), source.printTitleCols());
+    copy.setScenarios(source.scenarios());
+    copy.setDataTables(source.dataTables());
+    copy.setKeptRules(source.keptRules());
     // The copied formulas' unqualified references now mean the NEW sheet,
     // which is what a duplicate should do; the index still has to be rebuilt
     // because a sheet was inserted in the middle of the list.

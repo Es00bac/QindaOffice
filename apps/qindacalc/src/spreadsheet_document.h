@@ -12,14 +12,19 @@
 // pushes one QUndoStack command, so Ctrl+Z/Ctrl+Y behave like every other
 // spreadsheet (see calc_undo.h for the snapshot design).
 
+#include "data_table.h"
+#include "data_tools.h"
 #include "document.h"
 #include "pivot_edit.h"
+#include "scenario.h"
+#include "text_to_columns.h"
 #include "sheet_rules.h"
 #include "workbook.h"
 
 #include <QUndoStack>
 
 #include <functional>
+#include <memory>
 #include <optional>
 
 namespace QindaOffice::Calc {
@@ -94,7 +99,10 @@ public:
 
     // Per-sheet rules (calc_rules_ops.cpp). Each is ONE undo step and lands
     // in the recovery payload like everything else.
-    void setCondFormats(const QList<CalcEng::CondFormatRule> &rules);
+    // M78 (D-087): `kept` replaces the rules kept as Excel wrote them in the
+    // same step (Clear Rules from Entire Sheet).
+    void setCondFormats(const QList<CalcEng::CondFormatRule> &rules,
+                        const std::optional<QList<CalcEng::KeptRule>> &kept = std::nullopt);
     void setValidations(const QList<CalcEng::ValidationRule> &rules);
     void setAutoFilter(const CalcEng::AutoFilter &filter);
     void setComment(const CalcEng::CellAddr &addr, const CalcEng::CellComment &comment);
@@ -199,6 +207,37 @@ public:
     // one (Excel's refusals).
     bool refusePivotEdit(const CalcEng::CellRange &range);
     bool refusePivotSplit(bool rows, qint32 at, qint32 count, bool insert);
+    // ---- M78 (D-087): calc_m78_ops.cpp. One undo step each; false (with
+    // editRefused saying why) when nothing changed. ----
+    // Page Setup, the print area and the print titles of `sheet`.
+    void setPrintSettings(qint32 sheet, const CalcEng::Sheet::PageSetup &setup,
+                          const std::optional<CalcEng::CellRange> &area,
+                          const std::optional<CalcEng::CellRange> &titleRows,
+                          const std::optional<CalcEng::CellRange> &titleCols, const QString &undoText);
+    // The active sheet's scenarios, replaced wholesale (add, edit, delete).
+    void setScenarios(const CalcEng::ScenarioSet &set, const QString &undoText);
+    bool showScenario(qint32 index);
+    // Scenario Summary: a new sheet before the active one (Excel's place)
+    // with the report for `results`; its index, or -1.
+    qint32 addScenarioSummary(const QList<CalcEng::CellRange> &results);
+    // Data ▸ What-If Analysis ▸ Data Table over the active sheet.
+    bool addDataTable(const CalcEng::DataTableSpec &spec);
+    // Goal Seek runs on the live workbook (its status dialog shows the
+    // result in the grid); OK makes it one undo step from `before`, Cancel
+    // puts `before` back without one.
+    [[nodiscard]] std::shared_ptr<WorkbookSnapshot> snapshotNow() const;
+    void commitSnapshotStep(const WorkbookSnapshot &before, const QString &undoText);
+    void restoreWithoutUndo(const WorkbookSnapshot &before);
+    // Text to Columns: the converted cells (an empty input clears).
+    bool applyTextColumns(const QList<CalcEng::TextColumnCell> &cells, const CalcEng::CellRange &block);
+    // Remove Duplicates over `range` (calc_engine's data_tools.h).
+    std::optional<CalcEng::RemoveDuplicatesResult> removeDuplicateRows(const CalcEng::CellRange &range,
+                                                                       const QList<qint32> &columns, bool header);
+    // A block of values at `at` (Consolidate's result).
+    bool writeValues(const CalcEng::CellAddr &at, const QList<QList<CalcEng::Value>> &grid, const QString &undoText);
+    // Takes back the last undo step when it is still `undoText` (a
+    // validation Warning answered No).
+    bool undoIfTop(const QString &undoText);
     // What the last opened file holds that a save cannot keep (calc_io's
     // open warnings), for the window to show once.
     [[nodiscard]] QStringList openWarnings() const { return m_openWarnings; }
@@ -225,6 +264,11 @@ signals:
     // A typed value a data-validation rule refused. The window surfaces it;
     // silently dropping the input would look like the app lost a keystroke.
     void inputRejected(const CalcEng::CellAddr &addr, const QString &reason);
+    // M78 (D-087): a value a Warning or Information rule questions. It is
+    // in the cell (one undo step, "Set cell"); the window asks, and taking
+    // it back is undoIfTop.
+    void inputQuestioned(const CalcEng::CellAddr &addr, const QString &title, const QString &message,
+                         bool warning);
     // Sheet list/count changed (undo of sheet insert, sheet insert);
     // windows rebuild their tab bars on this.
     void structureChanged();
@@ -245,6 +289,8 @@ private:
     // restyleRange's work without its undo step (a link's look joins the
     // link's step).
     void restyleCells(const CalcEng::CellRange &range, const StylePatch &patch);
+    // M78: the value typed input would give at `addr` (a formula's result).
+    [[nodiscard]] CalcEng::Value inputValueAt(const CalcEng::CellAddr &addr, const QString &input) const;
 
     CalcEng::Workbook m_workbook;
     // Staging area for the worker-thread load (loadStaged writes it off the

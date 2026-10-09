@@ -22,6 +22,7 @@ class Worksheet;
 namespace QindaOffice::Calc {
 class Sheet;
 class Workbook;
+struct ValidationRule;
 }
 
 namespace QindaOffice::Calc::IO {
@@ -36,6 +37,10 @@ struct HiddenLists {
 
 void writeValidations(QXlsx::Worksheet *worksheet, const Workbook &wb, const Sheet &sheet,
                       HiddenLists *lists);
+// The formula1 of a list validation: its live source, the inline list when
+// Excel can take it, a range of `wb` holding the items, or a column of the
+// hidden list sheet (M78: shared with xlsx_write_validation.cpp).
+[[nodiscard]] QString validationListFormula(const ValidationRule &rule, const Workbook &wb, HiddenLists *lists);
 void writeCondFormats(QXlsx::Worksheet *worksheet, const Sheet &sheet);
 
 } // namespace QindaOffice::Calc::IO

@@ -256,6 +256,14 @@ void Workbook::installFormula(qint32 sheet, const CellAddr &addr, const NodePtr 
     editedCells(released);
 }
 
+Value Workbook::inputValue(const QString &input)
+{
+    bool formula = false;
+    NodePtr ast;
+    QString text;
+    return parseLiteral(input, &formula, &ast, &text);
+}
+
 void Workbook::editedCells(const QSet<CellKey> &edited)
 {
     if (m_bulkLoading) {
@@ -292,8 +300,9 @@ void Workbook::endBulkLoad()
 
 void Workbook::recalc(const QSet<CellKey> &edited)
 {
-    // Values the data bars measure against are moving; drop their extents.
-    m_dataBarExtents.clear();
+    // Values the conditional formats measure against are moving; drop
+    // their statistics.
+    m_condCache.clear();
     QSet<CellKey> spillChanged;
     recalcPass(edited, true, &spillChanged);
     // AGENT-NOTE (M66, D-075): a formula reading a spilled cell depends on
@@ -304,6 +313,10 @@ void Workbook::recalc(const QSet<CellKey> &edited)
         QSet<CellKey> next;
         recalcPass(spillChanged, false, &next);
         spillChanged = std::move(next);
+    }
+    // M78 (D-087): data tables follow what their formulas read.
+    if (!m_computingTables) {
+        recomputeDataTables();
     }
 }
 
@@ -440,7 +453,7 @@ CondFormat Workbook::condFormatFor(qint32 sheet, const CellAddr &addr) const
         return {};
     }
     return condFormatForHost(m_sheets.at(size_t(sheet))->condFormats(), sheet, addr, *this,
-                             m_dataBarExtents);
+                             m_condCache);
 }
 
 QVector<QPair<CellAddr, Value>> Workbook::nonBlankCellsIn(qint32 sheet, const CellRange &range) const

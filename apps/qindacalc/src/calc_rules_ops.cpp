@@ -16,17 +16,21 @@
 
 namespace QindaOffice::Apps::QindaCalc {
 
-void SpreadsheetDocument::setCondFormats(const QList<CalcEng::CondFormatRule> &rules)
+void SpreadsheetDocument::setCondFormats(const QList<CalcEng::CondFormatRule> &rules,
+                                         const std::optional<QList<CalcEng::KeptRule>> &kept)
 {
     if (refuseOnProtectedSheet(true, tr("change conditional formatting"))) {
         return;
     }
     CalcEng::Sheet &sheet = m_workbook.sheetAt(m_activeSheet);
-    if (sheet.condFormats() == rules) {
+    if (sheet.condFormats() == rules && (!kept || sheet.keptRules() == *kept)) {
         return;
     }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     sheet.setCondFormats(rules);
+    if (kept) {
+        sheet.setKeptRules(*kept); // M78: Clear Rules from Entire Sheet takes the kept ones too
+    }
     pushUndo(before, tr("Conditional formatting"));
     setDirty(true);
     emit contentChanged();

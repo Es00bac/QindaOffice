@@ -103,6 +103,9 @@ PrintJob *DocumentHost::createPrintJob()
     // The app's preferred orientation is the job's default; the print
     // dialog can still change it.
     m_printJob->setLandscape(printPrefersLandscape());
+    if (const std::optional<QPageLayout> layout = printPageLayout()) {
+        m_printJob->setPageLayout(*layout);
+    }
     return m_printJob;
 }
 

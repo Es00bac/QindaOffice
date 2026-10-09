@@ -329,17 +329,31 @@ void moveSheetContents(Sheet &sheet, const StructureEdit &edit)
     // AGENT-GUARD: the sheet's RULES address cells by range too. A rule left
     // un-moved paints, validates or filters the wrong cells after an insert
     // — the same class of defect as a formula that does not follow.
+    // M78 (D-087): every range of a rule's sqref moves; a rule lives while
+    // one of them does (the first survivor becomes its anchor).
+    const auto movedRanges = [&movedRange](CellRange &first, QList<CellRange> &more) {
+        QList<CellRange> kept;
+        for (const CellRange &range : QList<CellRange>{first} + more) {
+            if (const auto moved = movedRange(range)) {
+                kept.append(*moved);
+            }
+        }
+        if (kept.isEmpty()) {
+            return false;
+        }
+        first = kept.takeFirst();
+        more = kept;
+        return true;
+    };
     QList<CondFormatRule> condFormats;
     for (CondFormatRule rule : sheet.condFormats()) {
-        if (const auto moved = movedRange(rule.range)) {
-            rule.range = *moved;
+        if (movedRanges(rule.range, rule.moreRanges)) {
             condFormats.append(rule);
         }
     }
     QList<ValidationRule> validations;
     for (ValidationRule rule : sheet.validations()) {
-        if (const auto moved = movedRange(rule.range)) {
-            rule.range = *moved;
+        if (movedRanges(rule.range, rule.moreRanges)) {
             validations.append(rule);
         }
     }
@@ -374,9 +388,16 @@ void moveSheetContents(Sheet &sheet, const StructureEdit &edit)
     sheet.setAutoFilter(std::move(filter));
     sheet.setTables(std::move(tables));
     sheet.setComments(std::move(comments));
+    moveSheetPrintAndKept(sheet, edit); // print area, titles, breaks, kept rules (M78)
 }
 
 } // namespace
+
+NodePtr StructureMath::adjustFormulaNode(const NodePtr &node, const StructureEdit &edit, bool ownerIsEdited,
+                                         const QString &editedSheetName)
+{
+    return adjustNode(node, edit, ownerIsEdited, editedSheetName);
+}
 
 void applyStructureEdit(Workbook &book, const StructureEdit &edit)
 {
@@ -391,10 +412,12 @@ void applyStructureEdit(Workbook &book, const StructureEdit &edit)
     rewriteFormulas(book, edit);
     rewriteNames(book, edit);
     rewriteValidationSources(book, edit);
+    moveRuleFormulas(book, edit); // conditional-format and validation formulas (M78)
     rewriteCharts(book, edit);
     rewriteImages(book, edit);
     moveSheetFeatures(book, edit); // links, outline, source journal (M66)
     movePivotsForEdit(book, edit); // PivotTables and their sources (M74)
+    moveWhatIfForEdit(book, edit); // scenarios and data tables (M78)
     moveSheetContents(book.sheetAt(edit.sheet), edit);
     // Inserted table columns are named and inserted table rows filled with
     // the calculated columns (M69); endBulkLoad then reindexes once.

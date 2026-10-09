@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Carry phase 3 (xlsx_carry_phases.h, M66, D-075): per sheet, the elements
-// the writer never writes (page setup and print settings, breaks, the
-// controls and OLE objects, a background picture, the extLst entries of
-// slicers, timelines and sparklines), threaded comments, and query tables.
+// the writer never writes (the controls and OLE objects, a background
+// picture, the extLst entries of slicers, timelines and sparklines; the
+// printer settings link of the page setup — M78 models the rest of it),
+// threaded comments, and query tables.
 
 #include "xlsx_carry_phases.h"
 
@@ -15,6 +16,7 @@
 
 #include <QObject>
 #include <QRegularExpression>
+#include <QSet>
 
 namespace QindaOffice::Calc::IO::Carry {
 
@@ -53,54 +55,118 @@ QByteArray fragment(const Ooxml::XmlElement &element)
     return Ooxml::serializeFragment(element).toUtf8();
 }
 
-// The model's page setup over the source's: paper size, scale, DPI, the
-// printer settings and every other attribute stay; orientation and the
-// fit-to-page counts are the model's (the app edits them).
+// The page setup the model wrote, with what it does not hold taken from the
+// source's (M78, D-087): the printer settings part's link (r:id), the
+// printer's DPI, copies and usePrinterDefaults, a custom paper's
+// paperWidth / paperHeight — every attribute but the ones Sheet::PageSetup
+// models, which are the model's (present or, at their default, absent).
 Ooxml::XmlElementPtr mergedPageSetup(const Ooxml::XmlElement &source, const QByteArray &written)
 {
+    static const QSet<QString> modelled{
+        QStringLiteral("paperSize"),    QStringLiteral("scale"),         QStringLiteral("firstPageNumber"),
+        QStringLiteral("fitToWidth"),   QStringLiteral("fitToHeight"),   QStringLiteral("pageOrder"),
+        QStringLiteral("orientation"),  QStringLiteral("blackAndWhite"), QStringLiteral("draft"),
+        QStringLiteral("cellComments"), QStringLiteral("useFirstPageNumber"), QStringLiteral("errors")};
     Ooxml::XmlElementPtr merged = source.clone();
-    const auto read = [&written](const char *name) {
-        const QRegularExpression pattern(QStringLiteral("%1=\"([^\"]*)\"").arg(QLatin1String(name)));
-        return pattern.match(QString::fromUtf8(written)).captured(1);
-    };
-    const QString orientation = read("orientation");
-    if (!orientation.isEmpty() || source.hasAttribute(QString(), u"orientation")) {
-        merged->setAttribute(QString(), QStringLiteral("orientation"),
-                             orientation.isEmpty() ? QStringLiteral("portrait") : orientation);
+    merged->attributes.clear();
+    merged->children.clear();
+    const QString tag = QString::fromUtf8(written);
+    static const QRegularExpression attribute(QStringLiteral("([\\w:]+)=\"([^\"]*)\""));
+    for (auto it = attribute.globalMatch(tag); it.hasNext();) {
+        const QRegularExpressionMatch match = it.next();
+        if (!match.captured(1).contains(QLatin1Char(':'))) {
+            merged->setAttribute(QString(), match.captured(1), match.captured(2));
+        }
     }
-    for (const char *fit : {"fitToWidth", "fitToHeight"}) {
-        const QString value = read(fit);
-        if (!value.isEmpty() || source.hasAttribute(QString(), QString::fromLatin1(fit))) {
-            merged->setAttribute(QString(), QString::fromLatin1(fit), value.isEmpty() ? QStringLiteral("0") : value);
+    if (written.isEmpty()) {
+        // The model's settings are Excel's defaults; say which way the paper
+        // turns, as Excel does.
+        merged->setAttribute(QString(), QStringLiteral("orientation"), QStringLiteral("portrait"));
+    }
+    for (const Ooxml::XmlAttribute &kept : source.attributes) {
+        const bool model = kept.ns.isEmpty() && modelled.contains(kept.name);
+        if (!model && !merged->hasAttribute(kept.ns, kept.name)) {
+            merged->attributes.append(kept);
         }
     }
     return merged;
 }
 
-// Page breaks follow inserted and removed rows (columns); a break whose
-// line is gone goes with it.
-Ooxml::XmlElementPtr movedBreaks(const Ooxml::XmlElement &source, const QList<SourceStep> &steps, bool rows)
+// True when a source <pageSetup> carries something the model does not:
+// only then does a sheet whose print settings are Excel's defaults keep one.
+bool carriesPrinterSettings(const Ooxml::XmlElement &merged)
 {
-    Ooxml::XmlElementPtr moved = source.clone();
-    QList<Ooxml::XmlChild> kept;
-    int manual = 0;
-    for (Ooxml::XmlChild &child : moved->children) {
-        if (!child.element || child.element->name != u"brk") {
-            kept.append(child);
-            continue;
+    for (const Ooxml::XmlAttribute &attribute : merged.attributes) {
+        if (!(attribute.ns.isEmpty() && attribute.name == u"orientation")) {
+            return true;
         }
-        const auto line = mapSourceLine(steps, rows, child.element->attr(u"id").toInt());
-        if (!line) {
-            continue;
-        }
-        child.element->setAttribute(QString(), QStringLiteral("id"), QString::number(*line));
-        manual += child.element->attr(u"man") == QLatin1String("1") ? 1 : 0;
-        kept.append(child);
     }
-    moved->children = kept;
-    moved->setAttribute(QString(), QStringLiteral("count"), QString::number(kept.size()));
-    moved->setAttribute(QString(), QStringLiteral("manualBreakCount"), QString::number(manual));
-    return kept.isEmpty() ? nullptr : moved;
+    return false;
+}
+
+// The pictures of the sheet's headers and footers (&G, M78, D-087): the
+// VML part the source's <legacyDrawingHF> names, carried as text (Excel
+// reads VML with a legacy parser that wants its own layout), its shapes
+// moved into a fresh block of ids — written notes and carried controls
+// take theirs, and two drawings may not share one — and its pictures'
+// relationships re-made. False when it cannot be read.
+bool carryHeaderFooterPictures(Context &ctx, const QString &sourceSheet, const DestSheet &dest,
+                               const Ooxml::XmlElement &element, QByteArray *sheet)
+{
+    static const QString vmlType =
+        QStringLiteral("http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing");
+    const auto rel = ctx.source().relationship(sourceSheet, element.attribute(QString::fromUtf16(Ooxml::Ns::R), u"id"));
+    if (!rel || rel->external) {
+        return false;
+    }
+    const QString sourceVml = ctx.source().targetPart(sourceSheet, *rel);
+    const QString text = QString::fromUtf8(ctx.source().data(sourceVml));
+    if (!text.contains(QLatin1String("<xml"))) {
+        return false;
+    }
+    static const QRegularExpression idPattern(QStringLiteral("_x0000_s(\\d+)"));
+    QStringList oldIds;
+    for (auto it = idPattern.globalMatch(text); it.hasNext();) {
+        const QString id = it.next().captured(1);
+        if (!oldIds.contains(id)) {
+            oldIds.append(id);
+        }
+    }
+    const int blocks = int(oldIds.size() / 1024) + 1;
+    const int block = ctx.allocateVmlBlocks(blocks);
+    QString moved;
+    qsizetype copied = 0;
+    for (auto it = idPattern.globalMatch(text); it.hasNext();) {
+        const QRegularExpressionMatch match = it.next();
+        moved += QStringView(text).mid(copied, match.capturedStart(1) - copied);
+        moved += QString::number(block * 1024 + oldIds.indexOf(match.captured(1)) + 1);
+        copied = match.capturedEnd(1);
+    }
+    moved += QStringView(text).mid(copied);
+    QStringList taken;
+    for (int b = 0; b < blocks; ++b) {
+        taken.append(QString::number(block + b));
+    }
+    static const QRegularExpression idmap(QStringLiteral("(<o:idmap[^>]*data=\")([^\"]*)\""));
+    if (const QRegularExpressionMatch map = idmap.match(moved); map.hasMatch()) {
+        moved.replace(map.capturedStart(2), map.capturedLength(2), taken.join(QLatin1Char(',')));
+    }
+    const QString destVml = ctx.addNewPart(QStringLiteral("xl/drawings/vmlDrawing"), QStringLiteral(".vml"), QByteArray(),
+                                           QStringLiteral("application/vnd.openxmlformats-officedocument.vmlDrawing"));
+    static const QRegularExpression relId(QStringLiteral("o:relid=\"([^\"]*)\""));
+    QSet<QString> done;
+    for (auto it = relId.globalMatch(text); it.hasNext();) {
+        const QString id = it.next().captured(1);
+        if (!done.contains(id)) {
+            done.insert(id);
+            moved.replace(QStringLiteral("o:relid=\"%1\"").arg(id),
+                          QStringLiteral("o:relid=\"%1\"").arg(ctx.copyRelationship(sourceVml, id, destVml)));
+        }
+    }
+    ctx.replaceCopied(destVml, moved.toUtf8());
+    const QString id = ctx.addRelationship(dest.part, vmlType, destVml);
+    return insertInOrder(sheet, QStringLiteral("legacyDrawingHF"),
+                         QByteArrayLiteral("<legacyDrawingHF r:id=\"") + id.toUtf8() + QByteArrayLiteral("\"/>"));
 }
 
 // shapeId attributes of a <controls>/<oleObjects> element through the
@@ -183,22 +249,33 @@ void carryElements(Context &ctx, const CarryState &state, const DestSheet &dest,
         }
         Ooxml::XmlElementPtr copy;
         if (name == QLatin1String("pageSetup")) {
-            copy = mergedPageSetup(element, QRegularExpression(QStringLiteral("<pageSetup[^>]*>"))
-                                                .match(QString::fromUtf8(sheet)).captured(0).toUtf8());
+            // The model's own <pageSetup> (xlsx_print.h), at the top level.
+            const qsizetype at = topLevelTagOffset(sheet, {QStringLiteral("pageSetup")});
+            const qsizetype end = at < 0 ? -1 : sheet.indexOf('>', at);
+            copy = mergedPageSetup(element, at < 0 ? QByteArray() : sheet.mid(at, end + 1 - at));
             ctx.rewrite(*copy, sourceSheet, dest.part);
-            const QRegularExpressionMatch ours = QRegularExpression(QStringLiteral("<pageSetup[^>]*/>")).match(QString::fromUtf8(sheet));
-            if (ours.hasMatch()) {
-                QString text = QString::fromUtf8(sheet);
-                text.replace(ours.capturedStart(), ours.capturedLength(), Ooxml::serializeFragment(*copy));
-                sheet = text.toUtf8();
-            } else {
+            if (at >= 0) {
+                sheet.replace(at, end + 1 - at, fragment(*copy));
+            } else if (carriesPrinterSettings(*copy)) {
+                // Excel writes <pageMargins> with every <pageSetup>: the
+                // model's margins are the defaults when it wrote neither.
+                if (topLevelTagOffset(sheet, {QStringLiteral("pageMargins")}) < 0) {
+                    static_cast<void>(insertInOrder(&sheet, QStringLiteral("pageMargins"),
+                                                    QByteArrayLiteral("<pageMargins left=\"0.7\" right=\"0.7\" top=\"0.75\""
+                                                                      " bottom=\"0.75\" header=\"0.3\" footer=\"0.3\"/>")));
+                }
                 static_cast<void>(insertInOrder(&sheet, name, fragment(*copy)));
             }
             continue;
         }
-        if (name == QLatin1String("rowBreaks") || name == QLatin1String("colBreaks")) {
-            copy = movedBreaks(element, steps, name == QLatin1String("rowBreaks"));
-        } else if (name == QLatin1String("extLst")) {
+        if (name == QLatin1String("legacyDrawingHF")) {
+            if (!carryHeaderFooterPictures(ctx, sourceSheet, dest, element, &sheet)) {
+                ctx.warn(QObject::tr("The pictures in the headers or footers of “%1” were not kept: their drawing could not be read.")
+                             .arg(dest.name));
+            }
+            continue;
+        }
+        if (name == QLatin1String("extLst")) {
             copy = element.clone();
             QList<Ooxml::XmlChild> kept;
             for (const Ooxml::XmlChild &ext : copy->children) {
@@ -238,7 +315,22 @@ void carryElements(Context &ctx, const CarryState &state, const DestSheet &dest,
         }
         if (copy) {
             ctx.rewrite(*copy, sourceSheet, dest.part);
-            static_cast<void>(insertInOrder(&sheet, name, fragment(*copy)));
+            const qsizetype ownExtEnd = name == QLatin1String("extLst")
+                ? topLevelElementEnd(sheet, QStringLiteral("extLst"))
+                : -1;
+            if (ownExtEnd >= 0) {
+                // The post-pass wrote the sheet's extLst (M78: Excel 2010's
+                // rules): the carried entries join it.
+                QByteArray entries;
+                for (const Ooxml::XmlChild &ext : copy->children) {
+                    if (ext.element) {
+                        entries += fragment(*ext.element);
+                    }
+                }
+                sheet.insert(ownExtEnd, entries);
+            } else {
+                static_cast<void>(insertInOrder(&sheet, name, fragment(*copy)));
+            }
         }
     }
     ctx.setPart(dest.part, sheet);

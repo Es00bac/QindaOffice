@@ -54,13 +54,11 @@ struct PatchManifest {
         QList<CellAddr> commentCells; // where the notes sit (their legacy VML shapes)
         int vmlNumber = 0;       // N of xl/drawings/vmlDrawingN.vml (and its shape-id block)
         QList<TablePart> tables; // structured tables (parts + tableParts element)
-        // View state: frozen panes (0/0 = none), the selection cell, and
-        // page setup (empty = default). Written by expanding QXlsx's
-        // self-closed <sheetView> and inserting <pageSetup>.
+        // View state: frozen panes (0/0 = none) and the selection cell.
+        // Written by expanding QXlsx's self-closed <sheetView>.
         qint32 freezeRows = 0;
         qint32 freezeCols = 0;
         QString activeCell;      // A1 text; empty = none
-        QByteArray pageSetupXml; // "<pageSetup .../>", or empty
 
         // ---- M66 (D-075): xlsx_post_sheet.cpp writes these ----
         QString name;            // the sheet's name (the carry stage maps sources by it)
@@ -101,6 +99,26 @@ struct PatchManifest {
         // worksheet in its place (every sheet keeps its part number) and
         // the carry stage swaps in the source chartsheet part.
         bool chartSheet = false;
+
+        // ---- M78 (D-087): xlsx_post_m78.cpp puts these in place ----
+        // Conditional formats and validations in Excel's markup
+        // (xlsx_rules.h): every <conditionalFormatting> element — modelled
+        // and kept, in precedence order —, the <dataValidations> element,
+        // and the <ext> entries of Excel 2010's rules
+        // (x14:conditionalFormattings, x14:dataValidations) for the
+        // worksheet's <extLst>.
+        QByteArray condFormatXml;
+        QByteArray dataValidationsXml;
+        QByteArray extXml;
+        // Print settings (xlsx_print.h): <printOptions>, <pageMargins>,
+        // <pageSetup>, <headerFooter>, <rowBreaks>, <colBreaks>, in schema
+        // order; and sheetPr's <pageSetUpPr fitToPage="1"/>.
+        QByteArray printXml;
+        bool fitToPage = false;
+        // What-if (xlsx_whatif.h): <scenarios>, and the <f> elements cells
+        // get (a data table's top-left result cell: A1 → <f t="dataTable" …/>).
+        QByteArray scenariosXml;
+        QHash<QString, QByteArray> cellFormulaXml;
     };
     QList<SheetPatch> sheets;
 
@@ -132,6 +150,13 @@ struct PatchManifest {
     // Save-time notes for the user: a part the carry stage had to leave
     // behind (a thread whose note was edited, macros left out of an .xlsx).
     QStringList *warnings = nullptr;
+
+    // ---- M78 (D-087) ----
+    // The <dxfs> element of xl/styles.xml (xlsx_rules.h, DxfTable): the
+    // source package's dxfs as read — kept rules and unchanged formats keep
+    // their dxfId — then the ones new and changed formats need. Empty: no
+    // conditional formats at all (QXlsx's own element stays).
+    QByteArray dxfsXml;
 
     // ---- M74 (D-083): PivotTables (xlsx_write_pivot.h) ----
     // The pivots and caches written from the model, and what the carry

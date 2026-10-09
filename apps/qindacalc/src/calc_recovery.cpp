@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "calc_recovery.h"
 
+#include "calc_recovery_m78.h"
+
 #include "calc_recovery_features.h"
 #include "calc_recovery_pivots.h"
 #include "calc_recovery_rules.h"
@@ -354,11 +356,9 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
         if (sheet.printTitleCols.has_value()) {
             out.insert(QStringLiteral("printTitleCols"), optionalRange(sheet.printTitleCols));
         }
-        if (sheet.pageSetup.orientation != 0 || sheet.pageSetup.fitToWidth != 0
-            || sheet.pageSetup.fitToHeight != 0) {
-            out.insert(QStringLiteral("pageSetup"),
-                       QJsonArray{sheet.pageSetup.orientation, sheet.pageSetup.fitToWidth,
-                                  sheet.pageSetup.fitToHeight});
+        // M78 (D-087): all of Page Setup (M37's payload was an array of three).
+        if (!(sheet.pageSetup == CalcEng::Sheet::PageSetup{})) {
+            out.insert(QStringLiteral("pageSetup"), pageSetupToJson(sheet.pageSetup));
         }
         // M66 (D-075): links, outline, protection, the source tie.
         out.insert(QStringLiteral("hyperlinks"), hyperlinksToJson(sheet.hyperlinks));
@@ -366,6 +366,10 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
         out.insert(QStringLiteral("protection"), protectionToJson(sheet.protection));
         out.insert(QStringLiteral("sheetSource"), sheetSourceToJson(sheet.source));
         out.insert(QStringLiteral("pivots"), pivotsToJson(sheet.pivots)); // M74
+        // M78 (D-087): scenarios, data tables, the rules kept as written.
+        out.insert(QStringLiteral("scenarios"), scenariosToJson(sheet.scenarios));
+        out.insert(QStringLiteral("dataTables"), dataTablesToJson(sheet.dataTables));
+        out.insert(QStringLiteral("keptRules"), keptRulesToJson(sheet.keptRules));
         sheets.append(out);
     }
     root.insert(QStringLiteral("sheets"), sheets);
@@ -494,18 +498,17 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
         sheet.printArea = optionalRange(object.value(QStringLiteral("printArea")));
         sheet.printTitleRows = optionalRange(object.value(QStringLiteral("printTitleRows")));
         sheet.printTitleCols = optionalRange(object.value(QStringLiteral("printTitleCols")));
-        const QJsonArray pageSetup = object.value(QStringLiteral("pageSetup")).toArray();
-        if (pageSetup.size() == 3) {
-            sheet.pageSetup.orientation = pageSetup.at(0).toInt();
-            sheet.pageSetup.fitToWidth = pageSetup.at(1).toInt();
-            sheet.pageSetup.fitToHeight = pageSetup.at(2).toInt();
-        }
+        sheet.pageSetup = pageSetupFromJson(object.value(QStringLiteral("pageSetup")));
         // Absent before M66: no links, no outline, unprotected, no source.
         sheet.hyperlinks = hyperlinksFromJson(object.value(QStringLiteral("hyperlinks")).toArray());
         sheet.outline = outlineFromJson(object.value(QStringLiteral("outline")).toObject());
         sheet.protection = protectionFromJson(object.value(QStringLiteral("protection")).toObject());
         sheet.source = sheetSourceFromJson(object.value(QStringLiteral("sheetSource")).toObject());
         sheet.pivots = pivotsFromJson(object.value(QStringLiteral("pivots")).toArray()); // absent before M74
+        // Absent before M78: none.
+        sheet.scenarios = scenariosFromJson(object.value(QStringLiteral("scenarios")).toObject());
+        sheet.dataTables = dataTablesFromJson(object.value(QStringLiteral("dataTables")).toArray());
+        sheet.keptRules = keptRulesFromJson(object.value(QStringLiteral("keptRules")).toArray());
         snapshot.sheets.append(sheet);
     }
     snapshot.activeSheet = qBound(0, snapshot.activeSheet, snapshot.sheets.size() - 1);

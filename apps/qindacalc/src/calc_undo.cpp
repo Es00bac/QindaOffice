@@ -47,6 +47,9 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
         ss.source = sheet.source();
         ss.chartSheet = sheet.isChartSheet();
         ss.pivots = sheet.pivots();
+        ss.scenarios = sheet.scenarios();
+        ss.dataTables = sheet.dataTables();
+        ss.keptRules = sheet.keptRules();
         snap.sheets.append(ss);
     }
     // The style table is indexed by position; copy through the public
@@ -110,6 +113,9 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
         sheet.setSource(ss.source);
         sheet.setChartSheet(ss.chartSheet);
         sheet.setPivots(ss.pivots);
+        sheet.setScenarios(ss.scenarios);
+        sheet.setDataTables(ss.dataTables);
+        sheet.setKeptRules(ss.keptRules);
     }
     for (const CalcEng::CellStyle &style : snapshot.styles) {
         fresh.addStyle(style);

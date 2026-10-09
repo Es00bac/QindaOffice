@@ -16,7 +16,9 @@
 # columns and totals rows, legacy array formulas, chart sheets carried
 # whole (xlsx_carry_chartsheet). M74 (D-083): PivotTables read into the
 # model and written as Excel's parts (xlsx_read_pivot*, xlsx_write_pivot*),
-# untouched ones carried byte for byte. Qt Core+Gui + KArchive.
+# untouched ones carried byte for byte. M78 (D-087): every conditional-format
+# and validation kind, kept rules byte for byte, every print setting,
+# scenarios and data tables. Qt Core+Gui + KArchive.
 add_library(calc_io STATIC
     src/xlsx_bridge.h
     src/xlsx_carry.h
@@ -87,6 +89,29 @@ add_library(calc_io STATIC
     src/xlsx_write_xml.h
     src/xlsx_xml.cpp
     src/xlsx_xml.h
+    # M78 (D-087): every conditional-format and validation kind with the
+    # rules the model cannot hold kept as written (xlsx_rules.h), every
+    # print setting (xlsx_print.h), scenarios and data tables
+    # (xlsx_whatif.h), and the post-pass that places them (xlsx_post_m78).
+    src/xlsx_dxf.cpp
+    src/xlsx_post_m78.cpp
+    src/xlsx_post_m78.h
+    src/xlsx_print.h
+    src/xlsx_read_cfrule.cpp
+    src/xlsx_read_condformat.cpp
+    src/xlsx_read_print.cpp
+    src/xlsx_read_validation.cpp
+    src/xlsx_read_whatif.cpp
+    src/xlsx_rules.h
+    src/xlsx_rules_internal.h
+    src/xlsx_rules_names.cpp
+    src/xlsx_rules_scan.cpp
+    src/xlsx_whatif.h
+    src/xlsx_write_cfrule.cpp
+    src/xlsx_write_condformat.cpp
+    src/xlsx_write_print.cpp
+    src/xlsx_write_validation.cpp
+    src/xlsx_write_whatif.cpp
 )
 
 target_include_directories(calc_io

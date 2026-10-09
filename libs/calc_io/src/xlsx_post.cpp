@@ -4,6 +4,7 @@
 #include "xlsx_post_book.h"
 #include "xlsx_post_cells.h"
 #include "xlsx_post_images.h"
+#include "xlsx_post_m78.h"
 #include "xlsx_post_sheet.h"
 #include "xlsx_carry.h"
 #include "xlsx_write_charts.h"
@@ -140,6 +141,11 @@ bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest, QStr
         if (!applySheetFeatures(&parts, patch, error)) {
             return false;
         }
+        // M78 (D-087): scenarios, conditional formats, validations, print
+        // settings, the worksheet's x14 extensions, data-table formulas.
+        if (!applyM78SheetPatch(&parts[patch.sheetPart], patch, error)) {
+            return false;
+        }
         // Frozen panes and the selection cell live inside <sheetView> —
         // QXlsx writes it self-closed, so expand it.
         if (patch.freezeRows != 0 || patch.freezeCols != 0 || !patch.activeCell.isEmpty()) {
@@ -172,20 +178,6 @@ bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest, QStr
             }
             xml.replace(view, QByteArrayLiteral("<sheetView showRuler=\"0\" workbookViewId=\"0\">")
                                   + inner + QByteArrayLiteral("</sheetView>"));
-        }
-        if (!patch.pageSetupXml.isEmpty()) {
-            // Schema: pageSetup precedes headerFooter/drawing/tableParts.
-            if (!insertBeforeFirst(&parts[patch.sheetPart],
-                                   {QStringLiteral("<headerFooter"), QStringLiteral("<drawing"),
-                                    QStringLiteral("<legacyDrawing"), QStringLiteral("<tableParts"),
-                                    QStringLiteral("<extLst"), QStringLiteral("</worksheet>")},
-                                   patch.pageSetupXml)) {
-                if (error != nullptr) {
-                    *error = QStringLiteral("post-pass: no pageSetup anchor in %1")
-                                 .arg(patch.sheetPart);
-                }
-                return false;
-            }
         }
         if (!patch.commentsPart.isEmpty()) {
             parts.insert(patch.commentsPart, patch.commentsXml);
@@ -230,6 +222,13 @@ bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest, QStr
     if (!applyXfProtection(&parts[QStringLiteral("xl/styles.xml")], xfProtection)) {
         if (error != nullptr) {
             *error = QStringLiteral("post-pass: no <cellXfs> in xl/styles.xml");
+        }
+        return false;
+    }
+    // The dxf table the conditional formats name (M78, D-087).
+    if (!applyDxfs(&parts[QStringLiteral("xl/styles.xml")], manifest.dxfsXml)) {
+        if (error != nullptr) {
+            *error = QStringLiteral("post-pass: no place for <dxfs> in xl/styles.xml");
         }
         return false;
     }
@@ -289,9 +288,8 @@ bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest, QStr
                     + QByteArrayLiteral("\"/>");
             }
             tablePartsXml += QByteArrayLiteral("</tableParts>");
-            if (!insertBeforeFirst(&parts[patch.sheetPart],
-                                   {QStringLiteral("<extLst"), QStringLiteral("</worksheet>")},
-                                   tablePartsXml)) {
+            if (!insertBeforeAny(&parts[patch.sheetPart], {QStringLiteral("extLst"), QStringLiteral("/worksheet")},
+                                 tablePartsXml)) {
                 if (error != nullptr) {
                     *error = QStringLiteral("post-pass: no tableParts anchor in %1")
                                  .arg(patch.sheetPart);

@@ -31,6 +31,8 @@
 #include <QSharedPointer>
 #include <QtQml/qqmlregistration.h>
 
+#include <optional>
+
 namespace CalcEng = QindaOffice::Calc;
 namespace QindaOffice::Apps::QindaCalc {
 
@@ -173,6 +175,28 @@ public:
     [[nodiscard]] QColor cursorColor() const { return m_cursorColor; }
     void setCursorColor(const QColor &c) { setChrome(m_cursorColor, c); }
 
+    // ---- M78 (D-087): Page Break Preview and Circle Invalid Data ----
+    // What View ▸ Page Break Preview draws over the sheet: the print area,
+    // the rows and columns that begin a page (manual breaks solid,
+    // automatic ones dashed) and each page's number. nullopt: Normal view.
+    struct PageBreakView {
+        CalcEng::CellRange area;
+        QList<qint32> rowStarts;
+        QList<qint32> colStarts;
+        QList<bool> rowManual;
+        QList<bool> colManual;
+        struct Page {
+            CalcEng::CellRange body;
+            int number = 1;
+        };
+        QList<Page> pages;
+    };
+    void setPageBreakView(const std::optional<PageBreakView> &view);
+    [[nodiscard]] bool pageBreakPreview() const { return m_pageBreaks.has_value(); }
+    // The cells Circle Invalid Data rings in red (empty: none).
+    void setInvalidCells(const QList<CalcEng::CellAddr> &cells);
+    [[nodiscard]] const QList<CalcEng::CellAddr> &invalidCells() const { return m_invalidCells; }
+
     static constexpr int kHeaderWidth = 52;
     static constexpr int kHeaderHeight = 24;
     // The outline gutter (M66, D-075): one step per level, beside the row
@@ -283,6 +307,12 @@ private:
     mutable QByteArray m_pivotThemeKey;
     void paintGrid(QPainter &p);
     void setChrome(QColor &slot, const QColor &value);
+    // spreadsheet_item_overlay.cpp (M78): Page Break Preview and the
+    // invalid-data circles, in grid coordinates.
+    void paintPageBreaks(QPainter &p);
+    void paintInvalidCircles(QPainter &p);
+    std::optional<PageBreakView> m_pageBreaks;
+    QList<CalcEng::CellAddr> m_invalidCells;
 
     SpreadsheetDocument *m_document = nullptr;
     // AGENT-GUARD: A1, never {-1,-1} — the selection readouts describe a

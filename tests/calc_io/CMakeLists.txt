@@ -51,6 +51,12 @@ qqo_add_calc_io_test(tst_calc_io_corpus Qt6::Gui)
 # protection, spills and the carried pivot table. Skips without soffice.
 qqo_add_calc_io_test(tst_calc_io_libre)
 set_tests_properties(tst_calc_io_libre PROPERTIES TIMEOUT 900)
+# M78 (D-087): every print setting read, written and read back from an
+# Excel-shaped package (schema-valid, printer settings carried and linked),
+# and LibreOffice printing a sheet with print titles and Fit to one page
+# wide to PDF (skips without soffice / pdftotext).
+qqo_add_calc_io_test(tst_calc_io_print)
+set_tests_properties(tst_calc_io_print PROPERTIES TIMEOUT 600)
 
 # Not a test: the M61 measurement tool (see calc_io_survey.cpp) — prints
 # aggregate counts for a list of real workbooks, never their content.
@@ -59,3 +65,11 @@ target_link_libraries(calc_io_survey PRIVATE calc_io)
 qqo_set_strict_warnings(calc_io_survey)
 # M74 (D-083): Excel PivotTables into the model and back (pivot_fixtures.h).
 qqo_add_calc_io_test(tst_calc_io_pivot)
+# M78 (D-087): scenarios and data tables as Excel writes them, read into the
+# model, written back and re-opened by LibreOffice (skips without soffice).
+qqo_add_calc_io_test(tst_calc_io_whatif)
+set_tests_properties(tst_calc_io_whatif PROPERTIES TIMEOUT 600)
+# M78 (D-087): every conditional-format and validation kind in Excel's
+# markup, and the rules the model cannot hold kept byte for byte with their
+# dxfs and priorities (kept_fixtures.h).
+qqo_add_calc_io_test(tst_calc_io_kept)

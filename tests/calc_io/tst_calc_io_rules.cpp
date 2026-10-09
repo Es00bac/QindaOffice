@@ -127,9 +127,10 @@ void CalcIoRulesTest::expressionAndDataBarSurvive()
     QVERIFY(barIt != rules.end());
     QCOMPARE(int(barIt->barColor.r), 0x08);
     QCOMPARE(int(barIt->barColor.g), 0x7F);
+    // M78 (D-087): the largest value's Excel 2007 bar fills 90 % of the cell.
     const auto fraction = back.condFormatFor(0, {3, 0}).dataBar;
     QVERIFY(fraction.has_value());
-    QCOMPARE(fraction->fraction, 1.0);
+    QVERIFY(qAbs(fraction->fraction - 0.9) < 1e-9);
 }
 
 void CalcIoRulesTest::validationsRoundTrip()

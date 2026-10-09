@@ -123,37 +123,160 @@ void appendContentTypeDefault(QByteArray *contentTypesXml, const QString &extens
     }
 }
 
+namespace {
+
+// A tag's local name ("x14:cfRule" → "cfRule" is NOT done: names here are
+// compared as written, prefix included, since the post-pass works on its
+// own unprefixed SpreadsheetML).
+QByteArray tagName(const QByteArray &xml, qsizetype nameStart)
+{
+    qsizetype end = nameStart;
+    while (end < xml.size()) {
+        const char c = xml.at(end);
+        if (c == ' ' || c == '>' || c == '/' || c == '\t' || c == '\n' || c == '\r') {
+            break;
+        }
+        ++end;
+    }
+    return xml.mid(nameStart, end - nameStart);
+}
+
+// The end of the tag that starts at `open` ('<'): the offset of its '>',
+// quoted attribute values skipped (they may hold '>'). -1 when unterminated.
+qsizetype tagEnd(const QByteArray &xml, qsizetype open)
+{
+    char quote = 0;
+    for (qsizetype i = open + 1; i < xml.size(); ++i) {
+        const char c = xml.at(i);
+        if (quote != 0) {
+            quote = c == quote ? 0 : quote;
+        } else if (c == '"' || c == '\'') {
+            quote = c;
+        } else if (c == '>') {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Calls `visit(offset, depth, name, isEnd, selfClosing)` for every element
+// tag of `xml`, depth counting from 0 for the root element; comments,
+// processing instructions and CDATA are skipped. Stops when visit returns
+// true; returns that offset or -1.
+template<typename Visit>
+qsizetype walkTags(const QByteArray &xml, Visit visit)
+{
+    int depth = -1;
+    for (qsizetype pos = xml.indexOf('<'); pos >= 0 && pos + 1 < xml.size(); pos = xml.indexOf('<', pos + 1)) {
+        const char next = xml.at(pos + 1);
+        if (next == '?') {
+            pos = xml.indexOf("?>", pos);
+            if (pos < 0) {
+                return -1;
+            }
+            continue;
+        }
+        if (next == '!') {
+            if (xml.mid(pos, 4) == "<!--") {
+                pos = xml.indexOf("-->", pos);
+            } else if (xml.mid(pos, 9) == "<![CDATA[") {
+                pos = xml.indexOf("]]>", pos);
+            } else {
+                pos = xml.indexOf('>', pos);
+            }
+            if (pos < 0) {
+                return -1;
+            }
+            continue;
+        }
+        const qsizetype end = tagEnd(xml, pos);
+        if (end < 0) {
+            return -1;
+        }
+        if (next == '/') {
+            const QByteArray name = tagName(xml, pos + 2);
+            if (visit(pos, depth, name, true, false)) {
+                return pos;
+            }
+            --depth;
+        } else {
+            const bool selfClosing = xml.at(end - 1) == '/';
+            ++depth;
+            const QByteArray name = tagName(xml, pos + 1);
+            if (visit(pos, depth, name, false, selfClosing)) {
+                return pos;
+            }
+            if (selfClosing) {
+                --depth;
+            }
+        }
+        pos = end;
+    }
+    return -1;
+}
+
+// "name", "<name", "/root" or "</root>" → the bare name and whether it is
+// the root's end tag.
+QPair<QByteArray, bool> anchorOf(QString tag)
+{
+    if (tag.startsWith(QLatin1Char('<'))) {
+        tag.remove(0, 1);
+    }
+    if (tag.endsWith(QLatin1Char('>'))) {
+        tag.chop(1);
+    }
+    const bool end = tag.startsWith(QLatin1Char('/'));
+    return {(end ? tag.mid(1) : tag).toUtf8(), end};
+}
+
+} // namespace
+
+qsizetype topLevelTagOffset(const QByteArray &xml, const QStringList &tags)
+{
+    QList<QPair<QByteArray, bool>> anchors;
+    for (const QString &tag : tags) {
+        anchors.append(anchorOf(tag));
+    }
+    return walkTags(xml, [&anchors](qsizetype, int depth, const QByteArray &name, bool isEnd, bool) {
+        for (const auto &[anchor, rootEnd] : anchors) {
+            if (rootEnd ? (isEnd && depth == 0 && name == anchor) : (!isEnd && depth == 1 && name == anchor)) {
+                return true;
+            }
+        }
+        return false;
+    });
+}
+
+qsizetype topLevelElementEnd(const QByteArray &xml, const QString &name)
+{
+    const QByteArray wanted = name.toUtf8();
+    return walkTags(xml, [&wanted](qsizetype, int depth, const QByteArray &tag, bool isEnd, bool) {
+        return isEnd && depth == 1 && tag == wanted;
+    });
+}
+
 bool insertBeforeAny(QByteArray *sheetXml, const QStringList &beforeTags,
                      const QByteArray &fragment)
 {
-    int earliest = -1;
-    for (const QString &tag : beforeTags) {
-        // Match "<tag " and "<tag>" so namespace-free and attributed shapes
-        // both count (QXlsx writes no prefix).
-        const QByteArray withAttr = QByteArrayLiteral("<") + tag.toUtf8() + QByteArrayLiteral(" ");
-        const QByteArray bare = QByteArrayLiteral("<") + tag.toUtf8() + QByteArrayLiteral(">");
-        const int a = sheetXml->indexOf(withAttr);
-        const int b = sheetXml->indexOf(bare);
-        const int found = a >= 0 && b >= 0 ? qMin(a, b) : qMax(a, b);
-        if (found >= 0 && (earliest < 0 || found < earliest)) {
-            earliest = found;
-        }
-    }
-    if (earliest < 0) {
+    // AGENT-GUARD (M78, D-087): only the root's own children count. A kept
+    // conditional format carries an <extLst> of its own, a custom sheet view
+    // a <pageSetup>: the first textual match used to be one of those, and
+    // the fragment landed inside the wrong element.
+    const qsizetype at = topLevelTagOffset(*sheetXml, beforeTags);
+    if (at < 0) {
         return false;
     }
-    sheetXml->insert(earliest, fragment);
+    sheetXml->insert(at, fragment);
     return true;
 }
 
 bool insertAfterTag(QByteArray *sheetXml, const QString &tag, const QByteArray &fragment)
 {
-    const QByteArray marker = QByteArrayLiteral("</") + tag.toUtf8() + QByteArrayLiteral(">");
-    const int found = sheetXml->indexOf(marker);
+    const qsizetype found = topLevelElementEnd(*sheetXml, tag);
     if (found < 0) {
         return false;
     }
-    sheetXml->insert(found + marker.size(), fragment);
+    sheetXml->insert(sheetXml->indexOf('>', found) + 1, fragment);
     return true;
 }
 

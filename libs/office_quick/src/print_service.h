@@ -12,11 +12,13 @@
 
 #include <QAbstractListModel>
 #include <QImage>
+#include <QPageLayout>
 #include <QObject>
 #include <QQuickPaintedItem>
 #include <QtQml/qqmlregistration.h>
 
 #include <functional>
+#include <optional>
 
 class QPainter;
 class QPrinter;
@@ -67,6 +69,12 @@ public:
     ~PrintJob() override;
 
     void setRender(PrintRenderCallback render);
+    // M78 (D-087): the paper the document asks for (a sheet's Page Setup:
+    // size, orientation). Applied to the printer BEFORE the painter starts —
+    // a layout changed during painting only reaches the next page — with
+    // the print dialog's orientation over it. The render draws its own
+    // margins; the layout's are taken as given.
+    void setPageLayout(const QPageLayout &layout);
 
     [[nodiscard]] QString printerName() const { return m_printerName; }
     void setPrinterName(const QString &name);
@@ -108,6 +116,9 @@ private:
     int m_toPage = 0;
     bool m_landscape = false;
     int m_pageCount = 0;
+    std::optional<QPageLayout> m_pageLayout;
+    // The page layout (when the document gave one) with the job's orientation.
+    void applyPageLayout(QPrinter *printer) const;
     class Private;
     Private *d = nullptr;
 };

@@ -19,11 +19,14 @@
 #include "xlsx_formula.h"
 #include "xlsx_manifest.h"
 #include "xlsx_post.h"
+#include "xlsx_print.h"
+#include "xlsx_rules.h"
 #include "xlsx_style.h"
 #include "xlsx_text.h"
 #include "xlsx_write_book.h"
 #include "xlsx_write_features.h"
 #include "xlsx_write_rules.h"
+#include "xlsx_whatif.h"
 #include "xlsx_write_pivot.h"
 #include "xlsx_write_xml.h"
 
@@ -204,14 +207,7 @@ void fillSheetPatch(const Sheet &sheet, qint32 index, const QList<PatchManifest:
     if (sheet.cursor().isValid() && sheet.cursor() != CellAddr{0, 0}) {
         patch->activeCell = addrText(sheet.cursor());
     }
-    const Sheet::PageSetup &setup = sheet.pageSetup();
-    if (setup.orientation != 0 || setup.fitToWidth != 0 || setup.fitToHeight != 0) {
-        patch->pageSetupXml = QByteArrayLiteral("<pageSetup")
-            + (setup.orientation != 0 ? QByteArrayLiteral(" orientation=\"landscape\"") : QByteArray())
-            + (setup.fitToWidth != 0 ? QByteArrayLiteral(" fitToWidth=\"") + QByteArray::number(setup.fitToWidth) + "\"" : QByteArray())
-            + (setup.fitToHeight != 0 ? QByteArrayLiteral(" fitToHeight=\"") + QByteArray::number(setup.fitToHeight) + "\"" : QByteArray())
-            + QByteArrayLiteral("/>");
-    }
+    fillPrintPatch(sheet, patch); // M78 (D-087): every print setting
 }
 
 // Floating charts (plan section 7.2). Charts with an explicit series list
@@ -323,6 +319,9 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
         return formats.value(styleId);
     };
     HiddenLists lists{hiddenListsSheetName(wb), {}};
+    // M78 (D-087): the dxfs of the whole save — the source's first.
+    DxfTable dxfs(wb.source.dxfs, wb.source.themeXml.isEmpty() ? ThemePalette::officeDefault()
+                                                               : themePaletteFromXml(wb.source.themeXml));
     int nextVmlBlock = 1;
     for (qint32 s = 0; s < wb.sheetCount(); ++s) {
         const Sheet &sheet = wb.sheetAt(s);
@@ -373,10 +372,18 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
         for (const qint32 row : sheet.sizedRows()) {
             worksheet->setRowHeight(row + 1, row + 1, pxToPt(sheet.rowHeight(row)));
         }
-        writeValidations(worksheet, wb, sheet, &lists);
-        writeCondFormats(worksheet, sheet);
+        if (manifest == nullptr) {
+            // No post-pass: QXlsx's own model is all there is.
+            writeValidations(worksheet, wb, sheet, &lists);
+            writeCondFormats(worksheet, sheet);
+        } else {
+            // M78 (D-087): every rule kind in Excel's markup, kept rules
+            // byte for byte (xlsx_rules.h).
+            fillRulesPatch(wb, sheet, &dxfs, &lists, &patch, manifest->warnings);
+        }
         fillSheetPatch(sheet, s, tables, &nextVmlBlock, &patch);
         fillSheetFeatures(wb, sheet, &patch); // links, outline, protection, source (M66)
+        fillWhatIfPatch(wb, s, &patch);       // scenarios and data tables (M78)
         if (manifest != nullptr) {
             // Every sheet: the carry stage and the features need each one.
             manifest->dynamicArrays = manifest->dynamicArrays || !patch.arrayRefs.isEmpty();
@@ -414,6 +421,7 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
             manifest->images.append(patch);
         }
         manifest->definedNames = definedNamesForFile(wb);
+        manifest->dxfsXml = dxfs.xml(); // M78 (D-087)
         planPivotParts(wb, manifest); // M74 (D-083)
         manifest->source = wb.source;
         manifest->protection = wb.protection;

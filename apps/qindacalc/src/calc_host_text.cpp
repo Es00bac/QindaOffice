@@ -6,6 +6,8 @@
 
 #include "calc_host.h"
 
+#include "calc_print.h"
+
 #include "chart_series.h"
 #include "spreadsheet_item.h"
 #include "standard_actions.h"
@@ -15,6 +17,7 @@
 #include "sheet.h"
 
 #include <QPainter>
+#include <QFileInfo>
 #include <QPrinter>
 
 namespace QindaOffice::Apps::QindaCalc {
@@ -258,62 +261,28 @@ int CalcHost::replaceAll(const QString &needle, const QString &replacement, bool
 
 Quick::PrintRenderCallback CalcHost::printRenderCallback() const
 {
-    // Snapshot what to print now; the render runs synchronously inside the
-    // print job, so the document cannot move under it. A print area set on
-    // the sheet (from the file) wins over the used range.
-    const SpreadsheetDocument *doc = m_document;
-    const qint32 sheetIndex = m_document->activeSheet();
-    const Sheet &sheet = m_document->workbook()->sheetAt(sheetIndex);
-    const CellRange used = sheet.printArea().has_value()
-        ? *sheet.printArea()
-        : (m_grid != nullptr ? m_grid->usedRange() : CellRange{});
-    const bool landscape = sheet.pageSetup().orientation == 1;
-    return [doc, sheetIndex, used, landscape](QPrinter *printer, QPainter *painter) {
-        if (!used.isValid() || sheetIndex >= doc->workbook()->sheetCount()) {
-            return;
-        }
-        if (landscape && printer->pageLayout().orientation() != QPageLayout::Landscape) {
-            printer->setPageOrientation(QPageLayout::Landscape);
-        }
-        const Sheet &s = doc->workbook()->sheetAt(sheetIndex);
-        const QRectF page(0, 0, printer->width(), printer->height());
-        // Paginate the used range by rows, fitting the columns to the page
-        // width. A row never splits across pages.
-        qreal totalWidth = 0;
-        for (qint32 col = used.topLeft.col; col <= used.bottomRight.col; ++col) {
-            totalWidth += s.columnWidth(col);
-        }
-        const qreal scale = totalWidth > 0 ? qMin<qreal>(1.0, page.width() / totalWidth) : 1.0;
-        painter->save();
-        painter->scale(scale, scale);
-        const qreal pageHeight = page.height() / scale;
-        qreal y = 0;
-        for (qint32 row = used.topLeft.row; row <= used.bottomRight.row; ++row) {
-            const qreal h = s.rowHeight(row);
-            if (y > 0 && y + h > pageHeight) {
-                printer->newPage();
-                y = 0;
-            }
-            qreal x = 0;
-            for (qint32 col = used.topLeft.col; col <= used.bottomRight.col; ++col) {
-                const qreal w = s.columnWidth(col);
-                const QRectF cell(x, y, w, h);
-                painter->drawRect(cell);
-                const QString text = doc->displayTextAt(sheetIndex, {row, col});
-                if (!text.isEmpty()) {
-                    const Cell *data = s.cellAt({row, col});
-                    const Qt::Alignment align = Qt::AlignVCenter
-                        | ((data != nullptr && (isNumber(data->value) || isBool(data->value)))
-                               ? Qt::AlignRight
-                               : Qt::AlignLeft);
-                    painter->drawText(cell.adjusted(3, 0, -3, 0), int(align), text);
-                }
-                x += w;
-            }
-            y += h;
-        }
-        painter->restore();
-    };
+    // M78 (D-087): Excel's pages — Page Setup, print area and titles,
+    // breaks, headers and footers (calc_print.cpp). Snapshot what to print
+    // now; the render runs synchronously inside the print job.
+    SheetPrintContext context;
+    context.baseFont = m_grid != nullptr ? m_grid->cellFont() : QFont();
+    if (context.baseFont.pointSizeF() <= 0) {
+        context.baseFont.setPointSizeF(11);
+    }
+    const QFileInfo file(m_document->canonicalPath());
+    context.fileName = m_document->canonicalPath().isEmpty() ? tr("Book1") : file.fileName();
+    context.filePath = m_document->canonicalPath().isEmpty() ? QString() : file.absolutePath() + QLatin1Char('/');
+    return sheetPrintRender(m_document, m_document->activeSheet(), context);
+}
+
+bool CalcHost::printPrefersLandscape() const
+{
+    return sheet().pageSetup().orientation == 1;
+}
+
+std::optional<QPageLayout> CalcHost::printPageLayout() const
+{
+    return sheetPageLayout(m_document, m_document->activeSheet());
 }
 
 // ---- charts -------------------------------------------------------------------------

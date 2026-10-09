@@ -9,6 +9,11 @@
 // ECMA-376 schemas; only errors the save ADDS count (a carried part keeps
 // whatever its source had). Since M74 (D-083) PivotTables are counted too:
 // how many, how many QindaCalc models, and whether a round trip kept both.
+// Since M78 (D-087): the sheets with print settings and the workbooks whose
+// page setup, print areas, titles or breaks a round trip changed; and the
+// conditional-format and validation rules, counted apart — modelled, and
+// kept as Excel wrote them — where a round trip that loses one fails the
+// gate.
 //
 // AGENT-GUARD: it runs over the owner's private files, which never leave
 // the laptop. It prints aggregate counts only — never a file name, a sheet
@@ -52,7 +57,50 @@ struct BookStats {
     qint64 carriedParts = 0; // parts of the reduced source copy a save carries from
     qint64 pivots = 0;          // PivotTables, modelled or kept as read (M74, D-083)
     qint64 pivotsModelled = 0;  // the ones QindaCalc lays out and edits
+    qint64 printedSheets = 0;   // sheets with print settings of their own (M78, D-087)
+    // M78 (D-087): conditional-format rules and validations, in the model
+    // and kept as written (a kept <conditionalFormatting> counts its rules).
+    qint64 formats = 0;
+    qint64 keptFormats = 0;
+    qint64 validations = 0;
+    qint64 keptValidations = 0;
+    [[nodiscard]] qint64 rules() const { return formats + keptFormats + validations + keptValidations; }
 };
+
+// M78 (D-087): a sheet's print settings — page setup, print areas, titles,
+// breaks — as the model holds them.
+bool hasPrintSettings(const Sheet &sheet)
+{
+    return sheet.pageSetup() != Sheet::PageSetup() || sheet.printArea().has_value()
+        || sheet.printTitleRows().has_value() || sheet.printTitleCols().has_value();
+}
+
+bool samePrintSettings(const Workbook &before, const Workbook &after)
+{
+    if (before.sheetCount() != after.sheetCount()) {
+        return false;
+    }
+    for (qint32 s = 0; s < before.sheetCount(); ++s) {
+        const Sheet &a = before.sheetAt(s);
+        const Sheet &b = after.sheetAt(s);
+        if (a.pageSetup() != b.pageSetup() || a.printArea() != b.printArea() || a.printTitleRows() != b.printTitleRows()
+            || a.printTitleCols() != b.printTitleCols()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+qint64 keptFormatRules(const KeptRule &rule)
+{
+    static const QRegularExpression cfRule(QStringLiteral("<(?:[\\w.-]+:)?cfRule[\\s>/]"));
+    qint64 count = 0;
+    for (auto it = cfRule.globalMatch(rule.xml); it.hasNext();) {
+        static_cast<void>(it.next());
+        ++count;
+    }
+    return count;
+}
 
 qint64 carriedParts(const Workbook &wb)
 {
@@ -79,10 +127,18 @@ BookStats statsOf(const Workbook &wb)
         }
         stats.tables += sheet.tables().size();
         stats.comments += sheet.comments().size();
+        stats.formats += sheet.condFormats().size();
+        stats.validations += sheet.validations().size();
+        for (const KeptRule &rule : sheet.keptRules()) {
+            const bool format = rule.kind == KeptRule::Kind::CondFormat || rule.kind == KeptRule::Kind::CondFormatX14;
+            stats.keptFormats += format ? keptFormatRules(rule) : 0;
+            stats.keptValidations += format ? 0 : 1;
+        }
         for (const PivotTable &pivot : sheet.pivots()) {
             ++stats.pivots;
             stats.pivotsModelled += pivot.modelled ? 1 : 0;
         }
+        stats.printedSheets += hasPrintSettings(sheet) ? 1 : 0;
     }
     stats.charts = wb.charts.size();
     stats.pictures = wb.images.size();
@@ -192,6 +248,9 @@ void CalcIoCorpusTest::roundTripsEveryWorkbook()
     qint64 commentsChanged = 0;
     qint64 carriedChanged = 0;
     qint64 pivotsChanged = 0;
+    qint64 printChanged = 0;
+    qint64 rulesLost = 0;     // M78: workbooks whose rules a round trip lost
+    qint64 rulesChanged = 0;  // … or moved between modelled and kept
     qint64 invalid = 0;
     qint64 slowestMs = 0;
     QMap<QString, int> schemaErrors;
@@ -224,6 +283,11 @@ void CalcIoCorpusTest::roundTripsEveryWorkbook()
         total.carriedParts += before.carriedParts;
         total.pivots += before.pivots;
         total.pivotsModelled += before.pivotsModelled;
+        total.printedSheets += before.printedSheets;
+        total.formats += before.formats;
+        total.keptFormats += before.keptFormats;
+        total.validations += before.validations;
+        total.keptValidations += before.keptValidations;
 
         const bool macros = path.endsWith(QLatin1String(".xlsm"), Qt::CaseInsensitive);
         const QString out = scratch.filePath(QStringLiteral("book%1.%2").arg(i + 1).arg(macros ? "xlsm" : "xlsx"));
@@ -252,6 +316,14 @@ void CalcIoCorpusTest::roundTripsEveryWorkbook()
         commentsChanged += before.comments != after.comments ? 1 : 0;
         carriedChanged += before.carriedParts != after.carriedParts ? 1 : 0;
         pivotsChanged += before.pivots != after.pivots || before.pivotsModelled != after.pivotsModelled ? 1 : 0;
+        printChanged += samePrintSettings(wb, back) ? 0 : 1;
+        if (after.rules() < before.rules()) {
+            ++rulesLost;
+            failures.append(QStringLiteral("#%1 lost conditional-format or validation rules").arg(i + 1));
+        } else if (before.formats != after.formats || before.keptFormats != after.keptFormats
+                   || before.validations != after.validations || before.keptValidations != after.keptValidations) {
+            ++rulesChanged;
+        }
         const qint64 changed = changedCells(wb, back, &formulaTextsChanged);
         cellsChanged += changed;
         booksWithCellChanges += changed > 0 ? 1 : 0;
@@ -291,9 +363,17 @@ void CalcIoCorpusTest::roundTripsEveryWorkbook()
         .arg(formulaCountChanged).arg(chartsChanged).arg(picturesChanged).arg(tablesChanged).arg(commentsChanged)
         .arg(carriedChanged).arg(cellsChanged).arg(formulaTextsChanged).arg(booksWithCellChanges).arg(invalid)
         .arg(validate ? QString() : QStringLiteral(" (validation off: set QQO_OOXML_SCHEMA_DIR)"));
+    qInfo().noquote() << QStringLiteral("printing: %1 sheets with print settings of their own; workbooks whose print "
+                                        "settings changed in the round trip %2")
+                             .arg(total.printedSheets).arg(printChanged);
     qInfo().noquote() << QStringLiteral("pivots: %1 PivotTables, %2 modelled (the rest kept as read); workbooks whose "
                                         "PivotTables changed in the round trip %3")
                              .arg(total.pivots).arg(total.pivotsModelled).arg(pivotsChanged);
+    qInfo().noquote() << QStringLiteral("rules: %1 conditional-format rules modelled, %2 kept as written; %3 validations "
+                                        "modelled, %4 kept as written; workbooks that lost rules %5, whose rules changed "
+                                        "kind %6")
+                             .arg(total.formats).arg(total.keptFormats).arg(total.validations).arg(total.keptValidations)
+                             .arg(rulesLost).arg(rulesChanged);
     for (auto it = schemaErrors.cbegin(); it != schemaErrors.cend(); ++it) {
         qInfo().noquote() << QStringLiteral("  %1x %2").arg(it.value()).arg(it.key());
     }
@@ -303,6 +383,7 @@ void CalcIoCorpusTest::roundTripsEveryWorkbook()
     QCOMPARE(readFailed, 0);
     QCOMPARE(writeFailed, 0);
     QCOMPARE(rereadFailed, 0);
+    QCOMPARE(rulesLost, 0); // M78 (D-087): a workbook never loses a rule silently
 }
 
 // A GUI application: real workbooks hold pictures and fonts QXlsx decodes.

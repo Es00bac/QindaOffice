@@ -33,6 +33,157 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M78 Calc gates (D-087)
+
+Qualified on qinda (branch `m78-calc-whatif`, merged with
+`m60-office-formats` a994c60) with `QQO_OOXML_SCHEMA_DIR=~/scratch/qqo/ecma-xsd`
+and xmllint, as a targeted build (calc_engine, calc_io, office_ooxml,
+QindaCalc and their tests, and the calc_io consumers; qinda's disk is
+shared): **64/64 CTest targets passed, 352.88 s** (`ctest --preset dev -R
+"calc|tst_pptx_charts|tst_books_io_reports|tst_books_io_orders|tst_plan_output|tst_qindabase_interchange"`).
+QtTest counts (init/cleanup included):
+
+- calc_engine — `tst_calc_parser` 57, `_functions` 6, `_recalc` 12,
+  `_numfmt` 7, `_csv` 8, `_structure` 18, `_rules` 13, `_spill` 11,
+  `_features` 10, `_tables` 13, `_arrays` 12, `_pivot` 25, `_pivot_values`
+  18, `_pivot_edit` 10, **`_datatools` 17, `_flashfill` 16, `_whatif` 12,
+  `_datatables` 9, `_pagelayout` 20, `_condformat` 15, `_validation` 5**:
+  314 passed.
+- calc_io — `tst_calc_io` 9, `_styles` 6, `_rules` 7, `_charts` 5, `_tables`
+  4, `_view` 4, `_images` 5, `_excel` 10, `_package` 9, `_links` 4,
+  `_outline` 3, `_protect` 3, `_carry` 7, `_carry_sheet` 6, `_arrays` 5,
+  `_structured` 6, `_chartsheets` 5, `_corpus` 2 (1 skipped without a
+  corpus), `_libre` 7, `_pivot` 12, **`_print` 9, `_whatif` 6, `_kept` 9**:
+  143 passed.
+- QindaCalc — `tst_calc_window` 12 (1 skipped), `_sample` 3 (8 skipped
+  without `QQO_SAMPLE_XLSX`), `_ui` 16, `_rules_ui` 6, `_menu_export` 3,
+  `_tools` 4, `_agent` 5, `_features_ui` 7, `_tables_ui` 6, `_pivot_ui` 8,
+  **`_whatif_ui` 6, `_print_ui` 7, `_datatools_ui` 8, `_condformat_ui` 6**,
+  and `calc_agent_process`: 97 passed.
+- Consumers of calc_io — `tst_pptx_charts` 7, `tst_books_io_reports` 11,
+  `tst_books_io_orders` 5, `tst_plan_output` 9, `tst_qindabase_interchange`
+  6: 38 passed.
+
+The gates, per item (packages are built by hand the way Excel 365 writes
+them; every saved package validates against the Transitional XSDs):
+
+- **No rule lost** (`tst_calc_io_kept`, `tst_calc_condformat`,
+  `tst_calc_validation`, `tst_calc_io_rules`): a workbook with what the
+  model cannot hold (a custom icon per threshold, an x14 rule with a
+  cross-sheet formula, a `pivot="1"` block, an unparsable formula) saves
+  those `<conditionalFormatting>` blocks, the x14
+  `x14:conditionalFormattings` and their dxfs byte for byte, also after an
+  edit elsewhere; kept rules follow an inserted row; priorities are kept
+  while they describe the rules and renumbered when they do not; changed
+  formats get new dxfs after the source's table; Excel's data-bar twin
+  (2007 rule + x14 extension by {GUID}) round-trips as one bar; every
+  modelled kind (cellIs with numbers, text and cells, the text rules,
+  blanks, errors, Top 10 / bottom / percent, above/below average with
+  standard deviations, duplicates, uniques, dates occurring, formulas,
+  two- and three-colour scales, data bars, icon sets) and every validation
+  type, operator and alert (x14 included) round-trips equal. The engine
+  evaluates each kind against hand-worked values (over the whole sqref,
+  formulas anchored at its first range), precedence and Stop If True
+  across kinds, rule formulas through structural edits.
+- **Printing** (`tst_calc_pagelayout`, `tst_calc_io_print`,
+  `tst_calc_print_ui`): the pagination against hand-worked pages — paper
+  and margins, rows and columns cut, Adjust to, Fit to (the largest whole
+  percent), manual breaks (ignored under Fit to), print titles repeated,
+  hidden rows, headings, page order and first page number, several print
+  areas; Excel's Breaks commands; print settings through structural edits;
+  the header and footer codes (&P &N &D &T &F &Z &A, fonts, sizes,
+  colours; first / odd / even) parsed, filled in and written back, and
+  Excel's ready-made list. Every print setting round-trips (`pageSetup`,
+  `pageMargins`, `printOptions`, `headerFooter`, `rowBreaks` / `colBreaks`,
+  sheetPr `fitToPage`, `_xlnm.Print_Area` / `_xlnm.Print_Titles`), defaults
+  write nothing, custom sheet views keep their own settings, a dynamic
+  print area is kept, the printer settings part travels alone, header
+  pictures travel with their VML.
+- **LibreOffice prints a written sheet** (`tst_calc_io_print`
+  `libreOfficePrintsTitlesAndFitToWidth`, headless 25.2 to PDF): a 20-column,
+  120-row sheet with print titles (row 1) and Fit to 1 page wide comes out
+  as 2 Letter pages, all 20 columns on each, the title row repeated on
+  page 2 — looked at. QindaCalc's own Export PDF with the same settings
+  (`tst_calc_print_ui` `exportPdfHonoursPageSetup`, read back with
+  Poppler) was looked at too: the header "Sheet1" / "Quarterly", "Page 1 of
+  3" footers, headings, row 1 repeated, Normal margins.
+- **What-if** (`tst_calc_whatif`, `tst_calc_datatables`,
+  `tst_calc_io_whatif`, `tst_calc_whatif_ui`): Goal Seek on a linear and a
+  nonlinear model, no solution (the closest value kept and said), Excel's
+  refusals, the formatting kept; scenarios (Excel's problems with inputs,
+  Show entering values, the summary giving every cell back, the report's
+  layout and widths, structural edits); one-variable column and row tables
+  and a two-variable table recalculated with every change, the input
+  cell's own formula kept, structural edits, a 20 × 20 table timed; Excel's
+  `<scenarios>` and `t="dataTable"` tables read, saved and made here, and
+  LibreOffice reopening the written tables with our values. Through the
+  window: Goal Seek and its status (OK keeps one undo step, Cancel puts
+  the workbook back), the Scenario Manager (add, edit, show, delete,
+  summary), Data Table following its formula.
+- **Data tools** (`tst_calc_datatools`, `tst_calc_flashfill`,
+  `tst_calc_datatools_ui`): Text to Columns (delimited with empty fields,
+  qualifiers, consecutive delimiters; fixed width with guessed breaks;
+  column formats and skip; the Advanced separators; destination and empty
+  lines; the overwrite question), Remove Duplicates (chosen columns,
+  Excel's refusals, whole columns meaning their data, the header guess,
+  the report), Flash Fill (names, joins, case, digits, initials, e-mail
+  parts, first letters, what it inferred, an ambiguity settled by one more
+  example or refused, what it cannot infer said plainly; a title row read
+  as headers; Excel's current region), Consolidate by position and by
+  labels, Circle Invalid Data.
+- **Conditional formatting and validation through the window**
+  (`tst_calc_condformat_ui`, `tst_calc_rules_ui`): the gallery commands
+  painting a bar, a colour and an icon; New Formatting Rule for every kind;
+  the Rules Manager (move and delete, one undo step each); Clear Rules; a
+  Warning validation's question (No takes the value back); the recovery
+  payload carrying every new field.
+- **Ribbon and menus**: the ribbon gate (`tst_calc_ui`: every menu command
+  on the ribbon, every icon known, every item of every tab inside the
+  ribbon at 1280 and 520 px, the Page Layout tab included) and the menu
+  export (`tst_calc_menu_export`: every exported id resolves, the 43 new
+  ids among them; the Page Layout menu). Page Setup, Page Break Preview,
+  Goal Seek, the Scenario Manager, Data Table, Text to Columns, Remove
+  Duplicates, Consolidate, New Formatting Rule and the Rules Manager were
+  also opened at 520 px.
+- **Fixtures** regenerated deliberately (`QQO_UPDATE_FIXTURES=1`): at 1280
+  and 520 the only changes are the Page Layout tab button and Home ▸ Styles
+  (the Conditional Formatting menu button). **Grabs** looked at: the Page
+  Layout tab and Page Break Preview at 1280 and 520, the four Page Setup
+  tabs (Header/Footer at 520 too), Goal Seek (and at 520) and its status,
+  the Scenario Manager (and at 520), Add Scenario, the Scenario Summary
+  sheet, Data Table, the conditional-format gallery painted, New
+  Formatting Rule at 1280 and 520, the Rules Manager at 1280 and 520, Text
+  to Columns at 1280 and 520, Remove Duplicates, Consolidate (and at 520),
+  circled invalid data, Data Validation and its Warning question. The
+  looking found and fixed: the Margins tab reading 0.00 (a Qt 6.11
+  delegate-lookup quirk, AGENT-GUARD in `PageSetupMarginsTab.qml`), the
+  rule dialog's panels not seeing their dialog, clipped labels, the
+  Header/Footer lists not showing the chosen entry, the summary's narrow
+  columns.
+- **Real-workbook gate** (`tst_calc_io_corpus`, which now also counts
+  modelled and kept rules, print settings, and fails when a workbook loses
+  a rule): over the 482 Excel-written workbooks vendored with QXlsx
+  (`data03.xlsx` left out, D-078): 482 read, 0 failed, 482 written and
+  re-read, 0 cells or formula texts changed, 271 charts and 48 pictures
+  kept, 0 schema-invalid, slowest round trip 237 ms (151 s in all); 47
+  sheets with print settings of their own, none changed by the round trip;
+  6 validations modelled and 0 kept, no conditional formats in them, 0
+  workbooks lost a rule or saw one change kind; the one carried-part
+  difference is `IssueTest/test.xlsx`'s empty relationships part, as
+  before (M69). The owner's workbooks are the lead's run on the laptop.
+- Not verified: Microsoft Excel itself (none here).
+- **Desktop check (owner):** in QindaCalc on the desktop, open one of your
+  workbooks with conditional formatting: no "skipped rule" warning, the
+  bars, scales and icons drawn, Home ▸ Conditional Formatting ▸ Manage
+  Rules lists them (and any kept ones, read-only, with why). On a long
+  list, Page Layout ▸ Print Titles (rows to repeat) and Scale to Fit ▸
+  Width: 1 page, then File ▸ Export PDF: every page carries the title rows
+  and the full width. Run Data ▸ What-If Analysis ▸ Goal Seek on a formula.
+  Save and open the file in Excel: no repair prompt; File ▸ Print shows
+  the same titles, scaling, margins, header and footer; the rules and
+  validations are Excel's own, with the kept ones unchanged; the Goal Seek
+  result is there. Check the dialogs in dark and light themes.
+
 ## M77 Write mailings gates (D-086)
 
 On qinda (branch `m77-write-mailings`, merged with `m60-office-formats`
@@ -3733,7 +3884,9 @@ Rationale in D-034.
       and evaluates shifted; the bar colour and live fraction survive.
 - [x] `validationsRoundTrip`: list (with message) and whole-number rules
       enforce after the round trip; unmappable operators/styles are
-      skipped with a count, never approximated.
+      skipped with a count, never approximated. *(Superseded by M78,
+      D-087: every operator and alert style is modelled, and what the
+      model cannot hold is kept as Excel wrote it.)*
 - [x] `autoFilterRoundTrip`: the element lands after `</sheetData>`,
       re-imports active with its allowed values, and hides the same rows.
 - [x] `commentsRoundTrip`: the comments part, rels and content-type

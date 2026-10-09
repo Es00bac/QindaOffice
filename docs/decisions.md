@@ -5,6 +5,131 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-087: QindaCalc: what-if, data tools, sheet printing, kept rules
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart, with real interchange; M78, builds on D-034,
+D-037, D-069 and D-075)
+
+**Context.** Opening the owner's workbooks reported "skipped N unmappable
+rule(s)": the reader turned every conditional format it could not model —
+colour scales, icon sets, Top 10, above average, duplicates, the text and
+date rules, a cellIs rule whose operand was text or a cell, and Excel
+2010's x14 rules — into nothing, and a save then lost them; validations
+with an operator other than between, a date, time or custom type, or a
+Warning / Information alert went the same way. A multi-range rule was
+cloned per range, so its formulas and statistics were wrong. Printing was
+the used range scaled to the page width, ignoring margins, paper, scaling,
+breaks, titles, headers and footers; only orientation and fit-to survived a
+save (print options, margins, header/footer and breaks were carried from
+the source, never editable). QindaCalc had no Goal Seek, scenarios, data
+tables, Text to Columns, Remove Duplicates, Flash Fill or Consolidate.
+
+**Decision.**
+
+1. **No rule is lost** (`sheet_rules.h` `KeptRule`, `xlsx_rules.h`). Every
+   kind of conditional format Excel writes is modelled
+   (`CondFormatRule::Op`: cellIs with number or formula operands, the four
+   text rules, blanks, errors, Top 10 / bottom / percent, above or below
+   average with standard deviations, duplicates and uniques, dates
+   occurring, formulas, two- and three-colour scales, Excel 2007 and 2010
+   data bars — the x14 twin merged by its {GUID} —, every icon set
+   including x14's), over its whole sqref (statistics over every range,
+   formulas anchored at the first range's top-left). Every validation type
+   and operator is modelled, with formula operands, Warning and
+   Information alerts, input messages, Ignore blank, the in-cell dropdown
+   and x14 validations. What the model still cannot hold — a custom icon
+   per threshold, an x14 rule with a cross-sheet formula or an inline dxf,
+   a `pivot="1"` block, a formula the parser cannot read, an attribute the
+   model lacks — is kept as the exact text Excel wrote (sliced from the
+   decoded part), moved with its sqref, written back byte for byte, and
+   listed read-only in the Rules Manager with the reason; the open
+   warnings say how many each sheet keeps. Priorities and dxfIds stay as
+   read while they still describe the rules; the source's dxf table is
+   written first, unchanged (which also keeps carried PivotTable formats
+   pointing at their dxfs), new formats after it. Rule formulas follow
+   inserted and deleted rows and columns like cell formulas.
+2. **The rules are edited as Excel edits them.** Home ▸ Conditional
+   Formatting: Data Bars, Color Scales and Icon Sets applied at once with
+   Excel's first gallery choice; Top 10 Items, Above Average and Duplicate
+   Values into New Formatting Rule (`CondFormatRuleDialog.qml`: the six
+   rule types with every threshold, colour, bar and icon setting and the
+   format); Clear Rules from the selection (rules re-anchored, formulas
+   shifted) or the sheet; the Rules Manager (move, edit, delete — one undo
+   step each). The grid and the printer draw Excel's bars (negative values
+   from the axis, solid or gradient, borders) and icons as vector shapes in
+   Excel's colours (`calc_cell_look.cpp`: document content, D-004). Data ▸
+   Data Validation has Excel's three tabs; a Stop alert refuses, Warning
+   and Information let the value in and ask (No / Cancel takes it back);
+   Circle Invalid Data rings up to 255 invalid cells and follows edits.
+3. **Printing is Excel's** (`page_layout.h`, `header_footer.h`,
+   `calc_print.cpp`). `Sheet::PageSetup` holds all of Page Setup — paper,
+   orientation, Adjust to / Fit to, first page number, page order, margins,
+   centring, gridlines, headings, black and white, draft, errors as,
+   odd / even / first headers and footers, Scale with document, Align with
+   margins, manual breaks, several print areas — and the print titles and
+   areas stay the `_xlnm` names. One pagination serves Print, Print
+   Preview, Export PDF and View ▸ Page Break Preview (print area outlined,
+   the rest greyed, manual breaks solid and automatic ones dashed, "Page N"
+   over each page): print titles repeated, Fit to as the largest whole
+   percent that fits, manual breaks ignored under Fit to as in Excel,
+   hidden rows and columns skipped. The renderer draws the cells' look,
+   conditional formats, pictures, headings, gridlines and the header and
+   footer codes (&P, &N, &D, &T, &F, &Z, &A, fonts, sizes, colours) on the
+   sheet's paper (office_quick's print job takes the document's page
+   layout before painting starts). Read and written as Excel writes
+   `pageSetup`, `pageMargins`, `printOptions`, `headerFooter`,
+   `rowBreaks`/`colBreaks` and sheetPr `fitToPage`; only the printer
+   settings link, DPI and copies come from the source. The Page Layout tab
+   and Page Setup dialog (four tabs) edit it, one undo step each.
+4. **What-if analysis** (`goal_seek.h`, `scenario.h`, `data_table.h`). Goal
+   Seek with Excel's 100 iterations and 0.001 (secant steps, bracketing and
+   bisection, the closest value kept; Excel's refusals); its status dialog
+   keeps the value as one undo step or puts the workbook back. Scenario
+   Manager: add, edit, delete, show, and the Scenario Summary sheet
+   (Excel's layout, the changing cells' own content given back), written
+   as `<scenarios>`. Data tables, one- and two-variable, worked out after
+   every recalculation by substituting each input (the input cell's own
+   content restored exactly), shown as `{=TABLE(r,c)}`, edited only as a
+   whole (Excel's refusals, structural edits through one refused), read and
+   written as `<f t="dataTable" ref dt2D dtr r1 r2>` with every result's
+   value.
+5. **Data tools** (`text_to_columns.h`, `flash_fill.h`, `data_tools.h`):
+   Text to Columns (delimited or fixed width with Excel's guessed breaks,
+   qualifiers, consecutive delimiters, column formats General / Text / six
+   date orders / skip, Advanced separators; Excel's overwrite question);
+   Remove Duplicates by chosen columns (values compared as Excel does, the
+   kept rows moving up inside the range, Excel's report); Flash Fill
+   (Ctrl+E) by programme synthesis over the examples — words, letter and
+   digit runs, fields, cuts before and after delimiters, prefixes and
+   suffixes, case changes, literals —, ranked by simplicity, refusing an
+   ambiguous fill and saying plainly what it cannot infer (arithmetic,
+   dates, lookups, optional parts); Consolidate by position or by labels
+   with the eleven functions. Also View ▸ Freeze Top Row / First Column.
+6. **Every command is an ActionEntry** with a new stable id (43 in
+   `standard_actions.h` plus `calcPaperSize_<Excel code>`), in the menu
+   tree once and on the ribbon (Home ▸ Styles, Insert ▸ Text, the Page
+   Layout tab with its Scale to Fit slots, Data ▸ Data Tools and Forecast,
+   View ▸ Workbook Views); undo snapshots and the recovery payload carry
+   every new piece of state.
+
+**Consequences.** A workbook's conditional formats and validations survive
+QindaCalc whole: modelled ones shown and editable, the rest kept as Excel
+wrote them and said so. Behaviour changes: a blank cell now matches a
+"less than" rule as in Excel (blank compares as 0); Excel 2007 bars run
+10–90 % of the cell; Validity… is Data Validation…, Conditional
+Formatting… is Manage Rules…; printing follows Page Setup instead of
+fitting the used range to the page width. Limits: formulas inside kept
+rules do not follow structural edits (the save warns); a renumbered
+priority can cut a kept PivotTable format block from its pivot; modelled
+colours are written as RGB, not theme colours; header and footer pictures
+(&G) are kept but not drawn; comments are not printed; a dynamic print area
+(`OFFSET(…)`) is kept but not evaluated; Page Break Preview's breaks are not
+dragged; scenarios' `deleted`/`undone` input flags are not written;
+"Automatic except for data tables" is not offered; Solver, Split and Custom
+Views are not done. Microsoft Excel itself is not available here: written
+packages are checked against the ECMA-376 schemas and LibreOffice; the
+owner's check in Excel is in verification.md.
 ## D-086: QindaWrite: mail merge, envelopes and labels, endnotes, floating pictures
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

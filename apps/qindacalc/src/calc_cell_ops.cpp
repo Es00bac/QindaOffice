@@ -9,6 +9,7 @@
 
 #include "calc_undo.h"
 
+#include "eval.h"
 #include "sheet.h"
 #include "table_edit.h"
 
@@ -39,9 +40,13 @@ void SpreadsheetDocument::applyInput(const CalcEng::CellAddr &addr, const QStrin
     // AGENT-GUARD: validation is enforced HERE, on the one path every UI
     // edit takes (in-cell editor, formula bar, paste of a single cell, AI
     // apply). Checking it in the view would leave the other paths open.
-    if (const CalcEng::ValidationRule *rule =
-            m_workbook.sheetAt(m_activeSheet).validationAt(addr);
-        rule != nullptr && !CalcEng::validationAccepts(*rule, input)) {
+    // M78 (D-087): every kind and operator Excel has, on the value the
+    // input makes (a formula's result too); a Stop rule refuses, a Warning
+    // or Information rule lets the value in and the window asks.
+    const CalcEng::ValidationRule *rule = m_workbook.sheetAt(m_activeSheet).validationAt(addr);
+    const bool invalid = rule != nullptr && rule->showError && !input.isEmpty()
+        && !CalcEng::validationAcceptsValue(*rule, addr, inputValueAt(addr, input), m_workbook, m_activeSheet);
+    if (invalid && rule->style == CalcEng::ValidationRule::Style::Stop) {
         emit inputRejected(addr, CalcEng::validationDescription(*rule));
         return;
     }
@@ -52,6 +57,30 @@ void SpreadsheetDocument::applyInput(const CalcEng::CellAddr &addr, const QStrin
     pushUndo(before, tr("Set cell"));
     setDirty(true);
     emit contentChanged();
+    if (invalid) {
+        const bool warning = rule->style == CalcEng::ValidationRule::Style::Warning;
+        emit inputQuestioned(addr, rule->errorTitle,
+                             rule->message.isEmpty()
+                                 ? tr("The value you entered is not valid: this cell takes %1.")
+                                       .arg(CalcEng::validationDescription(*rule))
+                                 : rule->message,
+                             warning);
+    }
+}
+
+CalcEng::Value SpreadsheetDocument::inputValueAt(const CalcEng::CellAddr &addr, const QString &input) const
+{
+    if (!input.startsWith(QLatin1Char('=')) || input.size() < 2) {
+        return CalcEng::Workbook::inputValue(input);
+    }
+    // A formula is judged by its result where it would sit.
+    const CalcEng::ParseResult parsed = CalcEng::parseFormula(input.mid(1));
+    if (!parsed.error.isEmpty() || !parsed.root) {
+        return CalcEng::Value(CalcEng::Err::Name);
+    }
+    CalcEng::EvalContext ctx{&m_workbook, m_activeSheet, addr};
+    ctx.mode = CalcEng::ArrayMode::Dynamic;
+    return CalcEng::evalNode(parsed.root, ctx);
 }
 
 void SpreadsheetDocument::applyInputs(const QList<QPair<CalcEng::CellAddr, QString>> &edits,
@@ -90,6 +119,16 @@ void SpreadsheetDocument::clearCells(const CalcEng::CellRange &range)
         if (extent.isValid() && range.contains(extent.topLeft) && range.contains(extent.bottomRight)) {
             pivotsGone = CalcEng::removePivotTable(m_workbook, {m_activeSheet, qint32(i)}) || pivotsGone;
         }
+    }
+    // So does a whole data table's results (M78, D-087).
+    QList<CalcEng::DataTableSpec> tables = m_workbook.sheetAt(m_activeSheet).dataTables();
+    const qsizetype tableCount = tables.size();
+    tables.removeIf([&range](const CalcEng::DataTableSpec &table) {
+        return range.contains(table.ref.topLeft) && range.contains(table.ref.bottomRight);
+    });
+    if (tables.size() != tableCount) {
+        m_workbook.sheetAt(m_activeSheet).setDataTables(tables);
+        pivotsGone = true;
     }
     if (refuseCellEdit(range)) {
         if (pivotsGone) {

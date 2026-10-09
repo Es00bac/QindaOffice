@@ -84,7 +84,12 @@ QList<PatchManifest::DefinedNameEntry> definedNamesForFile(const Workbook &wb)
     for (qint32 s = 0; s < wb.sheetCount(); ++s) {
         const Sheet &sheet = wb.sheetAt(s);
         if (sheet.printArea().has_value()) {
-            add({QStringLiteral("_xlnm.Print_Area"), s, areaText(sheet.name(), *sheet.printArea()), false, {}});
+            // Every area of a multi-area print area (M78, D-087).
+            QStringList areas{areaText(sheet.name(), *sheet.printArea())};
+            for (const CellRange &more : sheet.pageSetup().morePrintAreas) {
+                areas.append(areaText(sheet.name(), more));
+            }
+            add({QStringLiteral("_xlnm.Print_Area"), s, areas.join(QLatin1Char(',')), false, {}});
         }
         QStringList titles;
         const QString quoted = quotedSheetName(sheet.name());

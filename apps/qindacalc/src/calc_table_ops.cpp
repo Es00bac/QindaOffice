@@ -54,6 +54,13 @@ bool SpreadsheetDocument::refuseCellEdit(const CellRange &range)
     if (refusePivotEdit(range)) { // a PivotTable's output (M74, D-083)
         return true;
     }
+    // A data table changes, or goes, as a whole (M78, D-087; Excel's rule).
+    for (const CalcEng::DataTableSpec &table : sheet.dataTables()) {
+        if (overlaps(table.ref, range) && !contains(range, table.ref)) {
+            emit editRefused(tr("Cannot change part of a data table."));
+            return true;
+        }
+    }
     // Excel's rule: an array formula changes, or goes, as a whole.
     bool part = false;
     if (range.cellCount() == 1) {
@@ -75,6 +82,11 @@ bool SpreadsheetDocument::refuseCellEdit(const CellRange &range)
 bool SpreadsheetDocument::refuseArraySplit(bool rows, qint32 at, qint32 count, bool insert)
 {
     if (refusePivotSplit(rows, at, count, insert)) { // through a PivotTable (M74)
+        return true;
+    }
+    // Through a data table (M78, D-087): Excel's refusal.
+    if (CalcEng::dataTableSplitBy(m_workbook.sheetAt(m_activeSheet), rows, at, count, insert)) {
+        emit editRefused(tr("Cannot change part of a data table."));
         return true;
     }
     for (const CellRange &block : arrayBlocks(m_workbook.sheetAt(m_activeSheet))) {

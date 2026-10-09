@@ -171,6 +171,9 @@ protected:
     // The orientation a new print job (and Export PDF) starts in (M51: a
     // Gantt chart prints landscape).
     [[nodiscard]] virtual bool printPrefersLandscape() const { return false; }
+    // M78 (D-087): the paper a new print job starts on (QindaCalc: the
+    // sheet's Page Setup paper size); nullopt keeps the printer's default.
+    [[nodiscard]] virtual std::optional<QPageLayout> printPageLayout() const { return std::nullopt; }
     // AGENT-CONTRACT (OfficeApplication::openPaths, D-042): a host WITHOUT a
     // document (MailHost) receives the paths and URLs the app is launched
     // or handed with here (mailto:, webcal:, .ics, .eml) instead of

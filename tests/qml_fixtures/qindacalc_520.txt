@@ -121,6 +121,7 @@ QQuickRootItem#CalcWindow
           QQuickTabButton#ribbonTab_file
           QQuickTabButton#ribbonTab_home
           QQuickTabButton#ribbonTab_insert
+          QQuickTabButton#ribbonTab_pageLayout
           QQuickTabButton#ribbonTab_review
           QQuickTabButton#ribbonTab_sheet
           QQuickTabButton#ribbonTab_view
@@ -348,4 +349,13 @@ QQuickRootItem#CalcWindow
               RibbonSlot#ribbonItem_numberFormat
                 ComboBox#cellNumberFormatCombo
                   QQuickText#comboDisplayText
+            RibbonGroup#ribbonGroup_styles
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_condFormatMenu
+                RibbonButton#ribbonAction_condFormatMenu
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
         QQuickRectangle#ribbonBackground

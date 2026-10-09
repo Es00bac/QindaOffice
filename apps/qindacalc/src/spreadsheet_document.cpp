@@ -354,6 +354,10 @@ QString SpreadsheetDocument::inputTextAt(const CalcEng::CellAddr &addr) const
             return QStringLiteral("{=") + anchor->formula + QLatin1Char('}');
         }
     }
+    // A data table's results show its {=TABLE(r,c)} (M78, D-087).
+    if (const CalcEng::DataTableSpec *table = CalcEng::dataTableAt(m_workbook.sheetAt(m_activeSheet), addr)) {
+        return CalcEng::dataTableFormulaText(*table);
+    }
     const CalcEng::Cell *cell = m_workbook.sheetAt(m_activeSheet).cellAt(addr);
     if (cell == nullptr) {
         return QString();

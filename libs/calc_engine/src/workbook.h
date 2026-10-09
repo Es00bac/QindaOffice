@@ -58,6 +58,11 @@ struct WorkbookSource {
     // (Sheet::pivots). A save carries one of these only while a PivotTable
     // still names it — one deleted in QindaCalc stays deleted.
     QStringList pivotParts;
+    // M78 (D-087): the source package's dxf table (xl/styles.xml <dxf>
+    // elements, as written). A save writes them first, unchanged, so kept
+    // conditional formats, carried PivotTable formats and formats nobody
+    // edited keep their dxfId.
+    QStringList dxfs;
     bool operator==(const WorkbookSource &) const = default;
 };
 
@@ -115,6 +120,10 @@ public:
                         const QString &formula, bool dynamicArray);
     // Installs a pre-parsed literal (number/text/bool/error) without parsing.
     void setCellValue(qint32 sheet, const CellAddr &addr, const Value &value);
+    // M78 (D-087): the value typed `input` would store — a number, a date
+    // serial, a boolean, an error or text, as setCellInput parses it (a
+    // formula, "=…", gives its text: evaluate it to know its result).
+    [[nodiscard]] static Value inputValue(const QString &input);
 
     // Recalculates the transitive dependents of `edited` plus all volatile
     // cells in Kahn topological order; cells on a cycle get Err::Circular.
@@ -222,6 +231,14 @@ public:
     // reindexAll, which the structural edits use anyway.
     void refreshStructuredRefs();
 
+    // ---- data tables (M78, D-087; data_table.h) ----
+    // Works out every data table of the workbook ({=TABLE(r,c)}): for each
+    // input value the input cell takes it, the workbook recalculates, and
+    // the formula's value lands in the table's cell; the input cell gets its
+    // own content back. Called at the end of every top-level recalculation
+    // (never while bulk loading, never from inside itself).
+    void recomputeDataTables();
+
     // ---- protection (M66, D-075) ----
     // True when the sheet is protected and the cell's format is locked.
     [[nodiscard]] bool isCellLocked(qint32 sheet, const CellAddr &addr) const;
@@ -279,9 +296,13 @@ private:
     QHash<QString, QList<qsizetype>> m_definedIndex; // upper-case name -> entries
     DependencyGraph m_dependencies;
     bool m_bulkLoading = false;
-    // Data-bar min/max per rule (keyed by rule content), cleared on every
-    // recalculation. Mutable: condFormatFor is a const evaluation.
-    mutable QHash<quint64, QPair<double, double>> m_dataBarExtents;
+    // The statistics conditional formats measure against (data-bar and
+    // colour-scale extremes, Top 10, averages, duplicates — M78), cleared on
+    // every recalculation. Mutable: condFormatFor is a const evaluation.
+    mutable CondFormatCache m_condCache;
+    // M78 (D-087): data tables are being worked out (data_table.cpp) — the
+    // recalculations they cause must not start another round.
+    bool m_computingTables = false;
     QHash<CellKey, SpillState> m_spills; // anchor → its spill (see spillAt)
     int m_batchDepth = 0;
     QSet<CellKey> m_batchEdited;

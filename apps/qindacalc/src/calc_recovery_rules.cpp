@@ -9,6 +9,8 @@
 
 #include "calc_recovery_rules.h"
 
+#include "calc_recovery_m78.h"
+
 #include <QJsonArray>
 #include <QJsonObject>
 
@@ -65,7 +67,7 @@ QJsonObject condFormatsToJson(const QList<CalcEng::CondFormatRule> &rules)
 {
     QJsonArray array;
     for (const CalcEng::CondFormatRule &rule : rules) {
-        array.append(QJsonObject{
+        QJsonObject item{
             {QStringLiteral("range"), rangeToJson(rule.range)},
             {QStringLiteral("op"), int(rule.op)},
             {QStringLiteral("first"), rule.first},
@@ -79,7 +81,9 @@ QJsonObject condFormatsToJson(const QList<CalcEng::CondFormatRule> &rules)
             {QStringLiteral("fg"), rgbToJson(rule.format.foreground)},
             {QStringLiteral("bold"), boolToJson(rule.format.bold)},
             {QStringLiteral("italic"), boolToJson(rule.format.italic)},
-        });
+        };
+        condRuleExtrasToJson(rule, &item); // M78 (D-087)
+        array.append(item);
     }
     return QJsonObject{{QStringLiteral("rules"), array}};
 }
@@ -95,7 +99,7 @@ QList<CalcEng::CondFormatRule> condFormatsFromJson(const QJsonObject &object)
         // switch in condRuleMatches.
         const int op = item.value(QStringLiteral("op")).toInt();
         rule.op = CalcEng::CondFormatRule::Op(
-            qBound(0, op, int(CalcEng::CondFormatRule::Op::DataBar)));
+            qBound(0, op, int(CalcEng::CondFormatRule::Op::IconSet)));
         rule.first = item.value(QStringLiteral("first")).toDouble();
         rule.second = item.value(QStringLiteral("second")).toDouble();
         rule.text = item.value(QStringLiteral("text")).toString();
@@ -110,6 +114,7 @@ QList<CalcEng::CondFormatRule> condFormatsFromJson(const QJsonObject &object)
         rule.format.foreground = rgbFromJson(item.value(QStringLiteral("fg")));
         rule.format.bold = boolFromJson(item.value(QStringLiteral("bold")));
         rule.format.italic = boolFromJson(item.value(QStringLiteral("italic")));
+        condRuleExtrasFromJson(item, &rule); // M78 (D-087)
         if (!rule.range.isValid()) {
             continue;
         }
@@ -127,7 +132,7 @@ QJsonObject validationsToJson(const QList<CalcEng::ValidationRule> &rules)
 {
     QJsonArray array;
     for (const CalcEng::ValidationRule &rule : rules) {
-        array.append(QJsonObject{
+        QJsonObject item{
             {QStringLiteral("range"), rangeToJson(rule.range)},
             {QStringLiteral("kind"), int(rule.kind)},
             {QStringLiteral("min"), rule.min},
@@ -135,7 +140,9 @@ QJsonObject validationsToJson(const QList<CalcEng::ValidationRule> &rules)
             {QStringLiteral("list"), QJsonArray::fromStringList(rule.list)},
             {QStringLiteral("source"), rule.listSource},
             {QStringLiteral("message"), rule.message},
-        });
+        };
+        validationExtrasToJson(rule, &item); // M78 (D-087)
+        array.append(item);
     }
     return QJsonObject{{QStringLiteral("rules"), array}};
 }
@@ -149,7 +156,7 @@ QList<CalcEng::ValidationRule> validationsFromJson(const QJsonObject &object)
         rule.range = rangeFromJson(item.value(QStringLiteral("range")).toArray());
         const int kind = item.value(QStringLiteral("kind")).toInt();
         rule.kind = CalcEng::ValidationRule::Kind(
-            qBound(0, kind, int(CalcEng::ValidationRule::Kind::NotEmpty)));
+            qBound(0, kind, int(CalcEng::ValidationRule::Kind::Any)));
         rule.min = item.value(QStringLiteral("min")).toDouble();
         rule.max = item.value(QStringLiteral("max")).toDouble();
         for (const QJsonValue &listed : item.value(QStringLiteral("list")).toArray()) {
@@ -157,6 +164,7 @@ QList<CalcEng::ValidationRule> validationsFromJson(const QJsonObject &object)
         }
         rule.listSource = item.value(QStringLiteral("source")).toString();
         rule.message = item.value(QStringLiteral("message")).toString();
+        validationExtrasFromJson(item, &rule); // M78 (D-087)
         if (rule.range.isValid()) {
             rules.append(rule);
         }
@@ -324,6 +332,8 @@ QJsonObject sourceToJson(const CalcEng::WorkbookSource &source)
         {QStringLiteral("macroEnabled"), source.macroEnabled},
         // M74 (D-083): the pivot parts the model took over.
         {QStringLiteral("pivotParts"), QJsonArray::fromStringList(source.pivotParts)},
+        // M78 (D-087): the source's dxf table, which kept rules name.
+        {QStringLiteral("dxfs"), QJsonArray::fromStringList(source.dxfs)},
     };
 }
 
@@ -343,6 +353,9 @@ CalcEng::WorkbookSource sourceFromJson(const QJsonObject &object)
     source.macroEnabled = object.value(QStringLiteral("macroEnabled")).toBool(false);
     for (const QJsonValue &part : object.value(QStringLiteral("pivotParts")).toArray()) {
         source.pivotParts.append(part.toString());
+    }
+    for (const QJsonValue &dxf : object.value(QStringLiteral("dxfs")).toArray()) {
+        source.dxfs.append(dxf.toString());
     }
     return source;
 }

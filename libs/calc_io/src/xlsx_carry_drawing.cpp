@@ -332,7 +332,18 @@ bool carrySheetDrawings(Context &ctx, const DestSheet &dest, int *drawingPartCou
 {
     Q_UNUSED(drawingPartCount); // new drawings take the first free name
     const QString sourceSheet = dest.patch->source.part;
-    const QString sourceVml = sourceTarget(ctx.source(), sourceSheet, QStringLiteral("vmlDrawing"));
+    // AGENT-GUARD (M78, D-087): the VML the sheet's <legacyDrawing> names —
+    // not any vmlDrawing relationship. A header or footer picture has a VML
+    // part of its own (<legacyDrawingHF>, carried as an element by
+    // carryElements); taking its shapes for controls copied the logo into
+    // the notes drawing.
+    QString sourceVml;
+    if (const Ooxml::XmlElementPtr root = parse(ctx.source().data(sourceSheet))) {
+        if (const Ooxml::XmlElement *legacy = root->child(QString::fromUtf16(Ooxml::Ns::S), u"legacyDrawing")) {
+            const auto rel = ctx.source().relationship(sourceSheet, legacy->attribute(QString::fromUtf16(Ooxml::Ns::R), u"id"));
+            sourceVml = rel && !rel->external ? ctx.source().targetPart(sourceSheet, *rel) : QString();
+        }
+    }
     if (!sourceVml.isEmpty() && !carryVmlShapes(ctx, dest, sourceVml, shapeIds, error)) {
         return false;
     }

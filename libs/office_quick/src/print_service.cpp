@@ -170,9 +170,25 @@ void PrintJob::setLastError(const QString &error)
     emit lastErrorChanged();
 }
 
+void PrintJob::setPageLayout(const QPageLayout &layout)
+{
+    m_pageLayout = layout;
+}
+
+void PrintJob::applyPageLayout(QPrinter *printer) const
+{
+    if (m_pageLayout.has_value()) {
+        QPageLayout layout = *m_pageLayout;
+        layout.setOrientation(m_landscape ? QPageLayout::Landscape : QPageLayout::Portrait);
+        printer->setPageLayout(layout);
+        return;
+    }
+    printer->setPageOrientation(m_landscape ? QPageLayout::Landscape : QPageLayout::Portrait);
+}
+
 void PrintJob::configure(QPrinter *printer) const
 {
-    printer->setPageOrientation(m_landscape ? QPageLayout::Landscape : QPageLayout::Portrait);
+    applyPageLayout(printer);
     printer->setCopyCount(m_copies);
     if (m_fromPage > 0 && m_toPage >= m_fromPage) {
         printer->setFromTo(m_fromPage, m_toPage);
@@ -195,7 +211,7 @@ bool PrintJob::preparePreview()
     QPrinter printer(QPrinter::HighResolution);
     printer.setOutputFormat(QPrinter::PdfFormat);
     printer.setOutputFileName(d->pdf->fileName());
-    printer.setPageOrientation(m_landscape ? QPageLayout::Landscape : QPageLayout::Portrait);
+    applyPageLayout(&printer);
     {
         QPainter painter(&printer);
         if (!painter.isActive()) {
@@ -286,7 +302,7 @@ bool PrintJob::exportPdf(const QString &path)
     QPrinter printer(QPrinter::HighResolution);
     printer.setOutputFormat(QPrinter::PdfFormat);
     printer.setOutputFileName(path);
-    printer.setPageOrientation(m_landscape ? QPageLayout::Landscape : QPageLayout::Portrait);
+    applyPageLayout(&printer);
     QPainter painter(&printer);
     // AGENT-GUARD: report honestly — an unwritable target must not return
     // true while the render goes to an inactive painter.

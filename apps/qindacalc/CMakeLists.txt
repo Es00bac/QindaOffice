@@ -25,6 +25,24 @@ set(qindacalc_qml
     qml/UnprotectDialog.qml
     qml/SizeDialog.qml
     qml/ValidationDialog.qml
+    # M78 (D-087): Page Setup, what-if analysis, data tools, rule editing.
+    qml/CalcToolDialogs.qml
+    qml/CondFormatFormatPanel.qml
+    qml/CondFormatRuleDialog.qml
+    qml/CondFormatScalePanel.qml
+    qml/ConsolidateDialog.qml
+    qml/DataTableDialog.qml
+    qml/GoalSeekDialog.qml
+    qml/GoalSeekStatusDialog.qml
+    qml/PageSetupDialog.qml
+    qml/PageSetupHeaderTab.qml
+    qml/PageSetupMarginsTab.qml
+    qml/PageSetupPageTab.qml
+    qml/PageSetupSheetTab.qml
+    qml/RemoveDuplicatesDialog.qml
+    qml/ScenarioEditDialog.qml
+    qml/ScenarioManagerDialog.qml
+    qml/TextToColumnsDialog.qml
 )
 foreach(qml_file IN LISTS qindacalc_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -72,6 +90,19 @@ qt_add_qml_module(qindacalc_app
         src/spreadsheet_item_paint.cpp
         src/spreadsheet_item_outline.cpp
         src/spreadsheet_item_pivot.cpp
+        # M78 (D-087)
+        src/calc_cell_look.cpp src/calc_cell_look.h
+        src/calc_condformat_maps.cpp src/calc_condformat_maps.h
+        src/calc_host_condformat.cpp
+        src/calc_host_edit.cpp
+        src/calc_host_datatools.cpp
+        src/calc_host_pagelayout.cpp
+        src/calc_host_pagesetup.cpp
+        src/calc_host_whatif.cpp
+        src/calc_m78_ops.cpp
+        src/calc_print.cpp src/calc_print.h
+        src/calc_recovery_m78.cpp src/calc_recovery_m78.h
+        src/spreadsheet_item_overlay.cpp
     QML_FILES ${qindacalc_qml}
 )
 target_include_directories(qindacalc_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

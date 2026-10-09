@@ -44,9 +44,10 @@ private slots:
             titles.append(item.text);
         }
         // Review (M66, D-075): protection; links, outline and hide/unhide
-        // joined Insert, Data and Format.
+        // joined Insert, Data and Format. Page Layout (M78, D-087).
         QCOMPARE(titles, (QStringList{QStringLiteral("File"), QStringLiteral("Edit"), QStringLiteral("View"),
-                                      QStringLiteral("Insert"), QStringLiteral("Format"), QStringLiteral("Data"),
+                                      QStringLiteral("Insert"), QStringLiteral("Format"), QStringLiteral("Page Layout"),
+                                      QStringLiteral("Data"),
                                       QStringLiteral("Sheet"), QStringLiteral("Review"), QStringLiteral("AI"),
                                       QStringLiteral("Settings"), QStringLiteral("Help")}));
         QStringList ids;
@@ -81,6 +82,21 @@ private slots:
                                "calcPivotSubtotalsTopAction", "calcPivotGrandTotalsRowsAction", "calcPivotBlankRowsOnAction",
                                "calcPivotBandedRowsAction", "calcPivotMoveAction", "calcPivotClearAction",
                                "calcPivotStyle_PivotStyleLight16", "calcPivotStyle_PivotStyleMedium9", "calcPivotStyle_None"}) {
+            QVERIFY2(ids.contains(QString::fromLatin1(id)), id);
+        }
+        // M78 (D-087): Page Layout, Page Break Preview, What-If Analysis, the
+        // data tools and the conditional-format commands reach the panel.
+        for (const char *id : {"calcPageSetupAction", "calcMarginsWideAction", "calcOrientationLandscapeAction",
+                               "calcPaperSize_9", "calcPaperSizeMoreAction", "calcSetPrintAreaAction", "calcClearPrintAreaAction",
+                               "calcInsertPageBreakAction", "calcRemovePageBreakAction", "calcResetPageBreaksAction",
+                               "calcPrintTitlesAction", "calcHeaderFooterAction", "calcScaleFitSheetAction",
+                               "calcPrintGridlinesAction", "calcPrintHeadingsAction", "calcViewPageBreakPreviewAction",
+                               "calcFreezeTopRowAction", "calcFreezeFirstColumnAction", "calcGoalSeekAction",
+                               "calcScenarioManagerAction", "calcDataTableAction", "calcTextToColumnsAction",
+                               "calcFlashFillAction", "calcRemoveDuplicatesAction", "calcConsolidateAction",
+                               "calcCircleInvalidAction", "calcClearCirclesAction", "calcCondFormatNewRuleAction",
+                               "calcCondFormatDataBarsAction", "calcCondFormatIconSetAction", "calcCondFormatTop10Action",
+                               "calcCondFormatClearSheetAction"}) {
             QVERIFY2(ids.contains(QString::fromLatin1(id)), id);
         }
     }

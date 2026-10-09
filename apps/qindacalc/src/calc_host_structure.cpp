@@ -216,7 +216,15 @@ void CalcHost::insertMenus()
                                 a(ActionId::kCalcBordersNone)}),
              MenuNode::separator(), a(ActionId::kCalcMergeCells), a(ActionId::kCalcUnmergeCells),
              MenuNode::separator(), a(ActionId::kCalcRowHeight), a(ActionId::kCalcColumnWidth),
-             a(ActionId::kCalcOptimalWidth), MenuNode::separator(), a(ActionId::kCalcCondFormat)}));
+             a(ActionId::kCalcOptimalWidth), MenuNode::separator(),
+             // M78 (D-087): Excel's Conditional Formatting menu.
+             MenuNode::submenu(QStringLiteral("calcCondFormatMenu"), tr("Conditional &Formatting"),
+                               {a(ActionId::kCalcCondFormatTop10), a(ActionId::kCalcCondFormatAboveAverage),
+                                a(ActionId::kCalcCondFormatDuplicates), MenuNode::separator(),
+                                a(ActionId::kCalcCondFormatDataBars), a(ActionId::kCalcCondFormatColorScale),
+                                a(ActionId::kCalcCondFormatIconSet), MenuNode::separator(),
+                                a(ActionId::kCalcCondFormatNewRule), a(ActionId::kCalcCondFormatClearSelection),
+                                a(ActionId::kCalcCondFormatClearSheet), a(ActionId::kCalcCondFormat)})}));
     menuTree()->insertMenuBefore(
         QStringLiteral("aiMenu"),
         MenuNode::submenu(QStringLiteral("calcDataMenu"), tr("&Data"),

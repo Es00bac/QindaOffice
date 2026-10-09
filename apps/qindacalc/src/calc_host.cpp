@@ -54,11 +54,17 @@ CalcHost::CalcHost()
     createFeatureActions(); // links, outline, protection (M66)
     createTableActions();   // tables, the chart sheet view (M69)
     createPivotActions();   // PivotTables (M74)
+    createPageLayoutActions(); // Page Layout, Page Break Preview (M78)
+    createWhatIfActions();     // Goal Seek, scenarios, data tables (M78)
+    createDataToolActions();   // Text to Columns, Flash Fill, … (M78)
+    createCondFormatActions(); // every conditional-format command (M78)
     createAssistant();
     insertMenus();
     insertFeatureMenus();
     insertTableMenus();
     insertPivotMenus();
+    insertPageLayoutMenus();
+    insertDataToolMenus();
     wireEditCommands();
     // Undo of a sheet insert/delete (or a load) changes the sheet list.
     connect(m_document, &SpreadsheetDocument::structureChanged, this, [this] {
@@ -78,6 +84,12 @@ CalcHost::CalcHost()
         showStatusMessage(text, 10000);
         refreshGrid();
     });
+    // A value a Warning or Information rule questions (M78): the window asks.
+    connect(m_document, &SpreadsheetDocument::inputQuestioned, this,
+            [this](const CellAddr &, const QString &title, const QString &message, bool warning) {
+                refreshGrid();
+                emit inputQuestioned(title, message, warning);
+            });
     // A value a validation rule refused must SAY so.
     connect(m_document, &SpreadsheetDocument::inputRejected, this,
             [this](const CellAddr &addr, const QString &reason) {
@@ -182,6 +194,8 @@ void CalcHost::syncFromCursor()
     syncFeaturesFromCursor();
     syncTablesFromCursor();
     syncPivotFromCursor();
+    syncPageLayoutFromCursor(); // M78
+    syncDataToolsFromCursor();  // M78
 }
 
 void CalcHost::commitInput(const CellAddr &addr, const QString &input)
@@ -448,65 +462,6 @@ void CalcHost::updateSelectionStatus()
     const qreal zoom = m_grid != nullptr ? m_grid->zoom() : 1.0;
     summary += tr("   Zoom: %1%").arg(qRound(zoom * 100));
     setStatusInfo(summary);
-}
-
-// ---- the shell's edit commands ----------------------------------------------------
-
-void CalcHost::wireEditCommands()
-{
-    ActionEntry *undo = action(QString::fromLatin1(ActionId::kEditUndo));
-    ActionEntry *redo = action(QString::fromLatin1(ActionId::kEditRedo));
-    undo->setEnabled(false);
-    redo->setEnabled(false);
-    connect(m_document->undoStack(), &QUndoStack::canUndoChanged, undo, &ActionEntry::setEnabled);
-    connect(m_document->undoStack(), &QUndoStack::canRedoChanged, redo, &ActionEntry::setEnabled);
-    connect(undo, &ActionEntry::triggered, this, [this] {
-        m_document->undoStack()->undo();
-        refreshGrid();
-    });
-    connect(redo, &ActionEntry::triggered, this, [this] {
-        m_document->undoStack()->redo();
-        refreshGrid();
-    });
-
-    action(QString::fromLatin1(ActionId::kEditCut))->setEnabled(true);
-    action(QString::fromLatin1(ActionId::kEditCopy))->setEnabled(true);
-    connect(action(QString::fromLatin1(ActionId::kEditCut)), &ActionEntry::triggered, this, [this] {
-        cutRangeToClipboard(m_document, selection());
-        refreshGrid();
-    });
-    connect(action(QString::fromLatin1(ActionId::kEditCopy)), &ActionEntry::triggered, this,
-            [this] { copyRangeToClipboard(m_document, selection()); });
-    ActionEntry *paste = action(QString::fromLatin1(ActionId::kEditPaste));
-    const auto updatePaste = [paste] {
-        const QMimeData *mime = QGuiApplication::clipboard()->mimeData();
-        paste->setEnabled(mime != nullptr
-                          && (mime->hasText()
-                              || mime->hasFormat(QString::fromLatin1(richCellsMimeType()))));
-    };
-    updatePaste();
-    connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, updatePaste);
-    connect(paste, &ActionEntry::triggered, this, [this] {
-        if (pasteClipboardAt(m_document, cursor())) {
-            refreshGrid();
-        }
-    });
-    action(QString::fromLatin1(ActionId::kEditSelectAll))->setEnabled(true);
-    connect(action(QString::fromLatin1(ActionId::kEditSelectAll)), &ActionEntry::triggered, this,
-            [this] {
-                if (m_grid != nullptr) {
-                    m_grid->selectUsedRange();
-                }
-            });
-    for (const char *id : {ActionId::kViewZoomIn, ActionId::kViewZoomOut, ActionId::kViewZoomReset}) {
-        action(QString::fromLatin1(id))->setEnabled(true);
-    }
-    connect(action(QString::fromLatin1(ActionId::kViewZoomIn)), &ActionEntry::triggered, this,
-            [this] { if (m_grid != nullptr) m_grid->setZoom(m_grid->zoom() * 1.25); });
-    connect(action(QString::fromLatin1(ActionId::kViewZoomOut)), &ActionEntry::triggered, this,
-            [this] { if (m_grid != nullptr) m_grid->setZoom(m_grid->zoom() / 1.25); });
-    connect(action(QString::fromLatin1(ActionId::kViewZoomReset)), &ActionEntry::triggered, this,
-            [this] { if (m_grid != nullptr) m_grid->setZoom(1.0); });
 }
 
 void CalcHost::applyPreferences()

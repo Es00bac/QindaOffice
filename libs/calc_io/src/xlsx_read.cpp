@@ -18,6 +18,7 @@
 #include "xlsx_carry.h"
 #include "xlsx_read_pivot.h"
 #include "xlsx_read_xml.h"
+#include "xlsx_rules.h"
 #include "xlsx_style.h"
 #include "xlsx_text.h"
 
@@ -410,7 +411,7 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
         // The features QXlsx has no public model for (conditional formats,
         // validations, autofilter, comments) read straight from the package.
         if (!packagePath.isEmpty()) {
-            readSheetExtras(packagePath, sheetIndex, palette, &sheet);
+            readSheetExtras(packagePath, sheetIndex, palette, out->source.dxfs, &sheet);
             readSheetDrawings(packagePath, out, sheetIndex);
             if (!sheetParts.value(sheetIndex).isEmpty()) {
                 readSheetFeatures(*package, sheetParts.value(sheetIndex), &sheet); // M66
@@ -504,13 +505,14 @@ bool readXlsxFile(const QString &path, Workbook *out, QString *error, QStringLis
     readDefinedNames(zip.fileData(QStringLiteral("xl/workbook.xml")), out);
     // The theme and properties ride with the workbook to its next save.
     out->source = readWorkbookSource(zip);
+    out->source.dxfs = readPackageDxfs(zip); // the dxfs kept rules name (M78, D-087)
     readWorkbookFeatures(zip, out); // structure lock, code name, VBA (M66)
     if (!readXlsxImpl(doc, out, paletteForPackage(source), source, error)) {
         return false;
     }
     // What the save will carry without modelling it (M66, D-075, D-068
     // rule 2), and what it cannot: said in the warnings the app shows.
-    QStringList notes;
+    QStringList notes = keptRuleNotes(*out); // M78 (D-087): kept rules, said
     readPivotTables(source, out, &notes); // M74 (D-083): the model's pivots, before the carried copy
     out->source.carried = buildCarriedPackage(source, *out, &notes);
     if (warnings != nullptr) {

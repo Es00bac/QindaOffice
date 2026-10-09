@@ -17,6 +17,8 @@
 #include <QDir>
 #include <QXmlStreamReader>
 
+#include <optional>
+
 #include <xlsxzipreader_p.h>
 
 namespace QindaOffice::Calc::IO {
@@ -51,6 +53,35 @@ QStringList bodyParts(const QString &body)
     return parts;
 }
 
+// The ranges a print name's body names, when the model can hold them all
+// (M78, D-087): each part a reference — a print area's ranges (whole rows
+// and columns are ranges too), print titles' whole rows or columns (or a
+// range spanning the sheet's width or height, as other producers write
+// them). nullopt for anything else (a dynamic print area, =OFFSET(…), a
+// name): such a name stays a DefinedName and is written back as read.
+std::optional<QList<RangeRef>> mappedPrintName(const QString &name, const QString &body)
+{
+    const bool area = name.compare(QLatin1String("_xlnm.Print_Area"), Qt::CaseInsensitive) == 0;
+    QList<RangeRef> refs;
+    for (const QString &part : bodyParts(body)) {
+        const ParseResult parsed = parseFormula(formulaFromFile(part.trimmed()));
+        if (!parsed.error.isEmpty() || !parsed.root || parsed.root->kind != Node::Kind::Ref) {
+            return std::nullopt;
+        }
+        const RangeRef &ref = parsed.root->ref;
+        const bool rows = ref.wholeRows || (ref.range.topLeft.col == 0 && ref.range.bottomRight.col >= Sheet::kMaxCols - 1);
+        const bool cols = ref.wholeCols || (ref.range.topLeft.row == 0 && ref.range.bottomRight.row >= Sheet::kMaxRows - 1);
+        if (!ref.range.isValid() || (!area && !rows && !cols)) {
+            return std::nullopt;
+        }
+        refs.append(ref);
+    }
+    if (refs.isEmpty()) {
+        return std::nullopt;
+    }
+    return refs;
+}
+
 QString childText(const Ooxml::XmlElement &root, const char16_t *ns, QStringView name)
 {
     const Ooxml::XmlElement *e = root.child(QString::fromUtf16(ns), name);
@@ -79,9 +110,10 @@ void readDefinedNames(const QByteArray &workbookXml, Workbook *wb)
         const QStringView hiddenFlag = attributes.value(QLatin1String("hidden"));
         const bool hidden = hiddenFlag == QLatin1String("1") || hiddenFlag == QLatin1String("true");
         const QString comment = attributes.value(QLatin1String("comment")).toString();
-        const QString body = formulaFromFile(reader.readElementText().trimmed());
-        if (name.isEmpty() || body.isEmpty() || isPrintName(name)) {
-            continue; // print areas and titles are per-sheet fields (readPrintNames)
+        const QString text = reader.readElementText().trimmed();
+        const QString body = formulaFromFile(text);
+        if (name.isEmpty() || body.isEmpty() || (isPrintName(name) && mappedPrintName(name, text).has_value())) {
+            continue; // print areas and titles the model holds are per-sheet fields (readPrintNames)
         }
         const ParseResult parsed = parseFormula(body);
         const bool parses = parsed.error.isEmpty() && parsed.root;
@@ -108,7 +140,10 @@ void readDefinedNames(const QByteArray &workbookXml, Workbook *wb)
 // not user names — they ride localSheetId and never enter a name table.
 // Titles may combine columns and rows ("'Q1 Sales'!$A:$A,'Q1 Sales'!$1:$1"),
 // and a quoted sheet name may hold any punctuation, so each part goes
-// through the formula parser rather than string surgery.
+// through the formula parser rather than string surgery. M78 (D-087): every
+// area of a multi-area print area is kept (Sheet::printArea, then
+// PageSetup::morePrintAreas); a print name the model cannot hold stays a
+// sheet-scoped DefinedName (readDefinedNames).
 void readPrintNames(const QByteArray &workbookXml, Workbook *wb)
 {
     QXmlStreamReader reader(workbookXml);
@@ -119,28 +154,33 @@ void readPrintNames(const QByteArray &workbookXml, Workbook *wb)
         const auto attributes = reader.attributes();
         const QString name = attributes.value(QLatin1String("name")).toString();
         const QString scope = attributes.value(QLatin1String("localSheetId")).toString();
-        const QString body = reader.readElementText();
+        const QString body = reader.readElementText().trimmed();
         bool numbered = false;
         const int sheetId = scope.toInt(&numbered);
         if (!isPrintName(name) || !numbered || sheetId < 0 || sheetId >= wb->sheetCount()) {
             continue;
         }
+        const std::optional<QList<RangeRef>> refs = mappedPrintName(name, body);
+        if (!refs.has_value()) {
+            continue;
+        }
         Sheet &sheet = wb->sheetAt(sheetId);
-        const bool area = name.compare(QLatin1String("_xlnm.Print_Area"), Qt::CaseInsensitive) == 0;
-        for (const QString &part : bodyParts(body)) {
-            const ParseResult parsed = parseFormula(part.trimmed());
-            if (!parsed.error.isEmpty() || !parsed.root || parsed.root->kind != Node::Kind::Ref) {
-                continue;
+        if (name.compare(QLatin1String("_xlnm.Print_Area"), Qt::CaseInsensitive) == 0) {
+            Sheet::PageSetup setup = sheet.pageSetup();
+            setup.morePrintAreas.clear();
+            for (qsizetype i = 1; i < refs->size(); ++i) {
+                setup.morePrintAreas.append(refs->at(i).range);
             }
-            const RangeRef &ref = parsed.root->ref;
-            if (area) {
-                sheet.setPrintArea(ref.range); // the engine keeps one area: the first
-                break;
-            }
-            if (ref.wholeRows) {
+            sheet.setPrintArea(refs->first().range); // clears the further areas: set them after
+            sheet.setPageSetup(setup);
+            continue;
+        }
+        for (const RangeRef &ref : *refs) {
+            const bool rows = ref.wholeRows || (ref.range.topLeft.col == 0 && ref.range.bottomRight.col >= Sheet::kMaxCols - 1);
+            if (rows) {
                 sheet.setPrintTitles(CellRange{{ref.range.topLeft.row, 0}, {ref.range.bottomRight.row, Sheet::kMaxCols - 1}},
                                      sheet.printTitleCols());
-            } else if (ref.wholeCols) {
+            } else {
                 sheet.setPrintTitles(sheet.printTitleRows(),
                                      CellRange{{0, ref.range.topLeft.col}, {Sheet::kMaxRows - 1, ref.range.bottomRight.col}});
             }

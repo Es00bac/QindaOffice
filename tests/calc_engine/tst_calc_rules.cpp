@@ -40,7 +40,7 @@ CondFormatRule numericRule(CondFormatRule::Op op, double first, const CellRange 
 class CalcRulesTest : public QObject {
     Q_OBJECT
 private slots:
-    void blankCellsSatisfyNoComparison();
+    void blankCellsCompareAsExcelDoes();
     void rulesLayerInOrder();
     void expressionRulesEvaluateShifted();
     void dataBarsScaleOverTheRange();
@@ -53,14 +53,15 @@ private slots:
     void rulesFollowStructuralEdits();
 };
 
-void CalcRulesTest::blankCellsSatisfyNoComparison()
+void CalcRulesTest::blankCellsCompareAsExcelDoes()
 {
     const CellRange all{at(0, 0), at(9, 9)};
     const CondFormatRule lessThanTen = numericRule(CondFormatRule::Op::LessThan, 10, all);
-    // A blank cell is not zero: treating it as zero would paint every empty
-    // cell of a "less than 10" rule.
-    QVERIFY(!condRuleMatches(lessThanTen, Value{}));
+    // M78 (D-087): Excel compares a blank cell as 0, so a "less than 10" rule
+    // paints the empty cells of its range too (the M21 engine did not).
+    QVERIFY(condRuleMatches(lessThanTen, Value{}));
     QVERIFY(condRuleMatches(lessThanTen, Value(3.0)));
+    QVERIFY(!condRuleMatches(numericRule(CondFormatRule::Op::GreaterThan, 0, all), Value{}));
 
     CondFormatRule empty;
     empty.op = CondFormatRule::Op::IsEmpty;
@@ -138,11 +139,13 @@ void CalcRulesTest::dataBarsScaleOverTheRange()
     rule.range = {at(0, 0), at(3, 0)};
     rule.barColor = Rgb{10, 20, 30};
     wb.sheetAt(0).setCondFormats({rule});
+    // M78 (D-087): an Excel 2007 bar runs from 10 % of the cell (the
+    // smallest value) to 90 % (the largest).
     const double third = 1.0 / 3.0;
-    QCOMPARE(wb.condFormatFor(0, at(0, 0)).dataBar->fraction, 0.0);
-    QVERIFY(qAbs(wb.condFormatFor(0, at(1, 0)).dataBar->fraction - third) < 0.001);
-    QVERIFY(qAbs(wb.condFormatFor(0, at(2, 0)).dataBar->fraction - 2 * third) < 0.001);
-    QCOMPARE(wb.condFormatFor(0, at(3, 0)).dataBar->fraction, 1.0);
+    QVERIFY(qAbs(wb.condFormatFor(0, at(0, 0)).dataBar->fraction - 0.1) < 0.001);
+    QVERIFY(qAbs(wb.condFormatFor(0, at(1, 0)).dataBar->fraction - (0.1 + 0.8 * third)) < 0.001);
+    QVERIFY(qAbs(wb.condFormatFor(0, at(2, 0)).dataBar->fraction - (0.1 + 1.6 * third)) < 0.001);
+    QVERIFY(qAbs(wb.condFormatFor(0, at(3, 0)).dataBar->fraction - 0.9) < 0.001);
     QCOMPARE(int(wb.condFormatFor(0, at(3, 0)).dataBar->color.r), 10);
     // No bar on text.
     wb.setCellInput(0, {0, 0}, QStringLiteral("nope"));

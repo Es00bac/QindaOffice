@@ -12,7 +12,9 @@ import QindaOffice.Calc
 // sheets), the formula bar with its name box, the grid, the sheet tabs, the
 // find/replace bar, the assistant dock and the dialogs the host asks for —
 // since M74 (D-083) also the PivotTable Fields pane, which shows while the
-// cursor is in a PivotTable and Field List is on, and the pivot dialogs.
+// cursor is in a PivotTable and Field List is on, and the pivot dialogs;
+// since M78 (D-087) the Page Layout, what-if and data-tool dialogs
+// (CalcToolDialogs.qml).
 OfficeWindow {
     id: window
 
@@ -42,6 +44,7 @@ OfficeWindow {
 
     // The ribbon (D-041): CalcRibbonLayout.qml over this window's slots.
     readonly property CalcRibbonLayout ribbonLayout: CalcRibbonLayout {
+        host: window.calc
         fontSlot: fontSlot
         sizeSlot: sizeSlot
         textColorSlot: textColorSlot
@@ -359,7 +362,9 @@ OfficeWindow {
             }
         }
     }
-    CondFormatDialog { id: condFormat; host: window.calc }
+    CondFormatDialog { id: condFormat; host: window.calc; onRuleRequested: function(index) { tools.openRule(index) } }
+    // M78 (D-087): Page Setup, what-if, data tools, rule editing.
+    CalcToolDialogs { id: tools; host: window.calc; hostItem: window.contentItem; manager: condFormat }
     ValidationDialog { id: validation; host: window.calc }
     CommentDialog { id: commentDialog; onCommentApplied: function(text) { window.calc.setCommentText(text) } }
     FilterPopover { id: filterPopover; onFilterApplied: function(column, kept) { window.calc.applyFilterValues(column, kept) } }

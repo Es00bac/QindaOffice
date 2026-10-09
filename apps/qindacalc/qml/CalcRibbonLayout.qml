@@ -1,21 +1,73 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import QtQuick
+import QindaTK as Tk
 import QindaOffice.Shell
+import QindaOffice.Calc
 
 // QindaCalc's ribbon (D-041): File · Home · Insert · Data · Review · Sheet ·
 // View (Review since M66, D-075: notes and protection; Insert's Tables
 // group since M69, D-078: Insert Table, Total Row), and since M74 (D-083)
 // Insert ▸ PivotTable with the contextual PivotTable Analyze and Design
-// tabs the "pivot" context shows while the cursor is in a PivotTable.
+// tabs the "pivot" context shows while the cursor is in a PivotTable. M78
+// (D-087): Home ▸ Styles ▸ Conditional Formatting, Insert ▸ Header &
+// Footer, the Page Layout tab (Page Setup, Scale to Fit with its Width /
+// Height / Scale slots, Sheet Options), Data ▸ Data Tools and Forecast
+// (What-If Analysis), View ▸ Workbook Views and the Freeze Panes variants.
 // Every string is an ActionEntry id (AGENTS.md rule 5); icons given here
 // only fill in for entries whose menu rows carry none. The slots are the
 // window's font, size, colour and number-format widgets.
 QtObject {
+    id: layout
+
+    // M78 (D-087): the host the Page Layout tab's slots and paper sizes read.
+    property CalcHost host: null
     property Component fontSlot: null
     property Component sizeSlot: null
     property Component textColorSlot: null
     property Component fillColorSlot: null
     property Component numberFormatSlot: null
+
+    // Scale to Fit (M78): Width and Height in pages (Automatic = 0) and
+    // the Scale percent, over the active sheet's Page Setup.
+    readonly property var pageCounts: [qsTr("Automatic"), qsTr("1 page"), qsTr("2 pages"), qsTr("3 pages"), qsTr("4 pages"),
+                                       qsTr("5 pages"), qsTr("6 pages"), qsTr("7 pages"), qsTr("8 pages"), qsTr("9 pages")]
+    property Component scaleWidthSlot: Component {
+        Tk.ComboBox {
+            objectName: "scaleWidthCombo"
+            small: true
+            implicitWidth: 104
+            tooltip: qsTr("Width: pages wide")
+            model: layout.pageCounts
+            currentIndex: layout.host !== null ? Math.min(9, layout.host.scaling.fitToWidth) : 0
+            onActivated: function(index) { layout.host.setFitTo(index, layout.host.scaling.fitToHeight) }
+        }
+    }
+    property Component scaleHeightSlot: Component {
+        Tk.ComboBox {
+            objectName: "scaleHeightCombo"
+            small: true
+            implicitWidth: 104
+            tooltip: qsTr("Height: pages tall")
+            model: layout.pageCounts
+            currentIndex: layout.host !== null ? Math.min(9, layout.host.scaling.fitToHeight) : 0
+            onActivated: function(index) { layout.host.setFitTo(layout.host.scaling.fitToWidth, index) }
+        }
+    }
+    property Component scalePercentSlot: Component {
+        Tk.NumberField {
+            objectName: "scalePercentField"
+            small: true
+            implicitWidth: 92
+            from: 10
+            to: 400
+            stepSize: 5
+            suffix: "%"
+            tooltip: qsTr("Scale (Adjust to; Automatic width and height)")
+            enabled: layout.host !== null && !layout.host.scaling.fitToPage
+            value: layout.host !== null ? layout.host.scaling.scale : 100
+            onValueModified: function(v) { layout.host.setScalePercent(Math.round(v)) }
+        }
+    }
 
     readonly property var tabs: [
         StandardRibbon.fileTab([], ["calcTemplate_Budget", "calcTemplate_Invoice"], []),
@@ -37,6 +89,12 @@ QtObject {
             { id: "number", label: qsTr("Number"), rows: [
                 [{ id: "numberFormat", component: numberFormatSlot }],
                 [{ action: "calcThousandsFormatAction", label: qsTr("#,##0.00"), iconName: "hash" }]] },
+            { id: "styles", label: qsTr("Styles"), items: [
+                { id: "condFormatMenu", label: qsTr("Conditional Formatting"), iconName: "paint-bucket", size: "large",
+                  menu: ["calcCondFormatTop10Action", "calcCondFormatAboveAverageAction", "calcCondFormatDuplicatesAction", "|",
+                         "calcCondFormatDataBarsAction", "calcCondFormatColorScaleAction", "calcCondFormatIconSetAction", "|",
+                         "calcCondFormatNewRuleAction", "calcCondFormatClearSelectionAction", "calcCondFormatClearSheetAction", "|",
+                         "calcCondFormatAction"] }] },
             { id: "cells", label: qsTr("Cells"), items: [
                 { action: "calcInsertRowsAction", label: qsTr("Insert rows") },
                 { action: "calcInsertColumnsAction", label: qsTr("Insert columns") },
@@ -70,15 +128,46 @@ QtObject {
             { id: "comments", label: qsTr("Comments"), items: [
                 { action: "calcCommentAction", size: "large" },
                 { action: "calcDeleteCommentAction", iconName: "message-square-x" }] },
-            { id: "sheets", label: qsTr("Sheets"), items: [{ action: "insertSheetAction", size: "large", iconName: "sheet" }] }
+            { id: "sheets", label: qsTr("Sheets"), items: [{ action: "insertSheetAction", size: "large", iconName: "sheet" }] },
+            { id: "insertText", label: qsTr("Text"), items: [{ action: "calcHeaderFooterAction", size: "large" }] }
+        ] },
+        // ---- Page Layout (M78, D-087): Excel's tab ----
+        { id: "pageLayout", label: qsTr("Page Layout"), keyTip: "P", groups: [
+            { id: "pageSetup", label: qsTr("Page Setup"), items: [
+                { id: "margins", label: qsTr("Margins"), iconName: "square-dashed", size: "large",
+                  menu: ["calcMarginsNormalAction", "calcMarginsWideAction", "calcMarginsNarrowAction", "|", "calcMarginsCustomAction"] },
+                { id: "orientation", label: qsTr("Orientation"), iconName: "rotate-cw", size: "large",
+                  menu: ["calcOrientationPortraitAction", "calcOrientationLandscapeAction"] },
+                { id: "paperSize", label: qsTr("Size"), iconName: "file", size: "large",
+                  menu: (layout.host !== null ? layout.host.paperSizeIds : []).concat(["|", "calcPaperSizeMoreAction"]) },
+                { id: "printArea", label: qsTr("Print Area"), iconName: "frame",
+                  menu: ["calcSetPrintAreaAction", "calcClearPrintAreaAction"] },
+                { id: "breaks", label: qsTr("Breaks"), iconName: "separator-horizontal",
+                  menu: ["calcInsertPageBreakAction", "calcRemovePageBreakAction", "calcResetPageBreaksAction"] },
+                { action: "calcPrintTitlesAction" },
+                { action: "calcPageSetupAction", iconName: "layout-template" }] },
+            { id: "scaleToFit", label: qsTr("Scale to Fit"), rows: [
+                [{ id: "scaleWidth", component: scaleWidthSlot }, { id: "scaleHeight", component: scaleHeightSlot }],
+                [{ id: "scalePercent", component: scalePercentSlot },
+                 { id: "scaling", label: qsTr("Scaling"), iconName: "scaling",
+                   menu: ["calcScaleNoneAction", "calcScaleFitSheetAction", "calcScaleFitColumnsAction", "calcScaleFitRowsAction"] }]] },
+            { id: "sheetOptions", label: qsTr("Sheet Options"), items: [
+                "calcPrintGridlinesAction", "calcPrintHeadingsAction"] }
         ] },
         { id: "data", label: qsTr("Data"), keyTip: "D", groups: [
             { id: "sortFilter", label: qsTr("Sort & filter"), items: [
                 { action: "calcAutoFilterAction", size: "large" },
                 "calcSortAscendingAction", "calcSortDescendingAction"] },
             { id: "dataTools", label: qsTr("Data tools"), items: [
-                { action: "calcValidationAction", size: "large", iconName: "list-checks" },
-                { action: "calcCondFormatAction", size: "large" }] },
+                { action: "calcTextToColumnsAction", size: "large" },
+                { action: "calcFlashFillAction" },
+                { action: "calcRemoveDuplicatesAction" },
+                { id: "dataValidation", action: "calcValidationAction", split: true, label: qsTr("Data Validation"),
+                  iconName: "list-checks", menu: ["calcValidationAction", "calcCircleInvalidAction", "calcClearCirclesAction"] },
+                { action: "calcConsolidateAction" }] },
+            { id: "forecast", label: qsTr("Forecast"), items: [
+                { id: "whatIf", label: qsTr("What-If Analysis"), iconName: "wand", size: "large",
+                  menu: ["calcScenarioManagerAction", "calcGoalSeekAction", "calcDataTableAction"] }] },
             { id: "fill", label: qsTr("Fill"), items: [
                 { action: "calcFillDownAction", iconName: "arrow-down-to-line" },
                 { action: "calcFillRightAction", iconName: "arrow-right" }] },
@@ -111,8 +200,13 @@ QtObject {
                 { action: "calcSheetUnhideAction", iconName: "eye" }] }
         ] },
         StandardRibbon.viewTab([
+            { id: "workbookViews", label: qsTr("Workbook Views"), items: [
+                { action: "calcViewNormalAction", size: "large" },
+                { action: "calcViewPageBreakPreviewAction", size: "large" }] },
             { id: "freeze", label: qsTr("Window"), items: [
-                { action: "calcFreezePanesAction", size: "large", iconName: "snowflake" }] },
+                { id: "freezeMenu", action: "calcFreezePanesAction", split: true, size: "large", iconName: "snowflake",
+                  label: qsTr("Freeze Panes"),
+                  menu: ["calcFreezePanesAction", "calcFreezeTopRowAction", "calcFreezeFirstColumnAction"] }] },
             StandardRibbon.assistantGroup([])
         ]),
         // ---- PivotTables (M74, D-083): Excel's two contextual tabs ----

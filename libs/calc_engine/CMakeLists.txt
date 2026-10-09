@@ -7,7 +7,9 @@
 # structure_tables), array constants, lifting and implicit intersection
 # (eval_lift), legacy array formulas (spill.cpp). M74 (D-083): PivotTables
 # (pivot*: caches, grouping, compute, Show Values As, compact / outline /
-# tabular layout, the built-in styles, GETPIVOTDATA). Qt Core only - never
+# tabular layout, the built-in styles, GETPIVOTDATA). M78 (D-087): what-if
+# analysis, data tools, sheet printing, every conditional-format and
+# validation kind. Qt Core only - never
 # links Qt Widgets or the desktop archives (AGENTS.md rules 8/9); every
 # behavior here is testable offscreen.
 add_library(calc_engine STATIC
@@ -110,6 +112,37 @@ add_library(calc_engine STATIC
     src/value.h
     src/workbook.cpp
     src/workbook.h
+    # M78 (D-087): what-if analysis (goal seek, scenarios, data tables),
+    # the data tools (Text to Columns, Flash Fill, Remove Duplicates,
+    # Consolidate), sheet printing (pages, headers and footers), every
+    # conditional-format and validation kind, and the moves of all of it.
+    src/cond_format_internal.h
+    src/cond_format_stats.cpp
+    src/data_table.cpp
+    src/data_table.h
+    src/data_tools.cpp
+    src/data_tools.h
+    src/flash_fill.cpp
+    src/flash_fill.h
+    src/flash_fill_atoms.cpp
+    src/flash_fill_internal.h
+    src/goal_seek.cpp
+    src/goal_seek.h
+    src/header_footer.cpp
+    src/header_footer.h
+    src/page_layout.cpp
+    src/page_layout.h
+    src/page_setup.cpp
+    src/scenario.cpp
+    src/scenario.h
+    src/structure_print.cpp
+    src/structure_rules.cpp
+    src/structure_whatif.cpp
+    src/text_to_columns.cpp
+    src/text_to_columns.h
+    src/validation_eval.cpp
+    src/what_if_cells.cpp
+    src/what_if_internal.h
 )
 
 target_include_directories(calc_engine

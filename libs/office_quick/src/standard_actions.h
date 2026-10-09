@@ -202,6 +202,53 @@ inline const char kCalcPivotRowHeaders[] = "calcPivotRowHeadersAction";
 inline const char kCalcPivotColumnHeaders[] = "calcPivotColumnHeadersAction";
 inline const char kCalcPivotBandedRows[] = "calcPivotBandedRowsAction";
 inline const char kCalcPivotBandedColumns[] = "calcPivotBandedColumnsAction";
+// M78 (D-087): Excel's Page Layout tab and Page Setup, View ▸ Page Break
+// Preview, Freeze Top Row / First Column, Data ▸ What-If Analysis and Data
+// Tools, Circle Invalid Data, and the conditional-format commands. Paper
+// sizes are app-scoped "calcPaperSize_<Excel's paperSize code>".
+inline const char kCalcPageSetup[] = "calcPageSetupAction";
+inline const char kCalcMarginsNormal[] = "calcMarginsNormalAction";
+inline const char kCalcMarginsWide[] = "calcMarginsWideAction";
+inline const char kCalcMarginsNarrow[] = "calcMarginsNarrowAction";
+inline const char kCalcMarginsCustom[] = "calcMarginsCustomAction";
+inline const char kCalcOrientationPortrait[] = "calcOrientationPortraitAction";
+inline const char kCalcOrientationLandscape[] = "calcOrientationLandscapeAction";
+inline const char kCalcPaperSizeMore[] = "calcPaperSizeMoreAction";
+inline const char kCalcSetPrintArea[] = "calcSetPrintAreaAction";
+inline const char kCalcClearPrintArea[] = "calcClearPrintAreaAction";
+inline const char kCalcInsertPageBreak[] = "calcInsertPageBreakAction";
+inline const char kCalcRemovePageBreak[] = "calcRemovePageBreakAction";
+inline const char kCalcResetPageBreaks[] = "calcResetPageBreaksAction";
+inline const char kCalcPrintTitles[] = "calcPrintTitlesAction";
+inline const char kCalcHeaderFooter[] = "calcHeaderFooterAction";
+inline const char kCalcScaleNone[] = "calcScaleNoneAction";
+inline const char kCalcScaleFitSheet[] = "calcScaleFitSheetAction";
+inline const char kCalcScaleFitColumns[] = "calcScaleFitColumnsAction";
+inline const char kCalcScaleFitRows[] = "calcScaleFitRowsAction";
+inline const char kCalcPrintGridlines[] = "calcPrintGridlinesAction";
+inline const char kCalcPrintHeadings[] = "calcPrintHeadingsAction";
+inline const char kCalcViewNormal[] = "calcViewNormalAction";
+inline const char kCalcViewPageBreakPreview[] = "calcViewPageBreakPreviewAction";
+inline const char kCalcFreezeTopRow[] = "calcFreezeTopRowAction";
+inline const char kCalcFreezeFirstColumn[] = "calcFreezeFirstColumnAction";
+inline const char kCalcGoalSeek[] = "calcGoalSeekAction";
+inline const char kCalcScenarioManager[] = "calcScenarioManagerAction";
+inline const char kCalcDataTable[] = "calcDataTableAction";
+inline const char kCalcTextToColumns[] = "calcTextToColumnsAction";
+inline const char kCalcFlashFill[] = "calcFlashFillAction";
+inline const char kCalcRemoveDuplicates[] = "calcRemoveDuplicatesAction";
+inline const char kCalcConsolidate[] = "calcConsolidateAction";
+inline const char kCalcCircleInvalid[] = "calcCircleInvalidAction";
+inline const char kCalcClearCircles[] = "calcClearCirclesAction";
+inline const char kCalcCondFormatNewRule[] = "calcCondFormatNewRuleAction";
+inline const char kCalcCondFormatDataBars[] = "calcCondFormatDataBarsAction";
+inline const char kCalcCondFormatColorScale[] = "calcCondFormatColorScaleAction";
+inline const char kCalcCondFormatIconSet[] = "calcCondFormatIconSetAction";
+inline const char kCalcCondFormatTop10[] = "calcCondFormatTop10Action";
+inline const char kCalcCondFormatAboveAverage[] = "calcCondFormatAboveAverageAction";
+inline const char kCalcCondFormatDuplicates[] = "calcCondFormatDuplicatesAction";
+inline const char kCalcCondFormatClearSelection[] = "calcCondFormatClearSelectionAction";
+inline const char kCalcCondFormatClearSheet[] = "calcCondFormatClearSheetAction";
 
 // QindaShow commands.
 inline const char kShowFillColor[] = "showFillColorAction";

@@ -77,10 +77,15 @@ struct CarriedElement {
     bool positional;
 };
 
+// M78 (D-087): printOptions, pageMargins, headerFooter and the page breaks
+// are modelled (Sheet::PageSetup) and written by the post-pass; pageSetup is
+// written from the model with the source's printer-settings link merged in
+// (xlsx_carry_sheet.cpp). The pictures a header or footer shows (&G) live
+// in a VML part of their own (legacyDrawingHF, carried with its shapes in a
+// fresh id block by xlsx_carry_sheet.cpp) or a drawing (drawingHF).
 inline constexpr CarriedElement kCarriedSheetElements[] = {
-    {"printOptions", false}, {"pageMargins", false}, {"headerFooter", false},
-    {"customProperties", false}, {"ignoredErrors", true}, {"picture", false},
-    {"oleObjects", false}, {"controls", false}, {"webPublishItems", false},
+    {"customProperties", false}, {"ignoredErrors", true}, {"drawingHF", false},
+    {"picture", false}, {"oleObjects", false}, {"controls", false}, {"webPublishItems", false},
 };
 
 // extLst entries of a worksheet that are carried, by uri: slicer lists,
