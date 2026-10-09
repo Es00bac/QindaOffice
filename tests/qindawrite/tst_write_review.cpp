@@ -34,6 +34,7 @@ private slots:
     void footnotesLandOnTheirMarkersPage();
     void orphanNotesArePruned();
     void tableOfContentsListsHeadingsWithPages();
+    void applyingAStyleRestylesWrittenText();
     void updatingTheTableReplacesItInPlace();
     void trackedInsertionIsMarkedAndRejectable();
     void acceptAndRejectAreExactInverses();
@@ -138,6 +139,24 @@ void WriteReviewTest::orphanNotesArePruned()
     // it from the document.
     QVERIFY(notes.contains(id));
     QVERIFY(!notes.contains(QStringLiteral("ghost")));
+}
+
+// "Heading 2" on a line already written makes the TEXT a heading, not just
+// the paragraph mark (the block char format only reaches later typing).
+void WriteReviewTest::applyingAStyleRestylesWrittenText()
+{
+    WriteDocument doc;
+    QTextDocument *text = makeDocument(&doc);
+    QTextCursor cursor(text);
+    cursor.insertText(QStringLiteral("Results"));
+    StyleCatalog catalog;
+    catalog.apply(QTextCursor(text->begin()), StyleCatalog::Heading2);
+    const QTextCharFormat run = text->begin().begin().fragment().charFormat();
+    QCOMPARE(run.fontPointSize(), 16.0);
+    QCOMPARE(run.fontWeight(), int(QFont::Bold));
+    catalog.apply(QTextCursor(text->begin()), StyleCatalog::Normal);
+    QCOMPARE(text->begin().begin().fragment().charFormat().fontPointSize(), 11.0);
+    QCOMPARE(text->begin().begin().fragment().charFormat().fontWeight(), int(QFont::Normal));
 }
 
 void WriteReviewTest::tableOfContentsListsHeadingsWithPages()

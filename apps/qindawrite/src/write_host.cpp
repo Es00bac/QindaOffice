@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_host.h"
+#include "docx_restyle.h"
 
 #include "format_controller.h"
 #include "format_io.h"
@@ -215,6 +216,10 @@ void WriteHost::applyHighlightColor(const QColor &color)
 void WriteHost::applyStyle(int styleId)
 {
     StyleCatalog catalog;
+    // A Word document's own "Heading 1" (its template's look, written as
+    // <w:pStyle/> only) wins over Write's built-in one (docx_restyle.h).
+    const Docx::DocumentStyles documentStyles(m_document->parts());
+    const QString wordStyle = documentStyles.styleFor(styleId);
     // AGENT-GUARD: style the control's live cursor, not a fresh cursor over
     // the document — a document-constructed cursor has no selection, which
     // made every style application land on the first paragraph.
@@ -227,8 +232,12 @@ void WriteHost::applyStyle(int styleId)
             break;
         }
         if (block.position() >= start || block.contains(start)) {
-            QTextCursor blockCursor(block);
-            catalog.apply(blockCursor, styleId);
+            if (!wordStyle.isEmpty()) {
+                documentStyles.apply(block, wordStyle);
+            } else {
+                QTextCursor blockCursor(block);
+                catalog.apply(blockCursor, styleId);
+            }
         }
     }
     cursor.endEditBlock();

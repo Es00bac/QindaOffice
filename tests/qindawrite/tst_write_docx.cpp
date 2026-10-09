@@ -23,6 +23,7 @@
 #include <QGuiApplication>
 #include <QProcess>
 #include <QRandomGenerator>
+#include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QTextBlock>
 #include <QTextCursor>
@@ -40,6 +41,7 @@ private slots:
     void htmlCarriesPicturesInside();
     void legacyFormatsGoThroughWord();
     void rendersListedDocuments();
+    void pageCountsAgreeWithWord();
 };
 
 namespace {
@@ -253,6 +255,60 @@ void WriteDocxTest::rendersListedDocuments()
               Apps::Write::KeepRules::count(doc.textDocument()));
         QVERIFY2(Apps::Write::exportDocumentPdf(doc.textDocument(), pdf, &error, doc.decoration()), qPrintable(error));
     }
+}
+
+// Opt-in measurement (QQO_WRITE_PAGES_CORPUS lists .docx paths): how many
+// documents Write lays out on as many pages as Microsoft Word did when it
+// last saved them (docProps/app.xml <Pages>, written by Word only). Counts
+// only — no file name or content is printed.
+void WriteDocxTest::pageCountsAgreeWithWord()
+{
+    const QString list = qEnvironmentVariable("QQO_WRITE_PAGES_CORPUS");
+    if (list.isEmpty()) {
+        QSKIP("QQO_WRITE_PAGES_CORPUS unset");
+    }
+    QFile file(list);
+    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+    int measured = 0;
+    int exact = 0;
+    int nearly = 0;
+    int shorter = 0;
+    int longer = 0;
+    int failed = 0;
+    qint64 wordPages = 0;
+    qint64 writePages = 0;
+    static const QRegularExpression kPages(QStringLiteral("<Pages>(\\d+)</Pages>"));
+    static const QRegularExpression kWord(QStringLiteral("<Application>Microsoft Office Word</Application>"));
+    for (const QString &path : QString::fromUtf8(file.readAll()).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+        const auto package = Ooxml::Package::load(path);
+        if (!package) {
+            ++failed;
+            continue;
+        }
+        const QString app = QString::fromUtf8(package->data(QStringLiteral("docProps/app.xml")));
+        const QRegularExpressionMatch pages = kPages.match(app);
+        if (!pages.hasMatch() || !kWord.match(app).hasMatch() || pages.captured(1).toInt() <= 0) {
+            continue; // no count from Word itself
+        }
+        WriteDocument doc;
+        if (!doc.load(path)) {
+            ++failed;
+            continue;
+        }
+        const int word = pages.captured(1).toInt();
+        const int ours = doc.textDocument()->pageCount();
+        ++measured;
+        wordPages += word;
+        writePages += ours;
+        exact += ours == word ? 1 : 0;
+        nearly += qAbs(ours - word) == 1 ? 1 : 0;
+        shorter += ours < word - 1 ? 1 : 0;
+        longer += ours > word + 1 ? 1 : 0;
+    }
+    qInfo("page counts vs Word: %d documents, %d exact, %d off by one, %d shorter by 2+, %d longer by 2+, "
+          "%d unreadable; %lld pages in Word, %lld in Write",
+          measured, exact, nearly, shorter, longer, failed, wordPages, writePages);
+    QCOMPARE(failed, 0);
 }
 
 int main(int argc, char *argv[])

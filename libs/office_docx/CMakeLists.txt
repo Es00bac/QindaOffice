@@ -21,6 +21,7 @@ add_library(office_docx STATIC
     src/docx_styles.cpp
     src/docx_styles.h
     src/docx_text.cpp
+    src/docx_restyle.cpp
     src/docx_text.h
     src/docx_writer.cpp
     src/docx_writer.h

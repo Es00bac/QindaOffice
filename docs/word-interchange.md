@@ -45,6 +45,20 @@ rest and `WriteDocument` owns both:
   save: styles, numbering definitions, theme, settings, fonts, comments,
   endnotes, custom XML, glossary, people, VBA (macro kinds only).
 
+## Styles in a Word document
+
+The style gallery's Normal, Title, Heading 1–6 and Quote apply the
+document's OWN style of that name when it has one (`docx_restyle.h`): the
+paragraph shows the document's template look (style chain, theme colours,
+spacing folded as the reader folds it), its runs keep their own direct
+formatting from the preserved `w:rPr` (text typed in Write takes the
+style's look), and the paragraph is written as `<w:pStyle w:val="…"/>`
+plus what is not formatting (numbering, section break, the mark's run
+properties) — so Word shows its own style, not Write's built-in look as
+direct formatting. A document without that style, or one not from Word,
+gets Write's built-in style. A restyled table-cell paragraph is shown
+without its table style's layers (Word, which has them, shows them).
+
 ## Reading (`docx_reader*`)
 
 Paragraph and run formatting is resolved the way Word resolves it

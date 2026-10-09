@@ -119,6 +119,18 @@ set, prefixed OPC package parts LibreOffice refused, first-block spacing,
 collapsed empty paragraphs after tables, row heights, paragraph borders,
 header overlap, cover-page headers, PDF page size (px passed as points).
 
+**Document styles:** `tst_docx_restyle` 3/3 — the document's own Heading 1
+(16 pt, its theme colour, keep-with-next) replaces the paragraph's direct
+centring, the run's own bold stays, the next paragraph's folded spacing
+follows, the output says `<w:pStyle w:val="Heading1"/>` only and validates,
+and it reads back as Heading 1. `tst_write_review` checks that a style
+applied to a written line restyles the text itself (it used to change only
+the paragraph mark).
+
+**Fonts:** `media-fonts/crosextrafonts-carlito` and `-caladea` (metric
+clones of Calibri and Cambria) are installed on both machines through
+Portage; with them the 25-page guide lays out on 25 pages, as in Word.
+
 **Pagination (keep rules):** `tst_write_pagination` 8/8 — a keep-with-next
 paragraph, a run of them, an orphaned first line, widow control switched
 off, a table split after its keep-with-next title row, no break in the

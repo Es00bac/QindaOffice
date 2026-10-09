@@ -197,11 +197,17 @@ void WritePaginationTest::breaksStayOutOfTheFiles()
     QVERIFY(!body.contains("pageBreakBefore"));
     QVERIFY(!body.contains("w:type=\"page\""));
     QCOMPARE(body.count("<w:keepNext/>"), 1);
-    // Reopened, Word's rule is read back and laid out again.
+    // Reopened, Word's rule is read back and laid out again (where the
+    // heading falls depends on the fonts installed; the rule must hold).
     WriteDocument reopened;
     QVERIFY2(reopened.load(path, &error), qPrintable(error));
-    QCOMPARE(KeepRules::count(reopened.textDocument()), 1);
-    QCOMPARE(pageOf(blockAt(reopened.textDocument(), last)), 1);
+    const QTextDocument *again = reopened.textDocument();
+    QTextBlock heading = again->begin();
+    while (heading.isValid() && !heading.blockFormat().boolProperty(Docx::kKeepWithNext)) {
+        heading = heading.next();
+    }
+    QVERIFY(heading.isValid());
+    QCOMPARE(pageOf(heading, true), pageOf(heading.next()));
     QVERIFY(!reopened.isDirty());
 
     const QString html = dir.filePath(QStringLiteral("keep.html"));

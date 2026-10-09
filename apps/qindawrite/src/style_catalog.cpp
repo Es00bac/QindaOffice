@@ -109,8 +109,13 @@ void StyleCatalog::apply(QTextCursor cursor, int id) const
     // Not setBlockCharFormat(): in a table cell's first paragraph that would
     // reset the cell's merge, shading and borders (docx_text.h).
     Docx::setBlockCharFormatKeepingCell(cursor, charFormat);
-    if (cursor.hasSelection()) {
-        cursor.mergeCharFormat(charFormat);
+    // The paragraph's existing text takes the style's look too: the block
+    // char format above only reaches text typed later, so "Heading 1" on a
+    // written line used to change its spacing and leave the text as it was.
+    QTextCursor text(cursor.block());
+    text.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+    if (text.hasSelection()) {
+        text.mergeCharFormat(charFormat);
     }
 }
 
