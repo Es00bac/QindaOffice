@@ -66,6 +66,19 @@ void paintPage(QPainter *painter, const Geometry &g, int page);
 void paintTimescale(QPainter *painter, const Geometry &g, int h, qreal rowsBottom);
 void paintBars(QPainter *painter, const Geometry &g, int h, int firstRow, int lastRow);
 void paintLinks(QPainter *painter, const Geometry &g, int h, int firstRow, int lastRow);
+
+// gantt_print_extras.cpp (M79): what goes under and around the bars —
+// slack bars, deadline arrows, the leveling delay line — and the legend,
+// which lists exactly what the chosen style and options draw.
+void paintBarExtras(QPainter *painter, const Geometry &g, int h, int firstRow, int lastRow);
 void paintLegend(QPainter *painter, const Geometry &g);
+// The lower lane of a row: the chosen baseline ("gantt", "tracking") or the
+// pre-leveled dates ("leveling"); false when the task has none.
+bool lowerBar(const Geometry &g, const Task &t, Minutes *start, Minutes *finish);
+// Shared drawing bits.
+QPolygonF diamond(qreal cx, qreal cy, qreal half);
+void arrowHead(QPainter *painter, QPointF tip, bool pointingRight, const QColor &color);
+void dashedLine(QPainter *painter, qreal x, qreal top, qreal bottom, const QColor &color);
+inline constexpr qreal kMilestoneHalf = 4.5;
 
 } // namespace QindaOffice::Plan::GanttPrint

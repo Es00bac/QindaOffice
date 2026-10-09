@@ -43,6 +43,7 @@ PlanService::PlanService(PlanDocument *document, QObject *parent)
     }
     m_resourceSheet->setColumnIds(resourceFields);
     m_usage = new QindaTK::ResourcePlanModel(this);
+    m_taskUsage = new QindaTK::ResourcePlanModel(this); // M79: Task Usage
     connect(m_selection, &QindaTK::SelectionModel::selectionModified, this,
             [this](const QStringList &ids, const QString &current) {
                 if (m_syncingSelection) {
@@ -172,6 +173,7 @@ void PlanService::setUsageWeeks(bool on)
     if (on != m_usageWeeks) {
         m_usageWeeks = on;
         rebuildUsage();
+        rebuildTaskUsage();
         emit viewChanged();
         emit changed();
     }
@@ -364,19 +366,10 @@ void PlanService::rebuild()
     rebuildGantt();
     rebuildCalendar();
     rebuildUsage();
+    rebuildTaskUsage(); // M79
+    rebuildNetwork();   // M79
     ++m_revision;
     emit changed();
-}
-
-void PlanService::rebuildVisible()
-{
-    m_visible.clear();
-    const Engine::Project &p = project();
-    for (int i = 0; i < p.tasks.size();) {
-        m_visible.append(i);
-        const Engine::Task &t = p.tasks.at(i);
-        i = t.summary && m_collapsed.contains(t.uid) ? Engine::subtreeEnd(p, i) : i + 1;
-    }
 }
 
 void PlanService::pruneSelection()

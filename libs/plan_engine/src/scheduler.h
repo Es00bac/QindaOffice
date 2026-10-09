@@ -12,11 +12,15 @@
 //     dates honour FS/SS/FF/SF links with lag (working time on the project
 //     calendar, or a percentage of the predecessor's duration), the eight
 //     constraint types (hard constraints win over links and are flagged as
-//     conflicts, as Project does by default), leveling delay, actuals and
+//     conflicts, as Project does by default), the leveling delay (M79:
+//     Project's, relative to the unleveled early start), actuals and
 //     manual scheduling.
 //  3. Backward pass from the project finish: late dates, total slack
 //     (working time between early and late finish), free slack, critical
-//     (active, not complete, total slack <= 0).
+//     (active, not complete, total slack <= the critical slack limit). M79:
+//     a deadline caps the late finish (dates do not move; slack can go
+//     negative); with multiple critical paths a task that drives nothing
+//     has its early finish as its late finish.
 //  4. As Late As Possible tasks move by their free slack.
 //  5. Roll-ups: summary dates, duration, % complete (duration-weighted),
 //     slack; assignment work and cost, task and resource totals; per-day

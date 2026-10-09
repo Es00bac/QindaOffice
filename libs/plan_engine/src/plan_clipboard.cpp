@@ -63,6 +63,11 @@ QByteArray copyTasks(const Project &project, const QList<int> &indices)
         o.remove(QStringLiteral("actualFinish"));
         o.remove(QStringLiteral("percentComplete"));
         o.remove(QStringLiteral("levelingFloor"));
+        // A pasted task starts unleveled, without the source's baselines.
+        for (const char *key : {"levelingDelay", "levelingDelayWorking", "preLeveledStart", "preLeveledFinish",
+                                "mspdiBaselines"}) {
+            o.remove(QLatin1String(key));
+        }
         tasks.append(o);
     }
     QJsonArray assignments;
@@ -75,6 +80,8 @@ QByteArray copyTasks(const Project &project, const QList<int> &indices)
         assignments.append(QJsonObject{{QStringLiteral("task"), a.taskUid},
                                        {QStringLiteral("resource"), res.name},
                                        {QStringLiteral("material"), res.type == ResourceType::Material},
+                                       {QStringLiteral("costResource"), res.type == ResourceType::Cost}, // M79
+                                       {QStringLiteral("cost"), a.costInput},
                                        {QStringLiteral("units"), a.units}});
     }
     const QJsonObject root{{QStringLiteral("format"), QStringLiteral("qindaplan-tasks")},
@@ -156,13 +163,16 @@ QList<int> pasteTasks(Project &project, int at, const QByteArray &data)
         int r = project.resourceIndexByName(name);
         if (r < 0) {
             r = addResource(project, int(project.resources.size()), name,
-                            o.value(QStringLiteral("material")).toBool() ? ResourceType::Material : ResourceType::Work);
+                            o.value(QStringLiteral("material")).toBool()       ? ResourceType::Material
+                            : o.value(QStringLiteral("costResource")).toBool() ? ResourceType::Cost
+                                                                               : ResourceType::Work);
         }
         Assignment a;
         a.uid = project.nextAssignmentUid();
         a.taskUid = taskUid;
         a.resourceUid = project.resources.at(r).uid;
         a.units = std::clamp(o.value(QStringLiteral("units")).toInt(100), 1, 1000000);
+        a.costInput = qint64(o.value(QStringLiteral("cost")).toDouble());
         project.assignments.append(a);
     }
     computeStructure(project);

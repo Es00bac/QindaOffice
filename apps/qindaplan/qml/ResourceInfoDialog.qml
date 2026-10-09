@@ -32,7 +32,7 @@ Tk.Dialog {
         const values = {}
         for (const f of fields) values[f] = plan.resourceSheetModel.editValue("r" + resourceUid, f)
         before = values
-        nameField.text = values.name; typeBox.currentIndex = values.type === "Material" ? 1 : 0
+        nameField.text = values.name; typeBox.currentIndex = values.type === "Material" ? 1 : values.type === "Cost" ? 2 : 0
         labelField.text = values.materialLabel; initialsField.text = values.initials; groupField.text = values.group
         unitsField.text = values.maxUnits; rateField.text = values.standardRate; perUseField.text = values.costPerUse
         emailField.text = values.email
@@ -40,7 +40,7 @@ Tk.Dialog {
         open()
     }
     onAccepted: {
-        const after = { name: nameField.text, type: typeBox.currentIndex === 1 ? "Material" : "Work",
+        const after = { name: nameField.text, type: ["Work", "Material", "Cost"][typeBox.currentIndex],
                         materialLabel: labelField.text, initials: initialsField.text, group: groupField.text,
                         maxUnits: unitsField.text, standardRate: rateField.text, costPerUse: perUseField.text,
                         email: emailField.text }
@@ -64,13 +64,13 @@ Tk.Dialog {
             columns: "1fr 1fr"
             columnGap: Tk.Theme.space.lg
             rowGap: Tk.Theme.space.sm
-            Tk.PropertyRow { label: qsTr("Type"); Tk.ComboBox { id: typeBox; small: true; model: [qsTr("Work"), qsTr("Material")] } }
+            Tk.PropertyRow { label: qsTr("Type"); Tk.ComboBox { id: typeBox; small: true; model: [qsTr("Work"), qsTr("Material"), qsTr("Cost")] } }
             Tk.PropertyRow { label: qsTr("Material label"); enabled: typeBox.currentIndex === 1; Tk.TextField { id: labelField } }
             Tk.PropertyRow { label: qsTr("Initials"); Tk.TextField { id: initialsField } }
             Tk.PropertyRow { label: qsTr("Group"); Tk.TextField { id: groupField } }
             Tk.PropertyRow { label: qsTr("Max. units"); enabled: typeBox.currentIndex === 0; Tk.TextField { id: unitsField; objectName: "resourceInfoMaxUnits" } }
-            Tk.PropertyRow { label: qsTr("Std. rate"); Tk.TextField { id: rateField; objectName: "resourceInfoRate" } }
-            Tk.PropertyRow { label: qsTr("Cost/use"); Tk.TextField { id: perUseField } }
+            Tk.PropertyRow { label: qsTr("Std. rate"); enabled: typeBox.currentIndex !== 2; Tk.TextField { id: rateField; objectName: "resourceInfoRate" } }
+            Tk.PropertyRow { label: qsTr("Cost/use"); enabled: typeBox.currentIndex !== 2; Tk.TextField { id: perUseField } }
             Tk.PropertyRow { label: qsTr("Email"); Tk.TextField { id: emailField; iconName: "mail" } }
         }
     }

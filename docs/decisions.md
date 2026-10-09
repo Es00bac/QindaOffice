@@ -5,6 +5,160 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-088: QindaPlan: Project's scheduling, tracking and views
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart, "nothing missing that somebody would need";
+M79, builds on D-051 and D-071; the survey and what remains are in
+docs/plans/office-parity.md)
+
+**Context.** QindaPlan scheduled, leveled and tracked a plan (D-051) and kept
+what Microsoft Project XML holds beyond its model (D-071), but against
+Project's everyday features it fell short where planners live: a deadline
+was only a flag, not a late finish; there was no critical slack limit or
+multiple critical paths; leveling stored an absolute floor that Project
+never saw — a plan leveled here came back unleveled from Project, and a
+plan Project had leveled was unleveled here; only three baselines existed
+(Project has eleven, kept blind since M63); Project's recurring calendar
+exceptions and alternative work weeks were kept but not scheduled, so a
+Project file with yearly holidays got other dates here — and a baseline set
+here disagreed with Project's on reopening; cost resources came in as
+material and went back so, losing their amounts; there was no Tracking
+Gantt, no Leveling Gantt, no Network Diagram ("a project of its own",
+D-051), no Task Usage, no filters or sorts, no Update Tasks or Mark on
+Track, no leveling options, and the printout knew one style.
+
+**Decision.**
+
+1. **The critical path is Project's.** A deadline caps the late finish of
+   its task (a summary's caps its subtasks) — dates never move, slack goes
+   negative, the task and its drivers turn critical. A task is critical
+   when its total slack is at most the critical slack limit (days; MSPDI
+   `CriticalSlackLimit`). With multiple critical paths (MSPDI
+   `MultipleCriticalPaths`) a task that drives nothing — no successor of its
+   own or of a summary above it — has its early finish as its late finish.
+   Both options are project fields (Project Information).
+2. **Leveling writes Project's Leveling Delay.** `Task::levelingDelay` is
+   elapsed time (or working time when the file says so) from the task's
+   unleveled early start, applied in the forward pass — relative, so a task
+   keeps its delay when its predecessors move, exactly as Project does.
+   Leveling measures the delay it needs from that start, writes it as
+   elapsed days (`LevelingDelayFormat` 8) and records every task's
+   pre-leveled dates (`PreLeveledStart/Finish`); a file's delays and format
+   are read and written back. The leveling options are Project's: order
+   (ID Only; Standard; Priority, Standard), level only within available
+   slack, clear leveling values first (project fields, .qplan only — MSPDI
+   has no place for them), the leveling range and Level Selection (per
+   run); priority 1000 never moves. An M51–M78 floor converts on load to
+   the delay that gives the same dates (schedule once with the floors, take
+   floor − unleveled start). The heuristic itself stays D-051's.
+3. **Eleven baselines, as Project writes them.** Baseline … Baseline 10 per
+   task and per assignment (Set Baseline saves the assignments' work and
+   cost); Set and Clear for the project or the selection. In MSPDI every
+   Baseline element — task, assignment, project summary task — is read
+   into the model and kept as written; the writer replays an element while
+   the model still holds what it says (Project's Interim,
+   EstimatedDuration, BCWS, BCWP travel untouched), writes one from the
+   model once the baseline was set here, drops it once cleared; the summary
+   task's baseline of a number is replayed while no task's of that number
+   changed and rolled up from the top-level tasks once one has. Baselines
+   3–10 a .qplan of M63–M78 kept blind join the model on load.
+4. **Views over one row set.** PlanService's visible rows — the outline
+   sorted (siblings under their summary), collapsed summaries' subtasks
+   left out, filtered with related summary rows — are the rows of the task
+   sheet, the Gantt views, the Network Diagram, Task Usage and the printout;
+   the Calendar takes the filter. Filters (`plan_views.h`: eleven of
+   Project's built-ins) and sorts (five) are view state. The Tracking Gantt
+   and Leveling Gantt are styles of the one Gantt (the Gantt model's
+   baseline lane carries the chosen baseline or the pre-leveled dates; the
+   bar text % complete or the delay), each with its own table as in
+   Project (Tracking; Delay), remembered per view.
+5. **The Network Diagram is laid out by the engine and painted once**
+   (superseding D-051's "the network diagram is not built").
+   `network_layout.h` (Qt Core): columns by the longest chain of links,
+   rows by the mean row of what leads to a box, links routed through the
+   gaps so none crosses a box — deterministic and testable; `plan_output`
+   paints it for the window (a viewport-sized painted item over a canvas of
+   the diagram's size, so a large plan never needs a large texture), paper
+   and PDF (fitted across the page setup's pages, 55 %–100 %). The window's
+   canvas is paper (D-004).
+6. **Printing follows the view.** The printed Gantt takes the view's rows
+   and style (Tracking, Leveling), draws Detail Gantt slack bars and
+   deadline arrows, and lists in its legend exactly what it drew; the
+   Network Diagram view prints the diagram. QindaTK's GanttView draws no
+   slack bars or deadline markers, so the window writes the slack after the
+   bar instead (a toolkit gap, not worked around in QindaTK).
+7. **Tracking commands are Project's.** Update Tasks (% complete, actual
+   and remaining duration, actual dates on the selection), Mark on Track
+   (complete through the status date), editable Act. Dur. / Rem. Dur. /
+   Leveling Delay cells; Project's Work, Baseline and Delay tables; Cost
+   Overview and Work Overview reports. % complete stays the stored truth
+   (an integer, as MSPDI's `PercentComplete`); the derived actual duration
+   is shown as the roundest value that rounds to it (whole days, half days,
+   tenths of a day, whole hours), else the exact share.
+8. **Calendars schedule as Project's do.** A calendar's recurring
+   exceptions (yearly or monthly on a day or a position, weekly on days,
+   every N days, within their range — 7-day blocks from the first day for
+   "every N weeks", as Project and MPXJ count them) and alternative work
+   weeks are DERIVED from the MSPDI elements kept in its extra (D-071) — on
+   every read of Project XML and every `.qplan` load — never stored twice,
+   so the file's elements stay the truth and go back as written. Resolution
+   for a date: dated, then recurring exceptions (own, then the bases'),
+   then a work week covering it (own, then the bases'; a day it leaves
+   unset falls through), then the week. A kind QindaPlan cannot expand (the
+   nth weekday or weekend day of a month; by weekday count) is reported.
+   Change Working Time lists them, read-only.
+9. **Cost resources are Project's.** `ResourceType::Cost` (MSPDI Type 2,
+   `IsCostResource`): no rate, units or work, never overallocated; each
+   assignment carries the amount it costs (`Assignment::costInput`, MSPDI
+   the assignment's `Cost`), typed as `Airfare[$450]` in Resource Names or
+   in Assign Resources, in the task's and the resource's cost.
+10. **The commands** are persistent `ActionEntry`s with new ids, in the menu
+   tree and on the ribbon (rule 5; never renamed, never reused):
+   `planView{TrackingGantt,LevelingGantt,Network,TaskUsage}Action`,
+   `planTable{Work,Baseline,Delay}Action`,
+   `planFilter{All,Critical,Incomplete,Completed,Late,Slipping,Milestones,Summary,Deadlines,Resource,DateRange}Action`,
+   `planFilterRelatedSummariesAction`,
+   `planSort{Id,Start,Finish,Priority,Cost}Action`,
+   `planBaselineShown0Action` … `planBaselineShown10Action`,
+   `planShowSlackAction`, `planLevelingOptionsAction`,
+   `planLevelSelectionAction`, `planClearLevelingSelectedAction`,
+   `planUpdateTasksAction`, `planMarkOnTrackAction`,
+   `planReport{Cost,Work}Action`, `planAddCostResourceAction`. Menus: View ▸ Filter, Sort, Baseline
+   Shown; Task ▸ Progress; Resource and Report grow. Ribbon: Task ▸ Mark on
+   Track; Resource ▸ Insert and Level; Report; View ▸ Views and Data (Tables,
+   Filter, Sort); Gantt Chart Format ▸ Slack and the Baseline split.
+
+**Consequences.** A plan leveled in QindaPlan opens leveled in Project and
+the other way round; deadlines, the slack limit and multiple critical paths
+mean what they mean in Project; baselines 0–10 survive both ways with
+Project's own extras; a Project file's recurring holidays and work weeks
+move tasks here as they do in Project, and its cost resources keep their
+amounts; planners get Project's Gantt views, the Network Diagram, Task
+Usage, filters and sorts, on screen and on paper. Two hand-built fixtures
+changed with the semantics: the 2016 sample's weekly "Monday stand-up"
+(Mondays 09–17) now starts Proofing at 09:00, and the M63 keep sample's
+"Monday review" was moved after its tasks so the dates it was written with
+still hold. The `.qplan` stays version 1 (new keys; older files convert on
+load). Not done, ranked in office-parity.md: task types and effort-driven
+scheduling (next — a model change: assignment work as an input,
+fractional units), groups and highlight filters (QindaTK's GanttView and
+EditableGrid have no group-header rows), custom fields shown and edited,
+earned value and interim plans, actual work/cost entry and progress lines,
+elapsed durations, splits and recurring tasks, Excel/CSV import, making
+recurring calendar exceptions and work weeks here (they are read, shown and
+scheduled), richer page setup, overtime and rate tables, Resource Graph and
+Team Planner; `.mpp` stays out of reach without Java (MPXJ). QindaTK gaps, reported and
+not worked around in the toolkit: GanttView has no slack bars, per-row
+deadline markers, progress lines, split bars or custom bar styles (Project's
+Bar Styles), and no second baseline lane; there is no network-diagram or
+PERT control (QindaPlan paints its own canvas through plan_output); the
+ResourceTable has no per-cell conflict for rows without a capacity (Task
+Usage shows hours only). Microsoft Project is not available here: the
+MSPDI output is checked against Project's element order and the schema's
+Baseline sequences structurally (no MSPDI XSD ships through Portage); the
+owner's check in Project is the manual gate (`docs/verification.md`).
+
 ## D-085: QindaMail: Outlook data files, contact groups, CardDAV
 
 **Date:** 2026-10-09 · **Status:** accepted (M76, the gaps D-072 left open

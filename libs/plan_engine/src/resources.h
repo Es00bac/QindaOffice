@@ -52,4 +52,12 @@ struct UsageTable {
 // buckets (at most 256, the ResourceTable limit).
 [[nodiscard]] UsageTable usageTable(const Project &project, const QDate &from, int count, bool weeks);
 
+// The Task Usage view (M79): one row per task of `rows` (task indices, the
+// view's order) — "t:<uid>", a summary summing its subtasks — and under a
+// leaf task one row per work assignment, "a:<uid>" named after the
+// resource. An assignment's bucket is `over` when its resource is
+// overallocated on a day inside it. Capacities are 0 (tasks have none).
+[[nodiscard]] UsageTable taskUsageTable(const Project &project, const QList<int> &rows, const QDate &from, int count,
+                                        bool weeks);
+
 } // namespace QindaOffice::Plan

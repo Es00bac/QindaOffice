@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// Baselines (up to kBaselineCount, numbered 0..2 — the app shows them as
-// Baseline, Baseline 1, Baseline 2) and the variances against them.
+// Baselines (kBaselineCount = 11, numbered 0..10 — the app shows them as
+// Baseline, Baseline 1 … Baseline 10, as Project does; M79) and the
+// variances against them.
 //
 // AGENT-CONTRACT (variance sign, as Project): positive = later / longer /
 // more expensive than the baseline. Start and finish variances are
@@ -13,11 +14,16 @@
 namespace QindaOffice::Plan {
 
 // Copies the scheduled start, finish, duration, work and cost of the tasks
-// (all when `taskUids` is empty) into baseline `number`. The project must
-// be scheduled. Returns the number of tasks saved.
+// (all when `taskUids` is empty) — and the work and cost of their
+// assignments (M79, as Project saves them) — into baseline `number`. The
+// project must be scheduled. Returns the number of tasks saved.
 int setBaseline(Project &project, int number, const QList<int> &taskUids = {});
+// Clears baseline `number` of the tasks (all when empty) and their
+// assignments. Returns the number of tasks that had it.
 int clearBaseline(Project &project, int number, const QList<int> &taskUids = {});
 [[nodiscard]] bool hasBaseline(const Project &project, int number);
+// "Baseline", "Baseline 1" … "Baseline 10".
+[[nodiscard]] QString baselineName(int number);
 
 struct Variance {
     bool valid = false; // the task has this baseline

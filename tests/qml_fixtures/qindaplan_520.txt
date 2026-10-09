@@ -181,6 +181,12 @@ QQuickRootItem#PlanWindow
               QQuickItem#navigationItem_gantt
                 QQuickButton#navigationButton_gantt
                   Icon#navigationIcon_gantt
+              QQuickItem#navigationItem_leveling
+                QQuickButton#navigationButton_leveling
+                  Icon#navigationIcon_leveling
+              QQuickItem#navigationItem_network
+                QQuickButton#navigationButton_network
+                  Icon#navigationIcon_network
               QQuickItem#navigationItem_reports
                 QQuickButton#navigationButton_reports
                   Icon#navigationIcon_reports
@@ -190,9 +196,19 @@ QQuickRootItem#PlanWindow
               QQuickItem#navigationItem_sheet
                 QQuickButton#navigationButton_sheet
                   Icon#navigationIcon_sheet
+              QQuickItem#navigationItem_taskUsage
+                QQuickButton#navigationButton_taskUsage
+                  Icon#navigationIcon_taskUsage
+              QQuickItem#navigationItem_tracking
+                QQuickButton#navigationButton_tracking
+                  Icon#navigationIcon_tracking
               QQuickItem#navigationItem_usage
                 QQuickButton#navigationButton_usage
                   Icon#navigationIcon_usage
+            NetworkView#planNetworkView [hidden]
+              Caption#planNetworkCaption [hidden]
+              Scroll#planNetworkScroll [hidden]
+                PlanNetworkItem#planNetwork [hidden]
             Notice#planUsageNotice [hidden]
               IconButton#noticeDismiss [hidden]
               Label#noticeText [hidden]
@@ -201,17 +217,10 @@ QQuickRootItem#PlanWindow
             ReportsView#planReports [hidden]
               Button#planReportPdf [hidden]
               Caption#planReportSubtitle [hidden]
+              ComboBox#planReportPicker [hidden]
+                QQuickText#comboDisplayText [hidden]
               Grid#planReportKpis [hidden]
               Heading#planReportTitle [hidden]
-              Segmented#planReportPicker [hidden]
-                QQuickAbstractButton#segment_0 [hidden]
-                  QQuickRectangle#segmentFocus_0 [hidden]
-                QQuickAbstractButton#segment_1 [hidden]
-                  QQuickRectangle#segmentFocus_1 [hidden]
-                QQuickAbstractButton#segment_2 [hidden]
-                  QQuickRectangle#segmentFocus_2 [hidden]
-                QQuickAbstractButton#segment_3 [hidden]
-                  QQuickRectangle#segmentFocus_3 [hidden]
             ResourceTable#planUsageTable [hidden]
               QQuickItem#resourceBucketHeaders [hidden]
               QQuickItem#resourceCellViewport [hidden]
@@ -923,6 +932,30 @@ QQuickRootItem#PlanWindow
               QQuickRectangle#splitterHandle
                 QQuickMouseArea#splitterHitTarget
                 QQuickRectangle#splitterFocusRing [hidden]
+            TaskUsageView#planTaskUsageView [hidden]
+              ResourceTable#planTaskUsageTable [hidden]
+                QQuickItem#resourceBucketHeaders [hidden]
+                QQuickItem#resourceCellViewport [hidden]
+                  QQuickRectangle#resourceActiveCell [hidden]
+                  TextField#resourceAllocationEditor [hidden]
+                    IconButton#fieldClear [hidden]
+                QQuickItem#resourceRowHeaders [hidden]
+                  QQuickRectangle#resourceRowHeader_a:1 [hidden]
+                    Label#resourceRowSummary [hidden]
+                  QQuickRectangle#resourceRowHeader_a:2 [hidden]
+                    Label#resourceRowSummary [hidden]
+                  QQuickRectangle#resourceRowHeader_t:1 [hidden]
+                    Label#resourceRowSummary [hidden]
+                  QQuickRectangle#resourceRowHeader_t:2 [hidden]
+                    Label#resourceRowSummary [hidden]
+                  QQuickRectangle#resourceRowHeader_t:3 [hidden]
+                    Label#resourceRowSummary [hidden]
+                QQuickRectangle#resourceCornerHeader [hidden]
+              Segmented#planTaskUsageScale [hidden]
+                QQuickAbstractButton#segment_0 [hidden]
+                  QQuickRectangle#segmentFocus_0 [hidden]
+                QQuickAbstractButton#segment_1 [hidden]
+                  QQuickRectangle#segmentFocus_1 [hidden]
             TimelineStrip#planTimelineStrip
               PlanTimelineItem#planTimelinePaper
             Toast#planToast [hidden]
@@ -1151,6 +1184,12 @@ QQuickRootItem#PlanWindow
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_planRespectLinksAction
                 RibbonButton#ribbonAction_planRespectLinksAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planTracking
+                RibbonButton#ribbonAction_planTracking
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground

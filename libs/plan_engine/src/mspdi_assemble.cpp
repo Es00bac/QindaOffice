@@ -62,11 +62,13 @@ void assembleTasks(Raw &raw, Project &p, int decimals, Minutes *earliest)
         }
         if (t.outlineLevel <= 0) {
             p.info.notes = t.task.notes; // the project summary task (UID 0)
-            // Its unmodelled elements travel with the project (M63).
+            // Its unmodelled elements travel with the project (M63), its
+            // baselines too (M79: replayed while unchanged, mspdi_p.h).
             if (t.task.extra.contains(kKeptKey)) {
                 p.info.extra.insert(kSummaryKey, t.task.extra.value(kKeptKey));
                 p.info.extra.insert(kSummaryStampKey, t.task.extra.value(kStampKey));
             }
+            storeBaselineFragments(p.info.extra, t.baselines, kSummaryBaselinesKey);
             continue;
         }
         tasks.append(t);
@@ -118,13 +120,22 @@ void assembleTasks(Raw &raw, Project &p, int decimals, Minutes *earliest)
         }
         t.fixedCost = centsToMinor(rt.fixedCostCents, decimals);
         for (const RawBaseline &b : std::as_const(rt.baselines)) {
-            if (b.number < 0 || b.number >= kBaselineCount) {
-                raw.warn(QStringLiteral("Baselines 3–10 are not kept; baseline %1 was skipped.").arg(b.number));
-                continue;
-            }
             BaselineData data = b.data;
             data.cost = centsToMinor(b.costCents, decimals);
             t.baselines[size_t(b.number)] = data;
+        }
+        storeBaselineFragments(t.extra, rt.baselines);
+        if (rt.hasLevelingDelay) {
+            // M79: Project's Leveling Delay, elapsed or working time.
+            const DurationCode code = durationCode(rt.levelingDelayFormat);
+            if (!code.known || code.percent) {
+                raw.warn(QStringLiteral("Task “%1” has a leveling delay in a format QindaPlan does not read; it was dropped.")
+                             .arg(t.name));
+            } else {
+                t.levelingDelay = std::max<Minutes>(0, divRound(rt.levelingDelayTenths, 10));
+                t.levelingDelayElapsed = code.elapsed;
+                t.extra.insert(kLevelingFormatKey, rt.levelingDelayFormat);
+            }
         }
         for (Minutes m : {rt.start, t.manualStart, t.actualStart}) {
             if (m != kNoDate && (*earliest == kNoDate || m < *earliest)) {
@@ -214,10 +225,8 @@ void assembleResources(Raw &raw, Project &p, int decimals)
             continue;
         }
         seen.insert(r.uid);
-        if (rr.type == 2) {
-            raw.warn(QStringLiteral("Cost resource “%1” was imported as a material resource.").arg(r.name));
-        }
-        r.type = rr.type == 1 ? ResourceType::Work : ResourceType::Material;
+        // MSPDI Type: 0 material, 1 work, 2 cost (M79: modelled).
+        r.type = rr.type == 1 ? ResourceType::Work : rr.type == 2 ? ResourceType::Cost : ResourceType::Material;
         r.standardRate = centsToMinor(rr.rateCents, decimals);
         r.costPerUse = centsToMinor(rr.costPerUseCents, decimals);
         if (r.calendarUid >= 0 && p.calendarIndex(r.calendarUid) < 0) {
@@ -252,7 +261,16 @@ void assembleResources(Raw &raw, Project &p, int decimals)
         a.taskUid = ra.taskUid;
         a.resourceUid = resourceUid;
         a.units = int(std::clamp<qint64>(ra.units, 0, 100000000));
+        if (p.resources.at(p.resourceIndex(resourceUid)).type == ResourceType::Cost) {
+            a.costInput = centsToMinor(ra.costCents, decimals);
+        }
         a.extra = ra.extra; // kept elements (mspdi_keep.h)
+        for (const RawBaseline &b : ra.baselines) { // M79
+            BaselineData data = b.data;
+            data.cost = centsToMinor(b.costCents, decimals);
+            a.baselines[size_t(b.number)] = data;
+        }
+        storeBaselineFragments(a.extra, ra.baselines);
         p.assignments.append(a);
     }
 }

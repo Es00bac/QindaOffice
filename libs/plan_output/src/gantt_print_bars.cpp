@@ -112,6 +112,8 @@ void paintTier(QPainter *painter, const Geometry &g, int h, Unit unit, bool majo
     }
 }
 
+} // namespace
+
 void dashedLine(QPainter *painter, qreal x, qreal top, qreal bottom, const QColor &color)
 {
     QPen pen(color, 0.9);
@@ -132,10 +134,6 @@ void arrowHead(QPainter *painter, QPointF tip, bool pointingRight, const QColor 
     painter->setBrush(color);
     painter->drawPolygon(QPolygonF({tip, QPointF(tip.x() + d, tip.y() - 2.2), QPointF(tip.x() + d, tip.y() + 2.2)}));
 }
-
-constexpr qreal kMilestoneHalf = 4.5;
-
-} // namespace
 
 void paintTimescale(QPainter *painter, const Geometry &g, int h, qreal rowsBottom)
 {
@@ -177,7 +175,8 @@ void paintTimescale(QPainter *painter, const Geometry &g, int h, qreal rowsBotto
 void paintBars(QPainter *painter, const Geometry &g, int h, int firstRow, int lastRow)
 {
     const PlanPaperStyle &s = g.style;
-    const int b = g.options.baseline;
+    const bool tracking = g.options.style == QLatin1String("tracking");
+    const bool leveling = g.options.style == QLatin1String("leveling");
     for (int r = firstRow; r <= lastRow; ++r) {
         const int index = g.rows.at(r);
         const Task &t = g.project.tasks.at(index);
@@ -188,16 +187,17 @@ void paintBars(QPainter *painter, const Geometry &g, int h, int firstRow, int la
         const qreal cy = y + g.rowHeight / 2;
         const bool critical = g.options.showCritical && t.critical;
         const QColor color = critical ? s.critical : s.accent;
-        const bool hasBaseline = b >= 0 && b < kBaselineCount && t.baselines[size_t(b)].set;
+        Minutes lowStart = kNoDate;
+        Minutes lowFinish = kNoDate;
+        const bool hasBaseline = lowerBar(g, t, &lowStart, &lowFinish);
         const qreal x0 = g.xOf(t.start, h);
         const qreal x1 = std::max(x0 + 0.8, g.xOf(t.finish, h));
         qreal textX = x1 + 7; // clear of the link stubs leaving the bar end (4pt)
         if (hasBaseline) {
-            const BaselineData &bl = t.baselines[size_t(b)];
-            const qreal bx0 = g.xOf(bl.start, h);
-            const qreal bx1 = g.xOf(bl.finish, h);
+            const qreal bx0 = g.xOf(lowStart, h);
+            const qreal bx1 = g.xOf(lowFinish, h);
             painter->setPen(Qt::NoPen);
-            painter->setBrush(s.baseline);
+            painter->setBrush(leveling ? s.tint(s.warning, 0.55) : s.baseline);
             if (t.isMilestone()) {
                 painter->setBrush(Qt::NoBrush);
                 painter->setPen(QPen(s.baseline, 0.9));
@@ -231,6 +231,16 @@ void paintBars(QPainter *painter, const Geometry &g, int h, int firstRow, int la
                 painter->setPen(pen);
                 painter->setBrush(Qt::NoBrush);
                 painter->drawRect(bar);
+            } else if (tracking) {
+                // Tracking Gantt: what is done solid, what remains light.
+                painter->setPen(QPen(color, 0.6));
+                painter->setBrush(s.tint(color, 0.30));
+                painter->drawRect(bar);
+                if (t.percentComplete > 0) {
+                    painter->setPen(Qt::NoPen);
+                    painter->setBrush(color.darker(125));
+                    painter->drawRect(QRectF(x0, bar.top(), bar.width() * t.percentComplete / 100.0, bar.height()));
+                }
             } else {
                 painter->setPen(QPen(color, 0.6));
                 painter->setBrush(s.tint(color, 0.42));
@@ -244,7 +254,14 @@ void paintBars(QPainter *painter, const Geometry &g, int h, int firstRow, int la
             }
         }
         if (g.options.showBarText) {
-            const QString text = taskFieldText(g.project, index, QStringLiteral("resources"), g.options.locale);
+            // What Project's style writes after the bar: resources, % complete
+            // (Tracking Gantt) or the leveling delay (Leveling Gantt).
+            const QString field = tracking ? QStringLiteral("percent")
+                                  : leveling ? QStringLiteral("levelingDelay") : QStringLiteral("resources");
+            QString text = taskFieldText(g.project, index, field, g.options.locale);
+            if (leveling && t.levelingDelay <= 0) {
+                text.clear();
+            }
             if (!text.isEmpty()) {
                 drawTextAt(painter, textX, cy - QFontMetricsF(g.small).height() / 2, text, g.small, s.muted);
             }
@@ -302,72 +319,6 @@ void paintLinks(QPainter *painter, const Geometry &g, int h, int firstRow, int l
             arrowHead(painter, QPointF(x2, y2), intoStart, color);
         }
     }
-}
-
-void paintLegend(QPainter *painter, const Geometry &g)
-{
-    const PlanPaperStyle &s = g.style;
-    const qreal y = g.area.bottom() - g.legendHeight + 8;
-    const qreal cy = y + 5;
-    qreal x = g.area.left();
-    const auto label = [&](const QString &text) {
-        drawTextAt(painter, x, cy - QFontMetricsF(g.small).height() / 2, text, g.small, s.ink);
-        x += textWidth(g.small, text) + 16;
-    };
-    const auto swatchBar = [&](const QColor &c, bool progress) {
-        painter->setPen(QPen(c, 0.6));
-        painter->setBrush(s.tint(c, 0.42));
-        painter->drawRect(QRectF(x, cy - 3.5, 18, 7));
-        if (progress) {
-            painter->setPen(Qt::NoPen);
-            painter->setBrush(c.darker(115));
-            painter->drawRect(QRectF(x, cy - 1.6, 11, 3.2));
-        }
-        x += 22;
-    };
-    swatchBar(s.accent, false);
-    label(QStringLiteral("Task"));
-    if (g.options.showCritical) {
-        swatchBar(s.critical, false);
-        label(QStringLiteral("Critical task"));
-    }
-    swatchBar(s.accent, true);
-    label(QStringLiteral("Progress"));
-    if (g.options.baseline >= 0) {
-        painter->fillRect(QRectF(x, cy - 1.3, 18, 2.6), s.baseline);
-        x += 22;
-        label(g.options.baseline == 0 ? QStringLiteral("Baseline") : QStringLiteral("Baseline %1").arg(g.options.baseline));
-    }
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(s.ink);
-    painter->drawRect(QRectF(x, cy - 2, 18, 3.4));
-    x += 22;
-    label(QStringLiteral("Summary"));
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(s.ink);
-    painter->drawPolygon(diamond(x + 4, cy, kMilestoneHalf));
-    x += 12;
-    label(QStringLiteral("Milestone"));
-    if (g.options.today != kNoDate) {
-        dashedLine(painter, x + 4, cy - 5, cy + 5, s.accent);
-        x += 10;
-        label(QStringLiteral("Today"));
-    }
-    if (g.options.statusDate != kNoDate) {
-        dashedLine(painter, x + 4, cy - 5, cy + 5, s.critical);
-        x += 10;
-        label(QStringLiteral("Status date"));
-    }
-    painter->setPen(QPen(s.muted, 0.6));
-    painter->setBrush(Qt::NoBrush);
-    QPainterPath link(QPointF(x, cy - 3));
-    link.lineTo(x + 6, cy - 3);
-    link.lineTo(x + 6, cy + 3);
-    link.lineTo(x + 14, cy + 3);
-    painter->drawPath(link);
-    arrowHead(painter, QPointF(x + 16, cy + 3), true, s.muted);
-    x += 22;
-    label(QStringLiteral("Link"));
 }
 
 } // namespace QindaOffice::Plan::GanttPrint

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Typing into the task sheet (plan_edit.h setTaskField): Project's
 // semantics for each field (a typed start pins Start No Earlier Than, …).
+#include "leveling.h"
 #include "plan_edit.h"
 #include "plan_fields_p.h"
 #include "plan_time.h"
@@ -285,7 +286,58 @@ EditResult setTaskField(Project &project, int index, const QString &field, const
         }
         return EditResult::fail(QStringLiteral("There is no calendar called “%1”.").arg(name));
     }
+    if (field == QLatin1String("levelingDelay") || field == QLatin1String("actualDuration")
+        || field == QLatin1String("remainingDuration")) {
+        return setTrackingField(project, index, field, text);
+    }
     return EditResult::fail(QStringLiteral("Unknown field %1.").arg(field));
+}
+
+EditResult setTrackingField(Project &project, int index, const QString &field, const QString &text)
+{
+    Task &t = project.tasks[index];
+    if (t.summary) {
+        return EditResult::fail(QStringLiteral("A summary task's %1 comes from its subtasks.").arg(taskFieldTitle(field)));
+    }
+    if (field == QLatin1String("levelingDelay")) {
+        Minutes minutes = 0;
+        bool elapsed = true;
+        if (!parseLevelingDelay(text, project.info, &minutes, &elapsed)) {
+            return EditResult::fail(QStringLiteral("“%1” is not a delay. Try 2 edays (elapsed) or 2d (working days).")
+                                        .arg(text.trimmed()));
+        }
+        if (t.manual && minutes > 0) {
+            return EditResult::fail(QStringLiteral("A manually scheduled task is not leveled."));
+        }
+        t.levelingDelay = minutes;
+        t.levelingDelayElapsed = elapsed;
+        return {};
+    }
+    const std::optional<ParsedDuration> d = parseDuration(text, durationFormatOf(project.info));
+    if (!d) {
+        return EditResult::fail(QStringLiteral("“%1” is not a duration. Try 2d or 4h.").arg(text.trimmed()));
+    }
+    const Minutes actual = actualDurationOf(t, project.info.minutesPerDay);
+    if (field == QLatin1String("actualDuration")) {
+        // Project: an actual duration at or past the duration finishes the
+        // task (and lengthens it to what it took).
+        if (d->minutes >= t.duration) {
+            t.duration = std::max(t.duration, d->minutes);
+            setPercentComplete(project, {index}, 100);
+        } else {
+            const int pct = t.duration > 0 ? int(std::clamp<qint64>(divRound(d->minutes * 100, t.duration), 0, 99)) : 0;
+            setPercentComplete(project, {index}, d->minutes > 0 ? std::max(1, pct) : 0);
+        }
+        return {};
+    }
+    // Remaining duration: the duration becomes actual + remaining.
+    t.duration = actual + d->minutes;
+    if (d->minutes == 0) {
+        setPercentComplete(project, {index}, actual > 0 ? 100 : t.percentComplete);
+    } else if (actual > 0) {
+        setPercentComplete(project, {index}, int(std::clamp<qint64>(divRound(actual * 100, t.duration), 1, 99)));
+    }
+    return {};
 }
 
 } // namespace QindaOffice::Plan

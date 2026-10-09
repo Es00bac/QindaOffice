@@ -136,7 +136,10 @@ private slots:
         QCOMPARE(setBaseline(p, 0), 3);
         QVERIFY(hasBaseline(p, 0));
         QCOMPARE(setBaseline(p, 2, {p.tasks.at(x.a).uid}), 1);
-        QCOMPARE(setBaseline(p, 3), 0);
+        // M79: Baseline 1 … Baseline 10 exist (Project's eleven); 11 does not.
+        QCOMPARE(setBaseline(p, 10), 3);
+        QVERIFY(hasBaseline(p, 10));
+        QCOMPARE(setBaseline(p, 11), 0);
         p.tasks[x.bb].duration += kDay;
         schedule(p);
         const Variance v = variance(p, p.tasks.at(x.c), 0);
@@ -201,7 +204,7 @@ private slots:
         QCOMPARE(resources.tables.first().rows.first().at(5), QStringLiteral("Overallocated"));
         QCOMPARE(resources.tables.first().rowTones.first(), QStringLiteral("danger"));
         QCOMPARE(buildReport(p, QStringLiteral("nonsense"), QDate(2026, 3, 4)).id, QStringLiteral("overview"));
-        QCOMPARE(reportIds().size(), 4);
+        QCOMPARE(reportIds().size(), 6); // M79: Cost Overview and Work Overview
     }
 };
 

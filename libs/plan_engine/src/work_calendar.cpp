@@ -106,6 +106,14 @@ void WorkCalendar::resolveWeek()
         for (const CalendarException &ex : cal.exceptions) {
             exceptionWork = exceptionWork || total(normalized(ex.times)) > 0;
         }
+        for (const RecurringException &rx : cal.recurring) {
+            exceptionWork = exceptionWork || total(normalized(rx.times)) > 0;
+        }
+        for (const WorkWeek &ww : cal.workWeeks) {
+            for (const std::optional<DayHours> &day : ww.week) {
+                exceptionWork = exceptionWork || (day && total(normalized(*day)) > 0);
+            }
+        }
     }
     m_degenerate = weekTotal == 0 && !exceptionWork;
     if (m_degenerate) {
@@ -123,8 +131,12 @@ const DayHours &WorkCalendar::hoursForDay(qint64 day) const
         return *it;
     }
     const QDate date = kEpoch.addDays(day);
-    DayHours result = m_week[size_t(date.dayOfWeek() - 1)];
+    const int dow = date.dayOfWeek() - 1;
+    DayHours result = m_week[size_t(dow)];
     if (!m_degenerate) {
+        // Exceptions first — dated, then recurring (M79) — the calendar's
+        // own before its bases'; then alternative work weeks (M79), the same
+        // way round; then the week.
         bool found = false;
         for (const Calendar &cal : std::as_const(m_chain)) {
             for (const CalendarException &ex : cal.exceptions) {
@@ -134,12 +146,62 @@ const DayHours &WorkCalendar::hoursForDay(qint64 day) const
                     break;
                 }
             }
+            for (int r = 0; !found && r < cal.recurring.size(); ++r) {
+                if (cal.recurring.at(r).fallsOn(date)) {
+                    result = normalized(cal.recurring.at(r).times);
+                    found = true;
+                }
+            }
             if (found) {
                 break;
             }
         }
+        for (int c = 0; !found && c < m_chain.size(); ++c) {
+            for (const WorkWeek &ww : m_chain.at(c).workWeeks) {
+                if (ww.from.isValid() && date >= ww.from && date <= (ww.to.isValid() ? ww.to : ww.from)
+                    && ww.week[size_t(dow)].has_value()) {
+                    result = normalized(*ww.week[size_t(dow)]);
+                    found = true;
+                    break;
+                }
+            }
+        }
     }
     return *m_cache->insert(day, result);
+}
+
+bool RecurringException::fallsOn(const QDate &date) const
+{
+    if (!from.isValid() || !date.isValid() || date < from || (to.isValid() && date > to)) {
+        return false;
+    }
+    const int n = std::max(1, every);
+    switch (kind) {
+    case Kind::EveryDays:
+        return from.daysTo(date) % n == 0;
+    case Kind::Weekly:
+        // As Project and MPXJ count them: 7-day blocks from the first day.
+        return ((daysOfWeek >> (date.dayOfWeek() - 1)) & 1) != 0 && (from.daysTo(date) / 7) % n == 0;
+    case Kind::MonthlyByDay:
+    case Kind::MonthlyByPosition:
+        if (((date.year() - from.year()) * 12 + date.month() - from.month()) % n != 0) {
+            return false;
+        }
+        break;
+    case Kind::YearlyByDay:
+    case Kind::YearlyByPosition:
+        if (date.month() != month) {
+            return false;
+        }
+        break;
+    }
+    if (kind == Kind::MonthlyByDay || kind == Kind::YearlyByDay) {
+        return date.day() == std::min(day, date.daysInMonth());
+    }
+    if (date.dayOfWeek() != weekday) {
+        return false;
+    }
+    return position >= 4 ? date.addDays(7).month() != date.month() : (date.day() - 1) / 7 == position;
 }
 
 const DayHours &WorkCalendar::hours(const QDate &date) const

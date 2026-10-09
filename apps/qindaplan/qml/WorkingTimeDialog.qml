@@ -8,7 +8,9 @@ import QindaOffice.Plan.App
 // own), set each weekday's hours ("08:00–12:00, 13:00–17:00",
 // "Nonworking", or "default" to inherit from the base calendar) and keep
 // the list of exceptions — holidays and odd working days. Every change is
-// applied at once as its own undo step and the schedule follows.
+// applied at once as its own undo step and the schedule follows. M79:
+// Project's recurring exceptions and alternative work weeks from its XML
+// are listed (and scheduled) but not edited here.
 Tk.Dialog {
     id: dialog
 
@@ -88,12 +90,18 @@ Tk.Dialog {
                 Tk.Icon { name: exceptionRow.modelData.working ? "calendar-check" : "calendar-x"; size: Tk.Theme.size.icon; color: Tk.Theme.color.textMuted }
                 Tk.Label { text: String(exceptionRow.modelData.name); Tk.Flex.grow: 1; Tk.Flex.basis: 0; elide: Text.ElideRight }
                 Tk.Caption {
+                    visible: exceptionRow.modelData.readOnly === true
+                    Tk.Flex.shrink: 0
+                    text: String(exceptionRow.modelData.recurrence || "")
+                }
+                Tk.Caption {
                     Tk.Flex.shrink: 0
                     text: exceptionRow.modelData.from === exceptionRow.modelData.to ? String(exceptionRow.modelData.from)
                           : String(exceptionRow.modelData.from) + " – " + String(exceptionRow.modelData.to)
                 }
                 Tk.Caption { Tk.Flex.shrink: 0; text: String(exceptionRow.modelData.hours) }
                 Tk.IconButton {
+                    visible: exceptionRow.modelData.readOnly !== true
                     iconName: "trash-2"
                     tooltip: qsTr("Remove this exception")
                     onClicked: dialog.report(dialog.plan.removeCalendarException(dialog.calendarUid, exceptionRow.modelData.index))

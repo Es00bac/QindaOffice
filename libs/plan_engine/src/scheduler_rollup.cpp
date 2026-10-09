@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The scheduler after the passes: free slack and As Late As Possible,
-// inactive tasks, summary roll-ups, work and cost; and the link check the
-// editing operations ask before creating a link (scheduler.h).
+// inactive tasks, summary roll-ups, work and cost; the critical-path option
+// helpers of the backward pass (M79); and the link check the editing
+// operations ask before creating a link (scheduler.h).
 #include "outline.h"
 #include "plan_time.h"
 #include "scheduler.h"
@@ -12,6 +13,25 @@
 namespace QindaOffice::Plan {
 
 namespace Detail {
+
+Minutes SchedulePass::criticalLimit() const
+{
+    // M79: Project's "tasks are critical if slack is less than or equal to
+    // N days" (MSPDI CriticalSlackLimit), in this project's working days.
+    return Minutes(std::max(0, m_project.info.criticalSlackDays)) * m_project.info.minutesPerDay;
+}
+
+bool SchedulePass::drivesSuccessor(int i) const
+{
+    // M79: multiple critical paths end at tasks that drive nothing — no
+    // successor link of their own or of a summary above them.
+    for (int k = i; k >= 0; k = m_project.tasks.at(k).parentIndex) {
+        if (!m_outgoing.at(k).isEmpty()) {
+            return true;
+        }
+    }
+    return false;
+}
 
 void SchedulePass::freeSlackAndAlap()
 {
@@ -184,6 +204,9 @@ void SchedulePass::costs()
             a.work = t.isMilestone() ? 0 : divRound(t.duration * a.units, 100);
             a.cost = divRound(a.work * r.standardRate, 60) + r.costPerUse;
             t.work += a.work;
+        } else if (r.type == ResourceType::Cost) {
+            a.work = 0; // M79: a cost resource costs what its assignment says
+            a.cost = a.costInput;
         } else {
             a.work = a.units;
             a.cost = divRound(qint64(a.units) * r.standardRate, 100) + r.costPerUse;

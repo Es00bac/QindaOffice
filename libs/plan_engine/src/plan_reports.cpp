@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "plan_reports.h"
+#include "plan_reports_p.h"
 
 #include "baselines.h"
 #include "plan_edit.h"
@@ -204,11 +205,18 @@ PlanReport overview(const Project &project, Minutes reference, const QLocale &lo
 
 QStringList reportIds()
 {
-    return {QStringLiteral("overview"), QStringLiteral("critical"), QStringLiteral("resources"), QStringLiteral("late")};
+    return {QStringLiteral("overview"), QStringLiteral("critical"), QStringLiteral("resources"), QStringLiteral("late"),
+            QStringLiteral("cost"),     QStringLiteral("work")};
 }
 
 QString reportTitle(const QString &id)
 {
+    if (id == QLatin1String("cost")) {
+        return QStringLiteral("Cost Overview");
+    }
+    if (id == QLatin1String("work")) {
+        return QStringLiteral("Work Overview");
+    }
     if (id == QLatin1String("critical")) {
         return QStringLiteral("Critical Tasks");
     }
@@ -258,6 +266,10 @@ PlanReport buildReport(const Project &project, const QString &id, const QDate &t
     const QString known = reportIds().contains(id) ? id : QStringLiteral("overview");
     if (known == QLatin1String("overview")) {
         r = overview(project, reference, locale);
+    } else if (known == QLatin1String("cost")) {
+        r = Reports::costOverview(project, locale); // M79
+    } else if (known == QLatin1String("work")) {
+        r = Reports::workOverview(project, locale); // M79
     } else if (known == QLatin1String("critical") || known == QLatin1String("late")) {
         const bool critical = known == QLatin1String("critical");
         const QStringList fields = critical

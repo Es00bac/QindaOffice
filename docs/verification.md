@@ -33,6 +33,160 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M79 Plan gates (D-088)
+
+Qualified on qinda (branch `m79-plan-project`, merged with
+`m60-office-formats` 4399244) as a targeted build — plan_engine,
+plan_output, the QindaPlan app and their tests only (qinda's disk is
+shared): **17/17 CTest targets passed, 40.0 s** (`ctest --preset dev -R
+"plan"`). QtTest counts (functions incl.
+init/cleanup and data rows), none skipped; **new** binaries in bold:
+
+- plan_engine — `tst_plan_calendar` 8, `tst_plan_schedule` 15,
+  `tst_plan_edit` 9, `tst_plan_file` 8, `tst_plan_resources` 9,
+  `tst_plan_mspdi` 6, `tst_plan_mspdi_keep` 6, **`tst_plan_critical` 7,
+  `tst_plan_leveling` 11, `tst_plan_views` 9, `tst_plan_mspdi_m79` 12**.
+- plan_output — `tst_plan_output` 9.
+- QindaPlan — `tst_qindaplan_service` 11, `tst_qindaplan_menu_export` 4,
+  `tst_qindaplan_ui` 8, **`tst_qindaplan_tracking` 11,
+  `tst_qindaplan_views` 9**: 152 QtTest functions in all (100 plan_engine,
+  9 plan_output, 43 QindaPlan), 0 failed.
+
+The fixtures are hand-built Project-shaped files
+(`tests/plan_engine/data/project_m79_sample.xml`: a critical slack limit,
+baselines 0, 3 and 10 with Project's Interim / EstimatedDuration / BCWS /
+BCWP, the summary task's and the assignments' baselines, leveling delays in
+elapsed and working days with the pre-leveled dates, a cost resource) and
+the seeded gala; no owner file was opened. Two older fixtures changed with
+the semantics, deliberately: the 2016 sample's weekly "Monday stand-up"
+(Mondays 09–17) is now scheduled, so Proofing starts Monday 09:00; the M63
+keep sample's "Monday review" was moved after its tasks so the dates it was
+written with still hold. Existing expectations changed by design: baseline
+11 does not exist (10 does), six reports, baselines 4 and 5 modelled
+instead of reported.
+
+**Scheduling by hand** (automated: `tst_plan_critical`, `tst_plan_calendar`):
+
+- `linkTypesWithLagAndSlack` — A 4d; B SS+1d → Tue; C FF+1d → Fri; D SF+3d
+  → Tue–Wed; A and C critical, B 3 days of total and free slack, D 2.
+- `deadlineIsALateFinish` — a Thursday deadline on B (finishing Friday)
+  leaves its dates and gives B and its driver A −1 day of slack, critical;
+  a later deadline changes nothing; a summary's deadline bounds its subtask.
+- `criticalSlackLimit` (3 days of slack: critical at a limit of 3, not 2),
+  `multipleCriticalPaths` (the chain ending Wednesday becomes critical).
+- `levelingDelayElapsedAndWorking` — 36 elapsed hours from Thu 08:00 land
+  on Monday; 1.5 working days on Friday 13:00; a predecessor one day longer
+  moves the delayed task one day; a Must Start On task ignores its delay.
+- `recurringExceptionsAndWorkWeeks` — every second week on Mondays and
+  Fridays (7-day blocks from the first day), 25 December yearly, the fourth
+  Thursday of November, "day 31" in April (its last day), the last Friday,
+  every third day 10–14 (a Sunday too), a dated half day beating a
+  recurrence, summer Fridays off and Monday 07–15 in a work week, a
+  resource calendar inheriting the holidays, three days from Wed 23 Dec
+  ending Mon 28 Dec 17:00.
+
+**Leveling** (automated: `tst_plan_leveling`): Standard delays the task with
+slack by 3 edays (Thursday start, pre-leveled Mon–Tue recorded); ID Only
+and Priority, Standard delay the higher ID / lower priority past its slack
+(B Wed–Fri, the finish moves to Tue 10 Mar); priority 1000 never moves;
+"within slack only" leaves Mon 2 and Tue 3 unresolved; a range after the
+clash levels nothing; Level Selection moves only the selected task;
+Clear Leveling of one task keeps the other's delay; a new predecessor moves
+a delayed task by as much (the delay is relative); delays as text
+(`2 edays`, `1.50 edays`, `6 ehrs`, working `2d`).
+
+**Views, reports, baselines** (automated: `tst_plan_views`): the eleven
+filters with and without related summary rows on a hand-built plan
+(critical, completed, incomplete, milestones, summary, deadlines, using
+Ana, a date range, late as of Wed 4 Mar, slipping against baseline 0);
+sorts by finish, priority and cost keeping the outline; the Network
+Diagram's columns, rows, box positions, size, links only through gaps (no
+inner point inside a box) and the summary column; Task Usage by day and
+week; Cost and Work Overview (actual $600 of $1,600, 38 %; work variance
++4 h after a slip); cost resources (`Airfare[$450]`, no work, re-typed
+names keep the amount, `.qplan` round trip); Baseline 7 for one task with
+its assignment's work and cost, variance and clear.
+
+**Microsoft Project XML** (automated: `tst_plan_mspdi_m79`, and the M63
+`tst_plan_mspdi`, `tst_plan_mspdi_keep` still green): the fixture reads as
+written (delays, pre-leveled dates, baselines 0/3/10, assignment baselines,
+the cost resource's $650); every one of its 9 Baseline elements is in the
+export as written and re-reading the export writes it byte for byte; a
+baseline set here is written from the model (no Interim), one cleared here
+is gone, the summary task's untouched baseline stays the file's and the
+changed one is rolled up (48 h, $3,050); `LevelingDelay` 28800/format 8,
+4800/format 7 and 0/format 8 go back as read, a delay QindaPlan sets is
+format 8 and Project's start is reproduced on re-reading; the critical
+options both ways; Project's recurrence codes (yearly by day and position,
+weekly with DaysOfWeek 34 = Monday and Friday, the last Friday, counted
+occurrences, every N days; MonthItem "weekday" refused); a `.qplan` keeps
+it all, and an M63–M78 `.qplan` has its kept baseline 4, kept
+`CriticalSlackLimit` and kept leveling delay adopted (each written once)
+and its leveling floor turned into the equivalent delay. **Schema:** no
+MSPDI XSD ships through Portage (MPXJ is in ::guru only as a JPype wheel),
+so `writtenShapeFollowsTheSchema` checks every Task and Assignment child
+against Project's own order (`mspdi_order.cpp`), every Baseline's children
+against the schema's TaskBaseline / AssignmentBaseline sequences, and the
+spelling of the values QindaPlan writes (xs:dateTime, xs:duration,
+integers); LibreOffice cannot open MSPDI.
+
+**Printed output** (automated: `tst_plan_output`): the Tracking style (done
+part solid, baselines, slack bars, a missed deadline) and the Leveling
+style (pre-leveled bars and the delay line) paint what they promise, on as
+many pages as the plain Gantt; the Network Diagram's PDF has the page count
+its layout promises, critical boxes in red, a phases-only diagram on one
+page. Pages break between columns and rows of boxes.
+
+**Through the host and the window** (automated: `tst_qindaplan_tracking`,
+`tst_qindaplan_views`): the Milestones filter leaves the same 10 rows in the
+Gantt model, the sheet (+ the blank row) and the Network Diagram and 6
+calendar events; Using Resource… asks first and keeps the check on the
+current filter until applied; sort by finish keeps subtasks under their
+summary; the Tracking Gantt opens on the Tracking table with % complete
+after the bars and baseline bars, Baseline 1 shown once set; the Leveling
+Gantt on the Delay table with the pre-leveled bars of the delayed tasks;
+each view keeps its table; Slack writes "+… slack" after non-critical bars;
+Baseline 10 set (40 tasks), cleared for one (39), and read back from the
+saved XML; Mark on Track and Update Tasks are one undo step each (50 %,
+then 2 days remaining → 3 days, 33 %, 1 day actual), a refused Update
+Tasks changes nothing; leveling options undoable; a range after the clash
+refused; Level Selection delays Rent AV equipment past Plan menu with
+caterer, saved with `LevelingDelayFormat` 8 and `PreLeveledStart`, and
+reopened at the same start; a click on a Network Diagram box selects its
+task and a double click opens Task Information (1280 and 520 px); Task
+Usage lists 40 tasks + their work assignments; Add Cost Resource and a
+$1,200 assignment; PDFs of the Network Diagram and the Tracking Gantt.
+
+**UI gates**: the structural fixtures `qindaplan_{1280,520}.txt` were
+regenerated deliberately (`QQO_UPDATE_FIXTURES=1`; the diff is the four new
+rail entries, the hidden Network Diagram and Task Usage views, the report
+picker as a ComboBox and Task ▸ Mark on Track); the ribbon gate (every menu
+command on the ribbon, every icon real, every tab — Gantt Chart Format
+forced on — inside the ribbon at 1320 and 520 px) and the panel export's
+validator pass with the 44 new commands. Grabs looked at (`QQO_GRAB_DIR`):
+`qindaplan_tracking_{1280,520}`, `qindaplan_critical_{1280,520}` (the
+Critical filter scrolled to the gala's critical chain),
+`qindaplan_leveling_{1280,520}` (Rent AV equipment "2 edays" over its
+pre-leveled bar), `qindaplan_network_{1280,520}` and
+`…_network_selected_…`, `qindaplan_task_usage_{1280,520}`,
+`qindaplan_report_{cost,work}_{1280,520}`, the dialogs
+(`qindaplan_leveling_options`, `qindaplan_update_tasks`,
+`qindaplan_filter_resource`, `qindaplan_set_baseline`,
+`qindaplan_project_info`), the ribbon tabs, and the PDFs the views print
+rendered with `pdftoppm` (`qindaplan_tracking_pdf`, `qindaplan_leveling_pdf`,
+`qindaplan_network_pdf`) and plan_output's pages (`gantt_tracking_page1`,
+`gantt_leveling_page1`, `network_page1`).
+
+**On the desktop (manual, the owner):** in Microsoft Project, save a plan
+of yours as XML (File ▸ Save As ▸ XML Format) — ideally one with a yearly
+holiday and a cost resource; open it in QindaPlan and check a few dates
+against Project's; Project ▸ Set Baseline ▸ Baseline 1 for the whole
+project; Resource ▸ Level All; open View ▸ Leveling Gantt and the Network
+Diagram and print the diagram to PDF; save as XML and open it in Project —
+Baseline 1 is there with the dates QindaPlan showed, the leveled tasks keep
+their delays (Leveling Gantt in Project), the holiday and the cost
+resource's amounts are as they were, and the rest of the file is unchanged.
+
 ## M76 Mail gates (D-085)
 
 Qualified on qinda (branch `m76-mail-pst`, merged with `m60-office-formats`

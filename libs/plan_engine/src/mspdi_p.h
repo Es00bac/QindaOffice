@@ -6,6 +6,8 @@
 
 #include "plan_types.h"
 
+#include <QHash>
+#include <QJsonObject>
 #include <QStringList>
 
 #include <optional>
@@ -70,6 +72,7 @@ struct RawBaseline {
     int number = 0;
     BaselineData data;
     qint64 costCents = 0;
+    QString fragment; // the element as the file wrote it (M79, mspdi_baselines.cpp)
 };
 
 struct RawTask {
@@ -85,6 +88,10 @@ struct RawTask {
     Minutes manualStart = kNoDate;
     Minutes manualFinish = kNoDate;
     qint64 fixedCostCents = 0;
+    // M79: Project's LevelingDelay (tenths of a minute) and its format.
+    bool hasLevelingDelay = false;
+    qint64 levelingDelayTenths = 0;
+    int levelingDelayFormat = 8; // edays, Project's default
     QList<RawLink> links;
     QList<RawBaseline> baselines;
 };
@@ -102,6 +109,8 @@ struct RawAssignment {
     int taskUid = 0;
     int resourceUid = 0;
     qint64 units = 100;
+    qint64 costCents = 0; // M79: a cost resource's assignment is its Cost
+    QList<RawBaseline> baselines; // M79
     QJsonObject extra; // kept elements and their stamp (mspdi_keep.h)
 };
 
@@ -124,5 +133,38 @@ struct Raw {
 
 // Validates, converts and schedules the raw records into *out.
 void assemble(Raw &raw, Project *out);
+
+// ---- recurring exceptions and work weeks (M79, mspdi_recurrence.cpp) ----
+// One kept <Exception> of Type 2–7 as a RecurringException; nullopt (and
+// why, for a warning) when QindaPlan cannot schedule its kind.
+[[nodiscard]] std::optional<RecurringException> parseRecurringException(const QString &fragment, QString *problem);
+[[nodiscard]] QList<WorkWeek> parseWorkWeeks(const QString &fragment);
+// Rebuilds Calendar::recurring and ::workWeeks from the calendar's kept
+// elements; returns what could not be read (one line each).
+QStringList deriveRecurrences(Calendar &calendar);
+
+// ---- baselines (M79, mspdi_baselines.cpp) ----
+// AGENT-CONTRACT (byte-faithful baselines, D-088): every Baseline element of
+// a task, an assignment and the project summary task is read into the model
+// AND kept as written in the object's extra under "mspdiBaselines"
+// ([{n, xml}]). The writer replays a kept element verbatim while the model's
+// baseline equals what it says (Project's own EstimatedDuration, Interim,
+// BCWS, BCWP travel untouched); a baseline QindaPlan set or cleared since is
+// written from the model (or dropped). The project summary task's are kept
+// in ProjectInfo::extra "mspdiSummaryBaselines" and replayed while no task's
+// baseline of that number changed.
+inline const QString kBaselinesKey = QStringLiteral("mspdiBaselines");
+// The LevelingDelayFormat the file used, so the writer keeps it (M79).
+inline const QString kLevelingFormatKey = QStringLiteral("mspdiLevelingDelayFormat");
+inline const QString kSummaryBaselinesKey = QStringLiteral("mspdiSummaryBaselines");
+// One <Baseline> fragment parsed (money still in MSPDI cents).
+[[nodiscard]] RawBaseline parseBaseline(const QString &fragment);
+// The kept fragments by baseline number.
+[[nodiscard]] QHash<int, QString> baselineFragments(const QJsonObject &extra, const QString &key = kBaselinesKey);
+// Stores the fragments of `baselines` (empty → the key is removed).
+void storeBaselineFragments(QJsonObject &extra, const QList<RawBaseline> &baselines, const QString &key = kBaselinesKey);
+// Does the kept fragment still say what the model holds? Assignments carry
+// no duration (Project writes none), so it is not compared for them.
+[[nodiscard]] bool baselineMatches(const QString &fragment, const BaselineData &model, int decimals, bool assignment);
 
 } // namespace QindaOffice::Plan::Mspdi

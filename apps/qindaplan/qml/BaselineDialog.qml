@@ -3,10 +3,10 @@ import QtQuick
 import QindaTK as Tk
 import QindaOffice.Plan.App
 
-// Set Baseline / Clear Baseline: which of the three baselines, and (when
-// setting) for the whole project or the selected tasks only. A baseline
-// that is already set says how many tasks it holds, so overwriting is a
-// visible choice.
+// Set Baseline / Clear Baseline: which of Project's eleven baselines
+// (Baseline, Baseline 1 … Baseline 10; M79), for the whole project or the
+// selected tasks only (and their assignments). A baseline that is already
+// set says how many tasks it holds, so overwriting is a visible choice.
 Tk.Dialog {
     id: dialog
 
@@ -30,7 +30,8 @@ Tk.Dialog {
         open()
     }
     onAccepted: {
-        const r = clearing ? plan.clearBaseline(picker.currentIndex) : plan.setBaseline(picker.currentIndex, selectedOnly.checked)
+        const r = clearing ? plan.clearBaseline(picker.currentIndex, selectedOnly.checked)
+                           : plan.setBaseline(picker.currentIndex, selectedOnly.checked)
         if (!r.ok) plan.notify(title, String(r.error || ""), "warning")
     }
 
@@ -51,7 +52,6 @@ Tk.Dialog {
         Tk.Switch {
             id: selectedOnly
             objectName: "baselineSelectedOnly"
-            visible: !dialog.clearing
             text: qsTr("Selected tasks only")
         }
         Tk.Notice {

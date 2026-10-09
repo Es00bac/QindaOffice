@@ -86,11 +86,18 @@ Geometry layOut(const Project &project, const GanttPrintOptions &options, const 
     for (int i = 0; i < project.tasks.size(); ++i) {
         const Task &t = project.tasks.at(i);
         // A hidden task hides its subtree too.
-        if (options.hiddenTaskUids.contains(t.uid) || hiddenByAncestor(project, i, options.hiddenTaskUids)) {
+        if (!options.rows.isEmpty() || options.hiddenTaskUids.contains(t.uid)
+            || hiddenByAncestor(project, i, options.hiddenTaskUids)) {
             continue;
         }
         g.rowOfUid.insert(t.uid, int(g.rows.size()));
         g.rows.append(i);
+    }
+    for (int i : options.rows) { // M79: the view's own rows and order
+        if (i >= 0 && i < project.tasks.size() && !g.rowOfUid.contains(project.tasks.at(i).uid)) {
+            g.rowOfUid.insert(project.tasks.at(i).uid, int(g.rows.size()));
+            g.rows.append(i);
+        }
     }
 
     // Columns: the requested ones, narrowed and then dropped from the
@@ -146,8 +153,11 @@ void paintHeader(QPainter *painter, const Geometry &g, int page)
     const QString title = g.project.info.title.isEmpty() ? QStringLiteral("Untitled project") : g.project.info.title;
     drawTextAt(painter, g.area.left(), g.area.top(), elideText(g.title, title, g.area.width() * 0.7), g.title, s.ink);
     const QLocale &l = g.options.locale;
-    QString sub = QStringLiteral("Gantt chart  ·  %1 – %2")
-                      .arg(l.toString(g.from, QStringLiteral("ddd d MMM yyyy")), l.toString(g.to, QStringLiteral("ddd d MMM yyyy")));
+    const QString kind = g.options.style == QLatin1String("tracking")   ? QStringLiteral("Tracking Gantt")
+                         : g.options.style == QLatin1String("leveling") ? QStringLiteral("Leveling Gantt")
+                                                                        : QStringLiteral("Gantt chart");
+    QString sub = QStringLiteral("%1  ·  %2 – %3")
+                      .arg(kind, l.toString(g.from, QStringLiteral("ddd d MMM yyyy")), l.toString(g.to, QStringLiteral("ddd d MMM yyyy")));
     if (g.options.statusDate != kNoDate) {
         sub += QStringLiteral("  ·  status date %1").arg(formatDate(g.options.statusDate, l));
     }
@@ -228,6 +238,7 @@ void paintPage(QPainter *painter, const Geometry &g, int page)
     paintTimescale(painter, g, h, bottom);
     if (count > 0) {
         paintLinks(painter, g, h, firstRow, lastRow);
+        paintBarExtras(painter, g, h, firstRow, lastRow);
         paintBars(painter, g, h, firstRow, lastRow);
     }
     painter->restore();

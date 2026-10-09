@@ -15,18 +15,26 @@
 //    dialog. The host never opens UI itself.
 //  * The view is a radio group (planView…Action, Ctrl+1…6) mirrored by
 //    `currentView`: "gantt" | "sheet" | "resources" | "usage" |
-//    "calendar" | "reports". The Gantt Chart Format tab is the ribbon
-//    context "ganttFormat" while the Gantt is shown.
+//    "calendar" | "reports", and since M79 (D-088) "tracking" (Tracking
+//    Gantt) | "leveling" (Leveling Gantt) | "network" (Network Diagram) |
+//    "taskUsage". The Gantt Chart Format tab is the ribbon context
+//    "ganttFormat" while a Gantt view is shown; each sheet view remembers
+//    its own table (Tracking Gantt opens on Tracking, Leveling Gantt on
+//    Delay, as in Project). The print source follows the view: the Gantt in
+//    the view's style, the Network Diagram, or the report on screen.
 //  * Timescale zoom is `zoom` (View ▸ Zoom In/Out/Reset), a multiplier the
 //    QML applies to PlanService::dayScale.
 //
 // Files: plan_host.cpp (document, view, printing), plan_host_actions.cpp
-// (commands), plan_host_menus.cpp (menus and enablement).
+// (commands), plan_host_views.cpp (M79: views, tables, filters, sorts,
+// baselines shown, tracking and leveling commands), plan_host_menus.cpp
+// (menus and enablement).
 
 #include "document_host.h"
 #include "plan_service.h"
 
 #include <QDate>
+#include <QHash>
 #include <QtQml/qqmlregistration.h>
 
 namespace QindaOffice::Apps::Plan {
@@ -99,6 +107,10 @@ signals:
     void levelRequested();
     void resourceInfoRequested(int resourceUid);
     void pageSetupRequested();
+    // M79: Using Resource… / Date Range… ask for their value; Update Tasks.
+    void filterRequested(const QString &filterId);
+    void updateTasksRequested();
+    void levelingOptionsRequested();
     void findRequested(bool replace);
     // "pdf" | "csv" | "xlsx" (M63) | "mspdi" | "png" | "import"
     void fileRequested(const QString &what);
@@ -117,6 +129,12 @@ private:
     void createActions();
     void wireEditCommands();
     void report(const QVariantMap &result, const QString &doneMessage = {});
+    // plan_host_views.cpp (M79)
+    void createViewActions();
+    void createTrackingActions();
+    [[nodiscard]] static QString viewActionId(const QString &view);
+    [[nodiscard]] bool isGanttView() const;
+    void switchTable(const QString &from, const QString &to);
     // plan_host_menus.cpp
     void insertMenus();
     void syncEnablement();
@@ -131,6 +149,7 @@ private:
     QString m_printFrom;
     QString m_printTo;
     int m_printPagesWide = 1;
+    QHash<QString, QString> m_tableOfView; // M79: each sheet view's table
 };
 
 } // namespace QindaOffice::Apps::Plan

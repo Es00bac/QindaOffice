@@ -8,6 +8,7 @@
 
 #include "baselines.h"
 #include "gantt_print.h"
+#include "network_print.h"
 #include "plan_edit.h"
 #include "plan_reports.h"
 #include "plan_time.h"
@@ -209,6 +210,100 @@ private slots:
         const QList<QImage> wide = rasterPages(ganttLayout(g.p, o), kLetterLandscape, 144);
         QCOMPARE(wide.size(), 2);
         grab(wide.at(1), QStringLiteral("gantt_2wide_page2"));
+    }
+
+    void trackingAndLevelingGanttStyles()
+    {
+        // M79: Project's Tracking Gantt (done solid, the baseline beneath,
+        // % complete) and Leveling Gantt (the pre-leveled bar beneath, the
+        // delay as a line), with slack bars and a missed deadline.
+        Gala g;
+        int venues = -1;
+        int deck = -1;
+        for (int i = 0; i < g.p.tasks.size(); ++i) {
+            venues = g.p.tasks.at(i).name == QStringLiteral("Shortlist venues") ? i : venues;
+            deck = g.p.tasks.at(i).name == QStringLiteral("Sponsorship deck") ? i : deck;
+        }
+        g.p.tasks[deck].deadline = toMinutes(QDate(2026, 3, 18), 17 * 60);
+        g.p.tasks[deck].levelingDelay = 2 * 1440;
+        schedule(g.p);
+        g.p.tasks[deck].preLeveledStart = g.p.tasks.at(deck).unleveledStart;
+        g.p.tasks[deck].preLeveledFinish = g.p.tasks.at(deck).finish - 2 * 1440;
+        const PlanPaperStyle s;
+        const auto pixels = [](const QImage &image, const QColor &c, int tolerance = 0) {
+            int n = 0;
+            for (int y = 0; y < image.height(); ++y) {
+                for (int x = 0; x < image.width(); ++x) {
+                    const QColor p = image.pixelColor(x, y);
+                    n += std::abs(p.red() - c.red()) + std::abs(p.green() - c.green()) + std::abs(p.blue() - c.blue())
+                                 <= tolerance ? 1 : 0;
+                }
+            }
+            return n;
+        };
+        GanttPrintOptions plain = options(g.p);
+        GanttPrintOptions tracking = plain;
+        tracking.style = QStringLiteral("tracking");
+        tracking.showSlack = true;
+        QCOMPARE(ganttPageCount(g.p, tracking, kLetterLandscape), ganttPageCount(g.p, plain, kLetterLandscape));
+        const QImage t = rasterPages(ganttLayout(g.p, tracking), kLetterLandscape, 144).first();
+        const QImage p = rasterPages(ganttLayout(g.p, plain), kLetterLandscape, 144).first();
+        grab(t, QStringLiteral("gantt_tracking_page1"));
+        QVERIFY(t != p);
+        // The done part of a bar is solid, darker than the bar's tone.
+        QVERIFY(pixels(t, s.accent.darker(125)) + pixels(t, s.critical.darker(125)) > 50);
+        QVERIFY(pixels(t, s.baseline) > 50);
+        QVERIFY(pixels(t, s.good, 60) > 20);     // slack bars and the deadline
+        QVERIFY(pixels(t, s.critical, 60) > 20); // critical bars
+        GanttPrintOptions leveling = plain;
+        leveling.style = QStringLiteral("leveling");
+        const QImage l = rasterPages(ganttLayout(g.p, leveling), kLetterLandscape, 144).first();
+        grab(l, QStringLiteral("gantt_leveling_page1"));
+        QVERIFY(pixels(l, s.tint(s.warning, 0.55)) > 5); // the pre-leveled bar
+        QVERIFY(pixels(l, s.warning, 60) > 5);           // the delay line
+        QVERIFY(pixels(l, s.baseline) < pixels(t, s.baseline)); // no baselines here
+        Q_UNUSED(venues)
+    }
+
+    void networkDiagramPages()
+    {
+        // M79: the Network Diagram on paper — fitted across, never below 55 %.
+        Gala g;
+        NetworkPrintOptions o;
+        o.locale = QLocale::c();
+        o.statusDate = g.p.info.statusDate;
+        const int pages = networkPageCount(g.p, o, kLetterLandscape);
+        QVERIFY(pages >= 1);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("network.pdf"));
+        QString error;
+        QVERIFY2(writePdf(path, networkPainter(g.p, o), QPageSize(QPageSize::Letter), QPageLayout::Landscape, &error),
+                 qPrintable(error));
+        QCOMPARE(pdfPages(path), pages);
+        const QList<QImage> images = rasterPages(networkPages(g.p, o), kLetterLandscape, 144);
+        QCOMPARE(images.size(), pages);
+        grab(images.first(), QStringLiteral("network_page1"));
+        const PlanPaperStyle s;
+        int red = 0;
+        for (int y = 0; y < images.first().height(); y += 2) {
+            for (int x = 0; x < images.first().width(); x += 2) {
+                const QColor c = images.first().pixelColor(x, y);
+                red += c.red() > 150 && c.green() < 90 && c.blue() < 90 ? 1 : 0;
+            }
+        }
+        QVERIFY2(red > 20, qPrintable(QString::number(red))); // critical boxes and links
+        // Asking for more pages across makes it larger, up to 100 %.
+        NetworkPrintOptions wide = o;
+        wide.pagesWide = 3;
+        QVERIFY(networkPageCount(g.p, wide, kLetterLandscape) >= pages);
+        // Only the view's rows: the phases alone fit one page.
+        NetworkPrintOptions phases = o;
+        for (int i = 0; i < g.p.tasks.size(); ++i) {
+            if (g.p.tasks.at(i).outlineLevel == 1) {
+                phases.rows.append(i);
+            }
+        }
+        QCOMPARE(networkPageCount(g.p, phases, kLetterLandscape), 1);
     }
 
     void reportPdf()

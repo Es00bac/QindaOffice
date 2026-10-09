@@ -29,6 +29,12 @@ set(qindaplan_qml
     qml/ResourceInfoDialog.qml
     qml/PlanFileDialogs.qml
     qml/FindTaskDialog.qml
+    # M79 (D-088): the Network Diagram and Task Usage views, Update Tasks,
+    # the two filters that ask a question.
+    qml/NetworkView.qml
+    qml/TaskUsageView.qml
+    qml/UpdateTasksDialog.qml
+    qml/FilterDialog.qml
 )
 foreach(qml_file IN LISTS qindaplan_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -50,12 +56,16 @@ qt_add_qml_module(qindaplan_app
         src/plan_host.cpp src/plan_host.h
         src/plan_host_actions.cpp
         src/plan_host_menus.cpp
+        src/plan_host_views.cpp
+        src/plan_network_item.cpp src/plan_network_item.h
         src/plan_service.cpp src/plan_service.h
         src/plan_service_columns.cpp
+        src/plan_service_display.cpp
         src/plan_service_output.cpp
         src/plan_service_project.cpp
         src/plan_service_resources.cpp
         src/plan_service_tasks.cpp
+        src/plan_service_tracking.cpp
         src/plan_service_views.cpp
         src/plan_timeline_item.cpp src/plan_timeline_item.h
         src/sheet_sources.cpp src/sheet_sources.h

@@ -25,18 +25,30 @@
 
 namespace QindaOffice::Plan {
 
+// M79: the chart's style, as Project's Gantt views draw it.
+//  "gantt"    task bars with a thin progress band, resource names after;
+//  "tracking" Tracking Gantt — the done part solid, the rest light, the
+//             chosen baseline beneath, % complete after the bar;
+//  "leveling" Leveling Gantt — the pre-leveled bar beneath, the leveling
+//             delay as a thin line before the bar and as text after it.
 struct GanttPrintOptions {
     QDate from; // empty = project start, back to its Monday
     QDate to;   // empty = project finish, on to its Sunday
     int pagesWide = 1;
     QStringList columns{QStringLiteral("id"), QStringLiteral("name"), QStringLiteral("duration"), QStringLiteral("start"),
                         QStringLiteral("finish")};
+    QString style = QStringLiteral("gantt");
     bool showCritical = true;
-    int baseline = 0; // -1 = no baseline bars
+    int baseline = 0; // 0–10; -1 = no baseline bars
     bool showBarText = true;
+    bool showSlack = false;    // M79: total slack as a thin bar after the task (Detail Gantt)
+    bool showDeadlines = true; // M79: a deadline arrow on the task's row
     Minutes today = kNoDate;
     Minutes statusDate = kNoDate;
     QList<int> hiddenTaskUids; // collapsed subtasks the window hides
+    // M79: when set, exactly these task indices in this order (the view's
+    // filter and sort); hiddenTaskUids is then not consulted.
+    QList<int> rows;
     QLocale locale;
 };
 

@@ -74,7 +74,8 @@ private:
     bool readTimePeriod(QDate *from, QDate *to);
     void readTask();
     void readLink(RawTask &raw);
-    void readBaseline(RawTask &raw, QList<Kept> &kept, const QString &after);
+    // M79: the current <Baseline>, parsed and kept as written (mspdi_p.h).
+    RawBaseline readBaseline();
     void readResource();
     void readAssignment();
 

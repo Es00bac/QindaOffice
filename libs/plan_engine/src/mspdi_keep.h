@@ -5,7 +5,7 @@
 // Microsoft Project XML file is KEPT, verbatim, and written back in the
 // order Project writes it — custom fields (ExtendedAttribute, and the
 // project's ExtendedAttributes / OutlineCodes definitions), task type,
-// hyperlinks, cost rate tables, baselines 3–10, recurring calendar
+// hyperlinks, cost rate tables, recurring calendar
 // exceptions, views and tables, and every element a later Project adds.
 //
 // AGENT-CONTRACT (storage): each object's kept children are a JSON array in

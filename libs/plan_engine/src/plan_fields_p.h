@@ -5,7 +5,46 @@
 
 #include "plan_types.h"
 
+#include <QLocale>
+
+#include <algorithm>
+
 namespace QindaOffice::Plan {
+
+// M79: the tracking, work and leveling fields of plan_fields.cpp (Act.
+// Dur., Rem. Dur., Act./Rem. Work, Baseline Work, Work Var., Leveling
+// Delay, Preleveled Start/Finish); empty for any other field.
+[[nodiscard]] QString trackingFieldText(const Project &project, int index, const QString &field, const QLocale &locale);
+// AGENT-NOTE (M79): % complete is the stored truth (an integer, as in
+// Project and MSPDI's PercentComplete); the actual duration it stands for
+// is any value that rounds to it. The roundest such value — whole days,
+// then half days, tenths of a day, whole hours — is shown (what was typed,
+// as a rule), else the exact share: "50 %, then 2 days remaining" reads
+// back as 1 day actual, not 0.99, and 30 % of 39 days as 11.7 days.
+inline Minutes actualDurationOf(const Task &t, int minutesPerDay)
+{
+    const Minutes exact = (t.duration * t.percentComplete + 50) / 100;
+    if (t.percentComplete <= 0 || t.percentComplete >= 100 || t.duration <= 0) {
+        return exact;
+    }
+    const double lo = double(t.duration) * (t.percentComplete - 0.5) / 100.0;
+    const double hi = double(t.duration) * (t.percentComplete + 0.5) / 100.0;
+    const Minutes day = std::max(1, minutesPerDay);
+    for (const Minutes step : {day, day / 2, day / 10, Minutes(60)}) {
+        if (step <= 0) {
+            continue;
+        }
+        const Minutes round = (exact + step / 2) / step * step;
+        if (double(round) >= lo && double(round) < hi) {
+            return round;
+        }
+    }
+    return exact;
+}
+
+// Typing Leveling Delay, Act. Dur. or Rem. Dur. (plan_field_edit.cpp).
+struct EditResult;
+EditResult setTrackingField(Project &project, int index, const QString &field, const QString &text);
 
 // The constraint's name as the sheet shows it ("Start No Earlier Than").
 inline QString constraintName(ConstraintType type)

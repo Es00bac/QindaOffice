@@ -3,6 +3,7 @@
 #include "plan_host.h"
 
 #include "gantt_print.h"
+#include "network_print.h"
 #include "plan_document.h"
 #include "plan_page_output.h"
 #include "plan_reports.h"
@@ -64,8 +65,10 @@ void PlanHost::documentReplaced()
 
 QStringList PlanHost::viewKeys()
 {
-    return {QStringLiteral("gantt"), QStringLiteral("sheet"),    QStringLiteral("resources"),
-            QStringLiteral("usage"), QStringLiteral("calendar"), QStringLiteral("reports")};
+    // AGENT-GUARD: the first six keep their order (Ctrl+1…6, createActions).
+    return {QStringLiteral("gantt"),    QStringLiteral("sheet"),    QStringLiteral("resources"), QStringLiteral("usage"),
+            QStringLiteral("calendar"), QStringLiteral("reports"),  QStringLiteral("tracking"),  QStringLiteral("leveling"),
+            QStringLiteral("network"),  QStringLiteral("taskUsage")};
 }
 
 void PlanHost::setCurrentView(const QString &view)
@@ -74,18 +77,19 @@ void PlanHost::setCurrentView(const QString &view)
         return;
     }
     if (m_view != view) {
+        const QString previous = m_view;
         m_view = view;
+        // M79: a Gantt view draws in its own style; each sheet view keeps
+        // its own table (switchTable, plan_host_views.cpp).
+        m_service->setGanttStyle(view == QLatin1String("tracking")   ? QStringLiteral("tracking")
+                                 : view == QLatin1String("leveling") ? QStringLiteral("leveling")
+                                                                     : QStringLiteral("gantt"));
+        switchTable(previous, view);
         emit currentViewChanged();
-        setRibbonContexts(view == QLatin1String("gantt") ? QStringList{QStringLiteral("ganttFormat")} : QStringList{});
+        setRibbonContexts(isGanttView() ? QStringList{QStringLiteral("ganttFormat")} : QStringList{});
         syncEnablement();
     }
-    static const QHash<QString, QString> ids{{QStringLiteral("gantt"), QStringLiteral("planViewGanttAction")},
-                                             {QStringLiteral("sheet"), QStringLiteral("planViewTaskSheetAction")},
-                                             {QStringLiteral("resources"), QStringLiteral("planViewResourceSheetAction")},
-                                             {QStringLiteral("usage"), QStringLiteral("planViewResourceUsageAction")},
-                                             {QStringLiteral("calendar"), QStringLiteral("planViewCalendarAction")},
-                                             {QStringLiteral("reports"), QStringLiteral("planViewReportsAction")}};
-    if (Quick::ActionEntry *entry = action(ids.value(view))) {
+    if (Quick::ActionEntry *entry = action(viewActionId(view))) {
         entry->setChecked(true);
     }
 }
@@ -156,6 +160,8 @@ namespace {
     o.from = QDate::fromString(host.printFrom(), Qt::ISODate);
     o.to = QDate::fromString(host.printTo(), Qt::ISODate);
     o.pagesWide = host.printPagesWide();
+    o.style = service.ganttStyle(); // M79: Gantt, Tracking or Leveling Gantt
+    o.showSlack = service.showSlack();
     QStringList columns = service.tableFields();
     columns.removeAll(QStringLiteral("indicators"));
     columns.removeAll(QStringLiteral("notes"));
@@ -163,23 +169,24 @@ namespace {
     columns.prepend(QStringLiteral("id"));
     o.columns = columns.mid(0, 6);
     o.showCritical = service.showCritical();
-    o.baseline = service.showBaseline() ? 0 : -1;
+    o.baseline = service.showBaseline() || o.style == QLatin1String("tracking") ? service.ganttBaseline() : -1;
     o.showBarText = service.showBarText();
     o.today = Engine::toMinutes(service.todayDate(), 12 * 60);
     o.statusDate = service.project().info.statusDate;
     o.locale = service.locale();
-    const Engine::Project &p = service.project();
-    for (const Engine::Task &t : p.tasks) {
-        if (t.parentIndex >= 0) {
-            // Hidden when any ancestor is collapsed.
-            for (int a = t.parentIndex; a >= 0; a = p.tasks.at(a).parentIndex) {
-                if (service.isCollapsed(p.tasks.at(a).uid)) {
-                    o.hiddenTaskUids.append(t.uid);
-                    break;
-                }
-            }
-        }
-    }
+    // M79: exactly the rows the view shows — sorted, filtered, collapsed.
+    o.rows = service.visibleRows();
+    return o;
+}
+
+::QindaOffice::Plan::NetworkPrintOptions networkOptions(const PlanHost &host, const PlanService &service)
+{
+    ::QindaOffice::Plan::NetworkPrintOptions o;
+    o.rows = service.visibleRows();
+    o.pagesWide = host.printPagesWide();
+    o.showCritical = service.showCritical();
+    o.statusDate = service.project().info.statusDate;
+    o.locale = service.locale();
     return o;
 }
 
@@ -192,6 +199,9 @@ Quick::PrintRenderCallback PlanHost::printRenderCallback() const
         const Engine::PlanReport report = Engine::buildReport(m_service->project(), m_reportId, m_service->todayDate(),
                                                               m_service->locale());
         return Engine::asPrintCallback<QPrinter>(Engine::reportPainter(report, m_service->locale()));
+    }
+    if (m_view == QLatin1String("network")) {
+        return Engine::asPrintCallback<QPrinter>(Engine::networkPainter(m_service->project(), networkOptions(*this, *m_service)));
     }
     return Engine::asPrintCallback<QPrinter>(Engine::ganttPainter(m_service->project(), printOptions(*this, *m_service)));
 }
@@ -206,8 +216,11 @@ int PlanHost::ganttPageCount() const
     namespace Engine = ::QindaOffice::Plan;
     const QPageSize size = Engine::defaultPageSize(m_service->locale());
     const QSizeF points = size.size(QPageSize::Point);
-    return Engine::ganttPageCount(m_service->project(), printOptions(*this, *m_service),
-                                  QSizeF(points.height(), points.width()));
+    const QSizeF landscape(points.height(), points.width());
+    if (m_view == QLatin1String("network")) {
+        return Engine::networkPageCount(m_service->project(), networkOptions(*this, *m_service), landscape);
+    }
+    return Engine::ganttPageCount(m_service->project(), printOptions(*this, *m_service), landscape);
 }
 
 QVariantMap PlanHost::exportPdfTo(const QUrl &url)

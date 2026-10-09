@@ -116,7 +116,10 @@ bool isDerived(Kind kind, const QString &element)
 {
     // AGENT-NOTE: values Project derives from the dates, work and progress
     // QindaPlan edits. They travel only while the object's stamp holds
-    // (mspdi_keep.h); stale ones would contradict the new schedule.
+    // (mspdi_keep.h); stale ones would contradict the new schedule. Since
+    // M79 a task's LevelingDelay, LevelingDelayFormat, PreLeveledStart and
+    // PreLeveledFinish are modelled (the reader never keeps them); the
+    // entries below still govern an assignment's own leveling delay.
     static const QStringList common{
         QStringLiteral("TimephasedData"), QStringLiteral("ActualWork"), QStringLiteral("RemainingWork"),
         QStringLiteral("ActualCost"), QStringLiteral("RemainingCost"), QStringLiteral("PercentWorkComplete"),
@@ -137,8 +140,7 @@ bool isDerived(Kind kind, const QString &element)
         return element == QLatin1String("ActualDuration") || element == QLatin1String("RemainingDuration")
             || element == QLatin1String("ResumeValid") || element == QLatin1String("StartVariance")
             || element == QLatin1String("FinishVariance") || element == QLatin1String("StartSlack")
-            || element == QLatin1String("FinishSlack") || element == QLatin1String("PreLeveledStart")
-            || element == QLatin1String("PreLeveledFinish");
+            || element == QLatin1String("FinishSlack");
     case Kind::Resource:
         return element == QLatin1String("Start") || element == QLatin1String("Finish") || element == QLatin1String("Rates");
     case Kind::Assignment:

@@ -6,6 +6,7 @@
 
 #include "plan_types.h"
 
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QStringList>
 
@@ -25,6 +26,10 @@ void putDate(QJsonObject &o, const char *key, Minutes value);            // omit
 
 [[nodiscard]] QJsonObject taskToJson(const Task &task);
 [[nodiscard]] Task taskFromJson(const QJsonObject &o, QStringList *warnings);
+// A task's or an assignment's baselines: [{number, start, finish, duration,
+// work, cost}] for the ones that are set (M79: numbers 0–10).
+[[nodiscard]] QJsonArray baselinesToJson(const std::array<BaselineData, kBaselineCount> &list);
+void baselinesFromJson(const QJsonValue &value, std::array<BaselineData, kBaselineCount> *list);
 
 } // namespace QindaOffice::Plan::Json
 

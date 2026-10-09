@@ -41,6 +41,7 @@ QVariantList PlanService::resourceList() const
             {QStringLiteral("name"), r.name},
             {QStringLiteral("initials"), r.initials},
             {QStringLiteral("material"), r.type == Engine::ResourceType::Material},
+            {QStringLiteral("costResource"), r.type == Engine::ResourceType::Cost}, // M79
             {QStringLiteral("type"), Engine::resourceFieldText(p, i, QStringLiteral("type"), m_locale)},
             {QStringLiteral("maxUnits"), Engine::resourceFieldText(p, i, QStringLiteral("maxUnits"), m_locale)},
             {QStringLiteral("rate"), Engine::rateText(p, r, m_locale)},
@@ -62,13 +63,16 @@ QVariantList PlanService::assignmentsOf(const QString &taskId) const
         QString units;
         if (a >= 0) {
             const int u = p.assignments.at(a).units;
-            units = r.type == Engine::ResourceType::Work
-                ? m_locale.toString(u) + QLatin1Char('%')
-                : m_locale.toString(double(u) / 100.0, 'g', 10) + (r.materialLabel.isEmpty() ? QString() : QLatin1Char(' ') + r.materialLabel);
+            units = r.type == Engine::ResourceType::Work ? m_locale.toString(u) + QLatin1Char('%')
+                    : r.type == Engine::ResourceType::Cost // M79: the amount it costs
+                        ? Engine::formatMoney(p.assignments.at(a).costInput, p.info.currency, m_locale)
+                        : m_locale.toString(double(u) / 100.0, 'g', 10)
+                              + (r.materialLabel.isEmpty() ? QString() : QLatin1Char(' ') + r.materialLabel);
         }
         out.append(QVariantMap{{QStringLiteral("resourceUid"), r.uid},
                                {QStringLiteral("name"), r.name},
                                {QStringLiteral("material"), r.type == Engine::ResourceType::Material},
+                               {QStringLiteral("costResource"), r.type == Engine::ResourceType::Cost},
                                {QStringLiteral("assigned"), a >= 0},
                                {QStringLiteral("units"), units},
                                {QStringLiteral("cost"), a >= 0 ? Engine::formatMoney(p.assignments.at(a).cost, p.info.currency, m_locale)
@@ -85,7 +89,16 @@ QVariantMap PlanService::assign(int resourceUid, const QString &unitsText)
     if (rows.isEmpty() || ri < 0) {
         return fail(QStringLiteral("Select a task and a resource."));
     }
-    const std::optional<int> units = unitsText.trimmed().isEmpty()
+    // M79: a cost resource takes an amount ("$450"), the others units.
+    const bool costResource = project().resources.at(ri).type == Engine::ResourceType::Cost;
+    std::optional<qint64> amount;
+    if (costResource && !unitsText.trimmed().isEmpty()) {
+        amount = Engine::parseMoney(unitsText, project().info.currency, m_locale);
+        if (!amount || *amount < 0) {
+            return fail(QStringLiteral("“%1” is not an amount.").arg(unitsText.trimmed()));
+        }
+    }
+    const std::optional<int> units = unitsText.trimmed().isEmpty() || costResource
         ? std::optional<int>(100)
         : parseUnitsText(unitsText, project().resources.at(ri).type);
     if (!units) {
@@ -99,6 +112,9 @@ QVariantMap PlanService::assign(int resourceUid, const QString &unitsText)
             const Engine::EditResult r = Engine::assignResource(p, row, resourceUid, *units);
             if (!r.ok) {
                 return r.error;
+            }
+            if (amount) {
+                p.assignments[p.assignmentIndex(p.tasks.at(row).uid, resourceUid)].costInput = *amount;
             }
         }
         return QString();
@@ -124,6 +140,7 @@ QVariantMap PlanService::addResource(const QString &name, const QString &type)
         const int index = Engine::addResource(p, int(p.resources.size()),
                                               name.isEmpty() ? QStringLiteral("New resource") : name,
                                               type == QLatin1String("material") ? Engine::ResourceType::Material
+                                              : type == QLatin1String("cost")   ? Engine::ResourceType::Cost
                                                                                 : Engine::ResourceType::Work);
         uid = p.resources.at(index).uid;
         return QString();
@@ -158,25 +175,45 @@ QVariantMap PlanService::setResourceField(int resourceUid, const QString &field,
     });
 }
 
-QVariantMap PlanService::level(int resourceUid)
+QVariantMap PlanService::level(int resourceUid, const QString &from, const QString &to)
 {
+    // M79: the project's leveling options, and the range when one is given.
+    Engine::LevelingOptions options = Engine::projectLevelingOptions(project(), resourceUid);
+    for (const auto &[text, date] : {std::pair{from, &options.from}, std::pair{to, &options.to}}) {
+        if (text.trimmed().isEmpty()) {
+            continue;
+        }
+        const std::optional<Engine::Minutes> d = Engine::parseDate(text, 0, m_locale);
+        if (!d) {
+            return fail(QStringLiteral("“%1” is not a date.").arg(text.trimmed()));
+        }
+        *date = Engine::dateOf(*d);
+    }
+    if (options.from.isValid() && options.to.isValid() && options.to < options.from) {
+        return fail(QStringLiteral("The leveling range ends before it starts."));
+    }
     Engine::LevelingResult result;
     const QVariantMap r = apply(QStringLiteral("Level Resources"), [&](Engine::Project &p) {
-        result = Engine::levelResources(p, resourceUid);
+        result = Engine::levelResources(p, options);
         return result.delayedTasks > 0 ? QString()
                                        : (result.resolved ? QStringLiteral("Nothing is overallocated.")
                                                           : QStringLiteral("Leveling could not delay any task."));
     });
+    return leveled(r, result);
+}
+
+QVariantMap PlanService::leveled(const QVariantMap &applied, const Engine::LevelingResult &result)
+{
     QString text = result.delayedTasks == 1 ? QStringLiteral("1 task was delayed")
                                              : QStringLiteral("%1 tasks were delayed").arg(result.delayedTasks);
     text += result.finishMoved ? QStringLiteral("; the finish moved.") : QStringLiteral(" within their slack.");
     if (!result.resolved && !result.unresolvedDays.isEmpty()) {
         text += QStringLiteral(" Still overallocated on %1.").arg(result.unresolvedDays.join(QStringLiteral(", ")));
     }
-    if (r.value(QStringLiteral("ok")).toBool()) {
+    if (applied.value(QStringLiteral("ok")).toBool()) {
         emit notify(QStringLiteral("Leveled"), text, result.resolved ? QStringLiteral("info") : QStringLiteral("warning"));
     }
-    QVariantMap out = r;
+    QVariantMap out = applied;
     out.insert(QStringLiteral("delayed"), result.delayedTasks);
     out.insert(QStringLiteral("resolved"), result.resolved);
     out.insert(QStringLiteral("finishMoved"), result.finishMoved);

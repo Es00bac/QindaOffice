@@ -23,9 +23,20 @@
 // plan_service_resources.cpp, plan_service_project.cpp (project,
 // calendars, baselines, status), plan_service_output.cpp (reports, files,
 // clipboard), plan_service_views.cpp (Gantt rows, calendar events, usage
-// table).
+// table), plan_service_display.cpp (M79: filter, sort, Gantt styles, the
+// Network Diagram, Task Usage), plan_service_tracking.cpp (M79: Update
+// Tasks, Mark on Track, leveling options, Level Selection).
+//
+// AGENT-CONTRACT (M79, the rows a view shows): `visibleRows()` is the
+// project's tasks in the sort order (outline kept), without those under a
+// collapsed summary, through the filter (with their summary rows when
+// relatedSummaries) — the sheet, the Gantt, the Network Diagram, Task Usage
+// and the printout all show exactly these. The Calendar view takes the
+// filter but not the collapse (it has no outline).
 
+#include "network_layout.h"
 #include "plan_types.h"
+#include "plan_views.h"
 
 #include <qindatk/editable_grid_model.h>
 #include <qindatk/gantt_calendar.h>
@@ -36,13 +47,19 @@
 #include <QDate>
 #include <QLocale>
 #include <QObject>
+#include <QRectF>
 #include <QSet>
+#include <QSizeF>
 #include <QStringList>
 #include <QUrl>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 
 #include <functional>
+
+namespace QindaOffice::Plan {
+struct LevelingResult;
+} // namespace QindaOffice::Plan
 
 namespace QindaOffice::Apps::Plan {
 
@@ -81,6 +98,18 @@ class PlanService : public QObject {
     Q_PROPERTY(bool showBaseline READ showBaseline WRITE setShowBaseline NOTIFY viewChanged)
     Q_PROPERTY(bool showBarText READ showBarText WRITE setShowBarText NOTIFY viewChanged)
     Q_PROPERTY(bool usageWeeks READ usageWeeks WRITE setUsageWeeks NOTIFY viewChanged)
+    // M79 view state: Project's filter, sort, Gantt style (Gantt Chart,
+    // Tracking Gantt, Leveling Gantt), the baseline the bars show, slack.
+    Q_PROPERTY(QString filter READ filter NOTIFY viewChanged)
+    Q_PROPERTY(QString filterTitle READ filterTitle NOTIFY viewChanged)
+    Q_PROPERTY(bool relatedSummaries READ relatedSummaries WRITE setRelatedSummaries NOTIFY viewChanged)
+    Q_PROPERTY(QString sortKey READ sortKey WRITE setSortKey NOTIFY viewChanged)
+    Q_PROPERTY(QString ganttStyle READ ganttStyle WRITE setGanttStyle NOTIFY viewChanged)
+    Q_PROPERTY(int ganttBaseline READ ganttBaseline WRITE setGanttBaseline NOTIFY viewChanged)
+    Q_PROPERTY(bool showSlack READ showSlack WRITE setShowSlack NOTIFY viewChanged)
+    Q_PROPERTY(QindaTK::ResourcePlanModel *taskUsageModel READ taskUsageModel CONSTANT)
+    Q_PROPERTY(QVariantList taskUsageRows READ taskUsageRows NOTIFY changed)
+    Q_PROPERTY(QSizeF networkSize READ networkSize NOTIFY changed)
     Q_PROPERTY(QString ganttStartUtc READ ganttStartUtc NOTIFY changed)
     Q_PROPERTY(QString projectStartIso READ projectStartIso NOTIFY changed)
     Q_PROPERTY(QVariantList markers READ markers NOTIFY changed)
@@ -142,6 +171,31 @@ public:
     [[nodiscard]] QVariantList calendarSources() const;
     [[nodiscard]] QVariantList usageRows() const { return m_usageRows; }
 
+    // ---- display (plan_service_display.cpp, M79) ----
+    [[nodiscard]] QString filter() const { return m_filter.id; }
+    [[nodiscard]] QString filterTitle() const;
+    // id: plan_views.h's filter ids; "resource" takes {resourceUid},
+    // "dateRange" {from, to} (dates as typed). Not undoable, not saved.
+    Q_INVOKABLE QVariantMap applyFilter(const QString &id, const QVariantMap &params = {});
+    [[nodiscard]] bool relatedSummaries() const { return m_relatedSummaries; }
+    void setRelatedSummaries(bool on);
+    [[nodiscard]] QString sortKey() const { return m_sortKey; }
+    void setSortKey(const QString &key);
+    [[nodiscard]] QString ganttStyle() const { return m_ganttStyle; }
+    void setGanttStyle(const QString &style); // "gantt" | "tracking" | "leveling"
+    [[nodiscard]] int ganttBaseline() const { return m_ganttBaseline; }
+    void setGanttBaseline(int number); // 0–10
+    [[nodiscard]] bool showSlack() const { return m_showSlack; }
+    void setShowSlack(bool on);
+    [[nodiscard]] QindaTK::ResourcePlanModel *taskUsageModel() const { return m_taskUsage; }
+    [[nodiscard]] QVariantList taskUsageRows() const { return m_taskUsageRows; }
+    // The Network Diagram's layout of the visible rows (points).
+    [[nodiscard]] const Engine::NetworkLayout &networkLayout() const { return m_network; }
+    [[nodiscard]] QSizeF networkSize() const { return m_network.size; }
+    Q_INVOKABLE int visibleRowCount() const { return int(m_visible.size()); }
+    Q_INVOKABLE QString networkTaskAt(double x, double y) const;
+    Q_INVOKABLE QRectF networkBoxOf(const QString &taskId) const;
+
     [[nodiscard]] QString currentTaskId() const;
     void setCurrentTaskId(const QString &taskId);
     [[nodiscard]] QStringList selectedTaskIds() const { return m_selected; }
@@ -193,7 +247,8 @@ public:
     Q_INVOKABLE QVariantMap addResource(const QString &name = {}, const QString &type = QStringLiteral("work"));
     Q_INVOKABLE QVariantMap deleteResource(int resourceUid);
     Q_INVOKABLE QVariantMap setResourceField(int resourceUid, const QString &field, const QString &text);
-    Q_INVOKABLE QVariantMap level(int resourceUid); // 0 = every resource
+    // 0 = every resource; from/to = the leveling range (empty: all of it).
+    Q_INVOKABLE QVariantMap level(int resourceUid, const QString &from = {}, const QString &to = {});
     Q_INVOKABLE QVariantMap clearLeveling();
     Q_INVOKABLE QVariantMap nextOverallocation();
     QString commitResourceSheetChanges(const QVariantList &changes);
@@ -211,7 +266,7 @@ public:
     Q_INVOKABLE int resourceCalendar(int resourceUid);
     Q_INVOKABLE QVariantList baselines() const;
     Q_INVOKABLE QVariantMap setBaseline(int number, bool selectedOnly = false);
-    Q_INVOKABLE QVariantMap clearBaseline(int number);
+    Q_INVOKABLE QVariantMap clearBaseline(int number, bool selectedOnly = false);
     Q_INVOKABLE QVariantMap setStatusDate(const QString &date);
     Q_INVOKABLE QVariantMap updateProject(const QString &date);
     Q_INVOKABLE QVariantMap report(const QString &id) const;
@@ -225,6 +280,18 @@ public:
     Q_INVOKABLE QVariantMap cutSelection();
     Q_INVOKABLE QVariantMap paste();
     Q_INVOKABLE QString formatUtc(const QString &utc) const;
+
+    // ---- tracking and leveling (plan_service_tracking.cpp, M79) ----
+    // Mark on Track: the selected tasks done through the status date (or
+    // today). Update Tasks: {percent, actualDuration, remainingDuration,
+    // actualStart, actualFinish} as typed, on the selected tasks, one step.
+    Q_INVOKABLE QVariantMap markOnTrack();
+    Q_INVOKABLE QVariantMap updateTasks(const QVariantMap &fields);
+    // {order: "id"|"standard"|"priority", withinSlack, clearFirst}.
+    Q_INVOKABLE QVariantMap levelingOptions() const;
+    Q_INVOKABLE QVariantMap setLevelingOptions(const QVariantMap &options);
+    Q_INVOKABLE QVariantMap levelSelection();
+    Q_INVOKABLE QVariantMap clearLevelingSelected();
 
     // The Gantt rows for a project (the committed one or a moved preview
     // copy; plan_service_views.cpp). Same order and ids for both.
@@ -272,6 +339,13 @@ private:
     void rebuildUsage();       // plan_service_views.cpp
     void rebuildGanttCalendar();
     void pruneSelection();
+    // plan_service_display.cpp (M79)
+    void rebuildTaskUsage();
+    void rebuildNetwork();
+    [[nodiscard]] QVariantMap ganttRow(const Engine::Project &p, int index, const QSet<int> &shown,
+                                       const QHash<int, QString> &guidByUid) const;
+    // A leveling run's outcome as text and a toast (plan_service_resources.cpp).
+    QVariantMap leveled(const QVariantMap &applied, const Engine::LevelingResult &result);
 
     PlanDocument *m_document;
     QLocale m_locale;
@@ -298,6 +372,17 @@ private:
     int m_currentResource = 0;
     QVariantList m_calendarEvents;
     QVariantList m_usageRows;
+    // M79
+    Engine::TaskFilter m_filter;
+    bool m_relatedSummaries = true;
+    QString m_sortKey = QStringLiteral("id");
+    QString m_ganttStyle = QStringLiteral("gantt");
+    int m_ganttBaseline = 0;
+    bool m_showSlack = false;
+    QList<int> m_filtered; // filter only (the Calendar view)
+    QindaTK::ResourcePlanModel *m_taskUsage = nullptr;
+    QVariantList m_taskUsageRows;
+    Engine::NetworkLayout m_network;
     QHash<QString, int> m_rowByGuid;
     int m_ganttBusy = 0;
     bool m_syncingSelection = false;

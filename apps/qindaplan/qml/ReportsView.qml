@@ -4,10 +4,11 @@ import QtQuick
 import QindaTK as Tk
 import QindaOffice.Plan.App
 
-// Reports: Project Overview, Critical Tasks, Resource Overview and Late
-// Tasks, built by the engine (PlanService.report) — the same data the
-// printed/PDF report paints. Headline figures as cards, then each table;
-// a task row opens the task in the Gantt.
+// Reports: Project Overview, Critical Tasks, Resource Overview, Late Tasks
+// and (M79) Project's Cost Overview and Work Overview dashboards, built by
+// the engine (PlanService.report) — the same data the printed/PDF report
+// paints. Headline figures as cards, then each table; a task row opens the
+// task in the Gantt.
 Tk.Scroll {
     id: view
 
@@ -15,7 +16,7 @@ Tk.Scroll {
     property PlanHost host: null
     readonly property var report: plan !== null && plan.revision >= 0 && host !== null && visible
                                   ? plan.report(host.reportId) : ({})
-    readonly property var reportIds: ["overview", "critical", "resources", "late"]
+    readonly property var reportIds: ["overview", "critical", "resources", "late", "cost", "work"]
 
     objectName: "planReports"
     accessibleName: String(report.title || qsTr("Report"))
@@ -38,11 +39,12 @@ Tk.Scroll {
                 Tk.Heading { objectName: "planReportTitle"; level: 1; text: String(view.report.title || "") }
                 Tk.Caption { objectName: "planReportSubtitle"; text: String(view.report.subtitle || ""); elide: Text.ElideRight }
             }
-            Tk.Segmented {
+            Tk.ComboBox {
                 objectName: "planReportPicker"
                 small: true
                 tooltip: qsTr("Report")
-                model: [qsTr("Overview"), qsTr("Critical"), qsTr("Resources"), qsTr("Late")]
+                model: [qsTr("Project Overview"), qsTr("Critical Tasks"), qsTr("Resource Overview"), qsTr("Late Tasks"),
+                        qsTr("Cost Overview"), qsTr("Work Overview")]
                 currentIndex: view.host !== null ? Math.max(0, view.reportIds.indexOf(view.host.reportId)) : 0
                 onActivated: function(index) { view.host.reportId = view.reportIds[index] }
             }
@@ -109,11 +111,14 @@ Tk.Scroll {
                         Component.onCompleted: {
                             const cols = []
                             const titles = tableCard.modelData.columns || []
+                            // The name column stretches; an ID column before it is narrow.
+                            const byId = titles.length > 0 && titles[0] === "ID"
                             for (let c = 0; c < titles.length; ++c) {
                                 cols.push(columnComponent.createObject(table, {
                                     key: "c" + c, title: titles[c], sortable: false,
-                                    flex: c === 1 || (c === 0 && titles.length < 6) ? 1 : 0,
-                                    width: Tk.Theme.size.tableColumn * (c === 0 && titles.length >= 6 ? 0.6 : 1.3),
+                                    flex: c === (byId ? 1 : 0) ? 1 : 0,
+                                    minWidth: Tk.Theme.size.tableColumn * 1.6,
+                                    width: Tk.Theme.size.tableColumn * (byId && c === 0 ? 0.6 : 1.3),
                                     align: tableCard.numeric.indexOf(c) >= 0 ? Qt.AlignRight : Qt.AlignLeft }))
                             }
                             table.columns = cols

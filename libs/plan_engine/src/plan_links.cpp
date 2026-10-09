@@ -162,6 +162,9 @@ QString resourceNamesText(const Project &project, int index, const QLocale &loca
         if (res.type == ResourceType::Work) {
             parts.append(a.units == 100 ? res.name
                                         : QStringLiteral("%1[%2%]").arg(res.name, locale.toString(a.units)));
+        } else if (res.type == ResourceType::Cost) {
+            // M79: a cost resource with what the assignment costs.
+            parts.append(QStringLiteral("%1[%2]").arg(res.name, formatMoney(a.costInput, project.info.currency, locale)));
         } else {
             const QString quantity = quantityText(a.units, locale);
             parts.append(QStringLiteral("%1[%2]").arg(
@@ -173,7 +176,6 @@ QString resourceNamesText(const Project &project, int index, const QLocale &loca
 
 EditResult setResourceNames(Project &project, int index, const QString &text, const QLocale &locale)
 {
-    Q_UNUSED(locale)
     if (index < 0 || index >= project.tasks.size()) {
         return EditResult::fail(QStringLiteral("There is no such task."));
     }
@@ -185,6 +187,7 @@ EditResult setResourceNames(Project &project, int index, const QString &text, co
     struct Wanted {
         int resourceUid;
         int units;
+        std::optional<qint64> cost; // M79: a cost resource's amount, when typed
     };
     QList<Wanted> wanted;
     for (const QString &raw : text.split(QLatin1Char(','), Qt::SkipEmptyParts)) {
@@ -203,7 +206,14 @@ EditResult setResourceNames(Project &project, int index, const QString &text, co
         }
         const Resource &res = copy.resources.at(r);
         int units = 100; // full-time, or one unit of material
-        if (!m.captured(2).trimmed().isEmpty()) {
+        std::optional<qint64> cost;
+        if (res.type == ResourceType::Cost && !m.captured(2).trimmed().isEmpty()) {
+            const std::optional<qint64> amount = parseMoney(m.captured(2), copy.info.currency, locale);
+            if (!amount || *amount < 0) {
+                return EditResult::fail(QStringLiteral("“%1” is not an amount for %2.").arg(m.captured(2).trimmed(), name));
+            }
+            cost = *amount;
+        } else if (!m.captured(2).trimmed().isEmpty()) {
             const std::optional<int> parsed = parseUnits(m.captured(2), res.type);
             if (!parsed) {
                 return EditResult::fail(QStringLiteral("“%1” is not an amount of %2.").arg(m.captured(2).trimmed(), name));
@@ -215,7 +225,7 @@ EditResult setResourceNames(Project &project, int index, const QString &text, co
                 return EditResult::fail(QStringLiteral("%1 is listed twice.").arg(name));
             }
         }
-        wanted.append({res.uid, units});
+        wanted.append({res.uid, units, cost});
     }
     const int taskUid = copy.tasks.at(index).uid;
     copy.assignments.removeIf([&](const Assignment &a) {
@@ -233,12 +243,16 @@ EditResult setResourceNames(Project &project, int index, const QString &text, co
         const int existing = copy.assignmentIndex(taskUid, w.resourceUid);
         if (existing >= 0) {
             copy.assignments[existing].units = w.units;
+            if (w.cost) {
+                copy.assignments[existing].costInput = *w.cost;
+            }
         } else {
             Assignment a;
             a.uid = copy.nextAssignmentUid();
             a.taskUid = taskUid;
             a.resourceUid = w.resourceUid;
             a.units = w.units;
+            a.costInput = w.cost.value_or(0);
             copy.assignments.append(a);
         }
     }

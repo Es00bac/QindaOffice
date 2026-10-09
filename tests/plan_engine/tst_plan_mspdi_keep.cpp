@@ -96,11 +96,14 @@ private slots:
         QVERIFY(!setTaskField(p, p.taskIndex(2), str("priority"), str("1200"), QLocale::c()).ok);
         QVERIFY(setTaskField(p, p.taskIndex(2), str("deadline"), str("NA"), QLocale::c()).ok);
         QCOMPARE(p.tasks.at(p.taskIndex(2)).deadline, kNoDate);
-        // The recurring exception and the work weeks are reported, not lost.
+        // M79: the recurring exception and the work weeks are scheduled now
+        // (tst_plan_mspdi_m79), so the import has nothing to report on them.
         const QString warnings = r.warnings.join(QLatin1Char('\n'));
-        QVERIFY(warnings.contains(str("Monday review")));
-        QVERIFY(warnings.contains(str("work weeks")));
-        QVERIFY(warnings.contains(str("baseline 4")));
+        QVERIFY(!warnings.contains(str("Monday review")));
+        QVERIFY(!warnings.contains(str("work weeks")));
+        // M79: baseline 4 is modelled now, not only kept.
+        QVERIFY(design.baselines[4].set);
+        QCOMPARE(design.baselines[4].start, toMinutes(QDate(2026, 3, 9), 8 * 60));
     }
 
     void everythingElseRoundTripsInProjectsOrder()

@@ -15,7 +15,10 @@
 // "actualFinish" "baselineStart" "baselineFinish" "baselineDuration"
 // "baselineCost" "startVariance" "finishVariance" "durationVariance"
 // "costVariance" "totalSlack" "freeSlack" "earlyStart" "earlyFinish"
-// "lateStart" "lateFinish" "active" "milestone" "calendar" "critical";
+// "lateStart" "lateFinish" "active" "milestone" "calendar" "critical"
+// "priority" "deadline" (M63) "actualDuration" "remainingDuration"
+// "actualWork" "remainingWork" "baselineWork" "workVariance"
+// "levelingDelay" "preLeveledStart" "preLeveledFinish" (M79);
 // resource fields "id" "indicators" "name" "type" "materialLabel"
 // "initials" "group" "maxUnits" "standardRate" "costPerUse" "calendar"
 // "email" "work" "cost" "overallocated".

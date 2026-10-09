@@ -55,28 +55,8 @@ void PlanHost::createActions()
     const auto on = [this](const char *raw, auto &&slot) {
         connect(action(id(raw)), &ActionEntry::triggered, this, std::forward<decltype(slot)>(slot));
     };
-    const QStringList views = viewKeys();
-    const char *viewIds[] = {"planViewGanttAction",         "planViewTaskSheetAction", "planViewResourceSheetAction",
-                             "planViewResourceUsageAction", "planViewCalendarAction",  "planViewReportsAction"};
-    for (int i = 0; i < views.size(); ++i) {
-        const QString key = views.at(i);
-        connect(action(id(viewIds[i])), &ActionEntry::toggled, this, [this, key](bool checked) {
-            if (checked) {
-                setCurrentView(key);
-            }
-        });
-    }
-    const QStringList tableIds = PlanService::tableIds();
-    const char *tableActions[] = {"planTableEntryAction", "planTableTrackingAction", "planTableVarianceAction",
-                                  "planTableCostAction", "planTableScheduleAction"};
-    for (int i = 0; i < tableIds.size(); ++i) {
-        const QString table = tableIds.at(i);
-        connect(action(id(tableActions[i])), &ActionEntry::toggled, this, [this, table](bool checked) {
-            if (checked) {
-                m_service->setTable(table);
-            }
-        });
-    }
+    // Views, tables, filters, sorts, baselines shown (plan_host_views.cpp).
+    createViewActions();
     const QList<std::pair<const char *, const char *>> scales{{"planTimescaleDaysAction", "days"},
                                                               {"planTimescaleWeeksAction", "weeks"},
                                                               {"planTimescaleMonthsAction", "months"}};
@@ -134,6 +114,10 @@ void PlanHost::createActions()
         setCurrentView(QStringLiteral("resources"));
         report(m_service->addResource(tr("New material"), QStringLiteral("material")));
     });
+    on("planAddCostResourceAction", [this] {
+        setCurrentView(QStringLiteral("resources"));
+        report(m_service->addResource(tr("New cost"), QStringLiteral("cost")));
+    });
     on("planDeleteResourceAction", [this] { report(m_service->deleteResource(m_service->currentResourceUid())); });
     on("planResourceInfoAction", [this] { emit resourceInfoRequested(m_service->currentResourceUid()); });
     on("planResourceCalendarAction", [this] {
@@ -169,7 +153,9 @@ void PlanHost::createActions()
     const QList<std::pair<const char *, const char *>> reports{{"planReportOverviewAction", "overview"},
                                                                {"planReportCriticalAction", "critical"},
                                                                {"planReportResourcesAction", "resources"},
-                                                               {"planReportLateAction", "late"}};
+                                                               {"planReportLateAction", "late"},
+                                                               {"planReportCostAction", "cost"}, // M79
+                                                               {"planReportWorkAction", "work"}};
     for (const auto &[raw, reportKey] : reports) {
         const QString key = id(reportKey);
         on(raw, [this, key] {
@@ -185,6 +171,7 @@ void PlanHost::createActions()
     on("planImportMspdiAction", [this] { emit fileRequested(QStringLiteral("import")); });
     on("planPageSetupAction", [this] { emit pageSetupRequested(); });
     on("planGoToTodayAction", [this] { emit goToTodayRequested(); });
+    createTrackingActions(); // M79 (plan_host_views.cpp)
     wireEditCommands();
 }
 

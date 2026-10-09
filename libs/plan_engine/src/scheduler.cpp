@@ -333,8 +333,17 @@ void SchedulePass::forwardLeaf(int i, Minutes floor)
             break;
         }
     }
+    t.unleveledStart = d > 0 ? c.snapForward(es) : es;
+    // M79: Project's Leveling Delay holds the task back from this early
+    // start (elapsed or working time, leveling.h). A hard constraint pins the
+    // task, so it is never delayed (leveling refuses such tasks too).
+    const bool pinned = t.constraint == ConstraintType::MustStartOn || t.constraint == ConstraintType::MustFinishOn;
+    if (!t.manual && !pinned && t.levelingDelay > 0) {
+        es = t.levelingDelayElapsed ? t.unleveledStart + t.levelingDelay
+                                    : c.add(t.unleveledStart, t.levelingDelay);
+    }
     if (!t.manual && t.levelingFloor != kNoDate) {
-        es = std::max(es, t.levelingFloor);
+        es = std::max(es, t.levelingFloor); // legacy floor (plan_types.h)
     }
     if (d > 0) {
         es = c.snapForward(es);
@@ -409,6 +418,18 @@ void SchedulePass::backward(const QList<int> &order)
             for (const LinkRef &ref : m_outgoing.at(i)) {
                 ceiling = std::min(ceiling, backRequirement(ref));
             }
+            // M79: "Calculate multiple critical paths" — a task that drives
+            // nothing (no successor of its own or above it) ends a path of
+            // its own: its late finish is its early finish, as in Project.
+            if (m_project.info.multipleCriticalPaths && t.effectiveActive && !drivesSuccessor(i)) {
+                ceiling = std::min(ceiling, t.earlyFinish);
+            }
+            // M79: a deadline is a late finish the task must keep (Project:
+            // it moves no date, but slack is measured to it, so a task that
+            // finishes after its deadline has negative slack and is critical).
+            if (t.deadline != kNoDate && t.effectiveActive) {
+                ceiling = std::min(ceiling, t.deadline);
+            }
             if (u >= m_n) {
                 m_exitCeiling[i] = ceiling;
             } else {
@@ -464,8 +485,11 @@ void SchedulePass::backwardLeaf(int i, Minutes ceiling)
         t.lateStart = t.earlyStart;
     }
     t.totalSlack = c.workBetween(t.earlyFinish, lf);
-    t.critical = !complete && t.totalSlack <= 0;
+    // M79: Project's "tasks are critical if slack is less than or equal to
+    // N days" (MSPDI CriticalSlackLimit); 0 by default.
+    t.critical = !complete && t.totalSlack <= criticalLimit();
 }
+
 
 } // namespace Detail
 

@@ -98,6 +98,10 @@ void Reader::readProject()
         } else if (n == QLatin1String("CalendarUID")) {
             m_info.calendarUid = integer(1);
             m_raw.hasCalendarUid = true;
+        } else if (n == QLatin1String("CriticalSlackLimit")) {
+            m_info.criticalSlackDays = std::clamp(integer(0), 0, 999); // M79
+        } else if (n == QLatin1String("MultipleCriticalPaths")) {
+            m_info.multipleCriticalPaths = boolean(); // M79
         } else if (n == QLatin1String("ScheduleFromStart")) {
             if (!boolean()) {
                 warn(QStringLiteral("The project is scheduled from its finish date; it is imported as scheduled from its start."));
@@ -148,39 +152,15 @@ void Reader::readLink(RawTask &raw)
     raw.links.append(link);
 }
 
-// Baselines 0–2 are modelled; Project's 3–10 are kept as written.
-void Reader::readBaseline(RawTask &raw, QList<Kept> &kept, const QString &after)
+// M79: every baseline (0–10) is modelled; the element is kept as written
+// so an unchanged baseline goes back byte for byte (mspdi_baselines.cpp).
+RawBaseline Reader::readBaseline()
 {
-    const QString fragment = capture(in());
-    RawBaseline b;
-    b.data.set = true;
-    reparse(fragment, [&] {
-        while (in().readNextStartElement()) {
-            const QStringView l = in().name();
-            if (l == u"Number") {
-                b.number = integer(-1);
-            } else if (l == u"Start") {
-                b.data.start = parseWireDateTime(text());
-            } else if (l == u"Finish") {
-                b.data.finish = parseWireDateTime(text());
-            } else if (l == u"Duration") {
-                b.data.duration = duration();
-            } else if (l == u"Work") {
-                b.data.work = duration();
-            } else if (l == u"Cost") {
-                b.costCents = scaled(0, 0);
-            } else {
-                in().skipCurrentElement();
-            }
-        }
-    });
-    if (b.number >= 0 && b.number < kBaselineCount) {
-        raw.baselines.append(b);
-        return;
+    RawBaseline b = parseBaseline(capture(in()));
+    if (b.number < 0 || b.number >= kBaselineCount) {
+        warn(QStringLiteral("A baseline with an unknown number (%1) was dropped.").arg(b.number));
     }
-    kept << Kept{QStringLiteral("Baseline"), after, fragment, false};
-    warn(QStringLiteral("Baselines 3–10 are kept in the file but QindaPlan shows baselines 0–2 only (baseline %1).")
-             .arg(b.number));
+    return b;
 }
 
 void Reader::readTask()
@@ -253,7 +233,19 @@ void Reader::readTask()
         } else if (n == QLatin1String("PredecessorLink")) {
             readLink(raw);
         } else if (n == QLatin1String("Baseline")) {
-            readBaseline(raw, kept, previous);
+            const RawBaseline b = readBaseline();
+            if (b.number >= 0 && b.number < kBaselineCount) {
+                raw.baselines.append(b);
+            }
+        } else if (n == QLatin1String("LevelingDelay")) {
+            raw.hasLevelingDelay = true; // M79
+            raw.levelingDelayTenths = scaled(0, 0);
+        } else if (n == QLatin1String("LevelingDelayFormat")) {
+            raw.levelingDelayFormat = integer(8);
+        } else if (n == QLatin1String("PreLeveledStart")) {
+            t.preLeveledStart = parseWireDateTime(text());
+        } else if (n == QLatin1String("PreLeveledFinish")) {
+            t.preLeveledFinish = parseWireDateTime(text());
         } else if (n == QLatin1String("WBS") || n == QLatin1String("OutlineNumber") || n == QLatin1String("Work")
                    || n == QLatin1String("ManualDuration") || n == QLatin1String("Summary")
                    || n == QLatin1String("Critical") || n == QLatin1String("OverAllocated")
@@ -346,7 +338,14 @@ void Reader::readAssignment()
                 raw.units = std::clamp<qint64>(scaledDecimal(value, 2).value_or(100), 0, 100000000);
             }
         } else if (n == QLatin1String("Cost")) {
-            in().skipCurrentElement(); // computed
+            // Computed — except for a cost resource, whose assignment's
+            // Cost is what was entered (M79, assemble decides).
+            raw.costCents = scaled(0, 0);
+        } else if (n == QLatin1String("Baseline")) {
+            const RawBaseline b = readBaseline(); // M79
+            if (b.number >= 0 && b.number < kBaselineCount) {
+                raw.baselines.append(b);
+            }
         } else {
             keep(kept, Kind::Assignment, previous);
         }

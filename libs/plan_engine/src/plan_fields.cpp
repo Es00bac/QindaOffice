@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The task sheet's fields as text (plan_edit.h).
 #include "baselines.h"
+#include "leveling.h"
 #include "plan_edit.h"
 #include "plan_fields_p.h"
 #include "plan_time.h"
@@ -62,6 +63,17 @@ constexpr FieldInfo kTaskFields[] = {
     {"milestone", "Milestone", true},
     {"calendar", "Task Calendar", true},
     {"critical", "Critical", false},
+    // M79: tracking by work and duration, leveling (Project's Tracking,
+    // Work, Delay and Baseline tables).
+    {"actualDuration", "Act. Dur.", true},
+    {"remainingDuration", "Rem. Dur.", true},
+    {"actualWork", "Act. Work", false},
+    {"remainingWork", "Rem. Work", false},
+    {"baselineWork", "Baseline Work", false},
+    {"workVariance", "Work Var.", false},
+    {"levelingDelay", "Leveling Delay", true},
+    {"preLeveledStart", "Preleveled Start", false},
+    {"preLeveledFinish", "Preleveled Finish", false},
 };
 
 const FieldInfo *taskField(const QString &id)
@@ -269,6 +281,43 @@ QString taskFieldText(const Project &project, int index, const QString &field, c
     }
     if (field == QLatin1String("critical")) {
         return yesNo(t.critical);
+    }
+    return trackingFieldText(project, index, field, locale);
+}
+
+QString trackingFieldText(const Project &project, int index, const QString &field, const QLocale &locale)
+{
+    const Task &t = project.tasks.at(index);
+    const DurationFormat fmt = durationFormatOf(project.info);
+    const Minutes actual = actualDurationOf(t, project.info.minutesPerDay);
+    const Minutes actualWork = divRound(t.work * t.percentComplete, 100);
+    if (field == QLatin1String("actualDuration")) {
+        return formatDuration(actual, t.summary ? DurationUnit::Days : t.durationUnit, fmt, false, locale);
+    }
+    if (field == QLatin1String("remainingDuration")) {
+        return formatDuration(t.duration - actual, t.summary ? DurationUnit::Days : t.durationUnit, fmt, false, locale);
+    }
+    if (field == QLatin1String("actualWork")) {
+        return formatWork(actualWork, locale);
+    }
+    if (field == QLatin1String("remainingWork")) {
+        return formatWork(t.work - actualWork, locale);
+    }
+    if (field == QLatin1String("baselineWork")) {
+        return t.baselines[0].set ? formatWork(t.baselines[0].work, locale) : QStringLiteral("NA");
+    }
+    if (field == QLatin1String("workVariance")) {
+        const Variance v = variance(project, t, 0);
+        return v.valid ? formatWork(v.work, locale) : QString();
+    }
+    if (field == QLatin1String("levelingDelay")) {
+        return formatLevelingDelay(t, project.info, locale);
+    }
+    if (field == QLatin1String("preLeveledStart")) {
+        return t.preLeveledStart == kNoDate ? QStringLiteral("NA") : formatDate(t.preLeveledStart, locale);
+    }
+    if (field == QLatin1String("preLeveledFinish")) {
+        return t.preLeveledFinish == kNoDate ? QStringLiteral("NA") : formatDate(t.preLeveledFinish, locale);
     }
     return {};
 }

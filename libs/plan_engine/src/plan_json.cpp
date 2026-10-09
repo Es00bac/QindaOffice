@@ -133,11 +133,28 @@ QJsonObject taskToJson(const Task &t)
     if (t.fixedCost != 0) {
         o.insert(QStringLiteral("fixedCost"), t.fixedCost);
     }
-    putDate(o, "levelingFloor", t.levelingFloor);
+    // M79: Project's Leveling Delay (a legacy "levelingFloor" is only read).
+    if (t.levelingDelay != 0) {
+        o.insert(QStringLiteral("levelingDelay"), t.levelingDelay);
+        if (!t.levelingDelayElapsed) {
+            o.insert(QStringLiteral("levelingDelayWorking"), true);
+        }
+    }
+    putDate(o, "preLeveledStart", t.preLeveledStart);
+    putDate(o, "preLeveledFinish", t.preLeveledFinish);
     putString(o, "notes", t.notes);
-    QJsonArray baselines;
+    const QJsonArray baselines = baselinesToJson(t.baselines);
+    if (!baselines.isEmpty()) {
+        o.insert(QStringLiteral("baselines"), baselines);
+    }
+    return o;
+}
+
+QJsonArray baselinesToJson(const std::array<BaselineData, kBaselineCount> &list)
+{
+    QJsonArray out;
     for (int n = 0; n < kBaselineCount; ++n) {
-        const BaselineData &b = t.baselines[size_t(n)];
+        const BaselineData &b = list[size_t(n)];
         if (!b.set) {
             continue;
         }
@@ -147,12 +164,27 @@ QJsonObject taskToJson(const Task &t)
                       {QStringLiteral("cost"), b.cost}};
         putDate(x, "start", b.start);
         putDate(x, "finish", b.finish);
-        baselines.append(x);
+        out.append(x);
     }
-    if (!baselines.isEmpty()) {
-        o.insert(QStringLiteral("baselines"), baselines);
+    return out;
+}
+
+void baselinesFromJson(const QJsonValue &value, std::array<BaselineData, kBaselineCount> *list)
+{
+    for (const QJsonValue &v : value.toArray()) {
+        const QJsonObject x = v.toObject();
+        const int n = x.value(QStringLiteral("number")).toInt(-1);
+        if (n < 0 || n >= kBaselineCount) {
+            continue;
+        }
+        BaselineData &b = (*list)[size_t(n)];
+        b.set = true;
+        b.start = date(x, "start");
+        b.finish = date(x, "finish");
+        b.duration = integer(x, "duration");
+        b.work = integer(x, "work");
+        b.cost = integer(x, "cost");
     }
-    return o;
 }
 
 Task taskFromJson(const QJsonObject &o, QStringList *warnings)
@@ -208,26 +240,18 @@ Task taskFromJson(const QJsonObject &o, QStringList *warnings)
     t.actualFinish = date(o, "actualFinish");
     t.calendarUid = o.value(QStringLiteral("calendarUid")).toInt(-1);
     t.fixedCost = integer(o, "fixedCost");
-    t.levelingFloor = date(o, "levelingFloor");
+    t.levelingFloor = date(o, "levelingFloor"); // legacy: readPlanJson converts it
+    t.levelingDelay = std::max<qint64>(0, integer(o, "levelingDelay"));
+    t.levelingDelayElapsed = !o.value(QStringLiteral("levelingDelayWorking")).toBool();
+    t.preLeveledStart = date(o, "preLeveledStart");
+    t.preLeveledFinish = date(o, "preLeveledFinish");
     t.notes = o.value(QStringLiteral("notes")).toString();
-    for (const QJsonValue &v : o.value(QStringLiteral("baselines")).toArray()) {
-        const QJsonObject x = v.toObject();
-        const int n = x.value(QStringLiteral("number")).toInt(-1);
-        if (n < 0 || n >= kBaselineCount) {
-            continue;
-        }
-        BaselineData &b = t.baselines[size_t(n)];
-        b.set = true;
-        b.start = date(x, "start");
-        b.finish = date(x, "finish");
-        b.duration = integer(x, "duration");
-        b.work = integer(x, "work");
-        b.cost = integer(x, "cost");
-    }
+    baselinesFromJson(o.value(QStringLiteral("baselines")), &t.baselines);
     t.extra = extraOf(o, {"uid", "guid", "name", "level", "duration", "durationUnit", "estimated", "milestone", "manual",
                           "manualStart", "manualFinish", "active", "constraint", "constraintDate", "priority",
                           "deadline", "predecessors",
                           "percentComplete", "actualStart", "actualFinish", "calendarUid", "fixedCost", "levelingFloor",
+                          "levelingDelay", "levelingDelayWorking", "preLeveledStart", "preLeveledFinish",
                           "notes", "baselines"});
     return t;
 }

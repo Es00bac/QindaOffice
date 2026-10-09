@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Working-time arithmetic (work_calendar.h) and the text forms of dates,
 // durations and money (plan_time.h), against hand-computed answers on the
-// standard calendar in March 2026 (Monday the 2nd).
+// standard calendar in March 2026 (Monday the 2nd); M79: Project's
+// recurring exceptions and alternative work weeks.
 
 #include "plan_fixture.h"
 #include "work_calendar.h"
@@ -129,6 +130,98 @@ private slots:
         QCOMPARE(dateOf(at(2, 23, 59)), QDate(2026, 3, 2));
         QCOMPARE(minuteOfDay(at(2, 13, 30)), 13 * 60 + 30);
         QCOMPARE(dateOf(toMinutes(QDate(1969, 12, 31), 600)), QDate(1969, 12, 31));
+    }
+
+    void recurringExceptionsAndWorkWeeks()
+    {
+        // M79 (D-088): Project's recurring exceptions and alternative work
+        // weeks, by hand on the 2026 calendar.
+        Project p = newProject(QDate(2026, 3, 2));
+        Calendar &cal = p.calendars[0];
+        using Kind = RecurringException::Kind;
+        RecurringException fortnightly; // every 2nd week, Mondays and Fridays, March
+        fortnightly.kind = Kind::Weekly;
+        fortnightly.from = QDate(2026, 3, 2);
+        fortnightly.to = QDate(2026, 3, 31);
+        fortnightly.every = 2;
+        fortnightly.daysOfWeek = 0b0010001;
+        RecurringException christmas;
+        christmas.kind = Kind::YearlyByDay;
+        christmas.from = QDate(2026, 1, 1);
+        christmas.to = QDate(2030, 12, 31);
+        christmas.month = 12;
+        christmas.day = 25;
+        RecurringException thanksgiving; // the fourth Thursday of November
+        thanksgiving.kind = Kind::YearlyByPosition;
+        thanksgiving.from = QDate(2026, 1, 1);
+        thanksgiving.to = QDate(2030, 12, 31);
+        thanksgiving.month = 11;
+        thanksgiving.position = 3;
+        thanksgiving.weekday = 4;
+        RecurringException monthEnd; // day 31 of every month: its last day
+        monthEnd.kind = Kind::MonthlyByDay;
+        monthEnd.from = QDate(2026, 4, 1);
+        monthEnd.to = QDate(2026, 12, 31);
+        monthEnd.day = 31;
+        RecurringException lastFriday;
+        lastFriday.kind = Kind::MonthlyByPosition;
+        lastFriday.from = QDate(2026, 1, 1);
+        lastFriday.to = QDate(2026, 12, 31);
+        lastFriday.position = 4;
+        lastFriday.weekday = 5;
+        RecurringException everyThird; // a short working day every third day
+        everyThird.kind = Kind::EveryDays;
+        everyThird.from = QDate(2026, 3, 9);
+        everyThird.to = QDate(2026, 3, 15);
+        everyThird.every = 3;
+        everyThird.times = {{10 * 60, 14 * 60}};
+        cal.recurring = {fortnightly, christmas, thanksgiving, monthEnd, lastFriday, everyThird};
+        // A dated exception beats a recurring one.
+        cal.exceptions.append({QDate(2026, 3, 16), QDate(2026, 3, 16), QStringLiteral("Half day"), {{8 * 60, 12 * 60}}});
+        // Summer hours: Fridays off, Mondays 07–15.
+        WorkWeek summer;
+        summer.name = QStringLiteral("Summer");
+        summer.from = QDate(2026, 7, 1);
+        summer.to = QDate(2026, 8, 31);
+        summer.week[0] = DayHours{{7 * 60, 15 * 60}};
+        summer.week[4] = DayHours{};
+        cal.workWeeks = {summer};
+        const WorkCalendar c(p, 1);
+        // The fortnight: 7-day blocks from Mon 2 Mar — blocks 0, 2, 4 count.
+        QCOMPARE(c.minutesOn(QDate(2026, 3, 2)), 0);
+        QCOMPARE(c.minutesOn(QDate(2026, 3, 4)), kDay);
+        QCOMPARE(c.minutesOn(QDate(2026, 3, 6)), 0);
+        QCOMPARE(c.minutesOn(QDate(2026, 3, 13)), kDay); // block 1: off the fortnight
+        QCOMPARE(c.minutesOn(QDate(2026, 3, 16)), 240);  // the dated half day beats it
+        QCOMPARE(c.minutesOn(QDate(2026, 3, 20)), 0);
+        QCOMPARE(c.minutesOn(QDate(2026, 3, 30)), 0);
+        QCOMPARE(c.minutesOn(QDate(2026, 4, 6)), kDay);  // after the range
+        // Every third day from Mon 9 Mar, 10–14: the 9th, 12th and 15th.
+        QCOMPARE(c.minutesOn(QDate(2026, 3, 9)), 240);
+        QCOMPARE(c.minutesOn(QDate(2026, 3, 10)), kDay);
+        QCOMPARE(c.minutesOn(QDate(2026, 3, 12)), 240);
+        QCOMPARE(c.minutesOn(QDate(2026, 3, 15)), 240);  // even a Sunday
+        QCOMPARE(c.minutesOn(QDate(2026, 12, 25)), 0);
+        QCOMPARE(c.minutesOn(QDate(2026, 12, 24)), kDay);
+        QCOMPARE(c.minutesOn(QDate(2026, 11, 26)), 0);  // fourth Thursday
+        QCOMPARE(c.minutesOn(QDate(2026, 11, 19)), kDay);
+        QCOMPARE(c.minutesOn(QDate(2026, 4, 30)), 0);   // "day 31" in April
+        QCOMPARE(c.minutesOn(QDate(2026, 6, 30)), 0);
+        QCOMPARE(c.minutesOn(QDate(2026, 3, 27)), 0);   // last Friday of March
+        QCOMPARE(c.minutesOn(QDate(2026, 2, 20)), kDay);
+        QCOMPARE(c.minutesOn(QDate(2026, 7, 3)), 0);    // summer Friday
+        QCOMPARE(c.hours(QDate(2026, 7, 6)).first().from, 7 * 60);
+        QCOMPARE(c.minutesOn(QDate(2026, 7, 7)), kDay); // a day the work week leaves alone
+        QCOMPARE(c.minutesOn(QDate(2026, 7, 31)), 0);   // last Friday wins inside the work week
+        // A resource calendar inherits the project's recurring holidays.
+        Calendar mine;
+        mine.uid = 2;
+        mine.name = QStringLiteral("Mine");
+        mine.baseUid = 1;
+        p.calendars.append(mine);
+        QCOMPARE(WorkCalendar(p, 2).minutesOn(QDate(2026, 12, 25)), 0);
+        // Scheduling across Christmas: Wed 23, Thu 24, Mon 28 Dec.
+        QCOMPARE_AT(c.add(toMinutes(QDate(2026, 12, 23), 480), 3 * kDay), toMinutes(QDate(2026, 12, 28), 17 * 60));
     }
 
     void money()

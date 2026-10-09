@@ -2,7 +2,8 @@
 #pragma once
 
 // The reports (Report tab): project overview, critical tasks, resource
-// overview, late tasks — built once as data (figures as text, already
+// overview, late tasks, and (M79) Project's Cost Overview and Work Overview
+// dashboards — built once as data (figures as text, already
 // formatted), shown by the app's report view and painted for print and PDF
 // by plan_output's report painter, so screen and paper say the same thing.
 //
@@ -49,7 +50,8 @@ struct PlanReport {
     QList<ReportTable> tables;
 };
 
-[[nodiscard]] QStringList reportIds(); // "overview", "critical", "resources", "late"
+// "overview", "critical", "resources", "late", "cost", "work" (M79).
+[[nodiscard]] QStringList reportIds();
 [[nodiscard]] QString reportTitle(const QString &id);
 // An unknown id builds the overview.
 [[nodiscard]] PlanReport buildReport(const Project &project, const QString &id, const QDate &today,

@@ -6,9 +6,11 @@
 // shared); not thread-safe (the cache is mutable) — one per thread.
 //
 // AGENT-CONTRACT (resolution order for a date, documented in docs/plan.md):
-//   the calendar's own exception, then its bases' exceptions (a project
-//   holiday is a holiday for every resource), then the calendar's own week
-//   day, then its bases' week day; nothing = non-working.
+//   the calendar's own exception — dated, then recurring (M79) — then its
+//   bases' exceptions (a project holiday is a holiday for every resource),
+//   then an alternative work week covering the date (M79; own first, then
+//   the bases'; a day it leaves unset falls through), then the calendar's
+//   own week day, then its bases' week day; nothing = non-working.
 //
 // AGENT-CONTRACT (instant arithmetic):
 //   add(s, w)       the earliest t with working minutes in [s, t) == w, so a

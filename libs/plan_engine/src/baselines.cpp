@@ -30,6 +30,18 @@ int setBaseline(Project &project, int number, const QList<int> &taskUids)
         b.work = t.work;
         b.cost = t.cost;
         ++saved;
+        for (Assignment &a : project.assignments) {
+            if (a.taskUid != t.uid) {
+                continue;
+            }
+            BaselineData &ab = a.baselines[size_t(number)];
+            ab.set = true;
+            ab.start = t.start;
+            ab.finish = t.finish;
+            ab.duration = t.duration;
+            ab.work = a.work;
+            ab.cost = a.cost;
+        }
     }
     return saved;
 }
@@ -41,13 +53,26 @@ int clearBaseline(Project &project, int number, const QList<int> &taskUids)
     }
     int cleared = 0;
     for (Task &t : project.tasks) {
-        if ((!taskUids.isEmpty() && !taskUids.contains(t.uid)) || !t.baselines[size_t(number)].set) {
+        if (!taskUids.isEmpty() && !taskUids.contains(t.uid)) {
+            continue;
+        }
+        for (Assignment &a : project.assignments) {
+            if (a.taskUid == t.uid) {
+                a.baselines[size_t(number)] = BaselineData{};
+            }
+        }
+        if (!t.baselines[size_t(number)].set) {
             continue;
         }
         t.baselines[size_t(number)] = BaselineData{};
         ++cleared;
     }
     return cleared;
+}
+
+QString baselineName(int number)
+{
+    return number <= 0 ? QStringLiteral("Baseline") : QStringLiteral("Baseline %1").arg(number);
 }
 
 bool hasBaseline(const Project &project, int number)

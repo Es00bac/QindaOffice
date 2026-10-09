@@ -20,3 +20,11 @@ qqo_add_plan_test(tst_plan_mspdi)
 # M63 (D-071): what Microsoft Project XML holds beyond the model is kept and
 # written back in Project's order.
 qqo_add_plan_test(tst_plan_mspdi_keep)
+# M79 (D-088): Project's scheduling, tracking and views — the critical path
+# with deadlines and the slack options, leveling options and delays, filters,
+# sorts, the Network Diagram's layout, usage, reports and baselines 0–10,
+# and their Microsoft Project XML.
+qqo_add_plan_test(tst_plan_critical)
+qqo_add_plan_test(tst_plan_leveling)
+qqo_add_plan_test(tst_plan_views)
+qqo_add_plan_test(tst_plan_mspdi_m79)

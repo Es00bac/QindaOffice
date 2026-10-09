@@ -5,8 +5,10 @@ import QindaOffice.Shell
 import QindaOffice.Plan.App
 
 // The QindaPlan window (D-051): one project per window. A rail picks the
-// view — Gantt, Task Sheet, Resource Sheet, Resource Usage, Calendar,
-// Reports — and the window answers the host's requests with dialogs.
+// view — Gantt, Tracking Gantt, Leveling Gantt, Network Diagram, Task
+// Sheet, Task Usage, Resource Sheet, Resource Usage, Calendar, Reports
+// (M79 added four, D-088) — and the window answers the host's requests
+// with dialogs.
 //
 // AGENT-NOTE: every date, span and amount arrives from PlanService already
 // formatted by the engine; this QML never computes schedule figures.
@@ -49,7 +51,11 @@ OfficeWindow {
                 tooltip: qsTr("Views")
                 groups: [{ id: "views", label: window.plan !== null ? window.plan.title : "", entries: [
                     { id: "gantt", label: qsTr("Gantt Chart"), destination: "planViewGanttAction", iconName: "chart-bar" },
+                    { id: "tracking", label: qsTr("Tracking Gantt"), destination: "planViewTrackingGanttAction", iconName: "activity" },
+                    { id: "leveling", label: qsTr("Leveling Gantt"), destination: "planViewLevelingGanttAction", iconName: "between-horizontal-start" },
+                    { id: "network", label: qsTr("Network Diagram"), destination: "planViewNetworkAction", iconName: "workflow" },
                     { id: "sheet", label: qsTr("Task Sheet"), destination: "planViewTaskSheetAction", iconName: "table" },
+                    { id: "taskUsage", label: qsTr("Task Usage"), destination: "planViewTaskUsageAction", iconName: "chart-column-big" },
                     { id: "resources", label: qsTr("Resources"), destination: "planViewResourceSheetAction", iconName: "users" },
                     { id: "usage", label: qsTr("Resource Usage"), destination: "planViewResourceUsageAction", iconName: "chart-column" },
                     { id: "calendar", label: qsTr("Calendar"), destination: "planViewCalendarAction", iconName: "calendar-days" },
@@ -71,8 +77,24 @@ OfficeWindow {
                 GanttWorkspace {
                     id: gantt
                     anchors.fill: parent
-                    visible: window.view === "gantt" || window.view === "sheet"
-                    showChart: window.view === "gantt"
+                    visible: ["gantt", "sheet", "tracking", "leveling"].indexOf(window.view) >= 0
+                    showChart: window.view !== "sheet"
+                    plan: window.plan
+                    host: window.planHost
+                }
+                NetworkView {
+                    id: network
+                    objectName: "planNetworkView"
+                    anchors.fill: parent
+                    visible: window.view === "network"
+                    plan: window.plan
+                    host: window.planHost
+                    onOpenTask: function(taskId) { taskInfo.openFor(taskId, "general") }
+                }
+                TaskUsageView {
+                    objectName: "planTaskUsageView"
+                    anchors.fill: parent
+                    visible: window.view === "taskUsage"
                     plan: window.plan
                     host: window.planHost
                 }
@@ -115,6 +137,8 @@ OfficeWindow {
     ResourceInfoDialog { id: resourceInfo; plan: window.plan; host: window.planHost }
     PlanFileDialogs { id: files; plan: window.plan; host: window.planHost }
     FindTaskDialog { id: findDialog; plan: window.plan; host: window.planHost }
+    UpdateTasksDialog { id: updateTasks; plan: window.plan }
+    FilterDialog { id: filterDialog; plan: window.plan }
 
     Binding {
         target: window.planHost
@@ -137,12 +161,15 @@ OfficeWindow {
         function onResourceInfoRequested(uid) { resourceInfo.openFor(uid) }
         function onFindRequested(replace) { findDialog.openFor(replace) }
         function onFileRequested(what) { files.request(what) }
-        function onScrollToTaskRequested(taskId) { gantt.reveal(taskId) }
+        function onScrollToTaskRequested(taskId) { window.view === "network" ? network.reveal(taskId) : gantt.reveal(taskId) }
         function onGoToTodayRequested() { gantt.goToToday() }
+        function onFilterRequested(filterId) { filterDialog.openFor(filterId) }
+        function onUpdateTasksRequested() { updateTasks.openDialog() }
+        function onLevelingOptionsRequested() { level.openDialog() }
     }
     Connections {
         target: window.plan
         function onNotify(title, text, variant) { window.showToast(title, text, variant) }
-        function onRevealTask(taskId) { gantt.reveal(taskId) }
+        function onRevealTask(taskId) { window.view === "network" ? network.reveal(taskId) : gantt.reveal(taskId) }
     }
 }

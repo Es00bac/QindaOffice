@@ -58,6 +58,8 @@ inline std::span<const PlanCommand> planCommands()
         {"planAssignResourcesAction", QT_TRANSLATE_NOOP("PlanHost", "&Assign Resources…"), "Alt+F10", "user-plus", nullptr},
         {"planAddResourceAction", QT_TRANSLATE_NOOP("PlanHost", "Add &Work Resource"), "", "user-round", nullptr},
         {"planAddMaterialAction", QT_TRANSLATE_NOOP("PlanHost", "Add &Material Resource"), "", "package", nullptr},
+        // M79: Project's cost resources (an amount per assignment).
+        {"planAddCostResourceAction", QT_TRANSLATE_NOOP("PlanHost", "Add C&ost Resource"), "", "circle-dollar-sign", nullptr},
         {"planDeleteResourceAction", QT_TRANSLATE_NOOP("PlanHost", "&Delete Resource"), "", "trash", nullptr},
         {"planResourceInfoAction", QT_TRANSLATE_NOOP("PlanHost", "Resource &Information…"), "", "contact", nullptr},
         {"planResourceCalendarAction", QT_TRANSLATE_NOOP("PlanHost", "Resource &Calendar…"), "", "calendar-range", nullptr},
@@ -101,6 +103,58 @@ inline std::span<const PlanCommand> planCommands()
         {"planShowBaselineAction", QT_TRANSLATE_NOOP("PlanHost", "&Baseline Bars"), "", "baseline", ""},
         {"planShowBarTextAction", QT_TRANSLATE_NOOP("PlanHost", "&Resource Names on Bars"), "", "tag", ""},
         {"planUsageWeeksAction", QT_TRANSLATE_NOOP("PlanHost", "Usage by &Week"), "", "calendar-range", ""},
+        // ---- M79 (D-088): Project's scheduling, tracking and views ----
+        // More views in the planView group (no Ctrl+digit: Project has none).
+        {"planViewTrackingGanttAction", QT_TRANSLATE_NOOP("PlanHost", "Trac&king Gantt"), "", "activity", "planView"},
+        {"planViewLevelingGanttAction", QT_TRANSLATE_NOOP("PlanHost", "Le&veling Gantt"), "", "between-horizontal-start", "planView"},
+        {"planViewNetworkAction", QT_TRANSLATE_NOOP("PlanHost", "&Network Diagram"), "", "workflow", "planView"},
+        {"planViewTaskUsageAction", QT_TRANSLATE_NOOP("PlanHost", "Task Us&age"), "", "chart-column-big", "planView"},
+        // Project's Work, Baseline and Delay tables.
+        {"planTableWorkAction", QT_TRANSLATE_NOOP("PlanHost", "&Work Table"), "", "briefcase", "planTable"},
+        {"planTableBaselineAction", QT_TRANSLATE_NOOP("PlanHost", "&Baseline Table"), "", "baseline", "planTable"},
+        {"planTableDelayAction", QT_TRANSLATE_NOOP("PlanHost", "&Delay Table"), "", "timer", "planTable"},
+        // View ▸ Filter (plan_views.h ids) and its related-summaries option.
+        {"planFilterAllAction", QT_TRANSLATE_NOOP("PlanHost", "&All Tasks"), "", "list", "planFilter"},
+        {"planFilterCriticalAction", QT_TRANSLATE_NOOP("PlanHost", "&Critical"), "", "waypoints", "planFilter"},
+        {"planFilterIncompleteAction", QT_TRANSLATE_NOOP("PlanHost", "&Incomplete Tasks"), "", "circle-dot", "planFilter"},
+        {"planFilterCompletedAction", QT_TRANSLATE_NOOP("PlanHost", "C&ompleted Tasks"), "", "circle-check", "planFilter"},
+        {"planFilterLateAction", QT_TRANSLATE_NOOP("PlanHost", "&Late Tasks"), "", "timer", "planFilter"},
+        {"planFilterSlippingAction", QT_TRANSLATE_NOOP("PlanHost", "&Slipping Tasks"), "", "trending-down", "planFilter"},
+        {"planFilterMilestonesAction", QT_TRANSLATE_NOOP("PlanHost", "&Milestones"), "", "diamond", "planFilter"},
+        {"planFilterSummaryAction", QT_TRANSLATE_NOOP("PlanHost", "S&ummary Tasks"), "", "list-tree", "planFilter"},
+        {"planFilterDeadlinesAction", QT_TRANSLATE_NOOP("PlanHost", "Tasks With &Deadlines"), "", "flag", "planFilter"},
+        {"planFilterResourceAction", QT_TRANSLATE_NOOP("PlanHost", "Using &Resource…"), "", "user", "planFilter"},
+        {"planFilterDateRangeAction", QT_TRANSLATE_NOOP("PlanHost", "Date Ra&nge…"), "", "calendar-range", "planFilter"},
+        {"planFilterRelatedSummariesAction", QT_TRANSLATE_NOOP("PlanHost", "Show Related &Summary Rows"), "", "rows-3", ""},
+        // View ▸ Sort (outline kept, as Project's "Keep outline structure").
+        {"planSortIdAction", QT_TRANSLATE_NOOP("PlanHost", "by &ID"), "", "hash", "planSort"},
+        {"planSortStartAction", QT_TRANSLATE_NOOP("PlanHost", "by &Start Date"), "", "calendar-days", "planSort"},
+        {"planSortFinishAction", QT_TRANSLATE_NOOP("PlanHost", "by &Finish Date"), "", "calendar-check", "planSort"},
+        {"planSortPriorityAction", QT_TRANSLATE_NOOP("PlanHost", "by &Priority"), "", "star", "planSort"},
+        {"planSortCostAction", QT_TRANSLATE_NOOP("PlanHost", "by &Cost"), "", "dollar-sign", "planSort"},
+        // Which baseline the Gantt draws (Gantt Chart Format ▸ Baseline).
+        {"planBaselineShown0Action", QT_TRANSLATE_NOOP("PlanHost", "&Baseline"), "", "baseline", "planBaselineShown"},
+        {"planBaselineShown1Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &1"), "", "baseline", "planBaselineShown"},
+        {"planBaselineShown2Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &2"), "", "baseline", "planBaselineShown"},
+        {"planBaselineShown3Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &3"), "", "baseline", "planBaselineShown"},
+        {"planBaselineShown4Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &4"), "", "baseline", "planBaselineShown"},
+        {"planBaselineShown5Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &5"), "", "baseline", "planBaselineShown"},
+        {"planBaselineShown6Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &6"), "", "baseline", "planBaselineShown"},
+        {"planBaselineShown7Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &7"), "", "baseline", "planBaselineShown"},
+        {"planBaselineShown8Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &8"), "", "baseline", "planBaselineShown"},
+        {"planBaselineShown9Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &9"), "", "baseline", "planBaselineShown"},
+        {"planBaselineShown10Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline 1&0"), "", "baseline", "planBaselineShown"},
+        {"planShowSlackAction", QT_TRANSLATE_NOOP("PlanHost", "&Slack"), "", "between-horizontal-end", ""},
+        // Resource ▸ Level.
+        {"planLevelingOptionsAction", QT_TRANSLATE_NOOP("PlanHost", "Leveling &Options…"), "", "settings-2", nullptr},
+        {"planLevelSelectionAction", QT_TRANSLATE_NOOP("PlanHost", "Level &Selection"), "", "lasso-select", nullptr},
+        {"planClearLevelingSelectedAction", QT_TRANSLATE_NOOP("PlanHost", "Clear Leveling of Selected &Tasks"), "", "eraser", nullptr},
+        // Task ▸ tracking.
+        {"planUpdateTasksAction", QT_TRANSLATE_NOOP("PlanHost", "&Update Tasks…"), "", "list-todo", nullptr},
+        {"planMarkOnTrackAction", QT_TRANSLATE_NOOP("PlanHost", "Mark on &Track"), "", "check-check", nullptr},
+        // Report ▸ Dashboards.
+        {"planReportCostAction", QT_TRANSLATE_NOOP("PlanHost", "C&ost Overview"), "", "circle-dollar-sign", nullptr},
+        {"planReportWorkAction", QT_TRANSLATE_NOOP("PlanHost", "&Work Overview"), "", "briefcase", nullptr},
     };
     return kCommands;
 }

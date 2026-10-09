@@ -3,7 +3,8 @@
 # plan_engine: the QindaPlan project model and scheduler (M51, D-051) —
 # tasks, outline, links, working calendars, constraints, the critical-path
 # passes, resources, leveling, baselines, editing operations, the .qplan
-# file format, Microsoft Project XML (MSPDI) and CSV. Qt Core only: no Gui,
+# file format, Microsoft Project XML (MSPDI) and CSV; since M79 (D-088) also
+# Project's filters and sorts and the Network Diagram's layout. Qt Core only: no Gui,
 # no Quick, no desktop archives (AGENTS.md rules 8/9), so every behaviour is
 # testable offscreen.
 # AGENT-GUARD: never add Gui here — painting (print, PDF, timeline PNG)
@@ -14,7 +15,9 @@ add_library(plan_engine STATIC
     src/leveling.cpp
     src/leveling.h
     src/mspdi.h
+    src/mspdi_adopt.cpp
     src/mspdi_assemble.cpp
+    src/mspdi_baselines.cpp
     src/mspdi_common.cpp
     src/mspdi_keep.cpp
     src/mspdi_keep.h
@@ -23,7 +26,10 @@ add_library(plan_engine STATIC
     src/mspdi_reader.cpp
     src/mspdi_reader_calendar.cpp
     src/mspdi_reader_p.h
+    src/mspdi_recurrence.cpp
     src/mspdi_writer.cpp
+    src/network_layout.cpp
+    src/network_layout.h
     src/outline.cpp
     src/outline.h
     src/plan_clipboard.cpp
@@ -39,11 +45,15 @@ add_library(plan_engine STATIC
     src/plan_ops.cpp
     src/plan_reports.cpp
     src/plan_reports.h
+    src/plan_reports_costs.cpp
+    src/plan_reports_p.h
     src/plan_resource_fields.cpp
     src/plan_time.cpp
     src/plan_time.h
     src/plan_types.cpp
     src/plan_types.h
+    src/plan_views.cpp
+    src/plan_views.h
     src/resources.cpp
     src/resources.h
     src/scheduler.cpp

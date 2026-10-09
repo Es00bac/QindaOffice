@@ -4,8 +4,9 @@ import QindaTK as Tk
 import QindaOffice.Plan.App
 
 // Project Information: title, manager, company, start date, status date,
-// the project calendar, currency and hours per day. The finish is the
-// scheduler's and shown read-only. One undo step.
+// the project calendar, currency and hours per day, and (M79) Project's
+// critical path options — the critical slack limit and multiple critical
+// paths. The finish is the scheduler's and shown read-only. One undo step.
 Tk.Dialog {
     id: dialog
 
@@ -29,6 +30,8 @@ Tk.Dialog {
         statusField.text = String(info.statusDate || "")
         currencyField.text = String(info.currency || "")
         hoursField.text = String(info.hoursPerDay || "")
+        slackField.text = String(info.criticalSlackDays || 0)
+        multipleSwitch.checked = info.multipleCriticalPaths === true
         calendarBox.currentIndex = Math.max(0, calendarNames.indexOf(String(info.calendar || "")))
         notesField.text = String(info.notes || "")
         error.visible = false
@@ -40,6 +43,8 @@ Tk.Dialog {
         if (startField.text !== String(info.start || "")) fields.start = startField.text
         if (statusField.text !== String(info.statusDate || "")) fields.statusDate = statusField.text
         if (hoursField.text !== String(info.hoursPerDay || "")) fields.hoursPerDay = hoursField.text
+        if (slackField.text !== String(info.criticalSlackDays || 0)) fields.criticalSlackDays = slackField.text
+        if (multipleSwitch.checked !== (info.multipleCriticalPaths === true)) fields.multipleCriticalPaths = multipleSwitch.checked
         const r = plan.setProjectInfo(fields)
         if (!r.ok) {
             error.text = String(r.error || "")
@@ -68,6 +73,12 @@ Tk.Dialog {
             }
             Tk.PropertyRow { label: qsTr("Currency"); Tk.TextField { id: currencyField; objectName: "projectCurrency"; mono: true } }
             Tk.PropertyRow { label: qsTr("Hours per day"); Tk.TextField { id: hoursField; objectName: "projectHoursPerDay" } }
+            Tk.PropertyRow {
+                label: qsTr("Critical if slack ≤")
+                hint: qsTr("days")
+                Tk.TextField { id: slackField; objectName: "projectCriticalSlack"; mono: true }
+            }
+            Tk.Switch { id: multipleSwitch; objectName: "projectMultipleCriticalPaths"; text: qsTr("Calculate multiple critical paths") }
         }
         Tk.TextArea { id: notesField; rows: 3; placeholderText: qsTr("Notes about the project") }
     }

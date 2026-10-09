@@ -77,6 +77,9 @@ QString resourceFieldTitle(const QString &field)
 
 QString rateText(const Project &project, const Resource &resource, const QLocale &locale)
 {
+    if (resource.type == ResourceType::Cost) {
+        return {}; // M79: a cost resource has no rate
+    }
     const QString money = formatMoney(resource.standardRate, project.info.currency, locale);
     return resource.type == ResourceType::Work ? money + QStringLiteral("/hr") : money;
 }
@@ -97,7 +100,9 @@ QString resourceFieldText(const Project &project, int index, const QString &fiel
         return r.name;
     }
     if (field == QLatin1String("type")) {
-        return r.type == ResourceType::Work ? QStringLiteral("Work") : QStringLiteral("Material");
+        return r.type == ResourceType::Work       ? QStringLiteral("Work")
+               : r.type == ResourceType::Cost ? QStringLiteral("Cost")
+                                              : QStringLiteral("Material");
     }
     if (field == QLatin1String("materialLabel")) {
         return r.materialLabel;
@@ -115,7 +120,7 @@ QString resourceFieldText(const Project &project, int index, const QString &fiel
         return rateText(project, r, locale);
     }
     if (field == QLatin1String("costPerUse")) {
-        return formatMoney(r.costPerUse, project.info.currency, locale);
+        return r.type == ResourceType::Cost ? QString() : formatMoney(r.costPerUse, project.info.currency, locale);
     }
     if (field == QLatin1String("calendar")) {
         const int c = project.calendarIndex(r.calendarUid >= 0 ? r.calendarUid : project.info.calendarUid);
@@ -125,6 +130,9 @@ QString resourceFieldText(const Project &project, int index, const QString &fiel
         return r.email;
     }
     if (field == QLatin1String("work")) {
+        if (r.type == ResourceType::Cost) {
+            return {};
+        }
         if (r.type == ResourceType::Material) {
             const QString q = locale.toString(double(r.work) / 100.0, 'g', 12);
             return r.materialLabel.isEmpty() ? q : q + QLatin1Char(' ') + r.materialLabel;
@@ -173,10 +181,17 @@ EditResult setResourceField(Project &project, int index, const QString &field, c
             r.type = ResourceType::Work;
         } else if (t.compare(QLatin1String("Material"), Qt::CaseInsensitive) == 0) {
             r.type = ResourceType::Material;
+        } else if (t.compare(QLatin1String("Cost"), Qt::CaseInsensitive) == 0) {
+            r.type = ResourceType::Cost; // M79
         } else {
-            return EditResult::fail(QStringLiteral("Type is Work or Material."));
+            return EditResult::fail(QStringLiteral("Type is Work, Material or Cost."));
         }
         return {};
+    }
+    if (r.type == ResourceType::Cost
+        && (field == QLatin1String("maxUnits") || field == QLatin1String("standardRate")
+            || field == QLatin1String("costPerUse"))) {
+        return EditResult::fail(QStringLiteral("A cost resource has no units or rate; type its cost on each assignment."));
     }
     if (field == QLatin1String("materialLabel")) {
         r.materialLabel = t;

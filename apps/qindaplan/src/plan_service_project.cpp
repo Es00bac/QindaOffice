@@ -68,7 +68,10 @@ QVariantMap PlanService::projectInfo() const
             {QStringLiteral("statusDate"), Engine::formatDate(p.info.statusDate, m_locale)},
             {QStringLiteral("currency"), p.info.currency},
             {QStringLiteral("calendar"), c >= 0 ? p.calendars.at(c).name : QString()},
-            {QStringLiteral("hoursPerDay"), m_locale.toString(double(p.info.minutesPerDay) / 60.0, 'g', 4)}};
+            {QStringLiteral("hoursPerDay"), m_locale.toString(double(p.info.minutesPerDay) / 60.0, 'g', 4)},
+            // M79: Project's schedule options for the critical path.
+            {QStringLiteral("criticalSlackDays"), p.info.criticalSlackDays},
+            {QStringLiteral("multipleCriticalPaths"), p.info.multipleCriticalPaths}};
 }
 
 QVariantMap PlanService::setProjectInfo(const QVariantMap &fields)
@@ -120,6 +123,17 @@ QVariantMap PlanService::setProjectInfo(const QVariantMap &fields)
                     info.calendarUid = c.uid;
                 }
             }
+        }
+        if (fields.contains(QStringLiteral("criticalSlackDays"))) {
+            bool okNumber = false;
+            const int days = fields.value(QStringLiteral("criticalSlackDays")).toString().trimmed().toInt(&okNumber);
+            if (!okNumber || days < 0 || days > 999) {
+                return QStringLiteral("Tasks are critical if their slack is at most a whole number of days (0 or more).");
+            }
+            info.criticalSlackDays = days;
+        }
+        if (fields.contains(QStringLiteral("multipleCriticalPaths"))) {
+            info.multipleCriticalPaths = fields.value(QStringLiteral("multipleCriticalPaths")).toBool();
         }
         if (fields.contains(QStringLiteral("hoursPerDay"))) {
             bool okNumber = false;
@@ -220,6 +234,45 @@ QVariantMap PlanService::setCalendarDay(int calendarUid, int day, const QString 
     });
 }
 
+namespace {
+
+// M79: how Project's Change Working Time describes a recurrence.
+QString describe(const Engine::RecurringException &rx, const QLocale &locale)
+{
+    using Kind = Engine::RecurringException::Kind;
+    static const char *const kPositions[] = {"first", "second", "third", "fourth", "last"};
+    const QString weekday = locale.dayName(rx.weekday, QLocale::LongFormat);
+    const QString position = QString::fromLatin1(kPositions[std::clamp(rx.position, 0, 4)]);
+    switch (rx.kind) {
+    case Kind::EveryDays:
+        return rx.every == 1 ? QStringLiteral("Every day") : QStringLiteral("Every %1 days").arg(rx.every);
+    case Kind::Weekly: {
+        QStringList days;
+        for (int d = 0; d < 7; ++d) {
+            if ((rx.daysOfWeek >> d) & 1) {
+                days.append(locale.dayName(d + 1, QLocale::ShortFormat));
+            }
+        }
+        const QString list = days.join(QStringLiteral(", "));
+        return rx.every == 1 ? QStringLiteral("Every week on %1").arg(list)
+                             : QStringLiteral("Every %1 weeks on %2").arg(rx.every).arg(list);
+    }
+    case Kind::MonthlyByDay:
+        return QStringLiteral("Day %1 of every %2").arg(rx.day).arg(rx.every == 1 ? QStringLiteral("month")
+                                                                                  : QStringLiteral("%1 months").arg(rx.every));
+    case Kind::MonthlyByPosition:
+        return QStringLiteral("The %1 %2 of every %3").arg(position, weekday,
+                                                          rx.every == 1 ? QStringLiteral("month") : QStringLiteral("%1 months").arg(rx.every));
+    case Kind::YearlyByDay:
+        return QStringLiteral("Every year on %1 %2").arg(rx.day).arg(locale.monthName(rx.month, QLocale::LongFormat));
+    case Kind::YearlyByPosition:
+        return QStringLiteral("Every year on the %1 %2 of %3").arg(position, weekday, locale.monthName(rx.month, QLocale::LongFormat));
+    }
+    return {};
+}
+
+} // namespace
+
 QVariantList PlanService::calendarExceptions(int calendarUid) const
 {
     QVariantList out;
@@ -227,7 +280,30 @@ QVariantList PlanService::calendarExceptions(int calendarUid) const
     if (ci < 0) {
         return out;
     }
-    const QList<Engine::CalendarException> &list = project().calendars.at(ci).exceptions;
+    // M79: Project's recurring exceptions and alternative work weeks, read
+    // from its XML — shown, scheduled and written back, not edited here.
+    const Engine::Calendar &cal = project().calendars.at(ci);
+    for (const Engine::RecurringException &rx : cal.recurring) {
+        out.append(QVariantMap{{QStringLiteral("index"), -1},
+                               {QStringLiteral("name"), rx.name},
+                               {QStringLiteral("from"), Engine::formatDate(Engine::toMinutes(rx.from), m_locale)},
+                               {QStringLiteral("to"), Engine::formatDate(Engine::toMinutes(rx.to), m_locale)},
+                               {QStringLiteral("hours"), hoursText(rx.times)},
+                               {QStringLiteral("working"), !rx.times.isEmpty()},
+                               {QStringLiteral("readOnly"), true},
+                               {QStringLiteral("recurrence"), describe(rx, m_locale)}});
+    }
+    for (const Engine::WorkWeek &ww : cal.workWeeks) {
+        out.append(QVariantMap{{QStringLiteral("index"), -1},
+                               {QStringLiteral("name"), ww.name},
+                               {QStringLiteral("from"), Engine::formatDate(Engine::toMinutes(ww.from), m_locale)},
+                               {QStringLiteral("to"), Engine::formatDate(Engine::toMinutes(ww.to), m_locale)},
+                               {QStringLiteral("hours"), QStringLiteral("Work week")},
+                               {QStringLiteral("working"), true},
+                               {QStringLiteral("readOnly"), true},
+                               {QStringLiteral("recurrence"), QStringLiteral("Alternative work week")}});
+    }
+    const QList<Engine::CalendarException> &list = cal.exceptions;
     for (int i = 0; i < list.size(); ++i) {
         const Engine::CalendarException &e = list.at(i);
         out.append(QVariantMap{{QStringLiteral("index"), i},
@@ -300,6 +376,7 @@ int PlanService::resourceCalendar(int resourceUid)
 
 QVariantList PlanService::baselines() const
 {
+    // M79: Baseline, Baseline 1 … Baseline 10, and how many tasks hold each.
     QVariantList out;
     for (int n = 0; n < Engine::kBaselineCount; ++n) {
         int count = 0;
@@ -307,7 +384,7 @@ QVariantList PlanService::baselines() const
             count += t.baselines[size_t(n)].set ? 1 : 0;
         }
         out.append(QVariantMap{{QStringLiteral("number"), n},
-                               {QStringLiteral("label"), n == 0 ? QStringLiteral("Baseline") : QStringLiteral("Baseline %1").arg(n)},
+                               {QStringLiteral("label"), Engine::baselineName(n)},
                                {QStringLiteral("set"), count > 0},
                                {QStringLiteral("tasks"), count}});
     }
@@ -330,10 +407,20 @@ QVariantMap PlanService::setBaseline(int number, bool selectedOnly)
     });
 }
 
-QVariantMap PlanService::clearBaseline(int number)
+QVariantMap PlanService::clearBaseline(int number, bool selectedOnly)
 {
+    QList<int> uids;
+    if (selectedOnly) {
+        for (int row : selectedRows()) {
+            uids.append(project().tasks.at(row).uid);
+        }
+        if (uids.isEmpty()) {
+            return fail(QStringLiteral("Select the tasks to clear."));
+        }
+    }
     return apply(QStringLiteral("Clear Baseline"), [&](Engine::Project &p) {
-        return Engine::clearBaseline(p, number) > 0 ? QString() : QStringLiteral("That baseline is not set.");
+        return Engine::clearBaseline(p, number, uids) > 0 ? QString()
+                                                          : QStringLiteral("%1 is not set on those tasks.").arg(Engine::baselineName(number));
     });
 }
 

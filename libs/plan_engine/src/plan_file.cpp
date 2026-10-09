@@ -2,6 +2,7 @@
 // The .qplan JSON format (plan_file.h).
 #include "plan_file.h"
 
+#include "mspdi.h"
 #include "plan_json.h"
 #include "plan_time.h"
 #include "scheduler.h"
@@ -113,7 +114,9 @@ QJsonObject resourceToJson(const Resource &r)
     QJsonObject o = r.extra;
     o.insert(QStringLiteral("uid"), r.uid);
     o.insert(QStringLiteral("name"), r.name);
-    o.insert(QStringLiteral("type"), r.type == ResourceType::Work ? QStringLiteral("work") : QStringLiteral("material"));
+    o.insert(QStringLiteral("type"), r.type == ResourceType::Work       ? QStringLiteral("work")
+                                     : r.type == ResourceType::Cost ? QStringLiteral("cost") // M79
+                                                                    : QStringLiteral("material"));
     putString(o, "initials", r.initials);
     putString(o, "group", r.group);
     putString(o, "email", r.email);
@@ -134,8 +137,10 @@ Resource resourceFromJson(const QJsonObject &o)
     Resource r;
     r.uid = o.value(QStringLiteral("uid")).toInt();
     r.name = o.value(QStringLiteral("name")).toString();
-    r.type = o.value(QStringLiteral("type")).toString() == QLatin1String("material") ? ResourceType::Material
-                                                                                     : ResourceType::Work;
+    const QString type = o.value(QStringLiteral("type")).toString();
+    r.type = type == QLatin1String("material") ? ResourceType::Material
+             : type == QLatin1String("cost")   ? ResourceType::Cost
+                                               : ResourceType::Work;
     r.initials = o.value(QStringLiteral("initials")).toString();
     r.group = o.value(QStringLiteral("group")).toString();
     r.email = o.value(QStringLiteral("email")).toString();
@@ -165,6 +170,23 @@ QJsonObject infoToJson(const ProjectInfo &info)
     o.insert(QStringLiteral("daysPerMonth"), info.daysPerMonth);
     o.insert(QStringLiteral("defaultStart"), clock(info.defaultStartMinute));
     o.insert(QStringLiteral("defaultFinish"), clock(info.defaultFinishMinute));
+    // M79: critical path and leveling options (defaults are not written).
+    if (info.criticalSlackDays != 0) {
+        o.insert(QStringLiteral("criticalSlackDays"), info.criticalSlackDays);
+    }
+    if (info.multipleCriticalPaths) {
+        o.insert(QStringLiteral("multipleCriticalPaths"), true);
+    }
+    if (info.levelingOrder != LevelingOrder::Standard) {
+        o.insert(QStringLiteral("levelingOrder"), info.levelingOrder == LevelingOrder::IdOnly ? QStringLiteral("id")
+                                                                                              : QStringLiteral("priority"));
+    }
+    if (info.levelWithinSlack) {
+        o.insert(QStringLiteral("levelWithinSlack"), true);
+    }
+    if (!info.levelClearFirst) {
+        o.insert(QStringLiteral("levelClearFirst"), false);
+    }
     return o;
 }
 
@@ -186,9 +208,46 @@ ProjectInfo infoFromJson(const QJsonObject &o)
     const int df = parseClock(o.value(QStringLiteral("defaultFinish")).toString());
     info.defaultStartMinute = ds >= 0 ? ds : 480;
     info.defaultFinishMinute = df > 0 ? df : 1020;
+    info.criticalSlackDays = std::clamp(o.value(QStringLiteral("criticalSlackDays")).toInt(0), 0, 999);
+    info.multipleCriticalPaths = o.value(QStringLiteral("multipleCriticalPaths")).toBool();
+    const QString order = o.value(QStringLiteral("levelingOrder")).toString();
+    info.levelingOrder = order == QLatin1String("id")         ? LevelingOrder::IdOnly
+                         : order == QLatin1String("priority") ? LevelingOrder::PriorityStandard
+                                                              : LevelingOrder::Standard;
+    info.levelWithinSlack = o.value(QStringLiteral("levelWithinSlack")).toBool();
+    info.levelClearFirst = o.value(QStringLiteral("levelClearFirst")).toBool(true);
     info.extra = extraOf(o, {"title", "manager", "company", "notes", "start", "statusDate", "currency", "calendarUid",
-                             "minutesPerDay", "minutesPerWeek", "daysPerMonth", "defaultStart", "defaultFinish"});
+                             "minutesPerDay", "minutesPerWeek", "daysPerMonth", "defaultStart", "defaultFinish",
+                             "criticalSlackDays", "multipleCriticalPaths", "levelingOrder", "levelWithinSlack",
+                             "levelClearFirst"});
     return info;
+}
+
+// AGENT-NOTE (M79): QindaPlan up to M78 stored leveling as an absolute
+// "starts no earlier" floor. One schedule with the floors applied gives each
+// task's unleveled early start (with its predecessors already leveled), so
+// floor − that start is exactly the relative Leveling Delay that yields the
+// same dates; the floors are then dropped.
+void convertLegacyFloors(Project &p)
+{
+    bool any = false;
+    for (const Task &t : std::as_const(p.tasks)) {
+        any = any || t.levelingFloor != kNoDate;
+    }
+    if (!any) {
+        return;
+    }
+    schedule(p);
+    for (Task &t : p.tasks) {
+        if (t.levelingFloor == kNoDate) {
+            continue;
+        }
+        if (t.unleveledStart != kNoDate && t.levelingFloor > t.unleveledStart && t.levelingDelay == 0) {
+            t.levelingDelay = t.levelingFloor - t.unleveledStart;
+            t.levelingDelayElapsed = true;
+        }
+        t.levelingFloor = kNoDate;
+    }
 }
 
 } // namespace
@@ -221,6 +280,13 @@ QByteArray writePlanJson(const Project &project)
         o.insert(QStringLiteral("task"), a.taskUid);
         o.insert(QStringLiteral("resource"), a.resourceUid);
         o.insert(QStringLiteral("units"), a.units);
+        if (a.costInput != 0) {
+            o.insert(QStringLiteral("cost"), a.costInput); // M79: a cost resource's amount
+        }
+        const QJsonArray baselines = baselinesToJson(a.baselines);
+        if (!baselines.isEmpty()) {
+            o.insert(QStringLiteral("baselines"), baselines); // M79
+        }
         assignments.append(o);
     }
     root.insert(QStringLiteral("assignments"), assignments);
@@ -301,7 +367,9 @@ LoadResult readPlanJson(const QByteArray &json, Project *out)
         a.taskUid = o.value(QStringLiteral("task")).toInt();
         a.resourceUid = o.value(QStringLiteral("resource")).toInt();
         a.units = std::clamp(o.value(QStringLiteral("units")).toInt(100), 1, 1000000);
-        a.extra = extraOf(o, {"uid", "task", "resource", "units"});
+        baselinesFromJson(o.value(QStringLiteral("baselines")), &a.baselines);
+        a.costInput = integer(o, "cost");
+        a.extra = extraOf(o, {"uid", "task", "resource", "units", "baselines", "cost"});
         if (p.taskIndex(a.taskUid) < 0 || p.resourceIndex(a.resourceUid) < 0 || p.assignmentIndex(a.taskUid, a.resourceUid) >= 0) {
             result.warnings.append(QStringLiteral("An assignment to a missing task or resource was dropped."));
             continue;
@@ -318,6 +386,11 @@ LoadResult readPlanJson(const QByteArray &json, Project *out)
         p.info.start = toMinutes(QDate::currentDate(), p.info.defaultStartMinute);
         result.warnings.append(QStringLiteral("The project had no start date; today is used."));
     }
+    // M79: what earlier versions kept verbatim but QindaPlan now models
+    // (baselines 3–10, leveling delays, the critical-path options from
+    // Microsoft Project XML), and leveling floors.
+    adoptKeptElements(p);
+    convertLegacyFloors(p);
     schedule(p);
     *out = p;
     result.ok = true;

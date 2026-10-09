@@ -54,7 +54,8 @@ Tk.Dialog {
                 align: Tk.Flex.Center
                 gap: Tk.Theme.space.sm
                 Tk.Icon {
-                    name: row.modelData.assigned ? "circle-check" : row.modelData.material ? "package" : "user"
+                    name: row.modelData.assigned ? "circle-check" : row.modelData.costResource ? "circle-dollar-sign"
+                          : row.modelData.material ? "package" : "user"
                     size: Tk.Theme.size.icon
                     color: row.modelData.assigned ? Tk.Theme.color.success : Tk.Theme.color.textMuted
                 }
@@ -73,7 +74,7 @@ Tk.Dialog {
                     Tk.Flex.basis: Tk.Theme.size.fieldWidth * 0.8
                     Tk.Flex.shrink: 0
                     text: String(row.modelData.units)
-                    placeholderText: row.modelData.material ? qsTr("Quantity") : qsTr("100%")
+                    placeholderText: row.modelData.costResource ? qsTr("Cost") : row.modelData.material ? qsTr("Quantity") : qsTr("100%")
                 }
                 Tk.Caption { text: String(row.modelData.cost); Tk.Flex.basis: Tk.Theme.size.tableColumn; Tk.Flex.shrink: 0; horizontalAlignment: Text.AlignRight }
                 Tk.Button {

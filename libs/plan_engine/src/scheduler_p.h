@@ -38,6 +38,10 @@ private:
     void backwardLeaf(int i, Minutes ceiling);
     [[nodiscard]] Minutes lagOf(const LinkRef &ref) const;
     [[nodiscard]] Minutes lagAdd(Minutes at, Minutes lag) const;
+    // M79: the total slack at or below which a task is critical.
+    [[nodiscard]] Minutes criticalLimit() const;
+    // M79: the task, or a summary above it, has a successor link.
+    [[nodiscard]] bool drivesSuccessor(int taskIndex) const;
     // scheduler_rollup.cpp
     void freeSlackAndAlap();
     void inactiveDates();

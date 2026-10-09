@@ -262,4 +262,94 @@ UsageTable usageTable(const Project &project, const QDate &from, int count, bool
     return table;
 }
 
+UsageTable taskUsageTable(const Project &project, const QList<int> &rows, const QDate &from, int count, bool weeks)
+{
+    UsageTable table;
+    count = std::clamp(count, 1, 256);
+    table.bucketDays = weeks ? 7 : 1;
+    const QDate start = weeks ? from.addDays(1 - from.dayOfWeek()) : from;
+    for (int b = 0; b < count; ++b) {
+        table.bucketStarts.append(start.addDays(qint64(b) * table.bucketDays));
+    }
+    const qint64 firstDay = kEpoch.daysTo(start);
+    const qint64 endDay = firstDay + qint64(count) * table.bucketDays;
+    const auto inRange = [&](qint64 day) { return day >= firstDay && day < endDay; };
+    const auto bucketOf = [&](qint64 day) { return int((day - firstDay) / table.bucketDays); };
+    Calendars calendars(project);
+    const QHash<int, int> index = taskIndexByUid(project);
+    const DailyLoad load = dailyLoad(project);
+    // Per task (index): work per bucket and in total; per assignment the same.
+    QHash<int, QList<Minutes>> taskWork;
+    QHash<int, Minutes> taskTotal;
+    QHash<int, UsageRow> assignmentRows;
+    for (const Assignment &a : project.assignments) {
+        const int ri = project.resourceIndex(a.resourceUid);
+        const int ti = index.value(a.taskUid, -1);
+        if (ri < 0 || ti < 0 || project.resources.at(ri).type != ResourceType::Work) {
+            continue;
+        }
+        const Resource &r = project.resources.at(ri);
+        const QSet<qint64> over = overDays(project, r, load.value(r.uid), calendars);
+        UsageRow row;
+        row.id = QStringLiteral("a:%1").arg(a.uid);
+        row.resourceUid = r.uid;
+        row.taskUid = a.taskUid;
+        row.assignment = true;
+        row.name = r.name;
+        row.work = QList<Minutes>(count, 0);
+        row.capacity = QList<Minutes>(count, 0);
+        row.over = QList<bool>(count, false);
+        QList<Minutes> &sum = taskWork[ti];
+        if (sum.isEmpty()) {
+            sum = QList<Minutes>(count, 0);
+        }
+        const QMap<qint64, Minutes> days = assignmentDays(project, a, calendars, index);
+        for (auto it = days.cbegin(); it != days.cend(); ++it) {
+            const Minutes m = divRound(it.value() * a.units, 100);
+            row.total += m;
+            taskTotal[ti] += m;
+            if (inRange(it.key())) {
+                row.work[bucketOf(it.key())] += m;
+                sum[bucketOf(it.key())] += m;
+                row.over[bucketOf(it.key())] = row.over.at(bucketOf(it.key())) || over.contains(it.key());
+            }
+        }
+        assignmentRows.insert(a.uid, row);
+    }
+    for (int i : rows) {
+        if (i < 0 || i >= project.tasks.size()) {
+            continue;
+        }
+        const Task &t = project.tasks.at(i);
+        UsageRow row;
+        row.id = QStringLiteral("t:%1").arg(t.uid);
+        row.taskUid = t.uid;
+        row.name = t.name;
+        row.work = QList<Minutes>(count, 0);
+        row.capacity = QList<Minutes>(count, 0);
+        row.over = QList<bool>(count, false);
+        // A summary sums its subtree (the run of deeper tasks after it).
+        for (int k = i; k < project.tasks.size() && (k == i || project.tasks.at(k).outlineLevel > t.outlineLevel); ++k) {
+            if (project.tasks.at(k).summary || !taskWork.contains(k)) {
+                continue;
+            }
+            const QList<Minutes> &w = taskWork.value(k);
+            for (int b = 0; b < count; ++b) {
+                row.work[b] += w.at(b);
+            }
+            row.total += taskTotal.value(k);
+        }
+        table.rows.append(row);
+        if (t.summary) {
+            continue;
+        }
+        for (const Assignment &a : project.assignments) {
+            if (a.taskUid == t.uid && assignmentRows.contains(a.uid)) {
+                table.rows.append(assignmentRows.value(a.uid));
+            }
+        }
+    }
+    return table;
+}
+
 } // namespace QindaOffice::Plan

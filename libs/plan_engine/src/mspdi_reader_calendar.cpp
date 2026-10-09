@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // MSPDI import: calendars (mspdi_reader_p.h). Week days and daily exceptions
 // (both of Project's spellings) are modelled; recurring exceptions and
-// alternative work weeks are kept verbatim for the file and reported, since
-// the scheduler does not use them.
+// alternative work weeks are kept verbatim for the file and (M79) derived
+// into the calendar for the scheduler (mspdi_recurrence.cpp); a kind of
+// recurrence QindaPlan cannot schedule is reported.
 #include "mspdi_reader_p.h"
 
 #include "plan_time.h"
@@ -71,11 +72,6 @@ void Reader::readCalendar()
                 }
             }
         } else {
-            if (n == QLatin1String("WorkWeeks")) {
-                warn(QStringLiteral("Alternative work weeks (calendar “%1”) are kept in the file but not used for "
-                                    "scheduling.")
-                         .arg(cal.name));
-            }
             keep(kept, Kind::Calendar, previous);
         }
         previous = n;
@@ -86,6 +82,11 @@ void Reader::readCalendar()
     }
     if (!unsupported.isEmpty()) {
         cal.extra.insert(kExceptionsKey, unsupported);
+    }
+    // M79: the kept recurrences and work weeks, for the scheduler.
+    for (const QString &problem : deriveRecurrences(cal)) {
+        warn(QStringLiteral("A recurring exception of calendar “%1” is kept in the file but not scheduled: %2.")
+                 .arg(cal.name, problem));
     }
     m_calendars.append(cal);
 }
@@ -191,12 +192,9 @@ bool Reader::readException(Calendar &calendar)
         }
     }
     if (type != 1) {
-        // AGENT-NOTE: only daily ranges map onto CalendarException; weekly,
-        // monthly and yearly recurrences would need expanding. Kept for the
-        // file (M63) — the scheduler does not see them.
-        warn(QStringLiteral("The recurring calendar exception “%1” (calendar “%2”) is kept in the file but not used "
-                            "for scheduling.")
-                 .arg(ex.name, calendar.name));
+        // AGENT-NOTE: only daily ranges map onto CalendarException; the
+        // other kinds stay kept (M63) and are scheduled from the kept
+        // element (M79, deriveRecurrences in readCalendar).
         return false;
     }
     ex.times = working ? (hasTimes && !hours.isEmpty() ? hours : kDefaultDay) : DayHours{};

@@ -43,7 +43,8 @@ namespace QindaOffice::Plan {
 
 using Minutes = qint64;
 inline constexpr Minutes kNoDate = std::numeric_limits<qint64>::min();
-inline constexpr int kBaselineCount = 3;
+// Baseline, Baseline 1 … Baseline 10, as in Project (M79; three before).
+inline constexpr int kBaselineCount = 11;
 
 // MSPDI numbering order (Type 0..3 there is FF, FS, SF, SS — mspdi.cpp maps).
 enum class LinkType { FinishToStart, StartToStart, FinishToFinish, StartToFinish };
@@ -59,7 +60,12 @@ enum class ConstraintType {
     FinishNoLaterThan,
 };
 enum class DurationUnit { Minutes, Hours, Days, Weeks, Months };
-enum class ResourceType { Work, Material };
+// M79: Cost resources are Project's (MSPDI Type 2): no rate, no units; each
+// assignment carries the amount it costs (Assignment::costInput).
+enum class ResourceType { Work, Material, Cost };
+// Project's leveling order (Resource Leveling dialog, M79): which task keeps
+// its dates on an overbooked day (leveling.h).
+enum class LevelingOrder { IdOnly, Standard, PriorityStandard };
 
 // Working time within one day, minutes from midnight: 0 <= from < to <= 1440.
 struct WorkingTime {
@@ -79,6 +85,37 @@ struct CalendarException {
     friend bool operator==(const CalendarException &, const CalendarException &) = default;
 };
 
+// M79: an exception that recurs within its range — Project's yearly,
+// monthly, weekly and every-N-days exceptions (MSPDI Exception Type 2–7).
+// Read from Microsoft Project XML, scheduled by WorkCalendar, and written
+// back as the file had it (mspdi_recurrence.cpp).
+struct RecurringException {
+    enum class Kind { EveryDays, Weekly, MonthlyByDay, MonthlyByPosition, YearlyByDay, YearlyByPosition };
+    Kind kind = Kind::Weekly;
+    QString name;
+    QDate from;
+    QDate to;            // the last day it can fall on
+    int every = 1;       // every N days, weeks or months (MSPDI Period)
+    int daysOfWeek = 0;  // Weekly: bit 0 = Monday … bit 6 = Sunday
+    int day = 1;         // ByDay: day of the month (past its end: its last day)
+    int position = 0;    // ByPosition: 0 first … 3 fourth, 4 last
+    int weekday = 1;     // ByPosition: 1 Monday … 7 Sunday
+    int month = 1;       // Yearly: 1 January … 12 December
+    DayHours times;      // empty = non-working
+    [[nodiscard]] bool fallsOn(const QDate &date) const; // work_calendar.cpp
+    friend bool operator==(const RecurringException &, const RecurringException &) = default;
+};
+
+// M79: an alternative work week (MSPDI WorkWeeks): inside its range its
+// days replace the calendar's week; a day it leaves out keeps the week's.
+struct WorkWeek {
+    QString name;
+    QDate from;
+    QDate to;
+    std::array<std::optional<DayHours>, 7> week; // 0 = Monday
+    friend bool operator==(const WorkWeek &, const WorkWeek &) = default;
+};
+
 struct Calendar {
     int uid = 0;
     QString name;
@@ -89,6 +126,11 @@ struct Calendar {
     // base calendar without a value for a day treats it as non-working).
     std::array<std::optional<DayHours>, 7> week;
     QList<CalendarException> exceptions;
+    // M79: derived from the Microsoft Project XML the calendar came from —
+    // its kept Exception and WorkWeeks elements stay the truth (extra) and
+    // these are rebuilt from them on every load (mspdi_recurrence.cpp).
+    QList<RecurringException> recurring;
+    QList<WorkWeek> workWeeks;
     QJsonObject extra; // unknown fields, written back unchanged
 };
 
@@ -143,7 +185,21 @@ struct Task {
     Minutes actualFinish = kNoDate;
     int calendarUid = -1; // -1 = the resource's or the project's
     qint64 fixedCost = 0;
-    // Set by resource leveling (leveling.h): the task starts no earlier.
+    // M79: Project's Leveling Delay — how long leveling holds the task back
+    // from its early start (leveling.h sets it; it can be typed; MSPDI
+    // LevelingDelay). Wall-clock minutes when levelingDelayElapsed (Project's
+    // default "edays"), else working minutes on the task's calendar. It is
+    // RELATIVE: a task whose predecessors move keeps its delay, as in Project.
+    Minutes levelingDelay = 0;
+    bool levelingDelayElapsed = true;
+    // M79: the start and finish before the last leveling (Project's
+    // Pre-Leveled Start/Finish; the Leveling Gantt draws them).
+    Minutes preLeveledStart = kNoDate;
+    Minutes preLeveledFinish = kNoDate;
+    // AGENT-NOTE (legacy, M51–M78): leveling used to store an absolute
+    // "starts no earlier" floor. readPlanJson converts a floor from an old
+    // .qplan into levelingDelay (plan_file.cpp); schedule() still honours a
+    // floor only so that conversion is exact. Nothing else sets it.
     Minutes levelingFloor = kNoDate;
     QString notes;
     std::array<BaselineData, kBaselineCount> baselines;
@@ -163,6 +219,9 @@ struct Task {
     Minutes lateFinish = kNoDate;
     Minutes totalSlack = 0;
     Minutes freeSlack = 0;
+    // M79: the early start before the leveling delay (leveling measures the
+    // delay it needs from here; Leveling Delay = start − this, elapsed).
+    Minutes unleveledStart = kNoDate;
     Minutes work = 0;
     qint64 cost = 0;
     bool critical = false;
@@ -201,8 +260,15 @@ struct Assignment {
     int taskUid = 0;
     int resourceUid = 0;
     // Work resources: percent of the resource's time (100 = full-time).
-    // Material resources: quantity × 100 (250 = 2.5 units).
+    // Material resources: quantity × 100 (250 = 2.5 units). Cost
+    // resources: 100 (Project writes 1).
     int units = 100;
+    // M79: what the assignment of a cost resource costs (minor units; Project
+    // types it on the assignment). Unused for work and material.
+    qint64 costInput = 0;
+    // M79: what Set Baseline saved for the assignment (Project keeps the
+    // assignment's baseline work and cost next to the task's).
+    std::array<BaselineData, kBaselineCount> baselines;
     QJsonObject extra;
 
     // ---- computed ----
@@ -224,6 +290,16 @@ struct ProjectInfo {
     int daysPerMonth = 20;
     int defaultStartMinute = 8 * 60;
     int defaultFinishMinute = 17 * 60;
+    // M79 (MSPDI CriticalSlackLimit / MultipleCriticalPaths): a task is
+    // critical when its total slack is at most this many days; with multiple
+    // critical paths every task without successors ends a critical path.
+    int criticalSlackDays = 0;
+    bool multipleCriticalPaths = false;
+    // M79: Project's Resource Leveling options (.qplan only; MSPDI has no
+    // place for them). Leveling range and Level Selection are per run.
+    LevelingOrder levelingOrder = LevelingOrder::Standard;
+    bool levelWithinSlack = false;
+    bool levelClearFirst = true;
     QJsonObject extra;
 };
 

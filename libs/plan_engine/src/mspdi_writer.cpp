@@ -13,6 +13,7 @@
 #include "plan_time.h"
 #include "work_calendar.h"
 
+#include <QSet>
 #include <QXmlStreamWriter>
 
 namespace QindaOffice::Plan {
@@ -64,6 +65,15 @@ private:
     void task(const Task &t);
     void resource(const Resource &r);
     void assignment(const Assignment &a);
+    // M79 (mspdi_p.h "byte-faithful baselines"): a task's or an
+    // assignment's baselines — the file's element while it still says what
+    // the model holds, else ours.
+    void baselines(Children &c, const std::array<BaselineData, kBaselineCount> &list, const QJsonObject &extra,
+                   bool assignment);
+    void baselineElement(int number, const BaselineData &b, bool assignment);
+    // The numbers whose baseline differs from the file's on some task
+    // (the project summary task's are rewritten for those).
+    [[nodiscard]] QSet<int> changedBaselines() const;
 
     const Project &m_p;
     int m_decimals;
@@ -101,7 +111,7 @@ void Writer::project()
     date(c, "StartDate", info.start);
     date(c, "FinishDate", m_p.finish);
     fallback(c, "FYStartDate", QStringLiteral("1"));
-    fallback(c, "CriticalSlackLimit", QStringLiteral("0"));
+    put(c, "CriticalSlackLimit", info.criticalSlackDays); // M79: modelled
     put(c, "CurrencyDigits", m_decimals);
     fallback(c, "CurrencySymbol", info.currency == QLatin1String("USD") ? QStringLiteral("$") : info.currency);
     put(c, "CurrencyCode", info.currency);
@@ -116,7 +126,7 @@ void Writer::project()
     fallback(c, "DurationFormat", QStringLiteral("7"));
     fallback(c, "WorkFormat", QStringLiteral("2"));
     fallback(c, "HonorConstraints", flag(true));
-    fallback(c, "MultipleCriticalPaths", flag(false));
+    put(c, "MultipleCriticalPaths", flag(info.multipleCriticalPaths)); // M79: modelled
     fallback(c, "NewTasksEffortDriven", flag(false));
     fallback(c, "NewTasksEstimated", flag(false));
     fallback(c, "WeekStartDay", QStringLiteral("1"));
@@ -249,8 +259,87 @@ void Writer::summaryTask()
     if (!m_p.info.notes.isEmpty()) {
         put(c, "Notes", m_p.info.notes);
     }
+    // M79: the summary task's baselines — the file's own while no task's
+    // baseline of that number changed; a changed one is rolled up from the
+    // top-level tasks (gone when none has it any more).
+    const QHash<int, QString> kept = baselineFragments(m_p.info.extra, kSummaryBaselinesKey);
+    const QSet<int> changed = changedBaselines();
+    for (int n = 0; n < kBaselineCount; ++n) {
+        BaselineData roll;
+        for (const Task &t : m_p.tasks) {
+            const BaselineData &b = t.baselines[size_t(n)];
+            if (t.parentIndex >= 0 || !b.set) {
+                continue;
+            }
+            roll.start = !roll.set || b.start < roll.start ? b.start : roll.start;
+            roll.finish = !roll.set || b.finish > roll.finish ? b.finish : roll.finish;
+            roll.work += b.work;
+            roll.cost += b.cost;
+            roll.set = true;
+        }
+        if (kept.contains(n) && !changed.contains(n)) {
+            const QString xml = kept.value(n);
+            c.add(QStringLiteral("Baseline"), [this, xml] { replay(m_xml, xml); });
+        } else if (changed.contains(n) && roll.set) {
+            roll.duration = cal.workBetween(roll.start, roll.finish);
+            c.add(QStringLiteral("Baseline"), [this, n, roll] { baselineElement(n, roll, false); });
+        }
+    }
     c.write(m_xml);
     m_xml.writeEndElement();
+}
+
+QSet<int> Writer::changedBaselines() const
+{
+    QSet<int> out;
+    for (const Task &t : m_p.tasks) {
+        const QHash<int, QString> kept = baselineFragments(t.extra);
+        for (int n = 0; n < kBaselineCount; ++n) {
+            const BaselineData &b = t.baselines[size_t(n)];
+            const bool same = kept.contains(n) ? baselineMatches(kept.value(n), b, m_decimals, false) : !b.set;
+            if (!same) {
+                out.insert(n);
+            }
+        }
+    }
+    return out;
+}
+
+void Writer::baselineElement(int number, const BaselineData &b, bool assignment)
+{
+    m_xml.writeStartElement(QStringLiteral("Baseline"));
+    m_xml.writeTextElement(QStringLiteral("Number"), QString::number(number));
+    if (b.start != kNoDate) {
+        m_xml.writeTextElement(QStringLiteral("Start"), wireDateTime(b.start));
+    }
+    if (b.finish != kNoDate) {
+        m_xml.writeTextElement(QStringLiteral("Finish"), wireDateTime(b.finish));
+    }
+    if (!assignment) {
+        m_xml.writeTextElement(QStringLiteral("Duration"), wireDuration(b.duration));
+        m_xml.writeTextElement(QStringLiteral("DurationFormat"), QStringLiteral("7"));
+    }
+    m_xml.writeTextElement(QStringLiteral("Work"), wireDuration(b.work));
+    m_xml.writeTextElement(QStringLiteral("Cost"), cents(b.cost));
+    m_xml.writeEndElement();
+}
+
+void Writer::baselines(Children &c, const std::array<BaselineData, kBaselineCount> &list, const QJsonObject &extra,
+                       bool assignment)
+{
+    const QHash<int, QString> kept = baselineFragments(extra);
+    for (int n = 0; n < kBaselineCount; ++n) {
+        const BaselineData &b = list[size_t(n)];
+        if (!b.set) {
+            continue; // a baseline cleared in QindaPlan leaves the file
+        }
+        if (kept.contains(n) && baselineMatches(kept.value(n), b, m_decimals, assignment)) {
+            const QString xml = kept.value(n);
+            c.add(QStringLiteral("Baseline"), [this, xml] { replay(m_xml, xml); });
+        } else {
+            c.add(QStringLiteral("Baseline"), [this, n, b, assignment] { baselineElement(n, b, assignment); });
+        }
+    }
 }
 
 void Writer::task(const Task &t)
@@ -302,6 +391,19 @@ void Writer::task(const Task &t)
     put(c, "CalendarUID", t.calendarUid);
     date(c, "ConstraintDate", t.constraintDate);
     date(c, "Deadline", t.deadline);
+    // M79: Project's Leveling Delay in tenths of a minute, in the file's
+    // format when it still fits (edays when elapsed, days when not).
+    if (t.levelingDelay != 0 || t.extra.contains(kLevelingFormatKey)) {
+        const int keptFormat = t.extra.value(kLevelingFormatKey).toInt(-1);
+        const DurationCode code = durationCode(keptFormat);
+        const int format = keptFormat >= 0 && code.known && !code.percent && code.elapsed == t.levelingDelayElapsed
+                               ? keptFormat
+                               : (t.levelingDelayElapsed ? 8 : 7);
+        put(c, "LevelingDelay", t.levelingDelay * 10);
+        put(c, "LevelingDelayFormat", format);
+    }
+    date(c, "PreLeveledStart", t.preLeveledStart);
+    date(c, "PreLeveledFinish", t.preLeveledFinish);
     if (!t.notes.isEmpty()) {
         put(c, "Notes", t.notes);
     }
@@ -322,27 +424,7 @@ void Writer::task(const Task &t)
             m_xml.writeEndElement();
         });
     }
-    for (int n = 0; n < kBaselineCount; ++n) {
-        const BaselineData &b = t.baselines[size_t(n)];
-        if (!b.set) {
-            continue;
-        }
-        c.add(QStringLiteral("Baseline"), [this, n, b] {
-            m_xml.writeStartElement(QStringLiteral("Baseline"));
-            m_xml.writeTextElement(QStringLiteral("Number"), QString::number(n));
-            if (b.start != kNoDate) {
-                m_xml.writeTextElement(QStringLiteral("Start"), wireDateTime(b.start));
-            }
-            if (b.finish != kNoDate) {
-                m_xml.writeTextElement(QStringLiteral("Finish"), wireDateTime(b.finish));
-            }
-            m_xml.writeTextElement(QStringLiteral("Duration"), wireDuration(b.duration));
-            m_xml.writeTextElement(QStringLiteral("DurationFormat"), QStringLiteral("7"));
-            m_xml.writeTextElement(QStringLiteral("Work"), wireDuration(b.work));
-            m_xml.writeTextElement(QStringLiteral("Cost"), cents(b.cost));
-            m_xml.writeEndElement();
-        });
-    }
+    baselines(c, t.baselines, t.extra, false);
     c.write(m_xml);
     m_xml.writeEndElement();
 }
@@ -355,7 +437,7 @@ void Writer::resource(const Resource &r)
     put(c, "UID", r.uid);
     put(c, "ID", m_p.resourceIndex(r.uid) + 1);
     put(c, "Name", r.name);
-    put(c, "Type", work ? 1 : 0);
+    put(c, "Type", work ? 1 : r.type == ResourceType::Cost ? 2 : 0); // M79: cost resources
     put(c, "IsNull", flag(false));
     if (!r.initials.isEmpty()) {
         put(c, "Initials", r.initials);
@@ -379,6 +461,9 @@ void Writer::resource(const Resource &r)
     put(c, "Cost", cents(r.cost));
     put(c, "CostPerUse", cents(r.costPerUse));
     put(c, "CalendarUID", r.calendarUid);
+    if (r.type == ResourceType::Cost) {
+        fallback(c, "IsCostResource", flag(true));
+    }
     c.write(m_xml);
     m_xml.writeEndElement();
 }
@@ -402,6 +487,7 @@ void Writer::assignment(const Assignment &a)
     if (ri >= 0 && m_p.resources.at(ri).type == ResourceType::Work) {
         put(c, "Work", wireDuration(a.work)); // a material's "work" is its quantity (Units)
     }
+    baselines(c, a.baselines, a.extra, true); // M79
     c.write(m_xml);
     m_xml.writeEndElement();
 }

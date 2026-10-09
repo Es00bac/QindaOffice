@@ -12,7 +12,8 @@
 //   Review       FF Concepts (SNET Thu 12 is earlier): Fri 13
 //   Approved     milestone FS Review: Fri 13 17:00
 //   Print run    FS Approved -1d: Fri 13 08:00 – Mon 16 17:00
-//   Proofing     SS Print run +50% (1 day): Mon 16
+//   Proofing     SS Print run +50% (1 day): Mon 16 from 09:00 (the
+//                weekly "Monday stand-up" exception: Mondays 09–17, M79)
 //   Pack         SF Proofing: finishes when Proofing starts → Fri 13
 //   Vendor call  manual: Mon 16 – Tue 17
 //   Foil cover   inactive (not in roll-ups)
@@ -133,7 +134,10 @@ private slots:
         QCOMPARE(standard.exceptions.at(0).from, QDate(2026, 3, 20));
         QCOMPARE(standard.exceptions.at(0).name, QStringLiteral("Studio day"));
         QCOMPARE(standard.exceptions.at(1).name, QStringLiteral("Good Friday"));
-        QVERIFY(r.warnings.join(QLatin1Char('\n')).contains(QStringLiteral("Monday stand-up")));
+        // M79: the weekly "Monday stand-up" (Mondays 09:00–17:00) is scheduled.
+        QVERIFY(!r.warnings.join(QLatin1Char('\n')).contains(QStringLiteral("Monday stand-up")));
+        QCOMPARE(standard.recurring.size(), 1);
+        QCOMPARE(WorkCalendar(p, 1).hours(QDate(2026, 3, 16)).first().from, 9 * 60);
         const Calendar &ana = p.calendars.at(1);
         QCOMPARE(ana.baseUid, 1);
         QVERIFY(!ana.week[0].has_value());
@@ -153,7 +157,9 @@ private slots:
         QCOMPARE(brief.baselines[0].work, 8 * kHour);
         QCOMPARE(brief.baselines[0].cost, 38500);
         QCOMPARE_AT(brief.baselines[1].finish, at(4, 17));
-        QVERIFY(r.warnings.join(QLatin1Char('\n')).contains(QStringLiteral("baseline 5")));
+        // M79: baselines 3–10 are modelled (baseline 5 was only kept before).
+        QVERIFY(brief.baselines[5].set);
+        QCOMPARE_AT(brief.baselines[5].finish, at(2, 17));
         const Task &phase1 = byName(p, "Phase 1: Design");
         QVERIFY(phase1.summary);
         QCOMPARE(phase1.actualStart, kNoDate); // roll-ups are ours to compute
@@ -209,7 +215,7 @@ private slots:
         QCOMPARE_AT(byName(p, "Design approved").start, at(13, 17));
         QCOMPARE_AT(byName(p, "Print run").start, at(13));
         QCOMPARE_AT(byName(p, "Print run").finish, at(16, 17));
-        QCOMPARE_AT(proofing.start, at(16));
+        QCOMPARE_AT(proofing.start, at(16, 9)); // the Monday stand-up hours (M79)
         QCOMPARE_AT(pack.start, at(13));
         QCOMPARE_AT(pack.finish, at(13, 17));
         QCOMPARE_AT(phase1.finish, at(13, 17));

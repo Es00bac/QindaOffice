@@ -51,7 +51,8 @@ void PlanHost::insertMenus()
                                     "planUnlinkAction", nullptr});
     task.append(MenuNode::submenu(QStringLiteral("planProgressMenu"), tr("&Progress"),
                                   nodes({"planMark0Action", "planMark25Action", "planMark50Action", "planMark75Action",
-                                           "planMark100Action"})));
+                                           "planMark100Action", nullptr, "planMarkOnTrackAction",
+                                           "planUpdateTasksAction"})));
     task.append(nodes({nullptr, "planManualScheduleAction", "planAutoScheduleAction", "planRespectLinksAction",
                          "planInactivateAction", nullptr, "planTaskInfoAction", "planTaskNotesAction",
                          "planScrollToTaskAction", nullptr, "planToggleSubtasksAction", "planExpandAllAction"}));
@@ -59,10 +60,13 @@ void PlanHost::insertMenus()
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("planResourceMenu"), tr("&Resource"),
                                                      nodes({"planAssignResourcesAction", nullptr,
                                                               "planAddResourceAction", "planAddMaterialAction",
+                                                              "planAddCostResourceAction",
                                                               "planDeleteResourceAction", "planResourceInfoAction",
                                                               "planResourceCalendarAction", nullptr,
-                                                              "planLevelResourceAction", "planLevelAllAction",
+                                                              "planLevelSelectionAction", "planLevelResourceAction",
+                                                              "planLevelAllAction", "planLevelingOptionsAction",
                                                               "planClearLevelingAction",
+                                                              "planClearLevelingSelectedAction",
                                                               "planNextOverallocationAction"})));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("planProjectMenu"), tr("&Project"),
                                                      nodes({"planProjectInfoAction", "planWorkingTimeAction", nullptr,
@@ -71,20 +75,41 @@ void PlanHost::insertMenus()
                                                               "planUpdateProjectAction", "planRecalculateAction"})));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("planReportMenu"), tr("Re&port"),
                                                      nodes({"planReportOverviewAction", "planReportCriticalAction",
-                                                              "planReportResourcesAction", "planReportLateAction"})));
+                                                              "planReportResourcesAction", "planReportLateAction",
+                                                              nullptr, "planReportCostAction",
+                                                              "planReportWorkAction"})));
 
     const QString firstView = QString::fromLatin1(ActionId::kViewZoomIn);
-    QList<MenuNode> view = nodes({"planViewGanttAction", "planViewTaskSheetAction", "planViewResourceSheetAction",
-                                    "planViewResourceUsageAction", "planViewCalendarAction", "planViewReportsAction",
-                                    nullptr});
+    QList<MenuNode> view = nodes({"planViewGanttAction", "planViewTrackingGanttAction", "planViewLevelingGanttAction",
+                                    "planViewNetworkAction", "planViewTaskSheetAction", "planViewTaskUsageAction",
+                                    "planViewResourceSheetAction", "planViewResourceUsageAction", "planViewCalendarAction",
+                                    "planViewReportsAction", nullptr});
     view.append(MenuNode::submenu(QStringLiteral("planTablesMenu"), tr("T&ables"),
                                   nodes({"planTableEntryAction", "planTableTrackingAction", "planTableVarianceAction",
-                                           "planTableCostAction", "planTableScheduleAction"})));
+                                           "planTableCostAction", "planTableScheduleAction", "planTableWorkAction",
+                                           "planTableBaselineAction", "planTableDelayAction"})));
+    // M79: Project's View ▸ Data ▸ Filter and Sort.
+    view.append(MenuNode::submenu(QStringLiteral("planFilterMenu"), tr("&Filter"),
+                                  nodes({"planFilterAllAction", nullptr, "planFilterCriticalAction",
+                                           "planFilterIncompleteAction", "planFilterCompletedAction",
+                                           "planFilterLateAction", "planFilterSlippingAction", "planFilterMilestonesAction",
+                                           "planFilterSummaryAction", "planFilterDeadlinesAction", nullptr,
+                                           "planFilterResourceAction", "planFilterDateRangeAction", nullptr,
+                                           "planFilterRelatedSummariesAction"})));
+    view.append(MenuNode::submenu(QStringLiteral("planSortMenu"), tr("S&ort"),
+                                  nodes({"planSortIdAction", "planSortStartAction", "planSortFinishAction",
+                                           "planSortPriorityAction", "planSortCostAction"})));
     view.append(MenuNode::submenu(QStringLiteral("planTimescaleMenu"), tr("Time&scale"),
                                   nodes({"planTimescaleDaysAction", "planTimescaleWeeksAction",
                                            "planTimescaleMonthsAction", nullptr, "planGoToTodayAction"})));
-    view.append(nodes({nullptr, "planShowTimelineAction", "planShowCriticalAction", "planShowBaselineAction",
-                         "planShowBarTextAction", "planUsageWeeksAction", nullptr}));
+    view.append(nodes({nullptr, "planShowTimelineAction", "planShowCriticalAction", "planShowSlackAction",
+                         "planShowBaselineAction"}));
+    view.append(MenuNode::submenu(QStringLiteral("planBaselineShownMenu"), tr("Baseline &Shown"),
+                                  nodes({"planBaselineShown0Action", "planBaselineShown1Action", "planBaselineShown2Action",
+                                           "planBaselineShown3Action", "planBaselineShown4Action", "planBaselineShown5Action",
+                                           "planBaselineShown6Action", "planBaselineShown7Action", "planBaselineShown8Action",
+                                           "planBaselineShown9Action", "planBaselineShown10Action"})));
+    view.append(nodes({"planShowBarTextAction", "planUsageWeeksAction", nullptr}));
     for (const MenuNode &node : std::as_const(view)) {
         tree->insertInto(QStringLiteral("viewMenu"), firstView, node);
     }
@@ -107,7 +132,10 @@ void PlanHost::syncEnablement()
                        QStringLiteral("planAutoScheduleAction"), QStringLiteral("planTaskInfoAction"),
                        QStringLiteral("planTaskNotesAction"), QStringLiteral("planScrollToTaskAction"),
                        QStringLiteral("planAssignResourcesAction"), QString::fromLatin1(ActionId::kEditCut),
-                       QString::fromLatin1(ActionId::kEditCopy)},
+                       QString::fromLatin1(ActionId::kEditCopy),
+                       // M79
+                       QStringLiteral("planMarkOnTrackAction"), QStringLiteral("planUpdateTasksAction"),
+                       QStringLiteral("planLevelSelectionAction"), QStringLiteral("planClearLevelingSelectedAction")},
                       selected);
     model->setEnabled(QStringLiteral("planLinkAction"), rows.size() >= 2);
     model->setEnabled(QStringLiteral("planToggleSubtasksAction"), summary);
@@ -155,6 +183,20 @@ void PlanHost::syncChecks()
     action(QStringLiteral("planShowBaselineAction"))->setChecked(m_service->showBaseline());
     action(QStringLiteral("planShowBarTextAction"))->setChecked(m_service->showBarText());
     action(QStringLiteral("planUsageWeeksAction"))->setChecked(m_service->usageWeeks());
+    // M79: filter, sort, the baseline drawn, slack.
+    const QString filter = m_service->filter();
+    if (Quick::ActionEntry *entry = action(QStringLiteral("planFilter") + filter.left(1).toUpper() + filter.mid(1) + QStringLiteral("Action"))) {
+        entry->setChecked(true);
+    }
+    action(QStringLiteral("planFilterRelatedSummariesAction"))->setChecked(m_service->relatedSummaries());
+    const QString sort = m_service->sortKey();
+    if (Quick::ActionEntry *entry = action(QStringLiteral("planSort") + sort.left(1).toUpper() + sort.mid(1) + QStringLiteral("Action"))) {
+        entry->setChecked(true);
+    }
+    if (Quick::ActionEntry *entry = action(QStringLiteral("planBaselineShown%1Action").arg(m_service->ganttBaseline()))) {
+        entry->setChecked(true);
+    }
+    action(QStringLiteral("planShowSlackAction"))->setChecked(m_service->showSlack());
 }
 
 } // namespace QindaOffice::Apps::Plan
