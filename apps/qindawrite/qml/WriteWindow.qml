@@ -179,6 +179,29 @@ OfficeWindow {
             minWidth: 220
             CommentsPanel { id: commentsPanel; objectName: "commentsPanel"; comments: window.write.comments }
         }
+        // Word's Styles and Navigation panes (M73, D-082). AGENT-NOTE: the
+        // dock's side lanes never shrink below their extents (QindaTK), so
+        // these two together (240 + 260 and the gaps) still fit a 520 px window.
+        Tk.DockPanel {
+            panelId: "styles"
+            title: qsTr("Styles")
+            iconName: "palette"
+            zone: "right"
+            mode: "hidden"
+            extent: 260
+            minWidth: 200
+            StylesPanel { objectName: "stylesPanel"; styles: window.write.styles }
+        }
+        Tk.DockPanel {
+            panelId: "navigation"
+            title: qsTr("Navigation")
+            iconName: "navigation"
+            zone: "left"
+            mode: "hidden"
+            extent: 240
+            minWidth: 180
+            NavigationPanel { objectName: "navigationPanel"; navigation: window.write.navigation }
+        }
         Tk.DockPanel {
             panelId: "assistant"
             title: qsTr("Assistant")
@@ -193,6 +216,13 @@ OfficeWindow {
             const hidden = dock.hiddenPanels.map(function(e) { return typeof e === "string" ? e : e.panelId })
             window.host.actions.setChecked("aiAssistantAction", !hidden.includes("assistant"))
             window.host.actions.setChecked("writeShowCommentsAction", !hidden.includes("comments"))
+            window.host.actions.setChecked("writeStylesPaneAction", !hidden.includes("styles"))
+            window.host.actions.setChecked("writeNavigationPaneAction", !hidden.includes("navigation"))
+        }
+        function setPane(panel, visible) {
+            const hidden = dock.hiddenPanels.map(function(e) { return typeof e === "string" ? e : e.panelId }).includes(panel)
+            if (visible && hidden) dock.showPanel(panel)
+            else if (!visible && !hidden) dock.hidePanel(panel)
         }
     }
 
@@ -245,7 +275,38 @@ OfficeWindow {
         function onProposalRequested(original, proposal) { proposalDialog.original = original; proposalDialog.proposal = proposal; proposalDialog.open() }
     }
 
-    // ---- Word's formatting dialogs (M70, D-079) ----
+    Connections {
+        target: window.write.styles
+        function onPaneToggleRequested(visible) { dock.setPane("styles", visible) }
+    }
+    Connections {
+        target: window.write.navigation
+        function onPaneToggleRequested(visible) { dock.setPane("navigation", visible) }
+    }
+
+    // ---- Word's formatting dialogs (M70, D-079); while Modify Style asks
+    // for one, `formatTarget` is the style's draft (write_style_draft.h) ----
+    property QtObject formatTarget: null
+    readonly property QtObject paragraphTarget: formatTarget !== null ? formatTarget : window.write.paragraphFormat
+    readonly property QtObject fontTarget: formatTarget !== null ? formatTarget : window.write.fontFormat
+    readonly property QtObject bordersTarget: formatTarget !== null ? formatTarget : window.borders
+    StyleDialog {
+        id: styleDialog
+        styles: window.write.styles
+        families: window.write.fontFamilies
+        onClosed: window.formatTarget = null
+        onFormatRequested: function(kind) {
+            window.formatTarget = window.write.styles.draft
+            if (kind === "font") {
+                fontDialog.families = window.write.fontFamilies
+                fontDialog.sizes = window.write.fontSizes
+                fontDialog.load(window.fontTarget.fontInfo())
+                fontDialog.open()
+            } else if (kind === "paragraph") { paragraphDialog.load(window.paragraphTarget.paragraphInfo()); paragraphDialog.open() }
+            else if (kind === "tabs") { tabsDialog.load(window.paragraphTarget.tabsInfo()); tabsDialog.open() }
+            else { bordersDialog.load(window.bordersTarget.dialogInfo()); bordersDialog.open() }
+        }
+    }
     Connections {
         target: window.write.paragraphFormat
         function onParagraphDialogRequested() { paragraphDialog.load(target.paragraphInfo()); paragraphDialog.open() }
@@ -272,19 +333,19 @@ OfficeWindow {
     }
     ParagraphDialog {
         id: paragraphDialog
-        onParagraphApplied: function(answer) { window.write.paragraphFormat.applyParagraph(answer) }
-        onTabsRequested: { tabsDialog.load(window.write.paragraphFormat.tabsInfo()); tabsDialog.open() }
+        onParagraphApplied: function(answer) { window.paragraphTarget.applyParagraph(answer) }
+        onTabsRequested: { tabsDialog.load(window.paragraphTarget.tabsInfo()); tabsDialog.open() }
     }
-    TabsDialog { id: tabsDialog; onTabsApplied: function(answer) { window.write.paragraphFormat.applyTabs(answer) } }
+    TabsDialog { id: tabsDialog; onTabsApplied: function(answer) { window.paragraphTarget.applyTabs(answer) } }
     FontDialog {
         id: fontDialog
-        onFontApplied: function(answer) { window.write.fontFormat.applyFont(answer) }
+        onFontApplied: function(answer) { window.fontTarget.applyFont(answer) }
         onCustomColorRequested: function(what) { colorDialog.target = "font-" + what; colorDialog.open() }
     }
     BordersShadingDialog {
         id: bordersDialog
         borders: window.borders
-        onBordersApplied: function(answer) { window.borders.applyDialog(answer) }
+        onBordersApplied: function(answer) { window.bordersTarget.applyDialog(answer) }
         onCustomColorRequested: function(what) { colorDialog.target = "borders-" + what; colorDialog.open() }
     }
     TablePropertiesDialog { id: tableProperties; onPropertiesApplied: function(answer) { window.tableLayout.applyProperties(answer) } }
@@ -294,6 +355,12 @@ OfficeWindow {
         onSeparatorPicked: function(separator) { textToTable.columns = window.tableLayout.textToTableInfo(separator).columns }
         onConvertApplied: function(answer) { window.tableLayout.applyTextToTable(answer) }
     }
+    // ---- Word's lists (M73, D-082): each dialog opens on its own request ----
+    DefineBulletDialog { lists: window.write.lists; families: window.write.fontFamilies }
+    DefineNumberDialog { lists: window.write.lists }
+    DefineMultilevelDialog { lists: window.write.lists }
+    NumberingValueDialog { lists: window.write.lists }
+    ListIndentsDialog { lists: window.write.lists }
     TableDialog {
         id: tableDialog
         onTableApplied: function(rows, columns) { window.write.insertTable(rows, columns) }

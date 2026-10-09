@@ -5,9 +5,10 @@
 # gate (tst_docx_corpus: aggregate counts only; skips without QQO_DOCX_CORPUS), and
 # applying a document's own paragraph style (tst_docx_restyle), and Word's
 # table, paragraph and font formatting (M70: tst_docx_tables,
-# tst_docx_paragraphs, which renders a sample through LibreOffice when present).
+# tst_docx_paragraphs, which renders a sample through LibreOffice when present),
+# and Word's lists and styles (M73: tst_docx_lists, tst_docx_styles).
 foreach(name IN ITEMS tst_docx_corpus tst_docx_read tst_docx_write tst_docx_restyle tst_docx_comments
-                      tst_docx_tables tst_docx_paragraphs tst_docx_controls)
+                      tst_docx_tables tst_docx_paragraphs tst_docx_controls tst_docx_lists tst_docx_styles)
     add_executable(${name} ${name}.cpp docx_fixture.h)
     target_link_libraries(${name} PRIVATE office_docx office_ooxml Qt6::Test Qt6::Gui)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/tests)

@@ -223,7 +223,11 @@ QVariantMap FontController::fontInfo() const
         first.setPosition(cursor.selectionStart() + 1);
         f = first.charFormat();
     }
-    const QFont base = m_control->document()->defaultFont();
+    return fontInfoOf(f, m_control->document()->defaultFont());
+}
+
+QVariantMap fontInfoOf(const QTextCharFormat &f, const QFont &base)
+{
     const QStringList families = f.fontFamilies().toStringList();
     const qreal size = pointSize(f, base);
     return {{QStringLiteral("family"), families.isEmpty() || families.first().isEmpty() ? base.family() : families.first()},
@@ -267,6 +271,20 @@ bool FontController::applyFont(const QVariantMap &answer)
         m_control->setCurrentCharFormat(typing);
         return true;
     }
+    cursor.beginEditBlock();
+    applyFontAt(cursor, answer);
+    cursor.endEditBlock();
+    m_document->setDirty(true);
+    return true;
+}
+
+bool applyFontAt(const QTextCursor &cursor, const QVariantMap &answer)
+{
+    const QStringList changed = answer.value(QStringLiteral("changed")).toStringList();
+    if (changed.isEmpty() || !cursor.hasSelection()) {
+        return false;
+    }
+    const QFont base = cursor.document()->defaultFont();
     // Run by run, so each keeps what the dialog did not touch and a raise
     // in points becomes each run's own percentage.
     const int start = cursor.selectionStart();
@@ -287,15 +305,12 @@ bool FontController::applyFont(const QVariantMap &answer)
             runs.append({{from, to}, f});
         }
     }
-    cursor.beginEditBlock();
     for (const auto &[range, format] : std::as_const(runs)) {
         QTextCursor span(document);
         span.setPosition(range.first);
         span.setPosition(range.second, QTextCursor::KeepAnchor);
         span.setCharFormat(format);
     }
-    cursor.endEditBlock();
-    m_document->setDirty(true);
     return true;
 }
 

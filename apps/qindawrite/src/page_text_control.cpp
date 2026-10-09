@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "page_text_control.h"
 
+#include "docx_list_labels.h"
+
 #include "docx_properties.h"
 #include "docx_table_format.h"
 #include "docx_text.h"
@@ -337,6 +339,11 @@ void PageTextControl::moveToNextCell(bool backward)
 
 bool PageTextControl::keyPress(QKeyEvent *event)
 {
+    if (m_keyFilter && m_keyFilter(event)) {
+        m_formatPinned = false;
+        cursorSettled(true);
+        return true;
+    }
     if (moveCursor(event)) {
         return true;
     }
@@ -509,6 +516,7 @@ void PageTextControl::drawContents(QPainter *painter, const QRectF &clip) const
         context.selections.append(selection);
     }
     m_document->documentLayout()->draw(painter, context);
+    Docx::drawListMarkers(painter, *m_document, clip); // Word's list numbers (M73), any story
 }
 
 } // namespace QindaOffice::Apps::Write

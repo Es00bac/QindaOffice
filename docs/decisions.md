@@ -5,6 +5,110 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-082: QindaWrite: Word's lists, numbering and styles
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart, "nothing missing that somebody would need";
+M73, builds on D-068 and D-079)
+
+**Context.** 41 % of the owner's 590 Word documents have lists and nearly
+all lean on their template's styles. QindaWrite read Word's numbering and
+styles (D-068) but edited lists with two Qt toggles (a disc bullet and
+1. 2. 3.) and styles with a ten-entry gallery of Write's own: no bullet,
+numbering or multilevel library, no Define New…, no restart or continue,
+Tab did not change a level, a multi-level number was fixed when the file
+was read and went wrong after an edit, and a document's styles could be
+applied but not made, changed or deleted. Character styles were not
+written, and Clear Formatting dropped the paragraph's style.
+
+**Decision.**
+1. **Word's list model lives on the text** (`docx_lists.h`): a list
+   paragraph's `QTextListFormat` carries Word's own description — the
+   `w:abstractNum` (nine levels) as XML, that definition's identity, the
+   `w:num` and level, and the instance's start overrides (`kListDefinition`,
+   `kListAbstractKey`, `kListNumId`, `kListLevel`, `kListStarts`). Every
+   story and every clone carries what it needs; a changed list is a new
+   list format, so Undo is the document's own.
+2. **Numbers are computed, not stored** (`docx_list_labels.h`): Word's
+   counting over the document in order — one counter set per definition,
+   or per instance when it overrides a start; `w:lvlRestart`; `%1`–`%9`
+   in each level's format; legal numbering — cached until the next change,
+   and drawn by Write at left − hanging in the level's font and colour
+   (a symbol font's private-use bullet as its Unicode look-alike) on
+   screen, paper and PDF. Qt's own marker is switched off per paragraph
+   (`QTextFormat::ListStyle` on the block, read by Qt 6.11's
+   `drawListItem`); the Qt style, prefix and suffix stay for HTML and
+   Markdown. A list renumbers as items are added, promoted or removed.
+   Where the text after the number starts (tab, space, nothing; Word's
+   next-stop rule for a number wider than its hanging indent) is laid out
+   at each list command and at open, display only.
+3. **The commands are Word's** (`docx_list_edit.h`, `write_lists.h`): the
+   Bullets, Numbering and Multilevel List libraries (a pick on items of one
+   list of that kind changes that list, as Word's library does; otherwise
+   the selection becomes a new list), Define New Bullet / Number Format /
+   Multilevel List, Change List Level, Tab and Shift+Tab at an item's
+   start, Increase / Decrease Indent on items, Restart at 1 and Set
+   Numbering Value (a new instance with `w:startOverride`), Continue
+   Numbering (the list before's `w:numId`), Adjust List Indents, Enter on
+   an empty item (up a level, then out of the list), Backspace at an item's
+   start (the number goes, the text stays).
+4. **Saved as Word writes them**: a list's `w:num` and `w:abstractNum` are
+   kept byte for byte while they are as read (the import snapshot
+   `{num, def, starts}`); a restart is a new `w:num` over the same
+   `w:abstractNum` with `w:lvlOverride/w:startOverride`; a changed or new
+   definition is a new `w:abstractNum` (with a `w:nsid`) and `w:num`. A
+   paragraph at its level's indents, or numbered by its style, says
+   nothing of either.
+5. **Styles are data the user edits** (`docx_style_edit.h`,
+   `WordParts::styles`): an immutable styles part that each command swaps
+   inside its own edit block (an undo item swaps it back). The Styles pane
+   lists the document's paragraph, character, linked and table styles and
+   Word's built-ins it lacks (one joins the document on first use); the
+   gallery is sixteen stable slots (`writeQuickStyle0`–`15`) showing the
+   document's quick styles, then Word's; New Style takes the selection's
+   formatting (paragraph, character or linked; based on; next; gallery);
+   Modify Style runs M70's Font, Paragraph, Tabs and Borders and Shading
+   dialogs on a sample paragraph whose markup is what the writer would
+   write — the style's own `w:pPr` / `w:rPr` with exactly the changes
+   re-derived — plus Numbering; Update Style to Match Selection; Delete
+   Style (the document's own styles; its paragraphs fall back to its
+   parent). A changed style re-derives its paragraphs by rebasing: what a
+   paragraph took from the style follows it, what the paragraph says
+   itself stays, and the import snapshots move along, so the paragraph is
+   still written as `<w:pStyle/>` alone. Character styles are `w:rStyle`;
+   a linked style on part of a paragraph applies its character half.
+6. **Clear Formatting keeps the style**, and Enter at a paragraph's end
+   gives the next paragraph the style's `w:next` (it moved from the page
+   item into the styles controller's key filter, so a Word document's own
+   Normal follows its headings, not Write's).
+7. **Format Painter** (`write_painter.h`): once on a click, until Esc on a
+   double click, Ctrl+Shift+C / Ctrl+Shift+V; looks only, never content.
+   **Navigation pane** (`write_navigation.h`): headings by outline level,
+   go, collapse, Move Up / Move Down with the whole section. Track Changes
+   moves to Word's own Ctrl+Shift+E to free Ctrl+Shift+C.
+
+**Consequences.** Lists and styles made or changed in QindaWrite open in
+Word as Word would have written them, and an untouched Word list keeps its
+numbering part. The editing control no longer hands Enter, Tab and
+Backspace to Qt first: a key filter (lists, painter, styles) sees them.
+Not done: picture bullets; Word's "link level to style" (a list level's
+`w:pStyle`); a table style's conditional rows and columns are shown after
+the next open (its whole-table borders and shading at once); the first
+line's offset after a number is not re-laid while typing; list items
+pasted from another document join a list of this one that has the same
+`w:numId`; the Navigation pane moves sections with buttons, not by drag;
+style definitions cannot be changed while a header or footer is open;
+Modify Style's Numbering offers none, bullets or 1. 2. 3. QindaTK gaps,
+reported and not worked around in the app: no character-map control
+(Define New Bullet offers Word's symbols and takes any typed or pasted
+character), no gallery control with live previews (the sixteen slots are
+ribbon buttons), no drag source on `Tk.TreeRow` (section moves are
+buttons), dock side lanes that never shrink below their extents (the two
+panes' extents are chosen to fit a 520 px window together), and
+`Tk.Scroll` revealing a refocused item by its whole height, so the page
+scrolls when focus returns to it after a dialog closes (M70's dialogs do
+the same).
+
 ## D-081: QindaBooks: owner pay, estimated taxes and payroll (federal + Colorado)
 
 **Date:** 2026-10-08 · **Status:** accepted (owner request 2026-10-08:

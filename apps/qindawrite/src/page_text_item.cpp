@@ -2,6 +2,7 @@
 #include "page_text_item.h"
 
 #include "docx_comments.h"
+#include "docx_list_labels.h"
 #include "docx_paragraph_format.h"
 #include "docx_text.h"
 
@@ -9,7 +10,6 @@
 #include "page_story_editor.h"
 #include "page_text_control.h"
 #include "pdf_exporter.h"
-#include "style_catalog.h"
 #include "write_document.h"
 
 #include <QAbstractTextDocumentLayout>
@@ -237,6 +237,7 @@ void PageTextItem::paintPage(QPainter *painter, int index, const QRectF &clip)
         context.clip = pageArea;
         context.palette = m_control->paperPalette();
         m_document->textDocument()->documentLayout()->draw(painter, context);
+        Docx::drawListMarkers(painter, *m_document->textDocument(), pageArea); // Word's numbers (M73)
     } else {
         // Comment bands under the text (display only, docx_comments.h).
         if (!m_document->comments().isEmpty()) {
@@ -395,12 +396,15 @@ void PageTextItem::mouseReleaseEvent(QMouseEvent *event)
         return;
     }
     forwardMouse(event);
-    const bool click = m_pressForwarded && event->button() == Qt::LeftButton
-                       && (event->position() - m_pressPoint).manhattanLength() < 4;
+    const bool released = m_pressForwarded && event->button() == Qt::LeftButton;
+    const bool click = released && (event->position() - m_pressPoint).manhattanLength() < 4;
     m_pressForwarded = false;
     if (click && m_control != nullptr && !m_control->textCursor().hasSelection()) {
         emit clicked(event->position().x(), event->position().y(), viewToDoc(event->position()),
                      m_control->textCursor().position());
+    }
+    if (released) {
+        emit selectionReleased();
     }
 }
 
@@ -456,24 +460,11 @@ void PageTextItem::keyPressEvent(QKeyEvent *event)
         event->accept();
         return;
     }
-    const bool newParagraph = (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
-        && (event->modifiers() & Qt::ShiftModifier) == Qt::NoModifier;
-    const int styleBefore =
-        newParagraph ? classifyBlockStyle(m_control->textCursor().block()) : StyleCatalog::Normal;
+    // AGENT-NOTE: Enter at the end of a heading starts BODY text — the
+    // style's "style for following paragraph" — in the control's key filter
+    // (StylesController::handleKey, M73), so a Word document's own Normal
+    // follows its headings, not Write's.
     event->setAccepted(m_control->processEvent(event));
-    if (!newParagraph) {
-        return;
-    }
-    // AGENT-NOTE: Enter at the end of a heading starts BODY text, not
-    // another heading. Qt carries the block format forward, so without this
-    // everything typed after a heading stayed a heading — which is also why
-    // the table of contents listed body paragraphs as entries.
-    const bool wasHeading = styleBefore >= StyleCatalog::Title && styleBefore <= StyleCatalog::Heading6;
-    if (!wasHeading || !m_control->textCursor().block().text().isEmpty()) {
-        return;
-    }
-    StyleCatalog catalog;
-    catalog.apply(m_control->textCursor(), StyleCatalog::Normal);
 }
 
 void PageTextItem::inputMethodEvent(QInputMethodEvent *event)

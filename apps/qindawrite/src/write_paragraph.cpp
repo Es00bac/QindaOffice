@@ -113,7 +113,12 @@ QString ParagraphController::tabsId() const
 
 QVariantMap ParagraphController::paragraphInfo() const
 {
-    const QTextBlock block = selectedBlocks(m_control->textCursor()).value(0);
+    return paragraphInfoAt(m_control->textCursor());
+}
+
+QVariantMap paragraphInfoAt(const QTextCursor &cursor)
+{
+    const QTextBlock block = selectedBlocks(cursor).value(0);
     const QTextBlockFormat f = block.blockFormat();
     const Docx::OwnSpacing spacing = Docx::ownSpacing(f);
     const auto [rule, at] = lineRuleOf(f);
@@ -135,10 +140,27 @@ QVariantMap ParagraphController::paragraphInfo() const
             {QStringLiteral("keepNext"), f.boolProperty(Docx::kKeepWithNext)},
             {QStringLiteral("keepLines"), f.nonBreakableLines()},
             {QStringLiteral("pageBreakBefore"), bool(Docx::ownPageBreaks(f) & QTextFormat::PageBreak_AlwaysBefore)},
-            {QStringLiteral("count"), int(selectedBlocks(m_control->textCursor()).size())}};
+            {QStringLiteral("count"), int(selectedBlocks(cursor).size())}};
 }
 
 bool ParagraphController::applyParagraph(const QVariantMap &answer)
+{
+    QTextCursor cursor = m_control->textCursor();
+    const QList<QTextBlock> blocks = selectedBlocks(cursor);
+    cursor.beginEditBlock();
+    const bool applied = applyParagraphAt(cursor, answer);
+    cursor.endEditBlock();
+    if (!applied) {
+        return false;
+    }
+    m_document->setDirty(true);
+    if (!blocks.isEmpty() && m_control->document() == m_document->textDocument()) {
+        m_document->keepRules()->schedule(blocks.first().position());
+    }
+    return true;
+}
+
+bool applyParagraphAt(const QTextCursor &cursor, const QVariantMap &answer)
 {
     const QStringList changed = answer.value(QStringLiteral("changed")).toStringList();
     if (changed.isEmpty()) {
@@ -146,9 +168,7 @@ bool ParagraphController::applyParagraph(const QVariantMap &answer)
     }
     const auto has = [&](const char *key) { return changed.contains(QString::fromLatin1(key)); };
     const auto value = [&](const char *key) { return answer.value(QString::fromLatin1(key)); };
-    QTextCursor cursor = m_control->textCursor();
     const QList<QTextBlock> blocks = selectedBlocks(cursor);
-    cursor.beginEditBlock();
     for (const QTextBlock &block : blocks) {
         QTextBlockFormat f = block.blockFormat();
         if (has("alignment")) {
@@ -230,30 +250,45 @@ bool ParagraphController::applyParagraph(const QVariantMap &answer)
             Docx::setParagraphSpacing(block, s);
         }
     }
-    cursor.endEditBlock();
-    m_document->setDirty(true);
-    if (!blocks.isEmpty() && m_control->document() == m_document->textDocument()) {
-        m_document->keepRules()->schedule(blocks.first().position());
-    }
     return true;
 }
 
 QVariantMap ParagraphController::tabsInfo() const
 {
-    const QTextBlock block = selectedBlocks(m_control->textCursor()).value(0);
+    return {{QStringLiteral("stops"), tabStopsAt(m_control->textCursor())},
+            {QStringLiteral("defaultStop"), m_document->parts().defaultTabStop}};
+}
+
+QVariantList tabStopsAt(const QTextCursor &cursor)
+{
+    const QTextBlock block = selectedBlocks(cursor).value(0);
     QVariantList stops;
     for (const Docx::TabStop &s : Docx::tabStops(block.blockFormat())) {
         stops.append(QVariantMap{{QStringLiteral("position"), s.position},
                                  {QStringLiteral("alignment"), s.alignment},
                                  {QStringLiteral("leader"), s.leader}});
     }
-    return {{QStringLiteral("stops"), stops}, {QStringLiteral("defaultStop"), m_document->parts().defaultTabStop}};
+    return stops;
 }
 
 bool ParagraphController::applyTabs(const QVariantMap &answer)
 {
+    QTextCursor cursor = m_control->textCursor();
+    cursor.beginEditBlock();
+    applyTabStopsAt(cursor, answer.value(QStringLiteral("stops")).toList());
+    cursor.endEditBlock();
+    const qreal defaultStop = answer.value(QStringLiteral("defaultStop"), m_document->parts().defaultTabStop).toReal();
+    if (defaultStop > 0 && qAbs(defaultStop - m_document->parts().defaultTabStop) > 0.01) {
+        m_document->setDefaultTabStop(defaultStop);
+    }
+    m_document->setDirty(true);
+    return true;
+}
+
+void applyTabStopsAt(const QTextCursor &cursor, const QVariantList &answer)
+{
     QList<Docx::TabStop> stops;
-    for (const QVariant &v : answer.value(QStringLiteral("stops")).toList()) {
+    for (const QVariant &v : answer) {
         const QVariantMap m = v.toMap();
         const int position = m.value(QStringLiteral("position")).toInt();
         if (position <= 0 || position > 31680) {
@@ -262,20 +297,11 @@ bool ParagraphController::applyTabs(const QVariantMap &answer)
         stops.append({position, m.value(QStringLiteral("alignment"), QStringLiteral("left")).toString(),
                       m.value(QStringLiteral("leader"), QStringLiteral("none")).toString()});
     }
-    QTextCursor cursor = m_control->textCursor();
-    cursor.beginEditBlock();
     for (const QTextBlock &block : selectedBlocks(cursor)) {
         QTextBlockFormat f = block.blockFormat();
         Docx::setTabStops(f, stops);
         QTextCursor(block).setBlockFormat(f);
     }
-    cursor.endEditBlock();
-    const qreal defaultStop = answer.value(QStringLiteral("defaultStop"), m_document->parts().defaultTabStop).toReal();
-    if (defaultStop > 0 && qAbs(defaultStop - m_document->parts().defaultTabStop) > 0.01) {
-        m_document->setDefaultTabStop(defaultStop);
-    }
-    m_document->setDirty(true);
-    return true;
 }
 
 } // namespace QindaOffice::Apps::Write

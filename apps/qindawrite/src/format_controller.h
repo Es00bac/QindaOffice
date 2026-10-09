@@ -16,6 +16,8 @@
 #include <QTextCharFormat>
 #include <QTextListFormat>
 
+#include <functional>
+
 namespace QindaOffice::Quick {
 struct MenuNode;
 }
@@ -42,6 +44,12 @@ public:
 
     // Merges into the selection, or pins for the next keystroke.
     void applyCharFormat(const QTextCharFormat &format);
+    // Increase / Decrease Indent ask this first (ListController changes the
+    // level of list items); true when it handled the command.
+    void setListIndentHook(std::function<bool(int)> hook) { m_listIndent = std::move(hook); }
+    // Clear Formatting asks this first (StylesController keeps the style,
+    // M73); true when it handled the command.
+    void setClearFormattingHook(std::function<bool()> hook) { m_clearFormatting = std::move(hook); }
     // The actual insertions, separated from their dialogs so tests (and
     // future scripting) can drive them without modal UI.
     void insertTableAtCursor(int rows, int columns);
@@ -60,7 +68,6 @@ signals:
 private:
     void mergeBlockFormat(const QTextBlockFormat &format);
     void applyAlignment(Qt::Alignment alignment);
-    void toggleList(QTextListFormat::Style style);
     void adjustIndent(int delta);
     void clearDirectFormatting();
     void insertPageBreak();
@@ -69,6 +76,8 @@ private:
     PageTextControl *m_control;
     WriteDocument *m_document;
     WriteActions m_actions;
+    std::function<bool(int)> m_listIndent;
+    std::function<bool()> m_clearFormatting;
     bool m_syncing = false;
 };
 

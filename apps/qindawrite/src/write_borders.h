@@ -25,10 +25,18 @@ namespace QindaOffice::Quick {
 struct MenuNode;
 }
 
+class QTextCursor;
+
 namespace QindaOffice::Apps::Write {
 
 class PageTextControl;
 class WriteDocument;
+
+// The Borders and Shading dialog's question and answer for the paragraphs
+// `cursor` selects, in any document: the page's story, or a style's sample
+// in Modify Style (write_style_draft.h, M73). Not an edit block.
+[[nodiscard]] QVariantMap paragraphBordersInfoAt(const QTextCursor &cursor);
+void applyParagraphBordersAt(const QTextCursor &cursor, const QVariantMap &answer);
 
 class BordersController final : public QObject {
     Q_OBJECT

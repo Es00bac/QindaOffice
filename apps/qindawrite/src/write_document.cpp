@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_document.h"
 
+#include "docx_style_edit.h"
 #include "docx_text.h"
 #include "page_geometry.h"
 #include "write_footnotes.h"
 #include "write_pagination.h"
 
+#include <QAbstractUndoItem>
 #include <QTextCursor>
 #include <QTextFrame>
 
@@ -331,6 +333,50 @@ void WriteDocument::adoptParts(Docx::WordParts parts)
     applyLayout();
     // Word row heights need the final column widths: after the layout.
     Docx::applyRowHeights(m_text.get());
+    emit stylesChanged();
+}
+
+// ---- styles (M73, D-082) --------------------------------------------------------------
+
+namespace {
+
+// Swaps the document's styles part back and forth with the text's own
+// Undo and Redo: one item inside the style command's edit block.
+class StylesUndo final : public QAbstractUndoItem {
+public:
+    StylesUndo(WriteDocument *document, Ooxml::XmlElementPtr before, Ooxml::XmlElementPtr after)
+        : m_document(document)
+        , m_before(std::move(before))
+        , m_after(std::move(after))
+    {
+    }
+    void undo() override { m_document->swapStyles(m_before); }
+    void redo() override { m_document->swapStyles(m_after); }
+
+private:
+    WriteDocument *m_document;
+    Ooxml::XmlElementPtr m_before;
+    Ooxml::XmlElementPtr m_after;
+};
+
+} // namespace
+
+Ooxml::XmlElementPtr WriteDocument::stylesRoot() const
+{
+    return Docx::stylesRoot(m_parts, m_text->defaultFont());
+}
+
+void WriteDocument::setStylesRoot(Ooxml::XmlElementPtr root, QTextDocument *story)
+{
+    Ooxml::XmlElementPtr before = m_parts.styles;
+    swapStyles(root);
+    (story != nullptr ? story : m_text.get())->appendUndoItem(new StylesUndo(this, std::move(before), std::move(root)));
+}
+
+void WriteDocument::swapStyles(Ooxml::XmlElementPtr root)
+{
+    m_parts.styles = std::move(root);
+    emit stylesChanged();
 }
 
 } // namespace QindaOffice::Apps::Write

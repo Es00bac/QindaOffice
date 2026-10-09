@@ -37,6 +37,10 @@ namespace QindaOffice::Apps::Write {
 class BordersController;
 class FontController;
 class FormatController;
+class FormatPainter;
+class ListController;
+class NavigationModel;
+class StylesController;
 class PageTextControl;
 class ParagraphController;
 class TableLayoutController;
@@ -76,6 +80,13 @@ class WriteHost : public Quick::DocumentHost {
     Q_PROPERTY(QObject *paragraphFormat READ paragraphObject CONSTANT)
     Q_PROPERTY(QObject *fontFormat READ fontObject CONSTANT)
     Q_PROPERTY(QObject *tableLayout READ tableLayoutObject CONSTANT)
+    // Word's lists and styles (M73, D-082): write_lists.h, write_styles.h.
+    Q_PROPERTY(QObject *lists READ listsObject CONSTANT)
+    Q_PROPERTY(QObject *styles READ stylesObject CONSTANT)
+    // Word's Format Painter and Navigation pane (M73): write_painter.h,
+    // write_navigation.h.
+    Q_PROPERTY(QObject *painter READ painterObject CONSTANT)
+    Q_PROPERTY(QObject *navigation READ navigationObject CONSTANT)
 public:
     WriteHost();
     ~WriteHost() override;
@@ -94,6 +105,10 @@ public:
     [[nodiscard]] ParagraphController *paragraphController() const { return m_paragraph; }
     [[nodiscard]] FontController *fontController() const { return m_font; }
     [[nodiscard]] TableLayoutController *tableLayoutController() const { return m_tableLayout; }
+    [[nodiscard]] ListController *listController() const { return m_lists; }
+    [[nodiscard]] StylesController *stylesController() const { return m_styles; }
+    [[nodiscard]] FormatPainter *formatPainter() const { return m_painter; }
+    [[nodiscard]] NavigationModel *navigation() const { return m_navigation; }
 
     // The QML page item, once (WritePage.qml's Component.onCompleted).
     Q_INVOKABLE void attachPage(PageTextItem *item);
@@ -201,6 +216,10 @@ private:
     [[nodiscard]] QObject *paragraphObject() const;
     [[nodiscard]] QObject *fontObject() const;
     [[nodiscard]] QObject *tableLayoutObject() const;
+    [[nodiscard]] QObject *listsObject() const;
+    [[nodiscard]] QObject *stylesObject() const;
+    [[nodiscard]] QObject *painterObject() const;
+    [[nodiscard]] QObject *navigationObject() const;
     void insertPageField(bool total);
     void syncStoryActions();
     void createSpellingEntries();
@@ -225,6 +244,10 @@ private:
     ParagraphController *m_paragraph = nullptr;
     FontController *m_font = nullptr;
     TableLayoutController *m_tableLayout = nullptr;
+    ListController *m_lists = nullptr;
+    StylesController *m_styles = nullptr;
+    FormatPainter *m_painter = nullptr;
+    NavigationModel *m_navigation = nullptr;
     WriteReviewActions *m_review = nullptr;
     SpellChecker *m_spell = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;

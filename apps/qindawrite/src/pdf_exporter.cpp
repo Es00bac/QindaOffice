@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pdf_exporter.h"
 
+#include "docx_list_labels.h"
 #include "docx_paragraph_format.h"
 #include "docx_text.h"
 #include "page_geometry.h"
@@ -73,6 +74,7 @@ void drawStory(QPainter *painter, const QTextDocument *story, const QRectF &page
     context.clip = QRectF(0, 0, width, height);
     shown->documentLayout()->draw(painter, context);
     Docx::drawTabLeaders(painter, *shown, context.clip);
+    Docx::drawListMarkers(painter, *shown, context.clip);
     painter->restore();
 }
 
@@ -154,6 +156,7 @@ void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDoc
         const_cast<QAbstractTextDocumentLayout *>(layout)->draw(painter, context);
         Docx::drawParagraphBorders(painter, *document, context.clip);
         Docx::drawTabLeaders(painter, *document, context.clip);
+        Docx::drawListMarkers(painter, *document, context.clip);
         drawPageDecoration(painter, QRectF(0, i * page.height(), page.width(), page.height()), decoration, i + 1,
                            pages);
         painter->restore();

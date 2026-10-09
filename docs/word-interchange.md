@@ -87,14 +87,20 @@ rest and `WriteDocument` owns both:
   `w:showingPlcHdr` and `w:dataBinding` (Word would otherwise refill a
   bound control from its XML on open and undo the edit). A control copied
   within the document is written again without its `w:id`.
+- **Lists and styles** — Word's own model (M73, D-082; below): every list
+  paragraph's list format carries its `w:abstractNum`, `w:num`, level and
+  start overrides; the styles part is `WordParts::styles` once a style
+  command changed it.
 - **The source package** — what Write does not model is carried from it on
-  save: styles, numbering definitions, theme, settings, fonts, endnotes,
-  custom XML, glossary, people, VBA (macro kinds only), and the comment
-  parts while no comment changed.
+  save: styles (until a style command changes them), numbering
+  definitions (every untouched list's, byte for byte), theme, settings,
+  fonts, endnotes, custom XML, glossary, people, VBA (macro kinds only),
+  and the comment parts while no comment changed.
 
 ## Styles in a Word document
 
-The style gallery's Normal, Title, Heading 1–6 and Quote apply the
+Write's own styles (Format ▸ Style, Home ▸ Styles ▸ More styles: Normal,
+Title, Heading 1–6, Quote, Code) apply the
 document's OWN style of that name when it has one (`docx_restyle.h`): the
 paragraph shows the document's template look (style chain, theme colours,
 spacing folded as the reader folds it), its runs keep their own direct
@@ -105,6 +111,98 @@ properties) — so Word shows its own style, not Write's built-in look as
 direct formatting. A document without that style, or one not from Word,
 gets Write's built-in style. A restyled table-cell paragraph is shown
 without its table style's layers (Word, which has them, shows them).
+
+## Lists, numbering and styles (M73, D-082)
+
+Word's commands, under Word's names, on Word's model:
+
+- **Bullets** (Home ▸ Paragraph, Format ▸ Bullets): the library ● ○ ■ ◆ ➢
+  ✓ – in Word's own fonts (Symbol, Courier New, Wingdings), No Bullets and
+  **Define New Bullet** — any symbol (Word's, or any character typed or
+  pasted in any installed font), its colour and alignment. The Bullets
+  button applies the last bullet picked, or takes the bullets off.
+- **Numbering**: the library 1. 1) I. A. a) a. i., No Numbering and
+  **Define New Number Format** — number style (1, I, i, A, a, 1st, One,
+  First, 01, none), the text around the number ("Step %1:"; on a level
+  that also shows the levels above it, Word's own "%1.%2."), start value
+  and alignment. **Restart at 1**, **Continue Numbering** and **Set
+  Numbering Value** (start a new list at a value, or continue the list
+  before).
+- **Multilevel List**: the library 1. 1.1. 1.1.1., 1) a) i), bullet levels
+  (➢ ▪ •) and Article I. / Section 1.01 / (a); **Define New Multilevel
+  List** — per level the number style or a bullet, the format text with the
+  levels it includes, start, the level it restarts after, legal-style
+  numbering, the number's alignment and position, the text indent and what
+  follows the number (tab, space, nothing); **Change List Level** (levels
+  1–9); **Adjust List Indents** (number position, text indent, follow
+  number with, a tab stop).
+- Keys as in Word: **Tab / Shift+Tab** at an item's start move it down or
+  up a level (in the middle of an item they type a tab); Increase / Decrease
+  Indent do the same on items; **Enter** on an empty item moves it up a
+  level and, at the first level, ends the list; **Backspace** at an item's
+  start takes its number away and leaves the text where it was.
+- A library pick on items of one list of that kind changes that list (as
+  Word's library does); on other paragraphs it makes a new list.
+- **Numbers as Word shows them** (`docx_list_labels.h`): computed from the
+  paragraphs' list formats in document order — one counter set per
+  definition, or per instance when it overrides a start, `w:lvlRestart`,
+  `%1.%2.` in each level's format, legal numbering — and drawn at left −
+  hanging in the level's font and colour, on screen, paper and PDF and in
+  headers; a symbol font's private-use bullet is drawn as its Unicode
+  look-alike. Qt's own marker is off for these paragraphs. The text after
+  a number starts at the left indent, or at the next tab stop when the
+  number is wider than the hanging indent, or after a space or nothing.
+- **Saved as Word writes them** (`docx_writer_numbering.cpp`): an untouched
+  list keeps its `w:num` and `w:abstractNum`; a restart is a new `w:num`
+  over the same `w:abstractNum` with `w:lvlOverride/w:startOverride`;
+  Continue Numbering is the same `w:numId` again; a new or changed
+  definition is a new `w:abstractNum` (with a `w:nsid`) and `w:num`. A
+  paragraph at its level's indents, or numbered by its style, has no
+  `w:ind` or `w:numPr` of its own.
+- **Styles pane** (Home ▸ Styles ▸ Styles Pane, Alt+Ctrl+Shift+S, also
+  View ▸ Panes): the document's paragraph, character, linked and table
+  styles and Word's built-ins it lacks, in Word's order; a click applies
+  one (a built-in joins the document, as in Word); Show Preview draws the
+  names in their styles' fonts; "Only styles in use".
+- **The gallery** (Home ▸ Styles): the document's quick styles
+  (`w:qFormat`), then Word's built-in quick styles it lacks, in sixteen
+  stable slots; Write's own ten styles stay under More styles.
+- **New Style** from the selection (paragraph, character or linked; based
+  on; style for the following paragraph; add to the gallery), **Modify
+  Style** (name, base, next, gallery, the quick font row, and Font…,
+  Paragraph…, Tabs…, Borders… — M70's own dialogs — and Numbering), **Update
+  Style to Match Selection**, **Delete Style** (the document's own styles;
+  its paragraphs fall back to its parent, styles based on it to that
+  parent too). A style is written as a real `w:style` — `w:name`,
+  `w:basedOn`, `w:next`, `w:link`, `w:qFormat`, its own `w:pPr` / `w:rPr`,
+  all else it said kept; a linked style is a paragraph and a character
+  style naming each other. Modifying a style re-derives every paragraph
+  and run that uses it, or a style based on it: what they took from the
+  style follows it, what they say themselves stays, and they are still
+  written as `<w:pStyle/>` / `<w:rStyle/>` alone.
+- **Character styles** are `w:rStyle`; a linked style on part of a
+  paragraph applies its character half. **Clear Formatting** keeps the
+  style (and the list); **Enter** at a paragraph's end gives the next one
+  the style's "style for following paragraph".
+- **Format Painter** (Home ▸ Clipboard): a click paints the next text
+  selected with the mouse (a click paints the word under it), a double
+  click paints until Esc; Ctrl+Shift+C / Ctrl+Shift+V copy and paste
+  formatting. The paragraph's look travels when the copied selection held a
+  whole paragraph or nothing. (Track Changes is Word's Ctrl+Shift+E.)
+- **Navigation pane** (View ▸ Navigation Pane): the headings by outline
+  level (heading styles, `w:outlineLvl`), with their numbers; a click goes
+  there, an arrow collapses or expands, Move Up / Move Down move a heading
+  with its whole section (one undo step).
+
+Every command is a persistent action (`writeBullet0`–`6`,
+`writeNumbering0`–`6`, `writeMultilevel0`–`3`, `writeListLevel1`–`9`,
+`writeDefine…Action`, `writeRestartNumberingAction`, …,
+`writeQuickStyle0`–`15`, `writeStylesPaneAction`, `writeNewStyleAction`,
+`writeModifyStyleAction`, `writeUpdateStyleAction`,
+`writeDeleteStyleAction`, `writeFormatPainterAction`,
+`writeCopyFormatAction`, `writePasteFormatAction`,
+`writeNavigationPaneAction`) in the menus and on the ribbon, and one undo
+step.
 
 ## Formatting tables, paragraphs and text (M70, D-079)
 
@@ -184,8 +282,10 @@ from a style yields to the style's own indent, `contextualSpacing`, theme
 fonts and colours (`w:themeColor` with tint/shade).
 
 Lists number and restart as Word numbers them: one counter set per
-abstract definition, a new `QTextList` wherever Word restarts a level, and
-multi-level text such as `%1.%2.` drawn with the parent's number as prefix.
+abstract definition (per instance when it overrides a start), a new
+`QTextList` wherever Word restarts a level (its Qt prefix and start serve
+HTML and Markdown), and the numbers drawn by `docx_list_labels.h`, so the
+editing path and the reader show the same thing (M73).
 
 Tables keep their grid, `gridSpan` / `vMerge` merges, borders (collapsed,
 per side), shading, cell margins, vertical alignment, header rows, and the
@@ -238,9 +338,12 @@ markup and a snapshot of the values the reader mapped. On save, properties
 whose values still match the snapshot are written from the source markup;
 changed ones are re-derived (D-068 rule 3), and children are sorted into
 schema order. An untouched cell keeps its own `w:tcW`, `w:vMerge` spelling
-and borders while the grid and its span are as read (M70). Lists keep their numbering instance unless their format
-changed. New content gets complete definitions: built-in styles mirroring
-`StyleCatalog`, nine-level numbering, `Table Grid`, footnote styles.
+and borders while the grid and its span are as read (M70). Lists keep their numbering instance while it is as read;
+restarts and new or changed lists are written as Word writes them (M73,
+above). The styles part is the edited one once a style command ran.
+New content gets complete definitions: built-in styles mirroring
+`StyleCatalog` (and Word's other built-ins on first use), nine-level
+numbering, `Table Grid`, footnote styles.
 
 The output is ECMA-376 Transitional with Word's prefixes; Microsoft
 extension namespaces are declared `mc:Ignorable`; package parts use the
@@ -294,6 +397,16 @@ Session Review panel) and *Open in QindaWrite* write a page through
   paragraphs (an untouched one keeps its formatting, links and mentions).
   Comments marked in headers, footers, notes or text boxes are kept on
   save but not listed in the pane.
+- Lists and styles (M73): picture bullets and Word's "link level to style"
+  (a list level's `w:pStyle`) are not offered; a table style applied from
+  the Styles pane shows its whole-table borders and shading at once and its
+  conditional rows and columns after the next open; where the text after a
+  number starts is laid out at list commands and at open, not while
+  typing; list items pasted from another document join a list of this one
+  with the same `w:numId`; the Navigation pane moves sections with Move
+  Up / Move Down, not by drag; style definitions are not edited while a
+  header or footer is open; Modify Style's Numbering offers none, bullets
+  or 1. 2. 3. (the list libraries apply any definition to the paragraphs).
 - Row- and cell-level content controls (repeating sections) are read as
   their content and not written back as controls; controls in headers and
   footers are kept but not clickable; a control whose whole content is
@@ -314,6 +427,12 @@ folds it, outline and break switches, tab stops with leaders, paragraph
 borders and shading, every font effect — each written, XSD-validated and
 read back equal; an edited Word table's untouched cells keep their markup;
 LibreOffice renders a sample, `QQO_GRAB_DIR` keeps the PDF),
+`tst_docx_lists` and `tst_docx_styles` (M73: the list libraries written,
+validated and read back with the same numbers, restart and continue as Word
+writes them, an untouched list's numbering kept, multi-level and legal
+labels; a modified style re-deriving its paragraphs and written as a real
+`w:style`, a new style from a selection, character styles, Delete Style,
+Clear Formatting, style numbering; LibreOffice renders both samples),
 `tst_docx_controls` (content controls: kinds, block and inline, round trip,
 patched check box / list / date / bound text, a copy without its id),
 `tst_docx_comments` (ranges, replies, resolved state; untouched set copied,
@@ -324,7 +443,10 @@ covers WriteDocument (layout, headers, pictures, recovery, HTML, legacy
 formats through LibreOffice), `tst_write_comments` the Comments pane and
 its commands through the real window, `tst_write_tables` and
 `tst_write_formatting` Word's formatting commands and dialogs through the
-real window (M70), `tst_write_controls` filling in a
+real window (M70), `tst_write_lists` and `tst_write_styles` the list
+libraries, dialogs and keys, the Styles pane, gallery, New / Modify /
+Update / Delete Style, Clear Formatting, the Format Painter and the
+Navigation pane through the real window (M73), `tst_write_controls` filling in a
 form (check box, list, calendar, placeholder) through the real window and renders listed documents to PDF for
 review (`QQO_WRITE_RENDER_DOCX` + `QQO_GRAB_DIR`). `tests/qindanote/tst_note_word`
 exports a page with every block kind and ink, validates it, reads it back

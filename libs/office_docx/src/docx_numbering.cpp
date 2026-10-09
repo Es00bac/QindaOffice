@@ -22,9 +22,14 @@ Ooxml::XmlElementPtr childPtr(const XmlElement *parent, QStringView name)
     return nullptr;
 }
 
-NumberingLevel parseLevel(const XmlElement *lvl)
+} // namespace
+
+NumberingLevel parseNumberingLevel(const XmlElement *lvl)
 {
     NumberingLevel level;
+    if (lvl == nullptr) {
+        return level;
+    }
     bool ok = false;
     const int start = childVal(lvl, u"start").toInt(&ok);
     if (ok) {
@@ -45,18 +50,21 @@ NumberingLevel parseLevel(const XmlElement *lvl)
     return level;
 }
 
-} // namespace
-
 Numbering Numbering::parse(const XmlElement *root)
 {
     Numbering numbering;
     if (root == nullptr) {
         return numbering;
     }
-    for (const XmlElement *a : root->elements(kW, u"abstractNum")) {
+    for (const Ooxml::XmlChild &child : root->children) {
+        const XmlElement *a = child.element.get();
+        if (a == nullptr || !a->is(kW, u"abstractNum")) {
+            continue;
+        }
         Abstract abstract;
+        abstract.xml = child.element;
         for (const XmlElement *lvl : a->elements(kW, u"lvl")) {
-            abstract.levels.insert(wAttr(lvl, u"ilvl").toInt(), parseLevel(lvl));
+            abstract.levels.insert(wAttr(lvl, u"ilvl").toInt(), parseNumberingLevel(lvl));
         }
         abstract.numStyleLink = childVal(a, u"numStyleLink");
         const QString styleLink = childVal(a, u"styleLink");
@@ -76,7 +84,12 @@ Numbering Numbering::parse(const XmlElement *root)
                 instance.startOverrides.insert(ilvl, start.toInt());
             }
             if (const XmlElement *lvl = over->child(kW, u"lvl")) {
-                instance.levelOverrides.insert(ilvl, parseLevel(lvl));
+                instance.levelOverrides.insert(ilvl, parseNumberingLevel(lvl));
+                for (const Ooxml::XmlChild &c : over->children) {
+                    if (c.element && c.element->is(kW, u"lvl")) {
+                        instance.levelOverrideXml.insert(ilvl, c.element);
+                    }
+                }
             }
         }
         numbering.m_instances.insert(wAttr(num, u"numId").toInt(), std::move(instance));
@@ -131,6 +144,52 @@ int Numbering::start(int numId, int ilvl) const
     }
     const NumberingLevel *lvl = level(numId, ilvl);
     return lvl != nullptr ? lvl->start : 1;
+}
+
+QList<int> Numbering::startOverrides(int numId) const
+{
+    QList<int> out(9, -1);
+    const auto instance = m_instances.constFind(numId);
+    if (instance != m_instances.constEnd()) {
+        for (auto it = instance->startOverrides.cbegin(); it != instance->startOverrides.cend(); ++it) {
+            if (it.key() >= 0 && it.key() < 9) {
+                out[it.key()] = it.value();
+            }
+        }
+    }
+    return out;
+}
+
+QString Numbering::definitionXml(int numId) const
+{
+    if (const auto cached = m_definitions.constFind(numId); cached != m_definitions.constEnd()) {
+        return cached.value();
+    }
+    const auto instance = m_instances.constFind(numId);
+    const auto abstract = m_abstracts.constFind(abstractIdOf(numId));
+    if (instance == m_instances.constEnd() || abstract == m_abstracts.constEnd() || !abstract->xml) {
+        return {};
+    }
+    QString xml;
+    if (instance->levelOverrideXml.isEmpty()) {
+        xml = Ooxml::serializeFragment(*abstract->xml);
+    } else {
+        // An instance that redefines levels: those levels replace the
+        // abstract's (a new definition when the list is written changed).
+        const Ooxml::XmlElementPtr copy = abstract->xml->clone();
+        for (Ooxml::XmlChild &c : copy->children) {
+            if (c.element && c.element->is(kW, u"lvl")) {
+                const int ilvl = wAttr(c.element.get(), u"ilvl").toInt();
+                if (const auto over = instance->levelOverrideXml.constFind(ilvl); over != instance->levelOverrideXml.constEnd()) {
+                    c.element = over.value()->clone();
+                    c.element->setAttribute(kW, QStringLiteral("ilvl"), QString::number(ilvl));
+                }
+            }
+        }
+        xml = Ooxml::serializeFragment(*copy);
+    }
+    m_definitions.insert(numId, xml);
+    return xml;
 }
 
 } // namespace QindaOffice::Docx

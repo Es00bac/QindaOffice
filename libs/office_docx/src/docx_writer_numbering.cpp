@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// w:numbering for the .docx writer: lists read from a .docx keep their
-// numbering instance; lists created or changed in the editor get a new
+// w:numbering for the .docx writer. Word lists (docx_lists.h) keep their
+// numbering instance while it is as read and are otherwise written as Word
+// writes them: a restart as a new w:num over the same w:abstractNum with
+// w:lvlOverride/w:startOverride, a changed or new list as a new
+// w:abstractNum and w:num. Qt lists (from HTML or Markdown) get a new
 // nine-level definition built from their QTextListFormat.
 
+#include "docx_lists.h"
 #include "docx_properties.h"
 #include "docx_writer_p.h"
 #include "ooxml_namespaces.h"
@@ -51,6 +55,14 @@ std::pair<QString, QString> bulletGlyph(QTextListFormat::Style style)
     return {QString(QChar(0xF0B7)), QStringLiteral("Symbol")};
 }
 
+// Word identifies a definition by w:nsid (eight hex digits); a new one
+// gets one derived from its id, stable from save to save.
+QString nsidFor(int abstractId, const QString &markup)
+{
+    const quint32 hash = quint32(qHash(markup, size_t(abstractId) * 2654435761u)) | 0x10000000u;
+    return QStringLiteral("%1").arg(hash, 8, 16, QLatin1Char('0')).toUpper();
+}
+
 } // namespace
 
 NumberingBuilder::NumberingBuilder(XmlElementPtr source)
@@ -62,9 +74,92 @@ NumberingBuilder::NumberingBuilder(XmlElementPtr source)
     for (const XmlElement *a : m_root->elements(kW, u"abstractNum")) {
         m_nextAbstract = qMax(m_nextAbstract, wAttr(a, u"abstractNumId").toInt() + 1);
     }
-    for (const XmlElement *n : m_root->elements(kW, u"num")) {
-        m_nextNum = qMax(m_nextNum, wAttr(n, u"numId").toInt() + 1);
+    for (const XmlChild &c : std::as_const(source->children)) {
+        if (c.element && c.element->is(kW, u"abstractNum")) {
+            m_sourceAbstracts.insert(wAttr(c.element.get(), u"abstractNumId"), Ooxml::serializeFragment(*c.element));
+        }
     }
+    for (const XmlElement *n : m_root->elements(kW, u"num")) {
+        const int id = wAttr(n, u"numId").toInt();
+        m_sourceNums.insert(id);
+        m_nextNum = qMax(m_nextNum, id + 1);
+    }
+}
+
+int NumberingBuilder::freshNumId(int wanted)
+{
+    int id = wanted;
+    if (id <= 0 || m_sourceNums.contains(id) || m_usedNums.contains(id)) {
+        while (m_sourceNums.contains(m_nextNum) || m_usedNums.contains(m_nextNum)) {
+            ++m_nextNum;
+        }
+        id = m_nextNum++;
+    }
+    m_usedNums.insert(id);
+    return id;
+}
+
+NumberingBuilder::Ref NumberingBuilder::wordRef(const QTextListFormat &lf)
+{
+    const int numId = lf.intProperty(kListNumId);
+    const int ilvl = qBound(0, lf.intProperty(kListLevel), 8);
+    if (const auto known = m_wordNums.constFind(numId); known != m_wordNums.constEnd()) {
+        return {known.value(), ilvl};
+    }
+    const QString definition = lf.stringProperty(kListDefinition);
+    const QList<int> starts = listStarts(lf);
+    QVariantList startList;
+    for (const int v : starts) {
+        startList.append(v);
+    }
+    const QVariantMap then = lf.property(kListSnapshot).toMap();
+    if (m_root && m_sourceNums.contains(numId) && then.value(QStringLiteral("num")).toInt() == numId
+        && then.value(QStringLiteral("def")).toString() == definition && then.value(QStringLiteral("starts")).toList() == startList) {
+        m_usedNums.insert(numId);
+        m_wordNums.insert(numId, numId); // untouched: its w:num and w:abstractNum stay as they are
+        return {numId, ilvl};
+    }
+    if (!m_root) {
+        m_root = std::make_shared<XmlElement>(kW, QStringLiteral("numbering"));
+    }
+    // The definition: the source's own while it is unchanged, else new.
+    const QString key = lf.stringProperty(kListAbstractKey);
+    QString abstractId;
+    if (key.startsWith(u"src:") && m_sourceAbstracts.value(key.mid(4)) == definition) {
+        abstractId = key.mid(4);
+    } else if (const auto made = m_abstracts.constFind(key + QLatin1Char('\n') + definition); made != m_abstracts.constEnd()) {
+        abstractId = QString::number(made.value());
+    } else {
+        XmlElementPtr abstract = Ooxml::parseFragment(definition);
+        if (!abstract) {
+            abstract = Ooxml::parseFragment(numberingDefinition(QStringLiteral("decimal"), QStringLiteral("%1.")));
+        }
+        const int id = m_nextAbstract++;
+        abstract->setAttribute(kW, QStringLiteral("abstractNumId"), QString::number(id));
+        for (const char16_t *name : {u"nsid", u"tmpl", u"styleLink", u"numStyleLink"}) {
+            abstract->removeChildren(kW, QStringView(name));
+        }
+        auto nsid = std::make_shared<XmlElement>(kW, QStringLiteral("nsid"));
+        nsid->setAttribute(kW, QStringLiteral("val"), nsidFor(id, definition));
+        abstract->children.prepend({nsid, QString()});
+        m_root->insertElementBefore(abstract, {u"num", u"numIdMacAtCleanup"});
+        m_abstracts.insert(key + QLatin1Char('\n') + definition, id);
+        abstractId = QString::number(id);
+    }
+    const int written = freshNumId(numId);
+    auto num = std::make_shared<XmlElement>(kW, QStringLiteral("num"));
+    num->setAttribute(kW, QStringLiteral("numId"), QString::number(written));
+    setChildVal(*num, QStringLiteral("abstractNumId"), abstractId);
+    for (int k = 0; k < 9; ++k) {
+        if (starts.at(k) >= 0) {
+            XmlElement &over = num->appendElement(kW, QStringLiteral("lvlOverride"));
+            over.setAttribute(kW, QStringLiteral("ilvl"), QString::number(k));
+            setChildVal(over, QStringLiteral("startOverride"), QString::number(starts.at(k)));
+        }
+    }
+    m_root->insertElementBefore(num, {u"numIdMacAtCleanup"});
+    m_wordNums.insert(numId, written);
+    return {written, ilvl};
 }
 
 NumberingBuilder::Ref NumberingBuilder::refFor(const QTextList *list, qreal indentWidth)
@@ -74,14 +169,24 @@ NumberingBuilder::Ref NumberingBuilder::refFor(const QTextList *list, qreal inde
         return memo.value();
     }
     const QTextListFormat lf = list->format();
+    if (isWordList(lf)) {
+        const Ref ref = wordRef(lf);
+        m_refs.insert(list, ref);
+        return ref;
+    }
     const QVariantMap then = lf.property(kListSnapshot).toMap();
     if (!then.isEmpty() && m_root) {
         const QVariantMap now{{QStringLiteral("style"), int(lf.style())},
                               {QStringLiteral("prefix"), lf.numberPrefix()},
                               {QStringLiteral("suffix"), lf.numberSuffix()},
                               {QStringLiteral("start"), lf.start()}};
-        if (now == then) {
+        QVariantMap thenQt = then;
+        for (const char *key : {"num", "def", "starts"}) {
+            thenQt.remove(QString::fromLatin1(key));
+        }
+        if (now == thenQt) {
             const Ref ref{lf.intProperty(kListNumId), lf.intProperty(kListLevel)};
+            m_usedNums.insert(ref.numId);
             m_refs.insert(list, ref);
             return ref;
         }
@@ -91,7 +196,7 @@ NumberingBuilder::Ref NumberingBuilder::refFor(const QTextList *list, qreal inde
     }
     const int ilvl = lf.hasProperty(kListLevel) ? qBound(0, lf.intProperty(kListLevel), 8)
                                                 : qBound(0, lf.indent() - 1, 8);
-    const Ref ref{m_nextNum++, ilvl};
+    const Ref ref{freshNumId(0), ilvl};
     const int abstractId = m_nextAbstract++;
     auto abstract = std::make_shared<XmlElement>(kW, QStringLiteral("abstractNum"));
     abstract->setAttribute(kW, QStringLiteral("abstractNumId"), QString::number(abstractId));
@@ -139,6 +244,24 @@ NumberingBuilder::Ref NumberingBuilder::refFor(const QTextList *list, qreal inde
 XmlElementPtr NumberingBuilder::result() const
 {
     return m_root;
+}
+
+void NumberingBuilder::patchStyles(XmlElement &styles) const
+{
+    for (XmlChild &c : styles.children) {
+        XmlElement *pPr = c.element && c.element->is(kW, u"style") ? c.element->child(kW, u"pPr") : nullptr;
+        XmlElement *numPr = pPr != nullptr ? pPr->child(kW, u"numPr") : nullptr;
+        XmlElement *num = numPr != nullptr ? numPr->child(kW, u"numId") : nullptr;
+        if (num == nullptr) {
+            continue;
+        }
+        const int id = wAttr(num, u"val").toInt();
+        if (const auto written = m_wordNums.constFind(id); written != m_wordNums.constEnd()) {
+            num->setAttribute(kW, QStringLiteral("val"), QString::number(written.value()));
+        } else if (id > 0 && !m_sourceNums.contains(id)) {
+            pPr->removeChildren(kW, u"numPr");
+        }
+    }
 }
 
 } // namespace QindaOffice::Docx::detail

@@ -101,6 +101,17 @@ public:
     // what the .docx writer puts in settings.xml.
     void setDefaultTabStop(qreal px);
 
+    // ---- styles (M73, D-082: docx_style_edit.h) -----------------------------------------
+    // The styles part as it stands (never null): the edited one, the
+    // source's, or a new document's base styles.
+    [[nodiscard]] Ooxml::XmlElementPtr stylesRoot() const;
+    // A style command's new styles part, as an undo item of the edit block
+    // the caller has open on `story` (the body when null): Undo and Redo
+    // swap it back and forth with the text.
+    void setStylesRoot(Ooxml::XmlElementPtr root, QTextDocument *story = nullptr);
+    // Sets the part without an undo item (the undo item's own swap).
+    void swapStyles(Ooxml::XmlElementPtr root);
+
     // ---- pictures ----------------------------------------------------------------------
     // Stores the bytes with the document and returns the resource name the
     // QTextImageFormat must carry; empty when the bytes are not an image.
@@ -126,6 +137,8 @@ signals:
     void storiesAboutToBeReplaced();
     void commentsChanged();
     void activeCommentChanged();
+    // The styles part changed: a style command, its Undo or Redo, a load.
+    void stylesChanged();
 
 private:
     void applyLayout();

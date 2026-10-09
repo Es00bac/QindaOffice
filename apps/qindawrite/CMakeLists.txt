@@ -5,6 +5,14 @@
 # tests instantiate the real window; the executable is main.cpp over it.
 set(qindawrite_qml
     qml/BordersShadingDialog.qml
+    qml/DefineBulletDialog.qml
+    qml/DefineMultilevelDialog.qml
+    qml/DefineNumberDialog.qml
+    qml/ListIndentsDialog.qml
+    qml/NavigationPanel.qml
+    qml/NumberingValueDialog.qml
+    qml/StyleDialog.qml
+    qml/StylesPanel.qml
     qml/FontDialog.qml
     qml/ParagraphDialog.qml
     qml/SortDialog.qml
@@ -56,6 +64,11 @@ qt_add_qml_module(qindawrite_app
         src/table_layout.cpp src/table_layout.h
         src/write_borders.cpp src/write_borders.h
         src/write_font.cpp src/write_font.h
+        src/write_lists.cpp src/write_lists.h src/write_lists_dialogs.cpp
+        src/write_navigation.cpp src/write_navigation.h
+        src/write_painter.cpp src/write_painter.h
+        src/write_style_draft.cpp src/write_style_draft.h
+        src/write_styles.cpp src/write_styles.h src/write_styles_edit.cpp
         src/write_paragraph.cpp src/write_paragraph.h
         src/write_selection.h
         src/write_actions.cpp src/write_actions.h

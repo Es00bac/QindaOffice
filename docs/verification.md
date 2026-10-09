@@ -33,6 +33,135 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M73 Write lists and styles gates (D-082)
+
+On qinda (branch `m73-write-lists`, merged with `m60-office-formats`
+6de7b18; only office_ooxml, office_docx, QindaWrite, their tests and
+`tst_note_word` built; `QQO_OOXML_SCHEMA_DIR` set, so every package a test
+writes is validated against the ECMA-376 Transitional schemas):
+`ctest -R "tst_write_|tst_docx_|tst_ooxml|tst_note_word"` **31/31 targets**
+— the 27 after M70 plus `tst_docx_lists`, `tst_docx_styles`,
+`tst_write_lists` and `tst_write_styles`. QtTest functions (init/cleanup
+included): **241 passed, 3 skipped, 0 failed** (the skips: the corpus
+without `QQO_DOCX_CORPUS`, two opt-in renders).
+
+**office_docx** (hand-built packages only). `tst_docx_lists` 9/9 — Word's
+lists read as Word lists (instance, definition identity, Qt's marker off,
+0.25 in hanging; 1. a) 2. 3. 4. •); an edit elsewhere leaves every element
+of `numbering.xml` as read and the items' `w:numPr` as Word wrote them, no
+`w:ind`; the libraries written and read back equal (• in Symbol, I. II.
+right-aligned, a red ➢ in Wingdings, –), one Undo taking the four new lists
+away, a `w:nsid` on each new `w:abstractNum`; 1. 1.1. 1.1.1. 1.2. 2. 2.1.
+at Word's indents (792 / 432 twips), the same list redefined as 1) a) i)
+and as Article I. / Section 1.01 / (a) with legal numbering, the text
+after a wide number at the next default tab stop; "Step %1:" from 3,
+ordinal and spelled-out numbers ("4th", "Twenty-One", "Twelfth"); Restart
+at 1 as a new `w:num` over the same `w:abstractNum` with
+`<w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/>` (no new
+definition) and read back 2. 1. 2., Continue Numbering putting every item
+back on `w:numId` 1, Set Numbering Value 7. 8. 9.; Tab on an item written
+as `w:ilvl="1"` of the same list, a removed item without `w:numPr`;
+LibreOffice renders the sample. `tst_docx_styles` 9/9 — the Styles pane's
+list (Heading 1 linked and in use, Heading 1 Char and Default Paragraph Font
+not listed, Strong a built-in the document lacks; the gallery Normal
+first); Heading 1 modified (20 pt, C00000, centred, 18 pt before) restyling
+both headings and not Normal, one Undo and Redo, written as the
+`Heading1` style with `w:name` "heading 1", `w:basedOn` and `w:next`
+Normal, `w:link` Heading1Char, `w:uiPriority` 9 and `w:qFormat` in Word's
+order, the paragraphs saying only `<w:pStyle/>` (the one centred by hand
+keeps its `w:jc`) and no run colour; a new style from a centred bold paragraph (`Note2`,
+`w:customStyle="1"`, based on Normal, next itself, `w:qFormat`) read back
+centred and bold; Strong as `w:rStyle` and back, Default Paragraph Font
+taking it off; Delete Note (Sub Note based on Normal now, Note's paragraph
+falling back), Clear Formatting keeping Heading 1 and dropping a hand
+centring and an italic word; a style's numbering (`w:numPr` in the style,
+none on the paragraphs, read back numbered); LibreOffice renders the
+sample.
+
+**QindaWrite, through the real window.** `tst_write_lists` 8/8 — library
+picks on one list (➢, then o, then I. II. III.; three undo steps back to
+plain paragraphs), Multilevel 1. 2. 3., the Numbering button turning it
+off in one step, `%1.%2.` and `multilevel` in the saved numbering part, a
+heading style on an item keeping its number; Tab at an item's start → 1.1.
+(no tab typed, Change List Level ▸ Level 2 checked), Shift+Tab back, a tab
+typed mid-item, Enter on an empty item ending the list, Backspace at an
+item's start taking the number and keeping the indent (Word's 0.1. for a
+second level with no first); Restart at 1 (`w:startOverride` saved,
+Continue enabled), Continue Numbering, Set Numbering Value 7 and its Undo;
+Define New Bullet (★ in red), Define New Number Format (Step 3: Step 4:
+Step 5:), Define New Multilevel List (Part I / (a) / Part II), Adjust List
+Indents (number at 0, text at 0.75 in, a space after it), each one step,
+`upperRoman` "Part %1" saved; Define New Number Format on a 1.1. item
+keeping Word's `%1.%2.` (preview 1.b), saved `lowerLetter` "%1.%2)", one
+Undo) while a one-level list's second level still reads "%1."; the five
+list dialogs and a multilevel list at 1280 and 520 px. `tst_write_styles`
+9/9 — the pane's rows (linked, in use, built-in), the gallery
+(`writeQuickStyle0` is Normal) applying the document's Note in one step,
+Strong joining the document as a character style (Undo takes the run and
+the styles part back together), Heading 1 on part of a paragraph applying
+Heading 1 Char, the pane opening from its command; Modify Style through
+M70's Font and Paragraph on the style (20 pt, C00000, centred) restyling
+both Heading 1 paragraphs and not Heading 2, the paragraphs saying only
+`w:pStyle`, one Undo; Modify Heading 2 ▸ Numbering (the style numbered,
+the paragraphs not; reopened, 3.); New Style from a bold right-aligned
+selection (Callout), a linked Aside with Aside Char, Update Callout to
+Match Selection (italic) reaching both paragraphs, Delete Callout (back to
+Normal; Heading 1 cannot be deleted) and its Undo; Clear Formatting keeping
+Heading 1; Enter after a heading giving the document's own Normal; Format
+Painter once (one step) and locked until Esc, Ctrl+Shift+C / Ctrl+Shift+V
+carrying a paragraph's centring; the Navigation pane (Introduction, Scope,
+Plan, Budget, Staffing at levels 1 2 1 2 2), go, collapse, Move Down in one
+step with the moved heading still Heading 2, a whole section moved; both
+panes and Modify Style at 1280 and 520 px. `tst_write_ui` 19/19: the
+ribbon gate at 1400 and 520 px (every menu command reachable, every icon
+known, every item inside the ribbon — the Multilevel List and Format
+Painter split buttons, the quick-style slots, More styles and Styles Pane
+included) and the fixtures regenerated on purpose
+(`QQO_UPDATE_FIXTURES=1`, 356 → 494 rows each: the hidden Styles and
+Navigation panes with their rows, Format Painter in Write's own Clipboard
+group, the Multilevel List button, `writeQuickStyle0`–`3` and Styles Pane
+where `writeStyle0`–`3` and `writeStyle8` were — those ids stay, under
+More styles and Format ▸ Style). `tst_write_menu_export` 3/3 (every new id
+resolves in the ActionModel). The rest unchanged and green:
+`tst_write_control` 8/8, `tst_write_view` 9/9, `tst_write_typography` 7/7,
+`tst_write_review` 13/13 (Track Changes on Word's Ctrl+Shift+E),
+`tst_write_formats` 6/6, `tst_write_formatting` 8/8, `tst_write_tables`
+7/7, `tst_write_probe_pagination` 7/7, `tst_write_tools` 3/3,
+`tst_write_docx` 7/7 (2 opt-in skips), `tst_write_pagination` 8/8,
+`tst_write_story` 6/6, `tst_write_picture` 5/5, `tst_write_comments` 3/3,
+`tst_write_controls` 3/3, `tst_docx_read` 15/15, `tst_docx_write` 6/6,
+`tst_docx_restyle` 3/3, `tst_docx_comments` 8/8, `tst_docx_controls` 7/7,
+`tst_docx_tables` 8/8, `tst_docx_paragraphs` 8/8, `tst_docx_corpus` 2/2 (1
+skip), `tst_ooxml` 24/24, `tst_note_word` 3/3.
+
+**Looked at** (`QQO_GRAB_DIR`): the multilevel list at 1280 and 520 px (1.
+1.1. 1.1.1. 2. 3. 4. and a ✓ item at Word's indents; Home's Clipboard with
+Format Painter and Styles with Normal, No Spacing, Heading 1, Heading 2,
+More styles and Styles Pane; at 520 the groups wrap with every button);
+Define New Bullet (Word's symbols, any character, font, colour, alignment,
+preview), Define New Number Format on a 1.1. item (`%1.%2.`, previews 1.1.
+1.2. 1.3.), Define New Multilevel List (levels 1–9, include level, restart
+after, legal, alignment, positions, follow with, the nine-level preview),
+Set Numbering Value and Adjust List Indents at both widths; the Styles and
+Navigation panes together (at 520 both fit, the page a sliver between
+them); Modify Style on Heading 1 at both widths; LibreOffice's PDFs of the
+two samples (Heading 1 20 pt bold dark red, the centred heading, the note
+styles, 1. 1.1. 1.1.1. 2.; 1. 1.1. 1.1.1. 2. 3. and a ➢ bullet —
+LibreOffice runs the text into a number wider than its hanging indent,
+"1.1.1.Goals", where Word moves it to the next tab stop). In some dialog
+grabs the page is scrolled: QindaTK's `Tk.Scroll` reveals the page item by
+its whole height when focus returns to it after the previous dialog closes
+(M70's dialog loop does the same; a toolkit gap, D-082).
+
+On the desktop (owner, Microsoft Word): in QindaWrite build a multilevel
+list (Home ▸ Multilevel List ▸ 1. 1.1. 1.1.1., Tab and Shift+Tab), Restart
+at 1 on one item and Continue Numbering on another; modify Heading 1
+(Styles pane ▸ Modify: size, colour, centred) and give a word Strong; save,
+open in Word — no repair prompt; the numbers, levels and restart as set,
+every Heading 1 as modified and Word's own Styles pane showing the change.
+Then open an untouched Word document with lists, change a word elsewhere,
+save — its numbering as it was.
+
 ## M71 payroll gates (D-081)
 
 Qualified on qinda (branch `m71-payroll`, merged with `m60-office-formats`

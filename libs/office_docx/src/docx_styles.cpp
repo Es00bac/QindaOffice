@@ -261,6 +261,15 @@ QList<const Style *> StyleSheet::chain(const QString &id) const
     return out;
 }
 
+QStringList StyleSheet::chainOf(const QString &id) const
+{
+    QStringList out;
+    for (const Style *s : chain(id)) {
+        out.append(s->id);
+    }
+    return out;
+}
+
 XmlElementPtr StyleSheet::paragraphProperties(const QString &styleId) const
 {
     const QString id = style(styleId) != nullptr ? styleId : m_defaultParagraph;

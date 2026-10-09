@@ -61,6 +61,132 @@ QQuickRootItem#WriteWindow
               Overline#emptyTitle [hidden]
               Scroll#commentsScroll [hidden]
               TextArea#commentNewText [hidden]
+          QQuickItem#dockPanelContent_navigation [hidden]
+            NavigationPanel#navigationPanel [hidden]
+              Button#navigationDown [hidden]
+              Button#navigationUp [hidden]
+              Caption#emptyText [hidden]
+              Overline#emptyTitle [hidden]
+              Scroll#navigationScroll [hidden]
+          QQuickItem#dockPanelContent_styles [hidden]
+            StylesPanel#stylesPanel [hidden]
+              Button#stylesDelete [hidden]
+              Button#stylesModify [hidden]
+              Button#stylesNew [hidden]
+              Button#stylesUpdate [hidden]
+              CheckBox#stylesInUse [hidden]
+              CheckBox#stylesPreview [hidden]
+              Scroll#stylesScroll [hidden]
+                ListRow#style_BookTitle [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Caption [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Code [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Emphasis [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Heading1 [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Heading2 [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Heading3 [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Heading4 [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Heading5 [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Heading6 [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_IntenseEmphasis [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_IntenseQuote [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_IntenseReference [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_ListParagraph [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_NoSpacing [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Normal [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Quote [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Strong [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Subtitle [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_SubtleEmphasis [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_SubtleReference [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
+                ListRow#style_Title [hidden]
+                  Caption#rowSecondary [hidden]
+                  Label#rowText [hidden]
+                  Label#stylePreview [hidden]
+                  QQuickRectangle#rowFocusRing [hidden]
   QQuickItem#appFooter
     Flex#appFindBar
       FindBar#findBar [hidden]
@@ -118,19 +244,25 @@ QQuickRootItem#WriteWindow
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_editPasteAction
                 RibbonButton#ribbonAction_editPasteAction
-                  Icon#ribbonButtonIcon
+                  Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_writeFormatPainterAction
+                RibbonButton#ribbonAction_writeFormatPainterAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
             RibbonGroup#ribbonGroup_editing
               Overline#ribbonGroupCaption
               QQuickRectangle#ribbonGroupCard
               RibbonSlot#ribbonItem_editFindAction
                 RibbonButton#ribbonAction_editFindAction
-                  Icon#ribbonButtonIcon
+                  Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel
+                  QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_editReplaceAction
                 RibbonButton#ribbonAction_editReplaceAction
                   Icon#ribbonButtonIcon [hidden]
@@ -281,17 +413,23 @@ QQuickRootItem#WriteWindow
               RibbonSlot#ribbonItem_formatListBulletAction
                 RibbonButton#ribbonAction_formatListBulletAction
                   Icon#ribbonButtonIcon [hidden]
-                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickItem#ribbonButtonMenuArea
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_formatListNumberedAction
                 RibbonButton#ribbonAction_formatListNumberedAction
                   Icon#ribbonButtonIcon [hidden]
-                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickItem#ribbonButtonMenuArea
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_lineSpacing
                 RibbonButton#ribbonAction_lineSpacing
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_multilevelList
+                RibbonButton#ribbonAction_multilevelList
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
@@ -323,34 +461,34 @@ QQuickRootItem#WriteWindow
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
-              RibbonSlot#ribbonItem_writeStyle0
-                RibbonButton#ribbonAction_writeStyle0
-                  Icon#ribbonButtonIcon
-                  QQuickItem#ribbonButtonMenuArea [hidden]
-                  QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel
-              RibbonSlot#ribbonItem_writeStyle1
-                RibbonButton#ribbonAction_writeStyle1
+              RibbonSlot#ribbonItem_writeQuickStyle0
+                RibbonButton#ribbonAction_writeQuickStyle0
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
-              RibbonSlot#ribbonItem_writeStyle2
-                RibbonButton#ribbonAction_writeStyle2
+              RibbonSlot#ribbonItem_writeQuickStyle1
+                RibbonButton#ribbonAction_writeQuickStyle1
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
-              RibbonSlot#ribbonItem_writeStyle3
-                RibbonButton#ribbonAction_writeStyle3
+              RibbonSlot#ribbonItem_writeQuickStyle2
+                RibbonButton#ribbonAction_writeQuickStyle2
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
-              RibbonSlot#ribbonItem_writeStyle8
-                RibbonButton#ribbonAction_writeStyle8
+              RibbonSlot#ribbonItem_writeQuickStyle3
+                RibbonButton#ribbonAction_writeQuickStyle3
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_writeStylesPaneAction
+                RibbonButton#ribbonAction_writeStylesPaneAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
         QQuickRectangle#ribbonBackground

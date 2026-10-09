@@ -130,10 +130,13 @@ QTextCharFormat restyledRun(const StyleSheet &styles, const Ooxml::Theme &theme,
 
 DocumentStyles::DocumentStyles(const WordParts &parts)
 {
+    if (parts.styles) {
+        m_styles = StyleSheet::parse(parts.styles.get()); // as the style commands left them (M73)
+    }
     if (!parts.source) {
         return;
     }
-    if (const XmlElementPtr root = relatedXml(*parts.source, Ooxml::RelType::Styles)) {
+    if (const XmlElementPtr root = relatedXml(*parts.source, Ooxml::RelType::Styles); root && !parts.styles) {
         m_styles = StyleSheet::parse(root.get());
     }
     if (const XmlElementPtr theme = relatedXml(*parts.source, Ooxml::RelType::Theme)) {
@@ -209,6 +212,13 @@ void DocumentStyles::apply(const QTextBlock &block, const QString &styleId) cons
     if (block.textList() != nullptr) {
         format.setLeftMargin(old.leftMargin());
         format.setTextIndent(old.textIndent());
+        // A Word list item keeps its number where it was, drawn as Word's
+        // (docx_list_labels.h: Qt's own marker stays off).
+        for (const int key : {int(QTextFormat::ListStyle), kListHanging}) {
+            if (old.hasProperty(key)) {
+                format.setProperty(key, old.property(key));
+            }
+        }
     }
     QTextFormat::PageBreakFlags breaks = format.pageBreakPolicy() | (ownPageBreaks(old) & QTextFormat::PageBreak_AlwaysAfter);
     if (old.boolProperty(kPageBreakRun)) {
@@ -253,6 +263,51 @@ void DocumentStyles::apply(const QTextBlock &block, const QString &styleId) cons
     QTextCharFormat mark = charFormatFromRPr(mergeProperties(paragraphRun.get(), markRPr).get(), m_theme);
     QTextCursor markCursor(block);
     setBlockCharFormatKeepingCell(markCursor, mark);
+}
+
+void DocumentStyles::clearFormatting(const QTextCursor &selection) const
+{
+    // M73 (D-082): Clear Formatting keeps the style. The paragraphs go back
+    // to their style (apply() keeps list membership and section breaks);
+    // the runs keep their character style and lose their own w:rPr.
+    QTextDocument *document = selection.document();
+    QTextBlock block = document->findBlock(selection.selectionStart());
+    QTextBlock last = document->findBlock(selection.selectionEnd());
+    if (selection.hasSelection() && last.position() == selection.selectionEnd() && last != block) {
+        last = last.previous();
+    }
+    const int from = selection.hasSelection() ? selection.selectionStart() : block.position();
+    const int to = selection.hasSelection() ? selection.selectionEnd() : last.position() + last.length() - 1;
+    for (; block.isValid(); block = block.next()) {
+        const QString styleId = paragraphStyleOf(block);
+        apply(block, styleId);
+        QList<std::pair<std::pair<int, int>, QTextCharFormat>> runs;
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            const QTextFragment fragment = it.fragment();
+            const int start = qMax(from, fragment.position());
+            const int end = qMin(to, fragment.position() + fragment.length());
+            QTextCharFormat old = fragment.charFormat();
+            if (start >= end || old.isImageFormat() || old.objectType() != QTextFormat::NoObject || old.hasProperty(kInlineXml)) {
+                continue;
+            }
+            old.clearProperty(kRunXml);
+            if (const QString rStyle = old.stringProperty(kRunStyleId); !rStyle.isEmpty()) {
+                XmlElement own(kW, QStringLiteral("rPr"));
+                own.appendElement(kW, QStringLiteral("rStyle")).setAttribute(kW, QStringLiteral("val"), rStyle);
+                old.setProperty(kRunXml, Ooxml::serializeFragment(own));
+            }
+            runs.append({{start, end}, restyledRun(m_styles, m_theme, m_styles.paragraphRunProperties(styleId), old)});
+        }
+        for (const auto &[range, run] : std::as_const(runs)) {
+            QTextCursor span(document);
+            span.setPosition(range.first);
+            span.setPosition(range.second, QTextCursor::KeepAnchor);
+            span.setCharFormat(run);
+        }
+        if (block == last) {
+            break;
+        }
+    }
 }
 
 } // namespace QindaOffice::Docx

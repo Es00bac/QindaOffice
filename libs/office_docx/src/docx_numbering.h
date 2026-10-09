@@ -9,6 +9,7 @@
 #include "ooxml_xml.h"
 
 #include <QHash>
+#include <QList>
 #include <QString>
 
 namespace QindaOffice::Docx {
@@ -27,6 +28,9 @@ struct NumberingLevel {
     [[nodiscard]] bool isBullet() const { return format == u"bullet"; }
 };
 
+// One w:lvl.
+[[nodiscard]] NumberingLevel parseNumberingLevel(const Ooxml::XmlElement *lvl);
+
 class Numbering {
 public:
     [[nodiscard]] static Numbering parse(const Ooxml::XmlElement *root);
@@ -39,21 +43,33 @@ public:
     // The abstract definition an instance uses (instances sharing one keep
     // counting together in Word).
     [[nodiscard]] QString abstractIdOf(int numId) const;
+    // The instance's w:startOverride per level (nine entries, −1 none). An
+    // instance that overrides a start keeps its own count (M73, D-082).
+    [[nodiscard]] QList<int> startOverrides(int numId) const;
+    // The instance's definition as one self-contained w:abstractNum
+    // fragment: its abstract (a numbering-style link followed) with the
+    // instance's own w:lvlOverride/w:lvl levels in place. Exactly the
+    // source abstract's markup when the instance overrides no level, so the
+    // writer can tell an untouched list from a changed one (docx_lists.h).
+    [[nodiscard]] QString definitionXml(int numId) const;
     [[nodiscard]] bool isEmpty() const { return m_instances.isEmpty(); }
 
 private:
     struct Abstract {
         QHash<int, NumberingLevel> levels;
         QString numStyleLink; // defined by a numbering style instead
+        Ooxml::XmlElementPtr xml;
     };
     struct Instance {
         QString abstractId;
         QHash<int, int> startOverrides;
         QHash<int, NumberingLevel> levelOverrides;
+        QHash<int, Ooxml::XmlElementPtr> levelOverrideXml;
     };
     QHash<QString, Abstract> m_abstracts;
     QHash<int, Instance> m_instances;
     QHash<QString, QString> m_styleLinks; // numbering style id → abstract id
+    mutable QHash<int, QString> m_definitions;
 };
 
 } // namespace QindaOffice::Docx

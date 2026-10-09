@@ -8,6 +8,13 @@
 add_library(office_docx STATIC
     src/docx_format.cpp
     src/docx_format.h
+    src/docx_list_edit.cpp
+    src/docx_list_edit.h
+    src/docx_list_labels.cpp
+    src/docx_list_labels.h
+    src/docx_list_library.cpp
+    src/docx_lists.cpp
+    src/docx_lists.h
     src/docx_model.h
     src/docx_numbering.cpp
     src/docx_numbering.h
@@ -23,6 +30,9 @@ add_library(office_docx STATIC
     src/docx_styles.h
     src/docx_text.cpp
     src/docx_restyle.cpp
+    src/docx_restyle_edit.cpp
+    src/docx_style_edit.cpp
+    src/docx_style_edit.h
     src/docx_metrics.cpp
     src/docx_comments.cpp
     src/docx_controls.cpp

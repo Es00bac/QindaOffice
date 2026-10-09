@@ -86,6 +86,9 @@ public:
     [[nodiscard]] bool tableStyleBeatsParagraphStyle(const QString &paragraphStyleId) const;
 
     [[nodiscard]] bool isEmpty() const { return m_styles.isEmpty(); }
+    // Every style id, and a style's w:basedOn chain, root first (M73).
+    [[nodiscard]] QStringList styleIds() const { return m_styles.keys(); }
+    [[nodiscard]] QStringList chainOf(const QString &id) const;
 
 private:
     // basedOn chain, root ancestor first; cycle- and depth-safe.

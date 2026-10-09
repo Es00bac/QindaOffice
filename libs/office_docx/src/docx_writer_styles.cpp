@@ -9,6 +9,7 @@
 #include "ooxml_namespaces.h"
 
 #include <QFont>
+#include <QHash>
 
 namespace QindaOffice::Docx::detail {
 
@@ -72,6 +73,33 @@ const char *definition(const QString &id)
     if (id == u"TableGrid") {
         return R"(<w:style w:type="table" w:styleId="TableGrid"><w:name w:val="Table Grid"/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/></w:tblBorders><w:tblCellMar><w:left w:w="108" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style>)";
     }
+    // M73 (D-082): Word's other built-ins, added when a document first uses one.
+    if (id == u"NoSpacing") {
+        return R"(<w:style w:type="paragraph" w:styleId="NoSpacing"><w:name w:val="No Spacing"/><w:uiPriority w:val="1"/><w:qFormat/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:style>)";
+    }
+    if (id == u"Subtitle") {
+        return R"(<w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="11"/><w:qFormat/><w:pPr><w:spacing w:after="160"/></w:pPr><w:rPr><w:color w:val="5A5A5A"/><w:spacing w:val="15"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr></w:style>)";
+    }
+    if (id == u"IntenseQuote") {
+        return R"(<w:style w:type="paragraph" w:styleId="IntenseQuote"><w:name w:val="Intense Quote"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="30"/><w:qFormat/><w:pPr><w:pBdr><w:top w:val="single" w:sz="4" w:space="10" w:color="4472C4"/><w:bottom w:val="single" w:sz="4" w:space="10" w:color="4472C4"/></w:pBdr><w:spacing w:before="360" w:after="360"/><w:ind w:left="864" w:right="864"/><w:jc w:val="center"/></w:pPr><w:rPr><w:i/><w:iCs/><w:color w:val="4472C4"/></w:rPr></w:style>)";
+    }
+    if (id == u"ListParagraph") {
+        return R"(<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:uiPriority w:val="34"/><w:qFormat/><w:pPr><w:ind w:left="720"/><w:contextualSpacing/></w:pPr></w:style>)";
+    }
+    if (id == u"Caption") {
+        return R"(<w:style w:type="paragraph" w:styleId="Caption"><w:name w:val="caption"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="35"/><w:unhideWhenUsed/><w:qFormat/><w:pPr><w:spacing w:after="200" w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:i/><w:iCs/><w:color w:val="44546A"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr></w:style>)";
+    }
+    static const QHash<QString, const char *> kCharacter{
+        {QStringLiteral("Strong"), R"(<w:style w:type="character" w:styleId="Strong"><w:name w:val="Strong"/><w:basedOn w:val="DefaultParagraphFont"/><w:uiPriority w:val="22"/><w:qFormat/><w:rPr><w:b/><w:bCs/></w:rPr></w:style>)"},
+        {QStringLiteral("Emphasis"), R"(<w:style w:type="character" w:styleId="Emphasis"><w:name w:val="Emphasis"/><w:basedOn w:val="DefaultParagraphFont"/><w:uiPriority w:val="20"/><w:qFormat/><w:rPr><w:i/><w:iCs/></w:rPr></w:style>)"},
+        {QStringLiteral("SubtleEmphasis"), R"(<w:style w:type="character" w:styleId="SubtleEmphasis"><w:name w:val="Subtle Emphasis"/><w:basedOn w:val="DefaultParagraphFont"/><w:uiPriority w:val="19"/><w:qFormat/><w:rPr><w:i/><w:iCs/><w:color w:val="404040"/></w:rPr></w:style>)"},
+        {QStringLiteral("IntenseEmphasis"), R"(<w:style w:type="character" w:styleId="IntenseEmphasis"><w:name w:val="Intense Emphasis"/><w:basedOn w:val="DefaultParagraphFont"/><w:uiPriority w:val="21"/><w:qFormat/><w:rPr><w:i/><w:iCs/><w:color w:val="4472C4"/></w:rPr></w:style>)"},
+        {QStringLiteral("SubtleReference"), R"(<w:style w:type="character" w:styleId="SubtleReference"><w:name w:val="Subtle Reference"/><w:basedOn w:val="DefaultParagraphFont"/><w:uiPriority w:val="31"/><w:qFormat/><w:rPr><w:smallCaps/><w:color w:val="5A5A5A"/></w:rPr></w:style>)"},
+        {QStringLiteral("IntenseReference"), R"(<w:style w:type="character" w:styleId="IntenseReference"><w:name w:val="Intense Reference"/><w:basedOn w:val="DefaultParagraphFont"/><w:uiPriority w:val="32"/><w:qFormat/><w:rPr><w:b/><w:bCs/><w:smallCaps/><w:color w:val="4472C4"/><w:spacing w:val="5"/></w:rPr></w:style>)"},
+        {QStringLiteral("BookTitle"), R"(<w:style w:type="character" w:styleId="BookTitle"><w:name w:val="Book Title"/><w:basedOn w:val="DefaultParagraphFont"/><w:uiPriority w:val="33"/><w:qFormat/><w:rPr><w:b/><w:bCs/><w:i/><w:iCs/><w:spacing w:val="5"/></w:rPr></w:style>)"}};
+    if (const auto it = kCharacter.constFind(id); it != kCharacter.constEnd()) {
+        return it.value();
+    }
     if (id == u"DefaultParagraphFont") {
         return R"(<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont"><w:name w:val="Default Paragraph Font"/><w:uiPriority w:val="1"/><w:semiHidden/><w:unhideWhenUsed/></w:style>)";
     }
@@ -90,6 +118,18 @@ XmlElementPtr parseWithW(const char *xml)
 }
 
 } // namespace
+
+QStringList builtInStyleIds()
+{
+    return {QStringLiteral("Normal"),         QStringLiteral("NoSpacing"),        QStringLiteral("Title"),
+            QStringLiteral("Subtitle"),       QStringLiteral("Heading1"),         QStringLiteral("Heading2"),
+            QStringLiteral("Heading3"),       QStringLiteral("Heading4"),         QStringLiteral("Heading5"),
+            QStringLiteral("Heading6"),       QStringLiteral("Quote"),            QStringLiteral("IntenseQuote"),
+            QStringLiteral("ListParagraph"),  QStringLiteral("Caption"),          QStringLiteral("Code"),
+            QStringLiteral("Strong"),         QStringLiteral("Emphasis"),         QStringLiteral("SubtleEmphasis"),
+            QStringLiteral("IntenseEmphasis"), QStringLiteral("SubtleReference"), QStringLiteral("IntenseReference"),
+            QStringLiteral("BookTitle")};
+}
 
 QString builtInStyleId(int writeStyleId)
 {

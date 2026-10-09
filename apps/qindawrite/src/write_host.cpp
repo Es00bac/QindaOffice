@@ -2,6 +2,7 @@
 #include "write_host.h"
 #include "write_comments.h"
 #include "write_controls.h"
+#include "docx_list_edit.h"
 #include "docx_restyle.h"
 
 #include "format_controller.h"
@@ -18,6 +19,10 @@
 #include "table_layout.h"
 #include "write_borders.h"
 #include "write_font.h"
+#include "write_lists.h"
+#include "write_navigation.h"
+#include "write_painter.h"
+#include "write_styles.h"
 #include "write_paragraph.h"
 #include "write_review_actions.h"
 #include "write_revisions.h"
@@ -61,6 +66,18 @@ WriteHost::WriteHost()
     m_paragraph = new ParagraphController(m_control, m_document, actions(), this);
     m_font = new FontController(m_control, m_document, actions(), this);
     m_tableLayout = new TableLayoutController(m_control, m_document, actions(), this);
+    // M73 (D-082): Word's lists; Tab, Enter and Backspace on list items.
+    m_lists = new ListController(m_control, m_document, actions(), this);
+    m_format->setListIndentHook([this](int delta) {
+        return Docx::wordListItem(m_control->textCursor().block()).isValid() && (m_lists->changeLevel(delta) || true);
+    });
+    m_styles = new StylesController(m_control, m_document, actions(), this);
+    m_format->setClearFormattingHook([this] { return m_styles->clearFormatting(); });
+    m_painter = new FormatPainter(m_control, m_document, actions(), this);
+    m_navigation = new NavigationModel(m_control, m_document, actions(), this);
+    m_control->setKeyFilter([this](QKeyEvent *event) {
+        return m_painter->handleKey(event) || m_lists->handleKey(event) || m_styles->handleKey(event);
+    });
     connect(m_tableLayout, &TableLayoutController::message, this, [this](const QString &text) { showStatusMessage(text, 6000); });
     connect(m_comments, &WriteComments::message, this, [this](const QString &text) { showStatusMessage(text); });
     connect(m_format, &FormatController::textColorRequested, this, &WriteHost::textColorRequested);
@@ -111,6 +128,7 @@ void WriteHost::attachPage(PageTextItem *item)
     connect(item, &PageTextItem::pageCountChanged, this, [this] { updateWriteStatus(); });
     connect(item, &PageTextItem::storyChanged, this, [this] { syncStoryActions(); });
     connect(item, &PageTextItem::pictureDialogRequested, this, &WriteHost::pictureDialogRequested);
+    connect(item, &PageTextItem::selectionReleased, m_painter, &FormatPainter::selectionReleased);
     connect(item, &PageTextItem::clicked, m_controls,
             [this](qreal x, qreal y, const QPointF &docPos, int position) {
                 m_controls->activate(position, docPos, QPointF(x, y));

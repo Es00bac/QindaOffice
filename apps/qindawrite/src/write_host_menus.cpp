@@ -19,6 +19,10 @@
 #include "table_layout.h"
 #include "write_borders.h"
 #include "write_font.h"
+#include "write_lists.h"
+#include "write_navigation.h"
+#include "write_painter.h"
+#include "write_styles.h"
 #include "write_paragraph.h"
 #include "template_loader.h"
 #include "write_comments.h"
@@ -69,9 +73,18 @@ void WriteHost::insertMenus()
                 [this, id] { applyStyle(id); });
         styleItems.append(MenuNode::action(actionId));
     }
+    // M73 (D-082): the Styles pane, New / Modify / Update / Delete Style and
+    // the document's quick styles, after Write's own.
+    styleItems.append(MenuNode::separator());
+    styleItems += m_styles->menuItems();
     QList<MenuNode> formatItems{MenuNode::submenu(QStringLiteral("writeStyleMenu"), tr("&Style"), styleItems),
                                 MenuNode::separator()};
     formatItems += m_format->formatMenuItems();
+    // M73 (D-082): Word's Bullets, Numbering and Multilevel List libraries
+    // and the Format Painter.
+    formatItems += m_lists->menuItems();
+    formatItems.append(MenuNode::separator());
+    formatItems += m_painter->menuItems();
     // Format > Picture: size and alternative text of the selected picture.
     m_picture = actions()->add(QStringLiteral("writePictureAction"), tr("&Picture…"), {}, QStringLiteral("image"));
     m_picture->setEnabled(false);
@@ -115,6 +128,12 @@ void WriteHost::insertMenus()
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("writeToolsMenu"), tr("T&ools"),
                                              {MenuNode::action(m_typography->wordCountId())}));
+
+    // View ▸ Navigation Pane (M73, D-082).
+    tree->appendTo(QStringLiteral("viewMenu"), MenuNode::separator());
+    for (const MenuNode &node : m_navigation->menuItems()) {
+        tree->appendTo(QStringLiteral("viewMenu"), node);
+    }
 
     // AGENT-GUARD: the inline AI commands belong in the SHELL's AI menu,
     // never in a second menu of the same title (two "AI" menus once sat
@@ -292,6 +311,26 @@ QObject *WriteHost::fontObject() const
 QObject *WriteHost::tableLayoutObject() const
 {
     return m_tableLayout;
+}
+
+QObject *WriteHost::listsObject() const
+{
+    return m_lists;
+}
+
+QObject *WriteHost::stylesObject() const
+{
+    return m_styles;
+}
+
+QObject *WriteHost::painterObject() const
+{
+    return m_painter;
+}
+
+QObject *WriteHost::navigationObject() const
+{
+    return m_navigation;
 }
 
 // Review > New Comment, Delete Comment, Previous / Next Comment, Show

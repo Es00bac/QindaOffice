@@ -102,8 +102,10 @@ void BodyWriter::writeTable(const QTextTable *table, XmlElement &container)
         tblPr = std::make_shared<XmlElement>(kW, QStringLiteral("tblPr"));
     }
     if (!imported) {
-        setChildVal(*tblPr, QStringLiteral("tblStyle"), QStringLiteral("TableGrid"));
-        m_env.usedStyles.insert(QStringLiteral("TableGrid"));
+        // Word's Table Grid, or the table style the Styles pane gave it (M73).
+        const QString style = childVal(tblPr.get(), u"tblStyle", QStringLiteral("TableGrid"));
+        setChildVal(*tblPr, QStringLiteral("tblStyle"), style);
+        m_env.usedStyles.insert(style);
         // A table with Word's model (docx_table_format.h) says its width,
         // borders and margins itself; one from HTML or an older Write
         // keeps Qt's frame border and padding.

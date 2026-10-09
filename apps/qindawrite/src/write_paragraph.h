@@ -21,10 +21,21 @@ namespace QindaOffice::Quick {
 struct MenuNode;
 }
 
+class QTextCursor;
+
 namespace QindaOffice::Apps::Write {
 
 class PageTextControl;
 class WriteDocument;
+
+// The Paragraph and Tabs dialogs' questions and answers on the paragraphs
+// `cursor` selects, in any document: the page's story, or a style's sample
+// in Modify Style (write_style_draft.h, M73). Not edit blocks; the answers'
+// keys are ParagraphController's below.
+[[nodiscard]] QVariantMap paragraphInfoAt(const QTextCursor &cursor);
+bool applyParagraphAt(const QTextCursor &cursor, const QVariantMap &answer);
+[[nodiscard]] QVariantList tabStopsAt(const QTextCursor &cursor);
+void applyTabStopsAt(const QTextCursor &cursor, const QVariantList &stops);
 
 class ParagraphController final : public QObject {
     Q_OBJECT

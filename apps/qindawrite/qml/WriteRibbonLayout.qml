@@ -27,17 +27,43 @@ QtObject {
     readonly property var caseIds: ["writeChangeCaseAction", "|", "writeCaseSentenceAction", "writeCaseLowerAction",
                                     "writeCaseUpperAction", "writeCaseCapitalizeAction", "writeCaseToggleAction"]
 
+    // Word's list libraries (M73, D-082).
+    readonly property var bulletIds: ["writeBullet0", "writeBullet1", "writeBullet2", "writeBullet3", "writeBullet4",
+                                      "writeBullet5", "writeBullet6", "|", "writeBulletNoneAction", "writeDefineBulletAction"]
+    readonly property var numberingIds: ["writeNumbering0", "writeNumbering1", "writeNumbering2", "writeNumbering3",
+                                         "writeNumbering4", "writeNumbering5", "writeNumbering6", "|",
+                                         "writeNumberingNoneAction", "writeDefineNumberAction", "|",
+                                         "writeRestartNumberingAction", "writeContinueNumberingAction",
+                                         "writeSetNumberingValueAction"]
+    readonly property var multilevelIds: ["writeMultilevel0", "writeMultilevel1", "writeMultilevel2", "writeMultilevel3", "|",
+                                          "writeDefineMultilevelAction", "|", "writeListLevel1", "writeListLevel2",
+                                          "writeListLevel3", "writeListLevel4", "writeListLevel5", "writeListLevel6",
+                                          "writeListLevel7", "writeListLevel8", "writeListLevel9", "|",
+                                          "writeAdjustListIndentsAction"]
+
     readonly property var aiIds: ["writeAirewrite", "writeAishorten", "writeAiexpand", "writeAigrammar",
                                   "writeAisummarize", "writeAicontinue", "writeAiexplain"]
     readonly property var styleIds: ["writeStyle0", "writeStyle1", "writeStyle2", "writeStyle3", "writeStyle4",
                                      "writeStyle5", "writeStyle6", "writeStyle7", "writeStyle8", "writeStyle9"]
+    // The document's quick styles (M73): sixteen slots that follow the document.
+    readonly property var quickStyleIds: ["writeQuickStyle4", "writeQuickStyle5", "writeQuickStyle6", "writeQuickStyle7",
+                                          "writeQuickStyle8", "writeQuickStyle9", "writeQuickStyle10", "writeQuickStyle11",
+                                          "writeQuickStyle12", "writeQuickStyle13", "writeQuickStyle14", "writeQuickStyle15",
+                                          "|"].concat(styleIds)
+    readonly property var styleCommandIds: ["writeStylesPaneAction", "|", "writeNewStyleAction", "writeModifyStyleAction",
+                                            "writeUpdateStyleAction", "writeDeleteStyleAction"]
 
     readonly property var tabs: [
         StandardRibbon.fileTab([], ["writeTemplate_Letter", "writeTemplate_Meeting_Notes"],
                                [{ action: "writeExportPdfAction", iconName: "file-down" }]),
         { id: "home", label: qsTr("Home"), keyTip: "H", groups: [
             StandardRibbon.historyGroup(),
-            StandardRibbon.clipboardGroup(),
+            // The shared Clipboard group with Word's Format Painter beside Cut
+            // and Copy (M73).
+            { id: "clipboard", label: qsTr("Clipboard"), items: [
+                { action: "editPasteAction", size: "large" }, "editCutAction", "editCopyAction",
+                { action: "writeFormatPainterAction", iconName: "paintbrush", split: true,
+                  menu: ["writeCopyFormatAction", "writePasteFormatAction"] }] },
             { id: "font", label: qsTr("Font"), rows: [
                 [{ id: "fontFamily", component: fontSlot }, { id: "fontSize", component: sizeSlot },
                  { action: "formatGrowFontAction", size: "icon" }, { action: "formatShrinkFontAction", size: "icon" },
@@ -49,7 +75,9 @@ QtObject {
                  { action: "formatSuperscriptAction", size: "icon" }, { action: "formatSubscriptAction", size: "icon" },
                  { id: "textColor", component: textColorSlot }, { id: "highlight", component: highlightSlot }]] },
             { id: "paragraph", label: qsTr("Paragraph"), rows: [
-                [{ action: "formatListBulletAction", size: "icon" }, { action: "formatListNumberedAction", size: "icon" },
+                [{ action: "formatListBulletAction", size: "icon", split: true, menu: bulletIds },
+                 { action: "formatListNumberedAction", size: "icon", split: true, menu: numberingIds },
+                 { id: "multilevelList", label: qsTr("Multilevel List"), iconName: "list-tree", size: "icon", menu: multilevelIds },
                  { action: "formatIndentLessAction", size: "icon" }, { action: "formatIndentMoreAction", size: "icon" },
                  { id: "lineSpacing", label: qsTr("Line spacing"), iconName: "rows-3", size: "icon",
                    menu: ["formatLineSpacingSingleAction", "formatLineSpacingOneHalfAction", "formatLineSpacingDoubleAction"] }],
@@ -59,12 +87,12 @@ QtObject {
                  { id: "paragraphBorders", label: qsTr("Borders"), iconName: "grid-3x3", size: "icon", menu: borderIds },
                  { action: "writeParagraphAction", size: "icon", iconName: "pilcrow" }]] },
             { id: "styles", label: qsTr("Styles"), items: [
-                { action: "writeStyle0", size: "large", iconName: "pilcrow" },
-                { action: "writeStyle1", iconName: "heading" },
-                { action: "writeStyle2", iconName: "heading-1" },
-                { action: "writeStyle3", iconName: "heading-2" },
-                { action: "writeStyle8", iconName: "text-quote" },
-                { id: "allStyles", label: qsTr("All styles"), iconName: "list-tree", menu: styleIds }] },
+                { action: "writeQuickStyle0", size: "large", iconName: "pilcrow" },
+                { action: "writeQuickStyle1", iconName: "type" },
+                { action: "writeQuickStyle2", iconName: "type" },
+                { action: "writeQuickStyle3", iconName: "type" },
+                { id: "allStyles", label: qsTr("More styles"), iconName: "list-tree", menu: quickStyleIds },
+                { action: "writeStylesPaneAction", iconName: "palette", split: true, menu: styleCommandIds }] },
             StandardRibbon.editingGroup()
         ] },
         { id: "insert", label: qsTr("Insert"), keyTip: "N", groups: [
@@ -122,7 +150,10 @@ QtObject {
                 { action: "writeShowCommentsAction", iconName: "message-square" }] },
             StandardRibbon.assistantGroup(aiIds)
         ] },
-        StandardRibbon.viewTab([]),
+        StandardRibbon.viewTab([{ id: "panes", label: qsTr("Panes"), items: [
+            { action: "writeNavigationPaneAction", size: "large", iconName: "navigation" },
+            { action: "writeStylesPaneAction", iconName: "palette" },
+            { action: "writeShowCommentsAction", iconName: "message-square" }] }]),
         { id: "tableDesign", label: qsTr("Table Design"), keyTip: "JT", contextId: "table", groups: [
             { id: "tableShading", label: qsTr("Shading"), items: [
                 { id: "shading", component: shadingSlot },

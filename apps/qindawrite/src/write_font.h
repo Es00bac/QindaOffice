@@ -21,10 +21,21 @@ namespace QindaOffice::Quick {
 struct MenuNode;
 }
 
+class QFont;
+class QTextCharFormat;
+class QTextCursor;
+
 namespace QindaOffice::Apps::Write {
 
 class PageTextControl;
 class WriteDocument;
+
+// The Font dialog's question for a run's format, and its answer on the
+// runs `cursor` selects (run by run), in any document: the page's story,
+// or a style's sample in Modify Style (write_style_draft.h, M73). Keys are
+// FontController's below; applyFontAt is not an edit block.
+[[nodiscard]] QVariantMap fontInfoOf(const QTextCharFormat &format, const QFont &base);
+bool applyFontAt(const QTextCursor &cursor, const QVariantMap &answer);
 
 class FontController final : public QObject {
     Q_OBJECT

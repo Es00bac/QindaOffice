@@ -28,17 +28,33 @@ public:
         int numId = 0;
         int ilvl = 0;
     };
-    // The numbering a QTextList is written with: its own when imported and
-    // unchanged, otherwise a new definition built from its format.
+    // The numbering a QTextList is written with. A Word list (docx_lists.h)
+    // keeps its w:num while it is as read; otherwise it gets a new w:num —
+    // over its source w:abstractNum with w:lvlOverride/w:startOverride when
+    // only the starts changed, over a new w:abstractNum from its definition
+    // when that changed or was made in Write. A Qt list (HTML, Markdown)
+    // gets a new definition built from its format.
     Ref refFor(const QTextList *list, qreal indentWidth);
     // numbering.xml content, or null when the document has no numbering.
     [[nodiscard]] Ooxml::XmlElementPtr result() const;
+    // A style's w:numPr names a list by the numId its paragraphs have in
+    // QindaWrite (Modify Style ▸ Numbering, M73): the id that list was
+    // written with; a numId no list has and the source lacks goes.
+    void patchStyles(Ooxml::XmlElement &styles) const;
 
 private:
+    Ref wordRef(const QTextListFormat &format);
+    [[nodiscard]] int freshNumId(int wanted);
+
     Ooxml::XmlElementPtr m_root;
     int m_nextAbstract = 0;
     int m_nextNum = 1;
     QHash<const QTextList *, Ref> m_refs;
+    QSet<int> m_sourceNums;
+    QSet<int> m_usedNums;
+    QHash<QString, QString> m_sourceAbstracts; // abstractNumId → its markup as read
+    QHash<int, int> m_wordNums;                // a Word list's numId → the one written
+    QHash<QString, int> m_abstracts;           // definition key + markup → abstractNumId written
 };
 
 struct WriteEnv {
@@ -75,6 +91,10 @@ public:
     BodyWriter(WriteEnv &env, const QTextDocument *document, QString part);
 
     void writeFrame(const QTextFrame *frame, Ooxml::XmlElement &container);
+    // The w:pPr / w:rPr written for a paragraph or a run (docx_style_edit.h:
+    // a selection's formatting as a style's markup, M73).
+    Ooxml::XmlElementPtr blockMarkup(const QTextBlock &block) { return paragraphProperties(block); }
+    Ooxml::XmlElementPtr runMarkup(const QTextCharFormat &format) { return runProperties(format); }
     // Ends the comment ranges still open at the story's end (docx_comments.h).
     void closeComments(Ooxml::XmlElement &container);
 
@@ -97,6 +117,12 @@ private:
     Ooxml::XmlElementPtr preservedElement(const QTextCharFormat &format);
     Ooxml::XmlElementPtr paragraphProperties(const QTextBlock &block);
     Ooxml::XmlElementPtr runProperties(const QTextCharFormat &format);
+    // w:numPr and, for a Word list paragraph, w:ind against its level
+    // (docx_writer_paragraph.cpp, M73): a paragraph numbered by its style
+    // or at its level's indents says nothing of its own, as in Word.
+    // Returns true when it wrote the paragraph's indents.
+    bool listProperties(Ooxml::XmlElement &pPr, const QTextBlock &block, const QString &styleId,
+                        const std::function<bool(const char *)> &changed);
 
     // Opens and closes w:commentRangeStart/End as runs enter and leave
     // comments (kCommentIds), across paragraphs.
@@ -142,6 +168,8 @@ void writeCellWidth(Ooxml::XmlElement &tcPr, const QTextTable *table, int column
 
 // Styles the writer may need in a document that lacks them (docx_writer_styles.cpp).
 [[nodiscard]] Ooxml::XmlElementPtr builtInStyle(const QString &styleId);
+// The built-ins QindaWrite offers when a document lacks them (M73).
+[[nodiscard]] QStringList builtInStyleIds();
 [[nodiscard]] QString builtInStyleId(int writeStyleId);
 // The styles part to write: `source` (cloned) or a new one for
 // `defaultFont`, plus every used built-in the document lacks.

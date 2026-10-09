@@ -20,9 +20,11 @@
 #include "docx_styles.h"
 #include "ooxml_theme.h"
 
+#include <QSet>
 #include <QString>
 
 class QTextBlock;
+class QTextCursor;
 
 namespace QindaOffice::Docx {
 
@@ -41,6 +43,27 @@ public:
     // Restyles the paragraph at `block`. Not an edit block of its own: the
     // caller groups the edits into one undo step.
     void apply(const QTextBlock &block, const QString &styleId) const;
+
+    // ---- M73 (D-082), docx_restyle_edit.cpp; none is an edit block ----
+    [[nodiscard]] const StyleSheet &sheet() const { return m_styles; }
+    [[nodiscard]] const Ooxml::Theme &theme() const { return m_theme; }
+    // The style a paragraph is in: its w:pStyle, else the Write style it
+    // was given (kWriteStyleIdProperty), else the default paragraph style.
+    [[nodiscard]] QString paragraphStyleOf(const QTextBlock &block) const;
+    // Character style `styleId` on the selection's runs (empty: none, Word's
+    // Default Paragraph Font): kRunStyleId (written as w:rStyle) and the
+    // look the style gives, the runs' own formatting kept.
+    void applyCharacter(const QTextCursor &selection, const QString &styleId) const;
+    // Clear Formatting: the selected paragraphs keep their style (and list)
+    // and lose their own paragraph formatting; the selected runs keep their
+    // character style and lose their own character formatting.
+    void clearFormatting(const QTextCursor &selection) const;
+    // The styles in `changed` went from `before` to this sheet: every
+    // paragraph and run of `document` that uses one (or a style based on
+    // one) shows the new look; what it says itself stays, and the import
+    // snapshots move along, so the writer still writes only its own
+    // markup (D-068 rule 3).
+    void restyle(QTextDocument *document, const StyleSheet &before, const QSet<QString> &changed) const;
 
 private:
     StyleSheet m_styles;

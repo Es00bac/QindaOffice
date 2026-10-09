@@ -22,6 +22,8 @@
 #include <QTextCursor>
 #include <QTextDocument>
 
+#include <functional>
+
 class QEvent;
 class QInputMethodEvent;
 class QKeyEvent;
@@ -64,6 +66,11 @@ public:
     // Key, mouse and input-method events; mouse positions are DOCUMENT
     // coordinates (the item maps them first). Returns true when consumed.
     bool processEvent(QEvent *event);
+    // Keys that are a command of the host's before they are text: Tab and
+    // Enter on list items, Esc for the Format Painter, Enter's "style for
+    // following paragraph" (M73). The filter sees every key press first and
+    // returns true when it handled it (as one edit of its own).
+    void setKeyFilter(std::function<bool(QKeyEvent *)> filter) { m_keyFilter = std::move(filter); }
     [[nodiscard]] QVariant inputMethodQuery(Qt::InputMethodQuery query) const;
     [[nodiscard]] bool canPaste() const;
     [[nodiscard]] QString preeditText() const { return m_preedit; }
@@ -109,6 +116,7 @@ private:
     void restartBlink();
 
     QTextDocument *m_document;
+    std::function<bool(QKeyEvent *)> m_keyFilter;
     QTextCursor m_cursor;
     QTextCharFormat m_charFormat;
     QPalette m_palette;

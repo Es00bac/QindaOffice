@@ -4,6 +4,7 @@
 #include "docx_comments.h"
 #include "docx_controls.h"
 #include "docx_format.h"
+#include "docx_list_labels.h"
 #include "docx_metrics.h"
 #include "docx_properties.h"
 #include "docx_reader_p.h"
@@ -323,13 +324,17 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
             }
         }
     }
-    // Word's line height (docx_metrics.h): display only, before undo is on.
+    // Word's line height (docx_metrics.h) and the first lines of list
+    // paragraphs after their numbers (docx_list_labels.h): display only,
+    // before undo is on.
     applyWordLineMetrics(body);
+    layoutListText(body, parts->defaultTabStop);
     for (auto *stories : {&parts->headers, &parts->footers}) {
         for (HeaderFooter &story : *stories) {
             if (story.document) {
                 const bool modified = story.document->isModified();
                 applyWordLineMetrics(story.document.get());
+                layoutListText(story.document.get(), parts->defaultTabStop);
                 story.document->setModified(modified); // untouched: still copied byte for byte
             }
         }

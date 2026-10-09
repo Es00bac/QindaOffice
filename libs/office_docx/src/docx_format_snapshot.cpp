@@ -49,6 +49,9 @@ QVariantMap blockSnapshot(const QTextBlockFormat &f)
         {QStringLiteral("wtabs"), f.stringProperty(kTabStops)},
         {QStringLiteral("pbdr"), f.stringProperty(kParagraphBorderSpec)},
         {QStringLiteral("widow"), !f.hasProperty(kWidowControl) || f.boolProperty(kWidowControl)},
+        // M73 (D-082): list membership and where a list paragraph's number stands.
+        {QStringLiteral("inlist"), f.objectIndex() >= 0},
+        {QStringLiteral("lhang"), f.hasProperty(kListHanging) ? qRound(f.doubleProperty(kListHanging) * 100) : -1},
     };
 }
 
@@ -80,6 +83,8 @@ QVariantMap charSnapshot(const QTextCharFormat &f)
         {QStringLiteral("dstrike"), f.boolProperty(kDoubleStrike)},
         {QStringLiteral("hidden"), f.boolProperty(kHiddenText)},
         {QStringLiteral("kern"), f.intProperty(kKerning)},
+        // M73 (D-082): a character style applied in QindaWrite.
+        {QStringLiteral("rstyle"), f.stringProperty(kRunStyleId)},
     };
 }
 

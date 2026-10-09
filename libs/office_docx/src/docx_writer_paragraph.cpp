@@ -10,6 +10,7 @@
 
 #include "docx_borders.h"
 #include "docx_format.h"
+#include "docx_lists.h"
 #include "docx_paragraph_format.h"
 #include "docx_properties.h"
 #include "docx_writer_p.h"
@@ -17,6 +18,7 @@
 #include "ooxml_units.h"
 
 #include <QHash>
+#include <QTextList>
 
 namespace QindaOffice::Docx::detail {
 
@@ -202,6 +204,55 @@ void writeRunExtras(XmlElement &rPr, const QTextCharFormat &f, bool imported, co
             setChildVal(rPr, QStringLiteral("kern"), QString::number(kern));
         }
     }
+}
+
+bool BodyWriter::listProperties(XmlElement &pPr, const QTextBlock &block, const QString &styleId,
+                                const std::function<bool(const char *)> &changed)
+{
+    const XmlElement *styleNum = m_env.sourceStyles.styleNumbering(styleId);
+    const QTextList *list = block.textList();
+    if (list == nullptr) {
+        // No longer numbered: numId 0 only where the style would number it.
+        if (changed("inlist")) {
+            pPr.removeChildren(kW, u"numPr");
+            if (styleNum != nullptr) {
+                setChildVal(wChild(pPr, QStringLiteral("numPr")), QStringLiteral("numId"), QStringLiteral("0"));
+            }
+        }
+        return false;
+    }
+    const NumberingBuilder::Ref ref = m_env.numbering->refFor(list, m_document->indentWidth());
+    const XmlElement *own = pPr.child(kW, u"numPr");
+    const XmlElement *now = own != nullptr ? own : styleNum;
+    if (now == nullptr || childVal(now, u"numId").toInt() != ref.numId
+        || childVal(now, u"ilvl", QStringLiteral("0")).toInt() != ref.ilvl) {
+        XmlElement &numPr = wChild(pPr, QStringLiteral("numPr"));
+        numPr.children.clear();
+        setChildVal(numPr, QStringLiteral("ilvl"), QString::number(ref.ilvl));
+        setChildVal(numPr, QStringLiteral("numId"), QString::number(ref.numId));
+    }
+    const QTextListFormat lf = list->format();
+    if (!isWordList(lf)) {
+        return false;
+    }
+    // A Word list paragraph at its level's indents takes them from the
+    // level, as Word writes it; its first-line offset is display only.
+    if (changed("left") || changed("right") || changed("lhang") || changed("inlist")) {
+        const QTextBlockFormat bf = block.blockFormat();
+        const NumberingLevel &level = listDefinition(lf.stringProperty(kListDefinition))->levels[size_t(qBound(0, ref.ilvl, 8))];
+        const int left = qRound(Units::pxToTwips(bf.leftMargin()));
+        const int hanging = qRound(Units::pxToTwips(bf.doubleProperty(kListHanging)));
+        const int right = qRound(Units::pxToTwips(bf.rightMargin()));
+        pPr.removeChildren(kW, u"ind");
+        if (qAbs(left - levelLeft(level)) > 1 || qAbs(hanging - levelHanging(level)) > 1 || right != 0) {
+            XmlElement &ind = wChild(pPr, QStringLiteral("ind"));
+            ind.setAttribute(kW, QStringLiteral("left"), QString::number(left));
+            ind.setAttribute(kW, QStringLiteral("right"), QString::number(right));
+            ind.setAttribute(kW, hanging >= 0 ? QStringLiteral("hanging") : QStringLiteral("firstLine"),
+                             QString::number(qAbs(hanging)));
+        }
+    }
+    return true;
 }
 
 } // namespace QindaOffice::Docx::detail

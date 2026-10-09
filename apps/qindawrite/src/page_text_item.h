@@ -84,6 +84,9 @@ signals:
     // `docPos` in the text's layout, the caret at `position` — form
     // fields answer it (write_controls.h).
     void clicked(qreal x, qreal y, const QPointF &docPos, int position);
+    // A left press in the body was released: a selection (or a click) is
+    // made — the Format Painter paints it (write_painter.h, M73).
+    void selectionReleased();
     void storyChanged();
     // A double-click on a picture: the Picture dialog for the selection.
     void pictureDialogRequested();

@@ -63,8 +63,9 @@ void WriteReviewActions::createActions(Quick::ActionModel *model)
                             "sticky-note");
     m_insertToc = make(kInsertToc, tr("Table of &Contents"));
     m_updateToc = make(kUpdateToc, tr("&Update Table of Contents"), QKeySequence(Qt::Key_F9));
+    // Word's own chord (M73): Ctrl+Shift+C is Copy Formatting (write_painter.h).
     m_trackChanges = make(kReviewTrackChanges, tr("&Track Changes"),
-                          QKeySequence(QStringLiteral("Ctrl+Shift+C")), "history");
+                          QKeySequence(QStringLiteral("Ctrl+Shift+E")), "history");
     m_trackChanges->setCheckable(true);
     m_acceptChange = make(kReviewAcceptChange, tr("&Accept Change"));
     m_rejectChange = make(kReviewRejectChange, tr("&Reject Change"));

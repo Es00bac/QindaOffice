@@ -147,6 +147,14 @@ struct WordParts {
     bool importedDifferentFirstPage = false;
     Ooxml::CoreProperties properties;
     qreal defaultTabStop = 48.0; // px
+    // The document's styles part (w:styles) as QindaWrite's style commands
+    // left it (M73, D-082: New / Modify / Update / Delete Style, a built-in
+    // added on first use); null while the styles are the source package's
+    // own — or, for a new document, Write's built-ins the writer adds. An
+    // immutable snapshot: an edit swaps in a new root (its undo step swaps
+    // back), and the writer, the reader-side restyling and the Styles pane
+    // read it (docx_style_edit.h stylesRoot()).
+    Ooxml::XmlElementPtr styles;
 
     // Human-readable notes about what was approximated on open
     // ("2 text boxes shown as boxes; kept unchanged on save").

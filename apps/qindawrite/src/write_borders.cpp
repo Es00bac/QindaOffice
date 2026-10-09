@@ -336,21 +336,53 @@ QVariantMap BordersController::dialogInfo() const
         out.insert(QStringLiteral("hasInsideV"), range.columns > 1);
         out.insert(QStringLiteral("fill"), cell.hasProperty(QTextFormat::BackgroundBrush) ? cell.background().color().name() : QString());
     } else {
-        const QList<QTextBlock> blocks = selectedBlocks(cursor);
-        const QTextBlockFormat format = blocks.value(0).blockFormat();
-        const WordBorders own = Docx::paragraphBorders(format);
-        for (const char *side : {"top", "left", "bottom", "right"}) {
-            edges.insert(QString::fromLatin1(side), edgeToMap(own.value(QString::fromLatin1(side), WordBorder::none())));
-        }
-        edges.insert(QStringLiteral("insideH"), edgeToMap(own.value(QStringLiteral("between"), WordBorder::none())));
-        out.insert(QStringLiteral("context"), QStringLiteral("paragraph"));
-        out.insert(QStringLiteral("applyTo"), QStringLiteral("paragraph"));
-        out.insert(QStringLiteral("hasInsideH"), blocks.size() > 1);
-        out.insert(QStringLiteral("hasInsideV"), false);
-        out.insert(QStringLiteral("fill"), format.hasProperty(QTextFormat::BackgroundBrush) ? format.background().color().name() : QString());
+        return paragraphBordersInfoAt(cursor);
     }
     out.insert(QStringLiteral("edges"), edges);
     return out;
+}
+
+QVariantMap paragraphBordersInfoAt(const QTextCursor &cursor)
+{
+    const QList<QTextBlock> blocks = selectedBlocks(cursor);
+    const QTextBlockFormat format = blocks.value(0).blockFormat();
+    const WordBorders own = Docx::paragraphBorders(format);
+    QVariantMap edges;
+    for (const char *side : {"top", "left", "bottom", "right"}) {
+        edges.insert(QString::fromLatin1(side), edgeToMap(own.value(QString::fromLatin1(side), WordBorder::none())));
+    }
+    edges.insert(QStringLiteral("insideH"), edgeToMap(own.value(QStringLiteral("between"), WordBorder::none())));
+    return {{QStringLiteral("context"), QStringLiteral("paragraph")},
+            {QStringLiteral("applyTo"), QStringLiteral("paragraph")},
+            {QStringLiteral("hasInsideH"), blocks.size() > 1},
+            {QStringLiteral("hasInsideV"), false},
+            {QStringLiteral("fill"), format.hasProperty(QTextFormat::BackgroundBrush) ? format.background().color().name() : QString()},
+            {QStringLiteral("edges"), edges}};
+}
+
+void applyParagraphBordersAt(const QTextCursor &cursor, const QVariantMap &answer)
+{
+    const QVariantMap edges = answer.value(QStringLiteral("edges")).toMap();
+    const bool fillChanged = answer.value(QStringLiteral("fillChanged")).toBool();
+    const QColor fill(answer.value(QStringLiteral("fill")).toString());
+    for (const QTextBlock &block : selectedBlocks(cursor)) {
+        QTextBlockFormat format = block.blockFormat();
+        WordBorders borders = Docx::paragraphBorders(format);
+        for (auto it = edges.cbegin(); it != edges.cend(); ++it) {
+            if (it.key() != u"insideV") {
+                borders.insert(paragraphSide(it.key()), edgeFromMap(it.value().toMap()));
+            }
+        }
+        Docx::setParagraphBorders(format, borders);
+        if (fillChanged) {
+            if (fill.isValid()) {
+                format.setBackground(fill);
+            } else {
+                format.clearBackground();
+            }
+        }
+        QTextCursor(block).setBlockFormat(format);
+    }
 }
 
 bool BordersController::applyDialog(const QVariantMap &answer)
@@ -376,24 +408,7 @@ bool BordersController::applyDialog(const QVariantMap &answer)
             Docx::applyCellShading(table, range, fill);
         }
     } else {
-        for (const QTextBlock &block : selectedBlocks(cursor)) {
-            QTextBlockFormat format = block.blockFormat();
-            WordBorders borders = Docx::paragraphBorders(format);
-            for (auto it = edges.cbegin(); it != edges.cend(); ++it) {
-                if (it.key() != u"insideV") {
-                    borders.insert(paragraphSide(it.key()), edgeFromMap(it.value().toMap()));
-                }
-            }
-            Docx::setParagraphBorders(format, borders);
-            if (fillChanged) {
-                if (fill.isValid()) {
-                    format.setBackground(fill);
-                } else {
-                    format.clearBackground();
-                }
-            }
-            QTextCursor(block).setBlockFormat(format);
-        }
+        applyParagraphBordersAt(cursor, answer);
     }
     cursor.endEditBlock();
     m_document->setDirty(true);

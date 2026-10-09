@@ -180,6 +180,11 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
             env.sourceFootnotesPart = source->targetPart(env.sourceMain, *rel);
         }
     }
+    if (parts.styles) {
+        // The styles as QindaWrite's style commands left them (M73).
+        sourceStyles = parts.styles;
+        env.sourceStyles = StyleSheet::parse(sourceStyles.get());
+    }
     env.numbering = std::make_unique<detail::NumberingBuilder>(sourceNumbering);
     env.layoutChanged = !source || parts.sourceSectionXml.isEmpty() || !(parts.layout == parts.importedLayout);
     env.headersChanged = !source || parts.differentFirstPage != parts.importedDifferentFirstPage;
@@ -408,6 +413,7 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
 
     // Styles and numbering, now that every reference is known.
     XmlElementPtr styles = detail::stylesPart(env, body.defaultFont(), sourceStyles);
+    env.numbering->patchStyles(*styles);
     env.writer.addXmlPart(QStringLiteral("word/styles.xml"), *styles, type("styles+xml"));
     env.writer.addRelationship(kMain, QString::fromUtf16(Ooxml::RelType::Styles), QStringLiteral("word/styles.xml"));
     if (XmlElementPtr numbering = env.numbering->result()) {

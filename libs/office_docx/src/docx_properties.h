@@ -2,7 +2,8 @@
 #pragma once
 
 // QTextFormat properties that carry WordprocessingML semantics on a
-// QTextDocument (D-068).
+// QTextDocument (D-068). Offsets are never reused: append new ones at the
+// end of the M73 block (85 is the last taken).
 //
 // Two groups:
 //
@@ -157,6 +158,17 @@ inline constexpr int kRowCantSplit = kDocxBase + 80;  // bool w:cantSplit
 // Display only: the padding applyRowHeights() added to a cell, so a new
 // row height replaces it instead of adding to it.
 inline constexpr int kRowPad = kDocxBase + 81; // qreal px
+
+// ---- M73 (D-082): Word's lists and styles --------------------------------------------
+// List formats: Word's own description of the list a paragraph is an item
+// of (docx_lists.h). With these, docx_list_labels.h numbers and draws the
+// list as Word does and the writer saves it as real w:abstractNum / w:num.
+inline constexpr int kListDefinition = kDocxBase + 82;  // QString: the w:abstractNum (nine levels) as XML
+inline constexpr int kListStarts = kDocxBase + 83;      // QVariantList of 9 ints: w:startOverride per level, −1 none
+inline constexpr int kListAbstractKey = kDocxBase + 84; // QString: "src:<abstractNumId>" read, "new:<n>" made in Write
+// Block formats: where a list paragraph's number stands — Word's hanging
+// indent (left − hanging), in px; the text starts at the left indent.
+inline constexpr int kListHanging = kDocxBase + 85; // qreal px
 
 // How QindaWrite shows a tracked change: blue underlined insertions, red
 // struck deletions — content colours, the same on screen, paper and PDF.

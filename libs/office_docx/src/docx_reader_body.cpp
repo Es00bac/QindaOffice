@@ -14,6 +14,8 @@
 #include <QTextDocument>
 #include <QTextTable>
 
+#include <algorithm>
+
 namespace QindaOffice::Docx::detail {
 
 using Ooxml::XmlElement;
@@ -262,9 +264,11 @@ void BodyReader::readParagraph(const XmlElement &p, QTextCursor &cursor, Contain
         }
     }
     if (level != nullptr) {
-        // Qt draws the marker left of the first line; Word's hanging indent
-        // puts the number there already, so the first line starts at the
-        // left indent.
+        // Word puts the number at left − hanging and the text at the left
+        // indent: the hanging indent is where the marker goes (drawn by
+        // docx_list_labels.h; Qt's own marker is off), not the first line's.
+        bf.setProperty(kListHanging, -bf.textIndent());
+        bf.setProperty(QTextFormat::ListStyle, int(QTextListFormat::ListStyleUndefined));
         bf.setTextIndent(0);
     }
     if (state.pageBreakPending) {
@@ -324,8 +328,9 @@ void BodyReader::readParagraph(const XmlElement &p, QTextCursor &cursor, Contain
 void BodyReader::joinList(int numId, int ilvl, const NumberingLevel &level, QTextCursor &cursor)
 {
     QString key = m_env.numbering.abstractIdOf(numId);
-    if (m_env.numbering.start(numId, ilvl) != level.start || key.isEmpty()) {
-        key = QStringLiteral("num:%1").arg(numId); // an override keeps its own count
+    const QList<int> overrides = m_env.numbering.startOverrides(numId);
+    if (std::any_of(overrides.cbegin(), overrides.cend(), [](int v) { return v >= 0; }) || key.isEmpty()) {
+        key = QStringLiteral("num:%1").arg(numId); // an override keeps its own count (Word's restart)
     }
     ListCounters &counters = m_counters[key];
     QTextList *list = counters.list[ilvl].data();
@@ -375,10 +380,25 @@ void BodyReader::joinList(int numId, int ilvl, const NumberingLevel &level, QTex
     }
     lf.setProperty(kListNumId, numId);
     lf.setProperty(kListLevel, ilvl);
+    // M73 (D-082): Word's own description of the list (docx_lists.h); the
+    // writer keeps this w:num and its w:abstractNum while they are as read.
+    const QString definition = m_env.numbering.definitionXml(numId);
+    QVariantList starts;
+    for (const int v : overrides) {
+        starts.append(v);
+    }
+    if (!definition.isEmpty()) {
+        lf.setProperty(kListDefinition, definition);
+        lf.setProperty(kListAbstractKey, QStringLiteral("src:") + m_env.numbering.abstractIdOf(numId));
+        lf.setProperty(kListStarts, starts);
+    }
     QVariantMap snapshot{{QStringLiteral("style"), int(lf.style())},
                          {QStringLiteral("prefix"), lf.numberPrefix()},
                          {QStringLiteral("suffix"), lf.numberSuffix()},
-                         {QStringLiteral("start"), lf.start()}};
+                         {QStringLiteral("start"), lf.start()},
+                         {QStringLiteral("num"), numId},
+                         {QStringLiteral("def"), definition},
+                         {QStringLiteral("starts"), starts}};
     lf.setProperty(kListSnapshot, snapshot);
     counters.list[ilvl] = cursor.createList(lf);
 }

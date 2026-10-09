@@ -22,25 +22,6 @@ using Quick::MenuNode;
 
 namespace {
 
-// Removes list membership from every block in [start, end]: the block's
-// objectIndex points at the list format; -1 detaches it (Qt's canonical
-// un-list trick, also used by the textedit example).
-void removeFromList(QTextDocument *doc, int start, int end)
-{
-    QTextBlock block = doc->findBlock(start);
-    const QTextBlock last = doc->findBlock(end);
-    while (block.isValid()) {
-        QTextCursor blockCursor(block);
-        QTextBlockFormat format;
-        format.setObjectIndex(-1);
-        blockCursor.setBlockFormat(format);
-        if (block == last) {
-            break;
-        }
-        block = block.next();
-    }
-}
-
 MenuNode a(ActionEntry *entry)
 {
     return MenuNode::action(entry->id());
@@ -104,10 +85,8 @@ FormatController::FormatController(PageTextControl *control, WriteDocument *docu
             }
         });
     }
-    connect(m_actions.listBullet, &ActionEntry::triggered, this,
-            [this] { toggleList(QTextListFormat::ListDisc); });
-    connect(m_actions.listNumbered, &ActionEntry::triggered, this,
-            [this] { toggleList(QTextListFormat::ListDecimal); });
+    // The Bullets and Numbering buttons are Word's list commands now
+    // (ListController, write_lists.h, M73).
     connect(m_actions.indentMore, &ActionEntry::triggered, this, [this] { adjustIndent(1); });
     connect(m_actions.indentLess, &ActionEntry::triggered, this, [this] { adjustIndent(-1); });
 
@@ -191,28 +170,12 @@ void FormatController::applyAlignment(Qt::Alignment alignment)
     syncFromControl();
 }
 
-void FormatController::toggleList(QTextListFormat::Style style)
-{
-    const QTextCursor cursor = m_control->textCursor();
-    QTextDocument *doc = m_document->textDocument();
-    QTextList *list = cursor.block().textList();
-    if (list != nullptr && list->format().style() == style) {
-        removeFromList(doc, cursor.selectionStart(), cursor.selectionEnd());
-    } else {
-        QTextCursor edit = cursor;
-        edit.beginEditBlock();
-        removeFromList(doc, cursor.selectionStart(), cursor.selectionEnd());
-        QTextListFormat listFormat;
-        listFormat.setStyle(style);
-        edit.createList(listFormat);
-        edit.endEditBlock();
-    }
-    m_document->setDirty(true);
-    syncFromControl();
-}
-
 void FormatController::adjustIndent(int delta)
 {
+    // On list items Word's Increase / Decrease Indent change the level.
+    if (m_listIndent && m_listIndent(delta)) {
+        return;
+    }
     const QTextCursor cursor = m_control->textCursor();
     QTextBlockFormat format;
     format.setIndent(qMax(0, cursor.blockFormat().indent() + delta));
@@ -221,6 +184,10 @@ void FormatController::adjustIndent(int delta)
 
 void FormatController::clearDirectFormatting()
 {
+    if (m_clearFormatting && m_clearFormatting()) {
+        syncFromControl();
+        return;
+    }
     QTextCursor cursor = m_control->textCursor();
     cursor.beginEditBlock();
     cursor.setCharFormat(QTextCharFormat());
@@ -321,10 +288,6 @@ void FormatController::syncFromControl()
     m_actions.alignRight->setChecked(alignment == Qt::AlignRight);
     m_actions.alignJustify->setChecked(alignment == Qt::AlignJustify);
 
-    QTextList *list = cursor.block().textList();
-    const int style = list != nullptr ? list->format().style() : QTextListFormat::ListStyleUndefined;
-    m_actions.listBullet->setChecked(style == QTextListFormat::ListDisc);
-    m_actions.listNumbered->setChecked(style == QTextListFormat::ListDecimal);
     m_syncing = false;
     emit formatChanged();
 }

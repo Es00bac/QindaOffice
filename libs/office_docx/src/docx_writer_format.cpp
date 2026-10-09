@@ -233,17 +233,7 @@ XmlElementPtr BodyWriter::paragraphProperties(const QTextBlock &block)
             setChildVal(*pPr, QStringLiteral("pageBreakBefore"), QStringLiteral("0"));
         }
     }
-    if (const QTextList *list = block.textList()) {
-        const NumberingBuilder::Ref ref = m_env.numbering->refFor(list, m_document->indentWidth());
-        XmlElement &numPr = wChild(*pPr, QStringLiteral("numPr"));
-        numPr.children.clear();
-        setChildVal(numPr, QStringLiteral("ilvl"), QString::number(ref.ilvl));
-        setChildVal(numPr, QStringLiteral("numId"), QString::number(ref.numId));
-    } else if (pPr->child(kW, u"numPr") != nullptr || m_env.sourceStyles.styleNumbering(styleId) != nullptr) {
-        XmlElement &numPr = wChild(*pPr, QStringLiteral("numPr"));
-        numPr.children.clear();
-        setChildVal(numPr, QStringLiteral("numId"), QStringLiteral("0"));
-    }
+    const bool listIndents = listProperties(*pPr, block, styleId, changed);
     if (changed("bg")) {
         pPr->removeChildren(kW, u"shd");
         const bool has = bf.hasProperty(QTextFormat::BackgroundBrush) && bf.background().style() != Qt::NoBrush;
@@ -277,7 +267,7 @@ XmlElementPtr BodyWriter::paragraphProperties(const QTextBlock &block)
     }
     writeParagraphSpacing(*pPr, bf, imported, changed);
     const bool inList = block.textList() != nullptr;
-    if (changed("left") || changed("right") || (changed("indent") && !inList)) {
+    if (!listIndents && (changed("left") || changed("right") || (changed("indent") && !inList))) {
         const qreal listIndent = inList ? block.textList()->format().indent() * m_document->indentWidth() : 0.0;
         const bool any = bf.leftMargin() != 0 || bf.rightMargin() != 0 || bf.textIndent() != 0 || listIndent != 0;
         if (any || imported) {
@@ -360,6 +350,12 @@ XmlElementPtr BodyWriter::runProperties(const QTextCharFormat &f)
     const QColor shown = f.foreground().color();
     const bool markColour = (insertMark && shown == QColor::fromRgb(kRevisionInsertColor))
         || (deleteMark && shown == QColor::fromRgb(kRevisionDeleteColor));
+    if (changed("rstyle")) { // a character style applied in Write (M73)
+        rPr->removeChildren(kW, u"rStyle");
+        if (const QString style = f.stringProperty(kRunStyleId); !style.isEmpty()) {
+            setChildVal(*rPr, QStringLiteral("rStyle"), style);
+        }
+    }
     if (!imported && f.isAnchor() && !f.anchorHref().isEmpty() && rPr->child(kW, u"rStyle") == nullptr) {
         setChildVal(*rPr, QStringLiteral("rStyle"), QStringLiteral("Hyperlink"));
         m_env.usedStyles.insert(QStringLiteral("Hyperlink"));
