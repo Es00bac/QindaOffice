@@ -54,7 +54,7 @@ private slots:
             }
             QCOMPARE(titles, (QStringList{QStringLiteral("File"), QStringLiteral("Edit"), QStringLiteral("View"),
                                           QStringLiteral("Sales"), QStringLiteral("Expenses"), QStringLiteral("Time"),
-                                          QStringLiteral("Banking"),
+                                          QStringLiteral("Payroll"), QStringLiteral("Banking"),
                                           QStringLiteral("Accounting"), QStringLiteral("Reports"), QStringLiteral("AI"),
                                           QStringLiteral("Settings"), QStringLiteral("Help")}));
         }

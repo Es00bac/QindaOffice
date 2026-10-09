@@ -7,6 +7,7 @@
 
 #include "check_print.h"
 #include "check_queue.h"
+#include "payroll_ledger.h"
 #include "company_file.h"
 #include "page_output.h"
 
@@ -37,6 +38,18 @@ QList<qint64> idsOf(const QVariantList &list)
     return ids;
 }
 
+// The payee a queued check is written to: its party, or (M71) the
+// employee a paycheck pays.
+QString payeeOf(CompanyFile &file, const QueuedCheck &q, const QString &partyName)
+{
+    if (q.kind == DocKind::Paycheck) {
+        if (const std::optional<PaycheckRecord> r = PayrollLedger(file).paycheck(q.docId)) {
+            return r->employeeName;
+        }
+    }
+    return partyName;
+}
+
 } // namespace
 
 QVariantList BooksService::checkQueue(qint64 bankAccountId) const
@@ -53,7 +66,7 @@ QVariantList BooksService::checkQueue(qint64 bankAccountId) const
                            {QStringLiteral("kindLabel"), Format::kindLabel(q.kind)},
                            {QStringLiteral("date"), Format::isoDate(q.date)},
                            {QStringLiteral("accountId"), q.accountId},
-                           {QStringLiteral("payeeName"), nameOfParty(q.payeeId)},
+                           {QStringLiteral("payeeName"), payeeOf(*c, q, nameOfParty(q.payeeId))},
                            {QStringLiteral("amount"), q.amount.minor()},
                            {QStringLiteral("amountText"), money.text(q.amount.minor())},
                            {QStringLiteral("number"), q.number}};
@@ -90,7 +103,7 @@ QVariantMap BooksService::assignCheckNumbers(qint64 bankAccountId, const QVarian
     for (const QueuedCheck &q : numbered) {
         checks << QVariantMap{{QStringLiteral("id"), q.docId},
                               {QStringLiteral("number"), q.number},
-                              {QStringLiteral("payeeName"), nameOfParty(q.payeeId)},
+                              {QStringLiteral("payeeName"), payeeOf(*c, q, nameOfParty(q.payeeId))},
                               {QStringLiteral("amountText"), money.text(q.amount.minor())}};
     }
     out.insert(QStringLiteral("checks"), checks);

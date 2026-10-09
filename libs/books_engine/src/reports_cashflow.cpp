@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Statement of Cash Flows (indirect method), budgets and Budget vs Actual,
 // and the report catalog.
+#include "payroll_reports.h"
 #include "reports.h"
 
 #include "company_file.h"
@@ -238,7 +239,7 @@ QList<Reports::Catalog> Reports::catalog()
     const QString expenses = QStringLiteral("Expenses and vendors");
     const QString accountant = QStringLiteral("For my accountant");
     const QString time = QStringLiteral("Jobs and time");
-    return {
+    QList<Catalog> out{
         {QStringLiteral("profit_and_loss"), QStringLiteral("Profit and Loss"), overview,
          QStringLiteral("Income minus cost of goods sold and expenses for a period: whether the business made money.")},
         {QStringLiteral("balance_sheet"), QStringLiteral("Balance Sheet"), overview,
@@ -295,6 +296,11 @@ QList<Reports::Catalog> Reports::catalog()
         {QStringLiteral("reconciliation"), QStringLiteral("Reconciliation Report"), accountant,
          QStringLiteral("A finished or in-progress bank reconciliation: cleared and uncleared items.")},
     };
+    // M71 (D-081): the payroll reports and form worksheets (payroll_reports.h).
+    for (const PayrollReports::Entry &e : PayrollReports::catalog()) {
+        out << Catalog{e.id, e.title, e.group, e.definition};
+    }
+    return out;
 }
 
 } // namespace QindaOffice::Books

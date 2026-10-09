@@ -12,6 +12,24 @@ find_package(Qt6 REQUIRED COMPONENTS Sql)
 
 qt_add_resources(BOOKS_ENGINE_RESOURCES resources/books_templates.qrc)
 
+# books_money (M71, D-081): Money and Decimal on their own, Qt Core only, so
+# books_payroll (pure tax arithmetic, no database) shares the engine's exact
+# money types without linking Qt Sql. The sources stay in this directory;
+# books_engine links it PUBLIC, so nothing that includes money.h changes.
+add_library(books_money STATIC
+    src/decimal.cpp
+    src/decimal.h
+    src/money.cpp
+    src/money.h
+)
+target_include_directories(books_money
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/qindaoffice>
+)
+target_link_libraries(books_money PUBLIC Qt6::Core)
+qqo_set_strict_warnings(books_money)
+
 add_library(books_engine STATIC
     ${BOOKS_ENGINE_RESOURCES}
     src/account_types.cpp
@@ -34,8 +52,6 @@ add_library(books_engine STATIC
     src/company_settings.h
     src/connections.cpp
     src/connections.h
-    src/decimal.cpp
-    src/decimal.h
     src/documents.cpp
     src/documents.h
     src/documents_write.cpp
@@ -47,8 +63,20 @@ add_library(books_engine STATIC
     src/ledger_query.h
     src/lists.cpp
     src/lists.h
-    src/money.cpp
-    src/money.h
+    src/owner_pay.cpp
+    src/owner_pay.h
+    src/payroll_forms_colorado.cpp
+    src/payroll_forms_federal.cpp
+    src/payroll_forms_p.h
+    src/payroll_forms_w2.cpp
+    src/payroll_ledger.cpp
+    src/payroll_ledger.h
+    src/payroll_liabilities.cpp
+    src/payroll_liabilities.h
+    src/payroll_records.cpp
+    src/payroll_records.h
+    src/payroll_reports.cpp
+    src/payroll_reports.h
     src/purchase_orders.cpp
     src/purchase_orders.h
     src/purchases.cpp
@@ -88,6 +116,8 @@ target_include_directories(books_engine
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/qindaoffice>
 )
 
-target_link_libraries(books_engine PUBLIC Qt6::Core Qt6::Sql)
+# M71 (D-081): payroll's records, ledger and forms compute through
+# books_payroll (pure tax arithmetic, Qt Core).
+target_link_libraries(books_engine PUBLIC books_money books_payroll Qt6::Core Qt6::Sql)
 
 qqo_set_strict_warnings(books_engine)

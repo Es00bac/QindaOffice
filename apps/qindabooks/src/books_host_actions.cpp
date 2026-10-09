@@ -87,6 +87,16 @@ constexpr Command kCommands[] = {
     {"booksTimeActivityAction", QT_TRANSLATE_NOOP("BooksHost", "&Time Activity…"), "Ctrl+Shift+T", "clock"},
     {"booksWeeklyTimesheetAction", QT_TRANSLATE_NOOP("BooksHost", "&Weekly Timesheet…"), "", "calendar-days"},
     {"booksNewEmployeeAction", QT_TRANSLATE_NOOP("BooksHost", "New &Employee…"), "", "user-round"},
+    // M71 (D-081): owner pay, estimated taxes and payroll.
+    {"booksPayrollSetupAction", QT_TRANSLATE_NOOP("BooksHost", "Set Up Owner Pay && &Payroll…"), "", "settings-2"},
+    {"booksPayOwnerAction", QT_TRANSLATE_NOOP("BooksHost", "Pay &Owner…"), "", "hand-coins"},
+    {"booksEstimatedTaxesAction", QT_TRANSLATE_NOOP("BooksHost", "Estimated &Taxes"), "", "calculator"},
+    {"booksDistributionAction", QT_TRANSLATE_NOOP("BooksHost", "Shareholder &Distribution…"), "", "banknote"},
+    {"booksPayrollEmployeesAction", QT_TRANSLATE_NOOP("BooksHost", "&Employee Payroll…"), "", "users"},
+    {"booksRunPayrollAction", QT_TRANSLATE_NOOP("BooksHost", "&Run Payroll…"), "", "receipt"},
+    {"booksPayLiabilitiesAction", QT_TRANSLATE_NOOP("BooksHost", "Pay Payroll &Liabilities…"), "", "landmark"},
+    {"booksPayrollFormsAction", QT_TRANSLATE_NOOP("BooksHost", "Payroll Tax &Forms…"), "", "file-check"},
+    {"booksExportEfw2Action", QT_TRANSLATE_NOOP("BooksHost", "Export &W-2 File (EFW2)…"), "", "file-down"},
 };
 
 // The workspace radio group, in Ctrl+1…7 order (BooksHost::viewKeys()).
@@ -98,6 +108,7 @@ constexpr Command kViews[] = {
     {"booksViewAccountingAction", QT_TRANSLATE_NOOP("BooksHost", "&Accounting"), "Ctrl+5", "book-text"},
     {"booksViewReportsAction", QT_TRANSLATE_NOOP("BooksHost", "&Reports"), "Ctrl+6", "chart-pie"},
     {"booksViewTimeAction", QT_TRANSLATE_NOOP("BooksHost", "&Time"), "Ctrl+7", "timer"}, // M68
+    {"booksViewPayrollAction", QT_TRANSLATE_NOOP("BooksHost", "&Payroll"), "Ctrl+8", "wallet-cards"}, // M71
 };
 
 QString id(const char *raw)
@@ -156,6 +167,25 @@ void BooksHost::createActions()
     on("booksTimeActivityAction", [this] { emit timeActivityRequested(0); });
     on("booksWeeklyTimesheetAction", [this] { emit timesheetRequested(); });
     on("booksNewEmployeeAction", [this] { emit employeeDialogRequested(0); });
+    // M71 (D-081): every payroll command only requests; the QML answers.
+    on("booksPayrollSetupAction", [this] { emit payrollSetupRequested(); });
+    on("booksPayOwnerAction", [this] { emit payOwnerRequested(QStringLiteral("draw")); });
+    on("booksDistributionAction", [this] { emit payOwnerRequested(QStringLiteral("distribution")); });
+    on("booksEstimatedTaxesAction", [this] {
+        setCurrentView(QStringLiteral("payroll"));
+        emit estimatedTaxesRequested();
+    });
+    on("booksPayrollEmployeesAction", [this] {
+        setCurrentView(QStringLiteral("payroll"));
+        emit payrollEmployeesRequested();
+    });
+    on("booksRunPayrollAction", [this] { emit runPayrollRequested(); });
+    on("booksPayLiabilitiesAction", [this] { emit payLiabilitiesRequested(); });
+    on("booksPayrollFormsAction", [this] {
+        setCurrentView(QStringLiteral("reports"));
+        emit payrollFormsRequested();
+    });
+    on("booksExportEfw2Action", [this] { emit efw2ExportRequested(); });
     on("booksReceivePaymentAction", [this] { emit paymentDialogRequested(QStringLiteral("receive")); });
     on("booksPayBillsAction", [this] { emit paymentDialogRequested(QStringLiteral("payBills")); });
     on("booksNewCustomerAction", [this] { emit partyDialogRequested(QStringLiteral("customer"), 0); });
@@ -254,6 +284,14 @@ void BooksHost::insertMenus()
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("booksTimeMenu"), tr("&Time"),
                                                      {a("booksTimeActivityAction"), a("booksWeeklyTimesheetAction"),
                                                       MenuNode::separator(), a("booksNewEmployeeAction")}));
+    // M71 (D-081): owner pay and payroll — QuickBooks' Employees ▸ Payroll.
+    tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("booksPayrollMenu"), tr("Pa&yroll"),
+                                                     {a("booksPayrollSetupAction"), MenuNode::separator(),
+                                                      a("booksPayOwnerAction"), a("booksEstimatedTaxesAction"),
+                                                      a("booksDistributionAction"), MenuNode::separator(),
+                                                      a("booksPayrollEmployeesAction"), a("booksRunPayrollAction"),
+                                                      a("booksPayLiabilitiesAction"), MenuNode::separator(),
+                                                      a("booksPayrollFormsAction"), a("booksExportEfw2Action")}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("booksBankingMenu"), tr("&Banking"),
                                                      {a("booksSyncBankAction"), a("booksConnectionsAction"),
                                                       MenuNode::separator(), a("booksImportStatementAction"),

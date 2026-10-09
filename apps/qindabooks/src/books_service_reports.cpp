@@ -7,6 +7,7 @@
 #include "accounts.h"
 #include "company_file.h"
 #include "documents.h"
+#include "payroll_reports.h"
 #include "reconciliation.h"
 #include "report_output.h"
 #include "report_xlsx.h"
@@ -45,6 +46,14 @@ QStringList optionsFor(const QString &id)
     };
     if (table.contains(id)) {
         return table.value(id);
+    }
+    // M71 (D-081): payroll reports and form worksheets take a period; a
+    // quarterly or yearly form reads the quarter or year `to` falls in.
+    // Checked before the "_balances" rule (payroll_liability_balances).
+    for (const PayrollReports::Entry &e : PayrollReports::catalog()) {
+        if (e.id == id) {
+            return {QStringLiteral("from"), QStringLiteral("to")};
+        }
     }
     if (id.startsWith(QLatin1String("ar_")) || id.startsWith(QLatin1String("ap_")) || id.endsWith(QLatin1String("_balances"))
         || id == QLatin1String("open_invoices") || id == QLatin1String("unpaid_bills")) {
@@ -203,6 +212,12 @@ std::optional<ReportTable> BooksService::buildReport(const QString &id, const QV
     };
     if (asOfReports.contains(id)) {
         return (reports.*asOfReports.value(id))(asOf);
+    }
+    // M71 (D-081). AGENT-GUARD (identity numbers): the report view shows
+    // SSNs and EINs masked — revealIds stays false here; the copies for
+    // filing come from PayrollService::exportFormForFiling.
+    if (std::optional<ReportTable> payroll = PayrollReports(*c).build(id, from, to)) {
+        return payroll;
     }
     if (error != nullptr) {
         *error = tr("Unknown report \"%1\".").arg(id);

@@ -44,7 +44,10 @@ Item {
         report = books.runReport(reportId, options())
         host.setPrintSource("report", reportId, options())
     }
-    function applyPreset(id) { const r = books.rangePreset(id); from = r.from; to = r.to; asOf = r.to; run() }
+    property string preset: "thisMonth"
+    // M71: a narrow window gives the report the width and picks it from a list.
+    readonly property bool narrow: width < Tk.Theme.size.panelMinWidth * 3
+    function applyPreset(id) { const r = books.rangePreset(id); preset = id; from = r.from; to = r.to; asOf = r.to; run() }
     function exportTo(url, format) { books.exportReport(reportId, options(), url, format) }
     onVisibleChanged: if (visible && catalog.length === 0 && books !== null && books.hasCompany) {
         catalog = books.reportCatalog()
@@ -62,6 +65,7 @@ Item {
         orientation: Qt.Horizontal
         Tk.Box {
             objectName: "reportCatalog"
+            visible: !view.narrow
             T.SplitView.preferredWidth: Tk.Theme.size.panelMinWidth * 1.3
             T.SplitView.minimumWidth: Tk.Theme.size.panelMinWidth
             color: Tk.Theme.color.panel
@@ -112,10 +116,21 @@ Item {
                     align: Tk.Flex.Center
                     gap: Tk.Theme.space.sm
                     Tk.ComboBox {
+                        objectName: "reportPicker"
+                        visible: view.narrow
+                        small: true
+                        textRole: "title"
+                        model: view.catalog
+                        currentIndex: view.catalog.findIndex(function(c) { return c.id === view.reportId })
+                        onActivated: function(i) { view.reportId = view.catalog[i].id }
+                    }
+                    Tk.ComboBox {
                         objectName: "reportPreset"
                         small: true
                         textRole: "text"
                         model: view.presets
+                        // M71: a preset chosen elsewhere (Payroll Tax Forms) shows here too.
+                        currentIndex: Math.max(0, view.presets.map(function(p) { return p.id }).indexOf(view.preset))
                         onActivated: function(i) { view.applyPreset(view.presets[i].id) }
                     }
                     Tk.TextField { visible: view.has("from"); small: true; mono: true; implicitWidth: Tk.Theme.size.fieldWidth; text: view.from; onEditingFinished: { view.from = text; view.run() } }

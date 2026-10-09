@@ -268,7 +268,9 @@ private slots:
                  journal.money(QStringLiteral("total"), QStringLiteral("credit")));
         const ReportTable list = reports.transactionList(kJan1, kMar31);
         QCOMPARE(list.rows.size(), 10); // JE, 2 invoices, bill, card, payment, deposit, bill payment, bill, receipt
-        QCOMPARE(Reports::catalog().size(), 26); // M68: open purchase orders and three time reports
+        // M68: open purchase orders and three time reports; M71: four
+        // payroll reports and nine payroll tax-form worksheets.
+        QCOMPARE(Reports::catalog().size(), 39);
     }
 
     void cashRecognitionIsExactOverPartialPayments()

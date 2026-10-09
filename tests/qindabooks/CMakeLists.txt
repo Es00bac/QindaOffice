@@ -15,10 +15,13 @@
 # books_window_scene.h). M68 (D-077): tst_qindabooks_m68 (purchase orders,
 # employees and time, the check queue and alignment through the service
 # and the host) and tst_qindabooks_m68_dialogs (their dialogs at 1280 and
-# 520 px).
+# 520 px). M71 (D-081): tst_qindabooks_payroll (PayrollService: setup,
+# employees, Run Payroll, liabilities, owner pay, the planner, reminders)
+# and tst_qindabooks_payroll_ui (the Payroll workspace and dialogs through
+# the real window at 1280 and 520 px).
 foreach(name IN ITEMS tst_qindabooks_service tst_qindabooks_banking tst_qindabooks_host tst_qindabooks_menu_export
                       tst_qindabooks_ui tst_qindabooks_connections tst_qindabooks_essentials tst_qindabooks_dialogs
-                      tst_qindabooks_m68 tst_qindabooks_m68_dialogs)
+                      tst_qindabooks_m68 tst_qindabooks_m68_dialogs tst_qindabooks_payroll tst_qindabooks_payroll_ui)
     add_executable(${name} ${name}.cpp books_app_test_support.h books_window_scene.h)
     target_link_libraries(${name} PRIVATE qindabooks_app qindabooks_appplugin Qt6::Test Qt6::Network)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)

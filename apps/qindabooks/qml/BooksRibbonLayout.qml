@@ -5,9 +5,10 @@ import QindaOffice.Shell
 // QindaBooks' ribbon (D-041, D-047): File (company, backups, import and
 // export) · Home (the everyday transactions, statements and recurring
 // invoices) · Purchases (orders, the check queue and alignment; M68) · Time
-// (activities, the weekly timesheet, employees; M68) · Banking · Accounting
-// (journal, budgets and sales tax, the period) · Reports · View. Every
-// string is an ActionEntry id BooksHost registers.
+// (activities, the weekly timesheet, employees; M68) · Payroll (setup,
+// owner pay and estimated taxes, payroll, tax forms; M71) · Banking ·
+// Accounting (journal, budgets and sales tax, the period) · Reports · View.
+// Every string is an ActionEntry id BooksHost registers.
 QtObject {
     readonly property var tabs: [
         (function() {
@@ -55,6 +56,16 @@ QtObject {
                 { action: "booksTimeActivityAction", size: "large" }, { action: "booksWeeklyTimesheetAction", size: "large" }] },
             { id: "people", label: qsTr("People"), items: ["booksNewEmployeeAction"] }
         ] },
+        { id: "payroll", label: qsTr("Payroll"), keyTip: "Y", groups: [
+            { id: "payrollSetup", label: qsTr("Setup"), items: [
+                { action: "booksPayrollSetupAction", size: "large", label: qsTr("Payroll Setup") }] },
+            { id: "ownerPay", label: qsTr("Owner pay"), items: [
+                { action: "booksPayOwnerAction", size: "large" }, "booksEstimatedTaxesAction", "booksDistributionAction"] },
+            { id: "payrollRun", label: qsTr("Payroll"), items: [
+                { action: "booksRunPayrollAction", size: "large" }, "booksPayrollEmployeesAction", "booksPayLiabilitiesAction"] },
+            { id: "payrollForms", label: qsTr("Tax forms"), items: [
+                { action: "booksPayrollFormsAction", size: "large" }, "booksExportEfw2Action"] }
+        ] },
         { id: "banking", label: qsTr("Banking"), keyTip: "B", groups: [
             { id: "connections", label: qsTr("Connections"), items: [
                 { action: "booksSyncBankAction", size: "large" }, "booksConnectionsAction"] },
@@ -79,7 +90,8 @@ QtObject {
         StandardRibbon.viewTab([
             { id: "workspace", label: qsTr("Workspace"), items: [
                 { action: "booksViewDashboardAction", size: "large" }, "booksViewSalesAction", "booksViewExpensesAction",
-                "booksViewBankingAction", "booksViewAccountingAction", "booksViewReportsAction", "booksViewTimeAction"] },
+                "booksViewBankingAction", "booksViewAccountingAction", "booksViewReportsAction", "booksViewTimeAction",
+                "booksViewPayrollAction"] },
             StandardRibbon.assistantGroup([])
         ])
     ]

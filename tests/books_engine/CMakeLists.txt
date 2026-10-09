@@ -26,3 +26,7 @@ qqo_add_books_test(tst_books_document books_document)
 qqo_add_books_test(tst_books_orders)
 qqo_add_books_test(tst_books_time)
 qqo_add_books_test(tst_books_checks)
+# M71 (D-081): paychecks, liabilities, owner pay, payroll reports and forms.
+qqo_add_books_test(tst_books_payroll)
+qqo_add_books_test(tst_books_owner_pay)
+qqo_add_books_test(tst_books_payroll_forms)

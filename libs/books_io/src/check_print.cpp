@@ -7,6 +7,7 @@
 #include "company_file.h"
 #include "documents.h"
 #include "lists.h"
+#include "pay_stub_p.h"
 
 #include <QRegularExpression>
 
@@ -126,8 +127,8 @@ bool isPrintableCheck(CompanyFile &file, qint64 docId, QString *why)
     if (!doc) {
         return fail(why, QStringLiteral("no such document"));
     }
-    if (doc->kind != DocKind::Check && doc->kind != DocKind::BillPayment) {
-        return fail(why, QStringLiteral("only checks and bill payments print as checks"));
+    if (doc->kind != DocKind::Check && doc->kind != DocKind::BillPayment && doc->kind != DocKind::Paycheck) {
+        return fail(why, QStringLiteral("only checks and bill payments (and paychecks) print as checks"));
     }
     if (doc->state == DocState::Void) {
         return fail(why, QStringLiteral("a void check is not printed"));
@@ -176,7 +177,12 @@ bool buildPrintableCheck(CompanyFile &file, qint64 docId, PrintableCheck *out, Q
     c.companyName = file.settings().displayName();
     c.bankAccount = accountLabel(*chart.account(doc.accountId));
     c.total = doc.total.format(locale);
-    if (doc.kind == DocKind::BillPayment) {
+    if (doc.kind == DocKind::Paycheck) {
+        // The employee's name and address, and the pay stub (pay_stub.cpp).
+        if (!fillPayStub(file, doc, &c, error)) {
+            return false;
+        }
+    } else if (doc.kind == DocKind::BillPayment) {
         c.columns = {{QStringLiteral("Date"), 2, false},
                      {QStringLiteral("Bill"), 4, false},
                      {QStringLiteral("Bill amount"), 2, true},

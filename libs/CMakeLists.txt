@@ -14,6 +14,9 @@ add_subdirectory(office_mail)
 add_subdirectory(office_ink)
 add_subdirectory(show_model)
 add_subdirectory(mail_exchange)
+# QindaBooks payroll and estimated-tax arithmetic (M71, D-081); books_engine
+# links it for the payroll records, so it comes first.
+add_subdirectory(books_payroll)
 add_subdirectory(books_engine)
 add_subdirectory(books_document)
 add_subdirectory(books_io)

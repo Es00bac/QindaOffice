@@ -52,6 +52,20 @@ set(qindabooks_qml
     qml/TimeActivityDialog.qml
     qml/TimesheetDialog.qml
     qml/EmployeeDialog.qml
+    # M71 (D-081): owner pay, estimated taxes and payroll.
+    qml/PayrollView.qml
+    qml/PayrollPeoplePane.qml
+    qml/PayrollLiabilitiesPane.qml
+    qml/EstimatedTaxesPane.qml
+    qml/WorksheetLines.qml
+    qml/PayrollSetupDialog.qml
+    qml/PayOwnerDialog.qml
+    qml/EstimateProfileDialog.qml
+    qml/EstimatedPaymentDialog.qml
+    qml/EmployeePayrollDialog.qml
+    qml/RunPayrollDialog.qml
+    qml/PaycheckDialog.qml
+    qml/PayLiabilitiesDialog.qml
 )
 foreach(qml_file IN LISTS qindabooks_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -90,6 +104,9 @@ qt_add_qml_module(qindabooks_app
         src/books_service_statements.cpp
         src/books_service_tax.cpp
         src/books_service_time.cpp
+        src/payroll_service.cpp src/payroll_service.h
+        src/payroll_service_owner.cpp
+        src/payroll_service_pay.cpp
     QML_FILES ${qindabooks_qml}
 )
 target_include_directories(qindabooks_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

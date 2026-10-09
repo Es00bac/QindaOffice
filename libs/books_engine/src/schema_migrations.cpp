@@ -244,6 +244,64 @@ const char *const kVersion4[] = {
     "INSERT OR IGNORE INTO settings(key, value) VALUES('next_purchase_order_number', 1001)",
 };
 
+// ---- version 5: payroll and owner pay (M71, D-081) --------------------------
+// AGENT-CONTRACT (with employees.h, M68): payroll extends `employees` in
+// `employee_payroll` (one row per employee; W-4, DR 0004 and deductions as
+// JSON, the SSN only here). A paycheck (DocKind::Paycheck) and a payroll
+// liability payment are documents; their payroll amounts live in
+// `paychecks` / `payroll_payments`, keyed by the document, written once and
+// never changed (triggers): a correction voids the document and writes a
+// new one (replaces_doc_id). Year-to-date wages and every liability are
+// DERIVED from documents that are not void, so a void restores them.
+// `owner_payments` marks which ordinary documents (checks, transfers,
+// expenses) are owner draws, estimated-tax payments, set-asides or
+// shareholder distributions.
+const char *const kVersion5[] = {
+    "CREATE TABLE employee_payroll ("
+    " employee_id INTEGER PRIMARY KEY REFERENCES employees(id),"
+    " first_name TEXT NOT NULL DEFAULT '', middle_initial TEXT, last_name TEXT NOT NULL DEFAULT '', suffix TEXT,"
+    " ssn TEXT, street TEXT, city TEXT, state TEXT, zip TEXT, hire_date TEXT, release_date TEXT,"
+    " pay_type INTEGER NOT NULL DEFAULT 0, pay_rate TEXT NOT NULL DEFAULT '0',"
+    " pay_frequency TEXT NOT NULL DEFAULT 'biweekly', default_hours TEXT,"
+    " w4 TEXT NOT NULL DEFAULT '{}', w4_on_file INTEGER NOT NULL DEFAULT 1,"
+    " dr0004 TEXT NOT NULL DEFAULT '{}', co_withholding INTEGER NOT NULL DEFAULT 1, opt_city TEXT,"
+    " owner_employee INTEGER NOT NULL DEFAULT 0, shareholder_2pct INTEGER NOT NULL DEFAULT 0,"
+    " deductions TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL)",
+    "CREATE TABLE paychecks ("
+    " doc_id INTEGER PRIMARY KEY REFERENCES documents(id),"
+    " employee_id INTEGER NOT NULL REFERENCES employees(id),"
+    " pay_date TEXT NOT NULL, period_start TEXT, period_end TEXT, tax_year INTEGER NOT NULL,"
+    " frequency TEXT NOT NULL, hours TEXT,"
+    " gross INTEGER NOT NULL, regular INTEGER NOT NULL, supplemental INTEGER NOT NULL,"
+    " section125 INTEGER NOT NULL, retirement INTEGER NOT NULL, retirement_kind INTEGER NOT NULL DEFAULT 0,"
+    " shareholder_health INTEGER NOT NULL, after_tax INTEGER NOT NULL,"
+    " federal_wages INTEGER NOT NULL, ss_wages INTEGER NOT NULL, medicare_wages INTEGER NOT NULL,"
+    " futa_wages INTEGER NOT NULL, co_wages INTEGER NOT NULL, ui_wages INTEGER NOT NULL, famli_wages INTEGER NOT NULL,"
+    " fit INTEGER NOT NULL, ss INTEGER NOT NULL, medicare INTEGER NOT NULL, addl_medicare INTEGER NOT NULL,"
+    " co_wh INTEGER NOT NULL, famli_ee INTEGER NOT NULL, opt_ee INTEGER NOT NULL,"
+    " ss_er INTEGER NOT NULL, medicare_er INTEGER NOT NULL, futa INTEGER NOT NULL, co_ui INTEGER NOT NULL,"
+    " famli_er INTEGER NOT NULL, opt_er INTEGER NOT NULL, net INTEGER NOT NULL, opt_city TEXT,"
+    " replaces_doc_id INTEGER REFERENCES documents(id), details TEXT NOT NULL DEFAULT '{}')",
+    "CREATE INDEX paychecks_employee ON paychecks(employee_id, tax_year, pay_date)",
+    "CREATE INDEX paychecks_date ON paychecks(pay_date)",
+    "CREATE TRIGGER paychecks_never_change BEFORE UPDATE ON paychecks"
+    " BEGIN SELECT RAISE(ABORT, 'a paycheck never changes: void it and write a new one'); END",
+    "CREATE TRIGGER paychecks_kept BEFORE DELETE ON paychecks"
+    " BEGIN SELECT RAISE(ABORT, 'a paycheck is never deleted: void it'); END",
+    "CREATE TABLE payroll_payments ("
+    " doc_id INTEGER PRIMARY KEY REFERENCES documents(id), tax TEXT NOT NULL,"
+    " period_start TEXT NOT NULL, period_end TEXT NOT NULL, adjustment INTEGER NOT NULL DEFAULT 0)",
+    "CREATE INDEX payroll_payments_tax ON payroll_payments(tax, period_start)",
+    "CREATE TRIGGER payroll_payments_never_change BEFORE UPDATE ON payroll_payments"
+    " BEGIN SELECT RAISE(ABORT, 'a liability payment never changes: void it'); END",
+    "CREATE TRIGGER payroll_payments_kept BEFORE DELETE ON payroll_payments"
+    " BEGIN SELECT RAISE(ABORT, 'a liability payment is never deleted: void it'); END",
+    "CREATE TABLE owner_payments ("
+    " doc_id INTEGER PRIMARY KEY REFERENCES documents(id), kind TEXT NOT NULL,"
+    " owner_id INTEGER REFERENCES parties(id), tax_year INTEGER, quarter INTEGER)",
+    "CREATE INDEX owner_payments_kind ON owner_payments(kind, tax_year)",
+};
+
 template<std::size_t N>
 bool runAll(const QSqlDatabase &db, const char *const (&statements)[N], QString *error)
 {
@@ -262,6 +320,7 @@ bool step(const QSqlDatabase &db, int toVersion, QString *error)
     case 2: return runAll(db, kVersion2, error);
     case 3: return runAll(db, kVersion3, error);
     case 4: return runAll(db, kVersion4, error);
+    case 5: return runAll(db, kVersion5, error);
     default: break;
     }
     if (error != nullptr) {

@@ -25,6 +25,8 @@ add_library(books_io STATIC
     src/check_renderer.cpp
     src/csv_util.cpp
     src/csv_util.h
+    src/efw2_export.cpp
+    src/efw2_export.h
     src/form_renderer.cpp
     src/form_renderer.h
     src/iif_import.h
@@ -39,6 +41,8 @@ add_library(books_io STATIC
     src/ledger_export.cpp
     src/ledger_export.h
     src/list_import.cpp
+    src/pay_stub.cpp
+    src/pay_stub_p.h
     src/page_output.cpp
     src/page_output.h
     src/paint_util.h

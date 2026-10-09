@@ -3,6 +3,7 @@
 #include "check_print.h"
 
 #include "paint_util.h"
+#include "pay_stub_p.h"
 
 #include <QFontMetricsF>
 #include <QPageLayout>
@@ -190,8 +191,15 @@ void CheckRenderer::paint(QPagedPaintDevice *device, QPainter *painter, const QL
         const PrintableCheck &c = checks.at(i);
         drawCheck(painter, c, f);
         // Both stubs alike: one goes with the check, one stays in the file.
-        drawStub(painter, c, kCheckHeight, f);
-        drawStub(painter, c, 2 * kCheckHeight, f);
+        // A paycheck's stubs are its pay stub (M71, pay_stub.cpp).
+        if (c.payStub) {
+            const StubGeometry geometry{kStubLeft, kStubRight, kStubPad, kCheckHeight};
+            drawPayStub(painter, c, kCheckHeight, geometry);
+            drawPayStub(painter, c, 2 * kCheckHeight, geometry);
+        } else {
+            drawStub(painter, c, kCheckHeight, f);
+            drawStub(painter, c, 2 * kCheckHeight, f);
+        }
     }
 }
 

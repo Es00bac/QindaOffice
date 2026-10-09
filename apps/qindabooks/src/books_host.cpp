@@ -38,6 +38,7 @@ BooksHost::BooksHost()
 {
     setDocument(m_document);
     m_service = new BooksService(m_document, this);
+    m_payroll = new PayrollService(m_service, this);
     createActions();
     insertMenus();
     connect(m_service, &BooksService::companyChanged, this, [this] {
@@ -47,6 +48,8 @@ BooksHost::BooksHost()
         clearPrintSource();
         emit titleChanged(); // the path (and so the title) moved
         syncEnablement();
+        // M71: the tax dates of the next two weeks, once the window settles.
+        QTimer::singleShot(0, m_payroll, &PayrollService::remindDueDates);
     });
     // What is printable can change under the selection (a check voided).
     connect(m_service, &BooksService::changed, this, [this] { syncEnablement(); });
@@ -78,7 +81,8 @@ QStringList BooksHost::viewKeys()
 {
     return {QStringLiteral("dashboard"), QStringLiteral("sales"),      QStringLiteral("expenses"),
             QStringLiteral("banking"),   QStringLiteral("accounting"), QStringLiteral("reports"),
-            QStringLiteral("time")}; // M68
+            QStringLiteral("time"), // M68
+            QStringLiteral("payroll")}; // M71
 }
 
 void BooksHost::setCurrentView(const QString &view)

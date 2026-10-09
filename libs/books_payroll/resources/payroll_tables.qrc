@@ -1,0 +1,8 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <!-- One file per tax year (payroll_tables.h); docs/payroll-tax-tables.md sources every value. -->
+    <qresource prefix="/books_payroll">
+        <file alias="payroll_2026.json">tables/payroll_2026.json</file>
+    </qresource>
+</RCC>

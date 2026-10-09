@@ -25,6 +25,8 @@ QString docKindName(DocKind kind)
     case DocKind::InvoiceTemplate: return QStringLiteral("Recurring Template");
     case DocKind::OpeningBalance: return QStringLiteral("Opening Balance");
     case DocKind::PurchaseOrder: return QStringLiteral("Purchase Order");
+    case DocKind::Paycheck: return QStringLiteral("Paycheck");
+    case DocKind::PayrollLiabilityPayment: return QStringLiteral("Payroll Liability Payment");
     }
     return QStringLiteral("Transaction");
 }

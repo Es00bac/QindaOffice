@@ -22,9 +22,12 @@ QString nextKey(qint64 accountId)
     return QStringLiteral("next_check_number:%1").arg(accountId);
 }
 
+// M71 (D-081): a paycheck drawn on a bank account is a check too — it waits
+// in the same queue, takes the account's numbers and is confirmed the same
+// way (check_print.cpp prints its pay stub on the vouchers).
 bool isPayment(DocKind kind)
 {
-    return kind == DocKind::Check || kind == DocKind::BillPayment;
+    return kind == DocKind::Check || kind == DocKind::BillPayment || kind == DocKind::Paycheck;
 }
 
 bool storeNext(CompanyFile &file, qint64 accountId, qint64 next, QString *error)
@@ -92,9 +95,10 @@ QList<QueuedCheck> CheckQueue::queue(qint64 bankAccountId) const
     QList<qint64> ids;
     {
         QSqlQuery q(m_file.database());
-        Sql::run(q, QStringLiteral("SELECT id FROM documents WHERE to_print = 1 AND state = ? AND kind IN (?, ?)"
+        Sql::run(q, QStringLiteral("SELECT id FROM documents WHERE to_print = 1 AND state = ? AND kind IN (?, ?, ?)"
                                    " AND (? = 0 OR account_id = ?) ORDER BY date, id"),
-                 {int(DocState::Open), int(DocKind::Check), int(DocKind::BillPayment), bankAccountId, bankAccountId});
+                 {int(DocState::Open), int(DocKind::Check), int(DocKind::BillPayment), int(DocKind::Paycheck),
+                  bankAccountId, bankAccountId});
         while (q.next()) {
             ids << q.value(0).toLongLong();
         }
@@ -117,8 +121,8 @@ qint64 CheckQueue::highestUsed(qint64 bankAccountId) const
     const qint64 byNumber = Sql::scalarInt(
         m_file.database(),
         QStringLiteral("SELECT COALESCE(MAX(CAST(number AS INTEGER)), 0) FROM documents WHERE account_id = ?"
-                       " AND kind IN (?, ?) AND number") + digits.arg(QStringLiteral("number")),
-        {bankAccountId, int(DocKind::Check), int(DocKind::BillPayment)});
+                       " AND kind IN (?, ?, ?) AND number") + digits.arg(QStringLiteral("number")),
+        {bankAccountId, int(DocKind::Check), int(DocKind::BillPayment), int(DocKind::Paycheck)});
     const qint64 byReference = Sql::scalarInt(
         m_file.database(),
         QStringLiteral("SELECT COALESCE(MAX(CAST(reference AS INTEGER)), 0) FROM documents WHERE account_id = ?"
@@ -208,10 +212,10 @@ Result CheckQueue::assignNumbers(qint64 bankAccountId, const QList<qint64> &docI
         const QString number = QString::number(first + i);
         const qint64 taken = Sql::scalarInt(
             m_file.database(),
-            QStringLiteral("SELECT COUNT(*) FROM documents WHERE account_id = ? AND kind IN (?, ?) AND id <> ?"
+            QStringLiteral("SELECT COUNT(*) FROM documents WHERE account_id = ? AND kind IN (?, ?, ?) AND id <> ?"
                            " AND (number = ? OR (kind = ? AND COALESCE(number, '') = '' AND reference = ?))"),
-            {bankAccountId, int(DocKind::Check), int(DocKind::BillPayment), d->id, number, int(DocKind::BillPayment),
-             number});
+            {bankAccountId, int(DocKind::Check), int(DocKind::BillPayment), int(DocKind::Paycheck), d->id, number,
+             int(DocKind::BillPayment), number});
         if (taken > 0) {
             return Result::failure(ErrorCode::Duplicate,
                                    QStringLiteral("check number %1 is already used on this account").arg(number));

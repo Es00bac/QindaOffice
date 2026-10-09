@@ -51,7 +51,9 @@ ItemKind itemKindFrom(const QString &key)
 QVariantMap partyMap(const Party &p, qint64 balance, const MoneyFormat &money)
 {
     return {{QStringLiteral("id"), p.id},
-            {QStringLiteral("kind"), p.kind == PartyKind::Vendor ? QStringLiteral("vendor") : QStringLiteral("customer")},
+            {QStringLiteral("kind"), p.kind == PartyKind::Vendor  ? QStringLiteral("vendor")
+                                     : p.kind == PartyKind::Owner ? QStringLiteral("owner") // M71
+                                                                  : QStringLiteral("customer")},
             {QStringLiteral("name"), p.displayName},
             {QStringLiteral("company"), p.companyName},
             {QStringLiteral("contact"), p.contactName},
@@ -329,8 +331,12 @@ QVariantMap BooksService::saveParty(const QVariantMap &map)
         }
         p = *existing;
     } else {
-        p.kind = map.value(QStringLiteral("kind")).toString() == QLatin1String("vendor") ? PartyKind::Vendor
-                                                                                         : PartyKind::Customer;
+        const QString kind = map.value(QStringLiteral("kind")).toString();
+        // M71 (D-081): "owner" — an owner or partner paid by draws or
+        // distributions (QuickBooks' Other Names).
+        p.kind = kind == QLatin1String("vendor") ? PartyKind::Vendor
+            : kind == QLatin1String("owner")     ? PartyKind::Owner
+                                                 : PartyKind::Customer;
     }
     const auto text = [&map](const char *key, QString *field) {
         const QString k = QString::fromLatin1(key);

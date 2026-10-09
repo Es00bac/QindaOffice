@@ -7,8 +7,9 @@ import QindaOffice.Books.App
 
 // The QindaBooks window (D-047): one company file per window. A rail picks
 // the workspace — Dashboard, Sales, Expenses, Banking, Accounting, Reports,
-// Time (M68) — and the window answers the host's requests with the editors
-// and dialogs. A brand-new window with no company opens the setup wizard.
+// Time (M68), Payroll (M71) — and the window answers the host's requests
+// with the editors and dialogs. A brand-new window with no company opens
+// the setup wizard.
 //
 // AGENT-NOTE: every amount arrives from BooksService as minor units plus
 // formatted text; this QML never does arithmetic on money.
@@ -17,6 +18,7 @@ OfficeWindow {
 
     readonly property BooksHost booksHost: host as BooksHost
     readonly property BooksService books: booksHost !== null ? booksHost.books : null
+    readonly property PayrollService payroll: booksHost !== null ? booksHost.payroll : null
     readonly property string view: booksHost !== null ? booksHost.currentView : "dashboard"
 
     width: 1320
@@ -51,7 +53,8 @@ OfficeWindow {
                 { id: "banking", label: qsTr("Banking"), destination: "booksViewBankingAction", iconName: "landmark" },
                 { id: "accounting", label: qsTr("Accounting"), destination: "booksViewAccountingAction", iconName: "book-text" },
                 { id: "reports", label: qsTr("Reports"), destination: "booksViewReportsAction", iconName: "chart-line" },
-                { id: "time", label: qsTr("Time"), destination: "booksViewTimeAction", iconName: "timer" }] }]
+                { id: "time", label: qsTr("Time"), destination: "booksViewTimeAction", iconName: "timer" },
+                { id: "payroll", label: qsTr("Payroll"), destination: "booksViewPayrollAction", iconName: "wallet-cards" }] }]
             onDestinationRequested: function(id, destination) { window.trigger(destination) }
         }
         Tk.Divider { vertical: true }
@@ -66,6 +69,8 @@ OfficeWindow {
             AccountsView { anchors.fill: parent; visible: window.view === "accounting"; books: window.books; host: window.booksHost }
             ReportsView { id: reports; anchors.fill: parent; visible: window.view === "reports"; books: window.books; host: window.booksHost }
             TimeView { anchors.fill: parent; visible: window.view === "time"; books: window.books; host: window.booksHost }
+            PayrollView { id: payrollView; objectName: "payrollView"; anchors.fill: parent; visible: window.view === "payroll"
+                          books: window.books; host: window.booksHost; payroll: window.payroll }
             Tk.EmptyState {
                 anchors.centerIn: parent
                 visible: window.books === null || !window.books.hasCompany
@@ -126,9 +131,15 @@ OfficeWindow {
     TimeActivityDialog { id: timeActivity; books: window.books }
     TimesheetDialog { id: timesheet; books: window.books }
     EmployeeDialog { id: employeeDialog; books: window.books }
+    // M71 (D-081): owner pay and payroll, opened from the Payroll menu.
+    PayrollSetupDialog { id: payrollSetup; books: window.books; payroll: window.payroll }
+    PayOwnerDialog { id: payOwner; books: window.books; payroll: window.payroll }
+    RunPayrollDialog { id: runPayroll; books: window.books; host: window.booksHost; payroll: window.payroll }
+    PayLiabilitiesDialog { id: payLiabilities; books: window.books; payroll: window.payroll }
     function openDocument(kind, id) {
-        const isOrder = kind === "purchaseOrder" || (Number(id) > 0 && String(window.books.document(id).kind) === "purchaseOrder")
-        if (isOrder) orderEditor.openFor(id)
+        const shown = Number(id) > 0 ? String(window.books.document(id).kind) : kind
+        if (kind === "purchaseOrder" || shown === "purchaseOrder") orderEditor.openFor(id)
+        else if (shown === "paycheck") payrollView.openPaycheck(id) // never the generic editor
         else editor.openFor(kind, id)
     }
     function billFromOrder(id) {
@@ -161,6 +172,18 @@ OfficeWindow {
         function onTimeActivityRequested(id) { timeActivity.openFor(id) }
         function onTimesheetRequested() { timesheet.openDialog("", window.books.today) }
         function onEmployeeDialogRequested(id) { employeeDialog.openFor(id) }
+        function onPayrollSetupRequested() { payrollSetup.openDialog() }
+        function onPayOwnerRequested(kind) { payOwner.openFor(kind) }
+        function onEstimatedTaxesRequested() { payrollView.showTab(2) }
+        function onPayrollEmployeesRequested() { payrollView.showTab(3) }
+        function onRunPayrollRequested() { runPayroll.openDialog() }
+        function onPayLiabilitiesRequested() { payLiabilities.openDialog() }
+        // The quarter being filed in the month after a quarter, else the current one.
+        function onPayrollFormsRequested() {
+            reports.reportId = "form_941"
+            reports.applyPreset((Number(window.books.today.substring(5, 7)) - 1) % 3 === 0 ? "lastQuarter" : "thisQuarter")
+        }
+        function onEfw2ExportRequested() { window.trigger("booksViewPayrollAction"); payrollView.saveForFiling("efw2") }
         function onExportRequested(what) {
             if (what === "backup") { const r = window.books.backupNow(); return }
             exportDialog.what = what

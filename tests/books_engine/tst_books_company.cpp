@@ -118,9 +118,10 @@ private slots:
         QCOMPARE(Ledger(*file).auditTrail(QStringLiteral("schema")).size(), 1);
     }
 
-    // M68 (D-077): a version-3 file with books in it opens as version 4 —
-    // its documents and lines intact, the new columns at their defaults,
-    // the time table empty and the purchase-order counter seeded.
+    // M68 (D-077): a version-3 file with books in it opens at the current
+    // version (4 then; 5 since M71's payroll) — its documents and lines
+    // intact, the new columns at their defaults, the time table empty and
+    // the purchase-order counter seeded.
     void migratesAVersion3FileWithBooksInIt()
     {
         QTemporaryDir dir;
@@ -144,8 +145,8 @@ private slots:
         QSqlDatabase::removeDatabase(QStringLiteral("v3"));
         auto file = CompanyFile::open(path, &error);
         QVERIFY2(file, qPrintable(error));
-        QCOMPARE(file->schemaVersion(), 4);
-        QVERIFY(QFileInfo::exists(path + QStringLiteral(".pre-v4.bak")));
+        QCOMPARE(file->schemaVersion(), Schema::kCurrentVersion);
+        QVERIFY(QFileInfo::exists(path + QStringLiteral(".pre-v%1.bak").arg(Schema::kCurrentVersion)));
         const std::optional<BusinessDocument> bill = Documents(*file).load(7);
         QVERIFY(bill);
         QCOMPARE(bill->number, QStringLiteral("B-7"));

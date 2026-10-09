@@ -29,3 +29,6 @@ qqo_add_books_io_test(tst_books_io_checks)
 # durations in CSV and Excel (read back with QXlsx through calc_io).
 qqo_add_books_io_test(tst_books_io_orders)
 target_link_libraries(tst_books_io_orders PRIVATE calc_io)
+# M71 (D-081): a paycheck's pay stub on voucher stock, the Form 941
+# worksheet through the report painter, the EFW2 W-2 file's records.
+qqo_add_books_io_test(tst_books_io_payroll)

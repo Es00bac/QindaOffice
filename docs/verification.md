@@ -33,6 +33,138 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M71 payroll gates (D-081)
+
+Qualified on qinda (branch `m71-payroll`, merged with `m60-office-formats`
+296bd4a), books and payroll targets only (qinda's disk is shared),
+`ctest --preset dev -R "books|payroll"`: **44 of 44 passed** — the 32
+before M71 plus twelve new ones (six `tst_payroll_*`, `tst_books_payroll`,
+`tst_books_owner_pay`, `tst_books_payroll_forms`, `tst_books_io_payroll`,
+`tst_qindabooks_payroll`, `tst_qindabooks_payroll_ui`); `tst_books_company`
+(the M68 migration now reaches version 5), `tst_books_reports` (39 reports),
+`tst_qindabooks_host` (the eighth workspace and the payroll commands),
+`tst_qindabooks_menu_export` (the Payroll menu) and the QindaBooks fixtures
+changed for it. QtTest
+functions (init/cleanup and data rows included): **402 passed, 0 failed, 0
+skipped** — `books_payroll` 63 (tables 10, federal 10, colorado 11,
+paycheck 12, estimates 11, calendar 9); `books_engine` 129 (payroll 13,
+owner pay 7, forms 9); `books_io` 93 (payroll 6); `books_connect` 21;
+QindaBooks 96 (payroll 8, payroll UI 6). `TZ=UTC`, generated company
+files only, identity numbers made up (EIN 00-0000000, SSN 900-00-0001) and
+compared without being printed.
+
+- [x] `tst_payroll_tables` — the 2026 file loads with 29 sources and four
+      unconfirmed values; every Publication 15-T base is recomputed from the
+      row above (the Step 2 single schedule is half the standard one, as
+      printed); the standard thresholds are the Form 1040-ES brackets
+      shifted by the standard deduction less line 1g ($19,300, $7,500,
+      $15,550); 2027 is refused in words; a damaged file names the bad path;
+      holidays move due dates; no floating point anywhere in `books_payroll`.
+- [x] `tst_payroll_federal` — Pub 15-T's own example (a nonresident alien,
+      $31.23 → $31), then by hand: single biweekly $156.15, married monthly
+      with a credit $53.34, Step 2 checked $485.29 / $292.08, head of
+      household with Step 4 $70.46, 2019-or-earlier W-4s $366.67 / $515.33,
+      exempt and credits above the tax → $0, supplemental 22 % and 37 %
+      over $1,000,000 ($220.00, $15,500.00).
+- [x] `tst_payroll_colorado` — DR 1098 by hand ($79, $180, $200), DR 0004
+      line 2 ($50, $44) and a blank line 2, exempt and no-certificate rules,
+      the 2019-or-earlier mapping flagged unconfirmed, UI by part (91.50,
+      37.66), FAMLI shares (26.40 / 13.20; the employee capped at half),
+      each city's threshold (at least, more than, Aurora repealed).
+- [x] `tst_payroll_paycheck` — $3,000 biweekly in Denver: 320.38, 186.00,
+      43.50, Colorado $123, FAMLI 13.20, OPT 5.75, net **2,308.17**, employer
+      356.20; Section 125 and 401(k) (FAMLI on gross, flagged; net
+      2,819.37); the social security base crossed mid-check (279.00), the
+      Additional Medicare threshold (45.00), FUTA and UI bases, a
+      shareholder's health premium, a bonus at 22 %, employer shares on
+      running totals (76.55 then 76.53), whole-dollar rounding, refusals
+      (another year, negatives, deductions above pay, the deferral limit
+      note "$24,500.00").
+- [x] `tst_payroll_estimates` — Pub 505's safe-harbor example ($46,839.10,
+      "110 % of 2025 tax") and amended installments ($2,175 / $1,025); a
+      $80,000 Schedule C: SE 11,303.64, QBI 11,649.64, taxable income
+      46,598.54, total 16,647.46, required 14,982.71 in 3,745.68 ×3 +
+      3,745.67, Colorado 2,050 → 1,435 in 359/359/359/358, set-aside 24 %;
+      the prior-year harbor; zero and negative profit; annualizing; wages
+      sharing the social security base; the $400 and QBI floors; 2027
+      refused.
+- [x] `tst_payroll_calendar` — Pub 15's semiweekly example, a holiday adding
+      a day, a period split at the quarter, monthly, next-day, 941 dates
+      (Nov 2, 2026; Feb 1, 2027), Colorado quarterly/monthly/weekly and the
+      year-end period.
+- [x] `tst_books_payroll` — the accounts once; one paycheck posts what was
+      computed (Officer Wages 3,000.00, Payroll Taxes 343.00, each
+      liability, bank −2,308.17); year to date (OPT once a month, FUTA
+      stops at $7,000); void and adjust restore the year; paycheck rows
+      never change (triggers); paychecks numbered through the M68 queue
+      (1001); liabilities: federal 779.38 due Nov 16, Colorado Feb 1, FUTA
+      to Form 940, a cent of rounding to Payroll Taxes, a partial payment,
+      more than owed refused, a void putting the balance back; the SSN never
+      in the audit; reports add up; a version-4 file migrates (`.pre-v5.bak`)
+      with its employee intact; an owner of a Schedule C or partnership LLC
+      refused a paycheck, "not sure" allowed.
+- [x] `tst_books_owner_pay` — a draw by queued check and by transfer
+      (−3,500.00 to Owner Draws), estimated payments as draws ("Federal
+      estimated tax 2026, payment 3 of 4"), the set-aside transfer, an
+      S corporation refused a draw and paying (and voiding) a distribution,
+      a Schedule C owner refused a distribution.
+- [x] `tst_books_payroll_forms` — Form 941 over three checks: line 2
+      9,000.00, 3 961.14, 5a 1,116.00, 5c 261.00, 6 and 12 2,338.14, line 7
+      0, months 1,558.76 / 0 / 779.38, a deposit on line 13; fractions of
+      cents (line 7 −0.01, line 12 equal to the books); Schedule B; Form 940
+      (3 9,000, 5 2,000, 7 7,000, 8 42.00 = the books); W-2 and W-3 masked
+      and, for filing, in full; DR 1094 / DR 1093 369.00; the UI report
+      (months "101", premium 274.50 = the books) and FAMLI 39.60; a year
+      without tables says so.
+- [x] `tst_books_io_payroll` — the paycheck on voucher stock: payee and
+      address, `**2,308.17`, "Two thousand three hundred eight and 17/100",
+      the stub lines this check and year to date on both stubs, the SSN
+      masked; the Form 941 PDF; signature PINs (check digit); EFW2 refused
+      with the made-up numbers, and written unvalidated with every field at
+      its Publication 42-007 position.
+- [x] `tst_qindabooks_payroll` — `PayrollService`: setup (the EIN in full
+      only for the edit field, CDLE's three UI parts, refusals), employees on
+      M68's list with a masked SSN, Run Payroll's draft, preview ($2,308.17,
+      employer 343.00) and posting, the stub, adjust and void, the federal
+      deposit due Apr 15 and paid, payroll reports in the catalog, the W-2
+      masked on screen and a filing PDF, EFW2 refused without echoing a
+      number; the Schedule C planner (16,647.46, 3,745.68, Colorado 2,050,
+      24 %), a draw with its $240.00 set-aside, a queued draw check, the
+      installment paid, Colorado's due Apr 15 in `upcoming(30)` and one
+      reminder; S corporation refusals.
+- [x] `tst_qindabooks_payroll_ui` (1280 and 520 px) — the setup dialog, the
+      employee editor, Run Payroll's three steps, the paycheck (8 stub lines,
+      the Pub 15-T worksheet, queued for Checks to Print), Pay Payroll
+      Liabilities (federal first, due Apr 15), Form 941 under Reports, Pay
+      Owner turned into a distribution, the tax picture, the planner (4
+      installments), an estimated payment, a draw with its set-aside moved,
+      the Overview and Owner pay tabs, the Payroll ribbon tab.
+- [x] Fixtures — `qindabooks_1280.txt` and `qindabooks_520.txt` regenerated
+      with `QQO_UPDATE_FIXTURES=1`: only additions (the Payroll rail entry,
+      the hidden Payroll workspace, the hidden narrow report picker).
+- [x] Ribbon gate (`tst_qindabooks_ui`) green at 1320 and 520 px with the
+      Payroll tab; menu export (`tst_qindabooks_menu_export`) validates the
+      tree with the Payroll menu and fires every exported command.
+- [x] Grabs reviewed (`QQO_GRAB_DIR`, 1280 and 520): setup, employee
+      editor and list, Run Payroll (grid, preview, done), the paycheck and
+      the voucher stub PDF, Pay Payroll Liabilities, Form 941, Pay Owner
+      (distribution and draw with set-aside), the tax picture, Estimated
+      taxes, an estimated payment, Overview, Owner pay, the Payroll ribbon
+      tab. At 520 px the dialogs drop to one column, wide tables scroll
+      sideways, the Payroll sections and the reports come from a list.
+
+**The owner's desktop check** (not done here — nothing is launched into the
+live session): open a *new* test company (never a real one), set up as
+"Not sure", then S corporation; add an employee with a made-up SSN; Run
+Payroll with Print later, print the paycheck on plain paper from Checks to
+Print and hold it against voucher stock; Pay Payroll Liabilities; open
+Payroll Tax Forms and export Form 941 as PDF and Excel; switch to Schedule
+C, enter your tax picture, record a draw and its set-aside; check the panel
+menu (Payroll), the Payroll ribbon tab in dark and light themes, and the
+window at 520 px. Before the first real payroll: confirm the LLC's tax
+classification and have a tax professional review the first payroll and
+the first estimate.
+
 ## M69 Calc gates (D-078)
 
 Qualified on qinda (branch `m69-calc-formulas`, merged with

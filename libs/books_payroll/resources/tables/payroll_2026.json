@@ -1,0 +1,638 @@
+{
+ "SPDX-License-Identifier": "GPL-3.0-or-later",
+ "schema": 1,
+ "taxYear": 2026,
+ "about": "QindaBooks payroll and estimated-tax tables for tax year 2026. Every value is documented with its source in docs/payroll-tax-tables.md; values the official sources could not confirm are listed under 'unconfirmed'.",
+ "sources": [
+  {
+   "id": "p15t",
+   "title": "IRS Publication 15-T (2026), Federal Income Tax Withholding Methods",
+   "url": "https://www.irs.gov/pub/irs-pdf/p15t.pdf",
+   "revised": "Dec 3, 2025 (Cat. No. 32112B)",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "p15",
+   "title": "IRS Publication 15 (2026), (Circular E), Employer's Tax Guide",
+   "url": "https://www.irs.gov/pub/irs-pdf/p15.pdf",
+   "revised": "Dec 15, 2025 (Cat. No. 10000W)",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "ssa",
+   "title": "Social Security Administration, Contribution and Benefit Base",
+   "url": "https://www.ssa.gov/oact/cola/cbb.html",
+   "revised": "Oct 24, 2025",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "fw4",
+   "title": "IRS Form W-4 (2026), Employee's Withholding Certificate",
+   "url": "https://www.irs.gov/pub/irs-pdf/fw4.pdf",
+   "revised": "Created 12/8/25 (Cat. No. 10220Q)",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "n2025-67",
+   "title": "IRS Notice 2025-67, 2026 retirement plan limitations (IR-2025-111)",
+   "url": "https://www.irs.gov/pub/irs-drop/n-25-67.pdf",
+   "revised": "Nov 13, 2025",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "f1040es",
+   "title": "IRS Form 1040-ES (2026), Estimated Tax for Individuals",
+   "url": "https://www.irs.gov/pub/irs-pdf/f1040es.pdf",
+   "revised": "Feb 12, 2026 (Cat. No. 11340T)",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "rp2025-32",
+   "title": "Rev. Proc. 2025-32, 2025-45 I.R.B. 695 (2026 inflation adjustments as amended by P.L. 119-21)",
+   "url": "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+   "revised": "Nov 3, 2025",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "p505",
+   "title": "IRS Publication 505 (2026), Tax Withholding and Estimated Tax",
+   "url": "https://www.irs.gov/pub/irs-pdf/p505.pdf",
+   "revised": "Mar 31, 2026 (Cat. No. 15008E)",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "i8959",
+   "title": "IRS Instructions for Form 8959, Additional Medicare Tax (2025; 2026 early-release draft Aug 26, 2026)",
+   "url": "https://www.irs.gov/pub/irs-pdf/i8959.pdf",
+   "revised": "Aug 7, 2025",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "f1040sse",
+   "title": "IRS Schedule SE (Form 1040) 2026, early-release draft",
+   "url": "https://www.irs.gov/pub/irs-dft/f1040sse--dft.pdf",
+   "revised": "Created 4/27/26 (draft)",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "f8995",
+   "title": "IRS Form 8995 (2026) early-release draft and the IRS Qualified Business Income Deduction page",
+   "url": "https://www.irs.gov/newsroom/qualified-business-income-deduction",
+   "revised": "Sep 22, 2026 (page); form draft created 5/1/26",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "p509-2027",
+   "title": "IRS Publication 509 (2027), Tax Calendars, early-release draft (2027 legal holidays)",
+   "url": "https://www.irs.gov/pub/irs-dft/p509--dft.pdf",
+   "revised": "Aug 24, 2026 (draft)",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "dol-futa",
+   "title": "U.S. Department of Labor, FUTA Credit Reductions (actual 2010–2025; potential 2026)",
+   "url": "https://oui.doleta.gov/unemploy/futa_credit.asp",
+   "revised": "Sep 11, 2026",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "dr1098",
+   "title": "Colorado DR 1098 (2026), Colorado Withholding Worksheet for Employers",
+   "url": "https://tax.colorado.gov/sites/default/files/documents/DR_1098_Colorado_Withholding_Worksheet_for_Employees.pdf",
+   "revised": "DR 1098 (10/21/25)",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "dr0004",
+   "title": "Colorado DR 0004 (2026), Colorado Employee Withholding Certificate",
+   "url": "https://tax.colorado.gov/sites/default/files/documents/DR_0004_2026.pdf",
+   "revised": "DR 0004 (10/29/25)",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "co-wh-guide",
+   "title": "Colorado Wage Withholding Tax Guide",
+   "url": "https://tax.colorado.gov/sites/default/files/documents/Wage_Withholding_Tax_Guide_Jan_2026.pdf",
+   "revised": "Revised January 2026",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "co-wh-frequency",
+   "title": "Colorado Department of Revenue, Withholding Filing Frequency & Due Dates",
+   "url": "https://tax.colorado.gov/withholding-filing-frequency-due-dates",
+   "revised": "web page",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "co-rule-604",
+   "title": "Colorado Rule 39-22-604-1 (wage withholding), adopted Jan 9, 2026",
+   "url": "https://www.coloradosos.gov/CCR/eDocketDetails.do?trackingNum=2025-00396",
+   "revised": "effective Mar 2, 2026",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "dr0104ep",
+   "title": "Colorado DR 0104EP (2026), Individual Estimated Income Tax",
+   "url": "https://tax.colorado.gov/sites/default/files/documents/DR_0104EP_2026.pdf",
+   "revised": "DR 0104EP (06/10/25)",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "crs-39-22-104",
+   "title": "C.R.S. 39-22-104(1.7)(c), Colorado income tax rate (2024 C.R.S.)",
+   "url": "https://content.leg.colorado.gov/sites/default/files/images/olls/crs2024-title-39.pdf",
+   "revised": "2024 C.R.S.",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "co-lcs-2026-09",
+   "title": "Colorado Legislative Council Staff, September 2026 Economic and Revenue Forecast (no TABOR rate cut for 2026)",
+   "url": "https://content.leg.colorado.gov/sites/default/files/2026-09/sept2026-forecast-with-cover-for-remediation-and-posting-accessible.pdf",
+   "revised": "Sep 17, 2026",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "cdle-ui",
+   "title": "Colorado Department of Labor and Employment, UI Premium Rates and Introductory Rates",
+   "url": "https://cdle.colorado.gov/employers/unemployment-insurance-premiums/introductory-rates",
+   "revised": "web page",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "famli",
+   "title": "Colorado FAMLI: SB25-144 (C.R.S. 8-13.3-507), 7 CCR 1107-1 §1.4.6 and famli.colorado.gov premium pages",
+   "url": "https://famli.colorado.gov/individuals-and-families/how-famli-works/premium-and-benefits-calculator",
+   "revised": "SB25-144 signed May 30, 2025; rule effective Jan 1, 2026",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "denver-opt",
+   "title": "Denver Tax Guide Topic 61, Occupational Privilege Taxes; Treasury Tax Rule 004",
+   "url": "https://denvergov.org/files/assets/public/v/2/finance/documents/treasury/tax-guides/taxguidetopic61_occupationalprivilegetaxes_1.pdf",
+   "revised": "Revised 04/2026; Rule 004 effective Sep 18, 2026",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "aurora-opt",
+   "title": "City of Aurora, Occupational Privilege Tax (repeal, Ordinance 2022-77)",
+   "url": "https://www.auroragov.org/business_services/taxes/occupational_privilege_tax",
+   "revised": "repealed effective Jan 1, 2025",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "gv-opt",
+   "title": "City of Greenwood Village, Occupational Privilege Tax (and Code ch. 4 arts. 6–7)",
+   "url": "https://www.greenwoodvillage.com/1220/Occupational-Privilege-Tax-OPT",
+   "revised": "Code codified through Mar 2, 2026",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "sheridan-opt",
+   "title": "City of Sheridan, Occupational Privilege Tax (and Code §§ 62-231 to 62-240)",
+   "url": "https://www.ci.sheridan.co.us/288/Occupational-Privilege-Tax",
+   "revised": "Code codified through Ord. 7-2026, Apr 27, 2026",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "glendale-opt",
+   "title": "City of Glendale, Occupational Privilege Tax (and Municipal Code ch. 3.21)",
+   "url": "https://glendale.co.us/355/Occupational-Privilege-Tax",
+   "revised": "Code through Dec 2, 2025",
+   "checked": "2026-10-08"
+  },
+  {
+   "id": "co-holidays",
+   "title": "Colorado Judicial Department, Calendar Year 2026 and Fiscal Year 2027 Holiday Schedules (C.R.S. 24-11-101 legal holidays)",
+   "url": "https://www.coloradojudicial.gov/sites/default/files/2026-07/Holiday%20Schedule%202026%20Calendar%20Year%20v.2.pdf",
+   "revised": "Sep 2, 2025; FY2027 Jul 1, 2026",
+   "checked": "2026-10-08"
+  }
+ ],
+ "unconfirmed": [
+  {
+   "path": "colorado.withholding.before2020W4",
+   "label": "Colorado withholding for a Form W-4 from 2019 or earlier",
+   "note": "DR 1098 (2026), DR 0004, the January 2026 withholding guide and Rule 39-22-604-1 do not say how to treat a 2019-or-earlier Form W-4. QindaBooks uses the married-filing-jointly allowance for \"Married\" and the other allowance otherwise (Publication 15-T's own mapping). Ask the employee for a DR 0004 or a 2026 Form W-4."
+  },
+  {
+   "path": "colorado.opt.glendale.monthlyThreshold",
+   "label": "Glendale OPT at exactly $750 a month",
+   "note": "Glendale's code taxes compensation of \"no less than $750\" a month; the city's web page says \"more than $750\". QindaBooks follows the code (at least $750)."
+  },
+  {
+   "path": "colorado.famli.wages",
+   "label": "FAMLI premium on pre-tax deductions",
+   "note": "FAMLI premiums are on \"gross wages\" (7 CCR 1107-1 §1.2(9)): the pay stub's gross, \"pretax earnings\". No FAMLI text says outright that cafeteria-plan (Section 125) reductions stay in it. QindaBooks charges the premium on gross pay before every deduction."
+  },
+  {
+   "path": "colorado.opt.sheridan.dueDay",
+   "label": "Sheridan OPT quarterly due date",
+   "note": "Sheridan's code lets employers with fewer than ten employees file quarterly but gives no quarterly due date. QindaBooks shows the last day of the month after the quarter, as for monthly returns."
+  }
+ ],
+ "federal": {
+  "withholding": {
+   "source": "p15t",
+   "payPeriods": {
+    "semiannual": 2,
+    "quarterly": 4,
+    "monthly": 12,
+    "semimonthly": 24,
+    "biweekly": 26,
+    "weekly": 52,
+    "daily": 260
+   },
+   "step2Unchecked": {
+    "marriedJointly": "12900",
+    "other": "8600"
+   },
+   "allowance": "4300",
+   "standard": {
+    "marriedJointly": [
+     ["0", "19300", "0.00", "0%"],
+     ["19300", "44100", "0.00", "10%"],
+     ["44100", "120100", "2480.00", "12%"],
+     ["120100", "230700", "11600.00", "22%"],
+     ["230700", "422850", "35932.00", "24%"],
+     ["422850", "531750", "82048.00", "32%"],
+     ["531750", "788000", "116896.00", "35%"],
+     ["788000", "", "206583.50", "37%"]
+    ],
+    "singleOrMarriedSeparately": [
+     ["0", "7500", "0.00", "0%"],
+     ["7500", "19900", "0.00", "10%"],
+     ["19900", "57900", "1240.00", "12%"],
+     ["57900", "113200", "5800.00", "22%"],
+     ["113200", "209275", "17966.00", "24%"],
+     ["209275", "263725", "41024.00", "32%"],
+     ["263725", "648100", "58448.00", "35%"],
+     ["648100", "", "192979.25", "37%"]
+    ],
+    "headOfHousehold": [
+     ["0", "15550", "0.00", "0%"],
+     ["15550", "33250", "0.00", "10%"],
+     ["33250", "83000", "1770.00", "12%"],
+     ["83000", "121250", "7740.00", "22%"],
+     ["121250", "217300", "16155.00", "24%"],
+     ["217300", "271750", "39207.00", "32%"],
+     ["271750", "656150", "56631.00", "35%"],
+     ["656150", "", "191171.00", "37%"]
+    ]
+   },
+   "step2Checkbox": {
+    "marriedJointly": [
+     ["0", "16100", "0.00", "0%"],
+     ["16100", "28500", "0.00", "10%"],
+     ["28500", "66500", "1240.00", "12%"],
+     ["66500", "121800", "5800.00", "22%"],
+     ["121800", "217875", "17966.00", "24%"],
+     ["217875", "272325", "41024.00", "32%"],
+     ["272325", "400450", "58448.00", "35%"],
+     ["400450", "", "103291.75", "37%"]
+    ],
+    "singleOrMarriedSeparately": [
+     ["0", "8050", "0.00", "0%"],
+     ["8050", "14250", "0.00", "10%"],
+     ["14250", "33250", "620.00", "12%"],
+     ["33250", "60900", "2900.00", "22%"],
+     ["60900", "108938", "8983.00", "24%"],
+     ["108938", "136163", "20512.00", "32%"],
+     ["136163", "328350", "29224.00", "35%"],
+     ["328350", "", "96489.63", "37%"]
+    ],
+    "headOfHousehold": [
+     ["0", "12075", "0.00", "0%"],
+     ["12075", "20925", "0.00", "10%"],
+     ["20925", "45800", "885.00", "12%"],
+     ["45800", "64925", "3870.00", "22%"],
+     ["64925", "112950", "8077.50", "24%"],
+     ["112950", "140175", "19603.50", "32%"],
+     ["140175", "332375", "28315.50", "35%"],
+     ["332375", "", "95585.50", "37%"]
+    ]
+   },
+   "before2020": {
+    "married": [
+     ["0", "19300", "0.00", "0%"],
+     ["19300", "44100", "0.00", "10%"],
+     ["44100", "120100", "2480.00", "12%"],
+     ["120100", "230700", "11600.00", "22%"],
+     ["230700", "422850", "35932.00", "24%"],
+     ["422850", "531750", "82048.00", "32%"],
+     ["531750", "788000", "116896.00", "35%"],
+     ["788000", "", "206583.50", "37%"]
+    ],
+    "single": [
+     ["0", "7500", "0.00", "0%"],
+     ["7500", "19900", "0.00", "10%"],
+     ["19900", "57900", "1240.00", "12%"],
+     ["57900", "113200", "5800.00", "22%"],
+     ["113200", "209275", "17966.00", "24%"],
+     ["209275", "263725", "41024.00", "32%"],
+     ["263725", "648100", "58448.00", "35%"],
+     ["648100", "", "192979.25", "37%"]
+    ]
+   }
+  },
+  "fica": {
+   "source": "p15 ssa",
+   "socialSecurityRate": "6.2%",
+   "socialSecurityWageBase": "184500",
+   "medicareRate": "1.45%",
+   "additionalMedicareRate": "0.9%",
+   "additionalMedicareThreshold": "200000"
+  },
+  "futa": {
+   "source": "p15 dol-futa",
+   "rate": "6.0%",
+   "maxCredit": "5.4%",
+   "wageBase": "7000",
+   "depositThreshold": "500",
+   "creditReduction": {},
+   "creditReductionNote": "No 2026 credit reduction for Colorado: only states with a Title XII advance balance on January 1, 2026 can have one, and DOL's potential 2026 list names only California and the Virgin Islands. DOL publishes the final 2026 list after November 10, 2026. Colorado had none for 2025 either."
+  },
+  "supplemental": {
+   "source": "p15",
+   "flatRate": "22%",
+   "mandatoryRate": "37%",
+   "mandatoryThreshold": "1000000"
+  },
+  "deposits": {
+   "source": "p15",
+   "lookbackThreshold": "50000",
+   "nextDayThreshold": "100000",
+   "quarterlyDeMinimis": "2500",
+   "form944Limit": "1000"
+  },
+  "retirement": {
+   "source": "n2025-67",
+   "deferralLimit401k": "24500",
+   "catchUp401k": "8000",
+   "deferralLimitSimple": "17000",
+   "catchUpSimple": "4000"
+  },
+  "holidays": [
+   "2026-01-01",
+   "2026-01-19",
+   "2026-02-16",
+   "2026-04-16",
+   "2026-05-25",
+   "2026-06-19",
+   "2026-07-03",
+   "2026-09-07",
+   "2026-10-12",
+   "2026-11-11",
+   "2026-11-26",
+   "2026-12-25",
+   "2027-01-01",
+   "2027-01-18",
+   "2027-02-15",
+   "2027-04-16"
+  ]
+ },
+ "estimatedTax": {
+  "source": "f1040es rp2025-32 p505",
+  "rateSchedules": {
+   "single": [
+    ["0", "12400", "0.00", "10%"],
+    ["12400", "50400", "1240.00", "12%"],
+    ["50400", "105700", "5800.00", "22%"],
+    ["105700", "201775", "17966.00", "24%"],
+    ["201775", "256225", "41024.00", "32%"],
+    ["256225", "640600", "58448.00", "35%"],
+    ["640600", "", "192979.25", "37%"]
+   ],
+   "headOfHousehold": [
+    ["0", "17700", "0.00", "10%"],
+    ["17700", "67450", "1770.00", "12%"],
+    ["67450", "105700", "7740.00", "22%"],
+    ["105700", "201750", "16155.00", "24%"],
+    ["201750", "256200", "39207.00", "32%"],
+    ["256200", "640600", "56631.00", "35%"],
+    ["640600", "", "191171.00", "37%"]
+   ],
+   "marriedJointly": [
+    ["0", "24800", "0.00", "10%"],
+    ["24800", "100800", "2480.00", "12%"],
+    ["100800", "211400", "11600.00", "22%"],
+    ["211400", "403550", "35932.00", "24%"],
+    ["403550", "512450", "82048.00", "32%"],
+    ["512450", "768700", "116896.00", "35%"],
+    ["768700", "", "206583.50", "37%"]
+   ],
+   "marriedSeparately": [
+    ["0", "12400", "0.00", "10%"],
+    ["12400", "50400", "1240.00", "12%"],
+    ["50400", "105700", "5800.00", "22%"],
+    ["105700", "201775", "17966.00", "24%"],
+    ["201775", "256225", "41024.00", "32%"],
+    ["256225", "384350", "58448.00", "35%"],
+    ["384350", "", "103291.75", "37%"]
+   ],
+   "qualifyingSurvivingSpouse": [
+    ["0", "24800", "0.00", "10%"],
+    ["24800", "100800", "2480.00", "12%"],
+    ["100800", "211400", "11600.00", "22%"],
+    ["211400", "403550", "35932.00", "24%"],
+    ["403550", "512450", "82048.00", "32%"],
+    ["512450", "768700", "116896.00", "35%"],
+    ["768700", "", "206583.50", "37%"]
+   ]
+  },
+  "standardDeduction": {
+   "single": "16100",
+   "marriedJointly": "32200",
+   "marriedSeparately": "16100",
+   "headOfHousehold": "24150",
+   "qualifyingSurvivingSpouse": "32200"
+  },
+  "selfEmployment": {
+   "netEarningsFactor": "92.35%",
+   "socialSecurityRate": "12.4%",
+   "medicareRate": "2.9%",
+   "minimumNetEarnings": "400",
+   "socialSecurityWageBase": "184500",
+   "deductionShare": "50%"
+  },
+  "additionalMedicare": {
+   "rate": "0.9%",
+   "threshold": {
+    "single": "200000",
+    "marriedJointly": "250000",
+    "marriedSeparately": "125000",
+    "headOfHousehold": "200000",
+    "qualifyingSurvivingSpouse": "200000"
+   }
+  },
+  "qbi": {
+   "rate": "20%",
+   "minimumDeduction": "400",
+   "minimumQualifiedIncome": "1000",
+   "threshold": {
+    "single": "201750",
+    "marriedJointly": "403500",
+    "marriedSeparately": "201775",
+    "headOfHousehold": "201750",
+    "qualifyingSurvivingSpouse": "201750"
+   }
+  },
+  "safeHarbor": {
+   "currentYear": "90%",
+   "priorYear": "100%",
+   "priorYearHighIncome": "110%",
+   "highIncomeAgi": "150000",
+   "highIncomeAgiSeparate": "75000"
+  },
+  "minimumBalanceDue": "1000",
+  "dueDates": ["2026-04-15", "2026-06-15", "2026-09-15", "2027-01-15"]
+ },
+ "colorado": {
+  "incomeTaxRate": "4.40%",
+  "withholding": {
+   "source": "dr1098 dr0004 co-wh-frequency",
+   "rate": "4.40%",
+   "payPeriods": {
+    "annual": 1,
+    "semiannual": 2,
+    "quarterly": 4,
+    "monthly": 12,
+    "semimonthly": 24,
+    "biweekly": 26,
+    "weekly": 52,
+    "daily": 260
+   },
+   "defaultAllowance": {
+    "marriedJointly": "11000",
+    "other": "5500"
+   },
+   "wholeDollars": true
+  },
+  "filing": {
+   "source": "co-rule-604 co-wh-guide",
+   "monthlyFrom": "7000",
+   "weeklyAbove": "50000"
+  },
+  "ui": {
+   "source": "cdle-ui",
+   "wageBase": "30600",
+   "introductoryRate": [
+    {
+     "name": "Beginning rate",
+     "rate": "1.53%"
+    },
+    {
+     "name": "Support rate",
+     "rate": "0.17%"
+    },
+    {
+     "name": "Solvency surcharge",
+     "rate": "1.35%"
+    }
+   ],
+   "heavyConstructionRate": [
+    {
+     "name": "Beginning rate",
+     "rate": "4.28%"
+    },
+    {
+     "name": "Support rate",
+     "rate": "0.48%"
+    },
+    {
+     "name": "Solvency surcharge",
+     "rate": "1.525%"
+    }
+   ]
+  },
+  "famli": {
+   "source": "famli",
+   "rate": "0.88%",
+   "maxEmployeeShare": "50%",
+   "smallEmployerSize": 10,
+   "wageBase": "184500"
+  },
+  "opt": {
+   "denver": {
+    "city": "Denver",
+    "employeeMonthly": "5.75",
+    "employerMonthly": "4.00",
+    "monthlyThreshold": "500",
+    "threshold": "atLeast",
+    "employerOnOwners": true,
+    "dueDay": 0,
+    "filing": "Quarterly for fewer than 60 employees, monthly for 60 or more; due the last day of the month after the period. Owners and partners without employees may pay the year by January 31.",
+    "status": ""
+   },
+   "aurora": {
+    "city": "Aurora",
+    "employeeMonthly": "0",
+    "employerMonthly": "0",
+    "monthlyThreshold": "0",
+    "threshold": "atLeast",
+    "employerOnOwners": false,
+    "dueDay": 0,
+    "filing": "No returns after the December 2024 and fourth-quarter 2024 returns.",
+    "status": "Aurora repealed its Occupational Privilege Tax effective January 1, 2025 (Ordinance 2022-77); nothing is withheld."
+   },
+   "greenwoodVillage": {
+    "city": "Greenwood Village",
+    "employeeMonthly": "2.00",
+    "employerMonthly": "2.00",
+    "monthlyThreshold": "250",
+    "threshold": "atLeast",
+    "employerOnOwners": true,
+    "dueDay": 0,
+    "filing": "Monthly, by the last day of the following month; the Finance Director may allow less frequent returns under $40 a month.",
+    "status": ""
+   },
+   "sheridan": {
+    "city": "Sheridan",
+    "employeeMonthly": "3.00",
+    "employerMonthly": "3.00",
+    "monthlyThreshold": "500",
+    "threshold": "moreThan",
+    "employerOnOwners": false,
+    "dueDay": 0,
+    "filing": "Monthly, by the last day of the following month; employers with fewer than ten employees may file quarterly.",
+    "status": ""
+   },
+   "glendale": {
+    "city": "Glendale",
+    "employeeMonthly": "5.00",
+    "employerMonthly": "5.00",
+    "monthlyThreshold": "750",
+    "threshold": "atLeast",
+    "employerOnOwners": true,
+    "dueDay": 20,
+    "filing": "Monthly when more than $60 a month, quarterly when less than $100 a quarter; due the 20th of the month after the period.",
+    "status": ""
+   }
+  },
+  "estimated": {
+   "source": "dr0104ep",
+   "safeHarborCurrentYear": "70%",
+   "safeHarborPriorYear": "100%",
+   "safeHarborPriorYearHighIncome": "110%",
+   "highIncomeAgi": "150000",
+   "highIncomeAgiSeparate": "75000",
+   "minimumBalanceDue": "1000",
+   "dueDates": ["2026-04-15", "2026-06-15", "2026-09-15", "2027-01-15"]
+  },
+  "holidays": [
+   "2026-01-01",
+   "2026-01-19",
+   "2026-02-16",
+   "2026-05-25",
+   "2026-06-19",
+   "2026-07-03",
+   "2026-09-07",
+   "2026-10-05",
+   "2026-11-11",
+   "2026-11-26",
+   "2026-12-25",
+   "2027-01-01",
+   "2027-01-18",
+   "2027-02-15"
+  ]
+ }
+}

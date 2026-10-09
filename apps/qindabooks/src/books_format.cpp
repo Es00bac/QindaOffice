@@ -44,6 +44,8 @@ constexpr KindRow kKinds[] = {
     {DocKind::InvoiceTemplate, "recurringTemplate"},
     {DocKind::OpeningBalance, "openingBalance"},
     {DocKind::PurchaseOrder, "purchaseOrder"}, // M68 (D-077)
+    {DocKind::Paycheck, "paycheck"},           // M71 (D-081)
+    {DocKind::PayrollLiabilityPayment, "payrollLiabilityPayment"},
 };
 
 QString rowKindKey(RowKind kind)

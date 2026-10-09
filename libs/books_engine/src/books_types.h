@@ -58,7 +58,9 @@ struct Result {
 enum class Basis { Accrual = 0, Cash = 1 };
 
 // Employees are not parties: they have their own list (employees.h, M68).
-enum class PartyKind { Customer = 1, Vendor = 2 };
+// Owner (M71, D-081): an owner or partner paid by draws or distributions —
+// QuickBooks Desktop's "Other Names"; never a customer or a vendor.
+enum class PartyKind { Customer = 1, Vendor = 2, Owner = 3 };
 
 // Business documents. Every kind but Estimate, InvoiceTemplate and
 // PurchaseOrder posts one balanced JournalTransaction while it is not a
@@ -83,6 +85,8 @@ enum class DocKind {
     InvoiceTemplate = 17, // a recurring template's body; never posts
     OpeningBalance = 18,
     PurchaseOrder = 19,   // M68 (D-077): a vendor order; never posts
+    Paycheck = 20,        // M71 (D-081): wages, withholding, employer taxes, net pay
+    PayrollLiabilityPayment = 21, // M71: a deposit of payroll taxes or deductions
 };
 
 [[nodiscard]] QString docKindName(DocKind kind);

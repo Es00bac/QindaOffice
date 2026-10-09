@@ -5,6 +5,114 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-081: QindaBooks: owner pay, estimated taxes and payroll (federal + Colorado)
+
+**Date:** 2026-10-08 · **Status:** accepted (owner request 2026-10-08:
+"getting the numbers right is the whole point"; M71; supersedes the
+"Payroll" item of the out-of-scope list in [books.md](books.md#out-of-scope--plainly)
+and in D-077)
+
+**Context.** The owner's LLC is in Colorado, and how the IRS taxes it is
+not settled: a single-member LLC that never elected otherwise is
+disregarded (Schedule C), one whose Form 2553 was accepted (the CP261
+notice) is an S corporation, and a multi-member LLC is a partnership. Each
+pays the owner differently — owner draws with quarterly estimated taxes, or
+a reasonable salary through payroll with the rest as distributions — and
+QuickBooks offers both. QindaBooks had no payroll; M68 left a minimal
+employees list for payroll to extend.
+
+**Decision.**
+
+1. **The tax tables are data, one file per year, every value sourced.**
+   `libs/books_payroll` (Qt Core only, pure computation over the new
+   `books_money` target, so it needs no Qt Sql) reads
+   `payroll_<year>.json` (schema 1): rates, wage bases, brackets,
+   allowances, thresholds, due-date rules and holidays, each traced in
+   [payroll-tax-tables.md](payroll-tax-tables.md) to the publication and
+   revision it came from. No rate is written in code; a year without a file
+   is refused in plain words; a value an official source could not confirm
+   is listed `unconfirmed` in the file and noted on every paycheck or
+   estimate that used it. Employer-specific values — the UI rate CDLE
+   assigned, the FAMLI shares, the deposit schedule, the Colorado filing
+   frequency, the city — are company settings.
+2. **Computation follows the publications line by line.** Federal income
+   tax by Publication 15-T Worksheet 1A (the percentage method, a 2020-or-
+   later Form W-4 or an earlier one; supplemental wages at 22 %/37 %);
+   social security with the year's wage base, Medicare and Additional
+   Medicare; FUTA; Colorado withholding by DR 1098 (DR 0004 lines 2 and 3,
+   the no-certificate rules, whole dollars); Colorado UI part by part; FAMLI
+   (employee share capped at half); the city occupational privilege taxes.
+   Cents round half-up at each percentage line; federal whole-dollar
+   withholding is a company setting. Every worksheet line is kept with the
+   paycheck and shown.
+3. **Employer shares accrue on running totals.** The employer's social
+   security, Medicare, FUTA and UI on a paycheck are the rate times the
+   quarter's (FUTA: the year's) wages so far, less what earlier paychecks
+   accrued — so Form 941 line 5, Form 940 and the UI report agree with the
+   books to the cent. Form 941 line 7 carries the employee side's fractions
+   of cents, as the instructions say.
+4. **One setting decides how the owner is paid.** `PayrollSetup.entity`:
+   *unsure*, *scheduleC*, *sCorporation*, *partnership*. A Schedule C or
+   partnership owner takes **owner draws** (equity, never an expense) by
+   check — through the M68 check queue and its confirm step — or by
+   transfer, pays **estimated taxes** planned from the books' profit (Form
+   1040-ES worksheet with Schedule SE, Additional Medicare, the simplified
+   QBI deduction and the safe harbors; Colorado DR 0104EP), records each
+   payment as an owner's draw marked with its year and installment, and
+   sees the share of each draw to **set aside**, moved to a tax savings
+   account on request; such an owner is never paid by paycheck and takes no
+   shareholder distribution. An S corporation pays its owner-employee
+   **wages** (Officer Wages) through payroll and the rest as **shareholder
+   distributions**, never draws; what salary is reasonable is the owner's
+   and the accountant's call — QindaBooks records it, it does not compute
+   it. "Not sure" keeps both ways open, and the setup explains how to tell.
+5. **Payroll extends M68's employees.** `employee_payroll` (one row per
+   `employees.id`): legal name and SSN, address, dates, pay type, rate and
+   schedule, the W-4 and DR 0004, Colorado withholding on or off, the city,
+   the owner-employee and more-than-2 % shareholder flags, and the
+   deductions (Section 125, 401(k) or SIMPLE by amount or percent, a
+   shareholder's health premium, one after-tax deduction). A paycheck is a
+   document (`DocKind::Paycheck`, 20) with a `paychecks` row — keyed by the
+   document, immutable — holding every wage base and tax as computed and
+   its worksheets. It posts Dr Wages or Officer Wages (gross), Dr Payroll
+   Taxes (the employer's taxes), Cr each Payroll Liabilities sub-account,
+   Cr the bank (net). It is never edited: Adjust voids it and writes the
+   corrected one (`replaces_doc_id`); the M68 queue numbers it like any
+   check, and because renumbering keeps the document id the payroll row
+   stays live. Liabilities are derived from the live paychecks per agency,
+   period and due date (the deposit schedule's monthly or semiweekly
+   periods and the $100,000 next-day rule, FUTA's $500 carry, Colorado's
+   filing frequency, quarterly UI, FAMLI and OPT); a
+   `PayrollLiabilityPayment` (21) clears the accounts, a difference of up
+   to $1.00 posting to Payroll Taxes, more than is owed refused.
+6. **Forms are reports.** Form 941 (and Schedule B), Form 940, the W-2s and
+   W-3, Colorado DR 1094, DR 1093, the UI and FAMLI wage reports, and
+   QuickBooks' Payroll Summary, Payroll Liability Balances, Employee
+   Earnings Summary and Paycheck History are `ReportTable`s: on screen, on
+   paper, PDF, CSV and Excel through the existing report path, every line
+   of the form shown. The SSA's EFW2 W-2 file (Publication 42-007, tax year
+   2026) is written after validating it. **No e-filing and no e-payment**:
+   the app says where each return is filed and each deposit paid.
+7. **Identity numbers stay in the company file.** SSNs and EINs leave it
+   masked to the last four digits, except the edit fields and the copies
+   saved for filing (W-2, W-3, UI and FAMLI PDFs; the EFW2 file) — never in
+   the audit log, a note, a notification, an error or test output.
+8. **Schema version 5** adds `employee_payroll`, `paychecks`,
+   `payroll_payments` and `owner_payments`, and owners become a party kind
+   (`PartyKind::Owner`, 3 — QuickBooks' "Other Names") so a draw check has
+   a payee and an address. A version-4 file is backed up and migrated.
+
+**Consequences.** A Payroll menu (ten commands), a Payroll ribbon tab, an
+eighth workspace (Payroll, Ctrl+8) and thirteen new reports (39 in the
+catalog); paychecks print on voucher checks with the pay stub. The setup
+screen and [payroll-tax-tables.md](payroll-tax-tables.md) say once that the
+numbers come from the official tables, with their dates, and that the owner
+should confirm the LLC's tax type and have a tax professional review the
+first payroll or estimate. Not done: other states and cities, e-filing and
+e-payment, direct-deposit files, Colorado's own electronic W-2 file, the
+annualized installment method, the QBI deduction above the threshold (Form
+8995-A), nonresident-alien withholding, Forms 943/944, and any judgement of
+reasonable compensation.
 ## D-078: QindaCalc: structured references, chart sheets, array formulas
 
 **Date:** 2026-10-09 · **Status:** accepted (M69; the owner's workbooks use

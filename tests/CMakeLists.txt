@@ -18,6 +18,8 @@ add_subdirectory(qindalauncher)
 add_subdirectory(mail_exchange)
 add_subdirectory(qindamail)
 add_subdirectory(books_engine)
+# M71 (D-081): payroll and estimated-tax arithmetic.
+add_subdirectory(books_payroll)
 add_subdirectory(books_io)
 add_subdirectory(books_connect)
 add_subdirectory(qindabooks)

@@ -26,6 +26,7 @@
 // (commands and menus).
 
 #include "books_service.h"
+#include "payroll_service.h"
 #include "document_host.h"
 
 #include <QPointer>
@@ -45,6 +46,8 @@ class BooksHost : public Quick::DocumentHost {
     QML_ELEMENT
     QML_UNCREATABLE("Created by the application.")
     Q_PROPERTY(QindaOffice::Apps::Books::BooksService *books READ books CONSTANT)
+    // M71 (D-081): owner pay, estimated taxes and payroll (payroll_service.h).
+    Q_PROPERTY(QindaOffice::Apps::Books::PayrollService *payroll READ payroll CONSTANT)
     // Settable twin of DocumentHost::preferencesPage: the window names its
     // page (BooksPreferencesPage.qml) from QML.
     Q_PROPERTY(QUrl preferencesPageUrl READ preferencesPage WRITE setPreferencesPage NOTIFY preferencesPageChanged)
@@ -61,6 +64,7 @@ public:
     ~BooksHost() override;
 
     [[nodiscard]] BooksService *books() const { return m_service; }
+    [[nodiscard]] PayrollService *payroll() const { return m_payroll; }
     [[nodiscard]] ::QindaOffice::Books::BooksDocument *booksDocument() const { return m_document; }
 
     [[nodiscard]] QString currentView() const { return m_view; }
@@ -141,6 +145,16 @@ signals:
     void timeActivityRequested(qint64 entryId);
     void timesheetRequested();
     void employeeDialogRequested(qint64 id);
+    // M71 (D-081): the Payroll menu. Each opens its dialog or workspace
+    // section (qml/Payroll*.qml); kind "draw" | "distribution".
+    void payrollSetupRequested();
+    void payOwnerRequested(const QString &kind);
+    void estimatedTaxesRequested();
+    void payrollEmployeesRequested();
+    void runPayrollRequested();
+    void payLiabilitiesRequested();
+    void payrollFormsRequested();
+    void efw2ExportRequested();
 
 protected:
     [[nodiscard]] QString filterString() const override;
@@ -155,6 +169,7 @@ private:
 
     ::QindaOffice::Books::BooksDocument *m_document = nullptr;
     BooksService *m_service = nullptr;
+    PayrollService *m_payroll = nullptr;
     QString m_view = QStringLiteral("dashboard");
     qint64 m_selectedDocumentId = 0;
     QString m_printKind;
