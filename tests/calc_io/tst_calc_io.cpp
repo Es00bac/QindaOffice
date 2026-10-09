@@ -57,6 +57,11 @@ static Workbook sampleWorkbook()
     put("B1", QStringLiteral("hello"));
     put("B2", QStringLiteral("=DATE(2024,3,15)"));
     sheet.addMerge({{4, 1}, {5, 2}}); // B5:C6
+    put("B5", QStringLiteral("merged"));
+    // Excel files can hold a value under a merge (hidden, still seen by
+    // formulas); the writer used to blank it (QXlsx's mergeCells).
+    put("C6", QStringLiteral("under the merge"));
+    put("D1", QStringLiteral("=C6"));
     sheet.setColumnWidth(0, 140);
     const qint32 style = wb.addStyle([] {
         CellStyle s;
@@ -86,6 +91,9 @@ void CalcIoTest::roundTrip()
     QCOMPARE(toText(back.cellValue(0, 0, 1)), QStringLiteral("hello"));
     QCOMPARE(std::get<double>(back.cellValue(0, 1, 1)), 45366.0); // B2 date serial
     QCOMPARE(back.sheetAt(0).merges().size(), 1);
+    QCOMPARE(toText(back.cellValue(0, 4, 1)), QStringLiteral("merged"));
+    QCOMPARE(toText(back.cellValue(0, 5, 2)), QStringLiteral("under the merge"));
+    QCOMPARE(toText(back.cellValue(0, 0, 3)), QStringLiteral("under the merge"));
     QVERIFY(back.sheetAt(0).columnWidth(0) > 100);
     QCOMPARE(back.sheetAt(0).styleIdAt({0, 0}) != 0, true);
     const CellStyle *readStyle = back.style(back.sheetAt(0).styleIdAt({0, 0}));

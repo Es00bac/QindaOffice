@@ -343,11 +343,15 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
         PatchManifest::SheetPatch patch;
         patch.sheetPart = QStringLiteral("xl/worksheets/sheet%1.xml").arg(s + 1);
         patch.chartSheet = sheet.isChartSheet();
-        writeSheetCells(worksheet, wb, s, formatFor, headerText, &patch);
+        // AGENT-GUARD: merges before cells. QXlsx's mergeCells() blanks every
+        // cell under a merge but its top-left one; Excel files can hold
+        // values there (hidden, still seen by formulas), and writing the
+        // cells afterwards keeps them (found by tst_calc_io_corpus).
         for (const CellRange &merge : sheet.merges()) {
             doc->mergeCells(QXlsx::CellRange(merge.topLeft.row + 1, merge.topLeft.col + 1,
                                              merge.bottomRight.row + 1, merge.bottomRight.col + 1));
         }
+        writeSheetCells(worksheet, wb, s, formatFor, headerText, &patch);
         // A run of equal widths is one call: QXlsx splits its column records
         // on every call, so a width per column out to XFD took it minutes
         // (M69, found by tst_calc_io_corpus).

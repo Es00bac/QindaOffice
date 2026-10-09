@@ -133,8 +133,15 @@ and our saved package validate against the Transitional XSDs):
   (cells at XFD1 and XFD1048576) is left out: QXlsx's writer needs about
   half an hour for it (D-078 limits). The first runs found the reader's
   rectangle walk (hung on such cells), the custom row heights and QXlsx's
-  quadratic column lookups — fixed (D-078 item 8). Not run here: the
-  owner's workbooks (the lead runs them on the laptop).
+  quadratic column lookups — fixed (D-078 item 8). The owner's 27
+  workbooks (laptop, XSD-validated): 27 read and re-read, 263 sheets,
+  185,107 cells, 18,243 formulas, 20 tables, 11 charts, 406 notes, 457
+  carried parts; 0 cells or formula texts changed and 0 schema-invalid.
+  The first run found 364 text values under merged ranges (hidden by the
+  merge, still seen by formulas) blanked in 3 workbooks: QXlsx's
+  `mergeCells()` overwrites the covered cells, so the writer now merges
+  before it writes cells (`tst_calc_io` `roundTrip` keeps a value under a
+  merge and a formula reading it).
 - Not verified: Microsoft Excel itself (none here).
 - **Desktop check (owner):** in QindaCalc on the desktop, open an Excel
   workbook that has a table with a calculated column and a totals row, a
