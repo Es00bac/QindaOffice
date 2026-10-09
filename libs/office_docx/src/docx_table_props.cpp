@@ -9,6 +9,7 @@
 
 #include <QAbstractTextDocumentLayout>
 #include <QTextBlock>
+#include <QTextCursor>
 #include <QTextDocument>
 #include <QTextTable>
 
@@ -29,12 +30,12 @@ CellMargins tableMargins(const QTextTable *table)
 }
 
 // Shows a cell's margins: its own, else the table's, else Word's default;
-// the padding a row height added stays on top of the bottom one.
+// the padding a row height added stays on top of them.
 void showMargins(QTextTableCellFormat &f, const CellMargins &table)
 {
     const CellMargins own = parseMarginsSpec(f.stringProperty(kCellMargins));
     auto pick = [](int own, int table, int fallback) { return own >= 0 ? own : table >= 0 ? table : fallback; };
-    f.setTopPadding(Units::twipsToPx(pick(own.top, table.top, 0)));
+    f.setTopPadding(Units::twipsToPx(pick(own.top, table.top, 0)) + f.doubleProperty(kRowPadTop));
     f.setLeftPadding(Units::twipsToPx(pick(own.left, table.left, kDefaultSideMargin)));
     f.setRightPadding(Units::twipsToPx(pick(own.right, table.right, kDefaultSideMargin)));
     f.setBottomPadding(Units::twipsToPx(pick(own.bottom, table.bottom, 0)) + f.doubleProperty(kRowPad));
@@ -55,7 +56,8 @@ qreal contentHeight(const QTextTableCell &cell)
             + b.blockFormat().bottomMargin();
     }
     const QTextTableCellFormat f = cell.format().toTableCellFormat();
-    return height + f.topPadding() + f.bottomPadding() - f.doubleProperty(kRowPad) + f.topBorder() + f.bottomBorder();
+    return height + f.topPadding() + f.bottomPadding() - f.doubleProperty(kRowPad) - f.doubleProperty(kRowPadTop)
+        + f.topBorder() + f.bottomBorder();
 }
 
 void layOut(const QTextTable *table)
@@ -319,43 +321,152 @@ void distributeRows(QTextTable *table, const CellRange &range)
     }
 }
 
-void refreshRowHeight(QTextTable *table, int row)
+void setRowPad(QTextTableCellFormat &format, qreal pad)
 {
-    // Take back what an earlier height added, then pad again.
+    format.setTopPadding(qMax<qreal>(0, format.topPadding() - format.doubleProperty(kRowPadTop)));
+    format.setBottomPadding(qMax<qreal>(0, format.bottomPadding() - format.doubleProperty(kRowPad)));
+    format.clearProperty(kRowPadTop);
+    format.clearProperty(kRowPad);
+    if (pad <= 0) {
+        return;
+    }
+    // AGENT-NOTE: Qt centres (or bottoms) a cell's content in what the row
+    // leaves after the cell's own padding, so a pad all on the bottom would
+    // pin a centred cell's text to the top of a tall row (a label sheet's
+    // first label did). Centred cells get it half and half, bottom ones on top.
+    qreal top = 0;
+    if (format.verticalAlignment() == QTextCharFormat::AlignMiddle) {
+        top = pad / 2;
+    } else if (format.verticalAlignment() == QTextCharFormat::AlignBottom) {
+        top = pad;
+    }
+    format.setTopPadding(format.topPadding() + top);
+    format.setBottomPadding(format.bottomPadding() + pad - top);
+    if (top > 0) {
+        format.setProperty(kRowPadTop, top);
+    }
+    if (pad - top > 0) {
+        format.setProperty(kRowPad, pad - top);
+    }
+}
+
+namespace {
+
+// The cells that start in `row` and span only it: the ones whose content
+// sets the row's height.
+QList<QTextTableCell> ownCells(const QTextTable *table, int row)
+{
     QList<QTextTableCell> cells;
     for (int c = 0; c < table->columns(); ++c) {
         const QTextTableCell cell = table->cellAt(row, c);
-        if (cell.row() != row || cell.column() != c || cell.rowSpan() != 1) {
-            continue;
+        if (cell.row() == row && cell.column() == c && cell.rowSpan() == 1) {
+            cells.append(cell);
         }
-        cells.append(cell);
-        QTextTableCellFormat f = cell.format().toTableCellFormat();
-        if (const qreal pad = f.doubleProperty(kRowPad); pad > 0) {
-            f.setBottomPadding(qMax<qreal>(0, f.bottomPadding() - pad));
-            f.clearProperty(kRowPad);
-            QTextTableCell(cell).setFormat(f);
-        }
+    }
+    return cells;
+}
+
+struct CellPad {
+    QTextTableCell cell;
+    qreal pad = 0;
+};
+
+// What each cell of `row` is to be padded by for its Word height
+// (kRowHeight): the first cell takes what it lacks itself when the row is
+// short of the height — not what the tallest cell lacks, or a short first
+// cell would leave the row short — and the others nothing. The heights are
+// measured without the pads already there, so they need not come off first.
+QList<CellPad> rowPads(const QTextTable *table, int row)
+{
+    QList<CellPad> pads;
+    const QList<QTextTableCell> cells = ownCells(table, row);
+    for (const QTextTableCell &cell : cells) {
+        pads.append({cell, 0});
     }
     const QTextTableCell anchor = rowAnchor(table, row);
     const qreal wanted = anchor.isValid() ? anchor.format().doubleProperty(kRowHeight) : 0;
     if (wanted <= 0 || cells.isEmpty()) {
-        return;
+        return pads;
     }
-    layOut(table);
     qreal tallest = 0;
-    for (const QTextTableCell &cell : std::as_const(cells)) {
+    for (const QTextTableCell &cell : cells) {
         const qreal h = contentHeight(cell);
         if (h < 0) {
-            return; // a nested table decides for itself
+            return pads; // a nested table decides for itself
         }
         tallest = qMax(tallest, h);
     }
     if (tallest < wanted - 0.5) {
-        QTextTableCellFormat f = cells.first().format().toTableCellFormat();
-        f.setBottomPadding(f.bottomPadding() + wanted - tallest);
-        f.setProperty(kRowPad, wanted - tallest);
-        QTextTableCell(cells.first()).setFormat(f);
+        pads.first().pad = wanted - contentHeight(cells.first());
     }
+    return pads;
+}
+
+// Sets the pads in one edit block (one relayout), touching only the cells
+// whose format changes.
+void applyPads(QTextDocument *document, const QList<CellPad> &pads)
+{
+    QTextCursor block(document);
+    block.beginEditBlock();
+    for (const CellPad &p : pads) {
+        const QTextTableCellFormat now = p.cell.format().toTableCellFormat();
+        QTextTableCellFormat f = now;
+        setRowPad(f, p.pad);
+        if (f != now) {
+            QTextTableCell(p.cell).setFormat(f);
+        }
+    }
+    block.endEditBlock();
+}
+
+void collectTables(QTextFrame *frame, QList<QTextTable *> &tables)
+{
+    for (QTextFrame *child : frame->childFrames()) {
+        if (auto *table = qobject_cast<QTextTable *>(child)) {
+            tables.append(table);
+        }
+        collectTables(child, tables);
+    }
+}
+
+} // namespace
+
+// AGENT-GUARD: every pad is measured before any is set. Qt lays new text
+// out only when the outermost edit block ends, so measuring rows filled in
+// the same edit block reads empty layouts and over-pads them (a label sheet
+// spilled onto a second page that way): callers that fill rows inside an
+// edit block refresh after it ends, joined to it (write_envelopes.cpp).
+void refreshRowHeight(QTextTable *table, int row)
+{
+    layOut(table);
+    applyPads(table->document(), rowPads(table, row));
+}
+
+void refreshRowHeights(QTextTable *table)
+{
+    layOut(table);
+    QList<CellPad> pads;
+    for (int r = 0; r < table->rows(); ++r) {
+        pads += rowPads(table, r);
+    }
+    applyPads(table->document(), pads);
+}
+
+void refreshRowHeights(QTextDocument *document)
+{
+    QList<QTextTable *> tables;
+    collectTables(document->rootFrame(), tables);
+    if (tables.isEmpty()) {
+        return;
+    }
+    static_cast<void>(document->documentLayout()->documentSize());
+    QList<CellPad> pads;
+    for (const QTextTable *table : std::as_const(tables)) {
+        for (int r = 0; r < table->rows(); ++r) {
+            pads += rowPads(table, r);
+        }
+    }
+    applyPads(document, pads);
 }
 
 } // namespace QindaOffice::Docx

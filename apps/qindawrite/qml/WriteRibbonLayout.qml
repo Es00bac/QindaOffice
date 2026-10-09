@@ -2,10 +2,11 @@
 import QtQuick
 import QindaOffice.Shell
 
-// QindaWrite's ribbon (D-041): File · Home · Insert · Layout · Review ·
-// View, plus the contextual Table Design and Table Layout tabs while the
-// cursor is in a table (M70, D-079: Word's shading, borders and pen, cell
-// size, alignment, data and properties). Every string is an ActionEntry id
+// QindaWrite's ribbon (D-041): File · Home · Insert · Layout · References ·
+// Mailings · Review · View, plus the contextual Table Design and Table
+// Layout tabs while the cursor is in a table (M70, D-079: Word's shading,
+// borders and pen, cell size, alignment, data and properties) and Picture
+// Format while a picture is selected (M77, D-086: Wrap Text, Position). Every string is an ActionEntry id
 // (AGENTS.md rule 5); icons given here only fill in for entries whose menu
 // rows carry none. The slots are the window's font, size and colour
 // widgets, and the border pen and shading pickers.
@@ -18,6 +19,7 @@ QtObject {
     property Component penStyleSlot: null
     property Component penWidthSlot: null
     property Component penColorSlot: null
+    property Component recordSlot: null
 
     readonly property var borderIds: ["writeBordersBottomAction", "writeBordersTopAction", "writeBordersLeftAction",
                                       "writeBordersRightAction", "|", "writeBordersNoneAction", "writeBordersAllAction",
@@ -40,6 +42,21 @@ QtObject {
                                           "writeListLevel3", "writeListLevel4", "writeListLevel5", "writeListLevel6",
                                           "writeListLevel7", "writeListLevel8", "writeListLevel9", "|",
                                           "writeAdjustListIndentsAction"]
+
+    // Word's Mailings (M77, D-086).
+    readonly property var mergeKindIds: ["writeMergeLettersAction", "writeMergeEmailAction", "writeMergeEnvelopesAction",
+                                         "writeMergeLabelsAction", "writeMergeDirectoryAction", "|", "writeMergeNormalAction"]
+    readonly property var mergeFieldIds: ["writeMergeField0", "writeMergeField1", "writeMergeField2", "writeMergeField3",
+                                          "writeMergeField4", "writeMergeField5", "writeMergeField6", "writeMergeField7",
+                                          "writeMergeField8", "writeMergeField9", "writeMergeField10", "writeMergeField11",
+                                          "writeMergeField12", "writeMergeField13", "writeMergeField14", "writeMergeField15",
+                                          "writeMergeField16", "writeMergeField17", "writeMergeField18", "writeMergeField19"]
+    readonly property var mergeRuleIds: ["writeMergeRuleIfAction", "writeMergeRuleSkipIfAction", "writeMergeRuleNextAction",
+                                         "writeMergeRuleNextIfAction", "writeMergeRuleRecordAction", "writeMergeRuleSequenceAction"]
+    readonly property var wrapIds: ["writeWrapInlineAction", "|", "writeWrapSquareAction", "writeWrapTightAction",
+                                    "writeWrapThroughAction", "writeWrapTopBottomAction", "writeWrapBehindAction",
+                                    "writeWrapFrontAction", "|", "writeMoveWithTextAction", "writeFixPositionAction", "|",
+                                    "writePictureLayoutAction"]
 
     readonly property var aiIds: ["writeAirewrite", "writeAishorten", "writeAiexpand", "writeAigrammar",
                                   "writeAisummarize", "writeAicontinue", "writeAiexplain"]
@@ -130,7 +147,51 @@ QtObject {
                 { action: "writeParagraphAction", size: "large", iconName: "pilcrow" },
                 { action: "writeTabsAction", iconName: "ruler" },
                 { action: "writeBordersShadingAction", iconName: "sliders-horizontal" },
-                { action: "writeNoShadingAction", iconName: "eraser" }] }
+                { action: "writeNoShadingAction", iconName: "eraser" }] },
+            { id: "arrange", label: qsTr("Arrange"), items: [
+                { id: "wrapTextLayout", label: qsTr("Wrap Text"), iconName: "wrap-text", menu: wrapIds },
+                { action: "writePictureLayoutAction", iconName: "move" }] }
+        ] },
+        { id: "references", label: qsTr("References"), keyTip: "S", groups: [
+            { id: "tableOfContents", label: qsTr("Table of Contents"), items: [
+                { action: "insertTocAction", size: "large", iconName: "list-tree" },
+                { action: "updateTocAction", iconName: "refresh-cw" }] },
+            { id: "footnotes", label: qsTr("Footnotes"), items: [
+                { action: "insertFootnoteAction", size: "large" },
+                { action: "writeInsertEndnoteAction", iconName: "notebook-pen" },
+                { action: "writeNoteOptionsAction", iconName: "settings-2" },
+                { action: "writeConvertNotesAction", iconName: "arrow-left-right" }] }
+        ] },
+        { id: "mailings", label: qsTr("Mailings"), keyTip: "M", groups: [
+            { id: "mergeCreate", label: qsTr("Create"), items: [
+                { action: "writeEnvelopesAction", size: "large", iconName: "mail" },
+                { action: "writeLabelsAction", iconName: "tag" }] },
+            { id: "mergeStart", label: qsTr("Start Mail Merge"), items: [
+                { id: "startMailMerge", label: qsTr("Start Mail Merge"), iconName: "mails", size: "large", menu: mergeKindIds },
+                { id: "selectRecipients", label: qsTr("Select Recipients"), iconName: "users",
+                  menu: ["writeMergeNewListAction", "writeMergeExistingListAction", "writeMergePeopleAction"] },
+                { action: "writeMergeEditRecipientsAction", iconName: "list-checks" }] },
+            { id: "mergeFields", label: qsTr("Write & Insert Fields"), items: [
+                { action: "writeMergeHighlightAction", iconName: "highlighter" },
+                { action: "writeMergeAddressBlockAction", size: "large", iconName: "book-user" },
+                { action: "writeMergeGreetingLineAction", iconName: "handshake" },
+                { action: "writeMergeInsertFieldAction", iconName: "braces", split: true, menu: mergeFieldIds },
+                { id: "mergeRules", label: qsTr("Rules"), iconName: "workflow", menu: mergeRuleIds },
+                { action: "writeMergeMatchFieldsAction", iconName: "link-2" },
+                { action: "writeMergeUpdateLabelsAction", iconName: "refresh-cw" }] },
+            { id: "mergePreview", label: qsTr("Preview Results"), rows: [
+                [{ action: "writeMergePreviewAction", iconName: "eye" },
+                 { action: "writeMergeFindAction", size: "icon", iconName: "search" },
+                 { action: "writeMergeCheckAction", size: "icon", iconName: "circle-check" }],
+                [{ action: "writeMergeFirstAction", size: "icon", iconName: "chevrons-left" },
+                 { action: "writeMergePreviousAction", size: "icon", iconName: "chevron-left" },
+                 { id: "mergeRecord", component: recordSlot },
+                 { action: "writeMergeNextAction", size: "icon", iconName: "chevron-right" },
+                 { action: "writeMergeLastAction", size: "icon", iconName: "chevrons-right" }]] },
+            { id: "mergeFinish", label: qsTr("Finish"), items: [
+                { id: "finishMerge", label: qsTr("Finish && Merge"), iconName: "merge", size: "large",
+                  menu: ["writeMergeEditDocumentsAction", "writeMergePrintAction", "writeMergePdfAction",
+                         "writeMergeEmailSendAction"] }] }
         ] },
         { id: "review", label: qsTr("Review"), keyTip: "R", groups: [
             { id: "proofing", label: qsTr("Proofing"), items: [
@@ -154,6 +215,15 @@ QtObject {
             { action: "writeNavigationPaneAction", size: "large", iconName: "navigation" },
             { action: "writeStylesPaneAction", iconName: "palette" },
             { action: "writeShowCommentsAction", iconName: "message-square" }] }]),
+        { id: "pictureFormat", label: qsTr("Picture Format"), keyTip: "JP", contextId: "picture", groups: [
+            { id: "pictureArrange", label: qsTr("Arrange"), items: [
+                { id: "wrapText", label: qsTr("Wrap Text"), iconName: "wrap-text", size: "large", menu: wrapIds },
+                { action: "writePictureLayoutAction", iconName: "move" },
+                { action: "writeMoveWithTextAction", iconName: "move-vertical" },
+                { action: "writeFixPositionAction", iconName: "pin" }] },
+            { id: "pictureSize", label: qsTr("Size"), items: [
+                { action: "writePictureAction", size: "large", iconName: "image" }] }
+        ] },
         { id: "tableDesign", label: qsTr("Table Design"), keyTip: "JT", contextId: "table", groups: [
             { id: "tableShading", label: qsTr("Shading"), items: [
                 { id: "shading", component: shadingSlot },

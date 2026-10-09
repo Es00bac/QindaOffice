@@ -27,13 +27,33 @@ const QString kTypePrefix = QStringLiteral("application/vnd.openxmlformats-offic
 
 QString type(const char *suffix)
 {
+    return detail::wordprocessingType(suffix);
+}
+
+XmlElementPtr sourceXml(const Ooxml::Package &package, const QString &main, const char16_t *relType, QString *part)
+{
+    const auto rel = package.firstOfType(main, QString::fromUtf16(relType));
+    if (!rel) {
+        return nullptr;
+    }
+    *part = package.targetPart(main, *rel);
+    return part->isEmpty() ? nullptr : package.xml(*part);
+}
+
+} // namespace
+
+namespace detail {
+
+QString wordprocessingType(const char *suffix)
+{
     return kTypePrefix + QString::fromLatin1(suffix);
 }
 
-// Microsoft extension vocabularies Word itself marks ignorable.
-const QStringList &ignorableExtensions()
+// Declares every Microsoft extension namespace the part uses as
+// mc:Ignorable on its root, as Word does.
+void markIgnorable(XmlElement &root)
 {
-    static const QStringList list{
+    static const QStringList kExtensions{
         QString::fromUtf16(Ooxml::Ns::W14), QString::fromUtf16(Ooxml::Ns::W15), QString::fromUtf16(Ooxml::Ns::WP14),
         QStringLiteral("http://schemas.microsoft.com/office/word/2015/wordml/symex"),
         QStringLiteral("http://schemas.microsoft.com/office/word/2016/wordml/cid"),
@@ -41,13 +61,6 @@ const QStringList &ignorableExtensions()
         QStringLiteral("http://schemas.microsoft.com/office/word/2018/wordml/cex"),
         QStringLiteral("http://schemas.microsoft.com/office/word/2020/wordml/sdtdatahash"),
         QStringLiteral("http://schemas.microsoft.com/office/word/2023/wordml/word16du")};
-    return list;
-}
-
-// Declares every Microsoft extension namespace the part uses as
-// mc:Ignorable on its root, as Word does.
-void markIgnorable(XmlElement &root)
-{
     QSet<QString> used;
     std::function<void(const XmlElement &)> walk = [&](const XmlElement &e) {
         used.insert(e.ns);
@@ -62,7 +75,7 @@ void markIgnorable(XmlElement &root)
     };
     walk(root);
     QStringList tokens;
-    for (const QString &uri : ignorableExtensions()) {
+    for (const QString &uri : kExtensions) {
         if (used.contains(uri)) {
             tokens.append(QLatin1Char('{') + uri + QLatin1Char('}'));
         }
@@ -73,91 +86,9 @@ void markIgnorable(XmlElement &root)
     }
 }
 
-XmlElementPtr sourceXml(const Ooxml::Package &package, const QString &main, const char16_t *relType, QString *part)
-{
-    const auto rel = package.firstOfType(main, QString::fromUtf16(relType));
-    if (!rel) {
-        return nullptr;
-    }
-    *part = package.targetPart(main, *rel);
-    return part->isEmpty() ? nullptr : package.xml(*part);
-}
+} // namespace detail
 
-const QStringList &settingsOrder()
-{
-    // CT_Settings sequence (ECMA-376 Part 1 §17.15.1.78), abridged to the
-    // elements Word writes; unknown ones keep their place.
-    static const QStringList order{
-        QStringLiteral("writeProtection"), QStringLiteral("view"), QStringLiteral("zoom"),
-        QStringLiteral("removePersonalInformation"), QStringLiteral("removeDateAndTime"),
-        QStringLiteral("doNotDisplayPageBoundaries"), QStringLiteral("displayBackgroundShape"),
-        QStringLiteral("embedTrueTypeFonts"), QStringLiteral("embedSystemFonts"), QStringLiteral("saveSubsetFonts"),
-        QStringLiteral("mirrorMargins"), QStringLiteral("gutterAtTop"), QStringLiteral("hideSpellingErrors"),
-        QStringLiteral("hideGrammaticalErrors"), QStringLiteral("activeWritingStyle"), QStringLiteral("proofState"),
-        QStringLiteral("formsDesign"), QStringLiteral("attachedTemplate"), QStringLiteral("linkStyles"),
-        QStringLiteral("stylePaneFormatFilter"), QStringLiteral("stylePaneSortMethod"), QStringLiteral("documentType"),
-        QStringLiteral("mailMerge"), QStringLiteral("revisionView"), QStringLiteral("trackRevisions"),
-        QStringLiteral("doNotTrackMoves"), QStringLiteral("doNotTrackFormatting"), QStringLiteral("documentProtection"),
-        QStringLiteral("autoFormatOverride"), QStringLiteral("styleLockTheme"), QStringLiteral("styleLockQFSet"),
-        QStringLiteral("defaultTabStop"), QStringLiteral("autoHyphenation"), QStringLiteral("consecutiveHyphenLimit"),
-        QStringLiteral("hyphenationZone"), QStringLiteral("doNotHyphenateCaps"), QStringLiteral("showEnvelope"),
-        QStringLiteral("summaryLength"), QStringLiteral("clickAndTypeStyle"), QStringLiteral("defaultTableStyle"),
-        QStringLiteral("evenAndOddHeaders"), QStringLiteral("bookFoldRevPrinting"), QStringLiteral("bookFoldPrinting"),
-        QStringLiteral("bookFoldPrintingSheets"), QStringLiteral("drawingGridHorizontalSpacing"),
-        QStringLiteral("drawingGridVerticalSpacing"), QStringLiteral("displayHorizontalDrawingGridEvery"),
-        QStringLiteral("displayVerticalDrawingGridEvery"), QStringLiteral("doNotUseMarginsForDrawingGridOrigin"),
-        QStringLiteral("drawingGridHorizontalOrigin"), QStringLiteral("drawingGridVerticalOrigin"),
-        QStringLiteral("doNotShadeFormData"), QStringLiteral("noPunctuationKerning"),
-        QStringLiteral("characterSpacingControl"), QStringLiteral("printTwoOnOne"),
-        QStringLiteral("strictFirstAndLastChars"), QStringLiteral("noLineBreaksAfter"),
-        QStringLiteral("noLineBreaksBefore"), QStringLiteral("savePreviewPicture"),
-        QStringLiteral("doNotValidateAgainstSchema"), QStringLiteral("saveInvalidXml"),
-        QStringLiteral("ignoreMixedContent"), QStringLiteral("alwaysShowPlaceholderText"),
-        QStringLiteral("doNotDemarcateInvalidXml"), QStringLiteral("saveXmlDataOnly"),
-        QStringLiteral("useXSLTWhenSaving"), QStringLiteral("saveThroughXslt"), QStringLiteral("showXMLTags"),
-        QStringLiteral("alwaysMergeEmptyNamespace"), QStringLiteral("updateFields"),
-        QStringLiteral("hdrShapeDefaults"), QStringLiteral("footnotePr"), QStringLiteral("endnotePr"),
-        QStringLiteral("compat"), QStringLiteral("docVars"), QStringLiteral("rsids"), QStringLiteral("mathPr"),
-        QStringLiteral("attachedSchema"), QStringLiteral("themeFontLang"), QStringLiteral("clrSchemeMapping"),
-        QStringLiteral("doNotIncludeSubdocsInStats"), QStringLiteral("doNotAutoCompressPictures"),
-        QStringLiteral("forceUpgrade"), QStringLiteral("captions"), QStringLiteral("readModeInkLockDown"),
-        QStringLiteral("smartTagType"), QStringLiteral("schemaLibrary"), QStringLiteral("shapeDefaults"),
-        QStringLiteral("doNotEmbedSmartTags"), QStringLiteral("decimalSymbol"), QStringLiteral("listSeparator")};
-    return order;
-}
-
-void sortSettings(XmlElement &settings)
-{
-    const QStringList &order = settingsOrder();
-    QList<std::pair<qsizetype, Ooxml::XmlChild>> ranked;
-    qsizetype last = -1;
-    for (const Ooxml::XmlChild &c : std::as_const(settings.children)) {
-        const qsizetype at = c.element && c.element->ns == kW ? order.indexOf(c.element->name) : -1;
-        last = at >= 0 ? at : last;
-        ranked.append({at >= 0 ? at : last, c});
-    }
-    std::stable_sort(ranked.begin(), ranked.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
-    settings.children.clear();
-    for (const auto &entry : ranked) {
-        settings.children.append(entry.second);
-    }
-}
-
-XmlElementPtr separatorNote(const QString &kind, const QString &id)
-{
-    auto note = std::make_shared<XmlElement>(kW, QStringLiteral("footnote"));
-    note->setAttribute(kW, QStringLiteral("type"), kind);
-    note->setAttribute(kW, QStringLiteral("id"), id);
-    XmlElement &p = note->appendElement(kW, QStringLiteral("p"));
-    XmlElement &spacing = p.appendElement(kW, QStringLiteral("pPr")).appendElement(kW, QStringLiteral("spacing"));
-    spacing.setAttribute(kW, QStringLiteral("after"), QStringLiteral("0"));
-    spacing.setAttribute(kW, QStringLiteral("line"), QStringLiteral("240"));
-    spacing.setAttribute(kW, QStringLiteral("lineRule"), QStringLiteral("auto"));
-    p.appendElement(kW, QStringLiteral("r")).appendElement(kW, kind);
-    return note;
-}
-
-} // namespace
+using detail::markIgnorable;
 
 QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const WriteOptions &options, QString *error)
 {
@@ -178,6 +109,9 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
         sourceSettings = sourceXml(*source, env.sourceMain, Ooxml::RelType::Settings, &sourceSettingsPart);
         if (const auto rel = source->firstOfType(env.sourceMain, QString::fromUtf16(Ooxml::RelType::Footnotes))) {
             env.sourceFootnotesPart = source->targetPart(env.sourceMain, *rel);
+        }
+        if (const auto rel = source->firstOfType(env.sourceMain, QString::fromUtf16(Ooxml::RelType::Endnotes))) {
+            env.sourceEndnotesPart = source->targetPart(env.sourceMain, *rel);
         }
     }
     if (parts.styles) {
@@ -229,6 +163,19 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
             }
         }
     }
+    // A paragraph-level section whose page is not the document's as read
+    // has a page of its own (an envelope before a letter, a label sheet,
+    // M77): a new page layout leaves it alone.
+    bool closingSection = false;
+    auto ownPage = [&](const XmlElement &sectPr) {
+        const XmlElement *size = sectPr.child(kW, u"pgSz");
+        if (closingSection || size == nullptr) {
+            return false;
+        }
+        const qreal w = Ooxml::Units::twipsToPx(Ooxml::Units::parseTwips(wAttr(size, u"w"), 0));
+        const qreal h = Ooxml::Units::twipsToPx(Ooxml::Units::parseTwips(wAttr(size, u"h"), 0));
+        return qAbs(w - parts.importedLayout.pageSize.width()) > 1 || qAbs(h - parts.importedLayout.pageSize.height()) > 1;
+    };
     env.sectionHook = [&](XmlElement &sectPr, const QString &part) {
         if (env.copier) {
             if (env.headersChanged) {
@@ -251,14 +198,18 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
                 sectPr.appendElement(kW, QStringLiteral("titlePg"));
             }
         }
-        if (env.layoutChanged) {
+        if (env.layoutChanged && !ownPage(sectPr)) {
             const PageLayout &l = parts.layout;
             XmlElement &size = detail::wChild(sectPr, QStringLiteral("pgSz"));
+            const QString code = size.attribute(kW, u"code");
             size.attributes.clear();
             size.setAttribute(kW, QStringLiteral("w"), detail::twips(l.pageSize.width()));
             size.setAttribute(kW, QStringLiteral("h"), detail::twips(l.pageSize.height()));
             if (l.landscape()) {
                 size.setAttribute(kW, QStringLiteral("orient"), QStringLiteral("landscape"));
+            }
+            if (!code.isEmpty() && l.pageSize == parts.importedLayout.pageSize) {
+                size.setAttribute(kW, QStringLiteral("code"), code);
             }
             XmlElement &margin = detail::wChild(sectPr, QStringLiteral("pgMar"));
             margin.attributes.clear();
@@ -270,12 +221,14 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
             margin.setAttribute(kW, QStringLiteral("footer"), detail::twips(l.footerDistance));
             margin.setAttribute(kW, QStringLiteral("gutter"), detail::twips(l.gutter));
         }
+        detail::patchSectionNoteOptions(parts, sectPr, closingSection);
         detail::sortChildren(sectPr);
     };
 
     // The body.
     XmlElement document(kW, QStringLiteral("document"));
     XmlElement &bodyElement = document.appendElement(kW, QStringLiteral("body"));
+    detail::prepareEndnotes(env, body);
     detail::BodyWriter bodyWriter(env, &body, kMain);
     bodyWriter.writeFrame(body.rootFrame(), bodyElement);
     bodyWriter.closeComments(bodyElement);
@@ -287,51 +240,12 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
         sectPr->appendElement(kW, QStringLiteral("docGrid"))
             .setAttribute(kW, QStringLiteral("linePitch"), QStringLiteral("360"));
     }
+    closingSection = true;
     env.sectionHook(*sectPr, kMain);
     bodyElement.appendElement(sectPr);
 
-    // Footnotes the body references, in reference order.
-    bool wroteFootnotes = false;
-    if (!env.footnoteOrder.isEmpty()) {
-        XmlElement notes(kW, QStringLiteral("footnotes"));
-        notes.appendElement(separatorNote(QStringLiteral("separator"), QStringLiteral("-1")));
-        notes.appendElement(separatorNote(QStringLiteral("continuationSeparator"), QStringLiteral("0")));
-        for (const QString &noteId : std::as_const(env.footnoteOrder)) {
-            const QString id = QString::number(env.footnoteIds.value(noteId));
-            const QString text = parts.footnotes.value(noteId);
-            XmlElementPtr preserved = parts.footnoteImportedText.contains(noteId)
-                    && parts.footnoteImportedText.value(noteId) == text
-                ? Ooxml::parseFragment(parts.footnoteXml.value(noteId))
-                : nullptr;
-            if (preserved) {
-                preserved->setAttribute(kW, QStringLiteral("id"), id);
-                if (env.copier) {
-                    env.copier->rewrite(*preserved, env.sourceFootnotesPart, QStringLiteral("word/footnotes.xml"));
-                }
-                notes.appendElement(preserved);
-                continue;
-            }
-            XmlElement &note = notes.appendElement(kW, QStringLiteral("footnote"));
-            note.setAttribute(kW, QStringLiteral("id"), id);
-            XmlElement &p = note.appendElement(kW, QStringLiteral("p"));
-            detail::setChildVal(p.appendElement(kW, QStringLiteral("pPr")), QStringLiteral("pStyle"),
-                                QStringLiteral("FootnoteText"));
-            XmlElement &ref = p.appendElement(kW, QStringLiteral("r"));
-            detail::setChildVal(ref.appendElement(kW, QStringLiteral("rPr")), QStringLiteral("rStyle"),
-                                QStringLiteral("FootnoteReference"));
-            ref.appendElement(kW, QStringLiteral("footnoteRef"));
-            XmlElement &t = p.appendElement(kW, QStringLiteral("r")).appendElement(kW, QStringLiteral("t"));
-            t.setAttribute(QString::fromUtf16(Ooxml::Ns::XML), QStringLiteral("space"), QStringLiteral("preserve"));
-            t.appendText(QLatin1Char(' ') + text);
-            env.usedStyles.insert(QStringLiteral("FootnoteText"));
-            env.usedStyles.insert(QStringLiteral("FootnoteReference"));
-        }
-        markIgnorable(notes);
-        env.writer.addXmlPart(QStringLiteral("word/footnotes.xml"), notes, type("footnotes+xml"));
-        env.writer.addRelationship(kMain, QString::fromUtf16(Ooxml::RelType::Footnotes),
-                                   QStringLiteral("word/footnotes.xml"));
-        wroteFootnotes = true;
-    }
+    // Footnotes and endnotes the body references (docx_writer_notes.cpp).
+    const detail::NotesWritten notes = detail::writeNotes(env);
 
     // Comments (docx_comments.h): while none changed, the source's comment
     // parts are carried below byte for byte; otherwise they are written from
@@ -370,12 +284,10 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
     }
 
     // Parts carried over verbatim from the source document.
-    bool carriedEndnotes = false;
     if (source && env.copier) {
         static const QStringList kCarry{
             QString::fromUtf16(Ooxml::RelType::Theme), QString::fromUtf16(Ooxml::RelType::FontTable),
-            QString::fromUtf16(Ooxml::RelType::WebSettings), QString::fromUtf16(Ooxml::RelType::Endnotes),
-            QString::fromUtf16(Ooxml::RelType::Comments),
+            QString::fromUtf16(Ooxml::RelType::WebSettings), QString::fromUtf16(Ooxml::RelType::Comments),
             QStringLiteral("http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml"),
             QStringLiteral("http://schemas.openxmlformats.org/officeDocument/2006/relationships/glossaryDocument"),
             QStringLiteral("http://schemas.microsoft.com/office/2007/relationships/stylesWithEffects"),
@@ -402,7 +314,6 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
                 continue;
             }
             env.writer.addRelationship(kMain, rel.type, env.copier->copyPart(target));
-            carriedEndnotes = carriedEndnotes || rel.type == QString::fromUtf16(Ooxml::RelType::Endnotes);
         }
         for (const Ooxml::Relationship &rel : source->relationships(QString())) {
             if (!rel.external && rel.type.endsWith(u"/custom-properties")) {
@@ -424,42 +335,7 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
     }
 
     // Settings: the source's, kept consistent with what was written.
-    XmlElementPtr settings = sourceSettings ? sourceSettings->clone() : nullptr;
-    if (!settings) {
-        settings = std::make_shared<XmlElement>(kW, QStringLiteral("settings"));
-        settings->appendElement(kW, QStringLiteral("zoom")).setAttribute(kW, QStringLiteral("percent"), QStringLiteral("100"));
-        detail::setChildVal(*settings, QStringLiteral("defaultTabStop"), detail::twips(parts.defaultTabStop));
-        detail::setChildVal(*settings, QStringLiteral("characterSpacingControl"), QStringLiteral("doNotCompress"));
-        XmlElement &compat = settings->appendElement(kW, QStringLiteral("compat"));
-        XmlElement &mode = compat.appendElement(kW, QStringLiteral("compatSetting"));
-        mode.setAttribute(kW, QStringLiteral("name"), QStringLiteral("compatibilityMode"));
-        mode.setAttribute(kW, QStringLiteral("uri"), QStringLiteral("http://schemas.microsoft.com/office/word"));
-        mode.setAttribute(kW, QStringLiteral("val"), QStringLiteral("15"));
-    } else if (env.copier) {
-        env.copier->rewrite(*settings, sourceSettingsPart, QStringLiteral("word/settings.xml"));
-    }
-    // Format ▸ Tabs ▸ Default tab stops (M70): kept as read unless changed.
-    if (const QString tab = childVal(settings.get(), u"defaultTabStop");
-        tab.isEmpty() || qAbs(Ooxml::Units::twipsToPx(Ooxml::Units::parseTwips(tab, 720)) - parts.defaultTabStop) > 0.5) {
-        detail::setChildVal(*settings, QStringLiteral("defaultTabStop"), detail::twips(parts.defaultTabStop));
-    }
-    settings->removeChildren(kW, u"footnotePr");
-    if (wroteFootnotes) {
-        XmlElement &pr = settings->appendElement(kW, QStringLiteral("footnotePr"));
-        pr.appendElement(kW, QStringLiteral("footnote")).setAttribute(kW, QStringLiteral("id"), QStringLiteral("-1"));
-        pr.appendElement(kW, QStringLiteral("footnote")).setAttribute(kW, QStringLiteral("id"), QStringLiteral("0"));
-    }
-    if (!carriedEndnotes) {
-        settings->removeChildren(kW, u"endnotePr");
-    }
-    settings->removeChildren(kW, u"evenAndOddHeaders");
-    if (parts.differentOddEven) {
-        settings->appendElement(kW, QStringLiteral("evenAndOddHeaders"));
-    }
-    sortSettings(*settings);
-    markIgnorable(*settings);
-    env.writer.addXmlPart(QStringLiteral("word/settings.xml"), *settings, type("settings+xml"));
-    env.writer.addRelationship(kMain, QString::fromUtf16(Ooxml::RelType::Settings), QStringLiteral("word/settings.xml"));
+    detail::writeSettings(env, sourceSettings, sourceSettingsPart, notes);
 
     markIgnorable(document);
     static const char *kMainTypes[] = {

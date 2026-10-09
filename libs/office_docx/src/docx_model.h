@@ -12,6 +12,8 @@
 // Ownership: WordParts owns its header/footer QTextDocuments and is
 // move-only. Threading: GUI thread, like the body document.
 
+#include "docx_mailmerge.h"
+#include "docx_notes.h"
 #include "ooxml_package.h"
 #include "ooxml_properties.h"
 
@@ -124,6 +126,25 @@ struct WordParts {
     QHash<QString, QString> footnotes;
     QHash<QString, QString> footnoteXml;
     QHash<QString, QString> footnoteImportedText;
+    // Endnotes, the same way (M77, D-086): texts by the id on the reference
+    // mark (kEndnoteIdProperty), each read note's own w:endnote and text.
+    // While the notes the body references are exactly the ones read, with
+    // their text unchanged, endnotes.xml is copied byte for byte.
+    QHash<QString, QString> endnotes;
+    QHash<QString, QString> endnoteXml;
+    QHash<QString, QString> endnoteImportedText;
+    // Footnote and endnote options (Word's Footnote and Endnote dialog) and
+    // what was read: written to settings.xml and the sections when changed.
+    NoteOptions footnoteOptions;
+    NoteOptions endnoteOptions;
+    NoteOptions importedFootnoteOptions;
+    NoteOptions importedEndnoteOptions;
+
+    // Mail merge (M77, D-086, docx_mailmerge.h): the merge settings and
+    // what the source said; the source's own w:mailMerge is kept while they
+    // are equal.
+    MailMergeSettings mailMerge;
+    MailMergeSettings importedMailMerge;
 
     // Comments in reading order; the set read from the source is copied
     // back unchanged unless one was added, edited, resolved or removed.
@@ -171,5 +192,16 @@ struct WordParts {
     [[nodiscard]] const HeaderFooter &header(HeaderFooterSlot slot) const { return headers[size_t(slot)]; }
     [[nodiscard]] const HeaderFooter &footer(HeaderFooterSlot slot) const { return footers[size_t(slot)]; }
 };
+
+// A copy of `parts` for another document made from this one (a merged
+// document, M77): the same layout, styles, notes, comments, controls,
+// pictures and source package, the headers and footers cloned
+// (docx_parts.cpp). Merge settings are left behind: a merged document is
+// an ordinary one.
+[[nodiscard]] WordParts cloneWordParts(const WordParts &parts);
+// The w:sectPr that ends a section of this document: the source's own
+// closing one, or one made from the page layout (a merged record's
+// section break, M77).
+[[nodiscard]] QString sectionPropertiesXml(const WordParts &parts);
 
 } // namespace QindaOffice::Docx

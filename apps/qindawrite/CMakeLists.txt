@@ -4,6 +4,25 @@
 # STATIC library with the app's QML module (URI QindaOffice.Write) so the
 # tests instantiate the real window; the executable is main.cpp over it.
 set(qindawrite_qml
+    qml/AddressBlockDialog.qml
+    qml/ConvertNotesDialog.qml
+    qml/DuplicatesDialog.qml
+    qml/EmailMergeDialog.qml
+    qml/EnvelopesDialog.qml
+    qml/FilterSortDialog.qml
+    qml/FindRecipientDialog.qml
+    qml/FinishMergeDialog.qml
+    qml/GreetingLineDialog.qml
+    qml/InsertMergeFieldDialog.qml
+    qml/LabelsDialog.qml
+    qml/MatchFieldsDialog.qml
+    qml/MergeRuleDialog.qml
+    qml/NewListDialog.qml
+    qml/NoteOptionsDialog.qml
+    qml/PeopleDialog.qml
+    qml/PictureLayoutDialog.qml
+    qml/RecipientListDialog.qml
+    qml/SelectTableDialog.qml
     qml/BordersShadingDialog.qml
     qml/DefineBulletDialog.qml
     qml/DefineMultilevelDialog.qml
@@ -55,7 +74,7 @@ qt_add_qml_module(qindawrite_app
         src/page_text_accessible.cpp src/page_text_accessible.h
         src/page_text_control.cpp src/page_text_control.h
         src/page_text_control_clipboard.cpp
-        src/page_text_item.cpp src/page_text_item.h
+        src/page_text_item.cpp src/page_text_item.h src/page_text_paint.cpp
         src/pdf_exporter.cpp src/pdf_exporter.h
         src/spell_checker.cpp src/spell_checker.h
         src/style_catalog.cpp src/style_catalog.h
@@ -73,7 +92,13 @@ qt_add_qml_module(qindawrite_app
         src/write_selection.h
         src/write_actions.cpp src/write_actions.h
         src/write_document.cpp src/write_document.h
-        src/write_document_io.cpp
+        src/write_document_io.cpp src/write_document_notes.cpp
+        src/write_endnotes.cpp src/write_endnotes.h
+        src/write_envelopes.cpp src/write_envelopes.h
+        src/write_float.cpp src/write_float.h
+        src/write_mailmerge.cpp src/write_mailmerge.h src/write_mailmerge_fields.cpp src/write_mailmerge_finish.cpp
+        src/write_merge_sources.cpp src/write_merge_sources.h
+        src/write_notes.cpp src/write_notes.h
         src/write_comments.cpp src/write_comments.h
         src/write_controls.cpp src/write_controls.h
         src/write_footnotes.cpp src/write_footnotes.h
@@ -81,6 +106,7 @@ qt_add_qml_module(qindawrite_app
         src/write_host_ai.cpp
         src/write_tools.cpp src/write_tools.h
         src/write_host_menus.cpp
+        src/write_host_m77.cpp
         src/write_host_text.cpp
         src/write_pagination.cpp src/write_pagination.h
         src/write_review_actions.cpp src/write_review_actions.h
@@ -93,8 +119,9 @@ target_include_directories(qindawrite_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
 # QuickPrivate: QAccessibleQuickItem (page_text_accessible.h) is a private
 # header, exported with the Qt_6_PRIVATE_API tag; version-locked like the
 # rest of the suite (ADR-0116).
+# calc_io (M77, D-086): a mail merge's recipients from a workbook sheet.
 target_link_libraries(qindawrite_app PUBLIC office_quick office_quickplugin office_ai office_aiplugin
-    office_docx Qt6::QuickPrivate KF6::SonnetCore)
+    office_docx calc_io Qt6::QuickPrivate KF6::SonnetCore)
 target_compile_definitions(qindawrite_app PRIVATE QT_NO_CAST_FROM_ASCII)
 qqo_set_strict_warnings(qindawrite_app)
 

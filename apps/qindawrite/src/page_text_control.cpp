@@ -27,9 +27,9 @@ namespace QindaOffice::Apps::Write {
 
 namespace {
 
-// The format typing continues in: the cursor's, without a comment mark's
-// identity — a mark is one character, and text typed after it is text
-// (docx_comments.h).
+// The format typing continues in: the cursor's, without a comment, footnote
+// or endnote mark's identity — a mark is one character (or its number), and
+// text typed after it is text (docx_comments.h, write_footnotes.h).
 QTextCharFormat typingFormat(const QTextCursor &cursor)
 {
     QTextCharFormat format = cursor.charFormat();
@@ -42,6 +42,18 @@ QTextCharFormat typingFormat(const QTextCursor &cursor)
     if (const QTextTable *table = cursor.currentTable()) {
         const QTextTableCell cell = table->cellAt(cursor);
         format = Docx::withoutCellProperties(format, cell.isValid() ? cell.format() : QTextCharFormat());
+    }
+    // Text typed after a footnote or endnote mark is text, not more of the
+    // mark (the next renumbering replaced it with the number; M77, D-086).
+    if (format.hasProperty(Docx::kFootnoteIdProperty) || format.hasProperty(Docx::kEndnoteIdProperty)) {
+        const QString style = format.stringProperty(Docx::kRunStyleId);
+        for (const int p : {Docx::kFootnoteIdProperty, Docx::kEndnoteIdProperty, int(QTextFormat::TextVerticalAlignment),
+                            Docx::kRunXml, Docx::kRunSnapshot}) {
+            format.clearProperty(p); // its identity, superscript and the reference run's markup
+        }
+        if (style == u"FootnoteReference" || style == u"EndnoteReference") {
+            format.clearProperty(Docx::kRunStyleId);
+        }
     }
     if (format.stringProperty(Docx::kRunStyleId) == u"PlaceholderText") {
         // Text typed into a form field's placeholder is its value (D-080).

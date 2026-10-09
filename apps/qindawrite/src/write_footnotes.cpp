@@ -4,8 +4,11 @@
 #include "docx_properties.h"
 
 static_assert(QindaOffice::Apps::Write::kFootnoteIdProperty == QindaOffice::Docx::kFootnoteIdProperty);
+static_assert(QindaOffice::Apps::Write::kEndnoteIdProperty == QindaOffice::Docx::kEndnoteIdProperty);
 
 #include "page_geometry.h"
+
+#include "docx_notes.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QTextBlock>
@@ -78,21 +81,71 @@ QHash<int, QStringList> footnotesByPage(const QTextDocument *document,
     return byPage;
 }
 
-QString insertFootnoteMarker(QTextCursor cursor)
+namespace {
+
+QString insertMarker(QTextCursor cursor, int property)
 {
     const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces).left(12);
     QTextCharFormat marker;
     marker.setVerticalAlignment(QTextCharFormat::AlignSuperScript);
-    marker.setProperty(kFootnoteIdProperty, id);
+    marker.setProperty(property, id);
     // The visible glyph is a placeholder: collectFootnotes owns the real
     // number, and the view re-renders it from document order.
     cursor.insertText(QStringLiteral("*"), marker);
-    // Stop the marker format bleeding into the next keystroke.
-    QTextCharFormat plain;
-    plain.setVerticalAlignment(QTextCharFormat::AlignNormal);
-    plain.clearProperty(kFootnoteIdProperty);
-    cursor.setCharFormat(plain);
+    // Typing after the mark continues plain: PageTextControl's typing format
+    // drops a note mark's identity and superscript (page_text_control.cpp).
     return id;
+}
+
+} // namespace
+
+QString insertFootnoteMarker(QTextCursor cursor)
+{
+    return insertMarker(std::move(cursor), kFootnoteIdProperty);
+}
+
+QString insertEndnoteMarker(QTextCursor cursor)
+{
+    return insertMarker(std::move(cursor), kEndnoteIdProperty);
+}
+
+QList<EndnoteRef> collectEndnotes(const QTextDocument *document, const Docx::NoteOptions &options)
+{
+    QList<EndnoteRef> refs;
+    if (document == nullptr) {
+        return refs;
+    }
+    const QString format = Docx::noteFormat(options, true);
+    int number = options.start;
+    for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+        for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it) {
+            const QTextFragment fragment = it.fragment();
+            if (fragment.isValid() && fragment.charFormat().hasProperty(kEndnoteIdProperty)) {
+                refs.append({fragment.charFormat().stringProperty(kEndnoteIdProperty),
+                             Docx::noteNumber(number++, format), fragment.position()});
+            }
+        }
+        if (options.restart == u"eachSect" && block.blockFormat().hasProperty(Docx::kSectionXml)) {
+            number = options.start;
+        }
+    }
+    return refs;
+}
+
+QString endnoteIdAt(const QTextDocument *document, int position)
+{
+    if (document == nullptr) {
+        return {};
+    }
+    const QTextBlock block = document->findBlock(position);
+    for (QTextBlock::iterator it = block.begin(); block.isValid() && !it.atEnd(); ++it) {
+        const QTextFragment fragment = it.fragment();
+        if (fragment.isValid() && fragment.charFormat().hasProperty(kEndnoteIdProperty) && position >= fragment.position()
+            && position <= fragment.position() + fragment.length()) {
+            return fragment.charFormat().stringProperty(kEndnoteIdProperty);
+        }
+    }
+    return {};
 }
 
 QString footnoteIdAt(const QTextDocument *document, int position)
@@ -121,24 +174,48 @@ QString footnoteIdAt(const QTextDocument *document, int position)
 
 void renumberFootnoteMarkers(QTextDocument *document)
 {
+    renumberNoteMarkers(document, {}, {});
+}
+
+void renumberNoteMarkers(QTextDocument *document, const Docx::NoteOptions &footnotes,
+                         const Docx::NoteOptions &endnotes)
+{
     if (document == nullptr) {
         return;
     }
     struct Marker {
         int position;
         int length;
+        int property;
         QString id;
         QString text;
+        QString wanted;
     };
     QList<Marker> markers;
+    const QString footFormat = Docx::noteFormat(footnotes, false);
+    const QString endFormat = Docx::noteFormat(endnotes, true);
+    int footNumber = footnotes.start;
+    int endNumber = endnotes.start;
     for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
         for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it) {
             const QTextFragment fragment = it.fragment();
-            if (fragment.isValid() && fragment.charFormat().hasProperty(kFootnoteIdProperty)) {
-                markers.append({fragment.position(), fragment.length(),
-                                fragment.charFormat().property(kFootnoteIdProperty).toString(),
-                                fragment.text()});
+            if (!fragment.isValid()) {
+                continue;
             }
+            const QTextCharFormat f = fragment.charFormat();
+            if (f.hasProperty(kFootnoteIdProperty)) {
+                markers.append({fragment.position(), fragment.length(), kFootnoteIdProperty,
+                                f.stringProperty(kFootnoteIdProperty), fragment.text(),
+                                Docx::noteNumber(footNumber++, footFormat)});
+            } else if (f.hasProperty(kEndnoteIdProperty)) {
+                markers.append({fragment.position(), fragment.length(), kEndnoteIdProperty,
+                                f.stringProperty(kEndnoteIdProperty), fragment.text(),
+                                Docx::noteNumber(endNumber++, endFormat)});
+            }
+        }
+        if (block.blockFormat().hasProperty(Docx::kSectionXml)) {
+            footNumber = footnotes.restart == u"eachSect" ? footnotes.start : footNumber;
+            endNumber = endnotes.restart == u"eachSect" ? endnotes.start : endNumber;
         }
     }
     QTextCursor cursor(document);
@@ -146,20 +223,62 @@ void renumberFootnoteMarkers(QTextDocument *document)
     // AGENT-GUARD: rewrite from the END backwards. Replacing a marker
     // changes the length of the text before every later position, so a
     // forward pass would edit at stale offsets after the first change.
-    for (int i = int(markers.size()) - 1; i >= 0; --i) {
+    for (qsizetype i = markers.size() - 1; i >= 0; --i) {
         const Marker &marker = markers.at(i);
-        const QString wanted = QString::number(i + 1);
-        if (marker.text == wanted) {
+        if (marker.text == marker.wanted) {
             continue;
         }
         cursor.setPosition(marker.position);
         cursor.setPosition(marker.position + marker.length, QTextCursor::KeepAnchor);
-        QTextCharFormat format;
+        QTextCharFormat format = cursor.charFormat();
         format.setVerticalAlignment(QTextCharFormat::AlignSuperScript);
-        format.setProperty(kFootnoteIdProperty, marker.id);
-        cursor.insertText(wanted, format);
+        format.setProperty(marker.property, marker.id);
+        cursor.insertText(marker.wanted, format);
     }
     cursor.endEditBlock();
+}
+
+int convertNoteMarkers(QTextDocument *document, const QString &mode, QHash<QString, QString> *footToEnd,
+                       QHash<QString, QString> *endToFoot)
+{
+    if (document == nullptr) {
+        return 0;
+    }
+    struct Mark {
+        int position;
+        int length;
+        QTextCharFormat format;
+    };
+    QList<Mark> marks;
+    for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+        for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it) {
+            const QTextFragment fragment = it.fragment();
+            QTextCharFormat f = fragment.charFormat();
+            const bool foot = f.hasProperty(kFootnoteIdProperty);
+            const bool end = f.hasProperty(kEndnoteIdProperty);
+            const bool convert = (foot && mode != u"toFootnotes") || (end && mode != u"toEndnotes");
+            if (!fragment.isValid() || !convert) {
+                continue;
+            }
+            const int from = foot ? kFootnoteIdProperty : kEndnoteIdProperty;
+            const int to = foot ? kEndnoteIdProperty : kFootnoteIdProperty;
+            const QString old = f.stringProperty(from);
+            QHash<QString, QString> *renamed = foot ? footToEnd : endToFoot;
+            if (renamed != nullptr && !renamed->contains(old)) {
+                renamed->insert(old, QUuid::createUuid().toString(QUuid::WithoutBraces).left(12));
+            }
+            f.setProperty(to, renamed != nullptr ? renamed->value(old) : old);
+            f.clearProperty(from);
+            marks.append({fragment.position(), fragment.length(), f});
+        }
+    }
+    QTextCursor cursor(document);
+    for (const Mark &mark : std::as_const(marks)) {
+        cursor.setPosition(mark.position);
+        cursor.setPosition(mark.position + mark.length, QTextCursor::KeepAnchor);
+        cursor.setCharFormat(mark.format);
+    }
+    return int(marks.size());
 }
 
 void pruneOrphanFootnotes(const QTextDocument *document, QHash<QString, QString> *texts)

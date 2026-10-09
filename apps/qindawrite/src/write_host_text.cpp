@@ -6,6 +6,7 @@
 // budget.
 
 #include "write_host.h"
+#include "write_notes.h"
 
 #include "docx_paragraph_format.h"
 #include "docx_properties.h"
@@ -164,7 +165,8 @@ void WriteHost::insertHyperlink(const QString &url, const QString &label)
 
 void WriteHost::commitFootnote(const QString &id, const QString &text)
 {
-    m_review->commitFootnote(id, text);
+    // One undo step with the note's text (M77: WriteDocument::setNoteTexts).
+    m_notes->commitNote(QStringLiteral("footnote"), id, text);
 }
 
 void WriteHost::exportPdfTo(const QUrl &url)

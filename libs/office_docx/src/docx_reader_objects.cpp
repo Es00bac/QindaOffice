@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Pictures and everything else that lives inside a run: DrawingML
-// pictures (inline and floating), VML pictures and text boxes, charts,
+// pictures (inline, and floating with their wrap and position — M77,
+// docx_float.h), VML pictures and text boxes, charts,
 // SmartArt, shapes, OLE objects and equations. Pictures become real images
 // with their original bytes kept; the rest is preserved verbatim (D-068)
 // and shown as a labelled box, or as its own preview picture when it has one.
 
+#include "docx_float.h"
 #include "docx_properties.h"
 #include "docx_reader_p.h"
 #include "docx_styles.h"
@@ -132,6 +134,7 @@ bool BodyReader::readObject(const XmlElement &run, const XmlElement &object, QTe
     QString pictureName;
     bool isPlainPicture = false; // a DrawingML picture we can own outright
     const XmlElement *drawing = nullptr;
+    PictureFloat layout;         // a wp:anchor's wrap and position
 
     const XmlElement *shown = &object;
     if (object.ns == kMC && object.name == u"AlternateContent") {
@@ -184,7 +187,7 @@ bool BodyReader::readObject(const XmlElement &run, const XmlElement &object, QTe
             isPlainPicture = !pictureBytes.isEmpty() && &object == shown;
             label = QStringLiteral("Picture");
             if (anchored) {
-                m_env.approximations[QStringLiteral("floating picture")] += 1;
+                layout = readPictureFloat(*frame);
             }
         } else if (uri.endsWith(u"/chart") || uri.contains(u"chartex")) {
             label = QStringLiteral("Chart");
@@ -260,6 +263,10 @@ bool BodyReader::readObject(const XmlElement &run, const XmlElement &object, QTe
             }
         }
         image.setProperty(kInlineSourcePart, m_part);
+        if (layout.isFloating()) {
+            image.setProperty(kPictureFloat, layout.toMap());
+            image.setProperty(kPictureFloatSnapshot, layout.toMap());
+        }
     } else {
         // Preserved verbatim: the whole run goes back on save.
         resource = QStringLiteral("%1:object%2").arg(QString::fromUtf16(kMediaScheme)).arg(m_env.nextIsland);
@@ -280,8 +287,25 @@ bool BodyReader::readObject(const XmlElement &run, const XmlElement &object, QTe
     image.setName(resource);
     image.setWidth(size.width());
     image.setHeight(size.height());
-    insertObject(cursor, image, inl, state);
+    if (isPlainPicture && layout.isFloating()) {
+        insertPicture(cursor, image, inl, state);
+    } else {
+        insertObject(cursor, image, inl, state);
+    }
     return true;
+}
+
+void BodyReader::insertPicture(QTextCursor &cursor, const QTextImageFormat &image, InlineState &inl,
+                               ContainerState &state)
+{
+    installPictureHandler(m_document);
+    const QTextFrameFormat::Position where = floatPosition(pictureFloat(image));
+    if (where == QTextFrameFormat::InFlow) {
+        insertObject(cursor, image, inl, state);
+        return;
+    }
+    cursor.insertImage(prepareFormat(image, inl, state).toImageFormat(), where);
+    inl.blockHasContent = true;
 }
 
 void BodyReader::readMath(const XmlElement &math, QTextCursor &cursor, InlineState &inl, ContainerState &state)

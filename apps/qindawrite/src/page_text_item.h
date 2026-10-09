@@ -71,6 +71,14 @@ public:
     Q_INVOKABLE void editFooter();
     Q_INVOKABLE void closeStory();
 
+    // Mail merge (M77, D-086): Preview Results shows `document` — a merged
+    // copy laid out like the body — read-only instead of the body; null
+    // returns to the body. Highlight Merge Fields shades the body's merge
+    // fields (display only).
+    void setPreviewDocument(QTextDocument *document);
+    [[nodiscard]] QTextDocument *previewDocument() const { return m_preview; }
+    void setMergeHighlight(bool on);
+
 signals:
     void pageCountChanged();
     void viewZoomChanged();
@@ -117,10 +125,14 @@ private:
     [[nodiscard]] QRectF storyToView(const QRectF &storyRect) const;
     void openStory(int kind);
     void updatePageMetrics();
+    // page_text_paint.cpp
     void paintPage(QPainter *painter, int index, const QRectF &clip);
+    void paintBody(QPainter *painter, const QRectF &pageArea, bool storyOpen, bool overTextPictures);
 
     QPointer<WriteDocument> m_document;
     QPointer<PageTextControl> m_control;
+    QPointer<QTextDocument> m_preview;
+    bool m_mergeHighlight = false;
     std::unique_ptr<StoryEditor> m_story;
     std::unique_ptr<PictureTool> m_pictures;
     PageGeometry m_geometry;

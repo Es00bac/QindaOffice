@@ -305,4 +305,9 @@ bool WriteDocument::loadRecovery(const QByteArray &snapshot, QString *error)
     return true;
 }
 
+bool WriteDocument::loadDocxBytes(const QByteArray &docx, QString *error)
+{
+    return loadRecovery(kRecoveryTag + docx, error);
+}
+
 } // namespace QindaOffice::Apps::Write

@@ -3,9 +3,12 @@
 
 #include "docx_comments.h"
 #include "docx_controls.h"
+#include "docx_envelopes.h"
 #include "docx_format.h"
 #include "docx_list_labels.h"
+#include "docx_mailmerge.h"
 #include "docx_metrics.h"
+#include "docx_notes.h"
 #include "docx_properties.h"
 #include "docx_reader_p.h"
 #include "ooxml_namespaces.h"
@@ -40,32 +43,6 @@ XmlElementPtr relatedXml(const Ooxml::Package &package, const QString &source, c
     return part.isEmpty() ? nullptr : package.xml(part);
 }
 
-// A footnote's text as QindaWrite stores it: its paragraphs, plain.
-QString noteText(const XmlElement &note)
-{
-    QStringList paragraphs;
-    for (const XmlElement *p : note.elements(kW, u"p")) {
-        QString line;
-        std::function<void(const XmlElement &)> walk = [&](const XmlElement &e) {
-            for (const XmlElement *c : e.elements()) {
-                if (c->ns != kW) {
-                    continue;
-                }
-                if (c->name == u"t") {
-                    line += c->text();
-                } else if (c->name == u"tab") {
-                    line += QLatin1Char(' ');
-                } else if (c->name != u"instrText" && c->name != u"rPr" && c->name != u"pPr") {
-                    walk(*c);
-                }
-            }
-        };
-        walk(*p);
-        paragraphs.append(line);
-    }
-    return paragraphs.join(QLatin1Char(' ')).trimmed();
-}
-
 void readLayout(const XmlElement *sectPr, PageLayout &layout)
 {
     if (sectPr == nullptr) {
@@ -87,6 +64,28 @@ void readLayout(const XmlElement *sectPr, PageLayout &layout)
         layout.footerDistance = px(u"footer", 720);
         layout.gutter = px(u"gutter", 0);
     }
+}
+
+// A section whose page is an envelope (Word's envelope paper codes, or an
+// envelope size of docx_envelopes.h on its side).
+bool isEnvelopeSection(const XmlElement &sectPr)
+{
+    const XmlElement *size = sectPr.child(kW, u"pgSz");
+    if (size == nullptr) {
+        return false;
+    }
+    const int code = wAttr(size, u"code").toInt();
+    if (code >= 19 && code <= 38) {
+        return true;
+    }
+    const QSizeF page(Units::twipsToPx(Units::parseTwips(wAttr(size, u"w"), 0)),
+                      Units::twipsToPx(Units::parseTwips(wAttr(size, u"h"), 0)));
+    for (const EnvelopeSize &envelope : envelopeSizes()) {
+        if (qAbs(page.width() - envelope.size.width()) < 2 && qAbs(page.height() - envelope.size.height()) < 2) {
+            return true;
+        }
+    }
+    return false;
 }
 
 QString describe(const QMap<QString, int> &approximations)
@@ -184,7 +183,8 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
     if (const XmlElementPtr themeRoot = relatedXml(*package, main, Ooxml::RelType::Theme)) {
         env.theme = Ooxml::parseTheme(*themeRoot);
     }
-    const XmlElementPtr settings = relatedXml(*package, main, Ooxml::RelType::Settings);
+    QString settingsPart;
+    const XmlElementPtr settings = relatedXml(*package, main, Ooxml::RelType::Settings, &settingsPart);
     if (settings) {
         const QString tab = childVal(settings.get(), u"defaultTabStop");
         if (!tab.isEmpty() && Units::parseTwips(tab) > 0) {
@@ -192,16 +192,32 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
         }
         parts->differentOddEven = onOff(settings.get(), u"evenAndOddHeaders");
     }
-    QString notesPart;
-    if (const XmlElementPtr notes = relatedXml(*package, main, Ooxml::RelType::Footnotes, &notesPart)) {
-        for (const XmlElement *note : notes->elements(kW, u"footnote")) {
+    // Footnote and endnote options (M77): the document's, then the closing
+    // section's own (Word lets a section's win); merge settings.
+    const XmlElement *closingSection = bodyElement->child(kW, u"sectPr");
+    for (const bool endnote : {false, true}) {
+        const QStringView name = endnote ? u"endnotePr" : u"footnotePr";
+        NoteOptions options = readNoteOptions(settings ? settings->child(kW, name) : nullptr);
+        options = readNoteOptions(closingSection != nullptr ? closingSection->child(kW, name) : nullptr, options);
+        (endnote ? parts->endnoteOptions : parts->footnoteOptions) = options;
+        (endnote ? parts->importedEndnoteOptions : parts->importedFootnoteOptions) = options;
+    }
+    parts->mailMerge = readMailMerge(*package, settingsPart, settings.get());
+    parts->importedMailMerge = parts->mailMerge;
+    // Footnote and endnote texts: each note's own markup is kept beside it.
+    for (const bool endnote : {false, true}) {
+        const XmlElementPtr notes = relatedXml(*package, main, endnote ? Ooxml::RelType::Endnotes : Ooxml::RelType::Footnotes);
+        if (!notes) {
+            continue;
+        }
+        for (const XmlElement *note : notes->elements(kW, endnote ? u"endnote" : u"footnote")) {
             const QString type = wAttr(note, u"type");
             if (!type.isEmpty() && type != u"normal") {
                 continue; // separators
             }
             const QString id = wAttr(note, u"id");
-            env.footnoteText.insert(id, noteText(*note));
-            parts->footnoteXml.insert(QStringLiteral("docx-") + id, Ooxml::serializeFragment(*note));
+            (endnote ? env.endnoteText : env.footnoteText).insert(id, noteText(*note));
+            (endnote ? parts->endnoteXml : parts->footnoteXml).insert(QStringLiteral("docx-") + id, Ooxml::serializeFragment(*note));
         }
     }
 
@@ -237,8 +253,14 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
     // header slots section to section).
     const QList<const XmlElement *> &sections = reader.sections();
     if (!sections.isEmpty()) {
-        readLayout(sections.first(), parts->layout);
-        parts->differentFirstPage = onOff(sections.first(), u"titlePg");
+        // An envelope added to a document is its first section (M77): the
+        // document's own page is the one after it.
+        qsizetype first = 0;
+        while (first + 1 < sections.size() && isEnvelopeSection(*sections.at(first))) {
+            ++first;
+        }
+        readLayout(sections.at(first), parts->layout);
+        parts->differentFirstPage = onOff(sections.at(first), u"titlePg");
         if (const XmlElement *closing = bodyElement->child(kW, u"sectPr")) {
             parts->sourceSectionXml = Ooxml::serializeFragment(*closing);
         }

@@ -101,7 +101,7 @@ QTextCharFormat withoutCellProperties(QTextCharFormat format, const QTextCharFor
         format.clearProperty(p);
     }
     for (const int p : {kCellXml, kRowXml, kCellSnapshot, kRowHeight, kCellBorders, kCellMargins, kRowHeightRule,
-                        kRowCantSplit, kRowPad}) {
+                        kRowCantSplit, kRowPad, kRowPadTop}) {
         format.clearProperty(p);
     }
     format.clearProperty(QTextFormat::ObjectType);
@@ -391,71 +391,9 @@ void drawParagraphBorders(QPainter *painter, const QTextDocument &document, cons
     painter->restore();
 }
 
-namespace {
-
-qreal cellContentHeight(const QTextTableCell &cell)
-{
-    qreal height = 0;
-    for (auto it = cell.begin(); !it.atEnd(); ++it) {
-        if (it.currentFrame() != nullptr) {
-            return -1; // nested table: leave the row alone
-        }
-        const QTextBlock b = it.currentBlock();
-        const QTextLayout *layout = b.layout();
-        height += (layout != nullptr ? layout->boundingRect().height() : 0) + b.blockFormat().topMargin()
-            + b.blockFormat().bottomMargin();
-    }
-    const QTextTableCellFormat f = cell.format().toTableCellFormat();
-    return height + f.topPadding() + f.bottomPadding() + f.topBorder() + f.bottomBorder();
-}
-
-void padRows(QTextFrame *frame)
-{
-    for (QTextFrame *child : frame->childFrames()) {
-        if (auto *table = qobject_cast<QTextTable *>(child)) {
-            for (int r = 0; r < table->rows(); ++r) {
-                const QTextTableCell first = rowAnchor(table, r);
-                const qreal wanted = first.isValid() ? first.format().doubleProperty(kRowHeight) : 0;
-                if (wanted <= 0) {
-                    continue;
-                }
-                qreal tallest = 0;
-                QTextTableCell target;
-                for (int c = 0; c < table->columns(); ++c) {
-                    const QTextTableCell cell = table->cellAt(r, c);
-                    if (cell.row() != r || cell.column() != c || cell.rowSpan() != 1) {
-                        continue;
-                    }
-                    const qreal h = cellContentHeight(cell);
-                    if (h < 0) {
-                        tallest = wanted; // nested tables decide for themselves
-                        break;
-                    }
-                    if (!target.isValid()) {
-                        target = cell;
-                    }
-                    tallest = qMax(tallest, h);
-                }
-                if (target.isValid() && tallest < wanted - 0.5) {
-                    QTextTableCellFormat f = target.format().toTableCellFormat();
-                    f.setBottomPadding(f.bottomPadding() + wanted - tallest);
-                    // Remembered, so a new row height replaces it
-                    // (docx_table_format.h refreshRowHeight).
-                    f.setProperty(kRowPad, f.doubleProperty(kRowPad) + wanted - tallest);
-                    target.setFormat(f);
-                }
-            }
-        }
-        padRows(child);
-    }
-}
-
-} // namespace
-
 void applyRowHeights(QTextDocument *document)
 {
-    static_cast<void>(document->documentLayout()->documentSize()); // lay everything out
-    padRows(document->rootFrame());
+    refreshRowHeights(document); // docx_table_format.h
 }
 
 qreal headerFooterHeight(const QTextDocument &story, qreal width)

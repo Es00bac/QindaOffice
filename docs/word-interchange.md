@@ -42,8 +42,17 @@ rest and `WriteDocument` owns both:
   double-click on the text return. The Page Setup text fields still edit
   the default slot as a plain pattern (`{page}` / `{pages}`) and warn when
   that would replace a richer header.
-- **Footnotes** — Write's markers and note texts; an unedited note keeps
-  Word's own markup.
+- **Footnotes and endnotes** — Write's markers and note texts; an unedited
+  note keeps Word's own markup, and an endnotes part whose notes are all
+  still referenced and unchanged is copied byte for byte (M77, below).
+  Each kind's options (number format, start, restart, place) are
+  `WordParts::footnoteOptions` / `endnoteOptions`.
+- **Mail merge** — `WordParts::mailMerge` (`docx_mailmerge.h`): Word's
+  `w:mailMerge` as the merge type, data source, filters and sorts, e-mail
+  settings and Match Fields; kept as read while unchanged (M77, below).
+- **Floating pictures** — a picture's wrap and position (`kPictureFloat`,
+  `docx_float.h`), shown with Qt's floating frames or drawn over and under
+  the text (M77, below).
 - **Comments** — `WordParts::comments` (`docx_comments.h`): author,
   initials, date, text, the comment a reply answers and the resolved state
   (Word's `commentsExtended`). In the text a comment is its range (each run
@@ -94,8 +103,9 @@ rest and `WriteDocument` owns both:
 - **The source package** — what Write does not model is carried from it on
   save: styles (until a style command changes them), numbering
   definitions (every untouched list's, byte for byte), theme, settings,
-  fonts, endnotes, custom XML, glossary, people, VBA (macro kinds only),
-  and the comment parts while no comment changed.
+  fonts, the endnotes part while its notes are unchanged, custom XML,
+  glossary, people, VBA (macro kinds only), and the comment parts while no
+  comment changed.
 
 ## Styles in a Word document
 
@@ -271,6 +281,115 @@ Insert ▸ Table makes Word's Table Grid table; a table from HTML or an older
 Write takes Word's model (collapsed edges, its frame line as
 `w:tblBorders`) at its first formatting command.
 
+## Mail merge, envelopes and labels, endnotes, floating pictures (M77, D-086)
+
+Word's Mailings tab, under Word's names, on Word's model:
+
+- **Start Mail Merge**: Letters, E-mail Messages, Envelopes (Envelope
+  Options: the document becomes the envelope with an «AddressBlock»),
+  Labels (Label Options: the document becomes the label sheet, «Next
+  Record» before every label but the first), Directory, Normal Word
+  Document. The type is `w:mainDocumentType`.
+- **Select Recipients**: Type a New List (Word's columns, New / Delete
+  Entry, add or remove a column; saved as a CSV file), Use an Existing List
+  (CSV or text with a header row — comma, tab, semicolon or pipe — or an
+  Excel workbook's sheet through calc_io, Word's Select Table when it has
+  several), Choose from QindaMail People (everyone, one of its contact
+  groups — members expanded, nested groups too — or a category, read from
+  QindaMail's address book without changing it). **Edit Recipient
+  List**: the records with Word's check boxes, sort by a column heading,
+  Filter and Sort (four rows of And / Or, field, comparison, value; three
+  sort keys), Find Duplicates, Find Recipient.
+- **Write & Insert Fields**: Highlight Merge Fields (display only),
+  Address Block (Word's name formats, company, postal address, the
+  country rule — never, always, only when not the home country — and
+  formatting by country; a preview of the current record), Greeting Line
+  (salutation, name format, punctuation, the greeting for a recipient
+  without a name), Insert Merge Field (the data source's columns in twenty
+  menu slots, and the dialog with Address Fields and Database Fields),
+  Rules (If…Then…Else, Skip Record If, Next Record, Next Record If, Merge
+  Record #, Merge Sequence #), Match Fields, Update Labels.
+- **Preview Results**: the page shows the merged copy of a record
+  (read-only), First / Previous / the record number / Next / Last, Find
+  Recipient, Check for Errors (fields the data source lacks, recipients
+  without an address, a document without merge fields).
+- **Finish & Merge**: Edit Individual Documents (a new untitled window, a
+  section per record), Print Documents (the shell's print dialog), Merge
+  to PDF, Send E-mail Messages (each recipient's message handed to
+  QindaMail as a composer draft — `mailto:` with a plain-text body, or the
+  merged document attached — and never sent from QindaWrite); all records,
+  the current one, or a range.
+- **Merge fields in the text**: a run whose `kFieldInstruction` is Word's
+  field-code view of the field — nested fields in braces (`IF { MERGEFIELD
+  Country } = "US" "" "{ MERGEFIELD Country }"`), line breaks as `\n` — and
+  whose text is the result Word shows («First_Name», «AddressBlock», «Next
+  Record»). The merge (`docx_merge.h`) evaluates them as Word does (above,
+  D-086).
+- **Saved as Word saves a merge**: the main document keeps its fields;
+  `w:mailMerge` is kept as read while unchanged, else written with
+  `w:dataType` textFile, the query `SELECT * FROM <path>` with Word's
+  WHERE and ORDER BY clauses for the filters and sorts, and `w:dataSource` an external
+  relationship to the CSV (`file:///…`); a workbook sheet as Word's ACE
+  connection string and `` `Sheet$` `` query. Recipients left out and a
+  People source are QindaWrite's own `w:docVar`s. **Word on open** asks
+  "Opening this document will run the following SQL command: SELECT * FROM
+  … Data from your database will be placed in the document. Do you want to
+  continue?"; Yes connects to the data source (asking for it when the path
+  does not exist on that machine, as a Linux path on Windows), No opens the
+  document as an ordinary one with its fields.
+- **Envelopes** (Mailings ▸ Envelopes): delivery and return address (the
+  return address remembered, or omitted), Size 10, 9, 11, 12, 14, Monarch,
+  6 3/4, DL, C4, C5, C6, B5 or a custom size, the delivery address at
+  Word's Auto place or from the left / top. Add to Document makes it the
+  first section (its own page size and Word's paper code; an empty document
+  becomes the envelope), New Document opens it in a window, Print prints
+  it. Written as Word writes them: Envelope Return and Envelope Address
+  styles, the envelope's `w:sectPr`.
+- **Labels** (Mailings ▸ Labels): Avery US Letter (5160, 5161, 5162, 5163,
+  5164, 5165, 5167, 5168, 5195, 5366, 5371, 8160, 8163) and A4 (L7159,
+  L7160, L7161, L7162, L7163, L7165, L7166, L7167, L7168, L7169, L7173,
+  L7651, J8160) with Word's dimensions; a full page of the same label or
+  one label at a row and column; New Document or Print. The sheet is
+  Word's fixed-layout table (spacer columns between labels with a gap,
+  exact row heights that cannot split, no borders) on the sheet's margins
+  with no bottom margin; on screen and in PDF each row is padded to the
+  sheet's pitch with its labels centred, so a printed sheet lines up.
+- **Endnotes** (References ▸ Insert Endnote, Alt+Ctrl+D): a mark numbered
+  i, ii, iii and its note, edited by a double-click like a footnote,
+  emptied to remove it; **Footnote and Endnote** sets each kind's number
+  format (1 2 3, a b c, A B C, i ii iii, I II III, * † ‡ §), Start at,
+  Numbering (continuous, restart each section, each page for footnotes)
+  and place; **Convert** turns all footnotes into endnotes, all endnotes
+  into footnotes, or swaps them. Each is one undo step (the marks and the
+  note texts together). The notes follow the body's last line under a
+  short rule, running onto more pages as needed, on screen, paper and PDF.
+- **Floating pictures** (Picture Format ▸ Wrap Text, Position; Layout ▸
+  Arrange): In Line with Text, Square, Tight, Through, Top and Bottom,
+  Behind Text, In Front of Text; Move with Text / Fix Position on Page;
+  Position and Wrapping (wrap side, distances, horizontal and vertical
+  position as an alignment or an offset relative to the margin, page,
+  column, character, paragraph or line). A picture switched from In Line
+  stays where it was; a floating picture is dragged into place by its body
+  (Word's four-way cursor); each change is one undo step. Square, Tight,
+  Through and Top and Bottom are Qt's floating frames (the text flows to
+  the side, below the picture for Top and Bottom); Behind and In Front take
+  no room in the line and are drawn under or over the text.
+- **Written as Word writes them**: an unchanged floating picture keeps its
+  drawing byte for byte; a changed one is written as `wp:anchor` with
+  `wp:simplePos`, `wp:positionH` / `wp:positionV` (`wp:align` or
+  `wp:posOffset`), the wrap element (`wp:wrapSquare`, `wp:wrapTight` /
+  `wp:wrapThrough` with their polygon, `wp:wrapTopAndBottom`,
+  `wp:wrapNone` with `behindDoc`), the distances and flags; back to In Line
+  as `wp:inline`.
+
+Every command is a persistent action (`writeMerge…`, `writeMergeField0`–
+`19`, `writeEnvelopesAction`, `writeLabelsAction`,
+`writeInsertEndnoteAction`, `writeNoteOptionsAction`,
+`writeConvertNotesAction`, `writeWrap…`, `writeMoveWithTextAction`,
+`writeFixPositionAction`, `writePictureLayoutAction`) in the menus (the
+Mailings menu, Insert, Format ▸ Wrap Text) and on the ribbon (Mailings,
+References, the Picture Format contextual tab, Layout ▸ Arrange).
+
 ## Reading (`docx_reader*`)
 
 Paragraph and run formatting is resolved the way Word resolves it
@@ -293,7 +412,9 @@ table style's conditional formats (header row, banding, first column…).
 
 Fields: PAGE, NUMPAGES, DATE, MERGEFIELD, REF, PAGEREF and the other
 single-result fields keep their instruction on the result text and are
-written back as `w:fldSimple`; HYPERLINK fields become links; TOC and other
+written back as `w:fldSimple`; Word's merge fields and rules keep their
+nested codes and are written as complex fields where Word writes them so
+(M77, below); HYPERLINK fields become links; TOC and other
 multi-paragraph fields keep their result as text and links.
 
 Tracked changes become Write's revision marks (blue insertions, red
@@ -303,8 +424,8 @@ struck deletions) and are written back as `w:ins` / `w:del`.
 
 Kept verbatim and written back unchanged; the status bar says so on open:
 text boxes and shapes (a box with their text), charts, SmartArt, OLE
-objects, ink, equations (shown as their linear text), endnote
-references. Floating pictures are shown in line but keep their anchoring.
+objects, ink, equations (shown as their linear text). Floating pictures
+and endnotes are modelled since M77 (below).
 
 ### Layout adjustments (display only, never written)
 
@@ -316,7 +437,7 @@ closed with state the writer ignores (D-068):
 | adds space after + space before | keeps the larger | the sum is folded into the next block's top margin |
 | applies the first paragraph's space before | drops a frame's first top margin | a zero-height synthetic spacer block |
 | gives an empty paragraph after a table one line | lays it beside the table | its height moves to what follows |
-| keeps a row's `trHeight` minimum | has no row heights | the row's first cell is padded |
+| keeps a row's `trHeight` minimum | has no row heights | the row's first cell is padded (top and bottom alike when its text is centred, so it stays centred), again after a merge or Update Labels (`refreshRowHeights`, M77) |
 | draws paragraph borders | has none | `drawParagraphBorders` paints them |
 | pushes the body below a tall header | overlaps | the root frame margin grows |
 | shows no header on a header-less cover section | one header set | different first page with empty slots |
@@ -383,7 +504,25 @@ Session Review panel) and *Open in QindaWrite* write a page through
 - A widow (a paragraph's last line alone at a page top) is left alone when
   the paragraph has three lines or more: a block format cannot break inside
   a paragraph. Keep rules inside a table apply to its leading rows only.
-- Floating pictures, text boxes and shapes are not editable as objects.
+- Text boxes and shapes are not editable as objects. Floating pictures
+  (M77): Qt floats a picture at its anchor line, at the column's left or
+  right; one centred in the column has text on one side only, one above
+  its anchor line or at a fixed place on the page is shown at its line
+  (Behind and In Front are drawn exactly where they are), Tight and
+  Through wrap the picture's box, not its outline, and an inline picture
+  is not dragged to move it in the text. A label (or any exact-height row)
+  holding more lines than fit grows on screen and in Write's PDF; Word
+  clips it.
+- Mail merge (M77): Word's Ask, Fill-in and Set Bookmark rules are not
+  offered; merge fields in headers and footers are kept but not merged;
+  Preview Results is read-only; left-out recipients are a QindaWrite
+  `w:docVar` Word keeps but does not apply; e-mail goes out through
+  QindaMail as plain text or with the merged document attached (no HTML
+  body); an Address Block's lines are line breaks in one paragraph (Word
+  makes paragraphs).
+- Endnotes (M77): endnotes placed at the end of each section are written
+  so and shown at the end of the document; footnotes restarting each page
+  are written so and numbered continuously in Write.
 - Formatting Qt cannot draw is kept and written but shown approximately
   (M70): double, thick, words-only and heavy underlines as one line, double
   strikethrough as one line, hidden text shown (and printed), bar tabs not
@@ -438,10 +577,14 @@ patched check box / list / date / bound text, a copy without its id),
 `tst_docx_comments` (ranges, replies, resolved state; untouched set copied,
 edited / new / deleted comments written, header-only comments kept),
 `tst_docx_corpus` (`QQO_DOCX_CORPUS` lists real documents: read, write,
-re-read, compare; aggregate counts only). `tests/qindawrite/tst_write_docx`
+re-read, compare; aggregate counts only), and M77's `tst_docx_mailmerge`,
+`tst_docx_envelopes`, `tst_docx_notes` and `tst_docx_floats` (below and in
+verification.md). `tests/qindawrite/tst_write_docx`
 covers WriteDocument (layout, headers, pictures, recovery, HTML, legacy
 formats through LibreOffice), `tst_write_comments` the Comments pane and
-its commands through the real window, `tst_write_tables` and
+its commands through the real window, `tst_write_mailings`,
+`tst_write_endnotes` and `tst_write_wrap` (M77) Word's Mailings, endnotes
+and floating pictures through the real window, `tst_write_tables` and
 `tst_write_formatting` Word's formatting commands and dialogs through the
 real window (M70), `tst_write_lists` and `tst_write_styles` the list
 libraries, dialogs and keys, the Styles pane, gallery, New / Modify /

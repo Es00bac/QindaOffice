@@ -21,6 +21,12 @@
 // can show about six short notes before the rest are elided with "…". A
 // growing band would need per-page re-layout, which QTextDocument's single
 // flow cannot express.
+//
+// Endnotes (M77, D-086) are the same two things with kEndnoteIdProperty:
+// their marks are numbered in the endnote format (i, ii, iii by default)
+// and the notes are drawn after the body's last line (write_endnotes.h).
+
+#include "docx_notes.h"
 
 #include <QHash>
 #include <QList>
@@ -36,6 +42,9 @@ class PageGeometry;
 
 // Set on the marker run's char format; its value is the footnote id.
 inline constexpr int kFootnoteIdProperty = QTextFormat::UserProperty + 8;
+// An endnote's mark (docx_properties.h kEndnoteIdProperty; static_assert in
+// write_footnotes.cpp).
+inline constexpr int kEndnoteIdProperty = QTextFormat::UserProperty + 0x400 + 120;
 
 struct FootnoteRef {
     QString id;
@@ -56,6 +65,28 @@ struct FootnoteRef {
 // Inserts a marker at the cursor and returns its fresh id. The caller
 // stores the note text against that id on the document.
 [[nodiscard]] QString insertFootnoteMarker(QTextCursor cursor);
+[[nodiscard]] QString insertEndnoteMarker(QTextCursor cursor);
+
+// The endnotes in document order: {label as numbered, note id}.
+struct EndnoteRef {
+    QString id;
+    QString label;
+    int position = 0;
+};
+[[nodiscard]] QList<EndnoteRef> collectEndnotes(const QTextDocument *document, const Docx::NoteOptions &options);
+// The id of the endnote mark at (or just before) `position`, or empty.
+[[nodiscard]] QString endnoteIdAt(const QTextDocument *document, int position);
+// Rewrites both kinds' marks to their numbers in their formats (start,
+// restart at each section break when the options say so).
+void renumberNoteMarkers(QTextDocument *document, const Docx::NoteOptions &footnotes,
+                         const Docx::NoteOptions &endnotes);
+// Converts note marks between the kinds: "toEndnotes", "toFootnotes" or
+// "swap". A converted mark gets a fresh id (a footnote and an endnote read
+// from Word may share one); `renamed` receives old id → new id for the
+// footnotes made endnotes (`footToEnd`) and back. Returns how many changed;
+// the caller moves the texts.
+int convertNoteMarkers(QTextDocument *document, const QString &mode, QHash<QString, QString> *footToEnd,
+                       QHash<QString, QString> *endToFoot);
 
 // The id of the marker at (or immediately before) `position`, or empty.
 // Double-clicking a marker edits its note through this.
@@ -63,7 +94,8 @@ struct FootnoteRef {
 
 // Rewrites every marker's visible glyph to its current number. Numbering
 // is document order, so inserting a note in the middle changes the ones
-// after it; this is what makes the page show that.
+// after it; this is what makes the page show that. (Word's default
+// formats: footnotes 1 2 3, endnotes i ii iii.)
 void renumberFootnoteMarkers(QTextDocument *document);
 
 // Drops markers whose note has been deleted and note texts whose marker is

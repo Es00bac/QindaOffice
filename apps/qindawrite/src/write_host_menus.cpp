@@ -29,6 +29,8 @@
 #include "write_controls.h"
 #include "write_review_actions.h"
 #include "write_typography.h"
+#include "write_float.h"
+#include "write_notes.h"
 
 #include "inline_action_flow.h"
 
@@ -93,6 +95,8 @@ void WriteHost::insertMenus()
         m_picture->setEnabled(m_page != nullptr && m_page->pictures() != nullptr && m_page->pictures()->selected() >= 0);
     });
     formatItems.append(MenuNode::action(m_picture->id()));
+    // M77 (D-086): Wrap Text and Position for floating pictures.
+    formatItems += m_pictureLayout->menuItems();
     formatItems.append(MenuNode::separator());
     formatItems += m_typography->formatMenuItems();
     // M70 (D-079): Word's Font, Paragraph, Tabs, Borders and Shading.
@@ -115,6 +119,7 @@ void WriteHost::insertMenus()
     insertItems += m_typography->insertMenuItems();
     insertItems.append(MenuNode::separator());
     insertItems += m_review->insertMenuItems();
+    insertItems += m_notes->menuItems(); // M77: Insert Endnote, Footnote and Endnote, Convert
     insertItems.append(MenuNode::separator());
     insertItems += headerFooterMenuItems();
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
@@ -125,6 +130,9 @@ void WriteHost::insertMenus()
     reviewItems += commentMenuItems();
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("writeReviewMenu"), tr("&Review"), reviewItems));
+    // M77 (D-086): Word's Mailings tab as a menu.
+    tree->insertMenuBefore(QStringLiteral("aiMenu"),
+                           MenuNode::submenu(QStringLiteral("writeMailingsMenu"), tr("&Mailings"), mailingsMenu()));
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("writeToolsMenu"), tr("T&ools"),
                                              {MenuNode::action(m_typography->wordCountId())}));
@@ -269,7 +277,7 @@ void WriteHost::syncStoryActions()
         m_closeStory->setEnabled(story);
     }
     for (const char *id : {ActionId::kInsertPageBreak, ActionId::kInsertFootnote, ActionId::kInsertToc,
-                           ActionId::kUpdateToc}) {
+                           ActionId::kUpdateToc, "writeInsertEndnoteAction"}) {
         if (ActionEntry *entry = action(QString::fromLatin1(id))) {
             entry->setEnabled(!story);
         }

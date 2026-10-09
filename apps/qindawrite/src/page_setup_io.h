@@ -22,10 +22,13 @@
 #include <QStringList>
 
 #include <array>
+#include <memory>
 
 class QTextDocument;
 
 namespace QindaOffice::Apps::Write {
+
+struct EndnoteArea;
 
 struct PageDecoration {
     Docx::PageLayout layout;
@@ -38,6 +41,14 @@ struct PageDecoration {
     // Footnote lines to print at the foot of each 1-based page, already
     // numbered (write_footnotes.h).
     QHash<int, QStringList> footnotes;
+    // The endnotes after the body's last line (write_endnotes.h, M77).
+    std::shared_ptr<const EndnoteArea> endnotes;
+    // Pictures behind and in front of the text are drawn with the body
+    // (docx_float.h); the decoration only says whether there are any.
+    bool overTextPictures = false;
+
+    // The pages to draw: the body's, or as many as the endnotes reach.
+    [[nodiscard]] int pageCount(int bodyPages) const;
 
     // The header/footer Word would show on 1-based `page`.
     [[nodiscard]] const QTextDocument *headerFor(int page) const;

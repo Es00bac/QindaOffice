@@ -25,6 +25,7 @@
 namespace QindaOffice::Apps::Write {
 
 class KeepRules;
+struct EndnoteArea;
 
 class WriteDocument final : public Core::Document {
     Q_OBJECT
@@ -86,6 +87,49 @@ public:
     void setFootnotes(QHash<QString, QString> notes);
     void setFootnoteText(const QString &id, const QString &text);
     [[nodiscard]] QString footnoteText(const QString &id) const { return m_parts.footnotes.value(id); }
+
+    // ---- endnotes and note options (M77, D-086; write_document_notes.cpp) ---------------
+    [[nodiscard]] const QHash<QString, QString> &endnotes() const { return m_parts.endnotes; }
+    [[nodiscard]] QString endnoteText(const QString &id) const { return m_parts.endnotes.value(id); }
+    // Both kinds' texts at once, as an undo item of the edit block the
+    // caller has open (inserting, editing, deleting, converting notes):
+    // Undo and Redo swap the tables with the marks in the text.
+    void setNoteTexts(QHash<QString, QString> footnotes, QHash<QString, QString> endnotes);
+    // Swaps the tables without an undo item (the undo item's own swap).
+    void swapNoteTexts(QHash<QString, QString> footnotes, QHash<QString, QString> endnotes);
+    [[nodiscard]] const Docx::NoteOptions &noteOptions(bool endnote) const
+    {
+        return endnote ? m_parts.endnoteOptions : m_parts.footnoteOptions;
+    }
+    // Footnote and Endnote dialog: the options as an undo item of the
+    // caller's edit block, and the marks renumbered in it.
+    void setNoteOptions(bool endnote, const Docx::NoteOptions &options);
+    // Sets the options without an undo item or renumbering (the undo
+    // item's own swap; the text's undo restores the numbers).
+    void swapNoteOptions(bool endnote, const Docx::NoteOptions &options);
+    // The endnotes laid out after the body's last line (cached until the
+    // next edit or layout change; null without endnotes).
+    [[nodiscard]] std::shared_ptr<const EndnoteArea> endnoteArea() const;
+
+    // ---- mail merge (M77, D-086: docx_mailmerge.h) -----------------------------------
+    [[nodiscard]] const Docx::MailMergeSettings &mailMerge() const { return m_parts.mailMerge; }
+    // The merge settings (type, data source, filters, …): saved with the
+    // document; not an edit Undo takes back (Word's are not either).
+    void setMailMerge(const Docx::MailMergeSettings &settings);
+
+    // ---- documents made from this one (M77) --------------------------------------------
+    // Gives `document` this document's page setup, fonts and tab stops, so
+    // it paginates as this one (a merged preview, an envelope).
+    void configureLike(QTextDocument *document) const;
+    // A Word package's bytes as this document's content, untitled and
+    // unsaved (a merged document opened in its own window).
+    bool loadDocxBytes(const QByteArray &docx, QString *error = nullptr);
+    // A new page layout as an undo item of the caller's edit block (Start
+    // Mail Merge ▸ Envelopes / Labels change the paper with the content).
+    void setPageLayoutUndoable(const Docx::PageLayout &layout);
+    // The layout model and page size without touching the text document
+    // (that undo item's own restore; Qt undoes the frame margins).
+    void restoreLayout(const Docx::PageLayout &layout);
 
     // ---- comments (write_comments.h) ---------------------------------------------------
     [[nodiscard]] const QList<Docx::Comment> &comments() const { return m_parts.comments; }
@@ -159,6 +203,8 @@ private:
     QString m_activeComment;
     mutable QList<Docx::CommentSpan> m_commentSpans;
     mutable bool m_commentSpansValid = false;
+    mutable std::shared_ptr<const EndnoteArea> m_endnoteArea;
+    mutable bool m_endnoteAreaValid = false;
     qreal m_bodyTop = 96;
     qreal m_bodyBottom = 96;
 };

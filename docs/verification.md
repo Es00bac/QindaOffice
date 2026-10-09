@@ -33,6 +33,150 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M77 Write mailings gates (D-086)
+
+On qinda (branch `m77-write-mailings`, merged with `m60-office-formats`
+4399244, then a57c0ee — M79 changes nothing these targets build, and the
+build after it compiled nothing; only office_ooxml, office_docx,
+calc_engine and calc_io (workbook recipients), QindaWrite, their tests and
+`tst_note_word` built; `QQO_OOXML_SCHEMA_DIR` set, so every package a test
+writes is validated against the ECMA-376 Transitional schemas):
+`ctest -R "tst_write_|tst_docx_|tst_ooxml|tst_note_word"` **39/39 targets**
+— the 31 after M73, M75's `tst_ooxml_entries`, and `tst_docx_mailmerge`,
+`tst_docx_envelopes`, `tst_docx_notes`, `tst_docx_floats`,
+`tst_write_mailings`, `tst_write_endnotes`, `tst_write_wrap`. QtTest
+functions (init/cleanup included): **303 passed, 3 skipped, 0 failed** (the
+skips: the corpus without `QQO_DOCX_CORPUS`, two opt-in renders).
+
+**office_docx** (hand-built packages only). `tst_docx_mailmerge` 11/11 —
+CSV as Word reads a text data source (comma, tab, semicolon with a BOM,
+Latin-1, quoted fields with commas, quotes and line breaks) and written
+back quoted where needed; filters with Word's And / Or, three sort keys
+(numbers as numbers), Find Duplicates, the query Word writes for them and
+read back; the fields as Word evaluates them (MERGEFIELD switches, Address
+Block with the country rule and Address 2 joined, Greeting Line with the
+no-name greeting, IF with nested fields, SKIPIF, NEXT, NEXTIF, MERGEREC,
+MERGESEQ) and the labels a main document shows; a merge copy per record in
+its own section (text beside an empty field kept, a line holding only it
+removed, no field left), a directory with no section breaks, one copy for
+Preview Results; labels running three records across one 5160 sheet (the
+rest blank); `w:mailMerge` written as Word writes it (`formLetters`,
+`textFile`, the SELECT with WHERE / ORDER BY, the external `file:///`
+relationship, `w:odso` field map, QindaWrite's docVars) and gone again for
+an ordinary document; Word's own `w:mailMerge` over a workbook kept child
+for child; Word's complex fields (IF with a nested field, SKIPIF and NEXT
+without a result, an Address Block format with line breaks) read and
+written back; LibreOffice renders the merged letter (a page per record).
+`tst_docx_envelopes` 8/8 — an envelope as a document (Size 10: the page
+is the envelope, landscape, Envelope Address / Envelope Return with Word's
+style names) and a DL envelope as the first section before a letter (its
+own `w:pgSz` and paper code, the letter's page kept after a page-setup
+change); a 5160 sheet as Word's
+fixed-layout table (`w:gridCol` 3780 / 180, ten `w:trHeight` 1440 exact
+rows that cannot split, nil borders, the sheet's margins with none at the
+bottom, no paragraph before the table) read back; **the rows as tall as
+the pitch on screen** (every row 1 in apart, the first label centred like
+the others although it carries the row's pad, one page; padded again when
+the first label grows to three lines); every product fitting its paper
+with Avery's figures (5160 thirty at 2 5/8 in, L7163 fourteen at 99.1 mm);
+LibreOffice renders a 5163 sheet. `tst_docx_notes` 7/7 — endnotes read as
+marks i, ii, iii with their texts; an untouched `endnotes.xml` copied byte
+for byte; an edited or added note rewriting the part with each unchanged
+note's own markup; the Footnote and Endnote options in settings.xml and
+the closing section, read back; new endnotes in a new document.
+`tst_docx_floats` 8/8 — `wp:anchor` read as Square, Tight, Top and Bottom
+(Qt floats the text flows around) and Behind Text (drawn where its position
+puts it); untouched anchors written back as Word wrote them; each wrap
+written as Word writes it, schema-valid and read back equal; a moved
+picture changing only its position; In Line ↔ Square; LibreOffice renders
+the anchored pictures.
+
+**QindaWrite, through the real window.** `tst_write_mailings` 11/11 —
+Letters from a CSV (Select Recipients, the twenty Insert Merge Field slots
+named after the columns, Address Block, Greeting Line, a field; one undo
+step per field), Preview Results (first record, Next, Last, Find Recipient,
+First; the body keeps its fields), Finish & Merge ▸ Edit Individual
+Documents (3 records, a section each, the values in place, no «), records 2
+to 3, Merge to PDF; from an Excel workbook (Hello Edsger, balance 100;
+Hello Barbara, balance 200; a two-sheet workbook asking which sheet);
+**SKIPIF drops a record** (London's Ada skipped, "To Grace in Virginia"
+from the IF, 2 copies); Edit Recipient List (a recipient left out, a
+filter, a sort, Find Duplicates); E-mail Messages handed to a fake
+QindaMail one recipient at a time (`mailto:` with subject and body, a
+recipient without an address left out, the merged document attached with
+`--attach`); QindaMail's People as recipients (a contact group's card and raw address, a category, Address Line 2);
+Check for Errors; the merge saved as `w:mailMerge` and reopened as a merge
+document with its recipients; Envelopes ▸ Add to Document (DL, one undo
+step for the text and the paper), Labels ▸ New Document (a full 5160 sheet,
+a single L7163 label at row 2, column 2), Start Mail Merge ▸ Labels («Next
+Record» before 29 labels, **one page**), Update Labels (one page), the
+merged sheet one page. `tst_write_endnotes` 6/6 — Insert Endnote
+(Ctrl+Alt+D) asks for the note and marks it i; a note before it renumbers
+both; **typing after a mark is text** (the mark stays "i"; Undo takes the
+typing alone); editing and removing a note are undo steps; options (A B C
+from 3) and their undo; Convert (to endnotes, back, swap); saved
+`endnotes.xml` and reopened; thirty three-line notes after the body running
+onto a second page. `tst_write_wrap` 7/7 — each Wrap Text style one undo
+step, the picture staying where it was and selected, the text beside it,
+**no gap left where an earlier float box was** (after Undo, and after an
+offset change the text starts at offset + picture + distance); alignment
+right at the column's edge, Fix Position on Page keeping its place;
+dragging to place (one step; an inline picture is not dragged); saved as
+`wp:anchor` with `wp:wrapTight` and read back. `tst_write_ui` 19/19: the
+ribbon gate at 1400 and 520 px (the Mailings and References tabs and the
+Picture Format contextual tab: every menu command reachable, every icon
+known, every item inside the ribbon); the fixtures regenerated on purpose
+(`QQO_UPDATE_FIXTURES=1`, 494 → 496 rows each: `ribbonTab_mailings` and
+`ribbonTab_references`). `tst_write_menu_export` 3/3 (the Mailings menu
+between Review and Tools; every new id resolves in the ActionModel). The
+rest unchanged and green: `tst_write_control` 8/8, `tst_write_view` 9/9,
+`tst_write_typography` 7/7, `tst_write_review` 13/13, `tst_write_formats`
+6/6, `tst_write_probe_pagination` 7/7, `tst_write_tools` 3/3,
+`tst_write_docx` 7/7 (2 opt-in skips), `tst_write_pagination` 8/8,
+`tst_write_story` 6/6, `tst_write_picture` 5/5, `tst_write_comments` 3/3,
+`tst_write_tables` 7/7, `tst_write_formatting` 8/8, `tst_write_controls`
+3/3, `tst_write_lists` 8/8, `tst_write_styles` 9/9, `tst_docx_read` 15/15,
+`tst_docx_write` 6/6, `tst_docx_restyle` 3/3, `tst_docx_comments` 8/8,
+`tst_docx_tables` 8/8, `tst_docx_paragraphs` 8/8, `tst_docx_controls` 7/7,
+`tst_docx_lists` 9/9, `tst_docx_styles` 9/9, `tst_docx_corpus` 2/2 (1
+skip), `tst_ooxml` 24/24, `tst_ooxml_entries` 4/4, `tst_note_word` 3/3.
+
+**Looked at** (`QQO_GRAB_DIR`, 1280 and 520 px): the Mailings tab (Create,
+Start Mail Merge, Write & Insert Fields, Preview Results with the record
+box, Finish & Merge; at 520 the groups wrap with every button); a letter
+with «AddressBlock», «GreetingLine» and «City» (no spelling squiggles under
+fields) and its Preview Results (Ada Lovelace's address, "Dear Lovelace,",
+"Your town: London"); Mail Merge Recipients (check boxes, columns, the
+buttons wrapping at 520); Insert Address Block with its preview; Envelopes
+and Labels (the single-label row and column wrapping together at 520); the
+label sheet Start Mail Merge ▸ Labels leaves (thirty labels in rows 1 in
+apart, «Next Record» centred in each, one page, the caret in the first
+label); a page ending in thirty endnotes under a short rule, numbered i to
+xxx, a second page; a Square-wrapped picture 0.42 in into the column with
+the text beside it, the Picture Format tab, and Position and Wrapping
+(Word's two distance columns). LibreOffice's PDFs: the merged letters (3
+pages, the address block and greeting per record), a 5163 sheet (ten labels
+on their grid), the anchored pictures (behind, square, top and bottom,
+tight). Fixed on the way: the label rows had been padded inside the edit
+block that made them, from layouts Qt had not made yet (rows 1.15 in, two
+pages); a replaced floating picture left its old box in Qt's float list
+(the text kept clear of an empty gap); text typed after a note mark took
+the mark's identity and was eaten by the next renumbering.
+
+On the desktop (owner, Microsoft Word): in QindaWrite, Start Mail Merge ▸
+Letters, Select Recipients ▸ Use an Existing List on a spreadsheet
+(`.xlsx`), Address Block, Greeting Line and a field; Preview Results, then
+Finish & Merge ▸ Edit Individual Documents and print one letter; save the
+main document. Start Mail Merge ▸ Labels on Avery 5160 with the same list,
+Address Block in the first label, Update Labels, Finish & Merge ▸ Print
+Documents onto a label sheet — the addresses inside the labels. Open the
+main documents in Word: Word asks "Opening this document will run the
+following SQL command: SELECT * FROM … Data from your database will be
+placed in the document. Do you want to continue?"; Yes asks for the data
+source when the path is a Linux one (point it at the same file), and
+Mailings ▸ Preview Results shows the same records; the merged letters and
+the label sheet open without a repair prompt.
+
 ## M79 Plan gates (D-088)
 
 Qualified on qinda (branch `m79-plan-project`, merged with

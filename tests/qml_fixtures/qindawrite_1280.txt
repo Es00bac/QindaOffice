@@ -223,6 +223,8 @@ QQuickRootItem#WriteWindow
           QQuickTabButton#ribbonTab_home
           QQuickTabButton#ribbonTab_insert
           QQuickTabButton#ribbonTab_layout
+          QQuickTabButton#ribbonTab_mailings
+          QQuickTabButton#ribbonTab_references
           QQuickTabButton#ribbonTab_review
           QQuickTabButton#ribbonTab_view
         QQuickItem#ribbonGroupViewport

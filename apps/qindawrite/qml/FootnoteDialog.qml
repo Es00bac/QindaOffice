@@ -2,18 +2,24 @@
 import QtQuick
 import QindaTK as Tk
 
-// A footnote's text: new (noteId empty) inserts a marker at the caret;
-// editing an existing note to empty removes note and marker.
+// A footnote's or endnote's text (M77: `kind`): new (noteId empty) inserts
+// a mark at the caret; editing an existing note to empty removes note and
+// mark.
 Tk.Dialog {
     id: dialog
     property string noteId: ""
+    property string kind: "footnote"
     property alias text: area.text
     signal footnoteApplied(string id, string text)
+    signal noteApplied(string kind, string id, string text)
     objectName: "footnoteDialog"
-    title: qsTr("Footnote")
+    title: kind === "endnote" ? qsTr("Endnote") : qsTr("Footnote")
     dialogWidth: 420
     primaryText: qsTr("Save")
-    onAccepted: dialog.footnoteApplied(noteId, area.text)
+    onAccepted: {
+        if (kind === "endnote") dialog.noteApplied(kind, noteId, area.text)
+        else dialog.footnoteApplied(noteId, area.text)
+    }
     onOpened: area.forceActiveFocus(Qt.TabFocusReason)
     Tk.Flex {
         direction: Tk.Flex.Column

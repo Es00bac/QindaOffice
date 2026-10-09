@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "page_setup_io.h"
 
+#include "write_endnotes.h"
+
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
@@ -72,7 +74,12 @@ bool PageDecoration::isEmpty() const
             return false;
         }
     }
-    return footnotes.isEmpty();
+    return footnotes.isEmpty() && endnotes == nullptr;
+}
+
+int PageDecoration::pageCount(int bodyPages) const
+{
+    return qMax(bodyPages, endnotes != nullptr ? endnotes->lastPage() : 0);
 }
 
 PageSetup pageSetupFromHtml(const QString &html)

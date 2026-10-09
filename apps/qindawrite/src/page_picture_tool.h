@@ -11,6 +11,11 @@
 // maps. A picture keeps its original bytes (WordParts::media): only its
 // display size changes, and the .docx writer patches the extents of a Word
 // picture's own drawing (alt text, crop and anchoring stay).
+//
+// Floating pictures (M77, docx_float.h): a click on one selects it (one
+// behind the text only where no text is under the pointer), and dragging
+// a selected floating picture by its body places it — new offsets in what
+// its position is relative to, one undo step.
 
 #include <QPointF>
 #include <QRectF>
@@ -40,11 +45,22 @@ public:
     [[nodiscard]] int handleAt(const QPointF &docPos) const;
 
     bool beginDrag(int handle, const QPointF &docPos);
+    // Starts placing the selected floating picture under `docPos`; false
+    // for an inline picture or a point off it.
+    bool beginMove(const QPointF &docPos);
+    // Moves the floating picture at `position` by `delta`, one undo step.
+    bool movePicture(int position, const QPointF &delta);
+    // Whether the selected picture floats (wrap other than In Line).
+    [[nodiscard]] bool selectedFloats() const;
     void dragTo(const QPointF &docPos, bool freeAspect);
     // Applies the dragged size; false when there was no drag.
     bool finishDrag();
-    void cancelDrag() { m_handle = -1; }
-    [[nodiscard]] bool isDragging() const { return m_handle >= 0; }
+    void cancelDrag()
+    {
+        m_handle = -1;
+        m_moving = false;
+    }
+    [[nodiscard]] bool isDragging() const { return m_handle >= 0 || m_moving; }
 
     // The picture's size and natural (pixel) size, and its alt text.
     [[nodiscard]] QSizeF pictureSize(int position) const;
@@ -60,12 +76,16 @@ public:
 private:
     [[nodiscard]] QTextDocument *document() const;
     [[nodiscard]] QList<QRectF> handleRects(const QRectF &picture) const;
+    // The positions of the floating pictures, in text order.
+    [[nodiscard]] QList<int> floatingPictures() const;
 
     PageTextControl *m_control;
     int m_handle = -1;
     int m_position = -1;
     QRectF m_start;
     QRectF m_drag;
+    bool m_moving = false;
+    QPointF m_moveFrom;
 };
 
 } // namespace QindaOffice::Apps::Write

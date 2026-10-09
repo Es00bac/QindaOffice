@@ -27,6 +27,10 @@
 #include "write_review_actions.h"
 #include "write_revisions.h"
 #include "write_typography.h"
+#include "write_endnotes.h"
+#include "write_float.h"
+#include "write_mailmerge.h"
+#include "write_notes.h"
 
 #include <QClipboard>
 #include <QFontDatabase>
@@ -94,12 +98,14 @@ WriteHost::WriteHost()
     connect(m_review, &WriteReviewActions::message, this,
             [this](const QString &text) { showStatusMessage(text, 6000); });
     connect(m_control, &PageTextControl::cursorPositionChanged, this, [this] { emit rulerChanged(); });
-    connect(m_control, &PageTextControl::doubleClicked, this,
-            [this](int position) { static_cast<void>(m_review->editFootnoteAt(position)); });
+    connect(m_control, &PageTextControl::doubleClicked, this, [this](int position) {
+        static_cast<void>(m_review->editFootnoteAt(position) || m_notes->editEndnoteAt(position));
+    });
     connect(m_document, &WriteDocument::pageSetupChanged, this, [this] {
         emit pageSetupChanged();
         emit rulerChanged();
     });
+    createMailings(); // M77 (D-086): write_host_m77.cpp
     createTextActions();
     createAssistant();
     createSpellingEntries();
@@ -107,6 +113,7 @@ WriteHost::WriteHost()
     wireEditCommands();
     finalizeHost();
     updateWriteStatus();
+    adoptPendingDocument();
 }
 
 WriteHost::~WriteHost()
@@ -125,9 +132,12 @@ void WriteHost::attachPage(PageTextItem *item)
     }
     item->attach(m_document, m_control);
     m_revisions->setInputTarget(item);
+    m_pictureLayout->setPictureTool(item->pictures());
+    m_mailMerge->setPageItem(item);
     connect(item, &PageTextItem::pageCountChanged, this, [this] { updateWriteStatus(); });
     connect(item, &PageTextItem::storyChanged, this, [this] { syncStoryActions(); });
     connect(item, &PageTextItem::pictureDialogRequested, this, &WriteHost::pictureDialogRequested);
+    connect(m_document, &WriteDocument::contentChanged, m_pictureLayout, &PictureLayoutController::sync);
     connect(item, &PageTextItem::selectionReleased, m_painter, &FormatPainter::selectionReleased);
     connect(item, &PageTextItem::clicked, m_controls,
             [this](qreal x, qreal y, const QPointF &docPos, int position) {
@@ -369,6 +379,7 @@ void WriteHost::documentReplaced()
     emit pageSetupChanged();
     emit rulerChanged();
     updateWriteStatus();
+    m_mailMerge->reload(); // the opened document's own merge data source (M77)
     // What the open approximated (text boxes, charts, …) is said once, not
     // hidden: those objects are kept unchanged on save (D-068).
     const QStringList warnings = m_document->openWarnings();
@@ -379,6 +390,26 @@ void WriteHost::documentReplaced()
 
 Quick::PrintRenderCallback WriteHost::printRenderCallback() const
 {
+    if (m_printOverride) {
+        // A merged document, an envelope or a label sheet (M77): its own
+        // pages; the headers and footers of this document only when it was
+        // made from this document's pages.
+        std::shared_ptr<QTextDocument> other = m_printOverride;
+        PageDecoration decoration;
+        if (other->pageSize() == m_document->pageSize()) {
+            decoration = m_document->decoration();
+            decoration.footnotes.clear();
+            decoration.endnotes = nullptr;
+        }
+        decoration.overTextPictures = true;
+        return [other, decoration](QPrinter *printer, QPainter *painter) {
+            const QSizeF page = other->pageSize();
+            printer->setPageSize(QPageSize(page * 0.75, QPageSize::Point));
+            printer->setPageMargins(QMarginsF(0, 0, 0, 0));
+            renderDocumentPages(painter, QSizeF(printer->width(), printer->height()), other.get(),
+                                [printer] { printer->newPage(); }, decoration);
+        };
+    }
     const WriteDocument *doc = m_document;
     return [doc](QPrinter *printer, QPainter *painter) {
         // WYSIWYG: the paper follows the document's page size, matching the

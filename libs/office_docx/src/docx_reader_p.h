@@ -28,6 +28,7 @@ struct ReadEnv {
     Ooxml::Theme theme;
     WordParts *parts = nullptr;
     QHash<QString, QString> footnoteText; // w:footnote id → plain text
+    QHash<QString, QString> endnoteText;  // w:endnote id → plain text (M77)
     int nextMedia = 1;
     int nextIsland = 1;
     int nextControl = 1; // content control keys, unique across stories
@@ -66,6 +67,11 @@ public:
         struct Field {
             QString instruction;
             bool inResult = false;
+            // Begun inside another field's code (IF { MERGEFIELD … }): its
+            // code joins the outer one's in braces, as Word's field-code
+            // view shows it (M77).
+            bool nested = false;
+            bool produced = false; // result text was inserted for it
         };
         QList<Field> fields;         // complex fields may span paragraphs
         QStringList pendingAnchors;  // bookmarks waiting for the next text
@@ -98,6 +104,12 @@ public:
     void insertText(QTextCursor &cursor, const QString &text, QTextCharFormat format, InlineState &inl,
                     ContainerState &state);
     void insertObject(QTextCursor &cursor, QTextCharFormat format, InlineState &inl, ContainerState &state);
+    // A picture Word anchors (wp:anchor): inline, or one of Qt's floating
+    // frames for the wrapped ones (docx_float.h, M77).
+    void insertPicture(QTextCursor &cursor, const QTextImageFormat &image, InlineState &inl, ContainerState &state);
+    // What insertText() gives a run's format: link, bookmarks, field,
+    // comments, controls, revision marks, the import snapshot.
+    QTextCharFormat prepareFormat(QTextCharFormat format, InlineState &inl, ContainerState &state);
     // Ends the pending paragraph: `keepAfter` gives it its own space after
     // (a table or the container's end follows); otherwise that space was
     // folded into the next paragraph's top margin.
@@ -111,10 +123,13 @@ private:
     void readParagraph(const Ooxml::XmlElement &p, QTextCursor &cursor, ContainerState &state);
     void readInline(const Ooxml::XmlElement &parent, QTextCursor &cursor, InlineState &inl, ContainerState &state);
     void readRun(const Ooxml::XmlElement &r, QTextCursor &cursor, InlineState &inl, ContainerState &state);
-    void readFieldChar(const Ooxml::XmlElement &fldChar, ContainerState &state);
+    void readFieldChar(const Ooxml::XmlElement &fldChar, QTextCursor &cursor, const QTextCharFormat &format,
+                       InlineState &inl, ContainerState &state);
     void pageBreak(QTextCursor &cursor, InlineState &inl, ContainerState &state);
     void footnoteMarker(QTextCursor &cursor, const QString &id, QTextCharFormat format, InlineState &inl,
                         ContainerState &state);
+    void endnoteMarker(QTextCursor &cursor, const QString &id, QTextCharFormat format, InlineState &inl,
+                       ContainerState &state);
     void preservedText(QTextCursor &cursor, const Ooxml::XmlElement &element, const QString &display,
                        QTextCharFormat format, InlineState &inl, ContainerState &state);
     // Makes the cursor's block an item of the list Word would number it in,
@@ -151,6 +166,7 @@ private:
     // 0 a paragraph, 1 a table (a block-level control is read through).
     int readBlockItems(const Ooxml::XmlElement &container, QTextCursor &cursor, ContainerState &state);
     int m_footnoteNumber = 0;
+    int m_endnoteNumber = 0;
 
     // Word keeps one counter set per abstract numbering definition (per
     // w:num when it overrides a start); a new QTextList starts whenever Word

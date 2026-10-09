@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Paragraphs and runs of the .docx writer: text, breaks, hyperlinks, simple
-// fields, tracked changes, bookmarks, footnote references, pictures and
-// preserved objects.
+// Paragraphs and runs of the .docx writer: text, breaks, hyperlinks, fields
+// (simple, or complex for merge fields with nested codes and Word's rules
+// without a result — M77), tracked changes, bookmarks, footnote and endnote
+// references, pictures and preserved objects.
 
 #include "docx_controls.h"
 #include "docx_format.h"
+#include "docx_merge_fields.h"
 #include "docx_properties.h"
 #include "docx_writer_p.h"
 #include "ooxml_namespaces.h"
@@ -67,6 +69,59 @@ void appendText(XmlElement &run, const QString &text, bool deleted)
         t.setAttribute(QString::fromUtf16(Ooxml::Ns::XML), QStringLiteral("space"), QStringLiteral("preserve"));
     }
     t.appendText(text);
+}
+
+XmlElement &fieldChar(XmlElement &parent, const QString &type)
+{
+    XmlElement &run = parent.appendElement(kW, QStringLiteral("r"));
+    run.appendElement(kW, QStringLiteral("fldChar")).setAttribute(kW, QStringLiteral("fldCharType"), type);
+    return run;
+}
+
+// A field code as instrText runs, its nested fields ("{ … }", Word's
+// field-code view) as nested complex fields and its line breaks as w:br.
+void writeCode(XmlElement &parent, const QString &code)
+{
+    QString text;
+    auto flush = [&] {
+        const QStringList lines = text.split(QLatin1Char('\n'));
+        for (qsizetype k = 0; k < lines.size(); ++k) {
+            if (k > 0) {
+                parent.appendElement(kW, QStringLiteral("r")).appendElement(kW, QStringLiteral("br"));
+            }
+            if (!lines.at(k).isEmpty()) {
+                XmlElement &t = parent.appendElement(kW, QStringLiteral("r")).appendElement(kW, QStringLiteral("instrText"));
+                t.setAttribute(QString::fromUtf16(Ooxml::Ns::XML), QStringLiteral("space"), QStringLiteral("preserve"));
+                t.appendText(lines.at(k));
+            }
+        }
+        text.clear();
+    };
+    for (qsizetype i = 0; i < code.size(); ++i) {
+        if (code.at(i) != QLatin1Char('{')) {
+            text += code.at(i);
+            continue;
+        }
+        int depth = 1;
+        qsizetype j = i + 1;
+        for (; j < code.size() && depth > 0; ++j) {
+            depth += code.at(j) == QLatin1Char('{') ? 1 : code.at(j) == QLatin1Char('}') ? -1 : 0;
+        }
+        flush();
+        fieldChar(parent, QStringLiteral("begin"));
+        writeCode(parent, QLatin1Char(' ') + code.mid(i + 1, j - i - 2).trimmed() + QLatin1Char(' '));
+        fieldChar(parent, QStringLiteral("end"));
+        i = j - 1;
+    }
+    flush();
+}
+
+// Written as a complex field: a code with nested fields or line breaks,
+// or one of Word's merge rules that have no result.
+bool complexField(const QString &code)
+{
+    return code.contains(QLatin1Char('{')) || code.contains(QLatin1Char('\n'))
+        || (isMergeField(code) && !mergeFieldHasResult(mergeFieldKind(code)));
 }
 
 } // namespace
@@ -227,6 +282,22 @@ void BodyWriter::writeRuns(const QTextBlock &block, XmlElement &p)
                         .setAttribute(kW, QStringLiteral("id"), QString::number(m_env.footnoteIds.value(noteId)));
                     continue;
                 }
+                if (f.hasProperty(kEndnoteIdProperty)) {
+                    // An endnote's reference mark (M77): the note keeps its
+                    // own id while endnotes.xml is copied as read.
+                    const QString noteId = f.stringProperty(kEndnoteIdProperty);
+                    if (!m_env.endnoteIds.contains(noteId)) {
+                        m_env.endnoteIds.insert(noteId, m_env.keepEndnotesPart ? noteId.mid(5).toInt() : m_env.nextEndnoteId++);
+                        m_env.endnoteOrder.append(noteId);
+                    }
+                    XmlElement &run = parent.appendElement(kW, QStringLiteral("r"));
+                    XmlElement &rPr = run.appendElement(kW, QStringLiteral("rPr"));
+                    setChildVal(rPr, QStringLiteral("rStyle"), QStringLiteral("EndnoteReference"));
+                    m_env.usedStyles.insert(QStringLiteral("EndnoteReference"));
+                    run.appendElement(kW, QStringLiteral("endnoteReference"))
+                        .setAttribute(kW, QStringLiteral("id"), QString::number(m_env.endnoteIds.value(noteId)));
+                    continue;
+                }
                 if (f.isImageFormat()) {
                     for (qsizetype c = 0; c < text.size(); ++c) {
                         if (XmlElementPtr run = pictureRun(f.toImageFormat())) {
@@ -268,6 +339,14 @@ void BodyWriter::writeRuns(const QTextBlock &block, XmlElement &p)
                 }
                 link.setAttribute(kW, QStringLiteral("history"), QStringLiteral("1"));
                 emitGroup(link, i, j, level + 1);
+            } else if (level == depth + 1 && complexField(value)) {
+                fieldChar(parent, QStringLiteral("begin"));
+                writeCode(parent, QLatin1Char(' ') + value + QLatin1Char(' '));
+                if (mergeFieldHasResult(mergeFieldKind(value))) {
+                    fieldChar(parent, QStringLiteral("separate"));
+                    emitGroup(parent, i, j, level + 1);
+                }
+                fieldChar(parent, QStringLiteral("end"));
             } else if (level == depth + 1) {
                 XmlElement &field = parent.appendElement(kW, QStringLiteral("fldSimple"));
                 field.setAttribute(kW, QStringLiteral("instr"), QLatin1Char(' ') + value + QLatin1Char(' '));

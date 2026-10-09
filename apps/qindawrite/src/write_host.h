@@ -51,6 +51,10 @@ class WriteComments;
 class WriteControls;
 class WriteRevisions;
 class WriteTypography;
+class EnvelopesController;
+class MailMergeController;
+class NotesController;
+class PictureLayoutController;
 
 class WriteHost : public Quick::DocumentHost {
     Q_OBJECT
@@ -87,6 +91,13 @@ class WriteHost : public Quick::DocumentHost {
     // write_navigation.h.
     Q_PROPERTY(QObject *painter READ painterObject CONSTANT)
     Q_PROPERTY(QObject *navigation READ navigationObject CONSTANT)
+    // Word's Mailings tab, envelopes and labels, endnotes and the Footnote
+    // and Endnote dialog, picture wrapping and position (M77, D-086):
+    // write_mailmerge.h, write_envelopes.h, write_notes.h, write_float.h.
+    Q_PROPERTY(QObject *mailMerge READ mailMergeObject CONSTANT)
+    Q_PROPERTY(QObject *envelopes READ envelopesObject CONSTANT)
+    Q_PROPERTY(QObject *notes READ notesObject CONSTANT)
+    Q_PROPERTY(QObject *pictureLayout READ pictureLayoutObject CONSTANT)
 public:
     WriteHost();
     ~WriteHost() override;
@@ -109,6 +120,17 @@ public:
     [[nodiscard]] StylesController *stylesController() const { return m_styles; }
     [[nodiscard]] FormatPainter *formatPainter() const { return m_painter; }
     [[nodiscard]] NavigationModel *navigation() const { return m_navigation; }
+    [[nodiscard]] MailMergeController *mailMergeController() const { return m_mailMerge; }
+    [[nodiscard]] EnvelopesController *envelopesController() const { return m_envelopes; }
+    [[nodiscard]] NotesController *notesController() const { return m_notes; }
+    [[nodiscard]] PictureLayoutController *pictureLayoutController() const { return m_pictureLayout; }
+    // A Word package opened in a window of its own, untitled and unsaved
+    // (a merged document, an envelope, a label sheet — M77): the next
+    // QindaWrite window this process creates adopts it (write_host_m77.cpp).
+    void openDocumentWindow(const QByteArray &docx);
+    // Prints `document` (laid out like this one) through the shell's print
+    // dialog instead of this document, once.
+    void printOther(std::shared_ptr<QTextDocument> document);
 
     // The QML page item, once (WritePage.qml's Component.onCompleted).
     Q_INVOKABLE void attachPage(PageTextItem *item);
@@ -190,6 +212,8 @@ signals:
     // only when the pane's state differs, so the checked sync cannot loop.
     void commentsPaneToggleRequested(bool visible, bool compose);
     void exportPdfRequested(const QString &suggestedPath);
+    // A document openDocumentWindow() handed on (M77); the tests read it.
+    void documentMade(const QByteArray &docx);
     void templateConsentRequested(const QString &path);
     void proposalRequested(const QString &original, const QString &proposal);
 
@@ -220,6 +244,14 @@ private:
     [[nodiscard]] QObject *stylesObject() const;
     [[nodiscard]] QObject *painterObject() const;
     [[nodiscard]] QObject *navigationObject() const;
+    // write_host_m77.cpp
+    void createMailings();
+    void adoptPendingDocument();
+    [[nodiscard]] QList<Quick::MenuNode> mailingsMenu() const;
+    [[nodiscard]] QObject *mailMergeObject() const;
+    [[nodiscard]] QObject *envelopesObject() const;
+    [[nodiscard]] QObject *notesObject() const;
+    [[nodiscard]] QObject *pictureLayoutObject() const;
     void insertPageField(bool total);
     void syncStoryActions();
     void createSpellingEntries();
@@ -248,6 +280,11 @@ private:
     StylesController *m_styles = nullptr;
     FormatPainter *m_painter = nullptr;
     NavigationModel *m_navigation = nullptr;
+    MailMergeController *m_mailMerge = nullptr;
+    EnvelopesController *m_envelopes = nullptr;
+    NotesController *m_notes = nullptr;
+    PictureLayoutController *m_pictureLayout = nullptr;
+    std::shared_ptr<QTextDocument> m_printOverride;
     WriteReviewActions *m_review = nullptr;
     SpellChecker *m_spell = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;

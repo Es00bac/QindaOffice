@@ -24,14 +24,6 @@
 
 namespace QindaOffice::Apps::Write {
 
-namespace {
-// Paper edge: paper is paper (D-004), so this is a print-like grey, not a
-// theme role.
-const QColor kPaperEdge(0xc8, 0xc8, 0xcc);
-// The body behind an open header or footer, washed out as Word does.
-const QColor kBodyWash(0xff, 0xff, 0xff, 0x8c);
-} // namespace
-
 PageTextItem::PageTextItem(QQuickItem *parent)
     : QQuickPaintedItem(parent)
 {
@@ -76,7 +68,7 @@ void PageTextItem::attach(WriteDocument *document, PageTextControl *control)
         m_geometry.setPageSize(m_document->pageSize());
         updatePageMetrics();
     });
-    connect(document, &WriteDocument::contentChanged, this, [this] { update(); });
+    connect(document, &WriteDocument::contentChanged, this, [this] { updatePageMetrics(); });
     connect(document, &WriteDocument::commentsChanged, this, [this] { update(); });
     connect(document, &WriteDocument::activeCommentChanged, this, [this] { update(); });
     updatePageMetrics();
@@ -93,11 +85,15 @@ void PageTextItem::updatePageMetrics()
     if (m_document == nullptr) {
         return;
     }
-    const qreal contentHeight =
-        m_document->textDocument()->documentLayout()->documentSize().height();
-    const int pages = m_geometry.pageCount(contentHeight);
+    // Preview Results shows a merged copy (M77); the body's endnotes may
+    // run past its last page (write_endnotes.h).
+    const QTextDocument *shown = m_preview != nullptr ? m_preview.data() : m_document->textDocument();
+    int pages = m_geometry.pageCount(shown->documentLayout()->documentSize().height());
+    if (m_preview == nullptr) {
+        pages = m_document->decoration().pageCount(pages);
+    }
     setImplicitWidth(m_geometry.pageSize().width());
-    setImplicitHeight(m_geometry.documentHeight(contentHeight));
+    setImplicitHeight(m_geometry.documentHeight(pages * m_geometry.pageHeight()));
     if (pages != m_pageCount) {
         m_pageCount = pages;
         emit pageCountChanged();
@@ -210,80 +206,6 @@ void PageTextItem::closeStory()
     }
 }
 
-// ---- painting -----------------------------------------------------------------------
-
-void PageTextItem::paintPage(QPainter *painter, int index, const QRectF &clip)
-{
-    const QRectF page = m_geometry.pageRect(index, width());
-    if (!page.intersects(clip)) {
-        return;
-    }
-    painter->fillRect(page, m_control->paperPalette().base().color());
-    painter->setPen(kPaperEdge);
-    painter->setBrush(Qt::NoBrush);
-    painter->drawRect(page.adjusted(0, 0, -1, -1));
-
-    const QSizeF size = m_document->pageSize();
-    painter->save();
-    painter->setClipRect(page.intersected(clip));
-    painter->translate(page.topLeft());
-    painter->translate(0, -index * size.height());
-    const QRectF pageArea(0, index * size.height(), size.width(), size.height());
-    const bool storyOpen = m_story != nullptr && m_story->isOpen();
-    if (storyOpen) {
-        // The control edits a header or footer: the body as it prints, no
-        // caret or selection.
-        QAbstractTextDocumentLayout::PaintContext context;
-        context.clip = pageArea;
-        context.palette = m_control->paperPalette();
-        m_document->textDocument()->documentLayout()->draw(painter, context);
-        Docx::drawListMarkers(painter, *m_document->textDocument(), pageArea); // Word's numbers (M73)
-    } else {
-        // Comment bands under the text (display only, docx_comments.h).
-        if (!m_document->comments().isEmpty()) {
-            Docx::drawCommentRanges(painter, *m_document->textDocument(), m_document->commentSpans(), pageArea,
-                                    m_document->activeComment());
-        }
-        m_control->drawContents(painter, pageArea);
-    }
-    // Word paragraph borders and tab leaders: Qt's layout draws neither
-    // (docx_text.h, docx_paragraph_format.h).
-    Docx::drawParagraphBorders(painter, *m_document->textDocument(), pageArea);
-    Docx::drawTabLeaders(painter, *m_document->textDocument(), pageArea);
-    if (!storyOpen) {
-        m_pictures->draw(painter, pageArea); // a selected picture's handles
-    }
-    painter->restore();
-    if (storyOpen) {
-        painter->fillRect(page.intersected(clip), kBodyWash);
-    }
-
-    const PageDecoration decoration = m_document->decoration();
-    const bool storyHere = storyOpen && m_story->page() == index;
-    if (!decoration.isEmpty()) {
-        painter->save();
-        painter->translate(page.topLeft());
-        drawPageDecoration(painter, QRectF(QPointF(0, 0), size), decoration, index + 1, m_pageCount,
-                           storyHere ? m_story->story() : nullptr);
-        painter->restore();
-    }
-    if (storyHere) {
-        m_story->drawOpenStory(painter, page);
-    }
-}
-
-void PageTextItem::paint(QPainter *painter)
-{
-    if (m_document == nullptr || m_control == nullptr) {
-        return;
-    }
-    painter->setRenderHint(QPainter::TextAntialiasing);
-    const QRectF clip(0, 0, width(), height());
-    for (int i = 0; i < m_pageCount; ++i) {
-        paintPage(painter, i, clip);
-    }
-}
-
 // ---- events -------------------------------------------------------------------------
 
 void PageTextItem::forwardMouse(QMouseEvent *event)
@@ -337,6 +259,10 @@ bool PageTextItem::openStoryAt(QMouseEvent *event)
 void PageTextItem::mousePressEvent(QMouseEvent *event)
 {
     forceActiveFocus(Qt::MouseFocusReason);
+    if (m_preview != nullptr) {
+        event->accept(); // Preview Results is read-only (M77)
+        return;
+    }
     if (event->button() == Qt::LeftButton && m_story != nullptr && m_story->isOpen()) {
         forwardStoryMouse(event);
         return;
@@ -350,6 +276,7 @@ void PageTextItem::mousePressEvent(QMouseEvent *event)
         }
         if (const int picture = m_pictures->pictureAt(doc); picture >= 0) {
             m_pictures->select(picture);
+            m_pictures->beginMove(doc); // a floating picture is dragged into place (M77)
             update();
             event->accept();
             return;
@@ -370,6 +297,10 @@ void PageTextItem::mousePressEvent(QMouseEvent *event)
 
 void PageTextItem::mouseMoveEvent(QMouseEvent *event)
 {
+    if (m_preview != nullptr) {
+        event->accept();
+        return;
+    }
     if (m_pictures != nullptr && m_pictures->isDragging()) {
         m_pictures->dragTo(viewToDoc(event->position()), event->modifiers() & Qt::ShiftModifier);
         update();
@@ -385,6 +316,10 @@ void PageTextItem::mouseMoveEvent(QMouseEvent *event)
 
 void PageTextItem::mouseReleaseEvent(QMouseEvent *event)
 {
+    if (m_preview != nullptr) {
+        event->accept();
+        return;
+    }
     if (m_pictures != nullptr && m_pictures->isDragging()) {
         m_pictures->finishDrag();
         update();
@@ -410,6 +345,10 @@ void PageTextItem::mouseReleaseEvent(QMouseEvent *event)
 
 void PageTextItem::mouseDoubleClickEvent(QMouseEvent *event)
 {
+    if (m_preview != nullptr) {
+        event->accept();
+        return;
+    }
     if (m_story != nullptr && m_story->isOpen()) {
         if (forwardStoryMouse(event)) {
             return;
@@ -444,14 +383,17 @@ void PageTextItem::hoverMoveEvent(QHoverEvent *event)
     static const Qt::CursorShape kShapes[8] = {Qt::SizeFDiagCursor, Qt::SizeVerCursor, Qt::SizeBDiagCursor,
                                                Qt::SizeHorCursor,   Qt::SizeFDiagCursor, Qt::SizeVerCursor,
                                                Qt::SizeBDiagCursor, Qt::SizeHorCursor};
-    const int handle = m_pictures != nullptr && !isEditingStory() ? m_pictures->handleAt(viewToDoc(event->position())) : -1;
-    setCursor(QCursor(handle >= 0 ? kShapes[handle] : Qt::IBeamCursor));
+    const QPointF doc = viewToDoc(event->position());
+    const int handle = m_pictures != nullptr && !isEditingStory() ? m_pictures->handleAt(doc) : -1;
+    const bool place = handle < 0 && m_pictures != nullptr && m_pictures->selectedFloats()
+        && m_pictures->pictureRect(m_pictures->selected()).contains(doc);
+    setCursor(QCursor(handle >= 0 ? kShapes[handle] : place ? Qt::SizeAllCursor : Qt::IBeamCursor));
     QQuickPaintedItem::hoverMoveEvent(event);
 }
 
 void PageTextItem::keyPressEvent(QKeyEvent *event)
 {
-    if (m_control == nullptr) {
+    if (m_control == nullptr || m_preview != nullptr) {
         event->ignore();
         return;
     }

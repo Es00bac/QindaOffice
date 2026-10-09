@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Pictures of the .docx writer: a picture QindaWrite owns becomes a w:drawing
 // with its original bytes; one read from Word keeps its own drawing (alt text,
-// crop, effects, anchoring) with only its extents patched when resized.
-// Split from docx_writer_body.cpp.
+// crop, effects, anchoring) with only its extents patched when resized, and
+// its wp:anchor rewritten only when its wrap or position changed (M77,
+// docx_float.h). Split from docx_writer_body.cpp.
 
+#include "docx_float.h"
 #include "docx_format.h"
 #include "docx_properties.h"
 #include "docx_writer_p.h"
@@ -152,6 +154,11 @@ XmlElementPtr BodyWriter::pictureRun(const QTextImageFormat &format)
         if (qAbs(imported.width() - size.width()) >= 0.5 || qAbs(imported.height() - size.height()) >= 0.5) {
             resizeDrawing(*drawing, cx, cy);
         }
+        // Wrap Text, Position (M77): the anchor rewritten only when changed.
+        if (format.hasProperty(kPictureFloat)
+            && format.property(kPictureFloat).toMap() != format.property(kPictureFloatSnapshot).toMap()) {
+            writePictureFloat(*drawing, pictureFloat(format), cx, cy);
+        }
         if (auto *docPr = const_cast<XmlElement *>(drawing->descendant(kWP, u"docPr"));
             docPr != nullptr && docPr->attr(u"descr") != alt) {
             if (alt.isEmpty()) {
@@ -225,6 +232,9 @@ XmlElementPtr BodyWriter::pictureRun(const QTextImageFormat &format)
     XmlElement &geom = sp.appendElement(kA, QStringLiteral("prstGeom"));
     geom.setAttribute(QString(), QStringLiteral("prst"), QStringLiteral("rect"));
     geom.appendElement(kA, QStringLiteral("avLst"));
+    if (const PictureFloat layout = pictureFloat(format); layout.isFloating()) {
+        writePictureFloat(d, layout, cx, cy); // wp:inline → Word's wp:anchor
+    }
     return run;
 }
 

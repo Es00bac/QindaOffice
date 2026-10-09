@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "page_picture_tool.h"
 
+#include "docx_float.h"
 #include "docx_properties.h"
 #include "page_text_control.h"
 
@@ -24,16 +25,13 @@ constexpr qreal kMinimum = 8; // a picture never shrinks to nothing
 
 QTextImageFormat imageAt(const QTextDocument *document, int position)
 {
-    if (position < 0 || position >= document->characterCount()) {
+    if (position < 0 || position >= document->characterCount()
+        || document->characterAt(position) != QChar::ObjectReplacementCharacter) {
         return {};
     }
-    QTextCursor cursor(const_cast<QTextDocument *>(document));
-    cursor.setPosition(position);
-    cursor.setPosition(position + 1, QTextCursor::KeepAnchor);
-    if (cursor.selectedText() != QString(QChar::ObjectReplacementCharacter)) {
-        return {};
-    }
-    const QTextCharFormat format = cursor.charFormat();
+    // The fragment's own format: a floating picture's ObjectIndex (its
+    // frame) is kept, so resizing it keeps it floating (docx_float.h).
+    const QTextCharFormat format = Docx::characterFormatAt(*document, position);
     if (!format.isImageFormat() || format.hasProperty(Docx::kInlineXml)) {
         return {}; // a preserved object (chart, shape) is not a picture to size
     }
@@ -89,34 +87,88 @@ QString PictureTool::altText(int position) const
 
 QRectF PictureTool::pictureRect(int position) const
 {
-    const QTextBlock block = document()->findBlock(position);
-    const QTextLayout *layout = block.isValid() ? block.layout() : nullptr;
-    const QSizeF size = pictureSize(position);
-    if (layout == nullptr || size.isEmpty()) {
-        return {};
+    // Inline, in a floating frame, or over the text (docx_float.h).
+    return imageAt(document(), position).isValid() ? Docx::floatingPictureRect(*document(), position) : QRectF();
+}
+
+QList<int> PictureTool::floatingPictures() const
+{
+    QList<int> positions;
+    for (QTextBlock block = document()->begin(); block.isValid(); block = block.next()) {
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            const QTextFragment fragment = it.fragment();
+            if (fragment.charFormat().isImageFormat() && Docx::pictureFloat(fragment.charFormat()).isFloating()) {
+                for (int i = 0; i < fragment.length(); ++i) {
+                    positions.append(fragment.position() + i);
+                }
+            }
+        }
     }
-    const int offset = position - block.position();
-    const QTextLine line = layout->lineForTextPosition(offset);
-    if (!line.isValid()) {
-        return {};
-    }
-    // AGENT-NOTE: Qt sits an inline picture on the baseline (ascent = its
-    // height, QTextDocumentLayout::positionInlineObject).
-    const QPointF origin = document()->documentLayout()->blockBoundingRect(block).topLeft();
-    const qreal x = origin.x() + line.cursorToX(offset);
-    const qreal baseline = origin.y() + line.y() + line.ascent();
-    return {x, baseline - size.height(), size.width(), size.height()};
+    return positions;
 }
 
 int PictureTool::pictureAt(const QPointF &docPos) const
 {
+    // In front of the text and wrapped pictures first; one behind the text
+    // only where no text is under the pointer (Word's rule).
+    int behind = -1;
+    for (const int position : floatingPictures()) {
+        if (!imageAt(document(), position).isValid() || !pictureRect(position).contains(docPos)) {
+            continue;
+        }
+        if (Docx::pictureFloat(imageAt(document(), position)).wrap == u"behind") {
+            behind = position;
+            continue;
+        }
+        return position;
+    }
     const int near = m_control->cursorForPosition(docPos).position();
     for (const int position : {near, near - 1}) {
-        if (imageAt(document(), position).isValid() && pictureRect(position).contains(docPos)) {
+        const QTextImageFormat image = imageAt(document(), position);
+        if (image.isValid() && !Docx::pictureFloat(image).isFloating() && pictureRect(position).contains(docPos)) {
             return position;
         }
     }
+    if (behind >= 0 && document()->documentLayout()->hitTest(docPos, Qt::ExactHit) < 0) {
+        return behind;
+    }
     return -1;
+}
+
+bool PictureTool::selectedFloats() const
+{
+    const int position = selected();
+    return position >= 0 && Docx::pictureFloat(imageAt(document(), position)).isFloating();
+}
+
+bool PictureTool::beginMove(const QPointF &docPos)
+{
+    const int position = selected();
+    if (!selectedFloats() || !pictureRect(position).contains(docPos)) {
+        return false;
+    }
+    m_position = position;
+    m_moving = true;
+    m_moveFrom = docPos;
+    m_start = pictureRect(position);
+    m_drag = m_start;
+    return true;
+}
+
+bool PictureTool::movePicture(int position, const QPointF &delta)
+{
+    if (!imageAt(document(), position).isValid() || delta.isNull()) {
+        return false;
+    }
+    const Docx::PictureFloat moved = Docx::movedPictureFloat(*document(), position, delta);
+    QTextCursor cursor(document());
+    cursor.beginEditBlock();
+    const int at = Docx::setPictureFloat(document(), position, moved);
+    cursor.endEditBlock();
+    if (at >= 0) {
+        select(at);
+    }
+    return at >= 0;
 }
 
 int PictureTool::selected() const
@@ -180,6 +232,10 @@ bool PictureTool::beginDrag(int handle, const QPointF &docPos)
 
 void PictureTool::dragTo(const QPointF &docPos, bool freeAspect)
 {
+    if (m_moving) {
+        m_drag = m_start.translated(docPos - m_moveFrom);
+        return;
+    }
     if (m_handle < 0) {
         return;
     }
@@ -212,6 +268,10 @@ void PictureTool::dragTo(const QPointF &docPos, bool freeAspect)
 
 bool PictureTool::finishDrag()
 {
+    if (m_moving) {
+        m_moving = false;
+        return movePicture(m_position, m_drag.topLeft() - m_start.topLeft());
+    }
     if (m_handle < 0) {
         return false;
     }
@@ -264,7 +324,7 @@ void PictureTool::draw(QPainter *painter, const QRectF &clip) const
     for (const QRectF &handle : handleRects(picture)) {
         painter->drawRect(handle);
     }
-    if (m_handle >= 0) {
+    if (m_handle >= 0 || m_moving) {
         QPen ghost(kHandleEdge);
         ghost.setStyle(Qt::DashLine);
         painter->setPen(ghost);

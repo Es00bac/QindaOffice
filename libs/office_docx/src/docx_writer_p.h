@@ -65,11 +65,19 @@ struct WriteEnv {
     std::unique_ptr<NumberingBuilder> numbering;
     QString sourceMain;         // main part of the source package, if any
     QString sourceFootnotesPart;
+    QString sourceEndnotesPart;
     QSet<QString> usedStyles;   // style ids the output references
     QHash<QByteArray, QString> mediaByHash; // content hash → part name
     QHash<QString, int> footnoteIds;        // note id → w:id
     QList<QString> footnoteOrder;
     int nextFootnoteId = 1;
+    // Endnotes (M77): ids in reference order; while the referenced notes
+    // are the ones read, unchanged, their ids stay and endnotes.xml is
+    // copied (keepEndnotesPart).
+    QHash<QString, int> endnoteIds;
+    QList<QString> endnoteOrder;
+    int nextEndnoteId = 1;
+    bool keepEndnotesPart = false;
     int nextDocPr = 1;
     int nextRevision = 1;
     int nextBookmark = 1;
@@ -78,7 +86,8 @@ struct WriteEnv {
     bool headersChanged = false;
     // Applied to every w:sectPr the body writer emits (paragraph-level ones
     // included): relationship ids, page layout and header references
-    // (docx_writer_parts.cpp, sectionProperties()).
+    // (docx_writer.cpp). A paragraph-level section whose page differs from
+    // the document's as read keeps its own page (an envelope, a label sheet).
     std::function<void(Ooxml::XmlElement &, const QString &)> sectionHook;
 
     [[nodiscard]] QString mediaPart(const QByteArray &bytes, const QString &extension);
@@ -165,6 +174,27 @@ void writeRowProperties(Ooxml::XmlElement &trPr, const QTextCharFormat &anchor);
 void writeCellProperties(Ooxml::XmlElement &tcPr, const QTextTableCellFormat &format, bool imported);
 void writeCellWidth(Ooxml::XmlElement &tcPr, const QTextTable *table, int column, int span,
                     const QList<qreal> &widthsPx);
+
+// Footnotes and endnotes (docx_writer_notes.cpp): decides whether the
+// source's endnotes part is kept (before the body is written), then writes
+// footnotes.xml and endnotes.xml for the notes the body referenced.
+struct NotesWritten {
+    bool footnotes = false;
+    bool endnotes = false;
+};
+void prepareEndnotes(WriteEnv &env, const QTextDocument &body);
+NotesWritten writeNotes(WriteEnv &env);
+// settings.xml (docx_writer_settings.cpp): the source's, kept consistent
+// with what was written — default tab stop, note options and separators,
+// even/odd headers, the mail merge (docx_mailmerge.h).
+void writeSettings(WriteEnv &env, const Ooxml::XmlElementPtr &sourceSettings, const QString &sourceSettingsPart,
+                   const NotesWritten &notes);
+// Footnote/endnote options into a w:sectPr that has its own (or, for the
+// closing section, when the options changed).
+void patchSectionNoteOptions(const WordParts &parts, Ooxml::XmlElement &sectPr, bool closing);
+// Declares the Microsoft extension namespaces a part uses as mc:Ignorable.
+void markIgnorable(Ooxml::XmlElement &root);
+[[nodiscard]] QString wordprocessingType(const char *suffix);
 
 // Styles the writer may need in a document that lacks them (docx_writer_styles.cpp).
 [[nodiscard]] Ooxml::XmlElementPtr builtInStyle(const QString &styleId);

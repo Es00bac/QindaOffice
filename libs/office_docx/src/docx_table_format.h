@@ -26,6 +26,7 @@
 #include <QTextTableFormat>
 
 class QTextCursor;
+class QTextDocument;
 class QTextTable;
 class QTextTableCell;
 
@@ -137,7 +138,18 @@ void distributeColumns(QTextTable *table, const CellRange &range, qreal contentW
 void distributeRows(QTextTable *table, const CellRange &range);
 
 // Re-pads row `row` up to its Word height (kRowHeight), replacing the
-// padding a previous height added (kRowPad). Lays the document out.
+// padding a previous height added (kRowPad, kRowPadTop). Lays the
+// document out.
 void refreshRowHeight(QTextTable *table, int row);
+// The same for every row of `table`, or of every table in `document`
+// (nested ones too), laying the document out once: after content changes
+// that make rows taller or shorter (a label sheet filled, a merge).
+void refreshRowHeights(QTextTable *table);
+void refreshRowHeights(QTextDocument *document);
+// Replaces the padding a row height put on a cell format with `pad` px (0
+// takes it off): on the bottom, split top and bottom for a vertically
+// centred cell, on top for a bottom-aligned one, so the content sits as
+// the cell's alignment asks.
+void setRowPad(QTextTableCellFormat &format, qreal pad);
 
 } // namespace QindaOffice::Docx

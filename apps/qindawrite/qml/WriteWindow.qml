@@ -31,11 +31,14 @@ OfficeWindow {
         penStyleSlot: penStyleSlot
         penWidthSlot: penWidthSlot
         penColorSlot: penColorSlot
+        recordSlot: recordSlot
     }
     ribbonTabs: ribbonLayout.tabs
-    ribbonContexts: tableContext.enabled ? ["table"] : []
+    ribbonContexts: (tableContext.enabled ? ["table"] : []).concat(pictureContext.enabled ? ["picture"] : [])
     // Enabled exactly while the cursor is in a table (table_layout.h).
     readonly property ActionEntry tableContext: host.actions.entry("writeTablePropertiesAction")
+    // Enabled exactly while a picture is selected (write_float.h, M77).
+    readonly property ActionEntry pictureContext: host.actions.entry("writePictureLayoutAction")
     // Word's formatting (M70, D-079): the border pen, the dialogs' hosts.
     readonly property QtObject borders: window.write.borders
     readonly property QtObject tableLayout: window.write.tableLayout
@@ -134,6 +137,23 @@ OfficeWindow {
             colors: ["#000000", "#7f7f7f", "#1f4e79", "#2f5496", "#4472c4", "#c00000", "#ed7d31", "#70ad47", "#ffffff"]
             onColorSelected: function(c) { window.borders.penColor = c }
             onCustomRequested: { colorDialog.target = "pen"; colorDialog.open() }
+        }
+    }
+
+    // Mailings ▸ Preview Results: the record shown (M77, write_mailmerge.h).
+    Component {
+        id: recordSlot
+        Tk.NumberField {
+            objectName: "mergeRecordField"
+            small: true
+            implicitWidth: 64
+            tooltip: qsTr("Record")
+            from: 1
+            to: Math.max(1, window.write.mailMerge.recipientCount)
+            decimals: 0
+            enabled: window.write.mailMerge.recipientCount > 0
+            value: window.write.mailMerge.previewRecord
+            onValueModified: function(v) { window.write.mailMerge.previewRecord = v }
         }
     }
 
@@ -368,7 +388,41 @@ OfficeWindow {
     }
     SymbolDialog { id: symbolDialog; symbols: window.write.symbols; onSymbolPicked: function(text) { window.write.insertSymbol(text) } }
     HyperlinkDialog { id: hyperlinkDialog; onLinkApplied: function(url, label) { window.write.insertHyperlink(url, label) } }
-    FootnoteDialog { id: footnoteDialog; onFootnoteApplied: function(id, text) { window.write.commitFootnote(id, text) } }
+    FootnoteDialog {
+        id: footnoteDialog
+        onFootnoteApplied: function(id, text) { window.write.commitFootnote(id, text) }
+        onNoteApplied: function(kind, id, text) { window.write.notes.commitNote(kind, id, text) }
+    }
+    // ---- M77 (D-086): Mailings, envelopes and labels, endnotes, picture layout ----
+    Connections {
+        target: window.write.notes
+        function onNoteRequested(kind, id, text) { footnoteDialog.kind = kind; footnoteDialog.noteId = id; footnoteDialog.text = text; footnoteDialog.open() }
+    }
+    Connections {
+        target: window.write.mailMerge
+        function onErrorsReported(errors) {
+            mergeErrors.text = errors.length === 0 ? qsTr("No mail merge errors have been found.") : errors.join("\n")
+            mergeErrors.open()
+        }
+    }
+    Tk.MessageDialog { id: mergeErrors; objectName: "mergeErrorsDialog"; title: qsTr("Check for Errors"); variant: "info"; primaryText: qsTr("OK"); secondaryText: "" }
+    RecipientListDialog { mailMerge: window.write.mailMerge }
+    NewListDialog { mailMerge: window.write.mailMerge }
+    PeopleDialog { mailMerge: window.write.mailMerge }
+    SelectTableDialog { mailMerge: window.write.mailMerge }
+    AddressBlockDialog { mailMerge: window.write.mailMerge }
+    GreetingLineDialog { mailMerge: window.write.mailMerge }
+    InsertMergeFieldDialog { mailMerge: window.write.mailMerge }
+    MergeRuleDialog { mailMerge: window.write.mailMerge }
+    MatchFieldsDialog { mailMerge: window.write.mailMerge }
+    FindRecipientDialog { mailMerge: window.write.mailMerge }
+    FinishMergeDialog { mailMerge: window.write.mailMerge }
+    EmailMergeDialog { mailMerge: window.write.mailMerge }
+    EnvelopesDialog { envelopes: window.write.envelopes }
+    LabelsDialog { envelopes: window.write.envelopes }
+    NoteOptionsDialog { notes: window.write.notes }
+    ConvertNotesDialog { notes: window.write.notes }
+    PictureLayoutDialog { pictureLayout: window.write.pictureLayout }
     PageSetupDialog {
         id: pageSetup
         onSetupApplied: function(setup) { window.write.applyPageSetup(setup) }

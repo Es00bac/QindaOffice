@@ -4,9 +4,12 @@
 #include "docx_style_edit.h"
 #include "docx_text.h"
 #include "page_geometry.h"
+#include "docx_float.h"
+#include "write_endnotes.h"
 #include "write_footnotes.h"
 #include "write_pagination.h"
 
+#include <QAbstractTextDocumentLayout>
 #include <QAbstractUndoItem>
 #include <QTextCursor>
 #include <QTextFrame>
@@ -36,7 +39,13 @@ WriteDocument::WriteDocument()
             [this](bool modified) { setDirty(modified); });
     // The recovery journal still wants every real content edit; a
     // format-only pass reports zero characters added and removed.
-    connect(m_text.get(), &QTextDocument::contentsChange, this, [this] { m_commentSpansValid = false; });
+    connect(m_text.get(), &QTextDocument::contentsChange, this, [this] {
+        m_commentSpansValid = false;
+        m_endnoteAreaValid = false;
+    });
+    // Endnotes follow the body's last line (M77): a new layout moves them.
+    connect(m_text->documentLayout(), &QAbstractTextDocumentLayout::documentSizeChanged, this,
+            [this] { m_endnoteAreaValid = false; });
     connect(m_text.get(), &QTextDocument::contentsChange, this,
             [this](int, int charsRemoved, int charsAdded) {
                 if (charsRemoved != 0 || charsAdded != 0) {
@@ -249,6 +258,8 @@ PageDecoration WriteDocument::decoration() const
         geometry.setPageSize(m_text->pageSize());
         out.footnotes = footnotesByPage(m_text.get(), geometry, m_parts.footnotes);
     }
+    out.endnotes = endnoteArea();
+    out.overTextPictures = m_text->documentLayout()->findChild<QObject *>(QStringLiteral("qqoPictureHandler")) != nullptr;
     return out;
 }
 
@@ -328,6 +339,7 @@ void WriteDocument::adoptParts(Docx::WordParts parts)
     emit storiesAboutToBeReplaced();
     m_parts = std::move(parts);
     m_commentSpansValid = false;
+    m_endnoteAreaValid = false;
     m_activeComment.clear();
     emit commentsChanged();
     applyLayout();

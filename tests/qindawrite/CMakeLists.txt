@@ -5,7 +5,9 @@
 # the real window (tst_write_ui), the typography set (tst_write_typography),
 # footnotes / TOC / tracked changes / ruler (tst_write_review), the panel
 # export through the desktop's validator (tst_write_menu_export), and the
-# format matrix and pagination probe. Every test links the app's static QML
+# format matrix and pagination probe; M77 (D-086): mail merge, envelopes
+# and labels (tst_write_mailings), endnotes (tst_write_endnotes), floating
+# pictures (tst_write_wrap). Every test links the app's static QML
 # module, so a source added to apps/qindawrite/CMakeLists.txt is in every test.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(POPPLER_QT6 REQUIRED poppler-qt6)
@@ -14,7 +16,7 @@ foreach(name IN ITEMS tst_write_control tst_write_view tst_write_ui tst_write_ty
                       tst_write_review tst_write_menu_export tst_write_formats tst_write_probe_pagination
                       tst_write_tools tst_write_docx tst_write_pagination tst_write_story tst_write_picture
                       tst_write_comments tst_write_tables tst_write_formatting tst_write_controls
-                      tst_write_lists tst_write_styles)
+                      tst_write_lists tst_write_styles tst_write_mailings tst_write_endnotes tst_write_wrap)
     add_executable(${name} ${name}.cpp write_test_support.h)
     target_link_libraries(${name} PRIVATE qindawrite_app qindawrite_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)

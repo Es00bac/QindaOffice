@@ -3,8 +3,10 @@
 # office_docx (M60, D-068): Word documents natively — WordprocessingML ⇄
 # QTextDocument plus WordParts (page layout, rich headers/footers, footnotes,
 # pictures, the source package). Formatting is mapped where the text model
-# has it and preserved verbatim where it does not. Qt Core/Gui + office_ooxml;
-# no Quick, no desktop archives, so its tests run anywhere.
+# has it and preserved verbatim where it does not. M77 (D-086): mail merge
+# (settings, data, fields, the merge), envelopes and labels, endnotes,
+# floating pictures. Qt Core/Gui + office_ooxml; no Quick, no desktop
+# archives, so its tests run anywhere.
 add_library(office_docx STATIC
     src/docx_format.cpp
     src/docx_format.h
@@ -57,6 +59,27 @@ add_library(office_docx STATIC
     src/docx_table_format.cpp
     src/docx_table_format.h
     src/docx_table_props.cpp
+    src/docx_envelopes.cpp
+    src/docx_envelopes.h
+    src/docx_float.cpp
+    src/docx_float.h
+    src/docx_float_display.cpp
+    src/docx_mailmerge.cpp
+    src/docx_mailmerge.h
+    src/docx_merge.cpp
+    src/docx_merge.h
+    src/docx_merge_address.cpp
+    src/docx_merge_data.cpp
+    src/docx_merge_data.h
+    src/docx_merge_fields.cpp
+    src/docx_merge_fields.h
+    src/docx_merge_fields_p.h
+    src/docx_merge_tokens.cpp
+    src/docx_notes.cpp
+    src/docx_parts.cpp
+    src/docx_notes.h
+    src/docx_writer_notes.cpp
+    src/docx_writer_settings.cpp
 )
 
 target_include_directories(office_docx

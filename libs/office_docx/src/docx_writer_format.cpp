@@ -313,6 +313,14 @@ XmlElementPtr BodyWriter::paragraphProperties(const QTextBlock &block)
             pPr->appendElement(mark);
         }
     }
+    // A section break QindaWrite made (a merged record's, an envelope's,
+    // M77): the block carries its w:sectPr; one read from Word has it in
+    // its own w:pPr already.
+    if (pPr->child(kW, u"sectPr") == nullptr && bf.hasProperty(kSectionXml)) {
+        if (XmlElementPtr sectPr = Ooxml::parseFragment(bf.stringProperty(kSectionXml))) {
+            pPr->appendElement(sectPr);
+        }
+    }
     sortChildren(*pPr);
     return pPr->children.isEmpty() && pPr->attributes.isEmpty() ? nullptr : pPr;
 }

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pdf_exporter.h"
 
+#include "docx_float.h"
 #include "docx_list_labels.h"
 #include "docx_paragraph_format.h"
 #include "docx_text.h"
 #include "page_geometry.h"
 #include "page_setup_io.h"
+#include "write_endnotes.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QFileInfo>
@@ -93,6 +95,9 @@ void drawPageDecoration(QPainter *painter, const QRectF &pageRect, const PageDec
     if (const QTextDocument *footer = decoration.footerFor(pageIndex); footer != omit) {
         drawStory(painter, footer, pageRect, l, -1, pageRect.height() - l.footerDistance, pageIndex, pageCount);
     }
+    if (decoration.endnotes != nullptr) {
+        drawEndnotes(painter, *decoration.endnotes, pageIndex - 1, pageRect); // M77
+    }
     const QStringList notes = decoration.footnotes.value(pageIndex);
     if (notes.isEmpty()) {
         return;
@@ -144,7 +149,7 @@ void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDoc
     const qreal uniformScale = page.width() > 0 ? targetPixels.width() / page.width() : 1.0;
     painter->scale(uniformScale, uniformScale);
     const QAbstractTextDocumentLayout *layout = document->documentLayout();
-    const int pages = qMax(1, int(std::ceil(layout->documentSize().height() / page.height())));
+    const int pages = decoration.pageCount(qMax(1, int(std::ceil(layout->documentSize().height() / page.height()))));
     for (int i = 0; i < pages; ++i) {
         if (i > 0 && newPage != nullptr) {
             newPage();
@@ -153,7 +158,14 @@ void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDoc
         painter->translate(0, -i * page.height());
         QAbstractTextDocumentLayout::PaintContext context;
         context.clip = QRectF(0, i * page.height(), page.width(), page.height());
+        // Pictures behind and in front of the text (M77, docx_float.h).
+        if (decoration.overTextPictures) {
+            Docx::drawFloatingPictures(painter, *document, context.clip, true);
+        }
         const_cast<QAbstractTextDocumentLayout *>(layout)->draw(painter, context);
+        if (decoration.overTextPictures) {
+            Docx::drawFloatingPictures(painter, *document, context.clip, false);
+        }
         Docx::drawParagraphBorders(painter, *document, context.clip);
         Docx::drawTabLeaders(painter, *document, context.clip);
         Docx::drawListMarkers(painter, *document, context.clip);

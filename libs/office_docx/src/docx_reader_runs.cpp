@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Runs of a .docx paragraph: text, fields (simple and complex), hyperlinks,
-// tracked changes, symbols, breaks, footnote markers, preserved objects.
+// Runs of a .docx paragraph: text, fields (simple and complex, merge fields
+// with their nested codes), hyperlinks, tracked changes, symbols, breaks,
+// footnote and endnote markers, preserved objects.
 // Split from docx_reader_body.cpp (paragraphs, tables entry, lists).
 
 
+#include "docx_float.h"
 #include "docx_format.h"
+#include "docx_merge_fields.h"
+#include "docx_notes.h"
 #include "docx_properties.h"
 #include "docx_reader_p.h"
 #include "docx_text.h"
@@ -28,9 +32,10 @@ const QString kM = QString::fromUtf16(Ooxml::Ns::M);
 const QString kR = QString::fromUtf16(Ooxml::Ns::R);
 const QString kMC = QString::fromUtf16(Ooxml::Ns::MC);
 
-// Field types whose result runs keep the field on save; others (TOC,
-// HYPERLINK, form fields) are read as their plain result.
-bool keepsField(const QString &type)
+// Fields whose result runs keep the field on save; others (TOC,
+// HYPERLINK, form fields, an IF without merge fields) are read as their
+// plain result. Mail merge fields (M77) are kept with their nested codes.
+bool keepsField(const QString &instruction)
 {
     static const QStringList kTypes{
         QStringLiteral("PAGE"), QStringLiteral("NUMPAGES"), QStringLiteral("SECTIONPAGES"),
@@ -42,7 +47,7 @@ bool keepsField(const QString &type)
         QStringLiteral("NUMWORDS"), QStringLiteral("NUMCHARS"), QStringLiteral("USERNAME"),
         QStringLiteral("STYLEREF"), QStringLiteral("LASTSAVEDBY"),
     };
-    return kTypes.contains(type);
+    return kTypes.contains(instruction.trimmed().section(QLatin1Char(' '), 0, 0).toUpper()) || isMergeField(instruction);
 }
 
 QString fieldType(const QString &instruction)
@@ -146,12 +151,19 @@ QString BodyReader::currentHref(const InlineState &inl, const ContainerState &st
 QString BodyReader::currentField(const InlineState &inl, const ContainerState &state) const
 {
     if (!inl.simpleFields.isEmpty()) {
-        const QString instr = inl.simpleFields.last();
-        return keepsField(fieldType(instr)) ? instr : QString();
+        // Trimmed: the writer puts Word's own spaces back around it.
+        const QString instr = inl.simpleFields.last().trimmed();
+        return keepsField(instr) ? instr : QString();
     }
     if (!state.fields.isEmpty() && state.fields.last().inResult) {
+        // A merge IF owns its whole result, nested merge fields' results too.
+        for (const ContainerState::Field &f : state.fields) {
+            if (f.inResult && mergeFieldKind(f.instruction) == MergeFieldKind::If) {
+                return f.instruction.trimmed();
+            }
+        }
         const QString instr = state.fields.last().instruction.trimmed();
-        return keepsField(fieldType(instr)) ? instr : QString();
+        return keepsField(instr) ? instr : QString();
     }
     return {};
 }
@@ -236,18 +248,34 @@ void BodyReader::readInline(const XmlElement &parent, QTextCursor &cursor, Inlin
     }
 }
 
-void BodyReader::readFieldChar(const XmlElement &fldChar, ContainerState &state)
+void BodyReader::readFieldChar(const XmlElement &fldChar, QTextCursor &cursor, const QTextCharFormat &format,
+                               InlineState &inl, ContainerState &state)
 {
     const QString type = wAttr(&fldChar, u"fldCharType");
     if (type == u"begin") {
-        state.fields.append({QString(), false});
+        ContainerState::Field field;
+        field.nested = inFieldInstruction(state);
+        state.fields.append(field);
     } else if (type == u"separate") {
         if (!state.fields.isEmpty()) {
             state.fields.last().inResult = true;
         }
     } else if (type == u"end") {
-        if (!state.fields.isEmpty()) {
-            state.fields.removeLast();
+        if (state.fields.isEmpty()) {
+            return;
+        }
+        const ContainerState::Field field = state.fields.takeLast();
+        const QString code = field.instruction.trimmed();
+        if (field.nested && !state.fields.isEmpty() && !state.fields.last().inResult) {
+            state.fields.last().instruction += QStringLiteral("{ ") + code + QStringLiteral(" }");
+            return;
+        }
+        // A merge rule Word writes without a result (NEXT, NEXTIF, SKIPIF),
+        // or a merge field whose result is empty, shows Word's label.
+        if (!field.produced && !inFieldInstruction(state) && isMergeField(code)) {
+            QTextCharFormat label = format;
+            label.setProperty(kFieldInstruction, code);
+            insertText(cursor, mergeFieldLabel(code), label, inl, state);
         }
     }
 }
@@ -276,11 +304,13 @@ void BodyReader::readRun(const XmlElement &r, QTextCursor &cursor, InlineState &
         }
         const QStringView n = e->name;
         if (n == u"fldChar") {
-            readFieldChar(*e, state);
+            readFieldChar(*e, cursor, cf, inl, state);
         } else if (n == u"instrText" || n == u"delInstrText") {
             if (!state.fields.isEmpty() && !state.fields.last().inResult) {
                 state.fields.last().instruction += e->text();
             }
+        } else if ((n == u"br" || n == u"cr") && !state.fields.isEmpty() && !state.fields.last().inResult) {
+            state.fields.last().instruction += QLatin1Char('\n'); // a line break in a code (Address Block)
         } else if (inFieldInstruction(state)) {
             continue; // everything between begin and separate is the code
         } else if (n == u"t" || n == u"delText") {
@@ -309,8 +339,7 @@ void BodyReader::readRun(const XmlElement &r, QTextCursor &cursor, InlineState &
         } else if (n == u"footnoteReference") {
             footnoteMarker(cursor, wAttr(e, u"id"), cf, inl, state);
         } else if (n == u"endnoteReference") {
-            preservedText(cursor, r, QStringLiteral("†"), cf, inl, state);
-            m_env.approximations[QStringLiteral("endnote")] += 1;
+            endnoteMarker(cursor, wAttr(e, u"id"), cf, inl, state);
         } else if (n == u"commentReference") {
             // The comment's mark (docx_comments.h): a zero-width space the
             // writer turns back into this run.
@@ -329,12 +358,8 @@ void BodyReader::readRun(const XmlElement &r, QTextCursor &cursor, InlineState &
     }
 }
 
-void BodyReader::insertText(QTextCursor &cursor, const QString &text, QTextCharFormat format, InlineState &inl,
-                            ContainerState &state)
+QTextCharFormat BodyReader::prepareFormat(QTextCharFormat format, InlineState &inl, ContainerState &state)
 {
-    if (text.isEmpty()) {
-        return;
-    }
     const QString href = currentHref(inl, state);
     if (!href.isEmpty()) {
         format.setAnchor(true);
@@ -347,6 +372,9 @@ void BodyReader::insertText(QTextCursor &cursor, const QString &text, QTextCharF
     const QString field = currentField(inl, state);
     if (!field.isEmpty()) {
         format.setProperty(kFieldInstruction, field);
+    }
+    if (!state.fields.isEmpty() && state.fields.last().inResult) {
+        state.fields.last().produced = true;
     }
     if (!m_openComments.isEmpty() && !format.hasProperty(kCommentReference)) {
         format.setProperty(kCommentIds, m_openComments);
@@ -373,7 +401,16 @@ void BodyReader::insertText(QTextCursor &cursor, const QString &text, QTextCharF
     if (!format.hasProperty(kRunSnapshot)) {
         format.setProperty(kRunSnapshot, charSnapshot(format));
     }
-    cursor.insertText(text, format);
+    return format;
+}
+
+void BodyReader::insertText(QTextCursor &cursor, const QString &text, QTextCharFormat format, InlineState &inl,
+                            ContainerState &state)
+{
+    if (text.isEmpty()) {
+        return;
+    }
+    cursor.insertText(text, prepareFormat(std::move(format), inl, state));
     inl.blockHasContent = true;
 }
 
@@ -414,7 +451,22 @@ void BodyReader::footnoteMarker(QTextCursor &cursor, const QString &id, QTextCha
     const QString text = m_env.footnoteText.value(id);
     parts.footnotes.insert(noteId, text);
     parts.footnoteImportedText.insert(noteId, text);
-    insertText(cursor, QString::number(++m_footnoteNumber), format, inl, state);
+    const NoteOptions &options = parts.footnoteOptions;
+    insertText(cursor, noteNumber(options.start + m_footnoteNumber++, noteFormat(options, false)), format, inl, state);
+}
+
+void BodyReader::endnoteMarker(QTextCursor &cursor, const QString &id, QTextCharFormat format, InlineState &inl,
+                               ContainerState &state)
+{
+    const QString noteId = QStringLiteral("docx-") + id;
+    format.setVerticalAlignment(QTextCharFormat::AlignSuperScript);
+    format.setProperty(kEndnoteIdProperty, noteId);
+    WordParts &parts = *m_env.parts;
+    const QString text = m_env.endnoteText.value(id);
+    parts.endnotes.insert(noteId, text);
+    parts.endnoteImportedText.insert(noteId, text);
+    const NoteOptions &options = parts.endnoteOptions;
+    insertText(cursor, noteNumber(options.start + m_endnoteNumber++, noteFormat(options, true)), format, inl, state);
 }
 
 void BodyReader::commentRange(const XmlElement &marker)

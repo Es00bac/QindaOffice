@@ -41,6 +41,11 @@
 // Empty fields are omitted; `displayName` is the raw FN there; the photo is
 // a file reference (photoFile + photoMimeType), written by ContactStore;
 // unknown keys survive in `jsonExtra`.
+// AGENT-CONTRACT (toJson ⇄ apps/qindawrite/src/write_merge_sources.cpp,
+// M77): QindaWrite's mail merge reads contacts.json read-only for its People
+// recipients — names, organization, title, emails, phones, addresses,
+// categories, a group's kind and members — so renaming one of those keys
+// breaks it.
 
 #include <QByteArray>
 #include <QJsonObject>

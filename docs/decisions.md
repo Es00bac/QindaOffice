@@ -5,6 +5,125 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-086: QindaWrite: mail merge, envelopes and labels, endnotes, floating pictures
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart, "nothing missing that somebody would need";
+M77, builds on D-068, D-079, D-080 and D-082)
+
+**Context.** Word's Mailings tab did not exist in QindaWrite: no merge, no
+envelopes, no labels. The reader kept MERGEFIELD results but read IF,
+SKIPIF and NEXT as plain text (a nested field's code was lost), and the
+writer turned every field into `w:fldSimple`. Endnotes were only carried
+(the endnotes part copied whole, each reference an opaque "†"), and a
+floating picture was shown in line with its wp:anchor kept but not
+editable.
+
+**Decision.**
+1. **The merge is office_docx's** (`docx_mailmerge.h`, `docx_merge_data.h`,
+   `docx_merge_fields.h`, `docx_merge.h`): Word's `w:mailMerge` as
+   `MailMergeSettings` (type, data source, the query's WHERE / ORDER BY as
+   filters and sorts, e-mail field and subject, Match Fields as
+   `w:odso/w:fieldMapData`); the recipients as one table (CSV / text read as
+   Word's text data source; a workbook sheet through calc_io and
+   QindaMail's People — everyone, a contact group or a category — in
+   QindaWrite); fields evaluated as Word does
+   (MERGEFIELD with `\b \f \* \@ \#`, ADDRESSBLOCK and GREETINGLINE with
+   Word's `\f` formats and country rule, IF with numbers, case-sensitive
+   text and wildcards, SKIPIF, NEXT, NEXTIF, MERGEREC, MERGESEQ); the merge
+   copies the main document per recipient (per sheet for labels, one run
+   for a directory), each copy after the first a section of its own, a
+   SKIPIF dropping its copy, lines left empty by empty fields removed.
+2. **A merge field is a run whose code is Word's field-code view**:
+   nested fields as `{ … }` inside `kFieldInstruction`, line breaks as
+   `\n`; the text is the result («First_Name», «AddressBlock», Word's
+   «Next Record» / «Skip Record If…» labels for the rules without a result).
+   The reader joins a nested field's code into its parent's; the writer
+   writes such codes (and NEXT, NEXTIF, SKIPIF) as complex fields — nested
+   fields, `w:br` for breaks, no result for the three rules — and the rest
+   as `w:fldSimple`. A simple field's code is now stored trimmed (it grew by
+   two spaces per save). An IF without a merge field is still read as text.
+   QindaWrite's spell checker passes field results by («AddressBlock» is
+   not a misspelling; Word does not check fields either).
+3. **Saved as Word saves a merge**: an unchanged `w:mailMerge` is written
+   back as read; a new or changed one is rebuilt (`w:dataType` textFile,
+   `SELECT * FROM <path>` with Word's WHERE / ORDER BY, `w:dataSource` an
+   external relationship to the CSV; a sheet as Word's ACE connection and
+   `` `Sheet$` `` query), keeping what the model does not cover (`w:odso`,
+   `w:checkErrors`, …). Recipients left out and a People source are
+   QindaWrite's `w:docVar`s (Word keeps them; it does not apply them).
+4. **Envelopes and labels as Word writes them** (`docx_envelopes.h`): an
+   envelope is a section of its own (`w:pgSz` landscape with Word's paper
+   code, the return address in Envelope Return, the delivery address in
+   Envelope Address placed by its indent and space before); a label sheet
+   is a fixed-layout table (label columns with spacer columns, exact
+   `w:trHeight` rows that cannot split, nil borders, the sheet's margins,
+   no bottom margin). Qt has no row heights: a row's first cell is padded
+   to the height, split top and bottom when it is centred
+   (`kRowPadTop` 123 beside M70's `kRowPad`), and every row is padded again
+   after a merge or Update Labels, so a printed sheet lines up with the
+   labels. The writer leaves a paragraph-level section's own
+   page alone when it is not the document's (an envelope before a letter);
+   the reader takes the page layout from the first section that is not an
+   envelope.
+5. **Endnotes are notes** (`docx_notes.h`, `kEndnoteIdProperty` 120):
+   reference marks numbered in the endnote format (i, ii, iii), texts in
+   `WordParts::endnotes`; while the referenced notes are the ones read,
+   unchanged, `endnotes.xml` is copied byte for byte; otherwise it is
+   written with each unchanged note's own markup. The Footnote and Endnote
+   options (format, start, restart, place) go to settings.xml and the
+   closing section. In QindaWrite the notes are laid out after the body's
+   last line in a document of their own paginated like the body, drawn on
+   screen, paper and PDF (`write_endnotes.h`), and note texts, options and
+   conversions are undo items of their edit blocks. Text typed after a
+   footnote or endnote mark is plain text: it used to take the mark's
+   identity and superscript, and the next renumbering replaced it with the
+   number (`page_text_control.cpp` typing format).
+6. **Floating pictures are modelled** (`docx_float.h`, `kPictureFloat` 121
+   with its import snapshot 122): Word's wrap, position, relative-to,
+   distances and flags. Square, Tight, Through and Top and Bottom are Qt's
+   floating frames (`QTextCursor::insertImage` with FloatLeft / FloatRight)
+   whose box holds the picture at its offset; Behind and In Front take no
+   room and are drawn by `drawFloatingPictures` before or after the text.
+   A picture handler replaces Qt's image handler on documents that float a
+   picture (inline images sized exactly as Qt sizes them); it also drops
+   the layout data of a floating frame whose picture character went (Qt
+   6.11 keeps a detached frame in the float list, so its old box would push
+   the text aside). An unchanged floating picture keeps its drawing byte
+   for byte; a changed one is rewritten as Word writes `wp:anchor` (or back
+   to `wp:inline`).
+7. **QindaWrite's commands are Word's** (`write_mailmerge*`,
+   `write_envelopes`, `write_notes`, `write_float`), each a persistent
+   action in the Mailings, References and Picture Format ribbon tabs and in
+   the menus, one undo step where it edits the document; a merged document,
+   an envelope or a label sheet opens in a window of its own (the next
+   WriteHost adopts the package) or prints through the shell's print path.
+   E-mail messages are handed to QindaMail's composer one recipient at a
+   time (`qindamail mailto:…`, `--attach` for the merged document) and are
+   never sent from QindaWrite.
+
+**Consequences.** A merge document made in QindaWrite opens in Word as a
+merge document: Word first asks "Opening this document will run the
+following SQL command: SELECT * FROM … Data from your database will be
+placed in the document. Do you want to continue?", and asks for the data
+source when its path does not exist on that machine (a Linux path on
+Windows). Preview Results shows a merged copy read-only (Word lets the user
+edit while previewing). Not done: Word's Ask / Fill-in / Set Bookmark
+rules, merge fields in headers and footers, Word's recipient data part
+(left-out recipients are QindaWrite's docVar), HTML e-mail (QindaMail's
+hand-off carries a plain-text body or the merged document attached),
+endnotes at the end of each section (written, shown at the document's end),
+footnotes restarting each page (written, numbered on), a float in the
+middle of a column with text on both sides, above its anchor line, or at a
+fixed place on the page with text flowing around it (Qt floats at the
+anchor line, left or right), Tight and Through around the picture's
+outline (they wrap its box), dragging an inline picture to move it in the
+text. QindaTK gaps, reported and worked around in the app: `Tk.DataTable`
+has no declarative dynamic columns (the recipient list creates
+`Tk.TableColumn`s from a Component), and there is no editable grid control
+for a dialog (Type a New List edits the selected entry in a form under the
+table).
+
 ## D-088: QindaPlan: Project's scheduling, tracking and views
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

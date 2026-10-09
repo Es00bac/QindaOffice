@@ -447,6 +447,10 @@ void applyCellVerticalAlignment(QTextTable *table, const CellRange &range, QText
     for (const QTextTableCell &cell : cellsIn(table, range)) {
         QTextTableCellFormat f = cell.format().toTableCellFormat();
         f.setVerticalAlignment(alignment);
+        // A row height's pad follows the new alignment (docx_table_format.h setRowPad).
+        if (const qreal pad = f.doubleProperty(kRowPad) + f.doubleProperty(kRowPadTop); pad > 0) {
+            setRowPad(f, pad);
+        }
         QTextTableCell(cell).setFormat(f);
     }
 }

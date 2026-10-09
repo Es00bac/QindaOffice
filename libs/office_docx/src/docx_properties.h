@@ -3,7 +3,8 @@
 
 // QTextFormat properties that carry WordprocessingML semantics on a
 // QTextDocument (D-068). Offsets are never reused: append new ones at the
-// end of the M73 block (85 is the last taken).
+// end of the M73 block (85 is the last taken) or of the M77 block, which
+// starts at 120 (123 is its last); 86–119 are left to other milestones.
 //
 // Two groups:
 //
@@ -169,6 +170,26 @@ inline constexpr int kListAbstractKey = kDocxBase + 84; // QString: "src:<abstra
 // Block formats: where a list paragraph's number stands — Word's hanging
 // indent (left − hanging), in px; the text starts at the left indent.
 inline constexpr int kListHanging = kDocxBase + 85; // qreal px
+
+// ---- M77 (D-086): endnotes and floating pictures -------------------------------------
+// An endnote's reference mark (char formats): the note id, as
+// kFootnoteIdProperty is a footnote's. The note text lives in
+// WordParts::endnotes; Write numbers the marks in document order in the
+// endnote number format (i, ii, iii by default, docx_notes.h).
+// AGENT-CONTRACT: apps/qindawrite/src/write_footnotes.h kEndnoteIdProperty
+// static_asserts equality with this one.
+inline constexpr int kEndnoteIdProperty = kDocxBase + 120; // QString note id
+// A picture's layout as Word's wp:anchor describes it (docx_float.h,
+// PictureFloat::toMap): wrap, horizontal and vertical position with what
+// they are relative to, wrap distances. Absent on an inline picture. The
+// snapshot is the map as read: while both match (and the size is as read),
+// the writer keeps the picture's own drawing byte for byte.
+inline constexpr int kPictureFloat = kDocxBase + 121;         // QVariantMap
+inline constexpr int kPictureFloatSnapshot = kDocxBase + 122; // QVariantMap
+// Display only, beside kRowPad: the part of a row height's padding put on
+// top of a cell, so a vertically centred (or bottom) cell stays centred in
+// a row Word gives a height (docx_table_format.h refreshRowHeights).
+inline constexpr int kRowPadTop = kDocxBase + 123; // qreal px
 
 // How QindaWrite shows a tracked change: blue underlined insertions, red
 // struck deletions — content colours, the same on screen, paper and PDF.
