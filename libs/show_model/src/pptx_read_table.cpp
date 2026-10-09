@@ -7,8 +7,11 @@
 
 #include "pptx_read_shapes.h"
 
+#include "pptx_origin.h"
 #include "pptx_read_text.h"
+#include "pptx_reader.h"
 
+#include "ooxml_namespaces.h"
 #include "ooxml_units.h"
 
 namespace QindaOffice::Show::Pptx {
@@ -220,7 +223,83 @@ Table readTable(const ShapeScope &scope, const Ooxml::XmlElement &tbl)
             ++c;
         }
     }
+    // M67 (D-076): every row and column is its own source row / column.
+    for (int r = 0; r < table.rows.size(); ++r) {
+        table.origin.rows.append(r);
+    }
+    for (int c = 0; c < table.columns.size(); ++c) {
+        table.origin.columns.append(c);
+    }
+    table.origin.sourceRows = int(table.rows.size());
+    table.origin.sourceColumns = int(table.columns.size());
     return table;
 }
 
 } // namespace QindaOffice::Show::Pptx
+
+namespace QindaOffice::Show {
+
+NewTableStyle newTableStyle(const Presentation &deck, const Slide &slide)
+{
+    using namespace Pptx;
+    NewTableStyle out;
+    out.styleId = kDefaultStyle;
+    Pptx::ThemeContext theme;
+    theme.theme = Ooxml::defaultOfficeTheme();
+    Pptx::TableStyles styles;
+    PartContext ctx;
+    const DeckSource *source = deck.origin.get();
+    if (source != nullptr && source->package) {
+        const auto &package = source->package;
+        ctx.package = package;
+        if (const auto rel = package->firstOfType(source->presentationPart, QString::fromUtf16(Ooxml::RelType::TableStyles))) {
+            styles.root = package->xml(package->targetPart(source->presentationPart, *rel));
+            const QString def = styles.root ? styles.root->attr(u"def") : QString();
+            if (!def.isEmpty()) {
+                out.styleId = def;
+            }
+        }
+        const SlideMaster *master = deck.masterFor(slide);
+        const MasterSource *masterSource = master != nullptr ? master->origin.get() : nullptr;
+        if (masterSource != nullptr) {
+            ctx.part = masterSource->part;
+            if (const auto rel = package->firstOfType(masterSource->part, QString::fromUtf16(Ooxml::RelType::Theme))) {
+                const Ooxml::XmlElementPtr root = package->xml(package->targetPart(masterSource->part, *rel));
+                if (root) {
+                    theme = parseThemeContext(root.get());
+                }
+            }
+            const Ooxml::XmlElementPtr masterRoot = package->xml(masterSource->part);
+            if (const Ooxml::XmlElement *map = masterRoot ? masterRoot->child(nsP(), u"clrMap") : nullptr) {
+                for (const Ooxml::XmlAttribute &a : map->attributes) {
+                    if (a.ns.isEmpty()) {
+                        ctx.map.insert(a.name, a.value);
+                    }
+                }
+            }
+        }
+    }
+    ctx.theme = &theme;
+    ShapeScope scope;
+    scope.ctx = ctx;
+    scope.tableStyles = &styles;
+    out.look = resolveLook(scope, out.styleId);
+    if (!out.look.known) {
+        // A default the deck names but does not define and PowerPoint does
+        // not ship: fall back to PowerPoint's own default.
+        out.styleId = kDefaultStyle;
+        out.look = resolveLook(scope, out.styleId);
+    }
+    if (theme.theme.minorLatin.isEmpty()) {
+        out.fontFamily = Ooxml::defaultOfficeTheme().minorLatin;
+    } else {
+        out.fontFamily = theme.theme.minorLatin;
+    }
+    // The deck's "other" text: dk1 through the colour map, as tx1.
+    Ooxml::XmlElement tx1(nsA(), QStringLiteral("schemeClr"));
+    tx1.setAttribute(QString(), QStringLiteral("val"), QStringLiteral("tx1"));
+    out.textColor = Pptx::color(ctx, &tx1);
+    return out;
+}
+
+} // namespace QindaOffice::Show

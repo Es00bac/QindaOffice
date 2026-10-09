@@ -5,7 +5,9 @@ import QindaOffice.Show
 // The player (plan §5.3): a fullscreen window driven by the host's
 // PresentationController. Two SlideFrameItems — the frozen outgoing
 // frame under the live incoming one — animate the slide's transition
-// (cut/fade/slide/zoom, 350 ms OutCubic, none under reduced motion); a
+// (cut / fade / push — the model's "slide" — / zoom, and since M67 wipe
+// from the right and split vertical out, both revealing the incoming frame
+// through a clipping item; 350 ms OutCubic, none under reduced motion); a
 // build step animates the arriving shapes through buildProgress. Keys:
 // Space/arrows advance, Backspace back, B/W blank, P pen and L laser
 // annotations (ephemeral, kept per slide for the session), E erases, Esc
@@ -35,6 +37,9 @@ Window {
     property point laserPos: Qt.point(-100, -100)
     property bool laserVisible: false
     readonly property int transitionMs: showHost.reducedMotion ? 0 : 350
+    // How much of the incoming frame a wipe or split shows (M67).
+    property string revealKind: ""
+    property real revealProgress: 1
 
     SlideFrameItem {
         id: outgoing
@@ -42,28 +47,54 @@ Window {
         anchors.fill: parent
         controller: player.controller
         visible: transition.running
+        transform: Translate { id: slideOut; x: 0 }
     }
-    SlideFrameItem {
-        id: incoming
-        objectName: "playerIncoming"
-        anchors.fill: parent
-        controller: player.controller
-        buildProgress: 1.0
-        transform: [Translate { id: slideIn; x: 0 }, Scale { id: zoomIn; origin.x: incoming.width / 2; origin.y: incoming.height / 2; xScale: 1; yScale: 1 }]
+    Item {
+        id: reveal
+        objectName: "playerReveal"
+        clip: player.revealKind !== ""
+        x: player.revealKind === "wipe" ? player.width * (1 - player.revealProgress)
+           : player.revealKind === "split" ? player.width * (1 - player.revealProgress) / 2 : 0
+        y: 0
+        width: player.revealKind === "" ? player.width : player.width * player.revealProgress
+        height: player.height
+        SlideFrameItem {
+            id: incoming
+            objectName: "playerIncoming"
+            x: -reveal.x
+            y: 0
+            width: player.width
+            height: player.height
+            controller: player.controller
+            buildProgress: 1.0
+            transform: [Translate { id: slideIn; x: 0 }, Scale { id: zoomIn; origin.x: incoming.width / 2; origin.y: incoming.height / 2; xScale: 1; yScale: 1 }]
+        }
     }
     NumberAnimation {
         id: transition
         property string kind: "cut"
         target: incoming
         property: "opacity"
-        from: 0
+        // Fade and zoom blend in; push, wipe and split move or reveal a whole frame.
+        from: kind === "fade" || kind === "zoom" ? 0 : 1
         to: 1
         duration: player.transitionMs
         easing.type: Easing.OutCubic
-        onStarted: { slideIn.x = kind === "slide" ? player.width : 0; zoomIn.xScale = kind === "zoom" ? 1.15 : 1; zoomIn.yScale = zoomIn.xScale }
-        onStopped: { incoming.opacity = 1; slideIn.x = 0; zoomIn.xScale = 1; zoomIn.yScale = 1; outgoing.frozen = false }
+        onStarted: {
+            slideIn.x = kind === "slide" ? player.width : 0
+            zoomIn.xScale = kind === "zoom" ? 1.15 : 1
+            zoomIn.yScale = zoomIn.xScale
+            player.revealKind = kind === "wipe" || kind === "split" ? kind : ""
+            player.revealProgress = player.revealKind !== "" ? 0 : 1
+        }
+        onStopped: {
+            incoming.opacity = 1; slideIn.x = 0; slideOut.x = 0; zoomIn.xScale = 1; zoomIn.yScale = 1
+            player.revealKind = ""; player.revealProgress = 1; outgoing.frozen = false
+        }
     }
     NumberAnimation { id: slideMove; target: slideIn; property: "x"; to: 0; duration: player.transitionMs; easing.type: Easing.OutCubic }
+    NumberAnimation { id: pushOut; target: slideOut; property: "x"; from: 0; to: -player.width; duration: player.transitionMs; easing.type: Easing.OutCubic }
+    NumberAnimation { id: revealMove; target: player; property: "revealProgress"; from: 0; to: 1; duration: player.transitionMs; easing.type: Easing.OutCubic }
     NumberAnimation { id: zoomMoveX; target: zoomIn; property: "xScale"; to: 1; duration: player.transitionMs; easing.type: Easing.OutCubic }
     NumberAnimation { id: zoomMoveY; target: zoomIn; property: "yScale"; to: 1; duration: player.transitionMs; easing.type: Easing.OutCubic }
     NumberAnimation {
@@ -99,8 +130,9 @@ Window {
                 incoming.opacity = 1
             } else {
                 transition.restart()
-                if (transition.kind === "slide") slideMove.restart()
+                if (transition.kind === "slide") { slideMove.restart(); pushOut.restart() }
                 if (transition.kind === "zoom") { zoomMoveX.restart(); zoomMoveY.restart() }
+                if (transition.kind === "wipe" || transition.kind === "split") revealMove.restart()
             }
         }
         player.lastSlide = slide

@@ -8,6 +8,7 @@
 
 #include "show_arrange.h"
 #include "show_design_actions.h"
+#include "show_table_actions.h"
 #include "show_toolbox.h"
 #include "standard_actions.h"
 #include "template_loader.h"
@@ -72,24 +73,30 @@ void ShowHost::insertMenus()
     slideItems += m_arrange->slideMenuItems();
     slideItems.append(MenuNode::separator());
     slideItems += m_design->slideMenuItems();
-    slideItems += {MenuNode::separator(), a(ActionId::kSlideStartShow), MenuNode::separator(),
-                   MenuNode::action(QStringLiteral("showExportPdfAction"))};
+    slideItems += {MenuNode::separator(), a(ActionId::kSlideStartShow), MenuNode::action(QStringLiteral("showPresenterViewAction")),
+                   MenuNode::separator(), MenuNode::action(QStringLiteral("showExportPdfAction"))};
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("showSlideMenu"), tr("&Slide"), slideItems));
 
     QList<MenuNode> insertItems = m_toolbox->insertMenuItems();
-    insertItems += {MenuNode::separator(), MenuNode::action(QStringLiteral("showAppearOnClickAction"))};
+    insertItems += {MenuNode::action(QString::fromLatin1(TableActionId::kInsertTable)), MenuNode::separator(),
+                    MenuNode::action(QStringLiteral("showAppearOnClickAction"))};
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("showInsertMenu"), tr("&Insert"), insertItems));
 
     QList<MenuNode> shapeItems = m_toolbox->styleMenuItems();
     shapeItems += m_design->shapeMenuItems();
+    shapeItems += chartMenuItems();
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("showShapeMenu"), tr("S&hape"), shapeItems));
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("showArrangeMenu"), tr("&Arrange"),
                                              m_arrange->arrangeMenuItems()));
+    // M67: the table commands (the ribbon's Table Design / Table Layout tabs).
+    tree->insertMenuBefore(QStringLiteral("aiMenu"),
+                           MenuNode::submenu(QStringLiteral("showTableMenu"), tr("&Table"), m_tables->tableMenuItems()));
     tree->appendTo(QStringLiteral("viewMenu"), MenuNode::separator());
+    tree->appendTo(QStringLiteral("viewMenu"), MenuNode::action(QStringLiteral("showViewNotesAction")));
     for (const MenuNode &node : m_design->viewMenuItems()) {
         tree->appendTo(QStringLiteral("viewMenu"), node);
     }

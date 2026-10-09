@@ -137,6 +137,7 @@ qindawrite → office_docx → office_ooxml   (Word interchange, D-068)
 apps/qindalauncher (qindaoffice)  → office_quick (theme bridge only)
 qindacalc → calc_io → calc_engine
 qindashow → show_model → office_ooxml   (PowerPoint interchange, D-070)
+                        → calc_io       (a chart's embedded workbook, D-076)
 qindanote → office_ink, office_speech (live notes, D-057)
 ```
 

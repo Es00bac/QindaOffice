@@ -336,6 +336,7 @@ void ShowHost::endShow()
     const int row = m_player->slide();
     m_player->deleteLater();
     m_player = nullptr;
+    m_presenterView = false;
     emit playerChanged();
     selectSlideRow(row);
 }

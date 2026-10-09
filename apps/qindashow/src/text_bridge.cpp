@@ -57,6 +57,8 @@ qreal screenScale()
     return dpi / 72.0;
 }
 
+QTextCharFormat charFormat(const ShowModel::TextRun &run, qreal scale);
+
 } // namespace
 
 QList<ShowModel::TextParagraph> paragraphsFromDocument(const QTextDocument &document)
@@ -121,7 +123,28 @@ QList<ShowModel::TextParagraph> paragraphsFromDocument(const QTextDocument &docu
     return out;
 }
 
-QTextDocument *documentFromParagraphs(const QList<ShowModel::TextParagraph> &paragraphs, QObject *parent)
+namespace {
+
+QTextCharFormat charFormat(const ShowModel::TextRun &run, qreal scale)
+{
+    QTextCharFormat format;
+    format.setFontWeight(run.bold ? QFont::Bold : QFont::Normal);
+    format.setFontItalic(run.italic);
+    format.setForeground(run.color.isValid() ? run.color : QColor(Qt::black));
+    format.setFontPointSize(run.pointSize / scale);
+    format.setFontUnderline(!run.underline.isEmpty());
+    format.setFontStrikeOut(!run.strike.isEmpty());
+    if (!run.fontFamily.isEmpty()) {
+        format.setFontFamilies(QStringList{run.fontFamily});
+    }
+    format.setProperty(kRunStash, stashRun(run));
+    return format;
+}
+
+} // namespace
+
+QTextDocument *documentFromParagraphs(const QList<ShowModel::TextParagraph> &paragraphs, QObject *parent,
+                                      const ShowModel::TextRun *emptyLook)
 {
     const qreal scale = screenScale();
     auto *document = new QTextDocument(parent);
@@ -139,21 +162,17 @@ QTextDocument *documentFromParagraphs(const QList<ShowModel::TextParagraph> &par
         } else {
             cursor.insertBlock(blockFormat);
         }
+        // M67: an empty paragraph types in the look it was given (a table
+        // cell's region look, text_bridge.h).
+        if (paragraph.runs.isEmpty() && emptyLook != nullptr) {
+            const QTextCharFormat format = charFormat(*emptyLook, scale);
+            cursor.setBlockCharFormat(format);
+            cursor.setCharFormat(format);
+        }
         for (const ShowModel::TextRun &run : paragraph.runs) {
-            QTextCharFormat format;
-            format.setFontWeight(run.bold ? QFont::Bold : QFont::Normal);
-            format.setFontItalic(run.italic);
-            format.setForeground(run.color.isValid() ? run.color : QColor(Qt::black));
-            format.setFontPointSize(run.pointSize / scale);
-            format.setFontUnderline(!run.underline.isEmpty());
-            format.setFontStrikeOut(!run.strike.isEmpty());
-            if (!run.fontFamily.isEmpty()) {
-                format.setFontFamilies(QStringList{run.fontFamily});
-            }
-            format.setProperty(kRunStash, stashRun(run));
             QString text = run.text;
             text.replace(QLatin1Char('\n'), QChar(QChar::LineSeparator));
-            cursor.insertText(text, format);
+            cursor.insertText(text, charFormat(run, scale));
         }
     }
     return document;

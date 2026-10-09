@@ -42,4 +42,19 @@ struct PptxReadReport {
 // True when `zip` is an OPC package (starts like a zip).
 [[nodiscard]] bool looksLikeZip(const QByteArray &bytes);
 
+// The look a NEW table on `slide` gets (M67, D-076), as PowerPoint picks
+// it: the deck's default table style (tableStyles.xml/@def; PowerPoint's
+// Medium Style 2 – Accent 1 when the deck names none or one it does not
+// define) resolved against the theme of the slide's master. A deck that was
+// not read from .pptx resolves against the Office theme the writer
+// generates for it. `textColor` and `fontFamily` are the deck's plain text
+// (tx1, the minor font) that cells outside any styled region show.
+struct NewTableStyle {
+    QString styleId;
+    TableLook look;
+    QColor textColor;
+    QString fontFamily;
+};
+[[nodiscard]] NewTableStyle newTableStyle(const Presentation &deck, const Slide &slide);
+
 } // namespace QindaOffice::Show

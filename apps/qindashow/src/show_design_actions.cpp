@@ -32,6 +32,12 @@ const AnimationEntry kAnimations[] = {
     {ShowModel::ShapeAnimation::FlyInTop, "showAnimFlyTop", QT_TR_NOOP("Fly in from &top")},
     {ShowModel::ShapeAnimation::FlyInBottom, "showAnimFlyBottom", QT_TR_NOOP("Fly in from &bottom")},
     {ShowModel::ShapeAnimation::Zoom, "showAnimZoom", QT_TR_NOOP("&Zoom in")},
+    // M67 (D-076): PowerPoint's Wipe and Split entrances, Spin and
+    // Grow/Shrink emphasis.
+    {ShowModel::ShapeAnimation::Wipe, "showAnimWipe", QT_TR_NOOP("&Wipe in")},
+    {ShowModel::ShapeAnimation::Split, "showAnimSplit", QT_TR_NOOP("S&plit in")},
+    {ShowModel::ShapeAnimation::Spin, "showAnimSpin", QT_TR_NOOP("Spi&n (emphasis)")},
+    {ShowModel::ShapeAnimation::GrowShrink, "showAnimGrowShrink", QT_TR_NOOP("&Grow/Shrink (emphasis)")},
 };
 
 MenuNode a(const ActionEntry *entry)
@@ -134,10 +140,15 @@ void ShowDesignActions::applyAnimation(ShowModel::ShapeAnimation animation)
             if (!ids.contains(shape.id)) {
                 continue;
             }
+            // Emphasis plays longer than an entrance (PowerPoint: 2 s, 0.5 s).
+            if (ShowModel::isEmphasis(animation) != ShowModel::isEmphasis(shape.animation)) {
+                shape.animationMs = ShowModel::isEmphasis(animation) ? 2000 : 500;
+            }
             shape.animation = animation;
-            // An animation only plays when the shape ARRIVES, so a shape
-            // that is on the slide from the start gets a build step too —
-            // otherwise the setting looks like it did nothing.
+            // An animation only plays when the shape ARRIVES (or, for an
+            // emphasis, at its step), so a shape that is on the slide from
+            // the start gets a build step too — otherwise the setting looks
+            // like it did nothing.
             if (animation != ShowModel::ShapeAnimation::Appear && shape.buildStep == 0) {
                 shape.buildStep = 1;
             }

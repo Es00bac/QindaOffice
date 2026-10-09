@@ -6,6 +6,8 @@
 #include <QPainter>
 #include <QPixmap>
 
+#include <cmath>
+
 namespace QindaOffice::Show {
 
 namespace {
@@ -14,9 +16,39 @@ namespace {
 // 1 = fully arrived). Returns false when the shape should not be drawn at
 // all yet. The transform is left on the painter for the caller's save/
 // restore pair to undo.
+// The box a shape paints in: its rect grown by its outline.
+QRectF paintedBox(const Shape &shape)
+{
+    const qreal margin = qMax<qreal>(1.0, shape.strokeWidth);
+    return shape.rect.normalized().adjusted(-margin, -margin, margin, margin);
+}
+
+// An emphasis effect at `progress` of its step (M67): Spin turns once
+// about the centre, Grow/Shrink scales to 150 % — and stays there after
+// its step during the show (`after`).
+void applyEmphasis(QPainter *painter, const Shape &shape, qreal progress, bool after)
+{
+    const QPointF centre = shape.rect.normalized().center();
+    const qreal eased = after ? 1.0 : 0.5 - std::cos(progress * M_PI) / 2.0; // ease in-out
+    if (shape.animation == ShapeAnimation::Spin && !after) {
+        painter->translate(centre);
+        painter->rotate(360.0 * eased);
+        painter->translate(-centre);
+    } else if (shape.animation == ShapeAnimation::GrowShrink) {
+        const qreal scale = 1.0 + 0.5 * eased;
+        painter->translate(centre);
+        painter->scale(scale, scale);
+        painter->translate(-centre);
+    }
+}
+
 bool applyBuildAnimation(QPainter *painter, const Shape &shape, const QSizeF &slideSize,
                          qreal progress)
 {
+    if (isEmphasis(shape.animation)) {
+        applyEmphasis(painter, shape, qBound(0.0, progress, 1.0), false);
+        return true; // on the slide all along
+    }
     if (shape.animation == ShapeAnimation::Appear) {
         // "Appear" is instantaneous by definition: it is either there or
         // it is not.
@@ -50,6 +82,24 @@ bool applyBuildAnimation(QPainter *painter, const Shape &shape, const QSizeF &sl
         break;
     case ShapeAnimation::FlyInBottom:
         painter->translate(0, slideSize.height() * (1.0 - eased));
+        break;
+    case ShapeAnimation::Wipe: {
+        // From the bottom: the edge sweeps up over the shape.
+        const QRectF box = paintedBox(shape);
+        painter->setClipRect(QRectF(box.left(), box.bottom() - box.height() * eased, box.width(), box.height() * eased),
+                             Qt::IntersectClip);
+        break;
+    }
+    case ShapeAnimation::Split: {
+        // Vertical out: a band opening from the vertical centre line.
+        const QRectF box = paintedBox(shape);
+        painter->setClipRect(QRectF(centre.x() - box.width() * eased / 2, box.top(), box.width() * eased, box.height()),
+                             Qt::IntersectClip);
+        break;
+    }
+    case ShapeAnimation::Spin:
+    case ShapeAnimation::GrowShrink:
+        applyEmphasis(painter, shape, progress, false);
         break;
     case ShapeAnimation::Appear:
         break;
@@ -159,14 +209,21 @@ void renderSlide(QPainter *painter, const Slide &slide, const QSizeF &slideSize,
     painter->setRenderHint(QPainter::Antialiasing);
     paintBackdrop(painter, backdrop, slideSize);
     const SlideMaster *typeMaster = backdrop.hasTypeMaster ? &backdrop.typeMaster : nullptr;
+    // AGENT-NOTE: buildStep 1000 is the finished slide the editor, the
+    // thumbnails and print draw — as designed, no emphasis applied. Only a
+    // running show keeps a Grow/Shrink at 150 % after its step.
+    const bool showing = buildStep < 1000;
     for (const Shape &shape : slide.shapes) {
-        if (shape.buildStep > buildStep) {
+        if (shape.buildStep > buildStep && !isEmphasis(shape.animation)) {
             continue; // appears on a later click
         }
         // The master supplies defaults for runs that never chose their own,
         // so restyling a deck is one edit rather than one per text box.
         const bool arriving = shape.buildStep > 0 && shape.buildStep == buildStep;
         painter->save();
+        if (showing && !arriving && isEmphasis(shape.animation) && shape.buildStep > 0 && shape.buildStep < buildStep) {
+            applyEmphasis(painter, shape, 1.0, true);
+        }
         const bool draw = !arriving
             || applyBuildAnimation(painter, shape, slideSize, qBound(0.0, buildProgress, 1.0));
         if (draw) {

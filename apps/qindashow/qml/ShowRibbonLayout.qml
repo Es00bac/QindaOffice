@@ -4,16 +4,28 @@ import QindaOffice.Shell
 
 // QindaShow's ribbon (D-041): File · Home · Insert · Design · Animations ·
 // Slide Show · View, plus the contextual Shape tab while shapes are
-// selected. Every string is an ActionEntry id (AGENTS.md rule 5); icons
-// given here only fill in for entries whose menu rows carry none.
+// selected and (M67, D-076) Table Design / Table Layout while a table is
+// and Chart while a chart is. Every string is an ActionEntry id (AGENTS.md
+// rule 5); icons given here only fill in for entries whose menu rows carry
+// none.
 QtObject {
     property Component fillSlot: null
     property Component strokeSlot: null
+    property Component shadingSlot: null
+    property Component penSlot: null
+
+    readonly property var tableOptionIds: ["showTableHeaderRowAction", "showTableTotalRowAction", "showTableBandedRowsAction",
+                                           "showTableFirstColumnAction", "showTableLastColumnAction", "showTableBandedColumnsAction"]
+    readonly property var borderIds: ["showTableBordersAllAction", "showTableBordersOutsideAction", "showTableBordersInsideAction", "|",
+                                      "showTableBordersTopAction", "showTableBordersBottomAction", "showTableBordersLeftAction",
+                                      "showTableBordersRightAction", "|", "showTableBordersInsideHorizontalAction",
+                                      "showTableBordersInsideVerticalAction", "|", "showTableBordersNoneAction"]
 
     readonly property var aiIds: ["showAirewrite", "showAishorten", "showAiexpand", "showAigrammar",
                                   "showAisummarize", "showAicontinue", "showAiexplain"]
     readonly property var animationIds: ["showAnimAppear", "showAnimFade", "showAnimFlyLeft", "showAnimFlyRight",
-                                         "showAnimFlyTop", "showAnimFlyBottom", "showAnimZoom"]
+                                         "showAnimFlyTop", "showAnimFlyBottom", "showAnimZoom", "showAnimWipe",
+                                         "showAnimSplit", "|", "showAnimSpin", "showAnimGrowShrink"]
     readonly property var alignIds: ["showAlignLeftAction", "showAlignHCenterAction", "showAlignRightAction", "|",
                                      "showAlignTopAction", "showAlignVCenterAction", "showAlignBottomAction", "|",
                                      "showDistributeHorizontallyAction", "showDistributeVerticallyAction"]
@@ -40,6 +52,7 @@ QtObject {
         ] },
         { id: "insert", label: qsTr("Insert"), keyTip: "N", groups: [
             { id: "newSlide", label: qsTr("Slides"), items: [{ action: "slideNewAction", size: "large" }] },
+            { id: "tables", label: qsTr("Tables"), items: [{ action: "showInsertTableAction", size: "large" }] },
             { id: "images", label: qsTr("Images"), items: [{ action: "showInsertImageAction", size: "large" }] },
             { id: "shapes", label: qsTr("Shapes"), items: [
                 "showInsertRectangleAction", "showInsertEllipseAction",
@@ -60,12 +73,12 @@ QtObject {
         ] },
         { id: "slideShow", label: qsTr("Slide Show"), keyTip: "S", groups: [
             { id: "start", label: qsTr("Start"), items: [
-                { action: "slideStartShowAction", size: "large" }] },
+                { action: "slideStartShowAction", size: "large" }, { action: "showPresenterViewAction", size: "large" }] },
             { id: "share", label: qsTr("Share"), items: [
                 { action: "showExportPdfAction", size: "large", iconName: "file-down" }] },
             StandardRibbon.assistantGroup(aiIds.concat(["|", "showGenerateDeckAction"]))
         ] },
-        StandardRibbon.viewTab([]),
+        StandardRibbon.viewTab([{ id: "notes", label: qsTr("Notes"), items: [{ action: "showViewNotesAction", size: "large" }] }]),
         { id: "shape", label: qsTr("Shape"), keyTip: "P", contextId: "shape", groups: [
             { id: "style", label: qsTr("Style"), rows: [
                 [{ id: "fill", component: fillSlot }, { id: "stroke", component: strokeSlot }],
@@ -79,6 +92,26 @@ QtObject {
                  { action: "showAlignBottomAction", size: "icon" }, { action: "showDistributeVerticallyAction", size: "icon" }]] },
             { id: "grouping", label: qsTr("Group"), items: ["showGroupAction", "showUngroupAction"] },
             { id: "shapeEdit", label: qsTr("Shape"), items: ["showDuplicateShapeAction", "showDeleteShapeAction"] }
+        ] },
+        { id: "tableDesign", label: qsTr("Table Design"), keyTip: "JT", contextId: "table", groups: [
+            { id: "tableOptions", label: qsTr("Table Style Options"), items: tableOptionIds },
+            { id: "tableShading", label: qsTr("Shading"), items: [
+                { id: "shading", component: shadingSlot }, "showTableShadingAction"] },
+            { id: "tableBorders", label: qsTr("Borders"), items: [
+                { id: "pen", component: penSlot },
+                { id: "bordersMenu", label: qsTr("Borders"), iconName: "grid-3x3", size: "large", menu: borderIds }] }
+        ] },
+        { id: "tableLayout", label: qsTr("Table Layout"), keyTip: "JL", contextId: "table", groups: [
+            { id: "rowsColumns", label: qsTr("Rows & Columns"), items: [
+                { action: "showTableInsertRowAboveAction", size: "large" }, "showTableInsertRowBelowAction",
+                "showTableInsertColumnLeftAction", "showTableInsertColumnRightAction",
+                "showTableDeleteRowsAction", "showTableDeleteColumnsAction"] },
+            { id: "merge", label: qsTr("Merge"), items: [
+                { action: "showTableMergeCellsAction", size: "large" }, { action: "showTableSplitCellsAction", size: "large" }] },
+            { id: "cellSize", label: qsTr("Cell Size"), items: ["showTableDistributeRowsAction", "showTableDistributeColumnsAction"] }
+        ] },
+        { id: "chart", label: qsTr("Chart"), keyTip: "JC", contextId: "chart", groups: [
+            { id: "chartData", label: qsTr("Data"), items: [{ action: "showChartEditDataAction", size: "large" }] }
         ] }
     ]
 }

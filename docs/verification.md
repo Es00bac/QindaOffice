@@ -33,6 +33,142 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M67 Show editing gates (D-076)
+
+Qualified on qinda (branch `m67-show-editing`, merged with
+`m60-office-formats` 02eb244) with
+`QQO_OOXML_SCHEMA_DIR=~/scratch/qqo/ecma-xsd`, xmllint and LibreOffice
+25.2, as a targeted build (show_model, calc_io, the QindaShow app and their
+tests only; qinda's disk is shared): **14/14 CTest targets passed,
+56.01 s** (`ctest --preset dev -R "show|pptx|fodp"`). QtTest counts
+(init/cleanup included), none skipped — the schema and LibreOffice steps
+ran:
+
+- show_model — `tst_show_model` 8, `tst_fodp` 7, `tst_pptx_read` 17,
+  `tst_pptx_write` 9, **`tst_pptx_tables` 10, `tst_pptx_charts` 7,
+  `tst_show_effects` 5**.
+- QindaShow — `tst_qindashow` 12, `tst_show_ui` 19, `tst_show_design` 11,
+  `tst_show_menu_export` 3, `tst_show_tools` 3, **`tst_show_table` 8,
+  `tst_show_chart_notes` 5**: 124 QtTest functions in all (63 show_model,
+  61 QindaShow), 0 failed, 0 skipped.
+
+**Tables** (automated: `tst_pptx_tables`, `tst_show_table`):
+
+- `rowsAndColumnsAroundMergedBlocks`, `mergeAndSplit`, `bordersAndFills`,
+  `styleOptionsRestyleTheHeader`: the model operations — a row inserted
+  inside a vertical block grows it, deleting a block's anchor row moves its
+  text down, a column inserted inside a horizontal block grows it, a merge
+  keeps every cell's text in the anchor and grows to whole blocks, a merged
+  block re-divides only into parts that divide it, a single cell split 2×2
+  gains grid lines the cells around it span, Outside borders set the facing
+  edges of the neighbours, None is an explicit no-line, Header Row off turns
+  the header's white bold into the body's look and a row inserted above the
+  header takes the header's look.
+- `editedTableKeepsUneditedCells`: the fixture's table (merged header,
+  PowerPoint's default style) gets a header row and a first column above /
+  beside it and a typed cell, is written and read back equal; the cells
+  nobody edited ("A", the yellow "B") are their source `a:tc` serialised
+  byte for byte at their new places; the old header, moved into the body,
+  keeps its source `<a:rPr lang="en-US"/>`; `tableStyleId`, Header Row and
+  Banded Rows are kept; an insert undone by a delete writes the source
+  table verbatim.
+- `newTableIsARealTable` (a PowerPoint deck and a QindaShow deck): a new
+  table is an `a:tbl` graphic frame with `tableStyleId`
+  {5C22544A-7EE6-4342-B048-85BDC9FD1C3A} and `firstRow="1" bandRow="1"`, no
+  `b="1"` (the style carries the header's bold), and reads back equal.
+- `libreOfficeConvertsTheEditedDeck`: an inserted row, a vertical merge, all
+  borders and edited notes — LibreOffice's PDF has the 4 shown slides.
+- Through the window: `insertTableLandsARealTable` (Insert ▸ Table, the
+  Table Design / Table Layout context, one undo step),
+  `clickIntoACellAndTabThroughIt` (a real click into a cell, typing, Tab /
+  Shift+Tab, typed header text in the header's look, Tab in the last cell
+  adds a row, each cell edit one undo step),
+  `aClickIntoAnUnselectedTableEditsTheCell` (one click selects and edits; a
+  click on the frame edge only selects), `commandsActOnTheSelectedCells`
+  (insert, merge, split dialog defaults, shading, borders with the pen
+  colour, Header Row, distribute, delete — each one step, all undone back
+  to the inserted table), `boundaryDragResizesAColumn` (a real drag: +30 pt
+  to the left column, the right one gives it up, one step),
+  `powerPointTableEditedAndSaved` (a column inserted beside the merged
+  header stays outside it; typed text keeps the cell's look; saved `.pptx`
+  reads back equal).
+
+**Charts** (automated: `tst_pptx_charts`, `tst_show_chart_notes`):
+
+- `editedDataReachesCachesAndWorkbook` (the fixture's chart given an
+  embedded workbook with an Excel table, as PowerPoint embeds it): a changed
+  value, a fourth category, a renamed and a new series read back equal; the
+  formulas are `Sheet1!$B$1 Sheet1!$A$2:$A$5 Sheet1!$B$2:$B$5 …
+  Sheet1!$D$2:$D$5`; one chart part and one embedding in the package (the
+  stale ones not carried); the embedded workbook re-read through calc_io
+  holds North / South region / East, Q4, 7.5, 9, the blank, 1.25 and 4 where
+  the formulas point, the untouched "Quarter" header, and its table over
+  A1:D5; shrunk again, the cells the data left are empty and the table is
+  A1:C4 again.
+- `unchangedChartIsCarriedVerbatim` (a moved chart: part and workbook byte
+  for byte), `tableOfAChart` (the sheet, unique Excel-safe series names,
+  `parseValue`), `kindChangesRebuildThePlot` (line, pie, scatter, stacked
+  bar, doughnut: each validates, reads back equal and has the axes its kind
+  needs), `libreOfficeConvertsTheEditedDeck`.
+- Through the window, `editDataReachesTheChartAndTheFile`: Edit Chart Data
+  lights with a chart, the Chart tab appears, the dialog opens on the
+  chart's numbers; an edited value, a new series and Stacked column land as
+  one undo step; the saved `.pptx` reads back equal with its workbook.
+
+**Notes and the presenter** (automated: `tst_pptx_tables`,
+`tst_show_chart_notes`, `tst_qindashow`):
+
+- `editedNotesKeepTheirNotesSlide`: a line added between two notes lines —
+  the notes slide keeps its slide image placeholder and the unchanged lines'
+  runs as written; a slide without notes gets a notes slide on the deck's
+  own notes master; both read back.
+- `notesPaneUnderTheSlide`: the pane is under the slide, typing into it
+  sets the notes as one undo step, View ▸ Notes hides and shows it;
+  `hostWiresDeckNotesAndUndo` now undoes the notes before the slide.
+- `presenterViewOnOneScreen`: Presenter View on the offscreen platform's one
+  screen shows the presenter and not the player, the current slide's notes,
+  next preview and timer; advancing shows the next notes and "End of the
+  show".
+
+**Effects** (automated: `tst_show_effects`, `tst_show_design`):
+
+- `writtenWithPowerPointPresets`: Wipe (22/4, `wipe(up)`), Split (16/37,
+  `barn(outVertical)`), Spin (`emph` 8, `animRot by="21600000"`), Grow/Shrink
+  (`emph` 6, `by 150000`), `<p:wipe dir="l"/>`, `<p:split orient="vert"
+  dir="out"/>`; schema-valid; read back with the same effects, steps,
+  durations and transitions; unchanged, the timing is written verbatim.
+- `travelsThroughFodp`, `drawnAsTheyPlay` (half a wipe shows the bottom,
+  half a split the centre, emphasis shapes are there before their step, a
+  spin ends where it began, a grown shape stays grown in the show but not on
+  the finished slide); `newTransitionsPlay` (the player plays wipe, split
+  and push through the clip and shows the slide whole) and Spin's 2 s.
+
+**UI gates**: the structural fixtures `qindashow_{1280,520}.txt` were
+regenerated deliberately (`QQO_UPDATE_FIXTURES=1`; the diff is the notes
+pane — `slideNotes` moved from the side panel into `NotesPane` under the
+slide in `SlideEditor`'s splitter); the ribbon gate (every menu command on
+the ribbon, every icon real, every tab — Table Design, Table Layout and
+Chart forced on — inside the ribbon at 1280 and 520 px) and the panel
+export's validator (the Table menu; ids once in the tree) pass. Grabs
+looked at (`QQO_GRAB_DIR`): `qindashow_1280` (the notes pane under the
+slide), `qindashow_table_editing` (Medium Style 2's blue header and bands,
+the caret in the added row, the Table Design / Table Layout tabs),
+`qindashow_chart_data` (the sheet lettered A–D, the new Series 3, Stacked
+column chosen), `qindashow_notes_pane`, `qindashow_presenter` (the current
+and next slide, the notes, the timer and counter; offscreen it keeps the
+window's declared size).
+
+**On the desktop (manual, the owner):** open one of your decks with a
+table and a chart in QindaShow; in the table click into a cell and type,
+Tab to the next, insert a row, merge two cells, shade one, drag a column
+boundary; on the chart choose Edit Chart Data…, change a number and add a
+series; type a speaker note under a slide; save as `.pptx` and open it in
+PowerPoint — the table keeps its style and your edits, the chart shows the
+new numbers and PowerPoint's own Edit Data opens a workbook with the same
+numbers, the notes are on the slide's notes page, and a Wipe / Spin you set
+plays in PowerPoint's slide show. Then try Slide Show ▸ Presenter View on
+one monitor.
+
 ## M66 Calc gaps gates (D-075)
 
 Qualified on qinda (branch `m66-calc-gaps`, merged with `m60-office-formats`

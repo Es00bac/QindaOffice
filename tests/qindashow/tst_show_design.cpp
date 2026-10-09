@@ -10,6 +10,8 @@
 
 #include "show_test_support.h"
 
+#include "qindashow/src/presentation_controller.h"
+
 #include "qindashow/src/show_commands.h"
 #include "qindashow/src/show_design_actions.h"
 
@@ -69,6 +71,7 @@ private slots:
     void multiShapeGestureIsOneUndoStep();
     void mastersRoundTripThroughTheDialogSeam();
     void animationEntriesFollowTheSelection();
+    void newTransitionsPlay();
 };
 
 void ShowDesignTest::masterPaintsTheBackground()
@@ -278,6 +281,48 @@ void ShowDesignTest::animationEntriesFollowTheSelection()
     // Nothing selected: the entries are inert.
     canvas->clearSelection();
     QVERIFY(!scene.host.action(QStringLiteral("showAnimFade"))->isEnabled());
+    // M67: an emphasis effect plays PowerPoint's two seconds.
+    canvas->setSelected(id, true);
+    QVERIFY(scene.host.actions()->trigger(QStringLiteral("showAnimSpin")));
+    QCOMPARE(canvas->slide()->findShape(id)->animation, ShapeAnimation::Spin);
+    QCOMPARE(canvas->slide()->findShape(id)->animationMs, 2000);
+    QVERIFY(scene.host.actions()->trigger(QStringLiteral("showAnimWipe")));
+    QCOMPARE(canvas->slide()->findShape(id)->animationMs, 500);
+}
+
+void ShowDesignTest::newTransitionsPlay()
+{
+    Scene scene;
+    QVERIFY2(scene.ready(), qPrintable(scene.error));
+    QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+    QCOMPARE(scene.host.transitionNames(), (QStringList{QStringLiteral("Cut"), QStringLiteral("Fade"), QStringLiteral("Push"),
+                                                        QStringLiteral("Zoom"), QStringLiteral("Wipe"), QStringLiteral("Split")}));
+    for (int i = 0; i < 3; ++i) {
+        scene.host.addSlide();
+    }
+    const char *const kinds[] = {"wipe", "split", "slide"};
+    const int indexes[] = {4, 5, 2}; // as the slide panel's combo box lists them
+    for (int i = 1; i <= 3; ++i) {
+        scene.host.selectSlideRow(i);
+        scene.host.setTransitionIndex(indexes[i - 1]);
+        QCOMPARE(scene.doc->presentation()->slides.at(i).transition, QString::fromLatin1(kinds[i - 1]));
+    }
+    scene.host.selectSlideRow(0);
+    QQuickWindow *player = scene.childWindow(QStringLiteral("showPlayer"));
+    QVERIFY(player != nullptr);
+    scene.host.startShow();
+    QTRY_VERIFY(player->isVisible());
+    QQuickItem *reveal = findItem(player->contentItem(), QStringLiteral("playerReveal"));
+    QVERIFY(reveal != nullptr);
+    for (int i = 1; i <= 3; ++i) {
+        QVERIFY(QMetaObject::invokeMethod(player, "advance", Q_ARG(QVariant, QVariant(1))));
+        QCOMPARE(scene.host.player()->slide(), i);
+        QCOMPARE(scene.host.player()->transition(), QString::fromLatin1(kinds[i - 1]));
+        // A wipe or split reveals the incoming slide through a clip, then
+        // shows it whole.
+        QTRY_COMPARE(reveal->width(), player->width());
+    }
+    scene.host.endShow();
 }
 
 SHOW_TEST_MAIN(ShowDesignTest)

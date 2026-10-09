@@ -4,7 +4,8 @@ import QindaTK as Tk
 import QindaOffice.Show
 
 // The speaker view on the second screen while the player owns the
-// projector: the current slide, the next-slide preview, the notes, an
+// projector — or alone on the only screen with Slide Show ▸ Presenter View
+// (M67) — the current slide, the next-slide preview, the speaker notes, an
 // elapsed timer, the wall clock and the slide counter. Observes the same
 // PresentationController as the player; Escape ends the show.
 Window {
@@ -27,8 +28,15 @@ Window {
         onTriggered: { presenter.elapsedSeconds = Math.floor((Date.now() - presenter.startedAt) / 1000); clock.text = Qt.formatTime(new Date(), "hh:mm") }
     }
     function pad(n) { return (n < 10 ? "0" : "") + n }
+    // AGENT-GUARD (M67): sized from the window, not anchored to its content
+    // item — shown straight into full screen (offscreen, and on some
+    // compositors) the content item can stay 0×0 and the whole view
+    // collapsed into its corner.
     Tk.Flex {
-        anchors.fill: parent
+        x: 0
+        y: 0
+        width: presenter.width
+        height: presenter.height
         direction: Tk.Flex.Column
         padding: Tk.Theme.space.md
         gap: Tk.Theme.space.md
@@ -45,6 +53,7 @@ Window {
                 Tk.Flex.basis: 0
                 Tk.Overline { text: qsTr("Next") }
                 SlideFrameItem {
+                    id: next
                     objectName: "presenterNext"
                     controller: presenter.controller
                     slideIndex: presenter.controller !== null && presenter.controller.slide + 1 < presenter.controller.slideCount ? presenter.controller.slide + 1 : -2
@@ -53,6 +62,7 @@ Window {
                     implicitHeight: 112
                     Tk.Flex.grow: 1
                 }
+                Tk.Label { objectName: "presenterEnd"; visible: next.slideIndex < 0; text: qsTr("End of the show") }
             }
         }
         Tk.Scroll {

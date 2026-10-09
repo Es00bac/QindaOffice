@@ -5,6 +5,128 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-076: QindaShow: tables, chart data and notes edited in place
+
+**Date:** 2026-10-08 · **Status:** accepted (owner request: Office parity,
+"nothing missing that somebody would need"; M67, builds on D-070 and D-068)
+
+**Context.** M62 (D-070) opened and saved PowerPoint decks natively but
+stopped at what QindaShow could draw: table cells could not be edited in
+place, charts were drawn from their cached values and carried verbatim,
+speaker notes were a text field in a side panel whose edits regenerated the
+notes slide from scratch, and only cut / fade / slide / zoom transitions and
+a few entrance effects were understood. Of the owner's 18 decks 87 % have
+tables, 93 % pictures, 33 % charts and 100 % speaker notes.
+
+**Decision.**
+
+1. **Tables are edited on the slide, as in PowerPoint.** A click into the
+   selected table puts the caret in the cell under the pointer — the
+   in-place editor over the cell's box inside its margins, the text bridge
+   text boxes use (the run and paragraph formatting it does not show rides
+   along, D-070), an empty cell typing in its region's look (the header's
+   white bold) and the deck's font. A drag selects cells, Shift extends,
+   Tab / Shift+Tab walk the cells, Tab in the last cell adds a row, Delete
+   empties the selected cells, Enter / F2 edit, a drag on a column or row
+   boundary resizes (the right and bottom edges resize the last column and
+   row; the left and top edges and a 4 pt frame band move the table).
+   Insert ▸ Table, the Table menu and the contextual **Table Design** /
+   **Table Layout** ribbon tabs carry insert and delete rows and columns,
+   merge, split (a merged block divided into equal parts; a single cell
+   given grid lines the cells around it span), shading, ten border commands
+   with a pen colour, the six table style options and distribute rows and
+   columns. The model work is show_model's `table_edit.h` (`TableEdit`):
+   merges are edited as a block list and written back onto every cell's
+   gridSpan / rowSpan / hMerge / vMerge. Each command is one undo step
+   (`ShapeEditCommand`, located by slide and shape id — it holds no
+   `Slide*`).
+2. **An edited table is written through its source.** `TableOrigin`
+   (`show_table.h`, never part of equality) gives every row and grid column
+   an id the edits keep; ids below the source counts are the rows and
+   columns the reader read. The writer (`pptx_write_table.cpp`) maps each
+   row, column and cell back: an unedited cell is its source `a:tc` byte for
+   byte wherever rows or columns moved around it; a source row or column
+   keeps its `a:tr` / `a:gridCol` (PowerPoint's a16:rowId / a16:colId
+   included); `a:tblPr` keeps its `tableStyleId` and only changed options are
+   patched into it. Because the model holds effective values, a cell that
+   moves into another style region gets that region's look
+   (`TableEdit::restyleText`), and the writer compares run formatting with
+   the region's look factored out — text that only moved keeps its source
+   `a:rPr` — and leaves colour and weight to the table style wherever they
+   are the style's, so the table keeps restyling itself in PowerPoint. A new
+   table takes the deck's default table style (`tableStyles.xml/@def`, else
+   PowerPoint's Medium Style 2 – Accent 1) resolved against the slide
+   master's theme (`newTableStyle`, `pptx_reader.h`), PowerPoint's Header
+   Row and Banded Rows on and 0.4 in rows, and is written as a real `a:tbl`
+   graphic frame.
+3. **Chart data is edited in a data sheet and saved into the chart part
+   and its workbook.** *Edit Chart Data…* (Shape menu, the contextual
+   **Chart** tab) opens the chart's sheet in QindaTK's EditableGrid —
+   series across, categories down, lettered as the embedded workbook lays
+   them out — with the kinds the renderer draws (column and bar clustered /
+   stacked / 100 %, line, stacked line, area variants, pie, doughnut,
+   scatter). The writer never re-derives a chart (`pptx_write_chart.cpp`):
+   it copies the SOURCE chart part, recomputes the series formulas (`c:f`)
+   for the data's new extent where the first series' formulas placed it
+   (series in columns or in rows, on the sheet they name), refills the
+   caches PowerPoint draws from, adds series as copies of the last one (in
+   the model's colour, else the chart's palette) and drops removed series
+   and per-point overrides past the last point; a kind change rebuilds the
+   first plot in the new element's schema order with the axes the kind
+   needs (`pptx_write_chart_kind.cpp`). The embedded workbook
+   (`c:externalData`) is rewritten through **calc_io** (`chart_workbook.h`):
+   read, the data written where the formulas point, the cells the old data
+   held and the new does not emptied, the Excel table PowerPoint keeps over
+   the data resized with it — so PowerPoint's own Edit Data opens on the
+   same numbers. show_model therefore links calc_io (library to library, as
+   books_io and plan_output do). A chart linked to an outside workbook keeps
+   its link; a chart without a readable `.xlsx` gets a new one. The stale
+   chart part never reaches the package: the frame's reference comes off
+   before the frame is carried, and the slide writer no longer carries the
+   source shape tree (which copied every part any shape named — deleted
+   pictures' media included — into the package).
+4. **Speaker notes are edited under the slide and saved into their notes
+   slide.** The notes pane sits under the slide behind a splitter
+   (`SlideEditor.qml`; View ▸ Notes shows and hides it, PowerPoint's Normal
+   view); the side panel keeps transition and layout. Typing is undoable,
+   one step per stretch of typing (`NotesEditCommand`). Edited notes go into
+   the notes slide they came from — its slide image, header, footer and
+   number placeholders and its formatting kept; a line that still reads as
+   a source paragraph IS that paragraph (runs and spelling), any other line
+   takes the look of the paragraph in its place. The presenter view shows
+   the notes; Slide Show ▸ **Presenter View** (Alt+F5) shows it alone on a
+   single screen. Screens are compared by name now: a screen-info object
+   never equalled the window's screen, so one screen counted as two and the
+   presenter covered the player. After the last slide the next preview reads
+   "End of the show".
+5. **More of PowerPoint's common effects** (widening D-070 point 4): the
+   Wipe (from bottom; preset 22 subtype 4, `wipe(up)`) and Split (vertical
+   out; 16 / 37, `barn(outVertical)`) entrances; Spin (emphasis 8,
+   `p:animRot by="21600000"`) and Grow/Shrink (emphasis 6, `p:animScale` by
+   150 %) — an emphasis shape is on the slide before its step, and a grown
+   one stays grown for the rest of the show but not in the editor, the
+   thumbnails or print; the Wipe and Split slide transitions (`p:wipe`,
+   `p:split`); "slide" is labelled Push — it is written as PowerPoint's
+   Push — and now pushes the outgoing slide too. Read and written with
+   PowerPoint's presets (cross-checked against LibreOffice 25.2's PPTX
+   export of the same effects), kept verbatim while unchanged, carried
+   through `.fodp`.
+
+**Consequences.** A PowerPoint table, chart or notes page edited in QindaShow
+saves as PowerPoint's own markup around the edit: the rest of the table is
+the file's, the chart's style and colour parts travel, the workbook holds the
+new numbers. Speaker-notes typing joins the undo history (a test that
+counted undo steps was updated). Limits: a combo chart edits its first plot
+only; multi-level categories become one level after an edit; a kind change
+drops per-point colours and data labels; a chart whose source part is gone
+(through `.fodp`) still saves as a picture of itself; a table pasted or
+brought through `.fodp` is written fresh; notes stay plain text (the
+formatting of unchanged lines is kept); Grow/Shrink always scales to 150 %
+and the Wipe / Split directions are PowerPoint's defaults only. PowerPoint
+itself is not available here: the markup follows PowerPoint's spelling and
+is checked by the ECMA-376 schemas and LibreOffice; the owner's check in
+PowerPoint is the manual gate (`docs/verification.md`).
+
 ## D-075: QindaCalc: hyperlinks, outlines, protection, carried parts, dynamic arrays
 
 **Date:** 2026-10-08 · **Status:** accepted (M66, the Excel features QindaCalc
@@ -603,7 +725,8 @@ edited in place; animations beyond the builds above play as appear and keep
 their XML only while the builds are unchanged; through `.fodp` a deck keeps
 its look but not its PowerPoint structure (placeholders, Office ids,
 connections), so a later `.pptx` save generates masters and layouts and
-writes charts and preserved content as pictures.
+writes charts and preserved content as pictures. *(Tables, chart data and
+speaker notes are edited in place since M67 — D-076.)*
 
 ## D-069: Excel interchange: typed cells, future-function prefixes, honest writer
 

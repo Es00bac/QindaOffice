@@ -68,6 +68,12 @@ QPair<QString, QString> smilTransition(const QString &transition)
     if (transition == u"zoom") {
         return {QStringLiteral("irisWipe"), QStringLiteral("rectangle")};
     }
+    if (transition == u"wipe") { // M67
+        return {QStringLiteral("barWipe"), QStringLiteral("leftToRight")};
+    }
+    if (transition == u"split") {
+        return {QStringLiteral("barnDoorWipe"), QStringLiteral("vertical")};
+    }
     return {};
 }
 

@@ -18,7 +18,9 @@
 // status, undo wiring, edit commands, print), show_host_slides.cpp (deck
 // operations, find/replace, the show, templates, PDF),
 // show_host_menus.cpp (the menu tree, the context menu, the AI menu),
-// show_host_ai.cpp (assistant, inline actions, deck generation).
+// show_host_ai.cpp (assistant, inline actions, deck generation),
+// show_host_editing.cpp (M67, D-076: tables, chart data, the notes pane,
+// the presenter view on one screen).
 
 #include "assistant_controller.h"
 #include "document_host.h"
@@ -44,9 +46,11 @@ class ModelCatalog;
 
 namespace QindaOffice::Apps::Show {
 
+class ChartDataEditor;
 class PresentationController;
 class ShowArrangeActions;
 class ShowDesignActions;
+class ShowTableActions;
 class ShowToolbox;
 
 class ShowHost : public Quick::DocumentHost {
@@ -70,6 +74,11 @@ class ShowHost : public Quick::DocumentHost {
     // The host owns the canvas item (the controllers need it from the first
     // line and the tests drive it without a window); the window seats it.
     Q_PROPERTY(QindaOffice::Apps::Show::SlideCanvasItem *canvas READ canvas CONSTANT)
+    // M67: the Edit Data sheet of the selected chart.
+    Q_PROPERTY(QindaOffice::Apps::Show::ChartDataEditor *chartData READ chartData CONSTANT)
+    // M67: the show runs with the presenter view even on one screen
+    // (Slide Show ▸ Presenter View); the player then stays hidden there.
+    Q_PROPERTY(bool presenterView READ presenterView NOTIFY playerChanged)
 public:
     ShowHost();
     ~ShowHost() override;
@@ -81,6 +90,9 @@ public:
     [[nodiscard]] ShowDesignActions *designActions() const { return m_design; }
     [[nodiscard]] Ai::AssistantController *assistant() const { return m_assistant; }
     [[nodiscard]] PresentationController *player() const { return m_player; }
+    [[nodiscard]] ShowTableActions *tableActions() const { return m_tables; }
+    [[nodiscard]] ChartDataEditor *chartData() const { return m_chartData; }
+    [[nodiscard]] bool presenterView() const { return m_presenterView; }
 
     // Seats the canvas item under `container` (SlideCanvasView.qml's
     // Component.onCompleted) and names the TextEdit that shows the in-place
@@ -117,6 +129,12 @@ public:
     // ---- the show ----
     Q_INVOKABLE void startShow();
     Q_INVOKABLE void endShow();
+    // ---- tables, charts (show_host_editing.cpp) ----
+    Q_INVOKABLE void insertTable(int rows, int columns);
+    Q_INVOKABLE void splitCells(int columns, int rows);
+    Q_INVOKABLE void applyTableShading(const QColor &color);
+    Q_INVOKABLE void setTablePenColor(const QColor &color);
+    Q_INVOKABLE bool applyChartData();
     // ---- find and replace (show_host_slides.cpp) ----
     Q_INVOKABLE bool findNext(const QString &needle, bool caseSensitive);
     Q_INVOKABLE bool findPrevious(const QString &needle, bool caseSensitive);
@@ -156,6 +174,11 @@ signals:
     void generateDeckRequested();
     void templateConsentRequested(const QString &path);
     void proposalRequested(const QString &original, const QString &proposal);
+    // M67 dialogs: Insert Table, Split Cells, cell shading, Edit Data.
+    void insertTableRequested();
+    void splitCellsRequested(int columns, int rows, int maxColumns, int maxRows);
+    void tableShadingRequested(const QColor &current);
+    void chartDataRequested();
 
 protected:
     [[nodiscard]] QString filterString() const override;
@@ -180,6 +203,9 @@ private:
     void insertMenus();
     // show_host_ai.cpp
     void createAssistant();
+    // show_host_editing.cpp
+    void createEditing();
+    [[nodiscard]] QList<Quick::MenuNode> chartMenuItems() const;
 
     ShowDocument *m_document = nullptr;
     SlideCanvasItem *m_canvas = nullptr;
@@ -189,6 +215,9 @@ private:
     ShowArrangeActions *m_arrange = nullptr;
     ShowDesignActions *m_design = nullptr;
     PresentationController *m_player = nullptr;
+    ShowTableActions *m_tables = nullptr;
+    ChartDataEditor *m_chartData = nullptr;
+    bool m_presenterView = false;
     Ai::ModelCatalog *m_catalog = nullptr;
     Ai::AssistantController *m_assistant = nullptr;
     Ai::InlineActionFlow *m_inline = nullptr;

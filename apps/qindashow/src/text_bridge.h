@@ -23,7 +23,11 @@ namespace ShowModel = QindaOffice::Show;
 namespace QindaOffice::Apps::Show {
 
 [[nodiscard]] QList<ShowModel::TextParagraph> paragraphsFromDocument(const QTextDocument &document);
+// `emptyLook` (M67): the run formatting an EMPTY paragraph types in — a
+// table cell's text look (TableEdit::textLook) — instead of the editor's
+// default; nullptr keeps the default.
 [[nodiscard]] QTextDocument *documentFromParagraphs(const QList<ShowModel::TextParagraph> &paragraphs,
-                                                    QObject *parent = nullptr);
+                                                    QObject *parent = nullptr,
+                                                    const ShowModel::TextRun *emptyLook = nullptr);
 
 } // namespace QindaOffice::Apps::Show

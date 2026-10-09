@@ -324,6 +324,10 @@ XmlElementPtr patchShape(PartWriter &out, const Shape &shape, const ShapeSource 
         return generateShape(out, shape, id);
     }
     XmlElementPtr e = source.xml->clone();
+    DetachedChart chart;
+    if (shape.kind == ShapeKind::Chart && shape.chart != old.chart && e->name == u"graphicFrame") {
+        chart = detachChart(out, *e, source.part);
+    }
     // AGENT-GUARD (pptx_write_context.h): carry the source ids first.
     out.carry(*e, source.part);
     setId(*e, id);
@@ -357,6 +361,9 @@ XmlElementPtr patchShape(PartWriter &out, const Shape &shape, const ShapeSource 
         if (!sameGeometry(shape, old)) {
             e->removeChildren(ns, u"xfrm");
             e->insertElementBefore(transformElement(ns, shape, false), {u"graphic", u"extLst"});
+        }
+        if (chart.active() && !attachChart(out, chart, shape.chart, old.chart)) {
+            return pictureFallback(out, shape, id);
         }
         if (shape.kind == ShapeKind::Table && shape.table != old.table) {
             XmlElement *graphic = e->child(nsA(), u"graphic");
@@ -420,8 +427,16 @@ XmlElementPtr writeShape(PartWriter &out, const Shape &shape, quint32 id)
         // A copy of a preserved shape (duplicated slide, paste in the same
         // deck): its XML still resolves against the source package.
         if (XmlElementPtr e = Ooxml::parseFragment(shape.preserved.fragment)) {
+            // A pasted chart edited since: compare with what its part caches.
+            ChartData cached;
+            const DetachedChart chart = shape.kind == ShapeKind::Chart
+                ? detachEditedCopy(out, *e, shape.preserved.part, shape.chart, &cached)
+                : DetachedChart();
             out.carry(*e, shape.preserved.part);
             setId(*e, id);
+            if (chart.active() && !attachChart(out, chart, shape.chart, cached)) {
+                return pictureFallback(out, shape, id);
+            }
             return e;
         }
     }

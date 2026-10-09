@@ -188,7 +188,7 @@ void Reader::readExtras(const OdfNode &node, Shape &shape) const
     shape.buildStep = node.attr(kQq, u"build-step").toInt();
     if (node.hasAttr(kQq, u"animation")) {
         const int animation = node.attr(kQq, u"animation").toInt();
-        shape.animation = ShapeAnimation(qBound(0, animation, int(ShapeAnimation::Zoom)));
+        shape.animation = ShapeAnimation(qBound(0, animation, int(kLastAnimation)));
     }
     if (node.hasAttr(kQq, u"animation-ms")) {
         const int ms = node.attr(kQq, u"animation-ms").toInt();
@@ -309,7 +309,13 @@ QString Reader::transitionOf(const QString &pageStyle) const
     if (type == u"fade" || type == u"dissolve") {
         return QStringLiteral("fade");
     }
-    if (type == u"slide" || type == u"slideWipe" || type == u"pushWipe" || type == u"barWipe") {
+    if (type == u"barWipe") { // M67
+        return QStringLiteral("wipe");
+    }
+    if (type == u"barnDoorWipe") {
+        return QStringLiteral("split");
+    }
+    if (type == u"slide" || type == u"slideWipe" || type == u"pushWipe") {
         return QStringLiteral("slide");
     }
     if (type == u"zoom" || type == u"irisWipe" || type == u"ellipseWipe") {

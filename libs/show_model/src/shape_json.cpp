@@ -93,7 +93,7 @@ Shape shapeFromJson(const QJsonObject &object)
     shape.imagePng = QByteArray::fromBase64(object.value(QStringLiteral("imagePng")).toString().toLatin1());
     shape.buildStep = object.value(QStringLiteral("buildStep")).toInt();
     shape.animation = ShapeAnimation(qBound(0, object.value(QStringLiteral("animation")).toInt(),
-                                            int(ShapeAnimation::Zoom)));
+                                            int(kLastAnimation)));
     shape.animationMs = object.value(QStringLiteral("animationMs")).toInt(350);
     shape.extra = object.value(QStringLiteral("extra")).toObject().toVariantMap();
     shape.name = object.value(QStringLiteral("name")).toString();

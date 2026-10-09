@@ -170,6 +170,8 @@ void QindaShowTest::hostWiresDeckNotesAndUndo()
     host.setTransitionIndex(1);
     QCOMPARE(doc->presentation()->slides.at(2).transition, QStringLiteral("fade"));
 
+    doc->undoStack()->undo(); // the notes are one undo step since M67 (D-076)
+    QCOMPARE(doc->presentation()->slides.at(2).notes, QString());
     doc->undoStack()->undo(); // undo the second addSlide
     QCOMPARE(doc->presentation()->slides.size(), 2);
     QCOMPARE(host.slideCount(), 2);

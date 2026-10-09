@@ -7,8 +7,14 @@
 # (pptx_fixture*.h): the reader (tst_pptx_read) and the writer
 # (tst_pptx_write: equal round trips, schema validation when
 # QQO_OOXML_SCHEMA_DIR is set, PowerPoint's id/relationship rules,
-# LibreOffice's PDF of what we write).
-foreach(name IN ITEMS tst_show_model tst_fodp tst_pptx_read tst_pptx_write)
+# LibreOffice's PDF of what we write). M67 (D-076): editing — tables
+# (tst_pptx_tables: the model operations, an edited table written through
+# its source, a new table, edited notes) and chart data (tst_pptx_charts:
+# caches, formulas and the embedded workbook read back through calc_io,
+# kind changes, LibreOffice) and more of PowerPoint's effects
+# (tst_show_effects: Wipe/Split entrances, Spin/Grow emphasis, Wipe/Split
+# transitions, read, written, drawn).
+foreach(name IN ITEMS tst_show_model tst_fodp tst_pptx_read tst_pptx_write tst_pptx_tables tst_pptx_charts tst_show_effects)
     add_executable(${name} ${name}.cpp)
     target_link_libraries(${name} PRIVATE show_model office_ooxml Qt6::Test Qt6::Gui)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/tests)
@@ -18,3 +24,4 @@ foreach(name IN ITEMS tst_show_model tst_fodp tst_pptx_read tst_pptx_write)
     add_test(NAME ${name} COMMAND ${name})
     set_tests_properties(${name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endforeach()
+target_link_libraries(tst_pptx_charts PRIVATE calc_io)

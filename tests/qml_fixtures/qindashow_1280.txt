@@ -46,7 +46,6 @@ QQuickRootItem#ShowWindow
                         QQuickRectangle#boxFocusRing [hidden]
                       Caption#propertyLabel
                       Caption#propertyLabel
-                      TextArea#slideNotes
                   QQuickRectangle#boxFocusRing [hidden]
                 Box#panelHeader
                   IconButton#dockPlacement_slide
@@ -58,14 +57,21 @@ QQuickRootItem#ShowWindow
           DockZone#dockZone_top [hidden]
           QQuickItem#dockCanvas
             Flex#dockZone_overlay [hidden]
-            SlideCanvasView#showViewport
-              QQuickRectangle#viewportFocusRing
-              Scroll#viewportScroll
-                QQuickItem#viewportSurface
-                  QQuickItem#viewportContent
-                    QQuickItem#slideContainer
-                      QQuickTextEdit#shapeTextEditor [hidden]
-                      SlideCanvasItem#slideCanvas
+            SlideEditor#slideEditor
+              QQuickContentItem#SlideEditor
+                NotesPane#notesPane
+                  TextArea#slideNotes
+                SlideCanvasView#showViewport
+                  QQuickRectangle#viewportFocusRing
+                  Scroll#viewportScroll
+                    QQuickItem#viewportSurface
+                      QQuickItem#viewportContent
+                        QQuickItem#slideContainer
+                          QQuickTextEdit#shapeTextEditor [hidden]
+                          SlideCanvasItem#slideCanvas
+              QQuickRectangle#splitterHandle
+                QQuickMouseArea#splitterHitTarget
+                QQuickRectangle#splitterFocusRing [hidden]
           QQuickItem#dockPanelContent_assistant [hidden]
             AssistantPanel#assistantPanel [hidden]
               Badge#assistantOffMachine [hidden]

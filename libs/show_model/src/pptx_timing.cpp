@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pptx_timing.h"
 
+#include <optional>
 #include <string_view>
 
 namespace QindaOffice::Show::Pptx {
@@ -39,8 +40,25 @@ ShapeAnimation animationFor(int presetId, int subtype)
     case 23:
     case 53:
         return ShapeAnimation::Zoom;
+    case 22: // M67
+        return ShapeAnimation::Wipe;
+    case 16:
+        return ShapeAnimation::Split;
     default:
         return ShapeAnimation::Fade;
+    }
+}
+
+// The emphasis effects the model holds (M67): Spin and Grow/Shrink.
+std::optional<ShapeAnimation> emphasisFor(int presetId)
+{
+    switch (presetId) {
+    case 8:
+        return ShapeAnimation::Spin;
+    case 6:
+        return ShapeAnimation::GrowShrink;
+    default:
+        return std::nullopt;
     }
 }
 
@@ -76,13 +94,18 @@ int longestBehaviour(const Ooxml::XmlElement &effect)
 void collectEntrances(const Ooxml::XmlElement &node, int step, QList<BuildEntry> &out)
 {
     for (const Ooxml::XmlElement *child : node.elements()) {
-        if (child->is(nsP(), u"cTn") && child->attr(u"presetClass") == u"entr") {
+        const bool entrance = child->is(nsP(), u"cTn") && child->attr(u"presetClass") == u"entr";
+        const std::optional<ShapeAnimation> emphasis = child->is(nsP(), u"cTn") && child->attr(u"presetClass") == u"emph"
+            ? emphasisFor(child->attr(u"presetID").toInt())
+            : std::nullopt;
+        if (entrance || emphasis) {
             const Ooxml::XmlElement *target = child->descendant(nsP(), u"spTgt");
             if (target != nullptr) {
                 BuildEntry entry;
                 entry.shapeId = target->attr(u"spid").toUInt();
                 entry.step = step;
-                entry.animation = animationFor(child->attr(u"presetID").toInt(), child->attr(u"presetSubtype").toInt());
+                entry.animation = emphasis ? *emphasis
+                                           : animationFor(child->attr(u"presetID").toInt(), child->attr(u"presetSubtype").toInt());
                 // The longest behaviour is how long the effect plays (the
                 // visibility switch lasts 1 ms).
                 entry.durationMs = longestBehaviour(*child);
@@ -162,8 +185,11 @@ QString transitionName(const Ooxml::XmlElement *transition)
     if (name == u"cut") {
         return QStringLiteral("cut");
     }
-    if (name == u"push" || name == u"wipe" || name == u"cover" || name == u"pull" || name == u"split"
-        || name == u"strips" || name == u"randomBar" || name == u"blinds" || name == u"comb" || name == u"checker") {
+    if (name == u"wipe" || name == u"split") { // M67: played as themselves
+        return name;
+    }
+    if (name == u"push" || name == u"cover" || name == u"pull" || name == u"strips" || name == u"randomBar"
+        || name == u"blinds" || name == u"comb" || name == u"checker") {
         return QStringLiteral("slide");
     }
     if (name == u"zoom" || name == u"newsflash" || name == u"circle" || name == u"diamond" || name == u"plus") {
@@ -181,6 +207,12 @@ Ooxml::XmlElementPtr transitionElement(const QString &name)
     transition->setAttribute(QString(), QStringLiteral("spd"), QStringLiteral("med"));
     if (name == u"slide") {
         transition->appendElement(nsP(), QStringLiteral("push")).setAttribute(QString(), QStringLiteral("dir"), QStringLiteral("l"));
+    } else if (name == u"wipe") { // M67: PowerPoint's Wipe, from the right
+        transition->appendElement(nsP(), QStringLiteral("wipe")).setAttribute(QString(), QStringLiteral("dir"), QStringLiteral("l"));
+    } else if (name == u"split") { // Split, vertical out
+        Ooxml::XmlElement &split = transition->appendElement(nsP(), QStringLiteral("split"));
+        split.setAttribute(QString(), QStringLiteral("orient"), QStringLiteral("vert"));
+        split.setAttribute(QString(), QStringLiteral("dir"), QStringLiteral("out"));
     } else if (name == u"zoom") {
         transition->appendElement(nsP(), QStringLiteral("zoom"));
     } else {
@@ -271,21 +303,49 @@ public:
         case ShapeAnimation::FlyInTop: preset = 2; subtype = 1; break;
         case ShapeAnimation::FlyInBottom: preset = 2; subtype = 4; break;
         case ShapeAnimation::Zoom: preset = 53; subtype = 16; break;
+        case ShapeAnimation::Wipe: preset = 22; subtype = 4; break;   // from bottom
+        case ShapeAnimation::Split: preset = 16; subtype = 37; break; // vertical out
+        case ShapeAnimation::Spin: preset = 8; break;
+        case ShapeAnimation::GrowShrink: preset = 6; break;
         }
+        const bool emphasis = isEmphasis(build.animation);
         node.setAttribute(QString(), QStringLiteral("presetID"), QString::number(preset));
-        node.setAttribute(QString(), QStringLiteral("presetClass"), QStringLiteral("entr"));
+        node.setAttribute(QString(), QStringLiteral("presetClass"), emphasis ? QStringLiteral("emph") : QStringLiteral("entr"));
         node.setAttribute(QString(), QStringLiteral("presetSubtype"), QString::number(subtype));
         node.setAttribute(QString(), QStringLiteral("fill"), QStringLiteral("hold"));
         node.setAttribute(QString(), QStringLiteral("grpId"), QStringLiteral("0"));
         node.setAttribute(QString(), QStringLiteral("nodeType"), first ? QStringLiteral("clickEffect") : QStringLiteral("withEffect"));
         delay(node, QStringLiteral("0"));
         Ooxml::XmlElement &children = node.appendElement(nsP(), QStringLiteral("childTnLst"));
+        if (emphasis) {
+            // On the slide already: it only turns (r, a full turn in
+            // 60000ths of a degree) or scales (to 150 %).
+            const int duration = build.durationMs > 0 ? build.durationMs : 2000;
+            if (build.animation == ShapeAnimation::Spin) {
+                Ooxml::XmlElement &rotate = children.appendElement(nsP(), QStringLiteral("animRot"));
+                rotate.setAttribute(QString(), QStringLiteral("by"), QStringLiteral("21600000"));
+                behaviour(rotate, build.shapeId, duration, QStringLiteral("r"));
+            } else {
+                Ooxml::XmlElement &scale = children.appendElement(nsP(), QStringLiteral("animScale"));
+                behaviour(scale, build.shapeId, duration);
+                Ooxml::XmlElement &by = scale.appendElement(nsP(), QStringLiteral("by"));
+                by.setAttribute(QString(), QStringLiteral("x"), QStringLiteral("150000"));
+                by.setAttribute(QString(), QStringLiteral("y"), QStringLiteral("150000"));
+            }
+            return;
+        }
         Ooxml::XmlElement &set = children.appendElement(nsP(), QStringLiteral("set"));
         behaviour(set, build.shapeId, 1, QStringLiteral("style.visibility"));
         set.appendElement(nsP(), QStringLiteral("to"))
             .appendElement(nsP(), QStringLiteral("strVal"))
             .setAttribute(QString(), QStringLiteral("val"), QStringLiteral("visible"));
         const int duration = build.durationMs > 0 ? build.durationMs : 500;
+        if (preset == 22 || preset == 16) {
+            Ooxml::XmlElement &reveal = children.appendElement(nsP(), QStringLiteral("animEffect"));
+            reveal.setAttribute(QString(), QStringLiteral("transition"), QStringLiteral("in"));
+            reveal.setAttribute(QString(), QStringLiteral("filter"), preset == 22 ? QStringLiteral("wipe(up)") : QStringLiteral("barn(outVertical)"));
+            behaviour(reveal, build.shapeId, duration);
+        }
         if (preset == 10 || preset == 53) {
             Ooxml::XmlElement &fade = children.appendElement(nsP(), QStringLiteral("animEffect"));
             fade.setAttribute(QString(), QStringLiteral("transition"), QStringLiteral("in"));

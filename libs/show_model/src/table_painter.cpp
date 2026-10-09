@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Tables for the renderer: the grid from the column widths, rows grown to
-// their text, merged cells spanning, fills from the cell or else the table
+// their text (tableGrid, slide_renderer.h — the canvas hit-tests through
+// the same function), merged cells spanning, fills from the cell or else the table
 // style's regions (whole table < banded columns < banded rows < last/first
 // column < last/first row, PowerPoint's order), borders likewise.
 
 #include "render_parts.h"
+#include "slide_renderer.h"
 #include "text_painter.h"
 
 #include <QPainter>
 
-namespace QindaOffice::Show::Render {
+namespace QindaOffice::Show {
 
 namespace {
 
@@ -31,11 +33,51 @@ void drawEdge(QPainter *painter, const CellBorder &border, const QPointF &a, con
     }
     LineStyle line;
     line.dash = border.dash;
-    painter->setPen(outlinePen(border.color, border.width, line));
+    painter->setPen(Render::outlinePen(border.color, border.width, line));
     painter->drawLine(a, b);
 }
 
 } // namespace
+
+TableGrid tableGrid(const Table &table, const QRectF &rect)
+{
+    TableGrid grid;
+    const int rows = int(table.rows.size());
+    const int columns = int(table.columns.size());
+    grid.xs.append(rect.left());
+    for (const qreal width : table.columns) {
+        grid.xs.append(grid.xs.last() + qMax<qreal>(0.0, width));
+    }
+    // Rows are at least their height and grow to their tallest single-row
+    // cell, as PowerPoint grows them.
+    grid.ys.append(rect.top());
+    for (int r = 0; r < rows; ++r) {
+        const TableRow &row = table.rows.at(r);
+        qreal height = row.height;
+        for (int c = 0; c < row.cells.size() && c < columns; ++c) {
+            const TableCell &cell = row.cells.at(c);
+            if (cell.hMerge || cell.vMerge || cell.rowSpan > 1) {
+                continue;
+            }
+            const qreal width = grid.xs.at(qMin(columns, c + qMax(1, cell.gridSpan))) - grid.xs.at(c);
+            height = qMax(height, Render::textHeight(cell.paragraphs, width, cellStyle(cell)));
+        }
+        grid.ys.append(grid.ys.last() + height);
+    }
+    return grid;
+}
+
+QRectF TableGrid::cellRect(int row, int column, int rowSpan, int columnSpan) const
+{
+    if (row < 0 || column < 0 || row + 1 >= ys.size() || column + 1 >= xs.size()) {
+        return {};
+    }
+    const int lastRow = int(qMin<qsizetype>(ys.size() - 1, row + qMax(1, rowSpan)));
+    const int lastColumn = int(qMin<qsizetype>(xs.size() - 1, column + qMax(1, columnSpan)));
+    return QRectF(QPointF(xs.at(column), ys.at(row)), QPointF(xs.at(lastColumn), ys.at(lastRow)));
+}
+
+namespace Render {
 
 void paintTable(QPainter *painter, const QRectF &rect, const Table &table)
 {
@@ -45,26 +87,9 @@ void paintTable(QPainter *painter, const QRectF &rect, const Table &table)
         paintPlaceholderBox(painter, rect, QStringLiteral("Table"));
         return;
     }
-    QList<qreal> xs{rect.left()};
-    for (const qreal width : table.columns) {
-        xs.append(xs.last() + qMax<qreal>(0.0, width));
-    }
-    // Rows are at least their height and grow to their tallest single-row
-    // cell, as PowerPoint grows them.
-    QList<qreal> ys{rect.top()};
-    for (int r = 0; r < rows; ++r) {
-        const TableRow &row = table.rows.at(r);
-        qreal height = row.height;
-        for (int c = 0; c < row.cells.size() && c < columns; ++c) {
-            const TableCell &cell = row.cells.at(c);
-            if (cell.hMerge || cell.vMerge || cell.rowSpan > 1) {
-                continue;
-            }
-            const qreal width = xs.at(qMin(columns, c + qMax(1, cell.gridSpan))) - xs.at(c);
-            height = qMax(height, textHeight(cell.paragraphs, width, cellStyle(cell)));
-        }
-        ys.append(ys.last() + height);
-    }
+    const TableGrid grid = tableGrid(table, rect);
+    const QList<qreal> &xs = grid.xs;
+    const QList<qreal> &ys = grid.ys;
     painter->save();
     for (int r = 0; r < rows; ++r) {
         const TableRow &row = table.rows.at(r);
@@ -113,12 +138,14 @@ void paintTable(QPainter *painter, const QRectF &rect, const Table &table)
     }
     if (!table.look.known) {
         // An unknown style: a hairline grid keeps the content legible.
-        QPen grid(QColor(160, 160, 160), 0.75);
-        painter->setPen(grid);
+        QPen hairline(QColor(160, 160, 160), 0.75);
+        painter->setPen(hairline);
         painter->setBrush(Qt::NoBrush);
         painter->drawRect(QRectF(QPointF(xs.first(), ys.first()), QPointF(xs.last(), ys.last())));
     }
     painter->restore();
 }
 
-} // namespace QindaOffice::Show::Render
+} // namespace Render
+
+} // namespace QindaOffice::Show

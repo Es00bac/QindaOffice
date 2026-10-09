@@ -154,7 +154,9 @@ int SlideFrameItem::effectiveSlide() const
     if (m_slideIndex >= 0) {
         return m_slideIndex;
     }
-    return m_controller != nullptr ? m_controller->slide() : -1;
+    // -1 follows the show; any other negative index is "no slide" (the
+    // presenter's next preview after the last slide, M67).
+    return m_slideIndex == -1 && m_controller != nullptr ? m_controller->slide() : -1;
 }
 
 int SlideFrameItem::effectiveBuild() const

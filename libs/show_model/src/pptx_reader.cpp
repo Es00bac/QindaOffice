@@ -120,7 +120,7 @@ private:
     void readLayout(const QString &part, int master, Presentation &deck);
     void readSlide(const QString &part, quint32 sldId, Presentation &deck);
     [[nodiscard]] PartContext context(const QString &part, const MasterInfo &master, const Ooxml::ColorMap &map) const;
-    [[nodiscard]] QString notesText(const QString &notesPart, const MasterInfo &master) const;
+    [[nodiscard]] QList<TextParagraph> notesBody(const QString &notesPart, const MasterInfo &master) const;
 
     std::shared_ptr<const Ooxml::Package> m_package;
     PptxReadReport *m_report;
@@ -263,7 +263,7 @@ void Reader::readLayout(const QString &part, int masterIndex, Presentation &deck
     m_layouts.push_back(std::move(info));
 }
 
-QString Reader::notesText(const QString &notesPart, const MasterInfo &master) const
+QList<TextParagraph> Reader::notesBody(const QString &notesPart, const MasterInfo &master) const
 {
     const Ooxml::XmlElementPtr root = m_package->xml(notesPart);
     const Ooxml::XmlElement *cSld = root ? root->child(nsP(), u"cSld") : nullptr;
@@ -277,7 +277,7 @@ QString Reader::notesText(const QString &notesPart, const MasterInfo &master) co
         const Ooxml::XmlElement *nvPr = nv != nullptr ? nv->child(nsP(), u"nvPr") : nullptr;
         const Ooxml::XmlElement *ph = nvPr != nullptr ? nvPr->child(nsP(), u"ph") : nullptr;
         if (ph != nullptr && ph->attr(u"type") == u"body") {
-            return plainLines(readTextBody(ctx, sp->child(nsP(), u"txBody"), ListStyle())).trimmed();
+            return readTextBody(ctx, sp->child(nsP(), u"txBody"), ListStyle());
         }
     }
     return {};
@@ -365,7 +365,9 @@ void Reader::readSlide(const QString &part, quint32 sldId, Presentation &deck)
     }
     if (const auto notesRel = m_package->firstOfType(part, QString::fromUtf16(Ooxml::RelType::NotesSlide))) {
         source->notesPart = m_package->targetPart(part, *notesRel);
-        source->notes = notesText(source->notesPart, master);
+        // M67 (D-076): the paragraphs too, so an edit keeps their spelling.
+        source->notesParagraphs = notesBody(source->notesPart, master);
+        source->notes = plainLines(source->notesParagraphs).trimmed();
         slide.notes = source->notes;
     }
     for (const Shape &shape : slide.shapes) {

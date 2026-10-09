@@ -43,6 +43,7 @@ SlideCanvasItem::SlideCanvasItem(QQuickItem *parent)
     : QQuickPaintedItem(parent)
 {
     setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton);
+    setAcceptHoverEvents(true); // table boundaries show a resize cursor
     setAntialiasing(true);
     setRenderTarget(QQuickPaintedItem::FramebufferObject);
     setImplicitWidth(m_slideSize.width());
@@ -140,6 +141,7 @@ const ShowModel::Shape *SlideCanvasItem::selectedShape() const
 
 void SlideCanvasItem::notifySelection()
 {
+    dropCellSelectionIfGone();
     emit selectionChanged();
     update();
 }
@@ -368,8 +370,13 @@ void SlideCanvasItem::paint(QPainter *painter)
         if (shape.id == m_textShapeId && shape.kind == ShowModel::ShapeKind::TextBox) {
             continue;
         }
+        if (shape.id == m_textShapeId && m_textRow >= 0) {
+            ShowModel::renderShape(painter, paintedWhileEditing(shape), typeMaster);
+            continue;
+        }
         ShowModel::renderShape(painter, shape, typeMaster);
     }
+    paintTableSelection(painter);
     painter->save();
     QPen pen(kSelection);
     pen.setCosmetic(true);
@@ -382,7 +389,9 @@ void SlideCanvasItem::paint(QPainter *painter)
         }
         const QRectF rect = shape->rect.normalized();
         painter->drawRect(rect);
-        if (m_selected.size() == 1) {
+        // A table has no resize grip: its corner is its last column's
+        // boundary (slide_canvas_item_table.cpp).
+        if (m_selected.size() == 1 && shape->kind != ShowModel::ShapeKind::Table) {
             const QRectF grip(rect.bottomRight() - QPointF(kGripRadius, kGripRadius),
                               QSizeF(kGripRadius * 2, kGripRadius * 2));
             painter->fillRect(grip, kSelection);

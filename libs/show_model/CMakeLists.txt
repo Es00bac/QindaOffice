@@ -5,10 +5,16 @@
 # charts from cached values, groups, placeholders, masters and layouts,
 # builds, transitions, notes), the renderer every view paints through, and
 # the format mappings: flat ODP (.fodp) and native PowerPoint (.pptx) over
-# office_ooxml. Qt Core/Gui + KArchive + office_ooxml; no Quick, no
-# desktop archives.
+# office_ooxml. M67 (D-076): table editing (table_edit.h), chart data and
+# kind editing (chart_edit.h) written into the chart part and its embedded
+# workbook through calc_io. Qt Core/Gui + KArchive + office_ooxml +
+# calc_io; no Quick, no desktop archives.
 add_library(show_model STATIC
+    src/chart_edit.cpp
+    src/chart_edit.h
     src/chart_painter.cpp
+    src/chart_workbook.cpp
+    src/chart_workbook.h
     src/custom_geometry.cpp
     src/fodp_extended.cpp
     src/fodp_extended.h
@@ -43,12 +49,15 @@ add_library(show_model STATIC
     src/pptx_write_context.cpp
     src/pptx_write_context.h
     src/pptx_write_generate.cpp
+    src/pptx_write_chart.cpp
+    src/pptx_write_chart_kind.cpp
     src/pptx_write_parts.cpp
     src/pptx_write_parts.h
     src/pptx_write_shapes.cpp
     src/pptx_write_shapes.h
     src/pptx_write_slide.cpp
     src/pptx_write_slide.h
+    src/pptx_write_table.cpp
     src/pptx_write_text.cpp
     src/pptx_write_text.h
     src/pptx_writer.cpp
@@ -71,6 +80,9 @@ add_library(show_model STATIC
     src/show_text.h
     src/slide_renderer.cpp
     src/slide_renderer.h
+    src/table_edit.cpp
+    src/table_edit.h
+    src/table_edit_look.cpp
     src/table_painter.cpp
     src/text_painter.cpp
     src/text_painter.h
@@ -82,7 +94,11 @@ target_include_directories(show_model
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/qindaoffice>
 )
 
-target_link_libraries(show_model PUBLIC Qt6::Core Qt6::Gui KF6::Archive office_ooxml)
+# calc_io (M67, D-076): an edited chart's embedded workbook is written
+# through the suite's own xlsx writer (chart_workbook.h) — a library-to-
+# library link like books_io's and plan_output's; still no Quick, no
+# desktop archives.
+target_link_libraries(show_model PUBLIC Qt6::Core Qt6::Gui KF6::Archive office_ooxml PRIVATE calc_io)
 
 qqo_set_strict_warnings(show_model)
 

@@ -4,9 +4,12 @@
 // Charts (M62, D-070): what QindaShow needs to DRAW a chart — its type,
 // grouping, title, legend and the series' cached values (c:numCache /
 // c:strCache). The chart part itself is never re-derived: the graphic
-// frame stays preserved XML (Shape::preserved) and the writer carries the
-// chart part, its embedded workbook and style parts across verbatim.
-// show_model does not depend on the spreadsheet libraries.
+// frame stays preserved XML (Shape::preserved) and, while the data is
+// unchanged, the writer carries the chart part, its embedded workbook and
+// style parts across verbatim. M67 (D-076): edited data (chart_edit.h) is
+// written into a COPY of the source chart part — formulas, caches, series,
+// the kind — and into its embedded workbook through calc_io
+// (pptx_write_chart.cpp, chart_workbook.h).
 
 #include <QColor>
 #include <QList>

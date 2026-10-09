@@ -3,7 +3,8 @@ import QtQuick
 import QindaTK as Tk
 import QindaOffice.Show
 
-// The current slide's transition, layout and speaker notes.
+// The current slide's transition and layout (its speaker notes are in the
+// notes pane under the slide since M67, NotesPane.qml).
 Tk.Flex {
     id: panel
     required property ShowHost showHost
@@ -26,21 +27,6 @@ Tk.Flex {
             model: panel.showHost.layoutNames
             currentIndex: panel.showHost.layoutIndex
             onActivated: function(index) { panel.showHost.layoutIndex = index }
-        }
-    }
-    Tk.Overline { text: qsTr("Speaker notes") }
-    Tk.Scroll {
-        Tk.Flex.grow: 1
-        Tk.Flex.basis: 0
-        Tk.Flex.minHeight: 60
-        Tk.TextArea {
-            id: notes
-            objectName: "slideNotes"
-            width: parent.width
-            rows: 6
-            placeholderText: qsTr("What to say on this slide")
-            text: panel.showHost.notes
-            onTextChanged: if (activeFocus) panel.showHost.notes = text
         }
     }
 }

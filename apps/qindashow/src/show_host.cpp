@@ -20,6 +20,8 @@
 #include <QQuickTextDocument>
 #include <QUndoStack>
 
+#include <iterator>
+
 #include "desktop_settings.h"
 
 namespace QindaOffice::Apps::Show {
@@ -28,7 +30,10 @@ using Quick::ActionEntry;
 namespace ActionId = Quick::ActionId;
 
 namespace {
-const char *const kTransitions[] = {"cut", "fade", "slide", "zoom"};
+// The model's names (the pptx mapping is pptx_timing.cpp); M67 adds Wipe
+// and Split, and "slide" is labelled Push — it is PowerPoint's Push.
+const char *const kTransitions[] = {"cut", "fade", "slide", "zoom", "wipe", "split"};
+constexpr int kTransitionCount = int(std::size(kTransitions));
 const char *const kLayouts[] = {"title", "title+content", "title+2content", "content", "two-content", "blank"};
 } // namespace
 
@@ -65,6 +70,7 @@ ShowHost::ShowHost()
         }
     });
     createAssistant();
+    createEditing(); // M67: before the menus, which name its commands
     insertMenus();
     wireCanvasUndo();
     wireEditCommands();
@@ -166,7 +172,9 @@ void ShowHost::setNotes(const QString &notes)
     if (m_currentRow < 0 || m_currentRow >= deck->slides.size() || deck->slides.at(m_currentRow).notes == notes) {
         return;
     }
-    deck->slides[m_currentRow].notes = notes;
+    // M67: undoable; consecutive typing in one slide's notes is one step.
+    const ShowModel::Slide &slide = deck->slides.at(m_currentRow);
+    m_document->undoStack()->push(new NotesEditCommand(deck, slide.id, slide.notes, notes));
     markEdited();
 }
 
@@ -175,7 +183,7 @@ int ShowHost::transitionIndex() const
     const QString transition = m_currentRow >= 0 && m_currentRow < slideCount()
         ? m_document->presentation()->slides.at(m_currentRow).transition
         : QString();
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < kTransitionCount; ++i) {
         if (transition == QLatin1String(kTransitions[i])) {
             return i;
         }
@@ -186,7 +194,7 @@ int ShowHost::transitionIndex() const
 void ShowHost::setTransitionIndex(int index)
 {
     ShowModel::Presentation *deck = m_document->presentation();
-    if (index < 0 || index >= 4 || m_currentRow < 0 || m_currentRow >= deck->slides.size()
+    if (index < 0 || index >= kTransitionCount || m_currentRow < 0 || m_currentRow >= deck->slides.size()
         || transitionIndex() == index) {
         return;
     }
@@ -217,7 +225,7 @@ void ShowHost::setLayoutIndex(int index)
 
 QStringList ShowHost::transitionNames() const
 {
-    return {tr("Cut"), tr("Fade"), tr("Slide"), tr("Zoom")};
+    return {tr("Cut"), tr("Fade"), tr("Push"), tr("Zoom"), tr("Wipe"), tr("Split")};
 }
 
 QStringList ShowHost::layoutNames() const

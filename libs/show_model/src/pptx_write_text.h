@@ -12,6 +12,8 @@
 
 #include "pptx_write_context.h"
 
+#include <functional>
+
 namespace QindaOffice::Show::Pptx {
 
 // a:srgbClr (with a:alpha below 100 %).
@@ -30,6 +32,14 @@ struct TextSource {
     const QList<TextParagraph> *pristine = nullptr; // what the reader produced from it
     const TextBodyStyle *pristineBody = nullptr;
     QString part;                                   // the source part (hyperlink ids)
+    // M67 (D-076), table cells: a run's formatting is compared with the
+    // style's look of its region factored out (sourceKey for the source's
+    // runs, currentKey for the model's), so text that only moved into
+    // another style region keeps its source a:rPr; generatedRun trims an
+    // a:rPr the writer spells itself of what the table style supplies.
+    std::function<TextRun(const TextRun &)> sourceKey{};
+    std::function<TextRun(const TextRun &)> currentKey{};
+    std::function<void(Ooxml::XmlElement &, const TextRun &)> generatedRun{};
 };
 
 // p:txBody (or a:txBody inside a table cell when `ns` is DrawingML's).

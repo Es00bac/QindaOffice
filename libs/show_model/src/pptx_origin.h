@@ -50,6 +50,7 @@ struct SlideSource {
     QList<BuildEntry> builds;            // the builds the reader mapped from p:timing
     QString notesPart;                   // its notes slide ("" = none)
     QString notes;                       // the notes text as read
+    QList<TextParagraph> notesParagraphs; // the notes body as read (M67: an edit reuses its spelling)
     Background background;               // the slide's own background as read
     QString layout;                      // the QindaShow layout name as read
     bool operator==(const SlideSource &) const = default;

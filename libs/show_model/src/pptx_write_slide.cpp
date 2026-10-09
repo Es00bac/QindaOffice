@@ -56,6 +56,99 @@ QList<BuildEntry> sorted(QList<BuildEntry> builds)
     return builds;
 }
 
+// The notes slide's body placeholder (p:sp with p:ph type="body").
+XmlElement *notesBodyShape(XmlElement &notes)
+{
+    XmlElement *cSld = notes.child(nsP(), u"cSld");
+    XmlElement *tree = cSld != nullptr ? cSld->child(nsP(), u"spTree") : nullptr;
+    if (tree == nullptr) {
+        return nullptr;
+    }
+    for (Ooxml::XmlChild &c : tree->children) {
+        if (!c.element || !c.element->is(nsP(), u"sp")) {
+            continue;
+        }
+        const XmlElement *nv = c.element->child(nsP(), u"nvSpPr");
+        const XmlElement *nvPr = nv != nullptr ? nv->child(nsP(), u"nvPr") : nullptr;
+        const XmlElement *ph = nvPr != nullptr ? nvPr->child(nsP(), u"ph") : nullptr;
+        if (ph != nullptr && ph->attr(u"type") == u"body") {
+            return c.element.get();
+        }
+    }
+    return nullptr;
+}
+
+QString paragraphText(const TextParagraph &paragraph)
+{
+    QString text;
+    for (const TextRun &run : paragraph.runs) {
+        text += run.text;
+    }
+    return text.replace(QChar(QChar::LineSeparator), QLatin1Char('\n'));
+}
+
+// The notes text as paragraphs: a line that still reads as a source
+// paragraph IS that paragraph (its runs and spelling kept); any other line
+// takes the look of the paragraph in its place.
+QList<TextParagraph> notesParagraphs(const QString &notes, const QList<TextParagraph> &was)
+{
+    TextRun anyRun;
+    anyRun.pointSize = 12;
+    for (const TextParagraph &p : was) {
+        if (!p.runs.isEmpty()) {
+            anyRun = p.runs.first();
+            break;
+        }
+    }
+    QList<TextParagraph> out;
+    const QStringList lines = notes.split(QLatin1Char('\n'));
+    qsizetype next = 0;
+    for (qsizetype i = 0; i < lines.size(); ++i) {
+        qsizetype match = -1;
+        for (qsizetype j = next; j < was.size(); ++j) {
+            if (paragraphText(was.at(j)) == lines.at(i)) {
+                match = j;
+                break;
+            }
+        }
+        if (match >= 0) {
+            out.append(was.at(match));
+            next = match + 1;
+            continue;
+        }
+        TextParagraph paragraph = was.isEmpty() ? TextParagraph() : was.at(qMin(i, was.size() - 1));
+        TextRun run = paragraph.runs.isEmpty() ? anyRun : paragraph.runs.first();
+        run.text = lines.at(i);
+        run.hyperlink.clear();
+        run.fieldType.clear();
+        run.fieldId.clear();
+        paragraph.runs.clear();
+        if (!run.text.isEmpty()) {
+            paragraph.runs = {run};
+        }
+        out.append(paragraph);
+    }
+    return out;
+}
+
+bool patchNotesBody(PartWriter &out, XmlElement &notes, const QString &text, const SlideSource &source)
+{
+    XmlElement *sp = notesBodyShape(notes);
+    // The source's own txBody (not the carried copy) is what the reader's
+    // paragraphs were made of; reused pieces are carried from it.
+    const XmlElementPtr sourceRoot = out.session.source->xml(source.notesPart);
+    XmlElement *sourceSp = sourceRoot ? notesBodyShape(*sourceRoot) : nullptr;
+    if (sp == nullptr || sourceSp == nullptr) {
+        return false;
+    }
+    const TextBodyStyle body;
+    const TextSource from{sourceSp->child(nsP(), u"txBody"), &source.notesParagraphs, &body, source.notesPart};
+    XmlElementPtr txBody = textBodyElement(out, nsP(), notesParagraphs(text, source.notesParagraphs), body, from);
+    sp->removeChildren(nsP(), u"txBody");
+    sp->insertElementBefore(txBody, {u"extLst"});
+    return true;
+}
+
 } // namespace
 
 XmlElementPtr slideElement(PartWriter &out, const Slide &slide)
@@ -86,10 +179,17 @@ XmlElementPtr slideElement(PartWriter &out, const Slide &slide)
 
     // p:cSld: the source's own attributes and trailing children around the
     // rebuilt background and shape tree.
-    XmlElementPtr cSld = sourceCSld != nullptr ? carried(out, sourceCSld, source->part) : make(nsP(), QStringLiteral("cSld"));
+    // AGENT-GUARD (M67): the background and the shape tree come off BEFORE
+    // the rest is carried — carrying them would copy every part a shape
+    // names (a deleted picture's media, an edited chart's stale part and
+    // workbook) into the package, each still related from the slide.
+    XmlElementPtr cSld = sourceCSld != nullptr ? sourceCSld->clone() : make(nsP(), QStringLiteral("cSld"));
     cSld->children.removeIf([](const Ooxml::XmlChild &c) {
         return c.element && (c.element->is(nsP(), u"bg") || c.element->is(nsP(), u"spTree"));
     });
+    if (sourceCSld != nullptr) {
+        out.carry(*cSld, source->part);
+    }
     const XmlElement *sourceTree = sourceCSld != nullptr ? sourceCSld->child(nsP(), u"spTree") : nullptr;
     XmlElementPtr tree = make(nsP(), QStringLiteral("spTree"));
     for (const char *name : {"nvGrpSpPr", "grpSpPr"}) {
@@ -186,10 +286,18 @@ XmlElementPtr notesElement(PartWriter &out, const Slide &slide)
         return nullptr;
     }
     const SlideSource *source = slide.origin.get();
-    if (source != nullptr && !source->notesPart.isEmpty() && source->notes == slide.notes && out.session.copier != nullptr) {
+    if (source != nullptr && !source->notesPart.isEmpty() && out.session.copier != nullptr) {
         if (XmlElementPtr root = out.session.source->xml(source->notesPart)) {
             out.carry(*root, source->notesPart);
-            return root;
+            if (source->notes == slide.notes) {
+                return root;
+            }
+            // M67 (D-076): edited notes go into the notes slide they came
+            // from — its slide image, header, footer and number placeholders
+            // and its formatting kept; only the body's paragraphs change.
+            if (patchNotesBody(out, *root, slide.notes, *source)) {
+                return root;
+            }
         }
     }
     return notesSlideElement(slide.notes);

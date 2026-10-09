@@ -66,6 +66,37 @@ struct TableLook {
     bool operator==(const TableLook &) const = default;
 };
 
+// Which rows and grid columns of a table are which (M67, D-076): one id per
+// row and per column, stable across edits (table_edit.h keeps them), where
+// an id below sourceRows / sourceColumns names that a:tr / a:gridCol of the
+// table as the pptx reader read it. The writer maps every row, column and
+// cell back to its source through them, so an edited table keeps its
+// unedited cells (and the a16:rowId / a16:colId extensions) byte for byte
+// even after rows or columns were inserted or deleted around them.
+//
+// AGENT-NOTE: provenance, like Provenance<> in presentation.h — never part
+// of equality. A table is the same table when its CONTENT is; an insert
+// followed by a delete leaves an equal table, which the writer then emits
+// verbatim.
+struct TableOrigin {
+    QList<int> rows;    // per model row
+    QList<int> columns; // per model grid column
+    int sourceRows = 0;    // ids below this are source rows
+    int sourceColumns = 0; // ids below this are source columns
+    bool operator==(const TableOrigin &) const { return true; }
+    // The source row / column of a model row / column, or -1.
+    [[nodiscard]] int sourceRow(int row) const
+    {
+        const int id = row >= 0 && row < rows.size() ? rows.at(row) : -1;
+        return id >= 0 && id < sourceRows ? id : -1;
+    }
+    [[nodiscard]] int sourceColumn(int column) const
+    {
+        const int id = column >= 0 && column < columns.size() ? columns.at(column) : -1;
+        return id >= 0 && id < sourceColumns ? id : -1;
+    }
+};
+
 struct Table {
     QList<qreal> columns; // pt
     QList<TableRow> rows;
@@ -77,6 +108,7 @@ struct Table {
     bool bandRows = false;
     bool bandColumns = false;
     TableLook look;
+    TableOrigin origin;   // M67: row/column identity for the writer
     bool operator==(const Table &) const = default;
     [[nodiscard]] bool isEmpty() const { return rows.isEmpty(); }
     [[nodiscard]] int columnCount() const { return int(columns.size()); }

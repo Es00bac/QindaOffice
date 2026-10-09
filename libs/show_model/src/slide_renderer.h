@@ -69,4 +69,18 @@ void renderShape(QPainter *painter, const Shape &shape, const SlideMaster *maste
 // `slide` of `deck` with its backdrop, as an image of `pixels`.
 [[nodiscard]] QImage renderSlideToImage(const Presentation &deck, const Slide &slide, const QSize &pixels);
 
+// The grid a table is drawn on (M67, D-076): the column edges `xs`
+// (columns + 1 of them) and row edges `ys` (rows + 1) in slide points, from
+// `rect`'s top-left, every row grown to its text the way the renderer grows
+// it. The canvas hit-tests cells and borders through this, so a click lands
+// on the cell painted under it.
+struct TableGrid {
+    QList<qreal> xs;
+    QList<qreal> ys;
+    // The box of the cell at (row, column) spanning rowSpan × columnSpan;
+    // empty when out of range.
+    [[nodiscard]] QRectF cellRect(int row, int column, int rowSpan = 1, int columnSpan = 1) const;
+};
+[[nodiscard]] TableGrid tableGrid(const Table &table, const QRectF &rect);
+
 } // namespace QindaOffice::Show

@@ -4,9 +4,12 @@
 # painting and arrange commands through the real window (tst_show_ui), the
 # design layer — masters, animations, snapping, grouping (tst_show_design)
 # — and the panel export through the desktop's validator
-# (tst_show_menu_export). Every test links the app's static QML module, so
-# a source added to apps/qindashow/CMakeLists.txt is in every test.
-foreach(name IN ITEMS tst_qindashow tst_show_ui tst_show_design tst_show_menu_export tst_show_tools)
+# (tst_show_menu_export). M67 (D-076): tables in place (tst_show_table),
+# chart data, the notes pane and the presenter view (tst_show_chart_notes).
+# Every test links the app's static QML module, so a source added to
+# apps/qindashow/CMakeLists.txt is in every test.
+foreach(name IN ITEMS tst_qindashow tst_show_ui tst_show_design tst_show_menu_export tst_show_tools tst_show_table
+                      tst_show_chart_notes)
     add_executable(${name} ${name}.cpp show_test_support.h)
     target_link_libraries(${name} PRIVATE qindashow_app qindashow_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)

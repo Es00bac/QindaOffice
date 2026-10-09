@@ -46,7 +46,7 @@ enum class ShapeKind {
     // ---- M62 ----
     AutoShape, // any other preset (Shape::geometry) or custom geometry
     Table,     // Shape::table, in a graphic frame
-    Chart,     // Shape::chart drawn from cached values; the frame is preserved
+    Chart,     // Shape::chart drawn from cached values; the frame is preserved (edits: D-076)
     Group,     // Shape::children in the Shape::childRect coordinate space
     Preserved, // Office content QindaShow cannot edit (SmartArt, media, OLE, ink, …)
 };
@@ -55,6 +55,13 @@ enum class ShapeKind {
 // behaviour (the shape is simply there); the rest animate over
 // Shape::animationMs. The renderer applies them, so the player, the
 // presenter view and any future export all animate identically.
+//
+// M67 (D-076) adds PowerPoint's Wipe (from the bottom) and Split
+// (vertical out) entrances and two EMPHASIS effects: Spin (one turn) and
+// Grow/Shrink (to 150 %, kept until the slide ends). An emphasis shape is
+// on the slide from the start; its build step is when it animates.
+// AGENT-GUARD: values are stored by number (.fodp qq:animation, the
+// clipboard JSON) — append, never reorder.
 enum class ShapeAnimation {
     Appear,
     Fade,
@@ -63,7 +70,17 @@ enum class ShapeAnimation {
     FlyInTop,
     FlyInBottom,
     Zoom,
+    // ---- M67 ----
+    Wipe,
+    Split,
+    Spin,
+    GrowShrink,
 };
+[[nodiscard]] inline bool isEmphasis(ShapeAnimation animation)
+{
+    return animation == ShapeAnimation::Spin || animation == ShapeAnimation::GrowShrink;
+}
+inline constexpr ShapeAnimation kLastAnimation = ShapeAnimation::GrowShrink;
 
 // An Office placeholder (p:ph). Empty type = not a placeholder.
 struct Placeholder {
@@ -179,7 +196,8 @@ struct Shape {
 
     [[nodiscard]] QString displayText() const;
     // True when the shape's text is edited in place (not pictures, lines,
-    // groups, tables, charts or preserved content).
+    // groups, tables, charts or preserved content; a table's CELLS are,
+    // through SlideCanvasItem::beginCellEdit, M67).
     [[nodiscard]] bool holdsText() const;
     bool operator==(const Shape &) const = default;
 };

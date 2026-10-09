@@ -2,10 +2,12 @@
 #pragma once
 
 // Slide transitions and builds between PowerPoint and QindaShow's player
-// (D-070): the reader maps p:transition onto cut/fade/slide/zoom and the
-// main sequence of p:timing onto per-shape build steps and entrance
-// effects; the writer keeps the original XML while those still match and
-// writes the player's own spelling when the user changed them.
+// (D-070): the reader maps p:transition onto cut / fade / slide (push) /
+// zoom — and since M67 (D-076) wipe and split — and the main sequence of
+// p:timing onto per-shape build steps with their entrance effects and the
+// Spin and Grow/Shrink emphasis effects; the writer keeps the original XML
+// while those still match and writes PowerPoint's presets for them when
+// the user changed them.
 //
 // AGENT-NOTE: p:timing names shapes by their Office id (p:spTgt/@spid).
 // PowerPoint repairs (or refuses) a deck whose timing names a shape the

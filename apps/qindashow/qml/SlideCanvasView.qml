@@ -6,9 +6,9 @@ import QindaOffice.Show
 
 // The slide inside a page-fitting viewport: the host's SlideCanvasItem is
 // seated in `container` (slide points; the viewport's zoom is the only
-// scale, D-009), the in-place editor is a TextEdit over the shape being
-// edited showing the shape's own QTextDocument (runs and all), and a right
-// press pops the arrange / group / clipboard context menu.
+// scale, D-009), the in-place editor is a TextEdit over the shape — or the
+// table cell (M67) — being edited, showing its own QTextDocument (runs and
+// all), and a right press pops the arrange / group / clipboard context menu.
 Tk.Viewport {
     id: viewport
     required property ShowHost showHost
@@ -47,6 +47,9 @@ Tk.Viewport {
             selectedTextColor: "white"
             onVisibleChanged: if (visible) forceActiveFocus(Qt.OtherFocusReason)
             Keys.onEscapePressed: function(event) { viewport.showHost.canvas.commitTextEdit(false); event.accepted = true }
+            // M67: in a table cell Tab / Shift+Tab move to the next / previous cell.
+            Keys.onTabPressed: function(event) { event.accepted = viewport.showHost.canvas.editingCell && viewport.showHost.canvas.moveCellEdit(1) }
+            Keys.onBacktabPressed: function(event) { event.accepted = viewport.showHost.canvas.editingCell && viewport.showHost.canvas.moveCellEdit(-1) }
         }
     }
     MenuFromNode {

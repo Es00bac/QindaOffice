@@ -17,17 +17,28 @@
 // it to the QML TextEdit the window places at editorRect; commitTextEdit()
 // reads the runs back.
 //
+// Tables (M67, D-076): a click into the selected table puts the caret in
+// the cell under it (the same in-place editor, over the cell's box), a
+// drag selects cells, Tab / Shift+Tab move between cells, dragging a
+// column or row boundary resizes; table and chart edits arrive as one
+// whole-shape before/after (shapeEdited), which the host pushes as an
+// id-located ShapeEditCommand.
+//
 // Files: slide_canvas_item.cpp (state, painting, shape ops),
 // slide_canvas_item_input.cpp (pointer and key events, the text editor),
 // slide_canvas_item_snap.cpp (snapping, guides, grouping),
-// slide_canvas_item_order.cpp (multi-selection, z-order).
+// slide_canvas_item_order.cpp (multi-selection, z-order),
+// slide_canvas_item_table.cpp (cells, boundaries, cell editing; M67).
 
 #include "presentation.h"
 #include "slide_renderer.h"
+#include "table_edit.h"
 
 #include <QQuickPaintedItem>
 #include <QSet>
 #include <QtQml/qqmlregistration.h>
+
+#include <functional>
 
 #ifndef QQO_SHOW_MODEL_ALIAS
 #define QQO_SHOW_MODEL_ALIAS
@@ -46,6 +57,8 @@ class SlideCanvasItem : public QQuickPaintedItem {
     Q_PROPERTY(QString editingShapeId READ editingShapeId NOTIFY editingChanged)
     Q_PROPERTY(QRectF editorRect READ editorRect NOTIFY editingChanged)
     Q_PROPERTY(bool snapEnabled READ snapEnabled WRITE setSnapEnabled NOTIFY snapChanged)
+    // True while the in-place editor holds a table cell (Tab moves cells).
+    Q_PROPERTY(bool editingCell READ editingCell NOTIFY editingChanged)
 public:
     // Half-size of the bottom-right resize grip, in slide points.
     static constexpr qreal kGripRadius = 5.0;
@@ -103,6 +116,30 @@ public:
     [[nodiscard]] QRectF snapRect(const QString &shapeId, const QRectF &proposed);
     void clearGuides();
 
+    // ---- tables (slide_canvas_item_table.cpp) ----
+    // The table the table commands act on: the one selected shape when it
+    // is a table, else "".
+    [[nodiscard]] QString tableShapeId() const;
+    // The cells selected in it — the edited cell's block while the caret is
+    // in one; invalid when none (the commands then act on the whole table).
+    [[nodiscard]] ShowModel::TableRange cellSelection() const;
+    void selectCells(const QString &shapeId, ShowModel::TableRange range);
+    // In-place editing of the cell at (row, column) — any cell of its block.
+    Q_INVOKABLE void beginCellEdit(const QString &shapeId, int row, int column);
+    // Tab (+1) / Shift+Tab (-1) while a cell is edited: commits it and
+    // edits the next cell in reading order; Tab in the last cell adds a
+    // row first, as PowerPoint does. False when no cell is edited.
+    Q_INVOKABLE bool moveCellEdit(int step);
+    [[nodiscard]] bool editingCell() const { return m_textRow >= 0; }
+    // The text look a table without any text types in (the deck's font and
+    // colour; the host supplies it, the canvas holds no deck).
+    void setTableTextLook(std::function<ShowModel::TextRun()> provider) { m_tableTextLook = std::move(provider); }
+    // Applies `mutate` to shape `shapeId` as ONE undoable edit named
+    // `label` (shapeEdited); a table's frame is refitted to its grid.
+    // False, and nothing changed, when `mutate` returns false or changes
+    // nothing.
+    bool editShape(const QString &shapeId, const QString &label, const std::function<bool(ShowModel::Shape &)> &mutate);
+
     // ---- in-place text editing (the window's TextEdit shows the document) ----
     Q_INVOKABLE void beginTextEdit(const QString &shapeId);
     Q_INVOKABLE void commitTextEdit(bool cancelled);
@@ -121,6 +158,10 @@ signals:
     void shapeBuildEdited(const QString &shapeId, int oldStep, int newStep);
     void shapesReordered(const QStringList &oldOrder, const QStringList &newOrder);
     void shapeStyled(const QString &shapeId, const ShowModel::Shape &before, const ShowModel::Shape &after);
+    // M67: a whole-shape edit (tables, cells, chart data) named `label`.
+    void shapeEdited(const QString &shapeId, const ShowModel::Shape &before, const ShowModel::Shape &after,
+                     const QString &label);
+    void cellSelectionChanged();
     void selectionChanged();
     void slideEdited(); // any of the above; the host marks dirty + journals
     // A gesture that touches SEVERAL shapes is starting/finishing: the host
@@ -138,9 +179,21 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void hoverMoveEvent(QHoverEvent *event) override;
 
 private:
-    enum class Gesture { None, Move, Resize, Marquee };
+    enum class Gesture { None, Move, Resize, Marquee, Cells, ColumnBoundary, RowBoundary };
+
+    // slide_canvas_item_table.cpp
+    bool tablePress(const QPointF &pos, Qt::KeyboardModifiers modifiers);
+    bool tableMove(const QPointF &pos);
+    bool tableRelease();
+    bool tableKey(QKeyEvent *event);
+    void paintTableSelection(QPainter *painter) const;
+    [[nodiscard]] ShowModel::Shape paintedWhileEditing(const ShowModel::Shape &shape) const;
+    [[nodiscard]] QRectF cellEditorRect(const ShowModel::Shape &shape) const;
+    void commitCellEdit(bool cancelled);
+    void dropCellSelectionIfGone();
 
     void reorderTo(const QStringList &order);
     [[nodiscard]] int shapeIndex(const QString &shapeId) const;
@@ -169,6 +222,15 @@ private:
     // Snapping.
     bool m_snap = true;
     QList<QLineF> m_guides;
+    // Tables (M67): the selected cells, the cell being edited, a boundary drag.
+    QString m_tableId;
+    ShowModel::TableRange m_cells{-1, -1, -1, -1};
+    ShowModel::TableRange m_cellAnchor{-1, -1, -1, -1};
+    int m_textRow = -1;
+    int m_textColumn = -1;
+    int m_boundary = -1;
+    ShowModel::Shape m_tableBefore;
+    std::function<ShowModel::TextRun()> m_tableTextLook;
 };
 
 } // namespace QindaOffice::Apps::Show

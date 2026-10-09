@@ -140,6 +140,47 @@ private:
     ShowModel::Slide m_after;
 };
 
+// Whole-shape replace located by slide id and shape id (M67, D-076): the
+// table, cell-text and chart-data edits. Unlike ShapeStateCommand it holds
+// no Slide*, so a slide-list change (which reallocates the deck's slides)
+// cannot leave it pointing at freed memory.
+class ShapeEditCommand final : public QUndoCommand {
+public:
+    ShapeEditCommand(ShowModel::Presentation *deck, QString slideId, QString shapeId, ShowModel::Shape before,
+                     ShowModel::Shape after, const QString &text, QUndoCommand *parent = nullptr);
+    void redo() override;
+    void undo() override;
+
+private:
+    void apply(const ShowModel::Shape &state);
+
+    ShowModel::Presentation *m_deck;
+    QString m_slideId;
+    QString m_shapeId;
+    ShowModel::Shape m_before;
+    ShowModel::Shape m_after;
+};
+
+// A slide's speaker notes (M67): typing into one slide's notes is ONE undo
+// step until another command intervenes (mergeWith).
+class NotesEditCommand final : public QUndoCommand {
+public:
+    NotesEditCommand(ShowModel::Presentation *deck, QString slideId, QString before, QString after,
+                     QUndoCommand *parent = nullptr);
+    void redo() override;
+    void undo() override;
+    bool mergeWith(const QUndoCommand *other) override;
+    int id() const override { return 2; }
+
+private:
+    void apply(const QString &notes);
+
+    ShowModel::Presentation *m_deck;
+    QString m_slideId;
+    QString m_before;
+    QString m_after;
+};
+
 class SlideListCommand final : public QUndoCommand {
 public:
     SlideListCommand(ShowModel::Presentation *deck, QList<ShowModel::Slide> before,

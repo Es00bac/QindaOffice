@@ -146,7 +146,10 @@ struct Reuse {
     QList<std::tuple<int, TextRun, const XmlElement *>> runs;   // level, format → a:rPr
     QList<std::tuple<int, qreal, const XmlElement *>> ends;    // level, end size → a:endParaRPr
 
-    void learn(const XmlElement &txBody, const QList<TextParagraph> &pristine)
+    std::function<TextRun(const TextRun &)> currentKey;
+
+    void learn(const XmlElement &txBody, const QList<TextParagraph> &pristine,
+               const std::function<TextRun(const TextRun &)> &sourceKey)
     {
         const QList<const XmlElement *> ps = txBody.elements(nsA(), u"p");
         for (qsizetype i = 0; i < ps.size() && i < pristine.size(); ++i) {
@@ -159,7 +162,8 @@ struct Reuse {
                     continue;
                 }
                 if (r < model.runs.size()) {
-                    runs.append({model.listLevel, formatOnly(model.runs.at(r)), e->child(nsA(), u"rPr")});
+                    const TextRun &run = model.runs.at(r);
+                    runs.append({model.listLevel, formatOnly(sourceKey ? sourceKey(run) : run), e->child(nsA(), u"rPr")});
                 }
                 ++r;
             }
@@ -179,7 +183,7 @@ struct Reuse {
 
     [[nodiscard]] const XmlElement *const *run(int level, const TextRun &run) const
     {
-        const TextRun key = formatOnly(run);
+        const TextRun key = formatOnly(currentKey ? currentKey(run) : run);
         for (const auto &entry : runs) {
             if (std::get<0>(entry) == level && std::get<1>(entry) == key) {
                 return &std::get<2>(entry);
@@ -365,8 +369,9 @@ XmlElementPtr textBodyElement(PartWriter &out, const QString &ns, const QList<Te
     const XmlElement *lstStyle = source.txBody != nullptr ? source.txBody->child(nsA(), u"lstStyle") : nullptr;
     txBody->appendElement(lstStyle != nullptr ? reused(out, lstStyle, source.part) : make(nsA(), QStringLiteral("lstStyle")));
     Reuse reuse;
+    reuse.currentKey = source.currentKey;
     if (source.txBody != nullptr && source.pristine != nullptr) {
-        reuse.learn(*source.txBody, *source.pristine);
+        reuse.learn(*source.txBody, *source.pristine, source.sourceKey);
     }
     for (const TextParagraph &paragraph : paragraphs) {
         XmlElement &p = txBody->appendElement(nsA(), QStringLiteral("p"));
@@ -383,7 +388,11 @@ XmlElementPtr textBodyElement(PartWriter &out, const QString &ns, const QList<Te
                 if (known != nullptr) {
                     return *known != nullptr ? reused(out, *known, source.part) : nullptr;
                 }
-                return runProperties(out, run);
+                XmlElementPtr rPr = runProperties(out, run);
+                if (source.generatedRun) {
+                    source.generatedRun(*rPr, run);
+                }
+                return rPr;
             };
             QString text = run.text;
             text.replace(QLatin1Char('\n'), QChar(QChar::LineSeparator));
@@ -414,8 +423,11 @@ XmlElementPtr textBodyElement(PartWriter &out, const QString &ns, const QList<Te
         const auto end = std::find_if(reuse.ends.cbegin(), reuse.ends.cend(), [&paragraph](const auto &e) {
             return std::get<0>(e) == paragraph.listLevel && std::get<1>(e) == paragraph.endPointSize;
         });
-        if (end != reuse.ends.cend() && std::get<2>(*end) != nullptr && reuse.paragraph(paragraph) != nullptr) {
-            p.appendElement(reused(out, std::get<2>(*end), source.part));
+        if (end != reuse.ends.cend() && reuse.paragraph(paragraph) != nullptr) {
+            // The source's end-of-paragraph properties, or none where it had none.
+            if (std::get<2>(*end) != nullptr) {
+                p.appendElement(reused(out, std::get<2>(*end), source.part));
+            }
         } else if (paragraph.endPointSize > 0) {
             XmlElement &endRun = p.appendElement(nsA(), QStringLiteral("endParaRPr"));
             set(endRun, QStringLiteral("lang"), QStringLiteral("en-US"));

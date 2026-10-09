@@ -45,7 +45,7 @@ private slots:
         }
         QCOMPARE(titles, (QStringList{QStringLiteral("File"), QStringLiteral("Edit"), QStringLiteral("View"),
                                       QStringLiteral("Slide"), QStringLiteral("Insert"), QStringLiteral("Shape"),
-                                      QStringLiteral("Arrange"), QStringLiteral("AI"), QStringLiteral("Settings"),
+                                      QStringLiteral("Arrange"), QStringLiteral("Table"), QStringLiteral("AI"), QStringLiteral("Settings"),
                                       QStringLiteral("Help")}));
         QCOMPARE(titles.count(QStringLiteral("AI")), 1);
         QStringList ids;

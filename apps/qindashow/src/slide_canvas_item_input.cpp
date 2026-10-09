@@ -50,6 +50,13 @@ void SlideCanvasItem::mousePressEvent(QMouseEvent *event)
     m_pressPos = pos;
     m_moved = false;
     m_gestureStart.clear();
+    // M67: inside the selected table a press selects, edits or resizes
+    // cells (its frame edge still moves it; no grip, its corner is the last
+    // column's boundary).
+    if (tablePress(pos, event->modifiers())) {
+        event->accept();
+        return;
+    }
     // Corner-grip resize on a single selected shape.
     if (m_selected.size() == 1) {
         const ShowModel::Shape *shape = m_slide->findShape(selectedShapeId());
@@ -107,6 +114,10 @@ void SlideCanvasItem::mouseMoveEvent(QMouseEvent *event)
     }
     const QPointF pos = event->position();
     const QPointF delta = pos - m_pressPos;
+    if (tableMove(pos)) {
+        event->accept();
+        return;
+    }
     if (m_gesture == Gesture::Marquee) {
         m_marquee = QRectF(m_pressPos, pos).normalized();
         update();
@@ -175,6 +186,10 @@ void SlideCanvasItem::finishGesture()
         }
         emit slideEdited();
     }
+    // M67: a click (no drag) into a table puts the caret in the cell under
+    // it, as PowerPoint does; a click on its frame edge only selects it.
+    const QString clickedTable = m_gesture == Gesture::Move && !m_moved && m_selected.size() == 1 ? tableShapeId() : QString();
+    const QPointF clickedAt = m_pressPos;
     m_gesture = Gesture::None;
     m_gestureStart.clear();
     m_draggingShapeId.clear();
@@ -185,6 +200,10 @@ void SlideCanvasItem::finishGesture()
         emit compoundEditFinished();
     }
     update();
+    if (!clickedTable.isEmpty()) {
+        tablePress(clickedAt, Qt::NoModifier); // the cell under the click…
+        tableRelease();                         // …edited, as a click into the selected table is
+    }
 }
 
 void SlideCanvasItem::mouseReleaseEvent(QMouseEvent *event)
@@ -193,7 +212,9 @@ void SlideCanvasItem::mouseReleaseEvent(QMouseEvent *event)
         event->ignore();
         return;
     }
-    finishGesture();
+    if (!tableRelease()) {
+        finishGesture();
+    }
     event->accept();
 }
 
@@ -213,7 +234,22 @@ void SlideCanvasItem::mouseDoubleClickEvent(QMouseEvent *event)
         return;
     }
     m_gesture = Gesture::None;
-    beginTextEdit(target);
+    const ShowModel::Shape *shape = m_slide->findShape(target);
+    if (shape != nullptr && shape->kind == ShowModel::ShapeKind::Table && !shape->table.isEmpty()) {
+        // A table: the caret goes into the cell under the pointer.
+        const ShowModel::TableGrid grid = ShowModel::tableGrid(shape->table, shape->rect.normalized());
+        int row = 0;
+        while (row + 2 < grid.ys.size() && event->position().y() >= grid.ys.at(row + 1)) {
+            ++row;
+        }
+        int column = 0;
+        while (column + 2 < grid.xs.size() && event->position().x() >= grid.xs.at(column + 1)) {
+            ++column;
+        }
+        beginCellEdit(target, row, column);
+    } else {
+        beginTextEdit(target);
+    }
     event->accept();
 }
 
@@ -221,6 +257,10 @@ void SlideCanvasItem::keyPressEvent(QKeyEvent *event)
 {
     if (!m_textShapeId.isEmpty()) {
         event->ignore();
+        return;
+    }
+    if (tableKey(event)) {
+        event->accept();
         return;
     }
     if ((event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) && hasSelection()) {
@@ -243,6 +283,9 @@ QRectF SlideCanvasItem::editorRect() const
     const ShowModel::Shape *shape = m_slide != nullptr ? m_slide->findShape(m_textShapeId) : nullptr;
     if (shape == nullptr) {
         return {};
+    }
+    if (m_textRow >= 0) {
+        return cellEditorRect(*shape); // a table cell, inside its margins
     }
     // The shape's own text insets (6/4 pt for QindaShow's, the file's for
     // an Office shape).
@@ -271,6 +314,10 @@ void SlideCanvasItem::beginTextEdit(const QString &shapeId)
 void SlideCanvasItem::commitTextEdit(bool cancelled)
 {
     if (m_textDocument == nullptr) {
+        return;
+    }
+    if (m_textRow >= 0) {
+        commitCellEdit(cancelled);
         return;
     }
     const QString shapeId = m_textShapeId;

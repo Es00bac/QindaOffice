@@ -5,14 +5,19 @@
 # tests instantiate the real window; the executable is main.cpp over it.
 set(qindashow_qml
     qml/ApplyMasterDialog.qml
+    qml/ChartDataDialog.qml
+    qml/InsertTableDialog.qml
     qml/MasterDialog.qml
+    qml/NotesPane.qml
     qml/PresenterView.qml
     qml/ShowPlayer.qml
     qml/ShowWindow.qml
     qml/ShowRibbonLayout.qml
     qml/SlideCanvasView.qml
+    qml/SlideEditor.qml
     qml/SlidePanel.qml
     qml/SlideSorter.qml
+    qml/SplitCellsDialog.qml
 )
 foreach(qml_file IN LISTS qindashow_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -31,21 +36,25 @@ qt_add_qml_module(qindashow_app
         src/show_ai.cpp src/show_ai.h
         src/show_arrange.cpp src/show_arrange.h
         src/show_arrange_menus.cpp
+        src/show_chart_data.cpp src/show_chart_data.h
         src/show_clipboard.cpp src/show_clipboard.h
         src/show_commands.cpp src/show_commands.h
         src/show_design_actions.cpp src/show_design_actions.h
         src/show_document.cpp src/show_document.h
         src/show_host.cpp src/show_host.h
         src/show_host_ai.cpp
+        src/show_host_editing.cpp
         src/show_tools.cpp src/show_tools.h
         src/slide_factory.h
         src/show_host_menus.cpp
         src/show_host_slides.cpp
+        src/show_table_actions.cpp src/show_table_actions.h
         src/show_toolbox.cpp src/show_toolbox.h
         src/slide_canvas_item.cpp src/slide_canvas_item.h
         src/slide_canvas_item_input.cpp
         src/slide_canvas_item_order.cpp
         src/slide_canvas_item_snap.cpp
+        src/slide_canvas_item_table.cpp
         src/slide_items.cpp src/slide_items.h
         src/text_bridge.cpp src/text_bridge.h
     QML_FILES ${qindashow_qml}

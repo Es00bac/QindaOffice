@@ -58,7 +58,9 @@ class SlideFrameItem : public QQuickPaintedItem {
     Q_OBJECT
     QML_ELEMENT
     Q_PROPERTY(PresentationController *controller READ controller WRITE setController NOTIFY changed)
-    // -1 follows the controller's current slide and build step.
+    // -1 follows the controller's current slide and build step; any other
+    // negative index draws nothing (the presenter's "next" after the last
+    // slide, M67).
     Q_PROPERTY(int slideIndex READ slideIndex WRITE setSlideIndex NOTIFY changed)
     Q_PROPERTY(int buildStep READ buildStep WRITE setBuildStep NOTIFY changed)
     Q_PROPERTY(qreal buildProgress READ buildProgress WRITE setBuildProgress NOTIFY changed)

@@ -252,6 +252,77 @@ void SlideStateCommand::undo()
     apply(m_before);
 }
 
+ShapeEditCommand::ShapeEditCommand(ShowModel::Presentation *deck, QString slideId, QString shapeId,
+                                   ShowModel::Shape before, ShowModel::Shape after, const QString &text,
+                                   QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_deck(deck)
+    , m_slideId(std::move(slideId))
+    , m_shapeId(std::move(shapeId))
+    , m_before(std::move(before))
+    , m_after(std::move(after))
+{
+    setText(text);
+}
+
+void ShapeEditCommand::apply(const ShowModel::Shape &state)
+{
+    ShowModel::Slide *slide = m_deck->findSlide(m_slideId);
+    ShowModel::Shape *shape = slide != nullptr ? slide->findShape(m_shapeId) : nullptr;
+    if (shape != nullptr) {
+        *shape = state;
+        shape->id = m_shapeId;
+    }
+}
+
+void ShapeEditCommand::redo()
+{
+    apply(m_after);
+}
+
+void ShapeEditCommand::undo()
+{
+    apply(m_before);
+}
+
+NotesEditCommand::NotesEditCommand(ShowModel::Presentation *deck, QString slideId, QString before, QString after,
+                                   QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_deck(deck)
+    , m_slideId(std::move(slideId))
+    , m_before(std::move(before))
+    , m_after(std::move(after))
+{
+    setText(QObject::tr("Edit speaker notes"));
+}
+
+void NotesEditCommand::apply(const QString &notes)
+{
+    if (ShowModel::Slide *slide = m_deck->findSlide(m_slideId)) {
+        slide->notes = notes;
+    }
+}
+
+void NotesEditCommand::redo()
+{
+    apply(m_after);
+}
+
+void NotesEditCommand::undo()
+{
+    apply(m_before);
+}
+
+bool NotesEditCommand::mergeWith(const QUndoCommand *other)
+{
+    const auto *that = static_cast<const NotesEditCommand *>(other);
+    if (that->m_deck != m_deck || that->m_slideId != m_slideId) {
+        return false;
+    }
+    m_after = that->m_after;
+    return true;
+}
+
 SlideListCommand::SlideListCommand(ShowModel::Presentation *deck, QList<ShowModel::Slide> before,
                                    QList<ShowModel::Slide> after, QUndoCommand *parent)
     : QUndoCommand(parent)
