@@ -39,7 +39,7 @@ QString keyOf(const QFont &font)
         + QString::number(font.weight()) + QLatin1Char('|') + QString::number(int(font.italic()));
 }
 
-const Metrics &metricsOf(const QFont &font)
+Metrics metricsOf(const QFont &font)
 {
     // AGENT-NOTE: QRawFont is expensive to open; a document uses a handful
     // of fonts. Bounded: a pathological document cannot grow it unduly.
@@ -67,7 +67,8 @@ const Metrics &metricsOf(const QFont &font)
             m.word = qreal(winAscent + winDescent + external) / unitsPerEm * raw.pixelSize();
         }
     }
-    return *cache.insert(key, m);
+    cache.insert(key, m);
+    return m;
 }
 
 // The font a paragraph is set in: its first run's, else its mark's.
@@ -107,7 +108,7 @@ void applyWordLineMetrics(QTextDocument *document)
             continue; // exact and at-least heights are Word's already
         }
         const qreal multiple = type == QTextBlockFormat::ProportionalHeight ? format.lineHeight() / 100.0 : 1.0;
-        const Metrics &m = metricsOf(paragraphFont(block, base));
+        const Metrics m = metricsOf(paragraphFont(block, base));
         if (m.word <= 0 || m.qt <= 0) {
             continue;
         }

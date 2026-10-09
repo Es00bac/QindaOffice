@@ -36,6 +36,7 @@ qt_add_qml_module(qindawrite_app
         src/page_story_editor.cpp src/page_story_editor.h
         src/page_text_accessible.cpp src/page_text_accessible.h
         src/page_text_control.cpp src/page_text_control.h
+        src/page_text_control_clipboard.cpp
         src/page_text_item.cpp src/page_text_item.h
         src/pdf_exporter.cpp src/pdf_exporter.h
         src/spell_checker.cpp src/spell_checker.h

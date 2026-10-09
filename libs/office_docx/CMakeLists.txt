@@ -15,6 +15,7 @@ add_library(office_docx STATIC
     src/docx_reader.cpp
     src/docx_reader.h
     src/docx_reader_body.cpp
+    src/docx_reader_runs.cpp
     src/docx_reader_objects.cpp
     src/docx_reader_p.h
     src/docx_reader_table.cpp
