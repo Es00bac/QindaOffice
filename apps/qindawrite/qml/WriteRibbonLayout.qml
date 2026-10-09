@@ -51,6 +51,12 @@ QtObject {
         { id: "insert", label: qsTr("Insert"), keyTip: "N", groups: [
             { id: "pages", label: qsTr("Pages"), items: [
                 { action: "insertPageBreakAction", size: "large", iconName: "separator-horizontal" }] },
+            { id: "headerFooter", label: qsTr("Header & Footer"), items: [
+                { action: "writeEditHeaderAction", size: "large", iconName: "panel-top" },
+                { action: "writeEditFooterAction", iconName: "panel-bottom" },
+                { action: "writeInsertPageNumberAction", iconName: "hash" },
+                { action: "writeInsertPageCountAction", iconName: "sigma" },
+                { action: "writeCloseHeaderFooterAction", iconName: "x" }] },
             { id: "tables", label: qsTr("Tables"), items: [{ action: "insertTableAction", size: "large" }] },
             { id: "illustrations", label: qsTr("Illustrations"), items: [{ action: "insertImageAction", size: "large" }] },
             { id: "links", label: qsTr("Links"), items: [{ action: "insertHyperlinkAction", size: "large" }] },

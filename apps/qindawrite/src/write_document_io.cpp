@@ -166,6 +166,8 @@ void WriteDocument::finishLoad(const QString &path)
     for (auto *list : {&m_parts.headers, &m_parts.footers}) {
         for (Docx::HeaderFooter &hf : *list) {
             if (hf.document) {
+                // The reader's own inserts are not an edit to undo.
+                hf.document->clearUndoRedoStacks();
                 hf.document->setModified(false);
             }
         }

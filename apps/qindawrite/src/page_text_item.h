@@ -18,8 +18,11 @@
 #include <QQuickPaintedItem>
 #include <QtQml/qqmlregistration.h>
 
+#include <memory>
+
 namespace QindaOffice::Apps::Write {
 
+class StoryEditor;
 class WriteDocument;
 
 class PageTextItem : public QQuickPaintedItem {
@@ -29,6 +32,9 @@ class PageTextItem : public QQuickPaintedItem {
     // The hosting viewport's zoom, for the status line only.
     Q_PROPERTY(qreal viewZoom READ viewZoom WRITE setViewZoom NOTIFY viewZoomChanged)
     Q_PROPERTY(bool attached READ isAttached NOTIFY attachedChanged)
+    // In-place header/footer editing (page_story_editor.h).
+    Q_PROPERTY(bool editingStory READ isEditingStory NOTIFY storyChanged)
+    Q_PROPERTY(QString storyLabel READ storyLabel NOTIFY storyChanged)
 public:
     explicit PageTextItem(QQuickItem *parent = nullptr);
     ~PageTextItem() override;
@@ -53,6 +59,15 @@ public:
 
     void paint(QPainter *painter) override;
 
+    // Header and footer of the page the caret is on (the body's caret
+    // while editing the body); Close returns to the body.
+    [[nodiscard]] bool isEditingStory() const;
+    [[nodiscard]] QString storyLabel() const;
+    [[nodiscard]] StoryEditor *storyEditor() const { return m_story.get(); }
+    Q_INVOKABLE void editHeader();
+    Q_INVOKABLE void editFooter();
+    Q_INVOKABLE void closeStory();
+
 signals:
     void pageCountChanged();
     void viewZoomChanged();
@@ -62,6 +77,7 @@ signals:
     // A right press at item (x, y); docPos is where it landed in the text.
     void contextMenuRequested(qreal x, qreal y, const QPointF &docPos);
     void doubleClicked(int position);
+    void storyChanged();
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -76,11 +92,23 @@ protected:
 
 private:
     void forwardMouse(QMouseEvent *event);
+    // The open story's events (story coordinates); false when a press fell
+    // outside its band.
+    bool forwardStoryMouse(QMouseEvent *event);
+    // Opens the story whose band was double-clicked; false elsewhere.
+    bool openStoryAt(QMouseEvent *event);
+    // The page under an item point (-1 in no page) and the point on it.
+    [[nodiscard]] int pageAt(const QPointF &viewPos, QPointF *pagePos = nullptr) const;
+    // The page the body's caret is on (0-based).
+    [[nodiscard]] int caretPage() const;
+    [[nodiscard]] QRectF storyToView(const QRectF &storyRect) const;
+    void openStory(int kind);
     void updatePageMetrics();
     void paintPage(QPainter *painter, int index, const QRectF &clip);
 
     QPointer<WriteDocument> m_document;
     QPointer<PageTextControl> m_control;
+    std::unique_ptr<StoryEditor> m_story;
     PageGeometry m_geometry;
     qreal m_viewZoom = 1.0;
     int m_pageCount = 1;

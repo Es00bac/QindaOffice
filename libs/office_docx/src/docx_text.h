@@ -33,6 +33,12 @@ QString addPicture(QTextDocument *document, QHash<QString, QByteArray> *media, c
 
 // The document as HTML with every qwmedia: picture inlined as a data: URI,
 // so the file stands alone (QTextDocument::setHtml decodes them back).
+// Inserts a PAGE (or, with `total`, NUMPAGES) field at the cursor in its
+// current character format: the result text "1" carries the instruction
+// (kFieldInstruction), filled in per page when a header is drawn, written
+// as w:fldSimple. Returns the format to keep typing in (without the field).
+QTextCharFormat insertPageField(QTextCursor &cursor, bool total);
+
 // Removes the display-only page breaks QindaWrite's pagination added
 // (kSyntheticBreak), restoring each block's own flags; returns how many
 // there were. Not undo-neutral: for clones and freshly read documents.

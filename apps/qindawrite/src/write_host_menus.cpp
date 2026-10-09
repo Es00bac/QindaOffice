@@ -7,6 +7,8 @@
 
 #include "write_host.h"
 
+#include "docx_text.h"
+#include "page_text_item.h"
 #include "format_controller.h"
 #include "page_text_control.h"
 #include "spell_checker.h"
@@ -77,6 +79,8 @@ void WriteHost::insertMenus()
     insertItems += m_typography->insertMenuItems();
     insertItems.append(MenuNode::separator());
     insertItems += m_review->insertMenuItems();
+    insertItems.append(MenuNode::separator());
+    insertItems += headerFooterMenuItems();
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("insertMenu"), tr("&Insert"), insertItems));
 
@@ -155,6 +159,86 @@ void WriteHost::createSpellingEntries()
     });
 }
 
+QList<MenuNode> WriteHost::headerFooterMenuItems()
+{
+    const auto make = [this](const char *id, const QString &text, const char *icon) {
+        return actions()->add(QString::fromLatin1(id), text, {}, QString::fromLatin1(icon));
+    };
+    ActionEntry *header = make("writeEditHeaderAction", tr("Edit &Header"), "panel-top");
+    ActionEntry *footer = make("writeEditFooterAction", tr("Edit &Footer"), "panel-bottom");
+    ActionEntry *number = make("writeInsertPageNumberAction", tr("Page &Number"), "hash");
+    ActionEntry *count = make("writeInsertPageCountAction", tr("Number of &Pages"), "sigma");
+    m_closeStory = make("writeCloseHeaderFooterAction", tr("&Close Header and Footer"), "x");
+    m_closeStory->setEnabled(false);
+    connect(header, &ActionEntry::triggered, this, [this] {
+        if (m_page != nullptr) {
+            m_page->editHeader();
+        }
+    });
+    connect(footer, &ActionEntry::triggered, this, [this] {
+        if (m_page != nullptr) {
+            m_page->editFooter();
+        }
+    });
+    connect(number, &ActionEntry::triggered, this, [this] { insertPageField(false); });
+    connect(count, &ActionEntry::triggered, this, [this] { insertPageField(true); });
+    connect(m_closeStory, &ActionEntry::triggered, this, [this] {
+        if (m_page != nullptr) {
+            m_page->closeStory();
+        }
+    });
+    return {MenuNode::action(header->id()), MenuNode::action(footer->id()), MenuNode::action(number->id()),
+            MenuNode::action(count->id()), MenuNode::action(m_closeStory->id())};
+}
+
+void WriteHost::insertPageField(bool total)
+{
+    if (m_page == nullptr) {
+        return;
+    }
+    // Word's Page Number goes to the footer when the body has the caret.
+    if (!m_page->isEditingStory()) {
+        m_page->editFooter();
+    }
+    if (!m_page->isEditingStory()) {
+        return;
+    }
+    QTextCursor cursor = m_control->textCursor();
+    cursor.beginEditBlock();
+    if (m_control->document()->isEmpty()) {
+        QTextBlockFormat centred = cursor.blockFormat();
+        centred.setAlignment(Qt::AlignHCenter);
+        cursor.setBlockFormat(centred);
+    }
+    const QTextCharFormat next = Docx::insertPageField(cursor, total);
+    cursor.endEditBlock();
+    m_control->setTextCursor(cursor);
+    m_control->setCurrentCharFormat(next);
+}
+
+// While a header or footer is open: Close is available, and what has no
+// place in one (a page break, a footnote, the table of contents) is not.
+void WriteHost::syncStoryActions()
+{
+    const bool story = m_page != nullptr && m_page->isEditingStory();
+    if (m_closeStory != nullptr) {
+        m_closeStory->setEnabled(story);
+    }
+    for (const char *id : {ActionId::kInsertPageBreak, ActionId::kInsertFootnote, ActionId::kInsertToc,
+                           ActionId::kUpdateToc}) {
+        if (ActionEntry *entry = action(QString::fromLatin1(id))) {
+            entry->setEnabled(!story);
+        }
+    }
+    if (story) {
+        showStatusMessage(tr("Editing the %1 — Esc or a double-click on the page returns to the text")
+                              .arg(m_page->storyLabel().toLower()),
+                          0);
+    } else {
+        showStatusMessage(QString(), 1);
+    }
+}
+
 void WriteHost::prepareSpellingMenu(const QPointF &docPos)
 {
     for (ActionEntry *entry : m_spellSuggestions) {
@@ -162,7 +246,7 @@ void WriteHost::prepareSpellingMenu(const QPointF &docPos)
     }
     m_spellIgnore->setVisible(false);
     m_spellWord = QTextCursor();
-    if (m_spell == nullptr || !m_spell->isActive()) {
+    if (m_spell == nullptr || !m_spell->isActive() || docPos.x() < 0) {
         return;
     }
     QTextCursor word = m_control->cursorForPosition(docPos);

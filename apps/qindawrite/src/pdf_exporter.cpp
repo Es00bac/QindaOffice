@@ -77,15 +77,18 @@ void drawStory(QPainter *painter, const QTextDocument *story, const QRectF &page
 } // namespace
 
 void drawPageDecoration(QPainter *painter, const QRectF &pageRect, const PageDecoration &decoration,
-                        int pageIndex, int pageCount)
+                        int pageIndex, int pageCount, const QTextDocument *omit)
 {
     if (decoration.isEmpty()) {
         return;
     }
     const Docx::PageLayout &l = decoration.layout;
-    drawStory(painter, decoration.headerFor(pageIndex), pageRect, l, l.headerDistance, 0, pageIndex, pageCount);
-    drawStory(painter, decoration.footerFor(pageIndex), pageRect, l, -1, pageRect.height() - l.footerDistance,
-              pageIndex, pageCount);
+    if (const QTextDocument *header = decoration.headerFor(pageIndex); header != omit) {
+        drawStory(painter, header, pageRect, l, l.headerDistance, 0, pageIndex, pageCount);
+    }
+    if (const QTextDocument *footer = decoration.footerFor(pageIndex); footer != omit) {
+        drawStory(painter, footer, pageRect, l, -1, pageRect.height() - l.footerDistance, pageIndex, pageCount);
+    }
     const QStringList notes = decoration.footnotes.value(pageIndex);
     if (notes.isEmpty()) {
         return;

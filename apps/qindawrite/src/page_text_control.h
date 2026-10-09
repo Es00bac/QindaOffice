@@ -38,6 +38,11 @@ public:
     ~PageTextControl() override;
 
     [[nodiscard]] QTextDocument *document() const { return m_document; }
+    // Edits another story — a header or footer (page_story_editor.h) — or
+    // the body again: a fresh cursor at its start, undo/redo availability
+    // re-announced. Every controller that works through textCursor() then
+    // formats that story.
+    void setDocument(QTextDocument *document);
     [[nodiscard]] QTextCursor textCursor() const { return m_cursor; }
     void setTextCursor(const QTextCursor &cursor);
     // The format the next typed character takes: the cursor's own, or
@@ -76,6 +81,8 @@ public slots:
     void insertText(const QString &text);
 
 signals:
+    // setDocument() switched stories.
+    void documentChanged();
     void updateRequest();
     // The caret moved somewhere the view may have to scroll to.
     void visibilityRequest(const QRectF &docRect);
@@ -90,6 +97,7 @@ signals:
     void doubleClicked(int position);
 
 private:
+    void bindDocument();
     bool keyPress(QKeyEvent *event);
     bool mouse(QMouseEvent *event);
     void inputMethod(QInputMethodEvent *event);

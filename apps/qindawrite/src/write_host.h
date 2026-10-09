@@ -160,6 +160,11 @@ private:
     void updateWriteStatus();
     // write_host_menus.cpp
     void insertMenus();
+    // Edit Header / Edit Footer / Page Number / Number of Pages / Close
+    // Header and Footer (page_story_editor.h); ids writeEditHeaderAction …
+    [[nodiscard]] QList<Quick::MenuNode> headerFooterMenuItems();
+    void insertPageField(bool total);
+    void syncStoryActions();
     void createSpellingEntries();
     void prepareSpellingMenu(const QPointF &docPos);
     // write_host_text.cpp
@@ -188,6 +193,7 @@ private:
     std::function<void()> m_proposalRegenerate;
     QList<Quick::ActionEntry *> m_spellSuggestions;
     Quick::ActionEntry *m_spellIgnore = nullptr;
+    Quick::ActionEntry *m_closeStory = nullptr;
     QTextCursor m_spellWord;
     QString m_pendingTemplate;
 };

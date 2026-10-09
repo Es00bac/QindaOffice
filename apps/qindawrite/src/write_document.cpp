@@ -69,6 +69,8 @@ void WriteDocument::applyLayout()
             bottom = qMax(bottom, l.footerDistance + Docx::headerFooterHeight(*f.document, l.contentWidth()));
         }
     }
+    m_bodyTop = top;
+    m_bodyBottom = bottom;
     if (qFuzzyCompare(left, l.margins.right()) && qFuzzyCompare(left, top) && qFuzzyCompare(left, bottom)) {
         m_text->setDocumentMargin(left);
     } else {
@@ -159,6 +161,9 @@ bool WriteDocument::footerIsSimple() const
 
 void WriteDocument::setHeaderFooter(const QString &header, const QString &footer)
 {
+    if (header != headerText() || footer != footerText()) {
+        emit storiesAboutToBeReplaced();
+    }
     bool changed = false;
     auto apply = [&](Docx::HeaderFooter &slot, const QString &current, const QString &pattern) {
         if (current == pattern) {
@@ -189,6 +194,7 @@ void WriteDocument::setDifferentFirstPage(bool different)
     if (m_parts.differentFirstPage == different) {
         return;
     }
+    emit storiesAboutToBeReplaced(); // page 1 shows another slot now
     m_parts.differentFirstPage = different;
     m_text->setModified(true);
     emit pageSetupChanged();
@@ -243,8 +249,42 @@ PageDecoration WriteDocument::decoration() const
     return out;
 }
 
+Docx::HeaderFooterSlot WriteDocument::storySlot(int page, bool footer) const
+{
+    const auto &stories = footer ? m_parts.footers : m_parts.headers;
+    if (m_parts.differentFirstPage && page == 1) {
+        return Docx::HeaderFooterSlot::First;
+    }
+    if (m_parts.differentOddEven && page % 2 == 0 && stories[size_t(Docx::HeaderFooterSlot::Even)].document) {
+        return Docx::HeaderFooterSlot::Even;
+    }
+    return Docx::HeaderFooterSlot::Default;
+}
+
+QTextDocument *WriteDocument::storyDocument(bool footer, Docx::HeaderFooterSlot slot, bool create)
+{
+    Docx::HeaderFooter &story = footer ? m_parts.footer(slot) : m_parts.header(slot);
+    if (!story.document && create) {
+        story.document = std::make_unique<QTextDocument>();
+        story.document->setDefaultFont(headerFont(*m_text));
+        story.document->setDocumentMargin(0);
+        story.document->clearUndoRedoStacks();
+        story.document->setModified(false); // empty: nothing to save yet
+    }
+    return story.document.get();
+}
+
+void WriteDocument::storyEdited()
+{
+    applyLayout(); // a taller header moves the body (Word's rule)
+    m_text->setModified(true);
+    setDirty(true);
+    emit contentChanged();
+}
+
 void WriteDocument::adoptParts(Docx::WordParts parts)
 {
+    emit storiesAboutToBeReplaced();
     m_parts = std::move(parts);
     applyLayout();
     // Word row heights need the final column widths: after the layout.

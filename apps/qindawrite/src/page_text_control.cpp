@@ -53,6 +53,13 @@ PageTextControl::PageTextControl(QTextDocument *document, QObject *parent)
         m_cursorOn = !m_cursorOn;
         emit updateRequest();
     });
+    bindDocument();
+}
+
+PageTextControl::~PageTextControl() = default;
+
+void PageTextControl::bindDocument()
+{
     connect(m_document, &QTextDocument::undoAvailable, this, &PageTextControl::undoAvailable);
     connect(m_document, &QTextDocument::redoAvailable, this, &PageTextControl::redoAvailable);
     connect(m_document, &QTextDocument::contentsChanged, this, [this] {
@@ -65,7 +72,22 @@ PageTextControl::PageTextControl(QTextDocument *document, QObject *parent)
     });
 }
 
-PageTextControl::~PageTextControl() = default;
+void PageTextControl::setDocument(QTextDocument *document)
+{
+    if (document == nullptr || document == m_document) {
+        return;
+    }
+    disconnect(m_document, nullptr, this, nullptr);
+    m_document = document;
+    m_cursor = QTextCursor(document);
+    m_formatPinned = false;
+    m_preedit.clear();
+    bindDocument();
+    emit undoAvailable(document->isUndoAvailable());
+    emit redoAvailable(document->isRedoAvailable());
+    emit documentChanged();
+    cursorSettled(false);
+}
 
 // ---- cursor and format ------------------------------------------------------------
 

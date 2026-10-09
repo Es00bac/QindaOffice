@@ -34,8 +34,14 @@ rest and `WriteDocument` owns both:
 - **Headers and footers** — rich `QTextDocument`s per slot (default, first
   page, even pages) with pictures and PAGE / NUMPAGES fields; "different
   first page" in Page Setup. An untouched header is copied back byte for
-  byte; the Page Setup text fields edit the default slot as a plain pattern
-  (`{page}` / `{pages}`) and warn when that would replace a richer header.
+  byte. They are edited in place as in Word (`page_story_editor.h`):
+  double-click the top or bottom margin band, or Insert ▸ Edit Header /
+  Edit Footer; the page's own slot opens (first page, even page), every
+  formatting command, Undo and the clipboard work on it, Page Number and
+  Number of Pages insert fields, and Esc, Close Header and Footer or a
+  double-click on the text return. The Page Setup text fields still edit
+  the default slot as a plain pattern (`{page}` / `{pages}`) and warn when
+  that would replace a richer header.
 - **Footnotes** — Write's markers and note texts; an unedited note keeps
   Word's own markup.
 - **Pictures** — the original bytes (`WordParts::media`, resource names

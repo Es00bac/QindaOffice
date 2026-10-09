@@ -31,6 +31,7 @@ qt_add_qml_module(qindawrite_app
         src/format_io.cpp src/format_io.h
         src/page_geometry.cpp src/page_geometry.h
         src/page_setup_io.cpp src/page_setup_io.h
+        src/page_story_editor.cpp src/page_story_editor.h
         src/page_text_accessible.cpp src/page_text_accessible.h
         src/page_text_control.cpp src/page_text_control.h
         src/page_text_item.cpp src/page_text_item.h

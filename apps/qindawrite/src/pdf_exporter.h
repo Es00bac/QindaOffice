@@ -30,8 +30,9 @@ void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDoc
                          const PageDecoration &decoration = {});
 
 // Draws one page's header/footer into `pageRect` (document coordinates,
-// already translated to the page being painted).
+// already translated to the page being painted). `omit` is a header or
+// footer the caller draws itself (the one being edited in place).
 void drawPageDecoration(QPainter *painter, const QRectF &pageRect, const PageDecoration &decoration,
-                        int pageIndex, int pageCount);
+                        int pageIndex, int pageCount, const QTextDocument *omit = nullptr);
 
 } // namespace QindaOffice::Apps::Write

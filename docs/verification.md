@@ -265,6 +265,18 @@ set, prefixed OPC package parts LibreOffice refused, first-block spacing,
 collapsed empty paragraphs after tables, row heights, paragraph borders,
 header overlap, cover-page headers, PDF page size (px passed as points).
 
+**Headers and footers in place:** `tst_write_story` 4/4 — Edit Header
+switches the editing control onto the default header, typing and PAGE /
+NUMPAGES fields land there (the body untouched), Close returns, the saved
+`.docx` reopens with "Acme — page {page} of {pages}"; the first page edits
+its own slot when different-first-page is on; a double-click on the top
+band opens the header, Esc closes, the bottom band opens the footer and a
+double-click on the text returns; Page Setup replacing the header closes
+the editor first (the control stays alive on the body). Looked at: the page
+with the header open (header text, dashed boundary, "Header" tab, the body
+washed out). Desktop check (owner): double-click a footer in a real
+document, edit it, save, open in Word.
+
 **Document styles:** `tst_docx_restyle` 3/3 — the document's own Heading 1
 (16 pt, its theme colour, keep-with-next) replaces the paragraph's direct
 centring, the run's own bold stays, the next paragraph's folded spacing

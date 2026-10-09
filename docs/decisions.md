@@ -449,6 +449,9 @@ the reader adds display-only state the writer never exports — see
 [word-interchange.md](word-interchange.md#layout-adjustments-display-only-never-written).
 Applying Normal, Title, Heading 1–6 or Quote in a Word document applies
 that document's own style (`docx_restyle`), written as `w:pStyle` only.
+Headers and footers are edited in place: the page view's one editing
+control switches onto the story's live document (`page_story_editor`), so
+no command needs a second code path.
 Write keeps one header set and one page layout per document. Word's
 keep-with-next (paragraphs and a table's leading rows) and widow/orphan
 control are laid out as display-only page breaks (`write_pagination`);

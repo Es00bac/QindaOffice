@@ -103,6 +103,17 @@ QString addPicture(QTextDocument *document, QHash<QString, QByteArray> *media, c
     return name;
 }
 
+QTextCharFormat insertPageField(QTextCursor &cursor, bool total)
+{
+    QTextCharFormat plain = cursor.charFormat();
+    plain.clearProperty(kFieldInstruction);
+    QTextCharFormat field = plain;
+    field.setProperty(kFieldInstruction, total ? QStringLiteral("NUMPAGES") : QStringLiteral("PAGE"));
+    cursor.insertText(QStringLiteral("1"), field);
+    cursor.setCharFormat(plain);
+    return plain;
+}
+
 int removeSyntheticBreaks(QTextDocument *document)
 {
     int removed = 0;

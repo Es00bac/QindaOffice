@@ -66,6 +66,19 @@ public:
     [[nodiscard]] bool footerIsSimple() const;
     [[nodiscard]] bool differentFirstPage() const { return m_parts.differentFirstPage; }
     void setDifferentFirstPage(bool different);
+    // In-place editing (page_story_editor.h). The slot a (1-based) page
+    // shows, resolved as decoration() resolves it.
+    [[nodiscard]] Docx::HeaderFooterSlot storySlot(int page, bool footer) const;
+    // The live header/footer document the writer saves; with `create`, an
+    // empty one (the body's header font, no margin) for a slot that has none.
+    QTextDocument *storyDocument(bool footer, Docx::HeaderFooterSlot slot, bool create);
+    // A header or footer was edited in place: re-lay the page out (a taller
+    // header moves the body, Word's rule) and mark the document changed.
+    void storyEdited();
+    // Where the body starts and ends on a page (document px): the margins
+    // the layout applied, header and footer push included.
+    [[nodiscard]] qreal bodyTop() const { return m_bodyTop; }
+    [[nodiscard]] qreal bodyBottom() const { return m_bodyBottom; }
 
     // ---- footnotes (write_footnotes.h): texts keyed by the marker's id ----------------
     [[nodiscard]] const QHash<QString, QString> &footnotes() const { return m_parts.footnotes; }
@@ -93,6 +106,9 @@ signals:
     // loaded with a non-default page size kept rendering (and clipping at)
     // the old size.
     void pageSetupChanged();
+    // Header/footer documents are about to be replaced or dropped (Page
+    // Setup, a load): an editor holding one must let go first.
+    void storiesAboutToBeReplaced();
 
 private:
     void applyLayout();
@@ -110,6 +126,8 @@ private:
     Docx::WordParts m_parts;
     // Word's keep-with-next / widow rules as display-only page breaks.
     std::unique_ptr<KeepRules> m_keepRules;
+    qreal m_bodyTop = 96;
+    qreal m_bodyBottom = 96;
 };
 
 } // namespace QindaOffice::Apps::Write
