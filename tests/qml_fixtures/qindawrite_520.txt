@@ -53,6 +53,13 @@ QQuickRootItem#WriteWindow
               Switch#assistantEditMode [hidden]
               TextField#assistantPrompt [hidden]
                 IconButton#fieldClear [hidden]
+          QQuickItem#dockPanelContent_comments [hidden]
+            CommentsPanel#commentsPanel [hidden]
+              Button#commentAdd [hidden]
+              Caption#emptyText [hidden]
+              Overline#emptyTitle [hidden]
+              Scroll#commentsScroll [hidden]
+              TextArea#commentNewText [hidden]
   QQuickItem#appFooter
     Flex#appFindBar
       FindBar#findBar [hidden]

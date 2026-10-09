@@ -98,6 +98,8 @@ void BodyReader::readBlocks(const XmlElement &container, QTextCursor &cursor, Co
             if (!name.isEmpty() && name != u"_GoBack") {
                 state.pendingAnchors.append(name);
             }
+        } else if (e->ns == kW && (e->name == u"commentRangeStart" || e->name == u"commentRangeEnd")) {
+            commentRange(*e); // a comment can span paragraphs
         } else if (e->ns == kW && e->name == u"sectPr") {
             m_sections.append(e);
         } else if (e->ns == kM && e->name == u"oMathPara") {
@@ -135,7 +137,9 @@ void BodyReader::finishParagraph(ContainerState &state, bool keepAfter)
     }
     QTextCursor c(state.pending);
     QTextBlockFormat f = state.pending.blockFormat();
-    f.setBottomMargin(keepAfter ? state.pendingAfter : 0.0);
+    // Auto spacing ends at a table cell's edge (HTML: a cell's last block).
+    const bool cellEdge = state.cell != nullptr && state.previousAutoAfter;
+    f.setBottomMargin(keepAfter && !cellEdge ? state.pendingAfter : 0.0);
     f.setProperty(kParagraphSnapshot, blockSnapshot(f));
     c.setBlockFormat(f);
     state.hasPending = false;
@@ -187,11 +191,24 @@ void BodyReader::readParagraph(const XmlElement &p, QTextCursor &cursor, Contain
     }
     const ParagraphSpacing spacing = spacingOf(effective.get());
     const bool sameStyle = !state.first && state.previousStyle == styleId;
-    qreal gap = (spacing.contextual && sameStyle) ? 0.0 : spacing.before;
+    // AGENT-NOTE: Word's HTML auto spacing (14 pt, D-068): no space between
+    // the items of one list, none before a table cell's first paragraph, and
+    // two adjacent auto spaces collapse to the larger as in HTML (Word's
+    // default; LibreOffice lays it out the same). Lists of auto-spaced items
+    // had grown documents by half.
+    const int listId = level != nullptr ? numId : 0;
+    const bool sameList = listId > 0 && state.previousNumId == listId;
+    qreal before = (spacing.contextual && sameStyle) ? 0.0 : spacing.before;
+    if (spacing.autoBefore && (sameList || (state.first && state.cell != nullptr))) {
+        before = 0;
+    }
+    qreal gap = before;
     if (state.hasPending) {
-        if (!(state.previousContextual && sameStyle)) {
-            gap += state.pendingAfter;
+        qreal after = (state.previousContextual && sameStyle) ? 0.0 : state.pendingAfter;
+        if (state.previousAutoAfter && sameList) {
+            after = 0;
         }
+        gap = spacing.autoBefore && state.previousAutoAfter ? qMax(before, after) : before + after;
         finishParagraph(state, false);
     }
     gap += state.collapsedExtra; // an empty paragraph Qt hid beside a table
@@ -268,6 +285,8 @@ void BodyReader::readParagraph(const XmlElement &p, QTextCursor &cursor, Contain
     state.hasPending = true;
     state.previousStyle = styleId;
     state.previousContextual = spacing.contextual;
+    state.previousAutoAfter = spacing.autoAfter;
+    state.previousNumId = listId;
     state.first = false;
 }
 

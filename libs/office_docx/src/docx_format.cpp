@@ -191,12 +191,10 @@ ParagraphSpacing spacingOf(const XmlElement *pPr)
     const XmlElement *spacing = pPr != nullptr ? pPr->child(kW, u"spacing") : nullptr;
     if (spacing != nullptr) {
         // Auto spacing is Word's HTML compatibility value: 14 pt.
-        out.before = Units::parseOnOff(wAttr(spacing, u"beforeAutospacing"), false)
-            ? Units::ptToPx(14)
-            : Units::twipsToPx(twipsAttr(spacing, u"before"));
-        out.after = Units::parseOnOff(wAttr(spacing, u"afterAutospacing"), false)
-            ? Units::ptToPx(14)
-            : Units::twipsToPx(twipsAttr(spacing, u"after"));
+        out.autoBefore = Units::parseOnOff(wAttr(spacing, u"beforeAutospacing"), false);
+        out.autoAfter = Units::parseOnOff(wAttr(spacing, u"afterAutospacing"), false);
+        out.before = out.autoBefore ? Units::ptToPx(14) : Units::twipsToPx(twipsAttr(spacing, u"before"));
+        out.after = out.autoAfter ? Units::ptToPx(14) : Units::twipsToPx(twipsAttr(spacing, u"after"));
     }
     out.contextual = onOff(pPr, u"contextualSpacing");
     return out;

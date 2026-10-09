@@ -89,6 +89,12 @@ QtObject {
                 { action: "reviewRejectChangeAction", iconName: "x" },
                 { action: "reviewAcceptAllAction", iconName: "check-check" },
                 { action: "reviewRejectAllAction", iconName: "circle-x" }] },
+            { id: "comments", label: qsTr("Comments"), items: [
+                { action: "writeNewCommentAction", size: "large", iconName: "message-square-plus" },
+                { action: "writeDeleteCommentAction", iconName: "message-square-x" },
+                { action: "writePreviousCommentAction", iconName: "chevron-up" },
+                { action: "writeNextCommentAction", iconName: "chevron-down" },
+                { action: "writeShowCommentsAction", iconName: "message-square" }] },
             StandardRibbon.assistantGroup(aiIds)
         ] },
         StandardRibbon.viewTab([]),

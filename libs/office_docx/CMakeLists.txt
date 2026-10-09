@@ -24,10 +24,12 @@ add_library(office_docx STATIC
     src/docx_text.cpp
     src/docx_restyle.cpp
     src/docx_metrics.cpp
+    src/docx_comments.cpp
     src/docx_text.h
     src/docx_writer.cpp
     src/docx_writer.h
     src/docx_writer_body.cpp
+    src/docx_writer_picture.cpp
     src/docx_writer_format.cpp
     src/docx_writer_numbering.cpp
     src/docx_writer_p.h

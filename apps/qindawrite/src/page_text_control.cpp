@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "page_text_control.h"
 
+#include "docx_properties.h"
+
 #include <QAbstractTextDocumentLayout>
 #include <QClipboard>
 #include <QDateTime>
@@ -20,6 +22,16 @@
 namespace QindaOffice::Apps::Write {
 
 namespace {
+
+// The format typing continues in: the cursor's, without a comment mark's
+// identity — a mark is one character, and text typed after it is text
+// (docx_comments.h).
+QTextCharFormat typingFormat(const QTextCursor &cursor)
+{
+    QTextCharFormat format = cursor.charFormat();
+    format.clearProperty(Docx::kCommentReference);
+    return format;
+}
 
 // AGENT-NOTE (D-004): a page is paper. These are the colours the print
 // path and the PDF use, pinned here so no desktop theme can turn the page
@@ -45,7 +57,7 @@ PageTextControl::PageTextControl(QTextDocument *document, QObject *parent)
     , m_palette(makePaperPalette())
     , m_blink(new QTimer(this))
 {
-    m_charFormat = m_cursor.charFormat();
+    m_charFormat = typingFormat(m_cursor);
     m_blink->setInterval(QGuiApplication::styleHints()->cursorFlashTime() / 2 > 0
                              ? QGuiApplication::styleHints()->cursorFlashTime() / 2
                              : 500);
@@ -66,7 +78,7 @@ void PageTextControl::bindDocument()
         // An edit made elsewhere (a controller, the assistant, a load)
         // repaints and re-reads the format under the caret.
         if (!m_formatPinned) {
-            m_charFormat = m_cursor.charFormat();
+            m_charFormat = typingFormat(m_cursor);
         }
         emit updateRequest();
     });
@@ -111,7 +123,7 @@ void PageTextControl::setCurrentCharFormat(const QTextCharFormat &format)
 void PageTextControl::cursorSettled(bool ensureVisible)
 {
     if (!m_formatPinned) {
-        m_charFormat = m_cursor.charFormat();
+        m_charFormat = typingFormat(m_cursor);
     }
     const bool selected = m_cursor.hasSelection();
     if (selected != m_hadSelection) {

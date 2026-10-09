@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "docx_reader.h"
 
+#include "docx_comments.h"
 #include "docx_format.h"
 #include "docx_metrics.h"
 #include "docx_properties.h"
@@ -292,6 +293,14 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
     if (!env.approximations.isEmpty()) {
         parts->warnings.append(QStringLiteral("Shown approximately and kept unchanged on save: %1.")
                                    .arg(describe(env.approximations)));
+    }
+    // Comments (docx_comments.h): the ones the body marks are the set an
+    // unchanged save copies back.
+    parts->comments = readComments(*package, main);
+    for (const CommentSpan &span : commentSpans(*body)) {
+        if (span.reference >= 0) {
+            parts->sourceCommentIds.append(span.id);
+        }
     }
     // Word's line height (docx_metrics.h): display only, before undo is on.
     applyWordLineMetrics(body);

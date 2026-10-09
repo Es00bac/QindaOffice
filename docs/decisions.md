@@ -802,6 +802,15 @@ keep-with-next (paragraphs and a table's leading rows) and widow/orphan
 control are laid out as display-only page breaks (`write_pagination`);
 pagination still differs where the document's fonts are missing — Word sets
 line height from the requested font's metrics, Qt from the substitute's.
+Paragraphs marked for HTML autospacing get the gap Word computes (14 pt,
+none inside one list or at a cell's edge, adjacent gaps collapsing).
+Comments are modelled (`docx_comments`): a comment's range and reference
+mark are character properties in the text, the comments themselves sit in
+`WordParts::comments`, and Review ▸ Comments adds, replies, edits, resolves
+and deletes them. The comment parts are copied byte for byte until a comment
+changes; a rewrite keeps every unchanged comment's markup and every comment
+Write does not list (one marked in a header, a note or a text box), so no
+reference in the file is left without its comment.
 
 **QindaNote (M65).** *Export as Word Document* writes a page through
 `office_docx` rather than through QindaWrite: the title as Word's Title,

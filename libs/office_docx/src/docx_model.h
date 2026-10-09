@@ -15,6 +15,7 @@
 #include "ooxml_package.h"
 #include "ooxml_properties.h"
 
+#include <QDateTime>
 #include <QHash>
 #include <QMarginsF>
 #include <QSizeF>
@@ -58,6 +59,31 @@ struct HeaderFooter {
     [[nodiscard]] bool isEmpty() const { return !document || document->isEmpty(); }
 };
 
+// A Word comment (docx_comments.h). In the text, its range is the runs whose
+// kCommentIds name it and its reference mark the character carrying
+// kCommentReference; the comment itself lives here.
+struct Comment {
+    QString id;        // w:id, decimal
+    QString author;
+    QString initials;
+    QDateTime date;
+    QString text;      // its paragraphs, joined with '\n'
+    QString parentId;  // the comment this one replies to, or empty
+    bool done = false; // resolved
+    // As read: the w:comment markup and the values above at that time; an
+    // unchanged comment is written back from its markup.
+    QString sourceXml;
+    QString sourceText;
+    QString sourceParentId;
+    bool sourceDone = false;
+    QString paraId; // w14:paraId of its last paragraph (commentsExtended's key)
+
+    [[nodiscard]] bool isUnchanged() const
+    {
+        return !sourceXml.isEmpty() && text == sourceText && parentId == sourceParentId && done == sourceDone;
+    }
+};
+
 struct WordParts {
     PageLayout layout;
     std::array<HeaderFooter, kHeaderFooterSlots> headers;
@@ -71,6 +97,11 @@ struct WordParts {
     QHash<QString, QString> footnotes;
     QHash<QString, QString> footnoteXml;
     QHash<QString, QString> footnoteImportedText;
+
+    // Comments in reading order; the set read from the source is copied
+    // back unchanged unless one was added, edited, resolved or removed.
+    QList<Comment> comments;
+    QStringList sourceCommentIds;
 
     // Original bytes of every picture, keyed by its resource name
     // ("qwmedia:image3.png"); the QTextDocument holds decoded images.

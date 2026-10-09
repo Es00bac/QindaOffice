@@ -114,6 +114,16 @@ OfficeWindow {
             }
         }
         Tk.DockPanel {
+            panelId: "comments"
+            title: qsTr("Comments")
+            iconName: "message-square"
+            zone: "right"
+            mode: "hidden"
+            extent: 300
+            minWidth: 220
+            CommentsPanel { id: commentsPanel; objectName: "commentsPanel"; comments: window.write.comments }
+        }
+        Tk.DockPanel {
             panelId: "assistant"
             title: qsTr("Assistant")
             iconName: "sparkles"
@@ -126,6 +136,7 @@ OfficeWindow {
         onHiddenPanelsChanged: {
             const hidden = dock.hiddenPanels.map(function(e) { return typeof e === "string" ? e : e.panelId })
             window.host.actions.setChecked("aiAssistantAction", !hidden.includes("assistant"))
+            window.host.actions.setChecked("writeShowCommentsAction", !hidden.includes("comments"))
         }
     }
 
@@ -163,6 +174,12 @@ OfficeWindow {
         }
         function onFootnoteRequested(id, text) { footnoteDialog.noteId = id; footnoteDialog.text = text; footnoteDialog.open() }
         function onPageSetupRequested() { pageSetup.load(window.write.pageSetup); pageSetup.open() }
+        function onCommentsPaneToggleRequested(visible, compose) {
+            const hidden = dock.hiddenPanels.map(function(e) { return typeof e === "string" ? e : e.panelId }).includes("comments")
+            if (visible && hidden) dock.showPanel("comments")
+            else if (!visible && !hidden) dock.hidePanel("comments")
+            if (visible && compose) commentsPanel.compose()
+        }
         function onPictureDialogRequested() {
             const info = window.write.pictureInfo()
             if (info.width !== undefined) { pictureDialog.load(info); pictureDialog.open() }

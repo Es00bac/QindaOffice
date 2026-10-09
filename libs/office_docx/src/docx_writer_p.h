@@ -74,6 +74,8 @@ public:
     BodyWriter(WriteEnv &env, const QTextDocument *document, QString part);
 
     void writeFrame(const QTextFrame *frame, Ooxml::XmlElement &container);
+    // Ends the comment ranges still open at the story's end (docx_comments.h).
+    void closeComments(Ooxml::XmlElement &container);
 
 private:
     void writeBlock(const QTextBlock &block, Ooxml::XmlElement &container, bool requireParagraph);
@@ -86,9 +88,14 @@ private:
     Ooxml::XmlElementPtr paragraphProperties(const QTextBlock &block);
     Ooxml::XmlElementPtr runProperties(const QTextCharFormat &format);
 
+    // Opens and closes w:commentRangeStart/End as runs enter and leave
+    // comments (kCommentIds), across paragraphs.
+    void syncComments(Ooxml::XmlElement &parent, const QTextCharFormat &format);
+
     WriteEnv &m_env;
     const QTextDocument *m_document;
     QString m_part;
+    QStringList m_openComments;
 };
 
 // The schema order of w:pPr, w:rPr, w:tblPr, w:tcPr, w:sectPr children

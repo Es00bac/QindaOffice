@@ -592,6 +592,29 @@ extents patched. `tst_write_ui` adds the Picture command (enabled only with
 a picture selected, the dialog opens, `applyPicture` resizes). Looked at:
 the dialog over a selected picture (handles, no selection tint).
 
+**Comments:** `tst_docx_comments` 8/8 (XSD-validated on qinda) — ranges
+over two paragraphs, reference marks, a reply and its resolved state read;
+an untouched set copied byte for byte; an edited, resolved or new comment
+written from the model; a comment whose text and mark were deleted dropped;
+a comment marked only in the header kept through a rewrite.
+`tst_write_comments` 3/3 through the real window — a Word document's
+comment listed with its author and quoted text, Show Comments opens the
+pane with its card, New Comment enabled only with a selection, a new
+comment, a reply, a resolve and an edit land in the saved `.docx` (three
+comments, the reply's parent, the resolved flag), Delete removes the thread
+and keeps the text. The fixtures gain the hidden Comments dock (+7 rows
+each) and `tst_write_menu_export` resolves the five new Review ids. Looked
+at: the pane beside the page (the Word comment's card with its quote, the
+new card, the commented text shaded). Desktop check (owner): open a
+reviewed Word document, reply to a comment and resolve another, save, open
+in Word — the thread, the reply and the resolved state as written.
+
+**HTML autospacing:** `tst_docx_read` `autoSpacingFollowsHtmlRules` — 14 pt
+between auto-spaced paragraphs (the larger of two, not the sum), none
+between items of one list, none at a table cell's top and bottom. The
+owner's worst-paginated document, a Word file converted from HTML (Word: 25
+pages), went from 37 pages in Write to 24.
+
 **Line metrics:** `tst_docx_read` `linesFollowWordsFontMetrics` — a laid-out
 line pitch equals Word's single line for the drawn font × the paragraph's
 own multiple, and the saved paragraph carries no spacing it did not have.

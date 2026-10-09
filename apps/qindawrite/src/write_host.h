@@ -39,6 +39,7 @@ class PageTextControl;
 class SpellChecker;
 class TableController;
 class WriteReviewActions;
+class WriteComments;
 class WriteRevisions;
 class WriteTypography;
 
@@ -60,6 +61,8 @@ class WriteHost : public Quick::DocumentHost {
     Q_PROPERTY(QVariantMap pageSetup READ pageSetup NOTIFY pageSetupChanged)
     Q_PROPERTY(QUrl preferencesPageUrl READ preferencesPage WRITE setPreferencesPage NOTIFY preferencesPageChanged)
     Q_PROPERTY(QindaOffice::Ai::AssistantController *assistant READ assistant CONSTANT)
+    // Review comments for the Comments pane (write_comments.h).
+    Q_PROPERTY(QObject *comments READ commentsObject CONSTANT)
 public:
     WriteHost();
     ~WriteHost() override;
@@ -150,6 +153,10 @@ signals:
     void pageSetupRequested();
     // Format > Picture, or a double-click on a picture.
     void pictureDialogRequested();
+    // New Comment / Show Comments: the window shows or hides the Comments
+    // pane (`compose`: shown with the new-comment field focused); it acts
+    // only when the pane's state differs, so the checked sync cannot loop.
+    void commentsPaneToggleRequested(bool visible, bool compose);
     void exportPdfRequested(const QString &suggestedPath);
     void templateConsentRequested(const QString &path);
     void proposalRequested(const QString &original, const QString &proposal);
@@ -170,6 +177,8 @@ private:
     // Edit Header / Edit Footer / Page Number / Number of Pages / Close
     // Header and Footer (page_story_editor.h); ids writeEditHeaderAction …
     [[nodiscard]] QList<Quick::MenuNode> headerFooterMenuItems();
+    [[nodiscard]] QList<Quick::MenuNode> commentMenuItems();
+    [[nodiscard]] QObject *commentsObject() const;
     void insertPageField(bool total);
     void syncStoryActions();
     void createSpellingEntries();
@@ -188,6 +197,7 @@ private:
     TableController *m_tables = nullptr;
     WriteTypography *m_typography = nullptr;
     WriteRevisions *m_revisions = nullptr;
+    WriteComments *m_comments = nullptr;
     WriteReviewActions *m_review = nullptr;
     SpellChecker *m_spell = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;

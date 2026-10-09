@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_host.h"
+#include "write_comments.h"
 #include "docx_restyle.h"
 
 #include "format_controller.h"
@@ -48,6 +49,8 @@ WriteHost::WriteHost()
     m_typography = new WriteTypography(m_control, m_document, actions(), this);
     m_revisions = new WriteRevisions(m_control, m_document, this);
     m_review = new WriteReviewActions(m_control, m_document, m_revisions, actions(), this);
+    m_comments = new WriteComments(m_document, m_control, [this] { return m_revisions->author(); }, this);
+    connect(m_comments, &WriteComments::message, this, [this](const QString &text) { showStatusMessage(text); });
     connect(m_format, &FormatController::textColorRequested, this, &WriteHost::textColorRequested);
     connect(m_format, &FormatController::tableDialogRequested, this, &WriteHost::tableDialogRequested);
     connect(m_format, &FormatController::columnsDialogRequested, this, &WriteHost::columnsDialogRequested);

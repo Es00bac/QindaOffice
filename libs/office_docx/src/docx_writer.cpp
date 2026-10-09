@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "docx_writer.h"
+#include "docx_comments.h"
 
 #include "docx_properties.h"
 #include "docx_writer_p.h"
@@ -269,7 +270,9 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
     // The body.
     XmlElement document(kW, QStringLiteral("document"));
     XmlElement &bodyElement = document.appendElement(kW, QStringLiteral("body"));
-    detail::BodyWriter(env, &body, kMain).writeFrame(body.rootFrame(), bodyElement);
+    detail::BodyWriter bodyWriter(env, &body, kMain);
+    bodyWriter.writeFrame(body.rootFrame(), bodyElement);
+    bodyWriter.closeComments(bodyElement);
     XmlElementPtr sectPr = Ooxml::parseFragment(parts.sourceSectionXml);
     if (!sectPr) {
         sectPr = std::make_shared<XmlElement>(kW, QStringLiteral("sectPr"));
@@ -324,6 +327,42 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
         wroteFootnotes = true;
     }
 
+    // Comments (docx_comments.h): while none changed, the source's comment
+    // parts are carried below byte for byte; otherwise they are written from
+    // the model and the source's are left behind.
+    const bool rewriteComments = commentsChanged(parts, body);
+    if (rewriteComments) {
+        QList<Comment> comments = parts.comments;
+        for (Comment &c : comments) {
+            if (c.paraId.isEmpty() && !c.isUnchanged()) {
+                c.paraId = newParaId();
+            }
+        }
+        XmlElementPtr written = commentsPart(comments, parts.sourceCommentIds, body);
+        if (!written->children.isEmpty()) {
+            // Kept comments may hold links or pictures relative to the source part.
+            if (const auto rel = source && env.copier
+                    ? source->firstOfType(env.sourceMain, QString::fromUtf16(Ooxml::RelType::Comments))
+                    : std::nullopt) {
+                env.copier->rewrite(*written, source->targetPart(env.sourceMain, *rel), QStringLiteral("word/comments.xml"));
+            }
+            markIgnorable(*written);
+            env.writer.addXmlPart(QStringLiteral("word/comments.xml"), *written, type("comments+xml"));
+            env.writer.addRelationship(kMain, QString::fromUtf16(Ooxml::RelType::Comments),
+                                       QStringLiteral("word/comments.xml"));
+            XmlElementPtr extended = commentsExtendedPart(comments, parts.sourceCommentIds, body);
+            if (!extended->children.isEmpty()) {
+                env.writer.addXmlPart(QStringLiteral("word/commentsExtended.xml"), *extended,
+                                      type("commentsExtended+xml"));
+                env.writer.addRelationship(
+                    kMain, QStringLiteral("http://schemas.microsoft.com/office/2011/relationships/commentsExtended"),
+                    QStringLiteral("word/commentsExtended.xml"));
+            }
+            env.usedStyles.insert(QStringLiteral("CommentText"));
+            env.usedStyles.insert(QStringLiteral("CommentReference"));
+        }
+    }
+
     // Parts carried over verbatim from the source document.
     bool carriedEndnotes = false;
     if (source && env.copier) {
@@ -340,9 +379,17 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
             QStringLiteral("http://schemas.microsoft.com/office/2018/08/relationships/commentsExtensible")};
         static const QString kVba = QStringLiteral("http://schemas.microsoft.com/office/2006/relationships/vbaProject");
         const bool macros = options.kind == WriteOptions::MacroDocument || options.kind == WriteOptions::MacroTemplate;
+        static const QStringList kCommentParts{
+            QString::fromUtf16(Ooxml::RelType::Comments),
+            QStringLiteral("http://schemas.microsoft.com/office/2011/relationships/commentsExtended"),
+            QStringLiteral("http://schemas.microsoft.com/office/2016/09/relationships/commentsIds"),
+            QStringLiteral("http://schemas.microsoft.com/office/2018/08/relationships/commentsExtensible")};
         for (const Ooxml::Relationship &rel : source->relationships(env.sourceMain)) {
             if (rel.external || (!kCarry.contains(rel.type) && !(macros && rel.type == kVba))) {
                 continue;
+            }
+            if (rewriteComments && kCommentParts.contains(rel.type)) {
+                continue; // written from the model above
             }
             const QString target = source->targetPart(env.sourceMain, rel);
             if (target.isEmpty()) {

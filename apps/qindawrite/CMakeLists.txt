@@ -8,6 +8,8 @@ set(qindawrite_qml
     qml/HyperlinkDialog.qml
     qml/PageSetupDialog.qml
     qml/PictureDialog.qml
+    qml/CommentsPanel.qml
+    qml/CommentEntry.qml
     qml/SymbolDialog.qml
     qml/TableDialog.qml
     qml/WritePage.qml
@@ -45,6 +47,7 @@ qt_add_qml_module(qindawrite_app
         src/write_actions.cpp src/write_actions.h
         src/write_document.cpp src/write_document.h
         src/write_document_io.cpp
+        src/write_comments.cpp src/write_comments.h
         src/write_footnotes.cpp src/write_footnotes.h
         src/write_host.cpp src/write_host.h
         src/write_host_ai.cpp

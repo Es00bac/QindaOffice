@@ -58,6 +58,8 @@ public:
         qreal pendingAfter = 0;
         QString previousStyle;
         bool previousContextual = false;
+        bool previousAutoAfter = false; // its space after is Word's auto spacing
+        int previousNumId = 0;          // the list it is an item of, or 0
         bool first = true;
         const CellContext *cell = nullptr;
         struct Field {
@@ -132,6 +134,10 @@ private:
     QTextDocument *m_document;
     QString m_part;
     QList<const Ooxml::XmlElement *> m_sections;
+    // Comments whose w:commentRangeStart was read and whose end was not:
+    // the runs in between carry their ids (kCommentIds, docx_comments.h).
+    QStringList m_openComments;
+    void commentRange(const Ooxml::XmlElement &marker);
     int m_footnoteNumber = 0;
 
     // Word keeps one counter set per abstract numbering definition (per

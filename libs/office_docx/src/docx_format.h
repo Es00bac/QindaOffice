@@ -28,6 +28,11 @@ struct ParagraphSpacing {
     qreal before = 0; // px
     qreal after = 0;  // px
     bool contextual = false;
+    // Word's HTML auto spacing (w:beforeAutospacing / w:afterAutospacing):
+    // 14 pt, with the HTML rules the body reader applies (none between the
+    // items of one list or at a table cell's edge; adjacent ones collapse).
+    bool autoBefore = false;
+    bool autoAfter = false;
 };
 
 [[nodiscard]] ParagraphSpacing spacingOf(const Ooxml::XmlElement *pPr);

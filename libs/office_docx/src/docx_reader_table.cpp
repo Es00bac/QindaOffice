@@ -413,6 +413,8 @@ void BodyReader::readTable(const XmlElement &tbl, QTextCursor &cursor, Container
     state.first = false;
     state.previousStyle.clear();
     state.previousContextual = false;
+    state.previousAutoAfter = false;
+    state.previousNumId = 0;
 }
 
 } // namespace QindaOffice::Docx::detail

@@ -74,6 +74,10 @@ inline constexpr int kLineSpacingOwn = kDocxBase + 25; // QVariantList{int type,
 // A picture's alternative text (wp:docPr/@descr), shown to screen readers
 // and kept with the picture; edited in QindaWrite's Picture dialog.
 inline constexpr int kPictureAltText = kDocxBase + 26; // QString
+// Word comments (docx_comments.h): the ids of the comments whose range
+// covers a run, and the comment a reference mark (U+200B) stands for.
+inline constexpr int kCommentIds = kDocxBase + 27;       // QStringList
+inline constexpr int kCommentReference = kDocxBase + 28; // QString
 
 // Char formats (QTextImageFormat included).
 inline constexpr int kRunStyleId = kDocxBase + 10;      // QString w:rStyle value

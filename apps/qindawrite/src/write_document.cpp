@@ -34,6 +34,7 @@ WriteDocument::WriteDocument()
             [this](bool modified) { setDirty(modified); });
     // The recovery journal still wants every real content edit; a
     // format-only pass reports zero characters added and removed.
+    connect(m_text.get(), &QTextDocument::contentsChange, this, [this] { m_commentSpansValid = false; });
     connect(m_text.get(), &QTextDocument::contentsChange, this,
             [this](int, int charsRemoved, int charsAdded) {
                 if (charsRemoved != 0 || charsAdded != 0) {
@@ -249,6 +250,31 @@ PageDecoration WriteDocument::decoration() const
     return out;
 }
 
+void WriteDocument::setComments(QList<Docx::Comment> comments)
+{
+    m_parts.comments = std::move(comments);
+    m_text->setModified(true);
+    setDirty(true);
+    emit commentsChanged();
+}
+
+const QList<Docx::CommentSpan> &WriteDocument::commentSpans() const
+{
+    if (!m_commentSpansValid) {
+        m_commentSpans = m_parts.comments.isEmpty() ? QList<Docx::CommentSpan>() : Docx::commentSpans(*m_text);
+        m_commentSpansValid = true;
+    }
+    return m_commentSpans;
+}
+
+void WriteDocument::setActiveComment(const QString &id)
+{
+    if (m_activeComment != id) {
+        m_activeComment = id;
+        emit activeCommentChanged();
+    }
+}
+
 Docx::HeaderFooterSlot WriteDocument::storySlot(int page, bool footer) const
 {
     const auto &stories = footer ? m_parts.footers : m_parts.headers;
@@ -286,6 +312,9 @@ void WriteDocument::adoptParts(Docx::WordParts parts)
 {
     emit storiesAboutToBeReplaced();
     m_parts = std::move(parts);
+    m_commentSpansValid = false;
+    m_activeComment.clear();
+    emit commentsChanged();
     applyLayout();
     // Word row heights need the final column widths: after the layout.
     Docx::applyRowHeights(m_text.get());

@@ -221,13 +221,15 @@ void BodyReader::readInline(const XmlElement &parent, QTextCursor &cursor, Inlin
             }
         } else if (n == u"smartTag" || n == u"customXml" || n == u"dir" || n == u"bdo") {
             readInline(*e, cursor, inl, state);
+        } else if (n == u"commentRangeStart" || n == u"commentRangeEnd") {
+            commentRange(*e);
         } else if (n == u"bookmarkStart") {
             const QString name = wAttr(e, u"name");
             if (!name.isEmpty() && name != u"_GoBack") {
                 state.pendingAnchors.append(name);
             }
         }
-        // pPr, proofErr, bookmarkEnd, permStart/End, comment ranges: nothing to show.
+        // pPr, proofErr, bookmarkEnd, permStart/End: nothing to show.
     }
 }
 
@@ -307,8 +309,11 @@ void BodyReader::readRun(const XmlElement &r, QTextCursor &cursor, InlineState &
             preservedText(cursor, r, QStringLiteral("†"), cf, inl, state);
             m_env.approximations[QStringLiteral("endnote")] += 1;
         } else if (n == u"commentReference") {
-            preservedText(cursor, r, QString(QChar(0x200B)), cf, inl, state);
-            m_env.approximations[QStringLiteral("comment")] += 1;
+            // The comment's mark (docx_comments.h): a zero-width space the
+            // writer turns back into this run.
+            QTextCharFormat mark = cf;
+            mark.setProperty(kCommentReference, wAttr(e, u"id"));
+            insertText(cursor, QString(QChar(0x200B)), mark, inl, state);
         } else if (n == u"ruby") {
             if (const XmlElement *base = e->child(kW, u"rubyBase")) {
                 readInline(*base, cursor, inl, state);
@@ -339,6 +344,9 @@ void BodyReader::insertText(QTextCursor &cursor, const QString &text, QTextCharF
     const QString field = currentField(inl, state);
     if (!field.isEmpty()) {
         format.setProperty(kFieldInstruction, field);
+    }
+    if (!m_openComments.isEmpty() && !format.hasProperty(kCommentReference)) {
+        format.setProperty(kCommentIds, m_openComments);
     }
     // Tracked changes look the way QindaWrite shows its own
     // (write_revisions.cpp): set before the snapshot, so the marks never
@@ -401,6 +409,18 @@ void BodyReader::footnoteMarker(QTextCursor &cursor, const QString &id, QTextCha
     parts.footnotes.insert(noteId, text);
     parts.footnoteImportedText.insert(noteId, text);
     insertText(cursor, QString::number(++m_footnoteNumber), format, inl, state);
+}
+
+void BodyReader::commentRange(const XmlElement &marker)
+{
+    const QString id = wAttr(&marker, u"id");
+    if (marker.name == u"commentRangeStart") {
+        if (!id.isEmpty() && !m_openComments.contains(id)) {
+            m_openComments.append(id);
+        }
+    } else {
+        m_openComments.removeAll(id);
+    }
 }
 
 void BodyReader::preservedText(QTextCursor &cursor, const XmlElement &element, const QString &display,

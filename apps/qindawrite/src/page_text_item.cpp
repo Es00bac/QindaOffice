@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "page_text_item.h"
 
+#include "docx_comments.h"
 #include "docx_text.h"
 
 #include "page_picture_tool.h"
@@ -75,6 +76,8 @@ void PageTextItem::attach(WriteDocument *document, PageTextControl *control)
         updatePageMetrics();
     });
     connect(document, &WriteDocument::contentChanged, this, [this] { update(); });
+    connect(document, &WriteDocument::commentsChanged, this, [this] { update(); });
+    connect(document, &WriteDocument::activeCommentChanged, this, [this] { update(); });
     updatePageMetrics();
     emit attachedChanged();
 }
@@ -234,6 +237,11 @@ void PageTextItem::paintPage(QPainter *painter, int index, const QRectF &clip)
         context.palette = m_control->paperPalette();
         m_document->textDocument()->documentLayout()->draw(painter, context);
     } else {
+        // Comment bands under the text (display only, docx_comments.h).
+        if (!m_document->comments().isEmpty()) {
+            Docx::drawCommentRanges(painter, *m_document->textDocument(), m_document->commentSpans(), pageArea,
+                                    m_document->activeComment());
+        }
         m_control->drawContents(painter, pageArea);
     }
     // Word paragraph borders: Qt's layout draws none (docx_text.h).

@@ -44,6 +44,23 @@ rest and `WriteDocument` owns both:
   that would replace a richer header.
 - **Footnotes** — Write's markers and note texts; an unedited note keeps
   Word's own markup.
+- **Comments** — `WordParts::comments` (`docx_comments.h`): author,
+  initials, date, text, the comment a reply answers and the resolved state
+  (Word's `commentsExtended`). In the text a comment is its range (each run
+  carries the comment's id, `kCommentIds`) and its reference mark, a
+  zero-width character (`kCommentReference`). Review ▸ Comments
+  (`write_comments.h`, the Comments pane) lists the body's comments in text
+  order with their replies: New Comment (Ctrl+Alt+M) on the selection,
+  Reply, Edit, Resolve / Reopen, Delete (the thread and its replies; the
+  text stays), Previous / Next; a click on a card selects its text, and
+  commented text is shaded (darker for the active comment; display only).
+  New comments carry the track-changes author (the login name). While no
+  comment changed, the source's comment parts are copied byte for byte;
+  otherwise `comments.xml` and `commentsExtended.xml` are written anew —
+  unchanged comments from their own markup, comments marked only in a
+  header, a note or a kept text box kept as they were — and Word's
+  `commentsIds` / `commentsExtensible` caches are left out (Word rebuilds
+  them).
 - **Pictures** — the original bytes (`WordParts::media`, resource names
   `qwmedia:…`) travel with the document: Insert ▸ Image stores the file's
   bytes, not its path. A click selects a picture and shows Word's eight
@@ -54,8 +71,9 @@ rest and `WriteDocument` owns both:
   (`wp:docPr/@descr`). A Word picture keeps its own drawing when resized —
   crop, effects, name and anchoring — with only its extents patched.
 - **The source package** — what Write does not model is carried from it on
-  save: styles, numbering definitions, theme, settings, fonts, comments,
-  endnotes, custom XML, glossary, people, VBA (macro kinds only).
+  save: styles, numbering definitions, theme, settings, fonts, endnotes,
+  custom XML, glossary, people, VBA (macro kinds only), and the comment
+  parts while no comment changed.
 
 ## Styles in a Word document
 
@@ -101,7 +119,7 @@ struck deletions) and are written back as `w:ins` / `w:del`.
 
 Kept verbatim and written back unchanged; the status bar says so on open:
 text boxes and shapes (a box with their text), charts, SmartArt, OLE
-objects, ink, equations (shown as their linear text), comment and endnote
+objects, ink, equations (shown as their linear text), endnote
 references. Floating pictures are shown in line but keep their anchoring.
 
 ### Layout adjustments (display only, never written)
@@ -117,6 +135,8 @@ closed with state the writer ignores (D-068):
 | keeps a row's `trHeight` minimum | has no row heights | the row's first cell is padded |
 | draws paragraph borders | has none | `drawParagraphBorders` paints them |
 | pushes the body below a tall header | overlaps | the root frame margin grows |
+| shows no header on a header-less cover section | one header set | different first page with empty slots |
+| spaces paragraphs marked for HTML autospacing (`w:beforeAutospacing` / `w:afterAutospacing`) by HTML's rules: 14 pt, none between items of one list or at a table cell's edges, adjacent spaces collapsing to the larger | uses the spacing values stored beside the flag | the reader computes Word's gap and folds it like the first row |
 | keeps a keep-with-next paragraph (headings) on the page of the next one | breaks anywhere | a page break before the run (`write_pagination`) |
 | keeps a table's keep-with-next leading rows together | splits between any rows | a page break before the table |
 | never leaves a paragraph's first line alone at a page bottom (widow/orphan control, on unless the file turns it off) | does | a page break before the paragraph (a two-line one moves whole) |
@@ -126,7 +146,6 @@ The pagination breaks (`Docx::kSyntheticBreak`, which keeps the block's own
 break flags) are laid out again after edits from the first changed
 paragraph on, joined to the user's last undo step so Undo, Redo and the
 modified flag never show them; the `.docx` and HTML writers ignore them.
-| shows no header on a header-less cover section | one header set | different first page with empty slots |
 
 ## Writing (`docx_writer*`)
 
@@ -172,7 +191,10 @@ Session Review panel) and *Open in QindaWrite* write a page through
   the paragraph has three lines or more: a block format cannot break inside
   a paragraph. Keep rules inside a table apply to its leading rows only.
 - Floating pictures, text boxes and shapes are not editable as objects.
-- Comments are kept but not shown; there is no comments pane yet.
+- Comment text is plain in Write: an edited comment is written as plain
+  paragraphs (an untouched one keeps its formatting, links and mentions).
+  Comments marked in headers, footers, notes or text boxes are kept on
+  save but not listed in the pane.
 - Content controls (`w:sdt`) and legacy form fields are read as their
   content and not written back as controls.
 
@@ -182,10 +204,13 @@ Session Review panel) and *Open in QindaWrite* write a page through
 pictures, preservation, layout, headers, notes, links, revisions),
 `tst_docx_write` (new document, unchanged markup, carried parts,
 edited notes and tables — XSD-validated with `QQO_OOXML_SCHEMA_DIR`),
+`tst_docx_comments` (ranges, replies, resolved state; untouched set copied,
+edited / new / deleted comments written, header-only comments kept),
 `tst_docx_corpus` (`QQO_DOCX_CORPUS` lists real documents: read, write,
 re-read, compare; aggregate counts only). `tests/qindawrite/tst_write_docx`
 covers WriteDocument (layout, headers, pictures, recovery, HTML, legacy
-formats through LibreOffice) and renders listed documents to PDF for
+formats through LibreOffice), `tst_write_comments` the Comments pane and
+its commands through the real window and renders listed documents to PDF for
 review (`QQO_WRITE_RENDER_DOCX` + `QQO_GRAB_DIR`). `tests/qindanote/tst_note_word`
 exports a page with every block kind and ink, validates it, reads it back
 (`QQO_GRAB_DIR` keeps the `.docx` for a look in Word or LibreOffice).

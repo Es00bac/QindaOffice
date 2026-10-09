@@ -17,6 +17,7 @@
 #include "style_catalog.h"
 #include "table_actions.h"
 #include "template_loader.h"
+#include "write_comments.h"
 #include "write_review_actions.h"
 #include "write_typography.h"
 
@@ -93,9 +94,11 @@ void WriteHost::insertMenus()
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("insertMenu"), tr("&Insert"), insertItems));
 
+    QList<MenuNode> reviewItems = m_review->reviewMenuItems();
+    reviewItems.append(MenuNode::separator());
+    reviewItems += commentMenuItems();
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
-                           MenuNode::submenu(QStringLiteral("writeReviewMenu"), tr("&Review"),
-                                             m_review->reviewMenuItems()));
+                           MenuNode::submenu(QStringLiteral("writeReviewMenu"), tr("&Review"), reviewItems));
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("writeToolsMenu"), tr("T&ools"),
                                              {MenuNode::action(m_typography->wordCountId())}));
@@ -246,6 +249,44 @@ void WriteHost::syncStoryActions()
     } else {
         showStatusMessage(QString(), 1);
     }
+}
+
+QObject *WriteHost::commentsObject() const
+{
+    return m_comments;
+}
+
+// Review > New Comment, Delete Comment, Previous / Next Comment, Show
+// Comments (write_comments.h); the pane itself is QML (CommentsPanel.qml).
+QList<MenuNode> WriteHost::commentMenuItems()
+{
+    const auto make = [this](const char *id, const QString &text, const char *icon, const QKeySequence &keys = {}) {
+        return actions()->add(QString::fromLatin1(id), text, keys, QString::fromLatin1(icon));
+    };
+    ActionEntry *add = make("writeNewCommentAction", tr("New &Comment"), "message-square-plus",
+                            QKeySequence(QStringLiteral("Ctrl+Alt+M")));
+    ActionEntry *remove = make("writeDeleteCommentAction", tr("&Delete Comment"), "message-square-x");
+    ActionEntry *previous = make("writePreviousCommentAction", tr("Pre&vious Comment"), "chevron-up");
+    ActionEntry *next = make("writeNextCommentAction", tr("Ne&xt Comment"), "chevron-down");
+    ActionEntry *show = make("writeShowCommentsAction", tr("Show Co&mments"), "message-square");
+    show->setCheckable(true);
+    connect(add, &ActionEntry::triggered, this, [this] { emit commentsPaneToggleRequested(true, true); });
+    connect(remove, &ActionEntry::triggered, this, [this] { m_comments->remove(m_comments->activeId()); });
+    connect(previous, &ActionEntry::triggered, m_comments, &WriteComments::previous);
+    connect(next, &ActionEntry::triggered, m_comments, &WriteComments::next);
+    connect(show, &ActionEntry::toggled, this, [this](bool on) { emit commentsPaneToggleRequested(on, false); });
+    const auto sync = [this, add, remove, previous, next] {
+        add->setEnabled(m_comments->canAdd());
+        remove->setEnabled(!m_comments->activeId().isEmpty());
+        previous->setEnabled(m_comments->count() > 0);
+        next->setEnabled(m_comments->count() > 0);
+    };
+    connect(m_comments, &WriteComments::canAddChanged, this, sync);
+    connect(m_comments, &WriteComments::activeChanged, this, sync);
+    connect(m_comments, &WriteComments::changed, this, sync);
+    sync();
+    return {MenuNode::action(add->id()), MenuNode::action(remove->id()), MenuNode::action(previous->id()),
+            MenuNode::action(next->id()), MenuNode::action(show->id())};
 }
 
 QVariantMap WriteHost::pictureInfo() const

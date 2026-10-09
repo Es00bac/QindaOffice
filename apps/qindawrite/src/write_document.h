@@ -14,6 +14,7 @@
 // .doc/.rtf/.odt through LibreOffice to and from .docx (never HTML);
 // .html/.md/.txt as before. Crash recovery snapshots are .docx bytes.
 
+#include "docx_comments.h"
 #include "docx_model.h"
 #include "document.h"
 #include "page_setup_io.h"
@@ -86,6 +87,15 @@ public:
     void setFootnoteText(const QString &id, const QString &text);
     [[nodiscard]] QString footnoteText(const QString &id) const { return m_parts.footnotes.value(id); }
 
+    // ---- comments (write_comments.h) ---------------------------------------------------
+    [[nodiscard]] const QList<Docx::Comment> &comments() const { return m_parts.comments; }
+    void setComments(QList<Docx::Comment> comments);
+    // Where each comment lies in the text, cached until the next edit.
+    [[nodiscard]] const QList<Docx::CommentSpan> &commentSpans() const;
+    // The comment the caret or the pane points at (display only).
+    [[nodiscard]] QString activeComment() const { return m_activeComment; }
+    void setActiveComment(const QString &id);
+
     // ---- pictures ----------------------------------------------------------------------
     // Stores the bytes with the document and returns the resource name the
     // QTextImageFormat must carry; empty when the bytes are not an image.
@@ -109,6 +119,8 @@ signals:
     // Header/footer documents are about to be replaced or dropped (Page
     // Setup, a load): an editor holding one must let go first.
     void storiesAboutToBeReplaced();
+    void commentsChanged();
+    void activeCommentChanged();
 
 private:
     void applyLayout();
@@ -126,6 +138,9 @@ private:
     Docx::WordParts m_parts;
     // Word's keep-with-next / widow rules as display-only page breaks.
     std::unique_ptr<KeepRules> m_keepRules;
+    QString m_activeComment;
+    mutable QList<Docx::CommentSpan> m_commentSpans;
+    mutable bool m_commentSpansValid = false;
     qreal m_bodyTop = 96;
     qreal m_bodyBottom = 96;
 };

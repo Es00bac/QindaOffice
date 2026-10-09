@@ -28,6 +28,7 @@ private slots:
     void resolvesStylesThemeFontsAndDirectFormatting();
     void foldsParagraphSpacingLikeWord();
     void linesFollowWordsFontMetrics();
+    void autoSpacingFollowsHtmlRules();
     void numbersListsLikeWord();
     void tablesKeepMergesShadingAndBorders();
     void tableStyleConditionsAndCellSpacing();
@@ -178,6 +179,30 @@ void DocxReadTest::linesFollowWordsFontMetrics()
     const auto written = Ooxml::Package::fromData(bytes, &error);
     QVERIFY2(written, qPrintable(error));
     QVERIFY(!QString::fromUtf8(written->data(written->mainPart())).contains(QStringLiteral("w:line=")));
+}
+
+// Word's HTML auto spacing (14 pt): none between the items of one list,
+// and two adjacent auto spaces collapse to the larger instead of adding.
+void DocxReadTest::autoSpacingFollowsHtmlRules()
+{
+    DocxFixture f;
+    f.numbering = QStringLiteral(
+        "<w:abstractNum w:abstractNumId=\"1\"><w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"bullet\"/>"
+        "<w:lvlText w:val=\"o\"/><w:pPr><w:ind w:left=\"720\" w:hanging=\"360\"/></w:pPr></w:lvl></w:abstractNum>"
+        "<w:num w:numId=\"2\"><w:abstractNumId w:val=\"1\"/></w:num>");
+    const QString autoSpacing = QStringLiteral(
+        "<w:spacing w:before=\"100\" w:beforeAutospacing=\"1\" w:after=\"100\" w:afterAutospacing=\"1\"/>");
+    const QString list = QStringLiteral("<w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"2\"/></w:numPr>");
+    f.body = para(QStringLiteral("intro"), autoSpacing) + para(QStringLiteral("next"), autoSpacing)
+        + para(QStringLiteral("item one"), list + autoSpacing) + para(QStringLiteral("item two"), list + autoSpacing)
+        + para(QStringLiteral("after"), autoSpacing);
+    auto doc = load(f);
+    QVERIFY(doc->ok);
+    const qreal fourteen = 14.0 * 96 / 72;
+    QCOMPARE(blockWithText(doc->body, QStringLiteral("next")).blockFormat().topMargin(), fourteen); // not 28
+    QCOMPARE(blockWithText(doc->body, QStringLiteral("item two")).blockFormat().topMargin(), 0.0);
+    QCOMPARE(blockWithText(doc->body, QStringLiteral("item one")).blockFormat().topMargin(), fourteen);
+    QCOMPARE(blockWithText(doc->body, QStringLiteral("after")).blockFormat().topMargin(), fourteen);
 }
 
 void DocxReadTest::foldsParagraphSpacingLikeWord()
