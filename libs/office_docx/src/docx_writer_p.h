@@ -57,6 +57,7 @@ struct WriteEnv {
     int nextDocPr = 1;
     int nextRevision = 1;
     int nextBookmark = 1;
+    QSet<QString> writtenControls; // content controls written once (a copy drops its w:id)
     bool layoutChanged = false;
     bool headersChanged = false;
     // Applied to every w:sectPr the body writer emits (paragraph-level ones
@@ -78,6 +79,15 @@ public:
     void closeComments(Ooxml::XmlElement &container);
 
 private:
+    // A frame's or a cell's blocks and tables in order, inside the
+    // block-level content controls they carry (docx_writer_controls.cpp).
+    void writeItems(const QList<QTextFrame::iterator> &items, Ooxml::XmlElement &container);
+    // A w:sdt for control `key` appended to `parent`; returns its w:sdtContent.
+    Ooxml::XmlElement &openControl(Ooxml::XmlElement &parent, const QString &key);
+    // The keys of `keys` that name a control of this document (a run pasted
+    // from another document keeps its content, not a control).
+    [[nodiscard]] QStringList knownControls(const QVariant &keys) const;
+    [[nodiscard]] static bool skipsBlock(const QTextBlock &block, bool requireParagraph);
     void writeBlock(const QTextBlock &block, Ooxml::XmlElement &container, bool requireParagraph);
     void writeTable(const QTextTable *table, Ooxml::XmlElement &container);
     void writeCell(const QTextTableCell &cell, Ooxml::XmlElement &tc);
@@ -96,7 +106,12 @@ private:
     const QTextDocument *m_document;
     QString m_part;
     QStringList m_openComments;
+    QHash<QString, QString> m_controlTexts; // content control key → its text now
 };
+
+// Whether `element` (a w:tc, or a w:sdtContent in one) ends with a
+// paragraph, looking into a closing block-level control.
+[[nodiscard]] bool endsWithParagraph(const Ooxml::XmlElement &element);
 
 // The schema order of w:pPr, w:rPr, w:tblPr, w:tcPr, w:sectPr children
 // (ECMA-376 Part 1 §17.3.1.26, §17.3.2.28, §17.4.60, §17.4.70, §17.6.17):

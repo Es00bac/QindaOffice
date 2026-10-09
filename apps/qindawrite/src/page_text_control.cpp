@@ -30,6 +30,13 @@ QTextCharFormat typingFormat(const QTextCursor &cursor)
 {
     QTextCharFormat format = cursor.charFormat();
     format.clearProperty(Docx::kCommentReference);
+    if (format.stringProperty(Docx::kRunStyleId) == u"PlaceholderText") {
+        // Text typed into a form field's placeholder is its value (D-080).
+        format.clearProperty(Docx::kRunStyleId);
+        format.clearProperty(Docx::kRunXml);
+        format.clearProperty(Docx::kRunSnapshot);
+        format.clearForeground();
+    }
     return format;
 }
 

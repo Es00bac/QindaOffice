@@ -80,6 +80,10 @@ signals:
     // A right press at item (x, y); docPos is where it landed in the text.
     void contextMenuRequested(qreal x, qreal y, const QPointF &docPos);
     void doubleClicked(int position);
+    // A left click in the body that selected nothing: at item (x, y),
+    // `docPos` in the text's layout, the caret at `position` — form
+    // fields answer it (write_controls.h).
+    void clicked(qreal x, qreal y, const QPointF &docPos, int position);
     void storyChanged();
     // A double-click on a picture: the Picture dialog for the selection.
     void pictureDialogRequested();
@@ -119,6 +123,9 @@ private:
     PageGeometry m_geometry;
     qreal m_viewZoom = 1.0;
     int m_pageCount = 1;
+    // The body press a release may turn into clicked().
+    QPointF m_pressPoint;
+    bool m_pressForwarded = false;
 };
 
 } // namespace QindaOffice::Apps::Write

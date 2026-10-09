@@ -17,6 +17,7 @@ QQuickRootItem#WriteWindow
                 QQuickItem#viewportSurface
                   QQuickItem#viewportContent
                     PageTextItem#writePage
+                      FormFieldPopup#formFieldPopup
             WriteRuler#writeRuler
               QQuickCanvasItem#rulerMarker_indent-first
               QQuickCanvasItem#rulerMarker_indent-left

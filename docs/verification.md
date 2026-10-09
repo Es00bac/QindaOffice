@@ -745,6 +745,25 @@ new card, the commented text shaded). Desktop check (owner): open a
 reviewed Word document, reply to a comment and resolve another, save, open
 in Word — the thread, the reply and the resolved state as written.
 
+**Word forms (D-080):** `tst_docx_controls` 7/7 — a block-level control
+around two paragraphs and a table (the table tagged, its cell not), inline
+check box, drop-down, date and bound plain-text controls read with kinds,
+symbols, items, formats and text; an unchanged save writes every `w:sdtPr`
+back identically and keeps the block control around the table; a ticked
+box, a chosen item, a date and new text write `w14:checked="1"`,
+`w:lastValue`, `w:fullDate` and drop `w:showingPlcHdr`/`w:dataBinding`; a
+copied check box is written twice with one `w:id`; `controlAt` finds each
+span. `tst_write_controls` 3/3 through the real window — a click beside the
+check box does nothing, one on its symbol ticks it and Undo clears it; the
+list opens at the click with its three items and an item replaces the
+placeholder; the calendar opens and a day lands as `10/8/2026`; a click on
+a text placeholder selects it and typing replaces it in ordinary ink; the
+saved file carries every state. The fixtures gain `FormFieldPopup` (+1 row
+each). LibreOffice renders the edited form (☒, Green, 10/8/2026). Looked
+at: the list menu at the click; the calendar popover. Desktop check
+(owner): open a Word form, tick a box, pick from a list and a date, save,
+open in Word — the boxes, choices and date as set, no repair prompt.
+
 **HTML autospacing:** `tst_docx_read` `autoSpacingFollowsHtmlRules` — 14 pt
 between auto-spaced paragraphs (the larger of two, not the sum), none
 between items of one list, none at a table cell's top and bottom. The

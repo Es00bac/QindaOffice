@@ -30,6 +30,7 @@ struct ReadEnv {
     QHash<QString, QString> footnoteText; // w:footnote id → plain text
     int nextMedia = 1;
     int nextIsland = 1;
+    int nextControl = 1; // content control keys, unique across stories
     QMap<QString, int> approximations; // "text box" → how many were shown approximately
 };
 
@@ -91,6 +92,9 @@ public:
     };
 
     void readBlocks(const Ooxml::XmlElement &container, QTextCursor &cursor, ContainerState &state);
+    // Registers a w:sdt in WordParts::contentControls (docx_controls.h) and
+    // returns its key.
+    QString openControl(const Ooxml::XmlElement &sdt, bool block);
     void insertText(QTextCursor &cursor, const QString &text, QTextCharFormat format, InlineState &inl,
                     ContainerState &state);
     void insertObject(QTextCursor &cursor, QTextCharFormat format, InlineState &inl, ContainerState &state);
@@ -138,6 +142,14 @@ private:
     // the runs in between carry their ids (kCommentIds, docx_comments.h).
     QStringList m_openComments;
     void commentRange(const Ooxml::XmlElement &marker);
+    // Content controls the reader is inside (docx_controls.h): block-level
+    // ones tag paragraphs and tables (kBlockControls), inline ones runs
+    // (kContentControls). A table's cells start with no block-level ones.
+    QStringList m_blockControls;
+    QStringList m_inlineControls;
+    // The blocks of one container; returns what it read last: -1 nothing,
+    // 0 a paragraph, 1 a table (a block-level control is read through).
+    int readBlockItems(const Ooxml::XmlElement &container, QTextCursor &cursor, ContainerState &state);
     int m_footnoteNumber = 0;
 
     // Word keeps one counter set per abstract numbering definition (per

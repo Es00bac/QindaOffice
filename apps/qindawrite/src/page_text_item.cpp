@@ -359,6 +359,8 @@ void PageTextItem::mousePressEvent(QMouseEvent *event)
         event->accept();
         return;
     }
+    m_pressPoint = event->position();
+    m_pressForwarded = event->button() == Qt::LeftButton;
     forwardMouse(event);
 }
 
@@ -390,6 +392,13 @@ void PageTextItem::mouseReleaseEvent(QMouseEvent *event)
         return;
     }
     forwardMouse(event);
+    const bool click = m_pressForwarded && event->button() == Qt::LeftButton
+                       && (event->position() - m_pressPoint).manhattanLength() < 4;
+    m_pressForwarded = false;
+    if (click && m_control != nullptr && !m_control->textCursor().hasSelection()) {
+        emit clicked(event->position().x(), event->position().y(), viewToDoc(event->position()),
+                     m_control->textCursor().position());
+    }
 }
 
 void PageTextItem::mouseDoubleClickEvent(QMouseEvent *event)

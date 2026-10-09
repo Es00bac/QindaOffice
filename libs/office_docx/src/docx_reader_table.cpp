@@ -10,6 +10,8 @@
 
 #include <QTextTable>
 
+#include <utility>
+
 namespace QindaOffice::Docx::detail {
 
 using Ooxml::XmlElement;
@@ -257,12 +259,18 @@ void BodyReader::readTable(const XmlElement &tbl, QTextCursor &cursor, Container
         tf.setProperty(kTableGridXml, Ooxml::serializeFragment(*tblGrid));
     }
 
+    if (!m_blockControls.isEmpty()) {
+        tf.setProperty(kBlockControls, m_blockControls); // a block-level control around the table
+    }
+
     QTextTable *table = cursor.insertTable(int(rows.size()), columns, tf);
     QTextTableFormat stored = table->format();
     stored.setProperty(kTableSnapshot, QVariantMap{{QStringLiteral("columns"), columns},
                                                    {QStringLiteral("align"), int(stored.alignment())},
                                                    {QStringLiteral("header"), headerRows}});
     table->setFormat(stored);
+    // The cells' paragraphs belong to the table, not to the control around it.
+    const QStringList outerControls = std::exchange(m_blockControls, QStringList());
     for (const CellSlot &s : std::as_const(cellSlots)) {
         if (s.rowSpan > 1 || s.columnSpan > 1) {
             table->mergeCells(s.row, s.column, s.rowSpan, s.columnSpan);
@@ -406,6 +414,7 @@ void BodyReader::readTable(const XmlElement &tbl, QTextCursor &cursor, Container
         readBlocks(*s.tc, cellCursor, cellState);
         state.fields = cellState.fields;
     }
+    m_blockControls = outerControls;
     cursor = table->lastCursorPosition();
     cursor.movePosition(QTextCursor::NextBlock);
     state.blockFresh = true;

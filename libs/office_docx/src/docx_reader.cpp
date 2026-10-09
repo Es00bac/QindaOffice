@@ -2,6 +2,7 @@
 #include "docx_reader.h"
 
 #include "docx_comments.h"
+#include "docx_controls.h"
 #include "docx_format.h"
 #include "docx_metrics.h"
 #include "docx_properties.h"
@@ -300,6 +301,26 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
     for (const CommentSpan &span : commentSpans(*body)) {
         if (span.reference >= 0) {
             parts->sourceCommentIds.append(span.id);
+        }
+    }
+    // Content controls (docx_controls.h): the text each one holds now is
+    // what a save compares against (placeholder, binding, list, date).
+    auto noteControlTexts = [parts](const QTextDocument &story) {
+        const QHash<QString, QString> texts = controlTexts(story);
+        for (auto it = texts.cbegin(); it != texts.cend(); ++it) {
+            if (auto control = parts->contentControls.find(it.key()); control != parts->contentControls.end()) {
+                control->sourceText = it.value();
+            }
+        }
+    };
+    if (!parts->contentControls.isEmpty()) {
+        noteControlTexts(*body);
+        for (auto *stories : {&parts->headers, &parts->footers}) {
+            for (const HeaderFooter &story : *stories) {
+                if (story.document) {
+                    noteControlTexts(*story.document);
+                }
+            }
         }
     }
     // Word's line height (docx_metrics.h): display only, before undo is on.

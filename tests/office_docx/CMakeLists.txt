@@ -4,7 +4,7 @@
 # against the ECMA-376 schemas (tst_docx_write), and the real-document corpus
 # gate (tst_docx_corpus: aggregate counts only; skips without QQO_DOCX_CORPUS), and
 # applying a document's own paragraph style (tst_docx_restyle).
-foreach(name IN ITEMS tst_docx_corpus tst_docx_read tst_docx_write tst_docx_restyle tst_docx_comments)
+foreach(name IN ITEMS tst_docx_corpus tst_docx_read tst_docx_write tst_docx_restyle tst_docx_comments tst_docx_controls)
     add_executable(${name} ${name}.cpp docx_fixture.h)
     target_link_libraries(${name} PRIVATE office_docx office_ooxml Qt6::Test Qt6::Gui)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/tests)

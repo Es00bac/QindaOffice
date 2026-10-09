@@ -258,21 +258,10 @@ void BodyWriter::writeCell(const QTextTableCell &cell, XmlElement &tc)
     for (auto it = cell.begin(); !it.atEnd(); ++it) {
         items.append(it);
     }
-    for (qsizetype i = 0; i < items.size(); ++i) {
-        if (QTextFrame *child = items.at(i).currentFrame()) {
-            if (const auto *nested = qobject_cast<const QTextTable *>(child)) {
-                writeTable(nested, tc);
-            } else {
-                writeFrame(child, tc);
-            }
-            continue;
-        }
-        writeBlock(items.at(i).currentBlock(), tc, i == items.size() - 1);
-    }
+    writeItems(items, tc);
     // A cell must end with a paragraph (ECMA-376 §17.4.66; Word refuses
-    // the file otherwise).
-    const QList<const XmlElement *> children = tc.elements();
-    if (children.isEmpty() || children.last()->name != u"p") {
+    // the file otherwise) — one closing a block-level control counts.
+    if (!endsWithParagraph(tc)) {
         tc.appendElement(kW, QStringLiteral("p"));
     }
 }

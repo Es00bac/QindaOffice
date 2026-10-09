@@ -3,6 +3,7 @@
 // fields, tracked changes, bookmarks, footnote references, pictures and
 // preserved objects.
 
+#include "docx_controls.h"
 #include "docx_format.h"
 #include "docx_properties.h"
 #include "docx_writer_p.h"
@@ -38,6 +39,7 @@ const QString kR = QString::fromUtf16(Ooxml::Ns::R);
 // One fragment's grouping keys (outermost first) and content.
 struct Piece {
     QTextFragment fragment;
+    QStringList controls; // inline content controls, outermost first
     QString href;
     QString field;
     QString revision; // "ins:author" / "del:author"
@@ -87,6 +89,9 @@ BodyWriter::BodyWriter(WriteEnv &env, const QTextDocument *document, QString par
     , m_document(document)
     , m_part(std::move(part))
 {
+    if (m_env.parts != nullptr && !m_env.parts->contentControls.isEmpty() && m_document != nullptr) {
+        m_controlTexts = controlTexts(*m_document);
+    }
 }
 
 void BodyWriter::writeFrame(const QTextFrame *frame, XmlElement &container)
@@ -97,24 +102,18 @@ void BodyWriter::writeFrame(const QTextFrame *frame, XmlElement &container)
     for (auto it = frame->begin(); !it.atEnd(); ++it) {
         items.append(it);
     }
-    for (qsizetype i = 0; i < items.size(); ++i) {
-        const QTextFrame::iterator &it = items.at(i);
-        if (QTextFrame *child = it.currentFrame()) {
-            if (const auto *table = qobject_cast<const QTextTable *>(child)) {
-                writeTable(table, container);
-            } else {
-                writeFrame(child, container);
-            }
-            continue;
-        }
-        writeBlock(it.currentBlock(), container, i == items.size() - 1);
-    }
+    writeItems(items, container);
+}
+
+bool BodyWriter::skipsBlock(const QTextBlock &block, bool requireParagraph)
+{
+    return !requireParagraph && block.blockFormat().boolProperty(kParagraphSynthetic) && block.text().isEmpty();
 }
 
 void BodyWriter::writeBlock(const QTextBlock &block, XmlElement &container, bool requireParagraph)
 {
     const QTextBlockFormat bf = block.blockFormat();
-    if (!requireParagraph && bf.boolProperty(kParagraphSynthetic) && block.text().isEmpty()) {
+    if (skipsBlock(block, requireParagraph)) {
         return;
     }
     XmlElement &p = container.appendElement(kW, QStringLiteral("p"));
@@ -143,15 +142,27 @@ void BodyWriter::writeRuns(const QTextBlock &block, XmlElement &p)
         const QTextCharFormat f = fragment.charFormat();
         Piece piece;
         piece.fragment = fragment;
+        piece.controls = knownControls(f.property(kContentControls));
         piece.href = f.isAnchor() ? f.anchorHref() : QString();
         piece.field = f.stringProperty(kFieldInstruction);
         piece.revision = revisionKey(f);
         piece.island = f.hasProperty(kInlineXml) ? qMax(1, f.intProperty(kInlineSerial)) : 0;
         pieces.append(piece);
     }
+    // Grouping levels, outermost first: one per nesting depth of inline
+    // content controls (w:sdt), then links, simple fields, revisions.
     using Key = std::function<QString(const Piece &)>;
-    const QList<Key> keys{[](const Piece &x) { return x.href; }, [](const Piece &x) { return x.field; },
-                          [](const Piece &x) { return x.revision; }};
+    qsizetype depth = 0;
+    for (const Piece &piece : pieces) {
+        depth = qMax(depth, piece.controls.size());
+    }
+    QList<Key> keys;
+    for (qsizetype d = 0; d < depth; ++d) {
+        keys.append([d](const Piece &x) { return d < x.controls.size() ? x.controls.at(d) : QString(); });
+    }
+    keys.append([](const Piece &x) { return x.href; });
+    keys.append([](const Piece &x) { return x.field; });
+    keys.append([](const Piece &x) { return x.revision; });
     std::function<void(XmlElement &, qsizetype, qsizetype, int)> emitGroup;
     emitGroup = [&](XmlElement &parent, qsizetype from, qsizetype to, int level) {
         if (level == keys.size()) {
@@ -239,7 +250,9 @@ void BodyWriter::writeRuns(const QTextBlock &block, XmlElement &p)
             }
             if (value.isEmpty()) {
                 emitGroup(parent, i, j, level + 1);
-            } else if (level == 0) {
+            } else if (level < depth) {
+                emitGroup(openControl(parent, value), i, j, level + 1);
+            } else if (level == depth) {
                 XmlElement &link = parent.appendElement(kW, QStringLiteral("hyperlink"));
                 if (value.startsWith(QLatin1Char('#'))) {
                     link.setAttribute(kW, QStringLiteral("anchor"), value.mid(1));
@@ -255,7 +268,7 @@ void BodyWriter::writeRuns(const QTextBlock &block, XmlElement &p)
                 }
                 link.setAttribute(kW, QStringLiteral("history"), QStringLiteral("1"));
                 emitGroup(link, i, j, level + 1);
-            } else if (level == 1) {
+            } else if (level == depth + 1) {
                 XmlElement &field = parent.appendElement(kW, QStringLiteral("fldSimple"));
                 field.setAttribute(kW, QStringLiteral("instr"), QLatin1Char(' ') + value + QLatin1Char(' '));
                 emitGroup(field, i, j, level + 1);

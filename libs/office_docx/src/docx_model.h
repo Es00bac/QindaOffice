@@ -84,6 +84,33 @@ struct Comment {
     }
 };
 
+// A Word content control (w:sdt, docx_controls.h): a form field (check box,
+// drop-down, date, plain text) or a rich-text, gallery or group wrapper. Its
+// content stays ordinary text; the runs, paragraphs and tables inside carry
+// its key (kContentControls / kBlockControls). Written back from its own
+// w:sdtPr, patched for what Write changed: the check box's state, the date,
+// the chosen item, the placeholder and data-binding flags.
+struct ContentControl {
+    enum class Kind { RichText, PlainText, CheckBox, DropDown, ComboBox, Date, Picture, Gallery, Group, Other };
+    Kind kind = Kind::RichText;
+    bool block = false;          // wraps paragraphs and tables, not runs
+    QString propertiesXml;       // w:sdtPr as read
+    QString endPropertiesXml;    // w:sdtEndPr as read, or empty
+    QString sourceText;          // its content's text as read (controlTexts())
+    bool showingPlaceholder = false;
+    QString title;               // w:alias
+    QString tag;
+    // Check box (w14:checkbox): the symbol and font of each state.
+    QChar checkedSymbol = QChar(0x2612);
+    QChar uncheckedSymbol = QChar(0x2610);
+    QString checkedFont;
+    QString uncheckedFont;
+    // Drop-down list / combo box: each item's shown text and value.
+    QStringList itemTexts;
+    QStringList itemValues;
+    QString dateFormat; // Word's w:dateFormat ("M/d/yyyy")
+};
+
 struct WordParts {
     PageLayout layout;
     std::array<HeaderFooter, kHeaderFooterSlots> headers;
@@ -102,6 +129,9 @@ struct WordParts {
     // back unchanged unless one was added, edited, resolved or removed.
     QList<Comment> comments;
     QStringList sourceCommentIds;
+
+    // Content controls of every story (body, headers, footers) by key.
+    QHash<QString, ContentControl> contentControls;
 
     // Original bytes of every picture, keyed by its resource name
     // ("qwmedia:image3.png"); the QTextDocument holds decoded images.

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_host.h"
 #include "write_comments.h"
+#include "write_controls.h"
 #include "docx_restyle.h"
 
 #include "format_controller.h"
@@ -50,6 +51,7 @@ WriteHost::WriteHost()
     m_revisions = new WriteRevisions(m_control, m_document, this);
     m_review = new WriteReviewActions(m_control, m_document, m_revisions, actions(), this);
     m_comments = new WriteComments(m_document, m_control, [this] { return m_revisions->author(); }, this);
+    m_controls = new WriteControls(m_document, m_control, this);
     connect(m_comments, &WriteComments::message, this, [this](const QString &text) { showStatusMessage(text); });
     connect(m_format, &FormatController::textColorRequested, this, &WriteHost::textColorRequested);
     connect(m_format, &FormatController::tableDialogRequested, this, &WriteHost::tableDialogRequested);
@@ -99,6 +101,10 @@ void WriteHost::attachPage(PageTextItem *item)
     connect(item, &PageTextItem::pageCountChanged, this, [this] { updateWriteStatus(); });
     connect(item, &PageTextItem::storyChanged, this, [this] { syncStoryActions(); });
     connect(item, &PageTextItem::pictureDialogRequested, this, &WriteHost::pictureDialogRequested);
+    connect(item, &PageTextItem::clicked, m_controls,
+            [this](qreal x, qreal y, const QPointF &docPos, int position) {
+                m_controls->activate(position, docPos, QPointF(x, y));
+            });
     connect(item, &PageTextItem::viewZoomChanged, this, [this] { updateWriteStatus(); });
     connect(item, &PageTextItem::contextMenuRequested, this,
             [this](qreal x, qreal y, const QPointF &docPos) {

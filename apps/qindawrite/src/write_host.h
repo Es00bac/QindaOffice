@@ -40,6 +40,7 @@ class SpellChecker;
 class TableController;
 class WriteReviewActions;
 class WriteComments;
+class WriteControls;
 class WriteRevisions;
 class WriteTypography;
 
@@ -63,6 +64,8 @@ class WriteHost : public Quick::DocumentHost {
     Q_PROPERTY(QindaOffice::Ai::AssistantController *assistant READ assistant CONSTANT)
     // Review comments for the Comments pane (write_comments.h).
     Q_PROPERTY(QObject *comments READ commentsObject CONSTANT)
+    // Word form fields: check boxes, lists, dates (write_controls.h).
+    Q_PROPERTY(QObject *controls READ controlsObject CONSTANT)
 public:
     WriteHost();
     ~WriteHost() override;
@@ -179,6 +182,7 @@ private:
     [[nodiscard]] QList<Quick::MenuNode> headerFooterMenuItems();
     [[nodiscard]] QList<Quick::MenuNode> commentMenuItems();
     [[nodiscard]] QObject *commentsObject() const;
+    [[nodiscard]] QObject *controlsObject() const;
     void insertPageField(bool total);
     void syncStoryActions();
     void createSpellingEntries();
@@ -198,6 +202,7 @@ private:
     WriteTypography *m_typography = nullptr;
     WriteRevisions *m_revisions = nullptr;
     WriteComments *m_comments = nullptr;
+    WriteControls *m_controls = nullptr;
     WriteReviewActions *m_review = nullptr;
     SpellChecker *m_spell = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;

@@ -216,8 +216,11 @@ void BodyReader::readInline(const XmlElement &parent, QTextCursor &cursor, Inlin
             readInline(*e, cursor, inl, state);
             inl.deleteAuthor = saved;
         } else if (n == u"sdt") {
+            // An inline content control: its runs carry its key (docx_controls.h).
             if (const XmlElement *content = e->child(kW, u"sdtContent")) {
+                m_inlineControls.append(openControl(*e, false));
                 readInline(*content, cursor, inl, state);
+                m_inlineControls.removeLast();
             }
         } else if (n == u"smartTag" || n == u"customXml" || n == u"dir" || n == u"bdo") {
             readInline(*e, cursor, inl, state);
@@ -347,6 +350,9 @@ void BodyReader::insertText(QTextCursor &cursor, const QString &text, QTextCharF
     }
     if (!m_openComments.isEmpty() && !format.hasProperty(kCommentReference)) {
         format.setProperty(kCommentIds, m_openComments);
+    }
+    if (!m_inlineControls.isEmpty()) {
+        format.setProperty(kContentControls, m_inlineControls);
     }
     // Tracked changes look the way QindaWrite shows its own
     // (write_revisions.cpp): set before the snapshot, so the marks never

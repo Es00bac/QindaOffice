@@ -70,6 +70,23 @@ rest and `WriteDocument` owns both:
   resets it to the picture's own size, and edits its alt text
   (`wp:docPr/@descr`). A Word picture keeps its own drawing when resized —
   crop, effects, name and anchoring — with only its extents patched.
+- **Content controls (forms)** — Word's `w:sdt` (`docx_controls.h`): check
+  boxes, drop-down lists, combo boxes, dates, plain and rich text, and the
+  gallery wrappers Word puts around a table of contents or a cover page.
+  The content stays ordinary text; its runs carry the control's key
+  (`kContentControls`), or its paragraphs and tables do for a block-level
+  control (`kBlockControls`), and `WordParts::contentControls` keeps each
+  control's own `w:sdtPr`. A click fills in a form as in Word
+  (`write_controls.h`, `FormFieldPopup.qml`): on a check box's symbol it
+  ticks or clears it, on a list it opens the items, on a date a calendar
+  (written in the control's `w:dateFormat`), and on a placeholder it
+  selects the placeholder so typing replaces it, in ordinary ink. On save
+  each control is written back from its own markup, patched for what
+  changed: `w14:checked` follows the symbol in its text, `w:lastValue` the
+  chosen item, `w:fullDate` the date; edited content drops
+  `w:showingPlcHdr` and `w:dataBinding` (Word would otherwise refill a
+  bound control from its XML on open and undo the edit). A control copied
+  within the document is written again without its `w:id`.
 - **The source package** — what Write does not model is carried from it on
   save: styles, numbering definitions, theme, settings, fonts, endnotes,
   custom XML, glossary, people, VBA (macro kinds only), and the comment
@@ -200,8 +217,12 @@ Session Review panel) and *Open in QindaWrite* write a page through
   paragraphs (an untouched one keeps its formatting, links and mentions).
   Comments marked in headers, footers, notes or text boxes are kept on
   save but not listed in the pane.
-- Content controls (`w:sdt`) and legacy form fields are read as their
-  content and not written back as controls.
+- Row- and cell-level content controls (repeating sections) are read as
+  their content and not written back as controls; controls in headers and
+  footers are kept but not clickable; a control whose whole content is
+  deleted goes with it (Word keeps an empty one). Legacy form fields
+  (`FORMTEXT`, `FORMCHECKBOX`, `FORMDROPDOWN` with `w:ffData`) are not
+  modelled: a text field keeps its text, a check box is lost on save.
 
 ## Gates
 
@@ -209,13 +230,16 @@ Session Review panel) and *Open in QindaWrite* write a page through
 pictures, preservation, layout, headers, notes, links, revisions),
 `tst_docx_write` (new document, unchanged markup, carried parts,
 edited notes and tables — XSD-validated with `QQO_OOXML_SCHEMA_DIR`),
+`tst_docx_controls` (content controls: kinds, block and inline, round trip,
+patched check box / list / date / bound text, a copy without its id),
 `tst_docx_comments` (ranges, replies, resolved state; untouched set copied,
 edited / new / deleted comments written, header-only comments kept),
 `tst_docx_corpus` (`QQO_DOCX_CORPUS` lists real documents: read, write,
 re-read, compare; aggregate counts only). `tests/qindawrite/tst_write_docx`
 covers WriteDocument (layout, headers, pictures, recovery, HTML, legacy
 formats through LibreOffice), `tst_write_comments` the Comments pane and
-its commands through the real window and renders listed documents to PDF for
+its commands through the real window, `tst_write_controls` filling in a
+form (check box, list, calendar, placeholder) through the real window and renders listed documents to PDF for
 review (`QQO_WRITE_RENDER_DOCX` + `QQO_GRAB_DIR`). `tests/qindanote/tst_note_word`
 exports a page with every block kind and ink, validates it, reads it back
 (`QQO_GRAB_DIR` keeps the `.docx` for a look in Word or LibreOffice).

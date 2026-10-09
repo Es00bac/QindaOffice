@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Paragraphs and lists of a .docx body (runs: docx_reader_runs.cpp).
 
+#include "docx_controls.h"
 #include "docx_format.h"
 #include "docx_properties.h"
 #include "docx_reader_p.h"
@@ -72,11 +73,34 @@ void BodyReader::readDocument(const XmlElement &container)
 
 void BodyReader::readBlocks(const XmlElement &container, QTextCursor &cursor, ContainerState &state)
 {
-    bool lastWasTable = false;
+    const bool lastWasTable = readBlockItems(container, cursor, state) == 1;
+    if (state.hasPending) {
+        finishParagraph(state, true);
+    }
+    if (lastWasTable && state.blockFresh) {
+        // The block Qt keeps after a closing table has no w:p behind it.
+        QTextBlockFormat synthetic = cursor.blockFormat();
+        synthetic.setProperty(kParagraphSynthetic, true);
+        cursor.setBlockFormat(synthetic);
+    }
+}
+
+QString BodyReader::openControl(const XmlElement &sdt, bool block)
+{
+    const QString key = QString::number(m_env.nextControl++);
+    if (m_env.parts != nullptr) {
+        m_env.parts->contentControls.insert(key, parseControl(sdt, block));
+    }
+    return key;
+}
+
+int BodyReader::readBlockItems(const XmlElement &container, QTextCursor &cursor, ContainerState &state)
+{
+    int last = -1;
     for (const XmlElement *e : container.elements()) {
         if (e->ns == kW && e->name == u"p") {
             readParagraph(*e, cursor, state);
-            lastWasTable = false;
+            last = 0;
         } else if (e->ns == kW && e->name == u"tbl") {
             state.tableTopMargin = 0;
             if (state.collapsedExtra > 0) {
@@ -87,11 +111,20 @@ void BodyReader::readBlocks(const XmlElement &container, QTextCursor &cursor, Co
                 finishParagraph(state, true);
             }
             readTable(*e, cursor, state);
-            lastWasTable = true;
-        } else if (e->ns == kW && (e->name == u"sdt" || e->name == u"customXml")) {
-            const XmlElement *content = e->name == u"sdt" ? e->child(kW, u"sdtContent") : e;
-            if (content != nullptr) {
-                readBlocks(*content, cursor, state);
+            last = 1;
+        } else if (e->ns == kW && e->name == u"sdt") {
+            // A block-level control: its paragraphs and tables carry its key
+            // and flow on as the container's own (spacing, page breaks).
+            if (const XmlElement *content = e->child(kW, u"sdtContent")) {
+                m_blockControls.append(openControl(*e, true));
+                if (const int inner = readBlockItems(*content, cursor, state); inner >= 0) {
+                    last = inner;
+                }
+                m_blockControls.removeLast();
+            }
+        } else if (e->ns == kW && e->name == u"customXml") {
+            if (const int inner = readBlockItems(*e, cursor, state); inner >= 0) {
+                last = inner;
             }
         } else if (e->ns == kW && e->name == u"bookmarkStart") {
             const QString name = wAttr(e, u"name");
@@ -106,6 +139,9 @@ void BodyReader::readBlocks(const XmlElement &container, QTextCursor &cursor, Co
             // Display math between paragraphs: give it its own paragraph.
             QTextBlockFormat bf;
             bf.setAlignment(Qt::AlignHCenter);
+            if (!m_blockControls.isEmpty()) {
+                bf.setProperty(kBlockControls, m_blockControls);
+            }
             bf.setProperty(kParagraphSynthetic, false);
             if (state.blockFresh) {
                 cursor.setBlockFormat(bf);
@@ -115,18 +151,10 @@ void BodyReader::readBlocks(const XmlElement &container, QTextCursor &cursor, Co
             state.blockFresh = false;
             InlineState inl;
             readMath(*e, cursor, inl, state);
-            lastWasTable = false;
+            last = 0;
         }
     }
-    if (state.hasPending) {
-        finishParagraph(state, true);
-    }
-    if (lastWasTable && state.blockFresh) {
-        // The block Qt keeps after a closing table has no w:p behind it.
-        QTextBlockFormat synthetic = cursor.blockFormat();
-        synthetic.setProperty(kParagraphSynthetic, true);
-        cursor.setBlockFormat(synthetic);
-    }
+    return last;
 }
 
 void BodyReader::finishParagraph(ContainerState &state, bool keepAfter)
@@ -254,6 +282,9 @@ void BodyReader::readParagraph(const XmlElement &p, QTextCursor &cursor, Contain
     const XmlElement *markRPr = pPr != nullptr ? pPr->child(kW, u"rPr") : nullptr;
     QTextCharFormat mark = charFormatFromRPr(mergeProperties(runBase.get(), markRPr).get(), m_env.theme);
 
+    if (!m_blockControls.isEmpty()) {
+        bf.setProperty(kBlockControls, m_blockControls);
+    }
     if (state.blockFresh) {
         cursor.setBlockFormat(bf);
         setBlockCharFormatKeepingCell(cursor, mark);

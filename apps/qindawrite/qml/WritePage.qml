@@ -6,8 +6,9 @@ import QindaOffice.Write
 
 // The pages inside a zoomable viewport: the PageTextItem paints paper and
 // text in document units (zoom is the viewport's transform, D-009), the
-// caret's movements scroll the viewport, and a right press pops the
-// context menu the host builds (spelling first).
+// caret's movements scroll the viewport, a right press pops the context
+// menu the host builds (spelling first), and a click on a Word form field
+// opens its list or calendar.
 Tk.Viewport {
     id: viewport
     required property WriteHost write
@@ -23,6 +24,8 @@ Tk.Viewport {
         focus: true
         Component.onCompleted: viewport.write.attachPage(page)
         onEnsureVisibleRequested: function(rect) { viewport.ensureVisible(rect) }
+        // A Word form field's list or calendar, at the click (D-080).
+        FormFieldPopup { objectName: "formFieldPopup"; controls: viewport.write.controls }
     }
     MenuFromNode {
         id: contextMenu

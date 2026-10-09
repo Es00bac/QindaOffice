@@ -5,6 +5,41 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-080: QindaWrite: Word forms (content controls) kept and filled in
+
+**Date:** 2026-10-08 · **Status:** accepted (owner request: "open, edit and
+save … openable in Microsoft Office"; builds on D-068)
+
+**Context.** Word forms and templates are built from content controls
+(`w:sdt`): check boxes, drop-down lists, date pickers, placeholder text,
+and the wrappers Word puts around a table of contents or a cover page. The
+reader showed their content but a save dropped every control: a form came
+back from QindaWrite as plain text.
+
+**Decision.** Model the control, not just its content (`docx_controls`).
+Runs inside an inline control carry its key (`kContentControls`);
+paragraphs and tables inside a block-level one carry it on their formats
+(`kBlockControls`); `WordParts::contentControls` keeps each control's own
+`w:sdtPr`/`w:sdtEndPr`. The writer groups tagged content back into `w:sdt`
+elements (inline ones as the outermost run grouping, block-level ones
+around paragraphs and tables, a cell ending in one still counts as ending
+in a paragraph) and patches the kept properties from the text: a check
+box's `w14:checked` from its symbol, a list's `w:lastValue` from the chosen
+item, a date's `w:fullDate` from its text, and edited content loses
+`w:showingPlcHdr` and `w:dataBinding` (a bound control would be refilled
+from its XML by Word). The state lives in the text, so Undo needs nothing
+else. In QindaWrite a click fills the form (`WriteControls`,
+`FormFieldPopup.qml`): a check box's symbol toggles, a list opens its
+items, a date opens `Tk.CalendarPicker`, a placeholder is selected so
+typing replaces it in ordinary ink.
+
+**Consequences.** Forms round-trip; LibreOffice renders the output. Not
+done: repeating sections (row/cell-level controls), interactive controls in
+headers and footers, inserting new controls (Word's Developer tab), legacy
+`FORMTEXT`/`FORMCHECKBOX` fields. The page view no longer jumps when focus
+returns to it from the calendar or the find bar: that was a QindaTK `Scroll`
+focus-reveal bug, fixed there (QindaTK D-309).
+
 ## D-076: QindaShow: tables, chart data and notes edited in place
 
 **Date:** 2026-10-08 · **Status:** accepted (owner request: Office parity,

@@ -78,6 +78,11 @@ inline constexpr int kPictureAltText = kDocxBase + 26; // QString
 // covers a run, and the comment a reference mark (U+200B) stands for.
 inline constexpr int kCommentIds = kDocxBase + 27;       // QStringList
 inline constexpr int kCommentReference = kDocxBase + 28; // QString
+// Word content controls (w:sdt, docx_controls.h): the keys of the controls
+// (WordParts::contentControls) a run is inside (char formats), or a
+// paragraph or table is inside (block and table formats), outermost first.
+inline constexpr int kContentControls = kDocxBase + 44; // QStringList
+inline constexpr int kBlockControls = kDocxBase + 45;   // QStringList
 
 // Char formats (QTextImageFormat included).
 inline constexpr int kRunStyleId = kDocxBase + 10;      // QString w:rStyle value

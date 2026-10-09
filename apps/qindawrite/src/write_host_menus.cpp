@@ -18,6 +18,7 @@
 #include "table_actions.h"
 #include "template_loader.h"
 #include "write_comments.h"
+#include "write_controls.h"
 #include "write_review_actions.h"
 #include "write_typography.h"
 
@@ -254,6 +255,11 @@ void WriteHost::syncStoryActions()
 QObject *WriteHost::commentsObject() const
 {
     return m_comments;
+}
+
+QObject *WriteHost::controlsObject() const
+{
+    return m_controls;
 }
 
 // Review > New Comment, Delete Comment, Previous / Next Comment, Show
