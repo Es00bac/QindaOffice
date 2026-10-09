@@ -397,8 +397,8 @@ QVariantMap blockSnapshot(const QTextBlockFormat &f)
         {QStringLiteral("indent"), qRound(f.textIndent() * 100)},
         {QStringLiteral("top"), qRound(f.topMargin() * 100)},
         {QStringLiteral("bottom"), qRound(f.bottomMargin() * 100)},
-        {QStringLiteral("lhType"), f.lineHeightType()},
-        {QStringLiteral("lh"), qRound(f.lineHeight() * 100)},
+        {QStringLiteral("lhType"), ownLineSpacing(f).type},
+        {QStringLiteral("lh"), qRound(ownLineSpacing(f).value * 100)},
         {QStringLiteral("bg"), colorKey(f.background(), f.hasProperty(QTextFormat::BackgroundBrush))},
         {QStringLiteral("break"), int(ownPageBreaks(f))},
         {QStringLiteral("keep"), f.nonBreakableLines()},
@@ -471,6 +471,17 @@ QTextFormat::PageBreakFlags ownPageBreaks(const QTextBlockFormat &format)
         return QTextFormat::PageBreakFlags(format.intProperty(kSyntheticBreak));
     }
     return format.pageBreakPolicy();
+}
+
+LineSpacing ownLineSpacing(const QTextBlockFormat &format)
+{
+    if (format.lineHeightType() == QTextBlockFormat::LineDistanceHeight && format.hasProperty(kLineSpacingOwn)) {
+        const QVariantList own = format.property(kLineSpacingOwn).toList();
+        if (own.size() == 2) {
+            return {own.at(0).toInt(), own.at(1).toReal()};
+        }
+    }
+    return {format.lineHeightType(), format.lineHeight()};
 }
 
 } // namespace QindaOffice::Docx

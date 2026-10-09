@@ -3,6 +3,7 @@
 
 #include "docx_text.h"
 
+#include "page_picture_tool.h"
 #include "page_story_editor.h"
 #include "page_text_control.h"
 #include "pdf_exporter.h"
@@ -14,6 +15,7 @@
 #include <QFocusEvent>
 #include <QInputMethodEvent>
 #include <QKeyEvent>
+#include <QHoverEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QTextDocument>
@@ -50,6 +52,7 @@ void PageTextItem::attach(WriteDocument *document, PageTextControl *control)
     m_control = control;
     m_geometry.setPageSize(document->pageSize());
     m_story = std::make_unique<StoryEditor>(document, control);
+    m_pictures = std::make_unique<PictureTool>(control);
     connect(m_story.get(), &StoryEditor::openChanged, this, [this] {
         emit storyChanged();
         updateInputMethod(Qt::ImQueryInput);
@@ -235,6 +238,9 @@ void PageTextItem::paintPage(QPainter *painter, int index, const QRectF &clip)
     }
     // Word paragraph borders: Qt's layout draws none (docx_text.h).
     Docx::drawParagraphBorders(painter, *m_document->textDocument(), pageArea);
+    if (!storyOpen) {
+        m_pictures->draw(painter, pageArea); // a selected picture's handles
+    }
     painter->restore();
     if (storyOpen) {
         painter->fillRect(page.intersected(clip), kBodyWash);
@@ -323,6 +329,20 @@ void PageTextItem::mousePressEvent(QMouseEvent *event)
         forwardStoryMouse(event);
         return;
     }
+    if (event->button() == Qt::LeftButton && m_pictures != nullptr) {
+        // A picture's handle starts a resize; the picture itself selects it.
+        const QPointF doc = viewToDoc(event->position());
+        if (const int handle = m_pictures->handleAt(doc); handle >= 0 && m_pictures->beginDrag(handle, doc)) {
+            event->accept();
+            return;
+        }
+        if (const int picture = m_pictures->pictureAt(doc); picture >= 0) {
+            m_pictures->select(picture);
+            update();
+            event->accept();
+            return;
+        }
+    }
     if (event->button() == Qt::RightButton) {
         // A context menu never moves the insertion point.
         // While a header is open the body offers no spelling (an invalid point).
@@ -336,6 +356,12 @@ void PageTextItem::mousePressEvent(QMouseEvent *event)
 
 void PageTextItem::mouseMoveEvent(QMouseEvent *event)
 {
+    if (m_pictures != nullptr && m_pictures->isDragging()) {
+        m_pictures->dragTo(viewToDoc(event->position()), event->modifiers() & Qt::ShiftModifier);
+        update();
+        event->accept();
+        return;
+    }
     if (m_story != nullptr && m_story->isOpen()) {
         forwardStoryMouse(event);
         return;
@@ -345,6 +371,12 @@ void PageTextItem::mouseMoveEvent(QMouseEvent *event)
 
 void PageTextItem::mouseReleaseEvent(QMouseEvent *event)
 {
+    if (m_pictures != nullptr && m_pictures->isDragging()) {
+        m_pictures->finishDrag();
+        update();
+        event->accept();
+        return;
+    }
     if (m_story != nullptr && m_story->isOpen()) {
         forwardStoryMouse(event);
         return;
@@ -368,10 +400,29 @@ void PageTextItem::mouseDoubleClickEvent(QMouseEvent *event)
         event->accept();
         return;
     }
+    if (m_pictures != nullptr && event->button() == Qt::LeftButton) {
+        if (const int picture = m_pictures->pictureAt(viewToDoc(event->position())); picture >= 0) {
+            m_pictures->select(picture);
+            emit pictureDialogRequested();
+            event->accept();
+            return;
+        }
+    }
     if (m_story != nullptr && event->button() == Qt::LeftButton && openStoryAt(event)) {
         return;
     }
     forwardMouse(event);
+}
+
+void PageTextItem::hoverMoveEvent(QHoverEvent *event)
+{
+    // Resize cursors over a selected picture's handles.
+    static const Qt::CursorShape kShapes[8] = {Qt::SizeFDiagCursor, Qt::SizeVerCursor, Qt::SizeBDiagCursor,
+                                               Qt::SizeHorCursor,   Qt::SizeFDiagCursor, Qt::SizeVerCursor,
+                                               Qt::SizeBDiagCursor, Qt::SizeHorCursor};
+    const int handle = m_pictures != nullptr && !isEditingStory() ? m_pictures->handleAt(viewToDoc(event->position())) : -1;
+    setCursor(QCursor(handle >= 0 ? kShapes[handle] : Qt::IBeamCursor));
+    QQuickPaintedItem::hoverMoveEvent(event);
 }
 
 void PageTextItem::keyPressEvent(QKeyEvent *event)

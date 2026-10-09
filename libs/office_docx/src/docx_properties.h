@@ -66,6 +66,14 @@ inline constexpr int kWidowControl = kDocxBase + 9; // bool, set only when false
 // the snapshot read; apps/qindawrite/src/write_pagination.cpp sets and
 // clears it.
 inline constexpr int kSyntheticBreak = kDocxBase + 24; // int
+// A display-only line height (Word's font metrics, docx_metrics.h): the
+// layout's is LineDistanceHeight; this keeps the paragraph's OWN line
+// height type and value. AGENT-CONTRACT: ownLineSpacing() (docx_format.h)
+// is what the snapshot and the writer read.
+inline constexpr int kLineSpacingOwn = kDocxBase + 25; // QVariantList{int type, qreal value}
+// A picture's alternative text (wp:docPr/@descr), shown to screen readers
+// and kept with the picture; edited in QindaWrite's Picture dialog.
+inline constexpr int kPictureAltText = kDocxBase + 26; // QString
 
 // Char formats (QTextImageFormat included).
 inline constexpr int kRunStyleId = kDocxBase + 10;      // QString w:rStyle value

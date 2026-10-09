@@ -533,7 +533,11 @@ void PageTextControl::drawContents(QPainter *painter, const QRectF &clip) const
     context.clip = clip;
     context.palette = m_palette;
     context.cursorPosition = cursorOn() ? m_cursor.position() : -1;
-    if (m_cursor.hasSelection()) {
+    // A lone selected picture shows handles (page_picture_tool.h), not a
+    // highlight tinting it, as in Word.
+    const bool lonePicture = m_cursor.selectionEnd() - m_cursor.selectionStart() == 1
+        && m_cursor.selectedText() == QString(QChar::ObjectReplacementCharacter) && m_cursor.charFormat().isImageFormat();
+    if (m_cursor.hasSelection() && !lonePicture) {
         QAbstractTextDocumentLayout::Selection selection;
         selection.cursor = m_cursor;
         selection.format.setBackground(m_palette.highlight());

@@ -285,6 +285,23 @@ and it reads back as Heading 1. `tst_write_review` checks that a style
 applied to a written line restyles the text itself (it used to change only
 the paragraph mark).
 
+**Pictures:** `tst_write_picture` 3/3 — hit test and selection, a corner
+handle scales in proportion and a side handle stretches, each drag one
+undo step; a click selects through the page item and a double-click asks
+for the Picture dialog; size and alt text land in the saved `.docx`
+(`descr`, `cx`); a Word picture resized keeps its crop and name with both
+extents patched. `tst_write_ui` adds the Picture command (enabled only with
+a picture selected, the dialog opens, `applyPicture` resizes). Looked at:
+the dialog over a selected picture (handles, no selection tint).
+
+**Line metrics:** `tst_docx_read` `linesFollowWordsFontMetrics` — a laid-out
+line pitch equals Word's single line for the drawn font × the paragraph's
+own multiple, and the saved paragraph carries no spacing it did not have.
+Page counts against Word's own (`QQO_WRITE_PAGES_CORPUS`, 567 documents):
+before 369 exact / 94 off by one / 44 shorter by 2+ / 60 longer by 2+
+(3,951 pages); with Word's line metrics 354 / 106 / 47 / 60 (3,910; Word
+3,666).
+
 **Fonts:** `media-fonts/crosextrafonts-carlito` and `-caladea` (metric
 clones of Calibri and Cambria) are installed on both machines through
 Portage; with them the 25-page guide lays out on 25 pages, as in Word.

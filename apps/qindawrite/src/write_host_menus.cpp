@@ -10,6 +10,7 @@
 #include "docx_text.h"
 #include "page_text_item.h"
 #include "format_controller.h"
+#include "page_picture_tool.h"
 #include "page_text_control.h"
 #include "spell_checker.h"
 #include "standard_actions.h"
@@ -65,6 +66,14 @@ void WriteHost::insertMenus()
     QList<MenuNode> formatItems{MenuNode::submenu(QStringLiteral("writeStyleMenu"), tr("&Style"), styleItems),
                                 MenuNode::separator()};
     formatItems += m_format->formatMenuItems();
+    // Format > Picture: size and alternative text of the selected picture.
+    m_picture = actions()->add(QStringLiteral("writePictureAction"), tr("&Picture…"), {}, QStringLiteral("image"));
+    m_picture->setEnabled(false);
+    connect(m_picture, &ActionEntry::triggered, this, &WriteHost::pictureDialogRequested);
+    connect(m_control, &PageTextControl::selectionChanged, this, [this] {
+        m_picture->setEnabled(m_page != nullptr && m_page->pictures() != nullptr && m_page->pictures()->selected() >= 0);
+    });
+    formatItems.append(MenuNode::action(m_picture->id()));
     formatItems.append(MenuNode::separator());
     formatItems += m_typography->formatMenuItems();
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
@@ -237,6 +246,37 @@ void WriteHost::syncStoryActions()
     } else {
         showStatusMessage(QString(), 1);
     }
+}
+
+QVariantMap WriteHost::pictureInfo() const
+{
+    const PictureTool *tool = m_page != nullptr ? m_page->pictures() : nullptr;
+    const int position = tool != nullptr ? tool->selected() : -1;
+    if (position < 0) {
+        return {};
+    }
+    const QSizeF size = tool->pictureSize(position);
+    const QSizeF natural = tool->naturalSize(position);
+    return {{QStringLiteral("width"), size.width()},
+            {QStringLiteral("height"), size.height()},
+            {QStringLiteral("naturalWidth"), natural.width()},
+            {QStringLiteral("naturalHeight"), natural.height()},
+            {QStringLiteral("altText"), tool->altText(position)}};
+}
+
+bool WriteHost::applyPicture(const QVariantMap &picture)
+{
+    PictureTool *tool = m_page != nullptr ? m_page->pictures() : nullptr;
+    const int position = tool != nullptr ? tool->selected() : -1;
+    if (position < 0) {
+        return false;
+    }
+    const QSizeF size(picture.value(QStringLiteral("width")).toReal(), picture.value(QStringLiteral("height")).toReal());
+    if (!tool->setPicture(position, size, picture.value(QStringLiteral("altText")).toString())) {
+        return false;
+    }
+    m_page->update();
+    return true;
 }
 
 void WriteHost::prepareSpellingMenu(const QPointF &docPos)

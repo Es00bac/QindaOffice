@@ -2,6 +2,7 @@
 #include "docx_reader.h"
 
 #include "docx_format.h"
+#include "docx_metrics.h"
 #include "docx_properties.h"
 #include "docx_reader_p.h"
 #include "ooxml_namespaces.h"
@@ -291,6 +292,17 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
     if (!env.approximations.isEmpty()) {
         parts->warnings.append(QStringLiteral("Shown approximately and kept unchanged on save: %1.")
                                    .arg(describe(env.approximations)));
+    }
+    // Word's line height (docx_metrics.h): display only, before undo is on.
+    applyWordLineMetrics(body);
+    for (auto *stories : {&parts->headers, &parts->footers}) {
+        for (HeaderFooter &story : *stories) {
+            if (story.document) {
+                const bool modified = story.document->isModified();
+                applyWordLineMetrics(story.document.get());
+                story.document->setModified(modified); // untouched: still copied byte for byte
+            }
+        }
     }
     body->setUndoRedoEnabled(undo);
     body->setModified(false);

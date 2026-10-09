@@ -102,6 +102,11 @@ public:
     // footerDistance} in document px, plus differentFirstPage, header,
     // footer (plain patterns; {page}/{pages}).
     Q_INVOKABLE void applyPageSetup(const QVariantMap &setup);
+    // The selected picture for the Picture dialog: width/height and its
+    // natural size (document px), alt text; empty without a picture.
+    Q_INVOKABLE QVariantMap pictureInfo() const;
+    // {width, height, altText} onto the selected picture, one undo step.
+    Q_INVOKABLE bool applyPicture(const QVariantMap &picture);
     Q_INVOKABLE void exportPdfTo(const QUrl &url);
     Q_INVOKABLE void loadTemplateResolved(const QString &path, const QString &choice);
     // ---- find and replace ----
@@ -143,6 +148,8 @@ signals:
     void wordCountRequested(const QVariantMap &counts);
     void footnoteRequested(const QString &id, const QString &text);
     void pageSetupRequested();
+    // Format > Picture, or a double-click on a picture.
+    void pictureDialogRequested();
     void exportPdfRequested(const QString &suggestedPath);
     void templateConsentRequested(const QString &path);
     void proposalRequested(const QString &original, const QString &proposal);
@@ -194,6 +201,7 @@ private:
     QList<Quick::ActionEntry *> m_spellSuggestions;
     Quick::ActionEntry *m_spellIgnore = nullptr;
     Quick::ActionEntry *m_closeStory = nullptr;
+    Quick::ActionEntry *m_picture = nullptr;
     QTextCursor m_spellWord;
     QString m_pendingTemplate;
 };

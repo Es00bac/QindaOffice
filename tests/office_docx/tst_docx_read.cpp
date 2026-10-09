@@ -3,6 +3,9 @@
 // into QTextDocument + WordParts.
 
 #include "docx_fixture.h"
+#include "docx_format.h"
+#include "docx_writer.h"
+#include "docx_metrics.h"
 #include "docx_properties.h"
 #include "docx_reader.h"
 
@@ -11,6 +14,8 @@
 #include <QTextFrame>
 #include <QTextList>
 #include <QTextTable>
+#include <QTextLayout>
+#include <QAbstractTextDocumentLayout>
 #include <QtTest>
 
 using namespace QindaOffice;
@@ -22,6 +27,7 @@ class DocxReadTest : public QObject {
 private slots:
     void resolvesStylesThemeFontsAndDirectFormatting();
     void foldsParagraphSpacingLikeWord();
+    void linesFollowWordsFontMetrics();
     void numbersListsLikeWord();
     void tablesKeepMergesShadingAndBorders();
     void tableStyleConditionsAndCellSpacing();
@@ -142,6 +148,38 @@ void DocxReadTest::resolvesStylesThemeFontsAndDirectFormatting()
     QVERIFY(styled.hasProperty(Docx::kRunSnapshot));
 }
 
+// Word's single line is the font's Windows metrics (docx_metrics.h); Qt's
+// is ascent + descent + leading rounded up. The layout must show Word's,
+// and the saved spacing must stay the paragraph's own.
+void DocxReadTest::linesFollowWordsFontMetrics()
+{
+    DocxFixture f;
+    f.styles = kStyles;
+    f.body = para(QStringLiteral("word ").repeated(120));
+    auto doc = load(f);
+    QVERIFY(doc->ok);
+    QTextDocument &body = doc->body;
+    body.setTextWidth(600);
+    body.documentLayout()->documentSize();
+    const QTextBlock block = blockWithText(body, QStringLiteral("word ").repeated(120));
+    QVERIFY(block.isValid());
+    const QTextLayout *lines = block.layout();
+    QVERIFY(lines->lineCount() >= 3);
+    const QFont font = block.begin().fragment().charFormat().font().resolve(body.defaultFont());
+    const qreal word = Docx::wordSingleLineHeight(font);
+    QVERIFY(word > 0);
+    const Docx::LineSpacing own = Docx::ownLineSpacing(block.blockFormat());
+    const qreal multiple = own.type == QTextBlockFormat::ProportionalHeight ? own.value / 100.0 : 1.0;
+    const qreal pitch = lines->lineAt(2).y() - lines->lineAt(1).y();
+    QVERIFY2(qAbs(pitch - word * multiple) < 0.6, qPrintable(QStringLiteral("%1 vs %2").arg(pitch).arg(word * multiple)));
+    // Written back, the paragraph carries no spacing it did not have.
+    const QByteArray bytes = Docx::docxBytes(body, doc->parts);
+    QString error;
+    const auto written = Ooxml::Package::fromData(bytes, &error);
+    QVERIFY2(written, qPrintable(error));
+    QVERIFY(!QString::fromUtf8(written->data(written->mainPart())).contains(QStringLiteral("w:line=")));
+}
+
 void DocxReadTest::foldsParagraphSpacingLikeWord()
 {
     // Word adds 8 pt after + 12 pt before = 20 pt; Qt keeps the larger of
@@ -162,8 +200,9 @@ void DocxReadTest::foldsParagraphSpacingLikeWord()
     // The last paragraph keeps its own space after.
     QCOMPARE(blockWithText(doc->body, QStringLiteral("b")).blockFormat().bottomMargin(), 300.0 / 15.0);
     // Line spacing 259/240 = 107.9 %.
-    QCOMPARE(qRound(one.blockFormat().lineHeight()), 108);
-    QCOMPARE(one.blockFormat().lineHeightType(), int(QTextBlockFormat::ProportionalHeight));
+    // The paragraph's own 1.08 lines; the layout's is Word's font metrics (docx_metrics.h).
+    QCOMPARE(qRound(Docx::ownLineSpacing(one.blockFormat()).value), 108);
+    QCOMPARE(Docx::ownLineSpacing(one.blockFormat()).type, int(QTextBlockFormat::ProportionalHeight));
 }
 
 void DocxReadTest::numbersListsLikeWord()
@@ -240,7 +279,7 @@ void DocxReadTest::tablesKeepMergesShadingAndBorders()
     // Table Grid's own pPr beats Normal: no space after inside cells.
     const QTextBlock a = blockWithText(doc->body, QStringLiteral("a"));
     QCOMPARE(a.blockFormat().bottomMargin(), 0.0);
-    QCOMPARE(qRound(a.blockFormat().lineHeight()), 100);
+    QCOMPARE(qRound(Docx::ownLineSpacing(a.blockFormat()).value), 100);
     QVERIFY(blockWithText(doc->body, QStringLiteral("after")).isValid());
 }
 

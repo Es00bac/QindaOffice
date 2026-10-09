@@ -95,6 +95,7 @@ void WriteHost::attachPage(PageTextItem *item)
     m_revisions->setInputTarget(item);
     connect(item, &PageTextItem::pageCountChanged, this, [this] { updateWriteStatus(); });
     connect(item, &PageTextItem::storyChanged, this, [this] { syncStoryActions(); });
+    connect(item, &PageTextItem::pictureDialogRequested, this, &WriteHost::pictureDialogRequested);
     connect(item, &PageTextItem::viewZoomChanged, this, [this] { updateWriteStatus(); });
     connect(item, &PageTextItem::contextMenuRequested, this,
             [this](qreal x, qreal y, const QPointF &docPos) {

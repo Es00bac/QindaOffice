@@ -254,6 +254,11 @@ bool BodyReader::readObject(const XmlElement &run, const XmlElement &object, QTe
         }
         image.setProperty(kDrawingXml, Ooxml::serializeFragment(*drawing));
         image.setProperty(kDrawingSize, size);
+        if (const XmlElement *docPr = drawing->descendant(QString::fromUtf16(Ooxml::Ns::WP), u"docPr")) {
+            if (const QString alt = docPr->attr(u"descr"); !alt.isEmpty()) {
+                image.setProperty(kPictureAltText, alt);
+            }
+        }
         image.setProperty(kInlineSourcePart, m_part);
     } else {
         // Preserved verbatim: the whole run goes back on save.

@@ -58,7 +58,8 @@ QtObject {
                 { action: "writeInsertPageCountAction", iconName: "sigma" },
                 { action: "writeCloseHeaderFooterAction", iconName: "x" }] },
             { id: "tables", label: qsTr("Tables"), items: [{ action: "insertTableAction", size: "large" }] },
-            { id: "illustrations", label: qsTr("Illustrations"), items: [{ action: "insertImageAction", size: "large" }] },
+            { id: "illustrations", label: qsTr("Illustrations"), items: [
+                { action: "insertImageAction", size: "large" }, { action: "writePictureAction", iconName: "image" }] },
             { id: "links", label: qsTr("Links"), items: [{ action: "insertHyperlinkAction", size: "large" }] },
             { id: "text", label: qsTr("Text"), items: [
                 "insertColumnsAction", { action: "insertHorizontalRuleAction", iconName: "minus" },

@@ -55,6 +55,13 @@ struct ParagraphSpacing {
 [[nodiscard]] QVariantMap blockSnapshot(const QTextBlockFormat &format);
 // A block's page-break flags without a display-only break (kSyntheticBreak).
 [[nodiscard]] QTextFormat::PageBreakFlags ownPageBreaks(const QTextBlockFormat &format);
+// A block's own line height (QTextBlockFormat::LineHeightTypes and value),
+// not the display-only Word metrics adjustment (kLineSpacingOwn).
+struct LineSpacing {
+    int type = QTextBlockFormat::SingleHeight;
+    qreal value = 0;
+};
+[[nodiscard]] LineSpacing ownLineSpacing(const QTextBlockFormat &format);
 [[nodiscard]] QVariantMap charSnapshot(const QTextCharFormat &format);
 
 // The font family a w:rFonts element names for Latin text (theme fonts

@@ -30,6 +30,32 @@ namespace {
 
 const QString kW = QString::fromUtf16(Ooxml::Ns::W);
 const QString kWP = QString::fromUtf16(Ooxml::Ns::WP);
+
+// A preserved w:drawing at a new size: the anchor's (or inline's) extent
+// and the picture shape's own a:ext.
+void resizeDrawing(XmlElement &drawing, const QString &cx, const QString &cy)
+{
+    for (XmlChild &child : drawing.children) {
+        if (!child.element || child.element->ns != kWP) {
+            continue; // wp:inline or wp:anchor
+        }
+        for (XmlChild &part : child.element->children) {
+            if (part.element && part.element->ns == kWP && part.element->name == u"extent") {
+                part.element->setAttribute(QString(), QStringLiteral("cx"), cx);
+                part.element->setAttribute(QString(), QStringLiteral("cy"), cy);
+            }
+        }
+    }
+    const QString kPicNs = QString::fromUtf16(Ooxml::Ns::PIC);
+    if (auto *spPr = const_cast<XmlElement *>(drawing.descendant(kPicNs, u"spPr"))) {
+        if (XmlElement *xfrm = spPr->child(QString::fromUtf16(Ooxml::Ns::A), u"xfrm")) {
+            if (XmlElement *ext = xfrm->child(QString::fromUtf16(Ooxml::Ns::A), u"ext")) {
+                ext->setAttribute(QString(), QStringLiteral("cx"), cx);
+                ext->setAttribute(QString(), QStringLiteral("cy"), cy);
+            }
+        }
+    }
+}
 const QString kA = QString::fromUtf16(Ooxml::Ns::A);
 const QString kPIC = QString::fromUtf16(Ooxml::Ns::PIC);
 const QString kR = QString::fromUtf16(Ooxml::Ns::R);
@@ -399,11 +425,22 @@ XmlElementPtr BodyWriter::pictureRun(const QTextImageFormat &format)
     }
     const QSizeF imported = format.property(kDrawingSize).toSizeF();
     XmlElementPtr drawing = Ooxml::parseFragment(format.stringProperty(kDrawingXml));
-    const bool keep = drawing && qAbs(imported.width() - size.width()) < 0.5
-        && qAbs(imported.height() - size.height()) < 0.5;
-    if (keep) {
+    const QString alt = format.stringProperty(kPictureAltText);
+    if (drawing) {
         // The source drawing (alt text, crop, effects, anchoring) with the
-        // picture re-pointed at the part written above.
+        // picture re-pointed at the part written above; a resized picture
+        // keeps all of it and only its extents change.
+        if (qAbs(imported.width() - size.width()) >= 0.5 || qAbs(imported.height() - size.height()) >= 0.5) {
+            resizeDrawing(*drawing, cx, cy);
+        }
+        if (auto *docPr = const_cast<XmlElement *>(drawing->descendant(kWP, u"docPr"));
+            docPr != nullptr && docPr->attr(u"descr") != alt) {
+            if (alt.isEmpty()) {
+                docPr->removeAttribute(QString(), u"descr");
+            } else {
+                docPr->setAttribute(QString(), QStringLiteral("descr"), alt);
+            }
+        }
         if (XmlElement *blip = const_cast<XmlElement *>(drawing->descendant(kA, u"blip"))) {
             blip->removeAttribute(kR, u"embed");
             if (m_env.copier) {
@@ -438,9 +475,12 @@ XmlElementPtr BodyWriter::pictureRun(const QTextImageFormat &format)
     for (const char *attr : {"l", "t", "r", "b"}) {
         effect.setAttribute(QString(), QString::fromLatin1(attr), QStringLiteral("0"));
     }
-    inl.appendElement(kWP, QStringLiteral("docPr"))
-        .setAttribute(QString(), QStringLiteral("id"), QString::number(id))
-        .setAttribute(QString(), QStringLiteral("name"), QStringLiteral("Picture %1").arg(id));
+    XmlElement &docPr = inl.appendElement(kWP, QStringLiteral("docPr"))
+                            .setAttribute(QString(), QStringLiteral("id"), QString::number(id))
+                            .setAttribute(QString(), QStringLiteral("name"), QStringLiteral("Picture %1").arg(id));
+    if (!alt.isEmpty()) {
+        docPr.setAttribute(QString(), QStringLiteral("descr"), alt);
+    }
     inl.appendElement(kWP, QStringLiteral("cNvGraphicFramePr"))
         .appendElement(kA, QStringLiteral("graphicFrameLocks"))
         .setAttribute(QString(), QStringLiteral("noChangeAspect"), QStringLiteral("1"));

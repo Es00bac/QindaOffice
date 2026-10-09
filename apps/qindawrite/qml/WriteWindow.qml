@@ -163,6 +163,10 @@ OfficeWindow {
         }
         function onFootnoteRequested(id, text) { footnoteDialog.noteId = id; footnoteDialog.text = text; footnoteDialog.open() }
         function onPageSetupRequested() { pageSetup.load(window.write.pageSetup); pageSetup.open() }
+        function onPictureDialogRequested() {
+            const info = window.write.pictureInfo()
+            if (info.width !== undefined) { pictureDialog.load(info); pictureDialog.open() }
+        }
         function onExportPdfRequested(suggested) { exportDialog.selectedFile = "file://" + suggested; exportDialog.open() }
         function onTemplateConsentRequested(path) { templateConsent.path = path; templateConsent.open() }
         function onProposalRequested(original, proposal) { proposalDialog.original = original; proposalDialog.proposal = proposal; proposalDialog.open() }
@@ -180,6 +184,7 @@ OfficeWindow {
         id: pageSetup
         onSetupApplied: function(setup) { window.write.applyPageSetup(setup) }
     }
+    PictureDialog { id: pictureDialog; onPictureApplied: function(picture) { window.write.applyPicture(picture) } }
     Tk.MessageDialog { id: wordCount; objectName: "wordCountDialog"; title: qsTr("Word Count"); variant: "info"; primaryText: qsTr("OK"); secondaryText: "" }
     Ai.ProposalDialog {
         id: proposalDialog

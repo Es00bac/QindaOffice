@@ -22,6 +22,7 @@
 
 namespace QindaOffice::Apps::Write {
 
+class PictureTool;
 class StoryEditor;
 class WriteDocument;
 
@@ -64,6 +65,8 @@ public:
     [[nodiscard]] bool isEditingStory() const;
     [[nodiscard]] QString storyLabel() const;
     [[nodiscard]] StoryEditor *storyEditor() const { return m_story.get(); }
+    // Picture selection and resizing (page_picture_tool.h).
+    [[nodiscard]] PictureTool *pictures() const { return m_pictures.get(); }
     Q_INVOKABLE void editHeader();
     Q_INVOKABLE void editFooter();
     Q_INVOKABLE void closeStory();
@@ -78,6 +81,8 @@ signals:
     void contextMenuRequested(qreal x, qreal y, const QPointF &docPos);
     void doubleClicked(int position);
     void storyChanged();
+    // A double-click on a picture: the Picture dialog for the selection.
+    void pictureDialogRequested();
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -89,6 +94,7 @@ protected:
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
     void focusInEvent(QFocusEvent *event) override;
     void focusOutEvent(QFocusEvent *event) override;
+    void hoverMoveEvent(QHoverEvent *event) override;
 
 private:
     void forwardMouse(QMouseEvent *event);
@@ -109,6 +115,7 @@ private:
     QPointer<WriteDocument> m_document;
     QPointer<PageTextControl> m_control;
     std::unique_ptr<StoryEditor> m_story;
+    std::unique_ptr<PictureTool> m_pictures;
     PageGeometry m_geometry;
     qreal m_viewZoom = 1.0;
     int m_pageCount = 1;

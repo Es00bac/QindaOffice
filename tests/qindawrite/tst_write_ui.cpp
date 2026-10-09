@@ -9,6 +9,9 @@
 #include <QRegularExpression>
 #include "write_test_support.h"
 
+#include "../office_docx/docx_fixture.h"
+#include "qindawrite/src/page_picture_tool.h"
+
 #include "qindawrite/src/format_controller.h"
 #include "qindawrite/src/page_setup_io.h"
 #include "qindawrite/src/table_actions.h"
@@ -362,6 +365,41 @@ private slots:
         outside.movePosition(QTextCursor::End);
         scene.control()->setTextCursor(outside);
         QVERIFY(!tables->actions().insertRowBelow->isEnabled());
+    }
+
+    // Format > Picture: enabled while a picture is selected, the dialog
+    // shows its size, and applying it resizes the picture (one undo step);
+    // the selected picture shows its handles on the page.
+    void pictureCommandEditsTheSelectedPicture()
+    {
+        Scene scene;
+        QVERIFY2(scene.ready(), qPrintable(scene.error));
+        QTextCursor cursor(scene.doc->textDocument());
+        cursor.insertText(QStringLiteral("Logo: "));
+        QTextImageFormat image;
+        image.setName(scene.doc->addPicture(QindaOffice::Test::pngBytes(120, 60)));
+        image.setWidth(120);
+        image.setHeight(60);
+        const int position = cursor.position();
+        cursor.insertImage(image);
+        ActionEntry *picture = scene.host.action(QStringLiteral("writePictureAction"));
+        QVERIFY(picture != nullptr);
+        QVERIFY(!picture->isEnabled());
+        scene.page->pictures()->select(position);
+        QVERIFY(picture->isEnabled());
+        picture->trigger();
+        // A Tk.Dialog is a popup: found in the object tree, "opened" when shown.
+        QObject *dialog = scene.window->findChild<QObject *>(QStringLiteral("pictureDialog"));
+        QVERIFY(dialog != nullptr);
+        QTRY_VERIFY(dialog->property("opened").toBool());
+        QTest::qWait(120);
+        QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindawrite_picture_dialog"));
+        const QVariantMap info = scene.host.pictureInfo();
+        QCOMPARE(info.value(QStringLiteral("width")).toReal(), 120.0);
+        QVERIFY(scene.host.applyPicture({{QStringLiteral("width"), 240}, {QStringLiteral("height"), 120},
+                                         {QStringLiteral("altText"), QStringLiteral("Company logo")}}));
+        QCOMPARE(scene.page->pictures()->pictureSize(position), QSizeF(240, 120));
+        QCOMPARE(scene.page->pictures()->altText(position), QStringLiteral("Company logo"));
     }
 
     void pageSetupRoundTripsThroughHtml()

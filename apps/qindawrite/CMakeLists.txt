@@ -7,6 +7,7 @@ set(qindawrite_qml
     qml/FootnoteDialog.qml
     qml/HyperlinkDialog.qml
     qml/PageSetupDialog.qml
+    qml/PictureDialog.qml
     qml/SymbolDialog.qml
     qml/TableDialog.qml
     qml/WritePage.qml
@@ -31,6 +32,7 @@ qt_add_qml_module(qindawrite_app
         src/format_io.cpp src/format_io.h
         src/page_geometry.cpp src/page_geometry.h
         src/page_setup_io.cpp src/page_setup_io.h
+        src/page_picture_tool.cpp src/page_picture_tool.h
         src/page_story_editor.cpp src/page_story_editor.h
         src/page_text_accessible.cpp src/page_text_accessible.h
         src/page_text_control.cpp src/page_text_control.h

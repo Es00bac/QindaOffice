@@ -285,16 +285,16 @@ XmlElementPtr BodyWriter::paragraphProperties(const QTextBlock &block)
             spacing.setAttribute(kW, QStringLiteral("after"), twips(bf.bottomMargin()));
         }
         if (!imported || changed("lh") || changed("lhType")) {
-            const int type = bf.lineHeightType();
+            const LineSpacing own = ownLineSpacing(bf);
             QString line = QStringLiteral("240");
             QString rule = QStringLiteral("auto");
-            if (type == QTextBlockFormat::ProportionalHeight) {
-                line = QString::number(qRound(bf.lineHeight() * 2.4));
-            } else if (type == QTextBlockFormat::FixedHeight) {
-                line = twips(bf.lineHeight());
+            if (own.type == QTextBlockFormat::ProportionalHeight) {
+                line = QString::number(qRound(own.value * 2.4));
+            } else if (own.type == QTextBlockFormat::FixedHeight) {
+                line = twips(own.value);
                 rule = QStringLiteral("exact");
-            } else if (type == QTextBlockFormat::MinimumHeight) {
-                line = twips(bf.lineHeight());
+            } else if (own.type == QTextBlockFormat::MinimumHeight) {
+                line = twips(own.value);
                 rule = QStringLiteral("atLeast");
             }
             spacing.setAttribute(kW, QStringLiteral("line"), line);

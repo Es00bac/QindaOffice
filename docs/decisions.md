@@ -449,6 +449,9 @@ the reader adds display-only state the writer never exports — see
 [word-interchange.md](word-interchange.md#layout-adjustments-display-only-never-written).
 Applying Normal, Title, Heading 1–6 or Quote in a Word document applies
 that document's own style (`docx_restyle`), written as `w:pStyle` only.
+Pictures are selected and resized on the page (Word's handles) and given
+alt text; a resized Word picture keeps its own drawing. Lines take Word's
+single-line height from the drawn font's Windows metrics (display only).
 Headers and footers are edited in place: the page view's one editing
 control switches onto the story's live document (`page_story_editor`), so
 no command needs a second code path.

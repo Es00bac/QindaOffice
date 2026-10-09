@@ -46,7 +46,13 @@ rest and `WriteDocument` owns both:
   Word's own markup.
 - **Pictures** — the original bytes (`WordParts::media`, resource names
   `qwmedia:…`) travel with the document: Insert ▸ Image stores the file's
-  bytes, not its path.
+  bytes, not its path. A click selects a picture and shows Word's eight
+  handles (`page_picture_tool.h`): a corner scales it in proportion (Shift:
+  freely), a side stretches it, each drag one undo step; Format ▸ Picture
+  (or a double-click) sets its size, locks or frees the aspect ratio,
+  resets it to the picture's own size, and edits its alt text
+  (`wp:docPr/@descr`). A Word picture keeps its own drawing when resized —
+  crop, effects, name and anchoring — with only its extents patched.
 - **The source package** — what Write does not model is carried from it on
   save: styles, numbering definitions, theme, settings, fonts, comments,
   endnotes, custom XML, glossary, people, VBA (macro kinds only).
@@ -114,6 +120,7 @@ closed with state the writer ignores (D-068):
 | keeps a keep-with-next paragraph (headings) on the page of the next one | breaks anywhere | a page break before the run (`write_pagination`) |
 | keeps a table's keep-with-next leading rows together | splits between any rows | a page break before the table |
 | never leaves a paragraph's first line alone at a page bottom (widow/orphan control, on unless the file turns it off) | does | a page break before the paragraph (a two-line one moves whole) |
+| sets a single line from the font's Windows metrics (OS/2 win ascent + descent, plus the hhea gap beyond them) | ascent + descent + leading, rounded up | a LineDistanceHeight of the difference (`docx_metrics.h`; the paragraph's own spacing kept in `kLineSpacingOwn`) |
 
 The pagination breaks (`Docx::kSyntheticBreak`, which keeps the block's own
 break flags) are laid out again after edits from the first changed
@@ -152,13 +159,15 @@ Session Review panel) and *Open in QindaWrite* write a page through
 
 - One set of headers/footers and one page layout for the whole document;
   a multi-section document keeps its sections on save while untouched.
-- Pagination follows Word's keep rules (above) but not its line metrics:
-  Word sizes a single-spaced line from the font's Windows metrics (Calibri
-  1.22 em), Qt from the font actually drawn. Without Calibri, or its
-  metric-compatible clone Carlito (`media-fonts/crosextrafonts-carlito`,
-  Cambria → `crosextrafonts-caladea`), Calibri text is set in Liberation
-  Sans: wider, but lines about 5 % shorter, so a long Calibri document can
-  end a page or two early (the 25-page guide: 23 pages).
+- Pagination follows Word's keep rules and line metrics (above), read from
+  the font actually drawn: install the metric-compatible clones of Office's
+  fonts (`media-fonts/crosextrafonts-carlito` for Calibri,
+  `crosextrafonts-caladea` for Cambria; both machines have them) or a
+  Calibri document is set in Liberation Sans, wider and with other
+  metrics. Measured over the owner's 567 documents Word itself paginated
+  (`pageCountsAgreeWithWord`): 354 lay out on exactly Word's page count and
+  106 within one page; Write's total is 6.7 % longer (3,910 pages to
+  Word's 3,666), the rest of the gap not yet traced.
 - A widow (a paragraph's last line alone at a page top) is left alone when
   the paragraph has three lines or more: a block format cannot break inside
   a paragraph. Keep rules inside a table apply to its leading rows only.
