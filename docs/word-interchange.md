@@ -184,9 +184,14 @@ Session Review panel) and *Open in QindaWrite* write a page through
   `crosextrafonts-caladea` for Cambria; both machines have them) or a
   Calibri document is set in Liberation Sans, wider and with other
   metrics. Measured over the owner's 567 documents Word itself paginated
-  (`pageCountsAgreeWithWord`): 354 lay out on exactly Word's page count and
-  106 within one page; Write's total is 6.7 % longer (3,910 pages to
-  Word's 3,666), the rest of the gap not yet traced.
+  (`pageCountsAgreeWithWord`): 383 lay out on exactly Word's page count and
+  101 within one page; Write's total is 1 % shorter (3,630 pages to Word's
+  3,666). On the 211 whose recorded count Word laid out last (its rendered
+  page breaks agree with it): 156 exact (74 %), 198 within one page (94 %).
+  What is left is mostly fonts: Aptos, Office's default since 2023, has no
+  metric-compatible free clone, so Aptos documents lay out about 13 %
+  shorter; documents with several sections (one page layout in Write) run
+  longer.
 - A widow (a paragraph's last line alone at a page top) is left alone when
   the paragraph has three lines or more: a block format cannot break inside
   a paragraph. Keep rules inside a table apply to its leading rows only.

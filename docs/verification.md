@@ -749,7 +749,10 @@ in Word — the thread, the reply and the resolved state as written.
 between auto-spaced paragraphs (the larger of two, not the sum), none
 between items of one list, none at a table cell's top and bottom. The
 owner's worst-paginated document, a Word file converted from HTML (Word: 25
-pages), went from 37 pages in Write to 24.
+pages), went from 37 pages in Write to 24. Over the 567 documents: 383
+exact / 101 off by one / 47 shorter by 2+ / 36 longer by 2+ (3,630 pages;
+Word 3,666); on the 211 whose rendered page breaks agree with Word's count,
+156 exact and 198 within one (were 141 and 186).
 
 **Line metrics:** `tst_docx_read` `linesFollowWordsFontMetrics` — a laid-out
 line pitch equals Word's single line for the drawn font × the paragraph's
