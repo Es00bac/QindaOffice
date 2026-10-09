@@ -759,7 +759,10 @@ list opens at the click with its three items and an item replaces the
 placeholder; the calendar opens and a day lands as `10/8/2026`; a click on
 a text placeholder selects it and typing replaces it in ordinary ink; the
 saved file carries every state. The fixtures gain `FormFieldPopup` (+1 row
-each). LibreOffice renders the edited form (☒, Green, 10/8/2026). Looked
+each). LibreOffice renders the edited form (☒, Green, 10/8/2026). The
+owner's 590 `.docx` (8 with content controls) read and round-trip with 0
+failures, 0 text/table/picture changes and 0 schema-invalid packages
+(`QQO_DOCX_CORPUS_VALIDATE`); qinda: 189/189 targets at 1d629a3. Looked
 at: the list menu at the click; the calendar popover. Desktop check
 (owner): open a Word form, tick a box, pick from a list and a date, save,
 open in Word — the boxes, choices and date as set, no repair prompt.
