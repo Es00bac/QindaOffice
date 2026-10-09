@@ -33,6 +33,11 @@
 #include <QSet>
 #include <QTimer>
 
+#include <cstdio>
+
+#include <fcntl.h>
+#include <unistd.h>
+
 namespace QindaOffice::Apps::Mail {
 
 using QindaOffice::Mail::MessageAttachment;
@@ -62,6 +67,22 @@ bool MailService::writeSource(const QString &messageId, const QByteArray &raw, Q
 {
     const QString path = sourcePath(messageId);
     QDir().mkpath(QFileInfo(path).absolutePath());
+    if (m_bulkSources) {
+        // AGENT-NOTE (M76): an Outlook import writes thousands of sources;
+        // QSaveFile syncs each one (5 ms apiece). Here each file still lands
+        // atomically (write, then rename over), and the importer calls
+        // syncSources() once before it saves the store — the records, the
+        // commit point, never reach disk before their sources.
+        QFile part(path + QStringLiteral(".part"));
+        const bool written = raw.size() <= kMaximumSourceBytes && part.open(QIODevice::WriteOnly)
+            && part.write(raw) == raw.size();
+        part.close();
+        if (written && std::rename(QFile::encodeName(part.fileName()).constData(), QFile::encodeName(path).constData()) == 0)
+            return true;
+        part.remove();
+        if (error != nullptr) *error = raw.size() > kMaximumSourceBytes ? tr("The message is larger than 64 MB") : part.errorString();
+        return false;
+    }
     QSaveFile file(path);
     const bool ok = raw.size() <= kMaximumSourceBytes && file.open(QIODevice::WriteOnly)
         && file.write(raw) == raw.size() && file.commit();
@@ -69,6 +90,19 @@ bool MailService::writeSource(const QString &messageId, const QByteArray &raw, Q
         *error = raw.size() > kMaximumSourceBytes ? tr("The message is larger than 64 MB") : file.errorString();
     }
     return ok;
+}
+
+void MailService::syncSources()
+{
+#ifdef Q_OS_LINUX
+    const int fd = ::open(QFile::encodeName(m_dataDir + QStringLiteral("/sources")).constData(), O_RDONLY | O_DIRECTORY);
+    if (fd >= 0) {
+        ::syncfs(fd);
+        ::close(fd);
+        return;
+    }
+#endif
+    ::sync();
 }
 
 void MailService::removeSource(const QVariantMap &record)

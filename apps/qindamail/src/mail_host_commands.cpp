@@ -4,6 +4,7 @@
 #include "mail_host.h"
 
 #include "mail_service.h"
+#include "pst_import.h"
 #include "standard_actions.h"
 
 #include <QKeySequence>
@@ -73,6 +74,11 @@ constexpr Command kCommands[] = {
     {"mailSaveAttachmentsAction", QT_TR_NOOP("Save All Attac&hments…"), "", "paperclip"},
     {"mailImportMboxAction", QT_TR_NOOP("Import Mail&box…"), "", "mailbox"},
     {"mailExportPdfAction", QT_TR_NOOP("Export as P&DF…"), "", "file-down"},
+    // M76 (D-085): Outlook data files, contact groups (Ctrl+Shift+L is
+    // Outlook's New Contact Group), CardDAV address books.
+    {"mailImportPstAction", QT_TR_NOOP("Outlook &Data File (.pst)…"), "", "archive-restore"},
+    {"contactNewGroupAction", QT_TR_NOOP("New Contact &Group"), "Ctrl+Shift+L", "users-round"},
+    {"contactAddressBookAction", QT_TR_NOOP("Connect &Address Book…"), "", "cloud"},
 };
 
 const QString kViewGroup = QStringLiteral("mailView");
@@ -168,6 +174,12 @@ void MailHost::createCommands()
     on("mailSaveAttachmentsAction", [this] { emit attachmentsSaveRequested(); });
     on("mailImportMboxAction", [this] { emit mailboxImportRequested(); });
     on("mailExportPdfAction", [this] { emit pdfExportRequested(); });
+    on("mailImportPstAction", [this] { emit outlookImportRequested(); });
+    on("contactNewGroupAction", [this] {
+        setView(QStringLiteral("people"));
+        emit contactGroupNewRequested();
+    });
+    on("contactAddressBookAction", [this] { emit addressBookRequested(); });
     connect(action(QString::fromLatin1(ActionId::kEditFind)), &ActionEntry::triggered, this,
             [this] { emit searchRequested(); });
     actions()->setEnabled(QString::fromLatin1(ActionId::kEditFind), true);
@@ -204,14 +216,17 @@ void MailHost::insertMenus()
     Quick::MenuTree *tree = menuTree();
     const QString file = QStringLiteral("fileMenu");
     const QString newWindow = QString::fromLatin1(ActionId::kFileNew);
-    for (const char *id : {"mailNewMessageAction", "mailNewEventAction", "taskNewAction", "contactNewAction"})
+    for (const char *id : {"mailNewMessageAction", "mailNewEventAction", "taskNewAction", "contactNewAction",
+                           "contactNewGroupAction"})
         tree->insertInto(file, newWindow, a(id));
     const QString close = QString::fromLatin1(ActionId::kFileCloseWindow);
     // AGENT-GUARD: an id appears ONCE in the menu tree (the panel export's
     // validator rejects duplicates); the contact files live in People.
-    for (const char *id : {"mailSaveMessageAction", "mailSaveAttachmentsAction", "mailExportPdfAction",
-                           "mailImportMboxAction"})
+    for (const char *id : {"mailSaveMessageAction", "mailSaveAttachmentsAction", "mailExportPdfAction"})
         tree->insertInto(file, close, a(id));
+    // M76: File ▸ Import ▸ Outlook Data File / Mailbox.
+    tree->insertInto(file, close, MenuNode::submenu(QStringLiteral("mailImportMenu"), tr("&Import"),
+                                                    {a("mailImportPstAction"), a("mailImportMboxAction")}));
     tree->insertInto(file, close, MenuNode::separator());
     for (const char *id : {"calImportAction", "calExportAction", "calSubscribeAction"})
         tree->insertInto(file, close, a(id));
@@ -240,7 +255,8 @@ void MailHost::insertMenus()
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("mailPeopleMenu"), tr("&People"),
                                              {a("contactDeleteAction"), MenuNode::separator(),
-                                              a("contactImportAction"), a("contactExportAction")}));
+                                              a("contactImportAction"), a("contactExportAction"),
+                                              MenuNode::separator(), a("contactAddressBookAction")}));
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("mailCalendarMenu"), tr("&Calendar"),
                                              {a("calTodayAction"), a("calPreviousAction"), a("calNextAction"),
@@ -313,6 +329,8 @@ void MailHost::syncCommandState()
         ->setText(message.value(QStringLiteral("unread")).toBool() ? tr("Mark as &Read") : tr("Mark as &Unread"));
     action(QStringLiteral("mailToggleFlagAction"))
         ->setText(message.value(QStringLiteral("flagged")).toBool() ? tr("C&lear Flag") : tr("F&lag"));
+    // M76: one Outlook import at a time per process.
+    actions()->setEnabled(QStringLiteral("mailImportPstAction"), !m_service->outlookImport()->running());
     const bool calendar = m_view == QLatin1String("calendar");
     actions()->setEnabled({QStringLiteral("calPreviousAction"), QStringLiteral("calNextAction")}, calendar);
     actions()->setEnabled(QStringLiteral("mailReadingPaneAction"), mail);

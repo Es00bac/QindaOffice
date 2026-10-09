@@ -20,6 +20,10 @@ std::optional<OAuthProfile> OAuthProfile::forProvider(const QString &provider)
                                     QStringLiteral("https://www.googleapis.com/auth/calendar")};
         p.resourceScopes.insert(QStringLiteral("mail"), scopes);
         p.resourceScopes.insert(QStringLiteral("calendar"), scopes);
+        // M76: an account syncing Google Contacts over CardDAV also asks for
+        // the carddav scope (one token still covers everything granted).
+        p.resourceScopes.insert(QStringLiteral("contacts"),
+                                scopes + QStringList{QStringLiteral("https://www.googleapis.com/auth/carddav")});
         p.extraAuthorizeParameters = {{QStringLiteral("access_type"), QStringLiteral("offline")},
                                       {QStringLiteral("prompt"), QStringLiteral("consent")}};
         p.oneTokenForAllResources = true;

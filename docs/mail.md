@@ -3,7 +3,8 @@
 
 > Contacts, vCard/CSV, safe HTML reading, printing and message files
 > (`.eml`, `.mbox`, Outlook `.msg`) are in
-> [mail-interchange.md](mail-interchange.md) (M64, D-072).
+> [mail-interchange.md](mail-interchange.md) (M64, D-072), as are Outlook
+> data files, contact groups and CardDAV address books (M76, D-085).
 
 `libs/office_mail` (M43, [D-043](decisions.md#d-043-hosted-accounts-sign-in-with-pkce-over-loopback-and-keep-secrets-in-the-keyring))
 is the account layer of QindaMail: what an account is, where its servers are,
@@ -69,6 +70,13 @@ next event-loop turn through the same signal.
 }
 ```
 
+- **Address books** (M76, D-085): an account may carry
+  `"contacts": {"protocol": "carddav", "url": "https://contacts.icloud.com/",
+  "userName": "ada@icloud.com", "authMechanism": "basic", "addressBooks":
+  [{"id": "book1", "url": "https://…/card/", "name": "Contacts",
+  "enabled": true}]}` — CardDAV beside the account's mail or calendar, or
+  alone (kind `carddav`). The key is written only for an account that uses
+  it (or already had it).
 - **Unknown fields are preserved** at every level (each struct keeps the
   object it was read from and writes the known keys over it), so a newer
   build's or a hand-added field survives a load/save round trip.
@@ -93,6 +101,13 @@ next event-loop turn through the same signal.
 | `ics` | — | — | `ics` (`https:`, `webcal:`, `file:`) | none / basic |
 | `exchange` | optional IMAP | optional SMTP | `ews` | password (Basic over TLS) or bearer |
 | `microsoft365` | IMAP, `xoauth2` only | SMTP, `xoauth2` only | `graph` (bearer) or `none` | OAuth `microsoft` |
+| `carddav` (M76) | — | — | `none` | password or bearer; `contacts.protocol` must be `carddav` |
+
+Contacts (`contacts.protocol` `carddav` or `none`) may be added to every
+kind but `ics`; with `carddav` a server URL (`https:`, or `http:` to
+loopback), `authMechanism` `basic` (needs a user name, filled from the
+incoming user or the address) or `bearer` (needs `oauth.provider`, Google),
+and address books with unique ids and https (or relative) URLs are required.
 
 `MailAccount::validate()` returns one line per problem, prefixed with the
 field path (`incoming.port: must be 1–65535`), so the dialog can put it next
@@ -115,6 +130,8 @@ and user names from the address, ports from protocol + security.
 | `add(map)`, `update(map)` → `{ok, id, error, errors}` | validate → write → then change the list |
 | `remove(id)` → `{ok, id, error, secretsRequestId}` | writes the file, then removes every keyring secret of the account; `secretsRemoved(id, result)` reports it |
 | `accountById(id)`, `validate(map)`, `draftFor(kind, address, fullName)`, `reload()` | |
+| `contactsUrlFor(address)` (M76) | where CardDAV discovery starts: Google's principal URL for Gmail addresses, `https://contacts.icloud.com/`, `https://carddav.fastmail.com/`, else `https://<domain>/` |
+| `addressBooks()` (M76) | every enabled CardDAV book of every account: [{accountId, accountName, id, url, name}] (People's "Save to") |
 | signals `accountsChanged`, `accountAdded/Updated/Removed(id)`, `secretsRemoved(id, result)` | |
 
 ## Presets
@@ -183,7 +200,8 @@ or `offline` + `retryable` when no step reached a server.
 1. `configure(account)` resolves the client ([below](#oauth-client-ids)),
    the tenant, the login hint, the account id (keyring key) and the
    **resources** the account needs: `mail` (IMAP/SMTP), `calendar` (Graph,
-   or Google CalDAV with bearer), `ews` (Exchange Online EWS).
+   or Google CalDAV with bearer), `ews` (Exchange Online EWS), `contacts`
+   (Google CardDAV with bearer, M76).
 2. `authorize(requestId)` listens on **127.0.0.1**, ephemeral port, generates
    a 43-character verifier and a `state` from the system CSPRNG, and opens
    the authorization URL (`QDesktopServices::openUrl`, injectable). The
@@ -201,7 +219,7 @@ or `offline` + `retryable` when no step reached a server.
 
 | Provider | Authorize / token | Scopes |
 | --- | --- | --- |
-| Google | `https://accounts.google.com/o/oauth2/v2/auth`, `https://oauth2.googleapis.com/token`; `access_type=offline&prompt=consent`; the desktop client's `client_secret` is sent (Google requires it and documents it as not confidential) | `https://mail.google.com/ https://www.googleapis.com/auth/calendar` — ONE token for mail and calendar |
+| Google | `https://accounts.google.com/o/oauth2/v2/auth`, `https://oauth2.googleapis.com/token`; `access_type=offline&prompt=consent`; the desktop client's `client_secret` is sent (Google requires it and documents it as not confidential) | `https://mail.google.com/ https://www.googleapis.com/auth/calendar`, plus `https://www.googleapis.com/auth/carddav` when the account syncs contacts (M76; an account made before signs in once more to grant it) — ONE token for mail, calendar and contacts |
 | Microsoft | `https://login.microsoftonline.com/<tenant\|common>/oauth2/v2.0/authorize` / `…/token` | mail: `offline_access https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send`; calendar: `offline_access Calendars.ReadWrite`; ews: `offline_access https://outlook.office365.com/EWS.AccessAsUser.All` — ONE TOKEN PER RESOURCE |
 
 Microsoft issues a token for one resource at a time, so the code redemption
@@ -268,6 +286,7 @@ Service API ([D-067](decisions.md#d-067-native-imported-mail-passwords-have-a-ty
 | --- | --- |
 | `imap`, `pop3`, `smtp` | mail passwords / app passwords / bridge passwords |
 | `caldav`, `ews`, `ics` | calendar passwords (feeds with basic auth) |
+| `carddav` | an address-book password when it differs from the account's (M76; without it the runtime uses the incoming mail password, else the CalDAV one) |
 | `oauth-refresh-google`, `oauth-refresh-microsoft` | OAuth refresh tokens (written by `OAuth2Session`) |
 
 - QML: `write(requestId, accountId, service, secret)`, `remove(…)`,
@@ -536,10 +555,13 @@ Tests (`ctest -R exchange`, local servers on 127.0.0.1 only):
 `apps/qindamail` (M44, [D-042](decisions.md#d-042-qindamail-is-a-document-less-window-over-one-mail-service-per-process)):
 binary `qindamail`, desktop id `org.qindaqt.QindaMail`
 (`Exec=qindamail %U`, MIME `message/rfc822`, `application/vnd.ms-outlook`,
-`application/mbox`, `text/vcard`, `text/x-vcard`, `text/calendar`,
-`x-scheme-handler/mailto`, `x-scheme-handler/webcal`). M64 added the People
-workspace, HTML reading, printing and message files:
-[mail-interchange.md](mail-interchange.md) ([D-072](decisions.md#d-072-mail-essentials-contacts-safe-html-message-files)). Static QML module
+`application/vnd.ms-outlook-pst` (defined by the suite's
+`data/mime/qindaoffice.xml`), `application/mbox`, `text/vcard`,
+`text/x-vcard`, `text/calendar`, `x-scheme-handler/mailto`,
+`x-scheme-handler/webcal`). M64 added the People workspace, HTML reading,
+printing and message files, M76 Outlook data files, contact groups and
+CardDAV: [mail-interchange.md](mail-interchange.md) ([D-072](decisions.md#d-072-mail-essentials-contacts-safe-html-message-files),
+[D-085](decisions.md#d-085-qindamail-outlook-data-files-contact-groups-carddav)). Static QML module
 `QindaOffice.Mail.App` (its QML imports `QindaOffice.Shell`,
 `QindaOffice.Mail`, `QindaTK`); namespace `QindaOffice::Apps::Mail`.
 
@@ -551,11 +573,14 @@ MailHost (one per main window, DocumentHost without a document)
         ├─ folders.json             last IMAP LIST per account (offline folder pane)
         ├─ view.json (config dir)   conversations, collapsed folders, hidden calendars
         ├─ AccountStore, MailSecrets, AutoConfig          (office_mail)
+        ├─ ContactStore             $XDG_DATA_HOME/qindaoffice/mail/contacts.json (M64)
+        ├─ PstImporter              File ▸ Import ▸ Outlook Data File (M76)
         └─ AccountRuntime per account
              ├─ ImapMailProvider per mailbox | Pop3MailProvider
              ├─ SmtpMailProvider
              ├─ CalDavProvider | IcsCalendarProvider | EwsCalendarProvider |
              │  GraphCalendarProvider per enabled calendar
+             ├─ CardDavProvider (accounts with contacts, M76)
              └─ OAuth2Session (OAuth accounts)
 ```
 
@@ -563,10 +588,12 @@ MailHost (one per main window, DocumentHost without a document)
 
 `AccountRuntime::run(service, provider, start, done)` starts every remote
 request. Before it, the credential is applied to the provider's write-only
-`setSecret`: a keyring secret (`<accountId>/<imap|pop3|smtp|caldav|ews|ics>`;
-SMTP with `sameCredentialsAsIncoming` reads the incoming key) or an OAuth
+`setSecret`: a keyring secret (`<accountId>/<imap|pop3|smtp|caldav|ews|ics|carddav>`;
+SMTP with `sameCredentialsAsIncoming` reads the incoming key; CardDAV
+without its own key reads the incoming, else the CalDAV one) or an OAuth
 access token (`ensureToken(resource)` → `applyAccessToken`; resources `mail`
-for IMAP/POP3/SMTP, `calendar` for Google CalDAV and Graph, `ews` for EWS).
+for IMAP/POP3/SMTP, `calendar` for Google CalDAV and Graph, `ews` for EWS,
+`contacts` for Google CardDAV).
 An authentication rejection (`authRejected`, or the providers' refusal texts:
 IMAP `AUTHENTICATIONFAILED`, POP3 `-ERR [AUTH]`, SMTP 535, HTTP 401/403) is
 retried once with a forced token refresh or a fresh keyring read; a second one,
@@ -574,7 +601,9 @@ a missing password, a dead refresh token or an unconfigured OAuth client sets
 the account's `status` to `needsSignIn` (the request never reaches the server
 without a credential). Account `status` is `idle | syncing | offline | error |
 needsSignIn`. `syncAccount` lists IMAP mailboxes, then syncs INBOX and the
-folder on screen, POP3 downloads, and every calendar syncs; each account has a
+folder on screen, POP3 downloads, every calendar syncs and the address
+books sync both ways (M76; a conflict raises the "Contacts changed in two
+places" notice); each account has a
 timer (`syncIntervalMinutes`, 0 = manual), and the service syncs all accounts
 at start and when the network comes back (`QNetworkInformation`).
 
@@ -654,10 +683,10 @@ sharing the service receive no dialog broadcast.
 | folders / messages | `toggleFolderExpanded(key)`, `folderTargets(accountId)` → [{key, name, depth, iconName, specialUse, accountId}], `conversation(threadId)`, `messageById(id)`, `markRead(ids, read)`, `setFlagged(ids, flagged)`, `archive(ids)`, `deleteMessages(ids)`, `moveTo(ids, folderKey)`, `fetchAttachment(messageId, attachmentId)`, `openAttachment(…)`, `saveAttachmentAs(…, url)`, `importMessageFile(path)` |
 | sync | `syncAll()`, `syncAccount(id)`, `syncFolder(key)` |
 | drafts | `newDraft(accountId)`, `replyDraft(messageId, replyAll)`, `forwardDraft(messageId)`, `mailtoDraft(url)`, `attachFiles(draft, paths)`, `saveDraft(draft)` → {ok, id, error}, `discardDraft(id)` → bool, `send(draft)` → requestId |
-| accounts | `addAccount(map, password)`, `updateAccount(map, password)`, `removeAccount(id)` (→ AccountStore results; remove adds `purgedRecords`), `signIn(id)`, `testAccount(requestId, map, password)`, `discoverCalendars(requestId, url, userName, password)`, `accountById(id)` |
+| accounts | `addAccount(map, password)`, `updateAccount(map, password)`, `removeAccount(id)` (→ AccountStore results; remove adds `purgedRecords`; M76: the account's synced contacts stay, unbound), `signIn(id)`, `testAccount(requestId, map, password)` (M76: a `carddav` step and `addressBooks`), `discoverCalendars(requestId, url, userName, password)`, `discoverAddressBooks(requestId, url, userName, password)` (M76), `accountById(id)` |
 | calendar | `setCalendarVisible(id, visible)`, `projectRange(startDate, endDate)` (local dates, half-open), `createEvent(map)`, `updateEvent(map)` (with `occurrenceId` + `scope: "occurrence"` an override), `deleteEvent(eventId, occurrenceId, scope)`, `applyChange(requestId, eventId, proposal)`, `eventById(id)`, `importIcs(url, calendarId)`, `exportIcs(url, calendarId)`, `subscribeFeed(url, name, color)`, `recurrencePreview(eventId, rule)` |
 | tasks | `addTask(title)` → id, `moveTask(requestId, taskId, toStatus, index)`, `updateTask(map)`, `deleteTask(id)` |
-| signals | `operationFinished(requestId, state, message)` (message actions, sync, sign-in, attachments, iCalendar, tasks), `sendFinished(requestId, result)` (+ `draftId`, `sentCopy` server/imap/local, `queued`), `eventChangeFinished(requestId, state, message)`, `accountTestFinished(requestId, result)` (+ `steps`, `mailboxes`, `calendars`), `calendarsDiscovered(requestId, result)`, `notify(title, text, variant)` and the `…Changed` notifiers |
+| signals | `operationFinished(requestId, state, message)` (message actions, sync, sign-in, attachments, iCalendar, tasks), `sendFinished(requestId, result)` (+ `draftId`, `sentCopy` server/imap/local, `queued`), `eventChangeFinished(requestId, state, message)`, `accountTestFinished(requestId, result)` (+ `steps`, `mailboxes`, `calendars`), `calendarsDiscovered(requestId, result)`, `addressBooksDiscovered(requestId, result)` (M76), `notify(title, text, variant)` and the `…Changed` notifiers |
 
 Request-id answers always arrive on a later event-loop turn. `folderModel`
 roles: `key, accountId, name, path, depth, specialUse, iconName, unread, total,

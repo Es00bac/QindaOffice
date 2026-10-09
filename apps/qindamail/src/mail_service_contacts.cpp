@@ -123,6 +123,12 @@ QVariantList MailService::recipientSuggestions(const QString &query, int limit) 
     QSet<QString> used;
     for (const QVariant &value : m_contacts->complete(trimmed, limit)) {
         QVariantMap candidate = value.toMap();
+        if (candidate.value(QStringLiteral("group")).toBool()) {
+            // M76: a contact group; the composer expands it (RecipientCompleter).
+            candidate.insert(QStringLiteral("valid"), true);
+            out.append(candidate);
+            continue;
+        }
         const QString address = candidate.value(QStringLiteral("value")).toString();
         if (address.isEmpty() || used.contains(address.toLower())) continue;
         used.insert(address.toLower());

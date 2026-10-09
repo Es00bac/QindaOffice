@@ -8,6 +8,8 @@ import QindaOffice.Mail.App
 // and a password (or sign in with Google / Microsoft), let autoconfig fill
 // the servers (editable under "Server settings"), test, save. Passwords
 // go straight to the keyring through the service; nothing here keeps them.
+// M76 (D-085): address books — a contacts-only CardDAV account, or CardDAV
+// added to a mail or calendar account (AddressBookSection).
 Tk.Dialog {
     id: dialog
 
@@ -25,6 +27,7 @@ Tk.Dialog {
     readonly property bool oauthKind: kind === "gmail" || kind === "microsoft365"
     readonly property bool mailKind: kind === "gmail" || kind === "imap" || kind === "pop3" || kind === "microsoft365" || kind === "exchange"
     readonly property bool calendarUrlKind: kind === "caldav" || kind === "ics" || kind === "exchange"
+    readonly property bool contactsKind: kind === "carddav" || kind === "gmail" || kind === "imap" || kind === "pop3" || kind === "caldav"
     readonly property var kinds: [
         { id: "gmail", title: qsTr("Google"), text: qsTr("Gmail and Google Calendar"), iconName: "mail" },
         { id: "microsoft365", title: qsTr("Microsoft"), text: qsTr("Outlook.com and Microsoft 365"), iconName: "building" },
@@ -32,7 +35,8 @@ Tk.Dialog {
         { id: "pop3", title: qsTr("Email (POP3)"), text: qsTr("Download mail to this computer"), iconName: "inbox" },
         { id: "exchange", title: qsTr("Exchange"), text: qsTr("An Exchange Server calendar (EWS)"), iconName: "building" },
         { id: "caldav", title: qsTr("CalDAV"), text: qsTr("Nextcloud, iCloud, Fastmail calendars"), iconName: "calendar" },
-        { id: "ics", title: qsTr("Calendar feed"), text: qsTr("A published .ics / webcal link"), iconName: "calendar-range" }]
+        { id: "ics", title: qsTr("Calendar feed"), text: qsTr("A published .ics / webcal link"), iconName: "calendar-range" },
+        { id: "carddav", title: qsTr("Address book"), text: qsTr("CardDAV contacts: iCloud, Fastmail, Nextcloud…"), iconName: "book-user" }]
 
     objectName: "accountDialog"
     title: editingId.length > 0 ? qsTr("Account settings") : qsTr("Add an account")
@@ -60,6 +64,11 @@ Tk.Dialog {
         }
         open()
     }
+    // People ▸ Connect Address Book: a contacts-only CardDAV account.
+    function openAddressBook() {
+        openFor("")
+        choose("carddav")
+    }
     function choose(k) {
         kind = k
         account = service.accountStore.draftFor(k, "", "")
@@ -80,6 +89,7 @@ Tk.Dialog {
         userField.text = String(incoming.userName || "")
         urlField.text = String(calendar.url || "")
         passwordField.text = ""
+        books.load(account.contacts || {}, String(account.emailAddress || ""))
     }
     function collect() {
         const out = Object.assign({}, account)
@@ -91,6 +101,7 @@ Tk.Dialog {
                                                                    userName: userField.text.trim() || out.emailAddress })
         out.outgoing = Object.assign({}, account.outgoing || {}, { host: outHost.text.trim(), port: Number(outPort.text) || 0 })
         if (calendarUrlKind) out.calendar = Object.assign({}, account.calendar || {}, { url: urlField.text.trim() })
+        if (contactsKind) out.contacts = books.settings(account.contacts || {})
         if (oauthKind) {
             const mechanism = appPassword.checked ? "plain" : "xoauth2"
             out.incoming.authMechanism = mechanism; out.outgoing.authMechanism = mechanism
@@ -98,6 +109,8 @@ Tk.Dialog {
         return out
     }
     function lookup() {
+        books.emailAddress = emailField.text.trim()
+        if (books.enabled_) books.suggestUrl()
         if (!mailKind || editingId.length > 0 || emailField.text.indexOf("@") < 1) return
         lookupId = "lookup-" + Date.now()
         service.autoConfig.lookup(lookupId, emailField.text.trim())
@@ -131,6 +144,9 @@ Tk.Dialog {
             if (!saved.ok) {
                 accountError = String(saved.error || qsTr("The account could not be saved."))
                 Qt.callLater(dialog.open)
+            } else if (books.enabled_ && books.password.length > 0) {
+                // A separate password for the address books only (M76).
+                service.secrets.write("books-" + Date.now(), String(saved.id), "carddav", books.password)
             }
         }
     }
@@ -155,7 +171,13 @@ Tk.Dialog {
     }
     Connections {
         target: dialog.service
-        function onAccountTestFinished(requestId, result) { if (requestId === dialog.testId) dialog.testResult = result }
+        function onAccountTestFinished(requestId, result) {
+            if (requestId !== dialog.testId) return
+            dialog.testResult = result
+            // The address books the test found are the ones saved (all on), unless chosen already.
+            if (books.enabled_ && books.found.length === 0 && result.addressBooks)
+                books.found = result.addressBooks.map(function(b) { return { url: String(b.url), name: String(b.name), enabled: true } })
+        }
         function onOperationFinished(requestId, state, message) {
             if (dialog.signInId.length === 0 || requestId !== dialog.signInId) return
             dialog.signInId = ""
@@ -250,6 +272,14 @@ Tk.Dialog {
                 Tk.TextField { id: urlField; objectName: "accountUrl"; placeholderText: dialog.kind === "exchange" ? "https://mail.example.com/EWS/Exchange.asmx" : "https://…" }
             }
             Tk.Caption { visible: dialog.autoNote.length > 0; text: dialog.autoNote; wrapMode: Text.Wrap }
+            AddressBookSection {
+                id: books
+                visible: dialog.contactsKind
+                service: dialog.service
+                forced: dialog.kind === "carddav"
+                bearer: dialog.kind === "gmail" && !appPassword.checked
+                accountPassword: passwordField.text
+            }
             Tk.FormGroup {
                 objectName: "accountServers"
                 visible: dialog.mailKind

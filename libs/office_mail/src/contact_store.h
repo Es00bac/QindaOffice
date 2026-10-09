@@ -45,6 +45,7 @@
 #include <QtQml/qqmlregistration.h>
 
 #include <optional>
+#include <tuple>
 
 namespace QindaOffice::Mail {
 
@@ -118,12 +119,57 @@ public:
     // warnings, error}.
     Q_INVOKABLE QVariantMap importFile(const QUrl &fileOrPath);
     Q_INVOKABLE QVariantMap importData(const QByteArray &data, const QString &fileName);
+    // M76 (D-085): contacts read from elsewhere (an Outlook .pst or .msg),
+    // merged exactly as an import is; one write, one contactsChanged.
+    QVariantMap importContacts(const QList<Contact> &contacts, int skipped = 0);
+    // M76: a group's members as recipients: {ok, name, recipients
+    // ["Name <addr>"], count, missing (members without an address), error};
+    // groups inside groups expand too (each once, ≤ 8 deep), every address once.
+    Q_INVOKABLE QVariantMap expandGroup(const QString &id) const;
+    // M76: the contact a group member's uri names ("urn:uuid:<uid>", a bare
+    // uid or a store id); {} when the address book has none.
+    Q_INVOKABLE QVariantMap contactForMember(const QString &uri) const;
     // ids empty = every contact (display order); version "3.0" (default) or
     // "4.0". Written atomically; refuses to overwrite the address book and
     // files over 64 MiB (what import accepts). {ok, count, error}.
     Q_INVOKABLE QVariantMap exportVcf(const QUrl &fileOrPath, const QStringList &ids = {},
                                       const QString &version = QStringLiteral("3.0"));
     Q_INVOKABLE void reload();
+
+    // ---- CardDAV (M76, D-085; contact_store_sync.cpp; C++ only) ----
+    // AGENT-CONTRACT (carddav_provider.cpp): a contact syncs with the book
+    // its `sync` names; its current vCard 3.0 differing from `sync.digest`
+    // means "changed here". Deleting a synced contact leaves a tombstone,
+    // and books' tokens live in the file's "carddav" object.
+    static constexpr const char *kConflictCategory = "Sync conflict";
+    struct SyncCard {
+        QString contactId, href, etag, uid;
+        QByteArray vcard;
+        bool changed = false;
+    };
+    struct SyncSnapshot {
+        QString syncToken, ctag;
+        QList<SyncCard> cards;
+        QList<QPair<QString, QString>> deleted;   // (href, etag)
+    };
+    struct RemoteVCard {
+        QString href, etag;
+        QByteArray vcard;
+    };
+    struct SyncApply {
+        QString syncToken, ctag;
+        QList<RemoteVCard> changed, restored;
+        QStringList removed, deletedHrefs, conflicts;
+        QList<std::tuple<QString, QString, QString>> pushed;   // contact id, href, etag
+        QHash<QString, QString> sentDigests;                   // contact id → digest of what was sent
+    };
+    [[nodiscard]] SyncSnapshot syncSnapshot(const QString &account, const QString &book) const;
+    // One book's sync in ONE write: {ok, created, updated, deleted,
+    // conflicts (names of the local copies kept), warnings, error}.
+    QVariantMap applySync(const QString &account, const QString &book, const SyncApply &apply);
+    // An account that no longer syncs: its contacts stay, unbound.
+    QVariantMap forgetSync(const QString &account);
+    [[nodiscard]] static QString syncDigest(const QByteArray &vcard);
 
 signals:
     void pathChanged();
@@ -168,7 +214,15 @@ private:
     void invalidate();
     void ensureIndex() const;
     [[nodiscard]] QVariantMap mapFor(const Contact &contact) const;
+    // contact_store_groups.cpp (M76)
+    [[nodiscard]] qsizetype indexForMember(const QString &uri) const;
+    // A group's members with what each resolves to (QML: People's group card).
+    [[nodiscard]] QVariantList resolvedMembers(const Contact &group) const;
+    // QML may name a member by its contactId: that becomes its card's uri.
+    [[nodiscard]] QVariantMap withMemberUris(const QVariantMap &map) const;
     [[nodiscard]] qsizetype indexForAddress(const QString &address) const;
+    // contact_store_sync.cpp
+    [[nodiscard]] QByteArray syncCard(const Contact &contact, const QByteArray &photo) const;
     // contact_store_io.cpp
     QVariantMap importFailure(const QString &error);
     QVariantMap mergeImported(QList<Contact> incoming, QStringList warnings, int skipped);
@@ -184,6 +238,7 @@ private:
     mutable QList<IndexEntry> m_index;
     mutable QList<qsizetype> m_order;            // display order
     mutable QHash<QString, qsizetype> m_byAddress; // folded address → contact
+    mutable QHash<QString, qsizetype> m_byUid;     // lower-case uid and id → contact (M76)
     mutable bool m_cacheValid = false;
     mutable QVariantList m_cache;                // contacts() in display order
 };

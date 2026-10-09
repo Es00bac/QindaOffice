@@ -18,6 +18,7 @@
 
 #include <qindatk/local_productivity_store.h>
 
+#include <algorithm>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQuickWindow>
@@ -54,7 +55,9 @@ class TestMailHost : public QObject {
                 QStringLiteral("panels-top-left"),
                 // M64 (D-072)
                 QStringLiteral("users"), QStringLiteral("book-user"), QStringLiteral("image"), QStringLiteral("save"),
-                QStringLiteral("paperclip"), QStringLiteral("mailbox"), QStringLiteral("file-down")};
+                QStringLiteral("paperclip"), QStringLiteral("mailbox"), QStringLiteral("file-down"),
+                // M76 (D-085)
+                QStringLiteral("archive-restore"), QStringLiteral("users-round"), QStringLiteral("cloud")};
     }
 
 private slots:
@@ -63,7 +66,7 @@ private slots:
         MailTest::Env env;
         MailHost host(env.service.get());
         const QStringList ids = MailHost::commandIds();
-        QCOMPARE(ids.size(), 41);
+        QCOMPARE(ids.size(), 44);
         for (const QString &id : ids) {
             ActionEntry *entry = host.actions()->entry(id);
             QVERIFY2(entry != nullptr, qPrintable(id));
@@ -217,12 +220,19 @@ private slots:
         for (const Protocol::MenuItem &item : snapshot.tree.items) collect(item, ids);
         for (const QString &id : ids) QVERIFY2(host.actions()->entry(id) != nullptr, qPrintable(id));
         for (const QString &id : MailHost::commandIds()) QVERIFY2(ids.contains(id), qPrintable(id + " not in a menu"));
-        // File starts with the new-item commands, then New Window.
+        // File starts with the new-item commands, then New Window; M76:
+        // File ▸ Import holds the Outlook data file and the mailbox.
         QStringList file;
         collect(snapshot.tree.items.first(), file);
-        QCOMPARE(file.mid(0, 5), (QStringList{QStringLiteral("mailNewMessageAction"), QStringLiteral("mailNewEventAction"),
+        QCOMPARE(file.mid(0, 6), (QStringList{QStringLiteral("mailNewMessageAction"), QStringLiteral("mailNewEventAction"),
                                               QStringLiteral("taskNewAction"), QStringLiteral("contactNewAction"),
-                                              QStringLiteral("fileNewAction")}));
+                                              QStringLiteral("contactNewGroupAction"), QStringLiteral("fileNewAction")}));
+        const auto import = std::find_if(snapshot.tree.items.first().children.cbegin(), snapshot.tree.items.first().children.cend(),
+                                         [](const Protocol::MenuItem &item) { return item.text == QLatin1String("Import"); });
+        QVERIFY(import != snapshot.tree.items.first().children.cend());
+        QStringList imports;
+        collect(*import, imports);
+        QCOMPARE(imports, (QStringList{QStringLiteral("mailImportPstAction"), QStringLiteral("mailImportMboxAction")}));
     }
 
     void pathsHandedToTheApp()

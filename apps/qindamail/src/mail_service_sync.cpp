@@ -3,6 +3,9 @@
 // folders.json so the pane is complete offline) and the per-account timers.
 #include "mail_service.h"
 
+#include "carddav_provider.h"
+#include "contact_store.h"
+
 #include "provider_calls.h"
 
 #include <qindatk/imap_mail_provider.h>
@@ -116,6 +119,23 @@ void MailService::syncRuntime(AccountRuntime *runtime, const QString &batchId)
                          return started;
                      },
                      one);
+    }
+    if (QindaOffice::Mail::CardDavProvider *carddav = runtime->carddav()) {
+        // M76: the account's address books, two ways; a conflict keeps the
+        // local version as a copy and says so.
+        ++fold->pending;
+        runtime->run(QStringLiteral("carddav"), carddav, [carddav](const QString &rid) { return carddav->sync(rid); },
+                     [this, fold](const QVariantMap &result) {
+                         const QStringList names = result.value(QStringLiteral("conflictNames")).toStringList();
+                         if (!names.isEmpty()) {
+                             emit notify(tr("Contacts changed in two places"),
+                                         tr("The server's version of %1 was kept; your changes are saved as copies in the "
+                                            "category “%2”.").arg(names.join(QStringLiteral(", ")),
+                                                                  QLatin1String(QindaOffice::Mail::ContactStore::kConflictCategory)),
+                                         QStringLiteral("warning"));
+                         }
+                         fold->add(result);
+                     });
     }
     fold->add(ProviderCalls::result({}, QStringLiteral("accepted"))); // release the guard
 }

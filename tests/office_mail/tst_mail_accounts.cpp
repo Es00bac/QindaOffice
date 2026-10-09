@@ -490,7 +490,7 @@ private slots:
             })", QUrl());
         std::unique_ptr<QObject> root(component.create());
         QVERIFY2(root, qPrintable(component.errorString()));
-        QCOMPARE(root->property("kinds").toInt(), 7);
+        QCOMPARE(root->property("kinds").toInt(), 8);   // M76: carddav
         QCOMPARE(root->property("presets").toInt(), int(ProviderPresets::all().size()));
         QVERIFY(root->property("wired").toBool());
         QCOMPARE(root->property("backend").toString(), QStringLiteral("memory")); // QQO_MAIL_SECRET_BACKEND

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "account_runtime.h"
 
+#include "carddav_provider.h"
+#include "contact_store.h"
 #include "imap_source_fetcher.h"
 
 #include "ews_calendar_provider.h"
@@ -91,10 +93,26 @@ void AccountRuntime::build()
         m_context.calls->watch(m_smtp);
     }
     buildCalendars();
+    if (m_account.hasContacts()) {
+        // M76: the account's CardDAV address books, synced with the account.
+        m_carddav = new QindaOffice::Mail::CardDavProvider(this);
+        const auto &contacts = m_account.contacts;
+        m_carddav->setProperty("accountId", m_account.id);
+        m_carddav->setProperty("url", contacts.url);
+        m_carddav->setProperty("userName", contacts.userName.isEmpty() ? m_account.emailAddress : contacts.userName);
+        QVariantList books;
+        for (const QindaOffice::Mail::AddressBookEntry &book : contacts.addressBooks) {
+            books.append(QVariantMap{{QStringLiteral("id"), book.id}, {QStringLiteral("url"), book.url},
+                                     {QStringLiteral("name"), book.name}, {QStringLiteral("enabled"), book.enabled}});
+        }
+        m_carddav->setProperty("addressBooks", books);
+        m_carddav->setStore(m_context.contacts);
+        m_context.calls->watch(m_carddav);
+    }
 
     const bool wantsOAuth = !m_account.oauth.provider.isEmpty()
         && (usesOAuth(QStringLiteral("imap")) || usesOAuth(QStringLiteral("pop3")) || usesOAuth(QStringLiteral("smtp"))
-            || usesOAuth(m_account.calendar.protocol));
+            || usesOAuth(m_account.calendar.protocol) || (m_carddav != nullptr && usesOAuth(QStringLiteral("carddav"))));
     if (wantsOAuth) {
         m_oauth = new QindaOffice::Mail::OAuth2Session(this);
         m_oauth->setSecrets(m_context.secrets);

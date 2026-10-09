@@ -129,6 +129,47 @@ QJsonObject calendarTo(const CalendarSettings &c)
     return o;
 }
 
+ContactsSettings contactsFrom(const QJsonObject &o)
+{
+    ContactsSettings c;
+    c.extra = o;
+    c.protocol = str(o, "protocol", c.protocol);
+    c.url = str(o, "url");
+    c.userName = str(o, "userName");
+    c.authMechanism = str(o, "authMechanism", c.authMechanism);
+    for (const QJsonValue &value : o.value(QLatin1String("addressBooks")).toArray()) {
+        const QJsonObject e = value.toObject();
+        AddressBookEntry entry;
+        entry.extra = e;
+        entry.id = str(e, "id");
+        entry.url = str(e, "url");
+        entry.name = str(e, "name");
+        entry.enabled = boolean(e, "enabled", true);
+        c.addressBooks.append(entry);
+    }
+    return c;
+}
+
+QJsonObject contactsTo(const ContactsSettings &c)
+{
+    QJsonObject o = c.extra;
+    o.insert(QStringLiteral("protocol"), c.protocol);
+    o.insert(QStringLiteral("url"), c.url);
+    o.insert(QStringLiteral("userName"), c.userName);
+    o.insert(QStringLiteral("authMechanism"), c.authMechanism);
+    QJsonArray list;
+    for (const AddressBookEntry &entry : c.addressBooks) {
+        QJsonObject e = entry.extra;
+        e.insert(QStringLiteral("id"), entry.id);
+        e.insert(QStringLiteral("url"), entry.url);
+        e.insert(QStringLiteral("name"), entry.name);
+        e.insert(QStringLiteral("enabled"), entry.enabled);
+        list.append(e);
+    }
+    o.insert(QStringLiteral("addressBooks"), list);
+    return o;
+}
+
 OAuthSettings oauthFrom(const QJsonObject &o)
 {
     OAuthSettings s;
@@ -203,7 +244,7 @@ QStringList accountKinds()
     return {QString::fromLatin1(kKindGmail), QString::fromLatin1(kKindImap),
             QString::fromLatin1(kKindPop3), QString::fromLatin1(kKindCalDav),
             QString::fromLatin1(kKindIcs), QString::fromLatin1(kKindExchange),
-            QString::fromLatin1(kKindMicrosoft365)};
+            QString::fromLatin1(kKindMicrosoft365), QString::fromLatin1(kKindCardDav)};
 }
 
 QString MailAccount::generateId()
@@ -213,7 +254,8 @@ QString MailAccount::generateId()
 
 bool MailAccount::hasMail() const
 {
-    if (kind == QLatin1String(kKindCalDav) || kind == QLatin1String(kKindIcs)) return false;
+    if (kind == QLatin1String(kKindCalDav) || kind == QLatin1String(kKindIcs) || kind == QLatin1String(kKindCardDav))
+        return false;
     if (kind == QLatin1String(kKindExchange)) return !incoming.isEmpty();
     return true;
 }
@@ -230,6 +272,7 @@ MailAccount MailAccount::fromJson(const QJsonObject &o)
     a.incoming = incomingFrom(obj(o, "incoming"));
     a.outgoing = outgoingFrom(obj(o, "outgoing"));
     a.calendar = calendarFrom(obj(o, "calendar"));
+    a.contacts = contactsFrom(obj(o, "contacts"));
     a.oauth = oauthFrom(obj(o, "oauth"));
     a.signature = str(o, "signature");
     a.syncIntervalMinutes = integer(o, "syncIntervalMinutes", a.syncIntervalMinutes);
@@ -249,6 +292,10 @@ QJsonObject MailAccount::toJson() const
     o.insert(QStringLiteral("incoming"), incomingTo(incoming));
     o.insert(QStringLiteral("outgoing"), outgoingTo(outgoing));
     o.insert(QStringLiteral("calendar"), calendarTo(calendar));
+    // M76: written once an account has (or had) address books, so older
+    // files round-trip byte for byte.
+    if (contacts.protocol != QLatin1String("none") || o.contains(QLatin1String("contacts")))
+        o.insert(QStringLiteral("contacts"), contactsTo(contacts));
     o.insert(QStringLiteral("oauth"), oauthTo(oauth));
     o.insert(QStringLiteral("signature"), signature);
     o.insert(QStringLiteral("syncIntervalMinutes"), syncIntervalMinutes);

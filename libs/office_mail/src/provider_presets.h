@@ -58,6 +58,10 @@ public:
     // Case-insensitive; exact domain match (no subdomain wildcards).
     [[nodiscard]] static std::optional<ProviderPreset> forDomain(const QString &domain);
     [[nodiscard]] static std::optional<ProviderPreset> forAddress(const QString &emailAddress);
+    // M76: where CardDAV discovery starts for an address — Google's CardDAV
+    // principal (OAuth), iCloud and Fastmail's servers, else the domain
+    // (RFC 6764 /.well-known/carddav). "" for an address without a domain.
+    [[nodiscard]] static QString contactsUrlFor(const QString &emailAddress);
 
     // A complete candidate account for `emailAddress` from `preset`: servers,
     // user names, calendar, OAuth provider, folders. The caller still sets

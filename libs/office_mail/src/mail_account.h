@@ -29,6 +29,7 @@ inline constexpr const char *kKindCalDav = "caldav";
 inline constexpr const char *kKindIcs = "ics";
 inline constexpr const char *kKindExchange = "exchange";
 inline constexpr const char *kKindMicrosoft365 = "microsoft365";
+inline constexpr const char *kKindCardDav = "carddav";   // M76: contacts only
 
 [[nodiscard]] QStringList accountKinds();
 
@@ -76,6 +77,27 @@ struct CalendarSettings {
     QJsonObject extra;
 };
 
+// M76 (D-085): CardDAV address books, on any account (an add-on to its
+// mail or calendar) or as a contacts-only "carddav" account. `url` is where
+// discovery starts (a server, a principal or a home set); the books found
+// are kept in `addressBooks` (the enabled ones sync).
+struct AddressBookEntry {
+    QString id;
+    QString url;
+    QString name;
+    bool enabled = true;
+    QJsonObject extra;
+};
+
+struct ContactsSettings {
+    QString protocol = QStringLiteral("none");       // carddav | none
+    QString url;
+    QString userName;
+    QString authMechanism = QStringLiteral("basic"); // basic | bearer
+    QList<AddressBookEntry> addressBooks;
+    QJsonObject extra;
+};
+
 struct OAuthSettings {
     QString provider;   // google | microsoft | ""
     QString clientId;   // optional override; see OAuthClientRegistry
@@ -102,6 +124,7 @@ struct MailAccount {
     IncomingServer incoming;
     OutgoingServer outgoing;
     CalendarSettings calendar;
+    ContactsSettings contacts;   // M76
     OAuthSettings oauth;
     QString signature;
     int syncIntervalMinutes = 15;   // 0 = manual only
@@ -125,6 +148,7 @@ struct MailAccount {
     // Kind-dependent capabilities (the "Account kinds" table).
     [[nodiscard]] bool hasMail() const;
     [[nodiscard]] bool hasCalendar() const { return calendar.protocol != QLatin1String("none"); }
+    [[nodiscard]] bool hasContacts() const { return contacts.protocol == QLatin1String("carddav"); }
 };
 
 // Keys that name a secret. They are refused anywhere in an account object,

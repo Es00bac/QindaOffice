@@ -8,12 +8,14 @@
 #include <QTimeZone>
 
 #include <algorithm>
+#include <bit>
 #include <limits>
 
 namespace QindaOffice::Mail::MsgDetail {
 namespace {
 
 constexpr int kEntrySize = 16;
+constexpr int kMaxMultiValues = 1024;
 
 quint32 le32(const QByteArray &bytes, qsizetype at)
 {
@@ -75,11 +77,60 @@ bool MsgPropertyBag::load(const CfbReader &cfb, int storageId, MsgObjectKind kin
     return true;
 }
 
+bool MsgPropertyBag::has(quint16 id, quint16 type) const
+{
+    return m_fixed.contains(tagOf(id, type)) || streamId(id, type) >= 0;
+}
+
 std::optional<quint32> MsgPropertyBag::longValue(quint16 id) const
 {
     const auto it = m_fixed.constFind(tagOf(id, kPtLong));
     if (it == m_fixed.cend()) return std::nullopt;
     return quint32(it.value() & 0xFFFFFFFFu);
+}
+
+std::optional<double> MsgPropertyBag::doubleValue(quint16 id) const
+{
+    const auto it = m_fixed.constFind(tagOf(id, kPtDouble));
+    if (it == m_fixed.cend()) return std::nullopt;
+    return std::bit_cast<double>(it.value());
+}
+
+QStringList MsgPropertyBag::strings(quint16 id)
+{
+    QStringList out;
+    const quint16 type = streamId(id, 0x101F) >= 0 ? 0x101F : 0x101E;
+    const QString base = QStringLiteral("__SUBSTG1.0_%1-").arg(tagOf(id, type), 8, 16, QLatin1Char('0')).toUpper();
+    for (int index = 0; index < kMaxMultiValues; ++index) {
+        const int entryId = m_children.value(base + QStringLiteral("%1").arg(index, 8, 16, QLatin1Char('0')).toUpper(), -1);
+        const CfbReader::Entry *entry = m_cfb ? m_cfb->entry(entryId) : nullptr;
+        if (!entry || entry->type != CfbReader::Entry::Stream) break;
+        QByteArray bytes;
+        if (!readOrRecord(entryId, &bytes)) break;
+        if (type == 0x101F) {
+            out.append(utf16LeToString(bytes));
+        } else {
+            const qsizetype nul = bytes.indexOf('\0');
+            if (nul >= 0) bytes.truncate(nul);
+            out.append(decodeCodePage(bytes, m_codePage));
+        }
+    }
+    return out;
+}
+
+QList<QByteArray> MsgPropertyBag::binaries(quint16 id)
+{
+    QList<QByteArray> out;
+    const QString base = QStringLiteral("__SUBSTG1.0_%1-").arg(tagOf(id, 0x1102), 8, 16, QLatin1Char('0')).toUpper();
+    for (int index = 0; index < kMaxMultiValues; ++index) {
+        const int entryId = m_children.value(base + QStringLiteral("%1").arg(index, 8, 16, QLatin1Char('0')).toUpper(), -1);
+        const CfbReader::Entry *entry = m_cfb ? m_cfb->entry(entryId) : nullptr;
+        if (!entry || entry->type != CfbReader::Entry::Stream) break;
+        QByteArray bytes;
+        if (!readOrRecord(entryId, &bytes)) break;
+        out.append(bytes);
+    }
+    return out;
 }
 
 bool MsgPropertyBag::boolValue(quint16 id) const

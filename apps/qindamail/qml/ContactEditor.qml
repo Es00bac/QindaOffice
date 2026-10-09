@@ -14,6 +14,9 @@ import QindaOffice.Mail.App
 // Contact field names; emails/phones/urls are [{type, value, preferred}],
 // addresses [{type, street, locality, region, postalCode, country, …}];
 // a new picture is passed as `photoFile` (URL), removal as `photoRemove`.
+// M76 (D-085): a new contact can be saved to a CardDAV address book
+// (`addressBookAccount` + `addressBookUrl`, ContactStore::add); the next sync
+// creates it on the server. A synced contact says which account it is in.
 Tk.Box {
     id: editor
 
@@ -36,6 +39,8 @@ Tk.Box {
     readonly property var urlTypes: [{ value: "", text: qsTr("Web page") }, { value: "work", text: qsTr("Business") },
                                      { value: "home", text: qsTr("Personal") }]
     property var addresses: []
+    // [{text, accountId, url}]: this computer, then every CardDAV book.
+    property var bookChoices: []
     signal saved(string contactId)
     signal deleteRequested(string contactId)
 
@@ -43,6 +48,17 @@ Tk.Box {
     padding: 0
 
     function field(name) { return String(editor.contact[name] || "") }
+    function refreshBooks() {
+        const list = [{ text: qsTr("On this computer"), accountId: "", url: "" }]
+        if (editor.service !== null) {
+            for (const b of editor.service.accountStore.addressBooks())
+                list.push({ text: qsTr("%1 — %2").arg(String(b.accountName)).arg(String(b.name)), accountId: String(b.accountId), url: String(b.url) })
+        }
+        editor.bookChoices = list
+    }
+    onServiceChanged: refreshBooks()
+    Component.onCompleted: refreshBooks()
+    Connections { target: editor.service; function onAccountsChanged() { editor.refreshBooks() } }
     function edit(map) {
         editor.contact = map || ({})
         const fields = { displayName: displayName, givenName: givenName, middleName: middleName, familyName: familyName,
@@ -75,6 +91,11 @@ Tk.Box {
                 return [a.street, a.locality, a.region, a.postalCode, a.country].some(function(v) { return String(v || "").trim().length > 0 }) })
         })
         delete map.photoUrl
+        const book = editor.bookChoices[bookCombo.currentIndex]
+        if (editor.isNew && book !== undefined && book.url.length > 0) {
+            map.addressBookAccount = book.accountId
+            map.addressBookUrl = book.url
+        }
         if (String(editor.photoFile).length > 0) map.photoFile = String(editor.photoFile)
         if (editor.photoRemove) map.photoRemove = true
         return map
@@ -158,6 +179,30 @@ Tk.Box {
                         Tk.Button { objectName: "contactPickPhoto"; small: true; variant: "ghost"; iconName: "image-plus"; text: qsTr("Picture…"); tooltip: qsTr("Choose a picture"); onClicked: photoDialog.open() }
                         Tk.Button { objectName: "contactRemovePhoto"; small: true; variant: "ghost"; iconName: "image-off"; text: qsTr("No picture"); tooltip: qsTr("Remove the picture"); visible: editor.field("photoUrl").length > 0 || String(editor.photoFile).length > 0; onClicked: { editor.photoFile = ""; editor.photoRemove = true; editor.dirty = true } }
                         Tk.Button { objectName: "contactDelete"; small: true; variant: "ghost"; iconName: "trash-2"; text: qsTr("Delete"); tooltip: qsTr("Delete this contact"); visible: !editor.isNew; onClicked: editor.deleteRequested(String(editor.contact.id)) }
+                    }
+                    Tk.Flex {
+                        visible: editor.isNew && editor.bookChoices.length > 1
+                        direction: Tk.Flex.Row
+                        align: Tk.Flex.Center
+                        gap: Tk.Theme.space.xs
+                        width: parent.width
+                        Tk.Caption { text: qsTr("Save to") }
+                        Tk.ComboBox {
+                            id: bookCombo
+                            objectName: "contactAddressBook"
+                            small: true
+                            Tk.Flex.grow: 1
+                            Tk.Flex.basis: 0
+                            Tk.Flex.minWidth: 0
+                            model: editor.bookChoices
+                            textRole: "text"
+                            tooltip: qsTr("Keep the new contact on this computer or in an address book")
+                        }
+                    }
+                    Tk.Caption {
+                        objectName: "contactSyncedWith"
+                        visible: !editor.isNew && editor.field("syncAccountId").length > 0
+                        text: visible ? qsTr("In the address book of %1").arg(String(editor.service.accountById(editor.field("syncAccountId")).displayName || "")) : ""
                     }
                 }
             }

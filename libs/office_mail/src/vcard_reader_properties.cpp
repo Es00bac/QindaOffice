@@ -136,6 +136,23 @@ void Reader::apply(const ContentLine &cl)
         return;
     }
     if (key == "PHOTO"_L1 && addPhoto(cl)) return;
+    // M76 (D-085): groups — vCard 4.0 KIND / MEMBER and Apple's 3.0
+    // X-ADDRESSBOOKSERVER-KIND / -MEMBER; X-CN names a raw address member.
+    if ((key == "KIND"_L1 || key == "X-ADDRESSBOOKSERVER-KIND"_L1) && once()) {
+        if (unescaped().compare("group"_L1, Qt::CaseInsensitive) == 0) c.kind = u"group"_s;
+        else addExtra(cl);   // individual, org, location: kept as written
+        return;
+    }
+    if (key == "MEMBER"_L1 || key == "X-ADDRESSBOOKSERVER-MEMBER"_L1) {
+        const QString uri = unescaped();
+        if (uri.isEmpty()) return;
+        if (c.members.size() >= ContactLimits::kMaxGroupMembers) {
+            tooMany();
+            return;
+        }
+        c.members.append({uri, paramValue(cl.params, "X-CN"_L1).trimmed()});
+        return;
+    }
     if (key == "UID"_L1 && once()) {
         c.uid = unescaped();
         return;

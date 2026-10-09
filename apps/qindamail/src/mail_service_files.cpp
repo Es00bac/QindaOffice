@@ -82,7 +82,7 @@ struct MailService::MboxJob {
 };
 
 QString MailService::importRawMessage(const QByteArray &raw, const QString &mailbox, const QString &origin,
-                                      QString *error)
+                                      QString *error, const QVariantMap &extra)
 {
     const QString id = QStringLiteral("local:eml:")
         + QString::fromLatin1(QCryptographicHash::hash(raw, QCryptographicHash::Sha256).toHex().left(24));
@@ -101,6 +101,7 @@ QString MailService::importRawMessage(const QByteArray &raw, const QString &mail
     record.insert(QStringLiteral("flagged"), false);
     record.insert(QStringLiteral("localSource"), true);
     if (!origin.isEmpty()) record.insert(QStringLiteral("sourceFile"), origin);
+    for (auto it = extra.cbegin(); it != extra.cend(); ++it) record.insert(it.key(), it.value());
     if (!writeSource(id, raw, error)) return {};
     m_contentCache.remove(id);
     const QVariantMap upserted = m_store->upsert(QStringLiteral("messages"), record);
@@ -165,11 +166,19 @@ QStringList MailService::localMailboxes() const
 {
     QStringList names = kFixedLocalFolders;
     QStringList extra;
+    QSet<QString> known(names.cbegin(), names.cend());
     for (const QVariant &value : m_store->messages()) {
         const QVariantMap record = value.toMap();
         if (ownerAccountOf(record) != QLatin1String(kLocalAccountId)) continue;
-        const QString mailbox = record.value(QStringLiteral("localMailbox")).toString();
-        if (!mailbox.isEmpty() && !names.contains(mailbox) && !extra.contains(mailbox)) extra.append(mailbox);
+        // M76: a nested folder of an Outlook import ("Archive/Inbox/Projects")
+        // brings its parents, so the folder pane shows the file's tree.
+        QString mailbox = record.value(QStringLiteral("localMailbox")).toString();
+        while (!mailbox.isEmpty() && !known.contains(mailbox)) {
+            known.insert(mailbox);
+            extra.append(mailbox);
+            const qsizetype slash = mailbox.lastIndexOf(QLatin1Char('/'));
+            mailbox = slash > 0 ? mailbox.left(slash) : QString();
+        }
     }
     extra.sort(Qt::CaseInsensitive);
     return names + extra;

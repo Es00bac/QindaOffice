@@ -76,6 +76,9 @@ class QNetworkAccessManager;
 namespace QindaOffice::Apps::Mail {
 
 class ProviderCalls;
+class PstImporter;
+
+Q_MOC_INCLUDE("pst_import.h")
 
 inline constexpr const char kLocalAccountId[] = "local";
 inline constexpr const char kLocalCalendarId[] = "local";
@@ -117,6 +120,8 @@ class MailService : public QObject {
     Q_PROPERTY(QVariantList taskColumns READ taskColumns NOTIFY taskColumnsChanged)
     // ---- address book (M64, mail_service_contacts.cpp) ----
     Q_PROPERTY(QindaOffice::Mail::ContactStore *contacts READ contacts CONSTANT)
+    // ---- Outlook data files (M76, pst_import.h) ----
+    Q_PROPERTY(QindaOffice::Apps::Mail::PstImporter *outlookImport READ outlookImport CONSTANT)
 
 public:
     struct Options {
@@ -174,6 +179,9 @@ public:
     Q_INVOKABLE void testAccount(const QString &requestId, const QVariantMap &account, const QString &password);
     Q_INVOKABLE void discoverCalendars(const QString &requestId, const QString &url, const QString &userName,
                                        const QString &password);
+    // M76: CardDAV address books at `url` → addressBooksDiscovered(requestId, result).
+    Q_INVOKABLE void discoverAddressBooks(const QString &requestId, const QString &url, const QString &userName,
+                                          const QString &password);
     Q_INVOKABLE QVariantMap accountById(const QString &accountId) const;
 
     // ---- folders and messages (_folders) ----
@@ -218,6 +226,10 @@ public:
     // returns its id ("" on failure, with a notification). An mbox file is
     // handed to importMailbox.
     Q_INVOKABLE QString importMessageFile(const QString &path);
+    // M76 (_outlook): an Outlook .msg that is a contact, a contact group, an
+    // appointment or a task goes to People, the calendar or the task board:
+    // {handled, ok, view, id, error}; handled false for mail.
+    Q_INVOKABLE QVariantMap importOutlookItemFile(const QString &path);
 
     // ---- message sources and files (M64: _source, _files) ----
     // The RFC 5322 source when this computer has it (never the network).
@@ -247,6 +259,7 @@ public:
 
     // ---- contacts and pictures (M64: _contacts) ----
     [[nodiscard]] QindaOffice::Mail::ContactStore *contacts() const { return m_contacts; }
+    [[nodiscard]] PstImporter *outlookImport() const { return m_outlookImport; }
     // "Add sender to contacts": {ok, id, existed, error}.
     Q_INVOKABLE QVariantMap addSenderToContacts(const QString &messageId);
     // Recipient autocomplete: contacts first, then addresses seen in mail,
@@ -345,6 +358,7 @@ signals:
     void eventChangeFinished(const QString &requestId, const QString &state, const QString &message);
     void accountTestFinished(const QString &requestId, const QVariantMap &result);
     void calendarsDiscovered(const QString &requestId, const QVariantMap &result);
+    void addressBooksDiscovered(const QString &requestId, const QVariantMap &result);
     // variant: info | success | warning | danger (Tk.Toast).
     void notify(const QString &title, const QString &text, const QString &variant);
     // M64: a message's source arrived, or its remote pictures changed.
@@ -354,6 +368,7 @@ signals:
 
 private:
     friend class MailServiceTestAccess;
+    friend class PstImporter;   // M76: imports through importRawMessage and the store
     struct Batch {
         int pending = 0;
         QString state = QStringLiteral("accepted");
@@ -407,6 +422,8 @@ private:
     [[nodiscard]] QVariantMap attachmentBytes(const QVariantMap &record, const QString &attachmentId) const;
     [[nodiscard]] QString sourcePath(const QString &messageId) const;
     [[nodiscard]] bool writeSource(const QString &messageId, const QByteArray &raw, QString *error);
+    // M76: bulk imports write sources without a sync each, then syncSources() once.
+    void syncSources();
     void removeSource(const QVariantMap &record);
     void fetchImapSource(const QVariantMap &record, AccountRuntime *runtime);
     void finishSource(const QString &messageId, const QByteArray &source, const QString &error);
@@ -414,7 +431,10 @@ private:
     void pruneSources();
     [[nodiscard]] QindaOffice::Mail::MessageContent recordContent(const QVariantMap &record) const;
     // _files: one RFC 5322 message into a local folder; the new record id.
-    QString importRawMessage(const QByteArray &raw, const QString &mailbox, const QString &origin, QString *error);
+    // `extra` fields go onto the record last (M76: unread, flagged, importedFrom).
+    QString importRawMessage(const QByteArray &raw, const QString &mailbox, const QString &origin, QString *error,
+                             const QVariantMap &extra = {});
+
     [[nodiscard]] QStringList localMailboxes() const;
     void importMailboxStep(const QString &requestId);
     // _contacts
@@ -483,6 +503,8 @@ private:
     };
     struct MboxJob;
     QindaOffice::Mail::ContactStore *m_contacts = nullptr;
+    PstImporter *m_outlookImport = nullptr;
+    bool m_bulkSources = false;
     QHash<QString, QList<std::function<void(const QByteArray &, const QString &)>>> m_sourceWaiters;
     mutable QHash<QString, std::shared_ptr<const QindaOffice::Mail::MessageContent>> m_contentCache;
     mutable QStringList m_contentOrder;

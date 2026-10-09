@@ -280,7 +280,7 @@ QVariantMap ContactStore::add(const QVariantMap &map)
     if (m_contacts.size() >= ContactLimits::kMaxContacts) {
         return failure({}, u"The address book is full (%1 contacts)."_s.arg(ContactLimits::kMaxContacts));
     }
-    Contact contact = contactFromVariantMap(map);
+    Contact contact = contactFromVariantMap(withMemberUris(map));
     normalizeContact(contact);
     if (contact.id.isEmpty()) contact.id = newId();
     else if (!validId(contact.id)) return failure(contact.id, u"id: use 1–128 letters, digits, '.', '_' or '-'."_s);
@@ -290,6 +290,10 @@ QVariantMap ContactStore::add(const QVariantMap &map)
     QStringList warnings;
     QStringList written;
     applyPhotoKeys(contact, map, &warnings, &written);
+    // M76: a new contact may go to a CardDAV address book (sent on its next sync).
+    const QString bookAccount = map.value(u"addressBookAccount"_s).toString();
+    const QString bookUrl = map.value(u"addressBookUrl"_s).toString();
+    if (!bookAccount.isEmpty() && !bookUrl.isEmpty()) contact.sync = {bookAccount, bookUrl, QString(), QString(), QString()};
     QList<Contact> next = m_contacts;
     next.append(contact);
     QString error;
@@ -312,7 +316,7 @@ QVariantMap ContactStore::update(const QVariantMap &map)
     const qsizetype index = indexOf(id);
     if (index < 0) return failure(id, u"There is no contact with id “%1”."_s.arg(id));
     Contact contact = m_contacts.at(index);
-    applyVariantMap(contact, map);
+    applyVariantMap(contact, withMemberUris(map));
     contact.id = id;
     normalizeContact(contact);
     const QStringList errors = validateContact(contact);
@@ -341,9 +345,24 @@ QVariantMap ContactStore::remove(const QString &id)
     const qsizetype index = indexOf(id);
     if (index < 0) return failure(id, u"There is no contact with id “%1”."_s.arg(id));
     QList<Contact> next = m_contacts;
+    const ContactSync bound = next.at(index).sync;
     next.removeAt(index);
+    // M76: a contact that is on a CardDAV server is deleted there on the
+    // next sync (a tombstone in the file's "carddav" object).
+    const QJsonObject previous = m_rootExtra;
+    if (!bound.account.isEmpty() && !bound.href.isEmpty()) {
+        QJsonObject state = m_rootExtra.value("carddav"_L1).toObject();
+        QJsonArray deleted = state.value("deleted"_L1).toArray();
+        deleted.append(QJsonObject{{u"account"_s, bound.account}, {u"book"_s, bound.book}, {u"href"_s, bound.href},
+                                   {u"etag"_s, bound.etag}});
+        state.insert("deleted"_L1, deleted);
+        m_rootExtra.insert("carddav"_L1, state);
+    }
     QString error;
-    if (!save(next, &error)) return failure(id, error);
+    if (!save(next, &error)) {
+        m_rootExtra = previous;
+        return failure(id, error);
+    }
     commit(std::move(next));
     setError({});
     emit contactsChanged();

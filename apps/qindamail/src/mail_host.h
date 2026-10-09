@@ -27,6 +27,9 @@
 //   contactExportAction mailAddSenderAction mailShowPicturesAction
 //   mailSaveMessageAction mailSaveAttachmentsAction mailImportMboxAction
 //   mailExportPdfAction
+// and, M76 (D-085): mailImportPstAction (File ▸ Import, with the mbox
+//   import in the same submenu) contactNewGroupAction (Ctrl+Shift+L)
+//   contactAddressBookAction (CardDAV)
 // plus the standard fileNewAction re-labelled "New Window" (Ctrl+Shift+N);
 // the standard filePrintAction / filePrintPreviewAction print the selected
 // message (M64; before, a document-less window never printed).
@@ -111,6 +114,10 @@ signals:
     void messageSaveRequested();
     void attachmentsSaveRequested();
     void pdfExportRequested();
+    // M76: the Outlook import dialog, a new contact group, CardDAV setup.
+    void outlookImportRequested();
+    void contactGroupNewRequested();
+    void addressBookRequested();
     void selectedContactIdChanged();
     void viewChanged();
     void calendarModeChanged();

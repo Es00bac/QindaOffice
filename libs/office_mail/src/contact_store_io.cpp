@@ -147,6 +147,13 @@ QVariantMap ContactStore::importData(const QByteArray &data, const QString &file
     return mergeImported(contacts, warnings, skipped);
 }
 
+QVariantMap ContactStore::importContacts(const QList<Contact> &contacts, int skipped)
+{
+    ensureLoaded();
+    if (!m_readOnlyReason.isEmpty()) return importFailure(readOnlyError());
+    return mergeImported(contacts, {}, skipped);
+}
+
 QVariantMap ContactStore::mergeImported(QList<Contact> incoming, QStringList warnings, int skipped)
 {
     QList<Contact> next = m_contacts;

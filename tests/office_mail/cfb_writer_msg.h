@@ -14,6 +14,7 @@
 #include <QPair>
 
 #include <memory>
+#include <tuple>
 
 namespace QindaOffice::Mail::Test {
 
@@ -50,6 +51,8 @@ inline QString msgStreamName(quint16 id, quint16 type)
 struct MsgProps {
     QList<QPair<quint32, quint64>> fixed;      // tag → 8-byte value
     QList<QPair<quint32, QByteArray>> streams; // tag → stream bytes
+    // M76: multi-valued values, one "__substg1.0_<tag>-<index>" stream each.
+    QList<std::tuple<quint32, quint32, QByteArray>> indexed;
 
     MsgProps &unicode(quint16 id, const QString &text) { return variable(id, kMsgPtUnicode, msgUtf16Le(text)); }
     MsgProps &string8(quint16 id, const QByteArray &bytes) { return variable(id, kMsgPtString8, bytes + '\0'); }
@@ -69,6 +72,20 @@ struct MsgProps {
         const quint64 fileTime = quint64(when.toMSecsSinceEpoch() * 10000 + 116444736000000000LL);
         fixed.append({(quint32(id) << 16) | kMsgPtSysTime, fileTime});
         return *this;
+    }
+    // MS-OXMSG 2.1.4.2.3: a length stream (8 bytes per binary value) and one
+    // stream per value.
+    MsgProps &mvBinary(quint16 id, const QList<QByteArray> &values)
+    {
+        const quint32 tag = (quint32(id) << 16) | 0x1102;
+        QByteArray lengths;
+        for (qsizetype i = 0; i < values.size(); ++i) {
+            QByteArray entry(8, '\0');
+            cfbPut32(entry, 0, quint32(values.at(i).size()));
+            lengths += entry;
+            indexed.append({tag, quint32(i), values.at(i)});
+        }
+        return variable(id, 0x1102, lengths);
     }
     MsgProps &variable(quint16 id, quint16 type, const QByteArray &bytes)
     {
@@ -99,6 +116,8 @@ struct MsgProps {
         out->append(CfbNode::stream(QStringLiteral("__properties_version1.0"), properties));
         for (const auto &stream : streams)
             out->append(CfbNode::stream(QStringLiteral("__substg1.0_") + msgHex8(stream.first), stream.second));
+        for (const auto &[tag, index, bytes] : indexed)
+            out->append(CfbNode::stream(QStringLiteral("__substg1.0_") + msgHex8(tag) + QLatin1Char('-') + msgHex8(index), bytes));
     }
 };
 
@@ -112,6 +131,9 @@ struct MsgBuilder : MsgProps {
     QList<MsgProps> recipients;
     QList<MsgAttachmentBuilder> attachments;
     QList<CfbNode> extraNodes;
+    // M76: the named-property streams of "__nameid_version1.0" (GUIDs,
+    // NAMEID entries, names), empty unless a test needs named properties.
+    QByteArray nameGuids, nameEntries, nameStrings;
 
     QList<CfbNode> nodes(bool topLevel) const
     {
@@ -131,9 +153,9 @@ struct MsgBuilder : MsgProps {
         }
         if (topLevel) {
             out.append(CfbNode::folder(QStringLiteral("__nameid_version1.0"),
-                                       {CfbNode::stream(QStringLiteral("__substg1.0_00020102"), {}),
-                                        CfbNode::stream(QStringLiteral("__substg1.0_00030102"), {}),
-                                        CfbNode::stream(QStringLiteral("__substg1.0_00040102"), {})}));
+                                       {CfbNode::stream(QStringLiteral("__substg1.0_00020102"), nameGuids),
+                                        CfbNode::stream(QStringLiteral("__substg1.0_00030102"), nameEntries),
+                                        CfbNode::stream(QStringLiteral("__substg1.0_00040102"), nameStrings)}));
         }
         out += extraNodes;
         return out;

@@ -191,6 +191,16 @@ QByteArray Writer::card(const Contact &c)
         for (const QString &part : name) parts.append(escapeText(part));
         line({}, u"N"_s, {}, parts.join(u';'));
     }
+    if (c.isGroup()) {
+        // M76: 4.0 KIND/MEMBER; 3.0 the X-ADDRESSBOOKSERVER-* pair Apple's
+        // Contacts, iCloud and most CardDAV servers use for groups.
+        line({}, m_v40 ? u"KIND"_s : u"X-ADDRESSBOOKSERVER-KIND"_s, {}, u"group"_s);
+        for (const ContactMember &m : c.members) {
+            Params params;
+            if (!m.name.isEmpty()) params.append({u"X-CN"_s, paramText(m.name)});
+            line({}, m_v40 ? u"MEMBER"_s : u"X-ADDRESSBOOKSERVER-MEMBER"_s, params, singleLine(m.uri));
+        }
+    }
     if (!c.nickname.isEmpty()) line({}, u"NICKNAME"_s, {}, escapeText(c.nickname));
     if (!c.organization.isEmpty() || !c.department.isEmpty()) {
         QString org = escapeText(c.organization);

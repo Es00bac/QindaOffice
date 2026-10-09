@@ -29,6 +29,13 @@
 // AGENT-GUARD: a remote PHOTO URI travels as `photoRemoteUri`, never as
 // `photoUrl`: binding it to an Image would fetch it (a tracking pixel).
 //
+// M76 (D-085): a contact can be a GROUP (`kind` "group", vCard 4.0
+// KIND:group / Apple's X-ADDRESSBOOKSERVER-KIND) whose `members` are cards
+// of the address book ("urn:uuid:<uid>") or raw addresses ("mailto:…");
+// QML keys kind, isGroup, members [{uri, name, address}] (ContactStore adds
+// each member's contactId and display name), memberCount. `sync` is the
+// CardDAV bookkeeping (store-only; never written to a vCard).
+//
 // AGENT-CONTRACT (contact.cpp ⇄ contact_store.cpp): toJson() is the
 // storage shape inside contacts.json (schema qindaoffice.mail.contacts/1).
 // Empty fields are omitted; `displayName` is the raw FN there; the photo is
@@ -58,6 +65,8 @@ inline constexpr int kMaxMultiValues = 64;            // emails, phones, urls, a
 inline constexpr int kMaxExtraProperties = 256;       // unmapped vCard properties per contact
 inline constexpr int kMaxLineBytes = 2 * 1024 * 1024; // one unfolded vCard content line
 inline constexpr int kMaxWarnings = 100;              // per read; then one summary line
+inline constexpr int kMaxGroupMembers = 5000;         // members of one group (M76)
+inline constexpr int kMaxGroupDepth = 8;              // groups inside groups when expanding
 } // namespace ContactLimits
 
 struct ContactValue {
@@ -89,6 +98,32 @@ struct VCardProperty {
     friend bool operator==(const VCardProperty &, const VCardProperty &) = default;
 };
 
+// One member of a contact group (M76): `uri` is "urn:uuid:<uid>" for a card
+// of the address book, "mailto:<address>" for a raw address (whose `name`
+// travels as the vCard parameter X-CN), or any other URI kept verbatim.
+struct ContactMember {
+    QString uri;
+    QString name;
+    [[nodiscard]] bool isAddress() const;
+    [[nodiscard]] QString address() const;   // the mailto: address, else ""
+    [[nodiscard]] static ContactMember forAddress(const QString &address, const QString &name = {});
+    // "urn:uuid:<uid>", or the uid itself when it already is a URI.
+    [[nodiscard]] static ContactMember forCard(const QString &uid);
+    friend bool operator==(const ContactMember &, const ContactMember &) = default;
+};
+
+// CardDAV bookkeeping (M76): the address book a contact syncs with. Empty
+// `account` = a contact of this computer only.
+struct ContactSync {
+    QString account;   // the mail account's id
+    QString book;      // the address book collection's URL
+    QString href;      // the card's URL ("" = not on the server yet)
+    QString etag;      // the server's ETag of the version last exchanged
+    QString digest;    // SHA-256 of that vCard; a different one = edited here
+    [[nodiscard]] bool isEmpty() const { return account.isEmpty(); }
+    friend bool operator==(const ContactSync &, const ContactSync &) = default;
+};
+
 struct Contact {
     QString id;             // store id (UUID); written to vCard only as UID when uid is empty
     QString uid;            // vCard UID
@@ -107,9 +142,14 @@ struct Contact {
     QString photoUrl;       // a remote PHOTO URI kept as text, NEVER fetched
     QString revision;       // REV, verbatim
     QList<VCardProperty> extra;
+    QString kind;                    // "" (an individual) or "group" (M76)
+    QList<ContactMember> members;    // a group's members (M76)
     // Store-only (never read or written by vCard/CSV):
     QString photoFile;      // file name under contact-photos/ (ContactStore)
     QJsonObject jsonExtra;  // unknown per-contact JSON keys, preserved on save
+    ContactSync sync;       // CardDAV (M76)
+
+    [[nodiscard]] bool isGroup() const { return kind == QLatin1String("group"); }
 
     // FN, else "Given Family", else nickname, else organization, else the
     // primary e-mail.

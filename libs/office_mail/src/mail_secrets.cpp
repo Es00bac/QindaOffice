@@ -27,7 +27,8 @@ QStringList MailSecrets::services()
     // renaming a service orphans every secret stored under the old name.
     return {QStringLiteral("imap"), QStringLiteral("smtp"), QStringLiteral("pop3"),
             QStringLiteral("caldav"), QStringLiteral("ews"), QStringLiteral("ics"),
-            QStringLiteral("oauth-refresh-google"), QStringLiteral("oauth-refresh-microsoft")};
+            QStringLiteral("oauth-refresh-google"), QStringLiteral("oauth-refresh-microsoft"),
+            QStringLiteral("carddav")};   // M76
 }
 
 QString MailSecrets::keyFor(const QString &accountId, const QString &service)

@@ -3,6 +3,7 @@
 
 #include <QJsonArray>
 #include <QJsonValue>
+#include <QUrl>
 
 namespace QindaOffice::Mail {
 
@@ -19,7 +20,7 @@ const QList<QLatin1StringView> &knownJsonKeys()
         "familyName"_L1, "suffix"_L1, "nickname"_L1, "emails"_L1, "phones"_L1, "urls"_L1,
         "addresses"_L1, "organization"_L1, "department"_L1, "title"_L1, "birthday"_L1,
         "anniversary"_L1, "notes"_L1, "categories"_L1, "photoFile"_L1, "photoMimeType"_L1,
-        "photoUri"_L1, "revision"_L1, "extra"_L1,
+        "photoUri"_L1, "revision"_L1, "extra"_L1, "kind"_L1, "members"_L1, "sync"_L1,
     };
     return keys;
 }
@@ -152,6 +153,43 @@ QList<VCardProperty> extrasFromVariant(const QVariant &variant)
     return out;
 }
 
+QVariantList membersToVariant(const QList<ContactMember> &members)
+{
+    QVariantList out;
+    for (const ContactMember &m : members)
+        out.append(QVariantMap{{u"uri"_s, m.uri}, {u"name"_s, m.name}, {u"address"_s, m.address()}});
+    return out;
+}
+
+// QML gives {uri, name} or {address, name} (ContactStore turns {contactId}
+// into a uri before this runs); a plain string is a uri or an address.
+QList<ContactMember> membersFromVariant(const QVariant &variant)
+{
+    QList<ContactMember> out;
+    for (const QVariant &item : variant.toList()) {
+        if (out.size() >= ContactLimits::kMaxGroupMembers) break;
+        const QVariantMap map = item.toMap();
+        ContactMember m;
+        if (map.isEmpty()) {
+            const QString text = item.toString().trimmed();
+            const qsizetype open = text.lastIndexOf(u'<');
+            if (open >= 0 && text.endsWith(u'>')) {
+                QString name = text.left(open).trimmed();
+                if (name.size() >= 2 && name.startsWith(u'"') && name.endsWith(u'"')) name = name.mid(1, name.size() - 2);
+                m = ContactMember::forAddress(text.mid(open + 1, text.size() - open - 2), name);
+            } else {
+                m = text.contains(u':') ? ContactMember{text, {}} : ContactMember::forAddress(text);
+            }
+        } else if (!map.value(u"uri"_s).toString().isEmpty()) {
+            m = {map.value(u"uri"_s).toString(), map.value(u"name"_s).toString()};
+        } else {
+            m = ContactMember::forAddress(map.value(u"address"_s).toString(), map.value(u"name"_s).toString());
+        }
+        if (!m.uri.isEmpty()) out.append(m);
+    }
+    return out;
+}
+
 QStringList stringListFromVariant(const QVariant &variant)
 {
     if (variant.typeId() == QMetaType::QString) {
@@ -161,6 +199,31 @@ QStringList stringListFromVariant(const QVariant &variant)
 }
 
 } // namespace
+
+bool ContactMember::isAddress() const
+{
+    return uri.startsWith("mailto:"_L1, Qt::CaseInsensitive);
+}
+
+QString ContactMember::address() const
+{
+    return isAddress() ? QUrl::fromPercentEncoding(uri.mid(7).toUtf8()).trimmed() : QString();
+}
+
+ContactMember ContactMember::forAddress(const QString &address, const QString &name)
+{
+    QString trimmed = address.trimmed();
+    if (trimmed.isEmpty()) return {};
+    trimmed.replace(u'%', "%25"_L1);   // RFC 6068: '%' starts an escape
+    return {u"mailto:"_s + trimmed, name.trimmed()};
+}
+
+ContactMember ContactMember::forCard(const QString &uid)
+{
+    const QString trimmed = uid.trimmed();
+    if (trimmed.isEmpty()) return {};
+    return {trimmed.contains(u':') ? trimmed : u"urn:uuid:"_s + trimmed, {}};
+}
 
 bool ContactAddress::isEmpty() const
 {
@@ -230,6 +293,8 @@ QVariantMap toVariantMap(const Contact &c)
         {u"categories"_s, c.categories}, {u"hasPhoto"_s, c.hasPhoto()},
         {u"photoMimeType"_s, c.photoMimeType}, {u"photoRemoteUri"_s, c.photoUrl},
         {u"revision"_s, c.revision}, {u"primaryEmail"_s, c.primaryEmail()}, {u"extra"_s, extras},
+        {u"kind"_s, c.kind}, {u"isGroup"_s, c.isGroup()}, {u"members"_s, membersToVariant(c.members)},
+        {u"memberCount"_s, int(c.members.size())}, {u"syncAccountId"_s, c.sync.account},
     };
 }
 
@@ -244,11 +309,13 @@ void applyVariantMap(Contact &c, const QVariantMap &map)
         {"title"_L1, &Contact::title}, {"birthday"_L1, &Contact::birthday},
         {"anniversary"_L1, &Contact::anniversary}, {"notes"_L1, &Contact::notes},
         {"photoRemoteUri"_L1, &Contact::photoUrl}, {"revision"_L1, &Contact::revision},
+        {"kind"_L1, &Contact::kind},
     };
     for (const auto &[key, member] : texts) {
         const auto it = map.constFind(QString(key));
         if (it != map.cend()) c.*member = it->toString();
     }
+    if (map.contains(u"members"_s)) c.members = membersFromVariant(map.value(u"members"_s));
     auto has = [&map](const char *key) { return map.contains(QString::fromLatin1(key)); };
     if (has("emails")) c.emails = valuesFromVariant(map.value(u"emails"_s));
     if (has("phones")) c.phones = valuesFromVariant(map.value(u"phones"_s));
@@ -276,7 +343,7 @@ QJsonObject toJson(const Contact &c)
         {"department"_L1, c.department}, {"title"_L1, c.title}, {"birthday"_L1, c.birthday},
         {"anniversary"_L1, c.anniversary}, {"notes"_L1, c.notes}, {"photoFile"_L1, c.photoFile},
         {"photoMimeType"_L1, c.photoFile.isEmpty() ? QString() : c.photoMimeType},
-        {"photoUri"_L1, c.photoUrl}, {"revision"_L1, c.revision},
+        {"photoUri"_L1, c.photoUrl}, {"revision"_L1, c.revision}, {"kind"_L1, c.kind},
     };
     for (const auto &[key, value] : texts) putString(o, key, value);
     auto putArray = [&o](QLatin1StringView key, const QJsonArray &array) {
@@ -305,6 +372,24 @@ QJsonObject toJson(const Contact &c)
         extras.append(po);
     }
     putArray("extra"_L1, extras);
+    QJsonArray members;
+    for (const ContactMember &m : c.members) {
+        QJsonObject mo{{u"uri"_s, m.uri}};
+        if (!m.name.isEmpty()) mo.insert(u"name"_s, m.name);
+        members.append(mo);
+    }
+    putArray("members"_L1, members);
+    if (c.sync.isEmpty()) {
+        o.remove("sync"_L1);
+    } else {
+        QJsonObject so;
+        putString(so, "account"_L1, c.sync.account);
+        putString(so, "book"_L1, c.sync.book);
+        putString(so, "href"_L1, c.sync.href);
+        putString(so, "etag"_L1, c.sync.etag);
+        putString(so, "digest"_L1, c.sync.digest);
+        o.insert("sync"_L1, so);
+    }
     return o;
 }
 
@@ -323,8 +408,18 @@ Contact contactFromJson(const QJsonObject &o)
         {"anniversary"_L1, &Contact::anniversary}, {"notes"_L1, &Contact::notes},
         {"photoFile"_L1, &Contact::photoFile}, {"photoMimeType"_L1, &Contact::photoMimeType},
         {"photoUri"_L1, &Contact::photoUrl}, {"revision"_L1, &Contact::revision},
+        {"kind"_L1, &Contact::kind},
     };
     for (const auto &[key, member] : texts) c.*member = jsonString(o, key);
+    for (const QJsonValue &item : o.value("members"_L1).toArray()) {
+        if (c.members.size() >= ContactLimits::kMaxGroupMembers) break;
+        const QJsonObject mo = item.toObject();
+        const ContactMember m{jsonString(mo, "uri"_L1), jsonString(mo, "name"_L1)};
+        if (!m.uri.isEmpty()) c.members.append(m);
+    }
+    const QJsonObject so = o.value("sync"_L1).toObject();
+    c.sync = {jsonString(so, "account"_L1), jsonString(so, "book"_L1), jsonString(so, "href"_L1),
+              jsonString(so, "etag"_L1), jsonString(so, "digest"_L1)};
     c.emails = valuesFromJson(o.value("emails"_L1));
     c.phones = valuesFromJson(o.value("phones"_L1));
     c.urls = valuesFromJson(o.value("urls"_L1));

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "mail_host.h"
 
+#include "pst_import.h"
+
 #include "contact_store.h"
 #include "launch_arguments.h"
 #include "mail_service.h"
@@ -22,6 +24,7 @@ MailHost::MailHost(MailService *service, QObject *parent)
     connect(service, &MailService::selectedMessageIdChanged, this, &MailHost::syncCommandState);
     connect(service, &MailService::selectedMessageChanged, this, &MailHost::syncCommandState);
     connect(service, &MailService::accountsChanged, this, &MailHost::syncCommandState);
+    connect(service->outlookImport(), &PstImporter::stateChanged, this, &MailHost::syncCommandState);
     connect(service, &MailService::currentFolderNameChanged, this, &MailHost::titleChanged);
     connect(service, &MailService::statusTextChanged, this, [this] { setStatusInfo(m_service->statusText()); });
     setStatusInfo(service->statusText());
@@ -94,9 +97,9 @@ void MailHost::setSelectedContactId(const QString &id)
 
 QString MailHost::filterString() const
 {
-    return tr("Mail, contact and calendar files (*.eml *.msg *.mbox *.vcf *.ics);;Messages (*.eml *.msg);;"
-              "Outlook messages (*.msg);;Mailboxes (*.mbox);;Contacts (*.vcf *.vcard);;Calendars (*.ics);;"
-              "All files (*)");
+    return tr("Mail, contact and calendar files (*.eml *.msg *.mbox *.vcf *.ics *.pst);;Messages (*.eml *.msg);;"
+              "Outlook messages (*.msg);;Outlook data files (*.pst *.ost);;Mailboxes (*.mbox);;"
+              "Contacts (*.vcf *.vcard);;Calendars (*.ics);;All files (*)");
 }
 
 Quick::PrintRenderCallback MailHost::printRenderCallback() const
@@ -182,6 +185,21 @@ bool MailHost::openWithoutDocument(const QString &path)
         static_cast<void>(m_service->importMailbox(QUrl::fromLocalFile(local)));
         setView(QStringLiteral("mail"));
         return true;
+    }
+    if (suffix == QLatin1String("pst") || suffix == QLatin1String("ost")) {
+        // M76: an Outlook data file starts the import (its dialog follows it).
+        static_cast<void>(m_service->outlookImport()->start(QUrl::fromLocalFile(local)));
+        setView(QStringLiteral("mail"));
+        return true;
+    }
+    if (suffix == QLatin1String("msg")) {
+        // M76: an Outlook contact, group, appointment or task saved as .msg.
+        const QVariantMap item = m_service->importOutlookItemFile(local);
+        if (item.value(QStringLiteral("handled")).toBool()) {
+            const bool ok = item.value(QStringLiteral("ok")).toBool();
+            if (ok) setView(item.value(QStringLiteral("view")).toString());
+            return ok;
+        }
     }
     if (suffix == QLatin1String("eml") || suffix == QLatin1String("msg")) {
         // importMessageFile also recognizes an mbox by its content.

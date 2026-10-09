@@ -7,6 +7,8 @@
 
 #include <QDate>
 
+#include <algorithm>
+
 namespace QindaOffice::Mail {
 
 using namespace Qt::StringLiterals;
@@ -176,6 +178,18 @@ void normalizeContact(Contact &c)
     }
     c.categories = categories;
     c.extra.removeIf([](const VCardProperty &p) { return p.name.trimmed().isEmpty(); });
+    // M76: a group keeps its members once each; an individual has none.
+    c.kind = c.kind.trimmed().toLower();
+    if (c.kind == "individual"_L1) c.kind.clear();
+    QList<ContactMember> members;
+    if (c.isGroup()) {
+        for (ContactMember m : std::as_const(c.members)) {
+            m.uri = m.uri.trimmed();
+            m.name = m.name.simplified();
+            if (!m.uri.isEmpty() && !members.contains(m)) members.append(m);
+        }
+    }
+    c.members = members;
 }
 
 QStringList validateContact(const Contact &c)
@@ -218,6 +232,15 @@ QStringList validateContact(const Contact &c)
         }
     }
     if (c.photo.size() > ContactLimits::kMaxPhotoBytes) errors.append(u"photo: larger than 1 MiB."_s);
+    if (c.isGroup() && c.effectiveDisplayName().isEmpty()) errors.append(u"A group needs a name."_s);
+    if (c.members.size() > ContactLimits::kMaxGroupMembers)
+        errors.append(u"members: at most %1 entries."_s.arg(ContactLimits::kMaxGroupMembers));
+    for (qsizetype i = 0; i < c.members.size(); ++i) {
+        const ContactMember &m = c.members.at(i);
+        const bool control = std::any_of(m.uri.cbegin(), m.uri.cend(), [](QChar ch) { return ch.unicode() < 0x20; });
+        if (m.uri.size() > 2048 || control || (m.isAddress() && !isPlausibleEmail(m.address())))
+            errors.append(u"members[%1]: “%2” is not a member address."_s.arg(i).arg(m.uri.left(80)));
+    }
     return errors;
 }
 

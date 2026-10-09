@@ -233,6 +233,13 @@ MailAccount AccountStore::normalized(MailAccount a)
         if (a.outgoing.port == 0) a.outgoing.port = defaultPort(QStringLiteral("smtp"), a.outgoing.security);
     }
     if (a.calendar.protocol.isEmpty()) a.calendar.protocol = QStringLiteral("none");
+    // M76: CardDAV.
+    a.contacts.url = a.contacts.url.trimmed();
+    if (a.kind == QLatin1String(kKindCardDav)) a.contacts.protocol = QStringLiteral("carddav");
+    if (a.contacts.protocol.isEmpty()) a.contacts.protocol = QStringLiteral("none");
+    if (a.hasContacts() && a.contacts.userName.isEmpty())
+        a.contacts.userName = !a.incoming.userName.isEmpty() ? a.incoming.userName : a.emailAddress;
+    if (a.displayName.isEmpty() && a.hasContacts()) a.displayName = QUrl(a.contacts.url).host();
     if ((a.calendar.protocol == QLatin1String("caldav") || a.calendar.protocol == QLatin1String("ews"))
         && a.calendar.userName.isEmpty()) {
         a.calendar.userName = !a.incoming.userName.isEmpty() ? a.incoming.userName : a.emailAddress;
@@ -247,9 +254,38 @@ QStringList AccountStore::validate(const QVariantMap &account) const
     return a.validate();
 }
 
+QString AccountStore::contactsUrlFor(const QString &emailAddress) const
+{
+    return ProviderPresets::contactsUrlFor(emailAddress);
+}
+
+QVariantList AccountStore::addressBooks() const
+{
+    QVariantList out;
+    for (const MailAccount &account : list()) {
+        if (!account.enabled || !account.hasContacts()) continue;
+        for (const AddressBookEntry &book : account.contacts.addressBooks) {
+            if (!book.enabled) continue;
+            out.append(QVariantMap{{QStringLiteral("accountId"), account.id}, {QStringLiteral("accountName"), account.displayName},
+                                   {QStringLiteral("id"), book.id}, {QStringLiteral("url"), book.url},
+                                   {QStringLiteral("name"), book.name}});
+        }
+    }
+    return out;
+}
+
 QVariantMap AccountStore::draftFor(const QString &kind, const QString &emailAddress, const QString &fullName) const
 {
     MailAccount a;
+    if (kind == QLatin1String(kKindCardDav)) {
+        // M76: a contacts-only account; mail presets do not apply.
+        a.kind = kind;
+        a.emailAddress = emailAddress.trimmed();
+        a.fullName = fullName;
+        a.contacts.protocol = QStringLiteral("carddav");
+        a.contacts.url = ProviderPresets::contactsUrlFor(emailAddress);
+        return normalized(a).toVariantMap();
+    }
     if (const std::optional<ProviderPreset> preset = ProviderPresets::forAddress(emailAddress)) {
         a = ProviderPresets::accountFor(*preset, emailAddress, fullName);
     } else if (kind == QLatin1String(kKindGmail) || kind == QLatin1String(kKindMicrosoft365)) {

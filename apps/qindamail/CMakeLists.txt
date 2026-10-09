@@ -27,6 +27,9 @@ set(qindamail_qml
     qml/PeopleWorkspace.qml
     qml/ContactEditor.qml
     qml/ContactValueList.qml
+    qml/ContactGroupEditor.qml
+    qml/PstImportDialog.qml
+    qml/AddressBookSection.qml
 )
 foreach(qml_file IN LISTS qindamail_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -63,6 +66,9 @@ qt_add_qml_module(qindamail_app
         src/mail_service_contacts.cpp
         src/mail_service_meetings.cpp
         src/mail_service_invitations.cpp
+        src/mail_service_outlook.cpp
+        src/outlook_records.cpp src/outlook_records.h
+        src/pst_import.cpp src/pst_import.h
         src/message_document.cpp src/message_document.h
         src/message_list_model.cpp src/message_list_model.h
         src/message_print.cpp src/message_print.h

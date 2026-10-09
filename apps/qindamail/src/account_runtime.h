@@ -17,8 +17,9 @@
 //   refresh, or a fresh keyring read) and retries ONCE. A missing or dead
 //   sign-in sets status "needsSignIn" and answers `rejected` without
 //   contacting the server.
-// - Services: imap, pop3, smtp, caldav, ics, ews, graph. Secret keys are
-//   `<accountId>/<imap|pop3|smtp|caldav|ews|ics>` (MailSecrets::services());
+// - Services: imap, pop3, smtp, caldav, ics, ews, graph, carddav (M76).
+//   Secret keys are `<accountId>/<imap|pop3|smtp|caldav|ews|ics|carddav>`
+//   (MailSecrets::services());
 //   SMTP with sameCredentialsAsIncoming reads the incoming key.
 // AGENT-GUARD: a secret or token is never stored here, never logged and
 // never put in a result: it passes from the keyring/OAuth session straight
@@ -46,6 +47,8 @@ class SmtpMailProvider;
 }
 
 namespace QindaOffice::Mail {
+class CardDavProvider;
+class ContactStore;
 class MailSecrets;
 class OAuth2Session;
 }
@@ -60,6 +63,7 @@ struct RuntimeContext {
     QindaTK::LocalAttachmentStore *attachments = nullptr;
     QindaOffice::Mail::MailSecrets *secrets = nullptr;
     ProviderCalls *calls = nullptr;
+    QindaOffice::Mail::ContactStore *contacts = nullptr;   // M76: CardDAV books sync into it
 };
 
 struct CalendarBinding {
@@ -99,6 +103,8 @@ public:
     [[nodiscard]] QindaTK::Pop3MailProvider *pop3() const { return m_pop3; }
     [[nodiscard]] QindaTK::SmtpMailProvider *smtp() const { return m_smtp; }
     [[nodiscard]] const QList<CalendarBinding> &calendars() const { return m_calendars; }
+    // M76: the account's CardDAV address books (service "carddav"), or null.
+    [[nodiscard]] QindaOffice::Mail::CardDavProvider *carddav() const { return m_carddav; }
     [[nodiscard]] const CalendarBinding *calendar(const QString &calendarId) const;
     [[nodiscard]] QindaOffice::Mail::OAuth2Session *oauth() const { return m_oauth; }
     [[nodiscard]] QString oauthConfigureError() const { return m_oauthError; }
@@ -152,6 +158,9 @@ private:
     // success or a failure result. `forceRefresh` after an auth rejection.
     void applyCredentials(const QString &service, QObject *provider, bool forceRefresh,
                           std::function<void(const QVariantMap &failure)> ready);
+    // The keyring secret `<account>/<secretService>` into the provider's setSecret.
+    void readSecretInto(const QString &secretService, QPointer<QObject> target, const QString &mechanism,
+                        std::function<void(const QVariantMap &failure)> ready, bool optional = false);
     void startAttempt(const QString &service, QObject *provider, const Starter &start, const Done &done,
                       int attempt);
     void adjustPending(int delta);
@@ -163,6 +172,7 @@ private:
     QindaTK::Pop3MailProvider *m_pop3 = nullptr;
     QindaTK::SmtpMailProvider *m_smtp = nullptr;
     QList<CalendarBinding> m_calendars;
+    QindaOffice::Mail::CardDavProvider *m_carddav = nullptr;
     QindaOffice::Mail::OAuth2Session *m_oauth = nullptr;
     QString m_oauthError;
     QString m_passwordOverride;

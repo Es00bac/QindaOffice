@@ -6,12 +6,16 @@
 # 127.0.0.1 (tst_qindamail_flow). No real network. M64 (D-072):
 # tst_qindamail_files (message files, sources over a local IMAP server,
 # pictures, printing) and tst_qindamail_people (contacts, autocomplete, the
-# People workspace). Every test links the
+# People workspace). M76 (D-085): tst_qindamail_pst (Outlook data files
+# through the service and the window) and tst_qindamail_carddav (address
+# books through the account runtime against the local fake CardDAV server,
+# and Connect Address Book through the window). Every test links the
 # app's static QML module, so a source added to apps/qindamail is in every
 # test.
 foreach(name IN ITEMS tst_qindamail_drafts tst_qindamail_service tst_qindamail_accounts
                       tst_qindamail_calendar tst_qindamail_host tst_qindamail_flow tst_qindamail_ui
-                      tst_qindamail_files tst_qindamail_people tst_qindamail_meetings)
+                      tst_qindamail_files tst_qindamail_people tst_qindamail_meetings tst_qindamail_pst
+                      tst_qindamail_carddav)
     add_executable(${name} ${name}.cpp mail_test_support.h fake_mail_server.h fake_imap_server.h)
     target_link_libraries(${name} PRIVATE qindamail_app qindamail_appplugin
         Qt6::Test Qt6::Network Qt6::GuiPrivate)

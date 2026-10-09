@@ -233,6 +233,9 @@ QVariantMap OAuth2Session::configure(const QVariantMap &accountMap)
     } else if (account.calendar.protocol == QLatin1String("ews") && bearer) {
         resources << QStringLiteral("ews");
     }
+    // M76: CardDAV with the account's token (Google's CardDAV API).
+    if (account.hasContacts() && account.contacts.authMechanism == QLatin1String("bearer"))
+        resources << QStringLiteral("contacts");
     if (resources.isEmpty()) resources << QStringLiteral("mail");
     setResources(resources);
     setResourceScopes(QStringLiteral("mail"), account.oauth.scopes);

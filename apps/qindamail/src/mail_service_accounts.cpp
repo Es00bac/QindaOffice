@@ -6,6 +6,9 @@
 // it is never kept in a member, a result or a log line.
 #include "mail_service.h"
 
+#include "carddav_provider.h"
+#include "contact_store.h"
+
 #include "account_store.h"
 #include "mail_secrets.h"
 #include "oauth2_session.h"
@@ -42,6 +45,9 @@ QStringList passwordServices(const MailAccount &account)
     if ((calendar == QLatin1String("caldav") || calendar == QLatin1String("ews") || calendar == QLatin1String("ics"))
         && account.calendar.authMechanism != QLatin1String("bearer"))
         services.append(calendar);
+    // M76: CardDAV with a password (a bearer token comes from the sign-in).
+    if (account.hasContacts() && account.contacts.authMechanism != QLatin1String("bearer"))
+        services.append(QStringLiteral("carddav"));
     return services;
 }
 
@@ -118,6 +124,8 @@ QVariantMap MailService::removeAccount(const QString &accountId)
     // stops the runtime.
     QVariantMap result = m_accountStore->remove(accountId);
     if (!result.value(QStringLiteral("ok")).toBool()) return result;
+    // M76: its synced contacts stay on this computer, unbound.
+    static_cast<void>(m_contacts->forgetSync(accountId));
 
     // Its cached records go with it; drafts are the user's words and stay
     // (they fall back to the default account).
@@ -200,7 +208,7 @@ void MailService::testAccount(const QString &requestId, const QVariantMap &accou
     // A throw-away store and runtime: a test never saves anything, never
     // deletes server copies (autoSave off) and never stores the password.
     auto *scratch = new QindaTK::LocalProductivityStore(this);
-    auto *rt = new AccountRuntime(candidate, {scratch, m_attachments, m_secrets, m_calls}, this);
+    auto *rt = new AccountRuntime(candidate, {scratch, m_attachments, m_secrets, m_calls, nullptr}, this);
     if (!password.isEmpty()) rt->setPasswordOverride(password);
     struct Test {
         int pending = 1;
@@ -225,6 +233,8 @@ void MailService::testAccount(const QString &requestId, const QVariantMap &accou
                 test->result.insert(QStringLiteral("mailboxes"), outcome.value(QStringLiteral("mailboxes")));
             if (outcome.contains(QStringLiteral("calendars")))
                 test->result.insert(QStringLiteral("calendars"), outcome.value(QStringLiteral("calendars")));
+            if (outcome.contains(QStringLiteral("addressBooks")))
+                test->result.insert(QStringLiteral("addressBooks"), outcome.value(QStringLiteral("addressBooks")));
         }
         if (--test->pending > 0) return;
         test->result.insert(QStringLiteral("steps"), test->steps);
@@ -269,6 +279,12 @@ void MailService::testAccount(const QString &requestId, const QVariantMap &accou
                 [step, service](const QVariantMap &r) { step(service, r); });
         break; // one calendar answers for the account's credentials
     }
+    if (QindaOffice::Mail::CardDavProvider *carddav = rt->carddav()) {
+        // M76: the address books answer for the CardDAV credentials (discovery only).
+        ++test->pending;
+        rt->run(QStringLiteral("carddav"), carddav, [carddav](const QString &rid) { return carddav->discover(rid); },
+                [step](const QVariantMap &r) { step(QStringLiteral("carddav"), r); });
+    }
     step(QString(), {}); // release the guard
 }
 
@@ -287,6 +303,26 @@ void MailService::discoverCalendars(const QString &requestId, const QString &url
         emit calendarsDiscovered(requestId, answer);
     });
     static_cast<void>(provider->discoverCalendars(rid, url));
+}
+
+void MailService::discoverAddressBooks(const QString &requestId, const QString &url, const QString &userName,
+                                       const QString &password)
+{
+    // M76: a throw-away provider with the dialog's password (never stored here).
+    auto *provider = new QindaOffice::Mail::CardDavProvider(this);
+    provider->setProperty("userName", userName);
+    provider->setProperty("url", url);
+    if (!password.isEmpty()) provider->setSecret(password, QStringLiteral("basic"));
+    m_calls->watch(provider);
+    const QString rid = ProviderCalls::newRequestId(QStringLiteral("books"));
+    m_calls->expect(rid, [this, provider, requestId](const QVariantMap &result) {
+        QVariantMap answer = result;
+        answer.insert(QStringLiteral("requestId"), requestId);
+        answer.remove(QStringLiteral("transcript"));
+        provider->deleteLater();
+        emit addressBooksDiscovered(requestId, answer);
+    });
+    static_cast<void>(provider->discover(rid, url));
 }
 
 } // namespace QindaOffice::Apps::Mail

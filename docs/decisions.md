@@ -5,6 +5,111 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-085: QindaMail: Outlook data files, contact groups, CardDAV
+
+**Date:** 2026-10-09 · **Status:** accepted (M76, the gaps D-072 left open
+under the owner's "match Office" request; plan
+[office-parity.md](plans/office-parity.md), details
+[mail-interchange.md](mail-interchange.md#outlook-data-files-pst-ost))
+
+**Context.** After M64 an Outlook user still could not bring a mailbox
+across (`.pst`), had no distribution lists, and kept an address book on
+one computer only (no CardDAV). Four facts shaped the answer. Portage has
+no PST library (no libpff, no libpst) and this milestone adds no overlay
+ebuild, so the reader is ours. A `.pst` is untrusted input of any size —
+gigabytes are common — and an import must neither block the window nor
+duplicate on a second run. M64's `.msg` reader already maps MAPI
+properties to RFC 5322; a PST holds the same property bags in another
+container. And QindaTK's `LocalProductivityStore` and `Tk.TokenField` are
+the toolkit's to change, not this milestone's.
+
+**Decision.**
+
+1. **A native, bounded MS-PST reader** in `office_mail`: `pst_ndb` (the
+   header with both CRCs, the node and block B-trees, blocks with their
+   trailers and the permute and cyclic encodings, XBLOCK/XXBLOCK data trees,
+   SLBLOCK/SIBLOCK subnode trees; Unicode 64-bit and ANSI 32-bit files, and
+   an `.ost` in the same format), `pst_ltp` (heap-on-node, BTH, property and
+   table contexts), `pst_reader`/`pst_objects` (the message store, folders,
+   messages, recipients, attachments, embedded messages, named properties).
+   Every offset, size, count, index and chain is checked against the file
+   and its B-tree entry; tree walks detect cycles and stop at a depth; the
+   page cache and every read are bounded; a corrupt or truncated file fails
+   with an error and never crashes; an unreadable item is skipped and
+   counted. Outlook 2013's 4 KiB-page `.ost` and Information Protection
+   encryption are refused by name.
+2. **One MAPI mapping for `.msg` and `.pst`.** The MS-OXMSG mapping now
+   reads a `Mapi::Message` (`mapi_object.h`) that MSG storages and PST
+   contexts both implement, so a PST message becomes RFC 5322 exactly as a
+   `.msg` does (`mapi_mail`), and Outlook's other items have one reader
+   (`outlook_items.h`): contacts, distribution lists (`IPM.DistList`, one-off
+   and wrapped entry ids), appointments (time zone from the Windows key
+   name, recurrence through `mail_exchange`'s pattern code, deleted
+   occurrences) and tasks — also when one is opened as a `.msg`.
+3. **Import is a streamed, idempotent job** (`PstImporter`, File ▸ Import ▸
+   Outlook Data File): the folder tree first, then the items in ~40 ms
+   slices with progress, counts and Cancel (what is in stays). Mail lands in
+   a local folder tree named after the file and mirroring it; contacts and
+   groups in People (merged once, one write); appointments in the local
+   calendar; tasks on the board; notes and journal entries are counted as
+   skipped. Ids derive from the file's record key and node ids (UUIDv5 for
+   contacts and groups, content ids for mail), and the record key remembers
+   its folder (`view.json` "outlookImports"), so importing the same file
+   again replaces what it brought instead of duplicating it. Message sources
+   are written without an fsync each and synced once, before the store — the
+   commit point — is saved; the views refresh once at the end.
+4. **A contact group is a contact of kind "group"** (`Contact::kind`,
+   `members` [{uri, name}]: `urn:uuid:<uid>` for a card, `mailto:` for an
+   address) — vCard 4.0's model, written as `KIND:group` + `MEMBER` in 4.0
+   and as Apple's `X-ADDRESSBOOKSERVER-KIND` / `-MEMBER` in 3.0, read from
+   both and from `IPM.DistList`. Expansion follows nested groups with a
+   cycle and depth guard (8). People edits groups (`ContactGroupEditor`);
+   the composer replaces a picked or typed group by its members
+   (`RecipientCompleter::expand`).
+5. **CardDAV belongs to an account** (`contacts` in `accounts.json`,
+   protocol `carddav`): an add-on of IMAP, POP3, Gmail and CalDAV accounts,
+   or a contacts-only `carddav` kind (People ▸ Connect Address Book).
+   `CardDavProvider` has the toolkit providers' surface (`setSecret`, a
+   request id answered once by a `…Finished` signal), so `AccountRuntime`
+   applies the keyring secret (service `carddav`, else the account's mail or
+   CalDAV password) or Google's token (OAuth resource `contacts`, the
+   `carddav` scope) and retries once after a refusal, as for every other
+   protocol. The protocol: RFC 6764 discovery (`/.well-known/carddav`,
+   `current-user-principal`, `addressbook-home-set`), RFC 6578
+   `sync-collection` with a ctag + ETag listing fallback and a fresh start
+   when a token expires, `addressbook-multiget` (GET as fallback),
+   conditional writes (`If-Match`, `If-None-Match: *`), XML with DTDs
+   refused, https (or loopback http) only, same-site redirects only, the
+   secret never in a result, a transcript or a log. **The server wins a
+   conflict**: the local version is kept as a copy in the category
+   "Sync conflict" and the user is told; a deletion the server refuses
+   (412) brings the card back. The sync state — href, ETag and digest per
+   card, token and ctag per book, tombstones — lives in `contacts.json`.
+6. **Three new commands, no renamed ones**: `mailImportPstAction` (File ▸
+   Import, the ribbon's File tab), `contactNewGroupAction` (Ctrl+Shift+L,
+   File ▸ New, People) and `contactAddressBookAction` (People ▸ Connect
+   Address Book…, the People ribbon's Address Books group with Sync All).
+
+**Consequences.** An Outlook mailbox, its address book with groups, its
+calendar and its tasks come across in one import that can be repeated, and
+contacts follow the user between devices. The reader is written from the
+specification alone: no independent PST implementation exists here to
+compare with, so the tests' file builder (written from MS-PST separately,
+with the encodings checked algebraically) and the owner's own `.pst` on the
+desktop are the checks. Not done: 4 KiB-page `.ost` and Information
+Protection; a changed occurrence of a recurring Outlook appointment keeps
+the series' time (deleted occurrences are honoured); a group's members
+come from `PidLidDistributionListMembers`/`…OneOffMembers` only (not the
+newer `PidLidDistributionListStream`); PST folders without mail are not
+created locally; CardDAV writes vCard 3.0 (Apple's group form); a Google
+account needs one new sign-in to grant the `carddav` scope. QindaTK gaps,
+reported and not worked around in the toolkit: `LocalProductivityStore::
+upsert` scans its list for every write and has no bulk call — about 70 % of
+a 10,000-message import (46 s on qinda; reading the same file takes 1.2 s)
+— `Tk.TokenField`'s validator discards a suggestion's value, so a group is
+expanded by its label, and `Tk.FormGroup`'s header writes `collapsed` back,
+which drops a binding on it (the address-book section sets it instead).
+
 ## D-084: QindaShow: PowerPoint's design, masters, sections, comments and media
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

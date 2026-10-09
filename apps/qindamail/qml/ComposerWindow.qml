@@ -14,6 +14,8 @@ import QindaOffice.Mail.App
 // id and later emits `sendFinished(requestId, result)`; the composer's own
 // request id is acknowledged with the result's state. To / Cc / Bcc suggest
 // recipients from the address book and from mail (RecipientCompleter, M64).
+// M76 (D-085): a contact group picked from the suggestions, or its name
+// typed, becomes its members in that field (RecipientCompleter.expand).
 Tk.AppWindow {
     id: composerWindow
 
@@ -36,6 +38,23 @@ Tk.AppWindow {
     function localPath(url) { return decodeURIComponent(String(url).replace(/^file:\/\//, "")) }
     function uuid() {
         return "att-xxxxxxxx-xxxx".replace(/x/g, function() { return (Math.random() * 16 | 0).toString(16) })
+    }
+    // AGENT-NOTE: the field's address validator turns a group suggestion into
+    // one invalid token (a group has no address); it is replaced here, on a
+    // later turn, never inside the field's own edit.
+    function expandGroups() {
+        for (const field of [composer.toField, composer.ccField, composer.bccField]) {
+            const tokens = field.tokens || []
+            for (let i = 0; i < tokens.length; ++i) {
+                if (tokens[i].valid !== false) continue
+                const members = composerWindow.completer.expand(String(tokens[i].label || ""))
+                if (members.length === 0) continue
+                field.removeAt(i)
+                field.appendCandidates(members)
+                Qt.callLater(composerWindow.expandGroups)   // another group may follow
+                return
+            }
+        }
     }
 
     toolBars: [
@@ -137,6 +156,9 @@ Tk.AppWindow {
         onRejected: composer.acknowledgeAttachment(requestId, "rejected", qsTr("No file chosen"), {})
     }
     Shortcut { sequences: ["Ctrl+Return", "Ctrl+Enter"]; onActivated: composer.requestSend() }
+    Connections { target: composer.toField; function onTokensEdited() { Qt.callLater(composerWindow.expandGroups) } }
+    Connections { target: composer.ccField; function onTokensEdited() { Qt.callLater(composerWindow.expandGroups) } }
+    Connections { target: composer.bccField; function onTokensEdited() { Qt.callLater(composerWindow.expandGroups) } }
     Connections {
         target: composerWindow.service
         function onSendFinished(requestId, result) {

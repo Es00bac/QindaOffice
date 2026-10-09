@@ -1,7 +1,9 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Mail essentials: contacts, safe HTML, message files (QindaMail, `office_mail`)
 
-M64 / [D-072](decisions.md#d-072-mail-essentials-contacts-safe-html-message-files).
+M64 / [D-072](decisions.md#d-072-mail-essentials-contacts-safe-html-message-files);
+M76 / [D-085](decisions.md#d-085-qindamail-outlook-data-files-contact-groups-carddav):
+Outlook data files, contact groups and CardDAV address books.
 What an Outlook user needs every day and QindaMail lacked (survey in
 [plans/office-parity.md](plans/office-parity.md)): an address book with vCard
 and Outlook CSV, recipient autocomplete, HTML mail shown as Outlook shows it
@@ -14,15 +16,17 @@ layer and the app's architecture are in [mail.md](mail.md).
 | Format | Open / import | Save / export |
 | --- | --- | --- |
 | `.eml` (RFC 5322) | File ▸ Open, the file manager, `qindamail file.eml` → "On this computer ▸ Inbox" | File ▸ Save Message As (F12): the message's original source byte for byte when this computer has it, else written from the stored record |
-| Outlook `.msg` (MS-OXMSG over MS-CFB) | the same paths; converted to RFC 5322 first, then stored like an `.eml` | as `.eml` (Outlook opens it) |
+| Outlook `.msg` (MS-OXMSG over MS-CFB) | the same paths; mail is converted to RFC 5322 first, then stored like an `.eml`; a contact, contact group, appointment or task saved as `.msg` goes to People, the calendar or the task board (M76) | as `.eml` (Outlook opens it) |
+| Outlook data file `.pst` (Outlook 97–2002 ANSI and 2003+ Unicode), `.ost` of Outlook 2003–2010 | File ▸ Import ▸ Outlook Data File (.pst)…, the file manager → mail into a local folder tree named after the file, contacts and groups into People, appointments into the calendar, tasks onto the board ([below](#outlook-data-files-pst-ost)) | — |
 | `.mbox` (mboxo / mboxrd, Thunderbird, Apple Mail, Google Takeout) | File ▸ Import Mailbox, the file manager → a new local folder named after the file | — |
-| vCard `.vcf` 2.1 (Outlook), 3.0 (RFC 2426), 4.0 (RFC 6350), many cards per file | File ▸ Import Contacts, People ▸ Import, the file manager | File ▸ Export Contacts: vCard 3.0 (default — Outlook, Google, Apple) or 4.0 |
+| vCard `.vcf` 2.1 (Outlook), 3.0 (RFC 2426), 4.0 (RFC 6350), many cards per file; contact groups as 4.0 `KIND:group` + `MEMBER` or Apple's 3.0 `X-ADDRESSBOOKSERVER-KIND` / `-MEMBER` | File ▸ Import Contacts, People ▸ Import, the file manager | File ▸ Export Contacts: vCard 3.0 (default — Outlook, Google, Apple) or 4.0 |
+| CardDAV address books (RFC 6352; iCloud, Fastmail, Nextcloud, Google, …) | People ▸ Connect Address Book…, or Contacts (CardDAV) in a mail or calendar account; synced both ways with the account ([below](#address-books-carddav)) | the same sync |
 | Outlook contacts `.csv` (Outlook desktop and Outlook.com exports; Google's CSV too) | File ▸ Import Contacts | — |
 | Print / PDF | — | File ▸ Print, Print Preview, Export as PDF (the selected message) |
 
-The desktop file adds `text/vcard`, `text/x-vcard`, `application/vnd.ms-outlook`
-and `application/mbox` to `message/rfc822`, so the file manager opens them with
-QindaMail.
+The desktop file adds `text/vcard`, `text/x-vcard`, `application/vnd.ms-outlook`,
+`application/vnd.ms-outlook-pst` and `application/mbox` to `message/rfc822`, so
+the file manager opens them with QindaMail.
 
 ## The address book (People)
 
@@ -47,6 +51,18 @@ Picture…, Delete). Commands: New Contact (Ctrl+Shift+C), Delete Contact,
 Import Contacts…, Export Contacts…, and, on a message, **Add Sender to
 Contacts** (Home ▸ People, the reading pane, the Message menu).
 
+**Contact groups** (M76; Outlook's Contact Group, vCard 4.0's `KIND:group`):
+New Contact Group (Ctrl+Shift+L; File ▸ New, People) opens an editor with
+the group's name, its members — contacts of the address book or plain
+addresses, added through the composer's suggestions (a group may hold
+groups) — and notes; New message writes to every member. A group is a
+contact of kind `group` whose members are `urn:uuid:<uid>` (a contact) or
+`mailto:` (an address) URIs; up to 5 000 members, expanded through nested
+groups to a depth of 8 with cycles ignored, each address once; a member
+whose contact was deleted is shown as "Not in your contacts" and skipped.
+In the composer a group is suggested as "Name (group)"; picking it, or
+typing its name, puts its members in that field.
+
 **Recipient autocomplete**: the composer's To / Cc / Bcc fields suggest as you
 type — contacts first (name, nickname, e-mail; every word must start a word),
 then addresses seen in mail (senders and recipients of stored mail and
@@ -68,6 +84,51 @@ drafts, by frequency then recency; never your own addresses).
   `Business Street`, `Birthday` as `M/D/YYYY`, `0/0/00` = none, …).
 - Import merges: the same UID updates; else the same primary e-mail fills the
   empty fields and adds the new addresses and numbers; else a new contact.
+- Groups: `KIND:group` (4.0) and `X-ADDRESSBOOKSERVER-KIND:group` (3.0) are
+  read alike, members from `MEMBER` / `X-ADDRESSBOOKSERVER-MEMBER` (Apple's
+  `X-CN` parameter as the member's name); other `KIND` values are kept as
+  unknown properties. Export writes the form of the chosen version.
+
+## Address books (CardDAV)
+
+A mail account (IMAP, POP3, Gmail) or a CalDAV account can sync its
+provider's address books — turn on **Contacts (CardDAV)** in the account
+dialog — and People ▸ **Connect Address Book…** sets up a contacts-only
+account (kind `carddav`). QindaMail suggests the server from the address
+(`contacts.icloud.com`, `carddav.fastmail.com`, Google's CardDAV principal,
+else `https://<domain>/`); **Find address books** follows
+`/.well-known/carddav` (RFC 6764), the `current-user-principal` and the
+`addressbook-home-set` (RFC 6352) and lists the books to sync. The password
+is the account's (an app password at iCloud or Fastmail) unless one is
+given for the address books; Google uses the account's sign-in (the
+`carddav` scope: an existing Google account signs in once more).
+
+Sync runs with the account's (Sync All, F5, and the account's interval):
+
+- **Pull**: RFC 6578 `sync-collection` from the stored token (a server that
+  refuses an old token is asked again from the start); without it, the
+  book's `getctag` and an ETag listing. Changed cards come by
+  `addressbook-multiget` in batches of 50 (GET one by one when the report is
+  refused) and are merged into People (unknown vCard properties kept).
+- **Push**: a contact changed here is PUT with `If-Match: <etag>`, a new
+  one (saved to that book from the contact card's **Save to**) with
+  `If-None-Match: *`, a deleted one is DELETEd with `If-Match`.
+- **Conflicts — the server wins.** A card changed in both places takes the
+  server's version; yours is kept as a copy in the category
+  **Sync conflict** and a notice names it. A deletion the server refuses
+  (412) brings the card back.
+- Groups travel as Apple's vCard 3.0 groups, which iCloud, Nextcloud and
+  Fastmail show as groups.
+- Removing the account keeps its contacts on this computer, no longer
+  synced.
+
+The sync state (each card's href, ETag and a SHA-256 of what was last
+synced; each book's token and ctag; deletions not yet sent) is kept in
+`contacts.json` under `carddav`. Bounds: 20 000 requests and 16 MiB per
+response per sync, 50 000 responses per listing, XML with a DTD refused,
+https only (http to a loopback address for local servers), redirects only
+within the same site, the password never in a result, a transcript or a
+log.
 
 ## Reading mail as Outlook shows it
 
@@ -201,6 +262,56 @@ you delete a meeting you organize, and COUNTER, are not done (D-072).
   derived boundaries and Message-ID), so importing the same `.msg` twice is
   one message, and its output opens in Outlook.
 
+## Outlook data files (.pst, .ost)
+
+File ▸ Import ▸ **Outlook Data File (.pst)…** (also a `.pst` or `.ost`
+opened from the file manager or `qindamail file.pst`) brings a whole Outlook
+file across. A dialog shows the folder being read, a progress bar and the
+counts as they grow; **Cancel import** stops at once and keeps what is in;
+the summary lists folders, messages, contacts, groups, appointments, tasks
+and skipped items with the first warnings, and **Show imported mail** opens
+the folder. The window stays usable meanwhile (one import at a time per
+process).
+
+| In the file | Goes to |
+| --- | --- |
+| mail, posts, meeting mail, reports in any folder | a local folder tree under "On this computer", named after the file (`Outlook`, `Archive (2)` when the name is taken) and mirroring the file's folders from its top of the information store; read and flag state kept; converted by the `.msg` mapping (bodies, compressed RTF, attachments, embedded messages, recipients) |
+| contacts (`IPM.Contact`) | People: names, e-mail addresses (SMTP only, never Exchange X.500), phones, postal addresses, company, birthday and anniversary, notes, categories, the picture |
+| contact groups (`IPM.DistList`) | People as groups: members that are contacts of the same file stay linked to them, others by address |
+| appointments (`IPM.Appointment`) | the local calendar, in their own time zone (Windows names mapped to IANA, the system zone when the item names none), all-day as dates, recurring ones with their rule and deleted occurrences, location, categories, organizer and attendees |
+| tasks (`IPM.Task`) | the task board: To do / Doing / Done from the task's status and percent complete, start, due and completed dates, priority, categories, notes |
+| notes, journal entries | skipped and counted ("Notes and journal entries are not imported") |
+
+- **Again without duplicates.** Every item's identity is the file's record
+  key plus its node id (contacts and groups get a version-5 UUID from it,
+  mail its content id), and the record key remembers the local folder it
+  went to (`view.json` "outlookImports"), so importing the same file again
+  replaces what it brought.
+- **Streaming.** The folder tree is read first, then the items in slices of
+  about 40 ms; nothing is held for the whole file but its folder list.
+  Message sources are written without an fsync each and synced once before
+  the store is saved; People is written once at the end. A 10 000-message
+  file took 46 s on qinda (the gate's bound is 180 s; reading it alone
+  takes 1.2 s): most of that is the toolkit store's per-record upsert
+  (D-085).
+- **The reader** (`libs/office_mail/src/pst_*`, MS-PST): Unicode (64-bit)
+  and ANSI (32-bit) files, no encoding, the permute ("compressible")
+  encoding and the cyclic ("high") encoding, data trees of any depth,
+  subnodes, the heap-on-node, BTH, property and table contexts, named
+  properties. Everything read is bounded and checked — offsets and sizes
+  against the file, block sizes and CRCs against the index, signatures,
+  B-tree levels (16 at most), cycles in any tree, 64 MiB per node, 1 048 576
+  subnodes, 2 000 000 table rows, 8 levels of embedded messages, 1 000
+  attachments and 10 000 recipients per message — so a damaged file fails
+  with an error naming the problem ("checksum mismatch", "loops back on
+  itself", "truncated", …) instead of crashing, and an item that cannot be
+  read is skipped and counted. Folders nest 64 deep at most, 100 000 of
+  them.
+- **Refused by name**: the 4 KiB-page `.ost` of Outlook 2013 and later
+  ("Outlook 2013 …"), and files encrypted with Information Protection. A
+  `.pst` password is not asked for: Outlook's password does not encrypt
+  the file.
+
 ## Limits
 
 - Qt's rich-text engine is not a browser: CSS layout (floats, flex, grid,
@@ -213,8 +324,54 @@ you delete a meeting you organize, and COUNTER, are not done (D-072).
   and numbered lists, links; sent as multipart/alternative) and per-account
   plain-text signatures; pictures inside the body need the toolkit's MIME
   builder to write multipart/related (D-072 follow-up).
-- `.pst` files, CardDAV and contact groups (distribution lists) are not
-  supported.
+- Outlook data files: a changed occurrence of a recurring appointment keeps
+  the series' time (deleted occurrences are honoured); a group's members are
+  read from `PidLidDistributionListMembers` / `…OneOffMembers`, not the
+  newer `PidLidDistributionListStream`; folders without mail are not
+  created; notes and journal entries are skipped; meeting mail arrives as
+  mail without its calendar part.
+- CardDAV writes vCard 3.0 (Apple's group form) and syncs when the account
+  syncs (no push); a contact changed in two places keeps the server's
+  version and a copy of yours.
+
+## API (M76 additions)
+
+`MailService`: `outlookImport` (`PstImporter`: `running`, `phase` idle |
+scanning | importing | done | failed | cancelled, `fileName`,
+`currentFolder`, `total`, `processed`, `progress`, `counts`, `summary`,
+`lastError`; `start(url)` → requestId ("" while one runs), `cancel()`;
+`finished(requestId, summary)` with {state, file, folder, folderKey,
+folders, messages, contacts, groups, events, tasks, skipped, total, error,
+warnings}), `importOutlookItemFile(path)` → {handled, ok, view, id, error}
+(a `.msg` contact, group, appointment or task; `handled` false for mail),
+`discoverAddressBooks(requestId, url,
+userName, password)` → `addressBooksDiscovered(requestId, {ok, state,
+error, principalUrl, homeSetUrl, addressBooks [{url, name}]})`.
+
+`ContactStore` (office_mail): contact maps gain `kind`, `isGroup`,
+`members` [{uri, name, address, displayName, kind contact | group | address
+| missing, contactId}], `memberCount`, `syncAccountId`; `add()` takes
+`addressBookAccount` + `addressBookUrl` (a new contact for that CardDAV
+book); `expandGroup(id)` → {ok, name, recipients ["Name <address>"],
+count, missing, error}; `contactForMember(uri)`; `complete()` offers groups
+({type: "group", group: true, contactId, memberCount}). C++:
+`importContacts(list)`, `syncSnapshot`/`applySync`/`forgetSync`
+(`CardDavProvider`'s local side), `kConflictCategory`.
+
+`CardDavProvider` (QML type of `QindaOffice.Mail`): `accountId`, `url`,
+`userName`, `addressBooks` [{id, url, name, enabled}], `store`,
+`timeoutMs`, `allowInsecureAuth`, `hasSecret`, `busy`, `lastError`;
+`setSecret(secret, basic | bearer)`, `clearSecret()`, `discover(requestId,
+url)` → `discoveryFinished`, `sync(requestId)` → `syncFinished(requestId,
+{ok, state, error, created, updated, deleted, pushed, conflicts,
+conflictNames, books})`. `AccountStore`: `contactsUrlFor(address)`,
+`addressBooks()` → [{accountId, accountName, id, url, name}].
+
+`MailHost`: signals `outlookImportRequested()`, `contactGroupNewRequested()`,
+`addressBookRequested()`; `.pst`/`.ost` handed to the app start the import.
+QML types of `QindaOffice.Mail.App`: `PstImportDialog`, `ContactGroupEditor`,
+`AddressBookSection`; `RecipientCompleter.expand(label)` → the members of a
+group suggestion, `groupIdFor(label)`.
 
 ## API (M64 additions)
 

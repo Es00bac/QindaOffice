@@ -5,6 +5,8 @@
 // addresses seen in mail (never your own), a vCard handed to the app lands
 // in People, the People workspace lists, edits and saves through the real
 // window, and the composer's To field offers a contact as you type.
+// M76 (D-085): a contact group made in People (a contact and a plain
+// address, through the same suggestions) expands in the composer's To field.
 // Headless; fixtures written here.
 
 #include "mail_test_support.h"
@@ -206,7 +208,118 @@ private slots:
                  QStringLiteral("alan@example.org"));
         composer->close();
     }
+
+    void groupsThroughTheWindow();
 };
+
+namespace {
+
+void typeInto(QQuickWindow *window, QQuickItem *field, const QString &text)
+{
+    auto *input = field->property("inputItem").value<QQuickItem *>();
+    QVERIFY(input != nullptr);
+    window->requestActivate();
+    input->forceActiveFocus();
+    QTRY_VERIFY(input->hasActiveFocus());
+    for (const QChar ch : text) QTest::keyClick(window, ch.toLatin1());   // no QWindow keyClicks()
+}
+
+QQuickItem *visibleSuggestion(QQuickItem *field)
+{
+    QQuickItem *suggestion = findNamed(field, QStringLiteral("tokenSuggestion"));
+    return suggestion != nullptr && suggestion->isVisible() ? suggestion : nullptr;
+}
+
+void click(QQuickWindow *window, QQuickItem *item)
+{
+    QTest::mouseClick(window, Qt::LeftButton, {}, item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint());
+}
+
+} // namespace
+
+void TestMailPeople::groupsThroughTheWindow()
+{
+    MailTest::Env env;
+    QVERIFY(env.service->contacts()->importData(kCards, QStringLiteral("people.vcf")).value(QStringLiteral("ok")).toBool());
+    MailHost host(env.service.get());
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_ROOT));
+    QQmlComponent component(&engine, QUrl(QStringLiteral("qrc:/qt/qml/QindaOffice/Mail/App/MailWindow.qml")));
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({{QStringLiteral("host"), QVariant::fromValue(&host)}}));
+    QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(object.get());
+    host.attachWindow(window);
+    window->resize(1280, 800);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    // New Contact Group opens People with an empty group.
+    QVERIFY(host.actions()->trigger(QStringLiteral("contactNewGroupAction")));
+    QCOMPARE(host.view(), QStringLiteral("people"));
+    QQuickItem *editor = nullptr;
+    QTRY_VERIFY((editor = findNamed(window->contentItem(), QStringLiteral("contactGroupEditor"))) != nullptr && editor->isVisible());
+    QQuickItem *name = findNamed(editor, QStringLiteral("contactGroupName"));
+    QQuickItem *add = findNamed(editor, QStringLiteral("contactGroupAdd"));
+    QVERIFY(name != nullptr && add != nullptr);
+    name->setProperty("text", QStringLiteral("Team"));
+    // A contact through the suggestions, then a plain address with Enter.
+    typeInto(window, add, QStringLiteral("gra"));
+    QQuickItem *suggestion = nullptr;
+    QTRY_VERIFY((suggestion = visibleSuggestion(add)) != nullptr);
+    QTest::qWait(100);
+    click(window, suggestion);
+    QTRY_COMPARE(editor->property("members").toList().size(), 1);
+    typeInto(window, add, QStringLiteral("bob@example.net"));
+    QTest::keyClick(window, Qt::Key_Return);
+    QTRY_COMPARE(editor->property("members").toList().size(), 2);
+    const QVariantList members = editor->property("members").toList();
+    QCOMPARE(members.at(0).toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("contact"));
+    QCOMPARE(members.at(1).toMap().value(QStringLiteral("address")).toString(), QStringLiteral("bob@example.net"));
+    QVariant saved;
+    QVERIFY(QMetaObject::invokeMethod(editor, "save", Q_RETURN_ARG(QVariant, saved)));
+    QVERIFY(saved.toBool());
+    QString groupId;
+    for (const QVariant &value : env.service->contacts()->contacts())
+        if (value.toMap().value(QStringLiteral("isGroup")).toBool()) groupId = value.toMap().value(QStringLiteral("id")).toString();
+    QVERIFY(!groupId.isEmpty());
+    const QVariantMap expanded = env.service->contacts()->expandGroup(groupId);
+    QCOMPARE(expanded.value(QStringLiteral("recipients")).toStringList(),
+             (QStringList{QStringLiteral("Grace Hopper <grace@example.org>"), QStringLiteral("bob@example.net")}));
+    QQuickItem *rows = findNamed(window->contentItem(), QStringLiteral("peopleRows"));
+    QTRY_COMPARE(rows->property("count").toInt(), 3);
+    QTRY_VERIFY(findNamed(window->contentItem(), QStringLiteral("peopleRow_") + groupId) != nullptr);
+    QTest::qWait(150);
+    QindaOffice::Test::saveGrab(window, QStringLiteral("qindamail_people_group_1280"));
+    window->resize(520, 800);
+    QTest::qWait(250);
+    QindaOffice::Test::saveGrab(window, QStringLiteral("qindamail_people_group_520"));
+    // Everything stays inside the window at 520 px.
+    QQuickItem *detail = findNamed(window->contentItem(), QStringLiteral("peopleDetail"));
+    QVERIFY(detail->mapToScene(QPointF(detail->width(), 0)).x() <= window->width() + 0.5);
+    window->resize(1280, 800);
+
+    // In the composer the group is offered by name and becomes its members.
+    QVERIFY(host.actions()->trigger(QStringLiteral("mailNewMessageAction")));
+    QQuickWindow *composer = nullptr;
+    QTRY_VERIFY([&] {
+        for (QWindow *w : QGuiApplication::allWindows())
+            if (w != window && w->isVisible() && w->title().contains(QStringLiteral("QindaMail"))) composer = qobject_cast<QQuickWindow *>(w);
+        return composer != nullptr;
+    }());
+    QVERIFY(QTest::qWaitForWindowExposed(composer));
+    QQuickItem *to = findNamed(composer->contentItem(), QStringLiteral("composerTo"));
+    QVERIFY(to != nullptr);
+    typeInto(composer, to, QStringLiteral("tea"));
+    QTRY_VERIFY((suggestion = visibleSuggestion(to)) != nullptr);
+    QVERIFY(suggestion->property("text").toString().contains(QStringLiteral("Team (group)")));
+    QTest::qWait(100);
+    QindaOffice::Test::saveGrab(composer, QStringLiteral("qindamail_composer_group"));
+    click(composer, suggestion);
+    QTRY_COMPARE(to->property("tokens").toList().size(), 2);
+    const QVariantList tokens = to->property("tokens").toList();
+    QCOMPARE(tokens.at(0).toMap().value(QStringLiteral("value")).toString(), QStringLiteral("grace@example.org"));
+    QCOMPARE(tokens.at(1).toMap().value(QStringLiteral("value")).toString(), QStringLiteral("bob@example.net"));
+    composer->close();
+}
 
 MAIL_TEST_MAIN(TestMailPeople)
 

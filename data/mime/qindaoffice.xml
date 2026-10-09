@@ -51,4 +51,16 @@
       </match>
     </magic>
   </mime-type>
+  <mime-type type="application/vnd.ms-outlook-pst">
+    <comment>Outlook data file</comment>
+    <comment xml:lang="en">Outlook data file</comment>
+    <glob pattern="*.pst"/>
+    <glob pattern="*.ost"/>
+    <!-- M76 (D-085): shared-mime-info has no type for Outlook's data files.
+         MS-PST 2.2.2.6: dwMagic "!BDN" at offset 0 (a .pst and an .ost
+         alike); QindaMail imports them (File > Import > Outlook Data File). -->
+    <magic priority="60">
+      <match type="string" value="!BDN" offset="0"/>
+    </magic>
+  </mime-type>
 </mime-info>

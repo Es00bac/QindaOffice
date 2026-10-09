@@ -4,7 +4,8 @@ import QindaOffice.Shell
 
 // QindaMail's ribbon (D-041, D-042): the Home tab follows the workspace —
 // mail commands in Mail, calendar commands in Calendar, tasks in Tasks,
-// contacts in People (M64) — while File, Accounts and View stay put. Every
+// contacts in People (M64; groups and CardDAV address books, M76) — while
+// File (M76: an Import group), Accounts and View stay put. Every
 // string is an ActionEntry id MailHost registers (app-scoped literals,
 // AGENTS.md rule 5).
 QtObject {
@@ -13,7 +14,9 @@ QtObject {
     readonly property var fileTab: {
         const tab = StandardRibbon.fileTab([
             { id: "messageFiles", label: qsTr("Messages"), items: [
-                { action: "mailSaveMessageAction", size: "large" }, "mailSaveAttachmentsAction", "mailImportMboxAction"] },
+                { action: "mailSaveMessageAction", size: "large" }, "mailSaveAttachmentsAction"] },
+            { id: "importFiles", label: qsTr("Import"), items: [
+                { action: "mailImportPstAction", size: "large" }, "mailImportMboxAction"] },
             { id: "contactFiles", label: qsTr("Contacts"), items: [
                 { action: "contactImportAction", size: "large" }, "contactExportAction"] },
             { id: "calendarFiles", label: qsTr("Calendars"), items: [
@@ -25,6 +28,7 @@ QtObject {
         tab.groups[0] = { id: "fileNew", label: qsTr("New"), items: [
             { action: "mailNewMessageAction", size: "large" },
             { action: "mailNewEventAction" }, { action: "taskNewAction" }, { action: "contactNewAction" },
+            { action: "contactNewGroupAction" },
             { action: "fileOpenAction" }, { action: "fileNewAction", iconName: "monitor" }, { action: "fileCloseWindowAction" }] }
         tab.groups[1] = { id: "filePrint", label: qsTr("Print"), items: [
             { action: "filePrintAction", size: "large" }, { action: "filePrintPreviewAction", iconName: "eye" },
@@ -65,10 +69,12 @@ QtObject {
     readonly property var peopleHome: { "id": "home", "label": qsTr("Home"), "keyTip": "H", "groups": [
         { id: "new", label: qsTr("New"), items: [
             { action: "contactNewAction", size: "large", split: true,
-              menu: ["contactNewAction", "mailNewMessageAction", "mailNewEventAction"] }] },
+              menu: ["contactNewAction", "contactNewGroupAction", "mailNewMessageAction", "mailNewEventAction"] },
+            "contactNewGroupAction"] },
         { id: "manage", label: qsTr("Manage"), items: [{ action: "contactDeleteAction", size: "large" }] },
         { id: "share", label: qsTr("Import & export"), items: [
-            { action: "contactImportAction", size: "large" }, "contactExportAction"] }
+            { action: "contactImportAction", size: "large" }, "contactExportAction"] },
+        { id: "addressBooks", label: qsTr("Address books"), items: ["contactAddressBookAction", "mailSyncAction"] }
     ] }
     readonly property var accountsTab: { "id": "accounts", "label": qsTr("Accounts"), "keyTip": "A", "groups": [
         { id: "accountManage", label: qsTr("Accounts"), items: [

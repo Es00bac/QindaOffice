@@ -36,7 +36,14 @@ qqo_add_mail_unit_test(tst_mail_messages)
 qqo_add_mail_unit_test(tst_mail_contacts)
 qqo_add_mail_unit_test(tst_mail_contact_csv)
 qqo_add_mail_unit_test(tst_mail_contact_store)
+qqo_add_mail_unit_test(tst_mail_contact_groups)
 qqo_add_mail_unit_test(tst_mail_html tst_mail_html_support.h tst_mail_html_samples.h)
 qqo_add_mail_unit_test(tst_mail_msg tst_mail_msg_parts.cpp tst_mail_msg_cfb.cpp tst_mail_msg_rtf.cpp
                        tst_mail_msg.h tst_mail_msg_support.h cfb_writer.h cfb_writer_msg.h)
+# M76 (D-085): Outlook data files, built in-process by pst_builder.h (no
+# .pst writer exists on Linux) — formats, encodings, items, corruption, size.
+qqo_add_mail_unit_test(tst_mail_pst tst_mail_pst_items.cpp tst_mail_pst_corrupt.cpp tst_mail_pst.h
+                       pst_builder.h pst_builder_ltp.h pst_builder_ndb.h pst_fixture.h cfb_writer.h cfb_writer_msg.h)
+# M76 (D-085): CardDAV against a local fake server (fake_carddav_server.h).
+qqo_add_mail_unit_test(tst_mail_carddav fake_carddav_server.h)
 add_subdirectory(native_secrets)

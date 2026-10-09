@@ -33,6 +33,108 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M76 Mail gates (D-085)
+
+Qualified on qinda (branch `m76-mail-pst`, merged with `m60-office-formats`
+9b2f438) as a targeted build — `office_mail`, `mail_exchange`, the
+QindaMail app and their tests only — with `ctest --preset dev -R mail`, run
+in two batches because qinda's shared disk was full (the library and
+Exchange programs first; then each QindaMail program built, run and its
+~110 MB binary deleted): **29/29 CTest targets passed, 530 QtTest
+cases, 0 failed, 0 skipped, 108 s of test time** (init/cleanup included;
+bold = new or extended in M76); no build warnings in the M76 sources. The
+lead qualifies the whole suite after merging.
+
+- office_mail — `tst_mail_accounts` **39**, `tst_mail_autoconfig` 20,
+  `tst_mail_oauth` 18, `tst_mail_messages` 13, `tst_mail_contacts` 14,
+  `tst_mail_contact_csv` 8, `tst_mail_contact_store` 15,
+  **`tst_mail_contact_groups` 9**, `tst_mail_html` 137, `tst_mail_msg` 49,
+  **`tst_mail_pst` 30**, **`tst_mail_carddav` 13** (365).
+- mail_exchange — `tst_mail_exchange_mapping` 7, `…_ews` 4,
+  `…_ews_writes` 5, `…_graph` 4, `…_graph_writes` 5 (25).
+- QindaMail — `tst_qindamail_drafts` 33, `tst_qindamail_service` 8,
+  `tst_qindamail_accounts` 18, `tst_qindamail_calendar` 8,
+  **`tst_qindamail_host` 10**, `tst_qindamail_flow` 6, **`tst_qindamail_ui`
+  16**, `tst_qindamail_files` 11, **`tst_qindamail_people` 8**,
+  `tst_qindamail_meetings` 5, **`tst_qindamail_pst` 9**,
+  **`tst_qindamail_carddav` 8** (140).
+
+What they check:
+
+- **The PST reader** (`tst_mail_pst`; every file is made by
+  `tests/office_mail/pst_builder*.h`, written from MS-PST separately from
+  the reader): the encoding tables (mpbbI a permutation, mpbbR its inverse,
+  mpbbS an involution, rows as MS-PST prints them), CRC-32 against zlib, the
+  header, page and block checksums and signatures; Unicode and ANSI files
+  with no, permute and cyclic encoding (6 rows); the folder tree; an `.ost`;
+  other files refused; mail with plain, HTML and RTF bodies, recipients,
+  attachments and an embedded message; contacts (picture, phones,
+  addresses), a contact group (one-off and wrapped members), appointments
+  (zone, a weekly recurrence with a deleted occurrence, all-day), tasks,
+  a sticky note as "other"; a `.msg` contact group; deep trees (2 000 items,
+  400 attachments, a 9 MB stream in an XXBLOCK); truncation at every
+  structure, a cyclic B-tree, a bad block size, a bad CRC and 300 random
+  corruptions all fail with a message, none crashes; 10 000 messages read
+  in 1.2 s, a 10.5 MiB file (bound 20 s).
+- **Groups** (`tst_mail_contact_groups`): vCard 4.0 and Apple 3.0 groups
+  read and written in both versions, members resolved and expanded through
+  nested groups (a cycle, a missing member), export/import keeping members,
+  validation.
+- **CardDAV** (`tst_mail_carddav`, `fake_carddav_server.h` on 127.0.0.1):
+  multistatus parsing (a DTD refused), discovery through
+  `/.well-known/carddav`, the principal and the home set, an initial sync
+  then a quiet one, changes both ways (create, update, delete on each side),
+  a conflict seen in the pull and one met by the PUT (412) — the server's
+  version kept, ours copied —, a refused deletion coming back, an expired
+  sync token starting over, the ctag fallback without `sync-collection`,
+  groups travelling as Apple groups, a 401.
+- **The app**: `tst_qindamail_pst` — every kind of item through the
+  service, a second import replacing the first (and `Archive.pst` beside
+  the local Archive folder landing in "Archive (2)"), progress and Cancel,
+  corrupt files failing with a summary, 10 000 messages imported in
+  45.6 s (bound 180 s), `.msg` contacts, groups, appointments and tasks
+  going to their workspace, the import dialog through the window.
+  `tst_qindamail_carddav` — a contacts-only account syncing into People and
+  pushing a new contact; a 401 retried once with a fresh keyring read; a
+  wrong password ending in `needsSignIn` without the password in
+  `lastError`; an IMAP account's address book borrowing its password; a
+  conflict announced with the copy kept; People ▸ Connect Address Book
+  through the real window (Find address books, test, save, sync, a new
+  contact saved to the book). `tst_qindamail_people` — a group made in
+  People from a suggestion and a typed address, listed as "Group · 2
+  member(s)", inside the window at 520 px, expanding in the composer's To
+  field. `tst_qindamail_host` — 44 ids with shipped icons, File ▸ Import,
+  the panel export through the desktop's validator. `tst_qindamail_ui` —
+  the ribbon gate (coverage, icons, the 520 px squeeze) in Mail, Calendar,
+  Tasks and People with the new commands; fixtures
+  `qindamail_{1280,520}.txt` regenerated (`QQO_UPDATE_FIXTURES=1`) and the
+  diff reviewed: the People detail pane now holds the contact card and the
+  group editor, the card has "Save to" and "In the address book of …".
+- **Grabs reviewed** (`QQO_GRAB_DIR`, offscreen software renderer):
+  `qindamail_pst_summary_{1280,520}`, `qindamail_carddav_setup_{1280,520}`,
+  `qindamail_people_group_{1280,520}`, `qindamail_composer_group`,
+  `qindamail_contact_save_to_520`, and the existing People, composer and
+  mail grabs. Found and fixed while looking: the account dialog's CardDAV
+  section stayed collapsed (`Tk.FormGroup`'s header writes `collapsed`
+  back, which drops a binding), and the People panes' minimum widths pushed
+  both editors 20 px past a 520 px window (the list's minimum is now
+  0.8 × `panelMinWidth`).
+- Not run: a sanitizer build of the reader (one build tree, a full disk).
+  No independent PST implementation exists here to compare with (no libpff
+  or libpst in Portage); the owner's own file is the check below.
+
+**Manual, on the desktop** (with the owner): import a real `.pst` (File ▸
+Import ▸ Outlook Data File) — folder and item counts against Outlook, a few
+messages with attachments and an attached message, contacts with pictures,
+a contact group, recurring appointments, tasks — then import it again (no
+duplicates); open an older ANSI `.pst` and an `.ost` if there are any; open
+a contact and an appointment saved from Outlook as `.msg`; make a group in
+People and write to it; connect an iCloud, Fastmail or Nextcloud address
+book (People ▸ Connect Address Book), change a contact here and on the
+phone, then the same contact in both places (a "Sync conflict" copy and the
+notice), add a contact with **Save to**, delete one; turn on contacts for a
+Gmail account and sign in again (the `carddav` scope).
+
 ## M75 Show design, masters, review and media gates (D-084)
 
 Qualified on qinda (branch `m75-show-design`, merged with

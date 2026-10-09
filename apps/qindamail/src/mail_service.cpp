@@ -11,6 +11,7 @@
 #include "message_list_model.h"
 #include "paths.h"
 #include "provider_calls.h"
+#include "pst_import.h"
 
 #include <qindatk/ics_calendar_provider.h>
 #include <qindatk/local_attachment_store.h>
@@ -127,6 +128,8 @@ void MailService::initialize(const Options &options)
     for (const QString &address : m_settings->value(QStringLiteral("picturesSenders")).toStringList()) {
         m_picturesSenders.insert(address.toLower());
     }
+    // M76: File ▸ Import ▸ Outlook Data File (one import at a time per process).
+    m_outlookImport = new PstImporter(this);
 
     m_folderModel = new FolderModel(this);
     m_messageModel = new MessageListModel(this);
@@ -217,7 +220,7 @@ void MailService::initialize(const Options &options)
 
 void MailService::startRuntime(const MailAccount &account)
 {
-    auto *runtime = new AccountRuntime(account, {m_store, m_attachments, m_secrets, m_calls}, this);
+    auto *runtime = new AccountRuntime(account, {m_store, m_attachments, m_secrets, m_calls, m_contacts}, this);
     runtime->setMailboxes(m_folderCache.value(account.id));
     connect(runtime, &AccountRuntime::statusChanged, this, [this] {
         emit accountsChanged();

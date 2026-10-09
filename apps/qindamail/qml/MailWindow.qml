@@ -12,7 +12,8 @@ import QindaOffice.Mail.App
 // Tasks (a board) or People (the address book, M64) — the ribbon for that
 // workspace, and the windows and dialogs the host asks for: composers (one
 // draft per ordinary top-level window), the account dialog, the event
-// dialog, the calendar, contact, mailbox and message files (M64).
+// dialog, the calendar, contact, mailbox and message files (M64), the
+// Outlook data file import and contact groups (M76).
 //
 // AGENT-NOTE: the service is per PROCESS (every main window shows the same
 // store); everything per window — the workspace, selections, the calendar
@@ -171,6 +172,22 @@ OfficeWindow {
         nameFilters: [qsTr("Mailboxes (*.mbox *.mbx)"), qsTr("All files (*)")]
         onAccepted: window.service.importMailbox(selectedFile)
     }
+    // ---- M76: Outlook data files ----
+    Dialogs.FileDialog {
+        id: pstOpenDialog
+        title: qsTr("Import an Outlook Data File")
+        fileMode: Dialogs.FileDialog.OpenFile
+        nameFilters: [qsTr("Outlook data files (*.pst *.ost)"), qsTr("All files (*)")]
+        onAccepted: window.service.outlookImport.start(selectedFile)
+    }
+    PstImportDialog {
+        id: pstImportDialog
+        service: window.service
+        onShowFolderRequested: function(folderKey) {
+            window.trigger("mailViewMailAction")
+            if (folderKey.length > 0) window.service.currentFolderKey = folderKey
+        }
+    }
     Dialogs.FileDialog {
         id: messageSaveDialog
         title: qsTr("Save Message As")
@@ -222,6 +239,9 @@ OfficeWindow {
             messageSaveDialog.open()
         }
         function onAttachmentsSaveRequested() { attachmentsFolderDialog.open() }
+        function onOutlookImportRequested() { pstOpenDialog.open() }
+        function onContactGroupNewRequested() { peopleWorkspace.newGroup() }
+        function onAddressBookRequested() { accountDialog.openAddressBook() }
         function onPdfExportRequested() {
             pdfExportDialog.selectedFile = window.mail.suggestedSaveUrl(window.mail.suggestedFileName("pdf"))
             pdfExportDialog.open()

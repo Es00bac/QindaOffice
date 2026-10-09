@@ -55,6 +55,10 @@ QString AccountRuntime::mechanismFor(const QString &service) const
     if (service == QLatin1String("graph")) {
         return QStringLiteral("bearer");
     }
+    if (service == QLatin1String("carddav")) {   // M76
+        const QString m = m_account.contacts.authMechanism;
+        return m.isEmpty() ? QStringLiteral("basic") : m;
+    }
     const QString m = m_account.calendar.authMechanism;
     return m.isEmpty() ? QStringLiteral("basic") : m;
 }
@@ -72,6 +76,7 @@ QString AccountRuntime::oauthResourceFor(const QString &service)
 {
     if (isMailService(service)) return QStringLiteral("mail");
     if (service == QLatin1String("ews")) return QStringLiteral("ews");
+    if (service == QLatin1String("carddav")) return QStringLiteral("contacts");
     return QStringLiteral("calendar");
 }
 
@@ -153,6 +158,44 @@ void AccountRuntime::applyCredentials(const QString &service, QObject *provider,
         return;
     }
     const bool optional = service == QLatin1String("ics");
+    // M76: an address book on the account's own server usually takes the
+    // account's password (an app password): without a "carddav" secret the
+    // incoming (or calendar) one is used.
+    QString fallback;
+    if (service == QLatin1String("carddav")) {
+        if (!m_account.incoming.isEmpty() && m_account.incoming.authMechanism != QLatin1String("xoauth2"))
+            fallback = m_account.incoming.protocol;
+        else if (m_account.calendar.protocol == QLatin1String("caldav") && m_account.calendar.authMechanism == QLatin1String("basic"))
+            fallback = QStringLiteral("caldav");
+    }
+    if (!fallback.isEmpty()) {
+        QPointer<AccountRuntime> self(this);
+        m_context.secrets->read(m_account.id, secretService,
+                                [self, target, mechanism, fallback, ready](const QindaOffice::Mail::SecretOutcome &outcome) {
+                                    using Status = QindaOffice::Mail::SecretOutcome::Status;
+                                    if (outcome.status == Status::Ok) {
+                                        if (target != nullptr)
+                                            QMetaObject::invokeMethod(target, "setSecret", Q_ARG(QString, outcome.value),
+                                                                      Q_ARG(QString, mechanism));
+                                        ready({});
+                                        return;
+                                    }
+                                    if (self == nullptr || outcome.status != Status::NotFound) {
+                                        QVariantMap failure = ProviderCalls::result({}, QStringLiteral("rejected"), outcome.error);
+                                        failure.insert(QStringLiteral("unavailable"), outcome.status == Status::Unavailable);
+                                        ready(failure);
+                                        return;
+                                    }
+                                    self->readSecretInto(fallback, target, mechanism, ready);
+                                });
+        return;
+    }
+    readSecretInto(secretService, target, mechanism, ready, optional);
+}
+
+void AccountRuntime::readSecretInto(const QString &secretService, QPointer<QObject> target, const QString &mechanism,
+                                    std::function<void(const QVariantMap &failure)> ready, bool optional)
+{
     m_context.secrets->read(m_account.id, secretService,
                             [target, mechanism, optional, ready](const QindaOffice::Mail::SecretOutcome &outcome) {
                                 using Status = QindaOffice::Mail::SecretOutcome::Status;

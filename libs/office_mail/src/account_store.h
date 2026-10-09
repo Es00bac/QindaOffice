@@ -87,6 +87,11 @@ public:
     Q_INVOKABLE QStringList validate(const QVariantMap &account) const;
     // A candidate account for `kind` and `emailAddress`: from the matching
     // preset when there is one (the preset's kind wins), else defaults.
+    // M76: where CardDAV discovery starts for an address (ProviderPresets).
+    Q_INVOKABLE QString contactsUrlFor(const QString &emailAddress) const;
+    // M76: every enabled CardDAV address book of every account, for the
+    // People workspace: [{accountId, accountName, id, url, name}].
+    Q_INVOKABLE QVariantList addressBooks() const;
     Q_INVOKABLE QVariantMap draftFor(const QString &kind, const QString &emailAddress,
                                      const QString &fullName = {}) const;
 

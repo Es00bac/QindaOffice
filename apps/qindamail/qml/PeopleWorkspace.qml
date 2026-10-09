@@ -10,7 +10,9 @@ import QindaOffice.Mail.App
 // and the selected contact's card (ContactEditor). New / Delete / Import /
 // Export are the host's commands (contactNewAction, contactDeleteAction,
 // contactImportAction, contactExportAction); the selection is reported to
-// the host (MailHost.selectedContactId) so Delete Contact enables.
+// the host (MailHost.selectedContactId) so Delete Contact enables. M76
+// (D-085): contact groups are listed with the contacts and edited in
+// ContactGroupEditor (contactNewGroupAction starts one).
 Item {
     id: people
 
@@ -18,6 +20,7 @@ Item {
     property MailHost host: null
     property string selectedId: ""
     property string query: ""
+    property bool groupSelected: false
     readonly property var store: service !== null ? service.contacts : null
     readonly property var rows: {
         const all = people.store !== null ? people.store.contacts : []
@@ -25,19 +28,30 @@ Item {
     }
 
     function select(id) {
+        const contact = id.length > 0 && people.store !== null ? people.store.contactById(id) : ({})
         people.selectedId = id
+        people.groupSelected = contact.isGroup === true
         if (people.host !== null) people.host.selectedContactId = id
-        editor.edit(id.length > 0 && people.store !== null ? people.store.contactById(id) : ({}))
+        if (people.groupSelected) groupEditor.edit(contact)
+        else editor.edit(contact)
     }
     function newContact() {
         people.select("")
         editor.focusFirst()
     }
+    function newGroup() {
+        people.select("")
+        people.groupSelected = true
+        groupEditor.edit({})
+        groupEditor.focusFirst()
+    }
     function deleteContact(id) {
         const contact = people.store !== null ? people.store.contactById(id) : ({})
         if (!contact || !contact.id) return
         confirmDelete.contactId = id
-        confirmDelete.text = qsTr("Delete %1 from your contacts? This cannot be undone.").arg(String(contact.displayName || qsTr("this contact")))
+        confirmDelete.text = contact.isGroup === true
+            ? qsTr("Delete the group %1? Its members stay in your contacts.").arg(String(contact.displayName || ""))
+            : qsTr("Delete %1 from your contacts? This cannot be undone.").arg(String(contact.displayName || qsTr("this contact")))
         confirmDelete.open()
     }
     function initials(name) {
@@ -53,7 +67,10 @@ Item {
         Tk.Box {
             objectName: "peopleListPane"
             T.SplitView.preferredWidth: Tk.Theme.size.panelMinWidth * 1.6
-            T.SplitView.minimumWidth: Tk.Theme.size.panelMinWidth
+            // AGENT-GUARD: list + detail minimums must fit a 520 px window
+            // beside the rail (M76): at panelMinWidth the editors were pushed
+            // 20 px past the window edge.
+            T.SplitView.minimumWidth: Tk.Theme.size.panelMinWidth * 0.8
             color: Tk.Theme.color.surface
             padding: 0
             Tk.Flex {
@@ -122,7 +139,8 @@ Item {
                                 radius: width / 2
                                 color: Tk.Theme.color.accentSubtle
                                 clip: true
-                                Tk.Label { anchors.centerIn: parent; visible: avatar.status !== Image.Ready; text: people.initials(row.modelData.displayName); color: Tk.Theme.color.accentText; font.weight: Font.DemiBold }
+                                Tk.Label { anchors.centerIn: parent; visible: avatar.status !== Image.Ready && !row.modelData.isGroup; text: people.initials(row.modelData.displayName); color: Tk.Theme.color.accentText; font.weight: Font.DemiBold }
+                                Tk.Icon { anchors.centerIn: parent; visible: row.modelData.isGroup === true; name: "users-round"; size: Tk.Theme.size.iconSm; color: Tk.Theme.color.accentText }
                                 Image { id: avatar; anchors.fill: parent; source: String(row.modelData.photoUrl || ""); fillMode: Image.PreserveAspectCrop; asynchronous: true; sourceSize.width: width * 2 }
                             }
                             Tk.Flex {
@@ -131,7 +149,12 @@ Item {
                                 Tk.Flex.grow: 1
                                 Tk.Flex.basis: 0
                                 Tk.Label { text: String(row.modelData.displayName || qsTr("(no name)")); font.weight: Font.DemiBold; elide: Text.ElideRight; width: parent.width }
-                                Tk.Caption { text: row.primary.length > 0 ? row.primary : String(row.modelData.organization || ""); elide: Text.ElideRight; width: parent.width }
+                                Tk.Caption {
+                                    text: row.modelData.isGroup === true ? qsTr("Group · %n member(s)", "", Number(row.modelData.memberCount || 0))
+                                        : row.primary.length > 0 ? row.primary : String(row.modelData.organization || "")
+                                    elide: Text.ElideRight
+                                    width: parent.width
+                                }
                             }
                         }
                     }
@@ -148,15 +171,30 @@ Item {
                 }
             }
         }
-        ContactEditor {
-            id: editor
-            objectName: "contactEditor"
+        Item {
+            objectName: "peopleDetail"
             T.SplitView.fillWidth: true
             T.SplitView.minimumWidth: Tk.Theme.size.panelMinWidth * 1.5
-            service: people.service
-            host: people.host
-            onSaved: function(contactId) { people.selectedId = contactId; if (people.host !== null) people.host.selectedContactId = contactId }
-            onDeleteRequested: function(contactId) { people.deleteContact(contactId) }
+            ContactEditor {
+                id: editor
+                objectName: "contactEditor"
+                anchors.fill: parent
+                visible: !people.groupSelected
+                service: people.service
+                host: people.host
+                onSaved: function(contactId) { people.selectedId = contactId; if (people.host !== null) people.host.selectedContactId = contactId }
+                onDeleteRequested: function(contactId) { people.deleteContact(contactId) }
+            }
+            ContactGroupEditor {
+                id: groupEditor
+                objectName: "contactGroupEditor"
+                anchors.fill: parent
+                visible: people.groupSelected
+                service: people.service
+                host: people.host
+                onSaved: function(contactId) { people.selectedId = contactId; if (people.host !== null) people.host.selectedContactId = contactId }
+                onDeleteRequested: function(contactId) { people.deleteContact(contactId) }
+            }
         }
     }
 

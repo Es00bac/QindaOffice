@@ -14,6 +14,7 @@
 #include <QHash>
 #include <QList>
 #include <QString>
+#include <QStringList>
 
 #include <optional>
 
@@ -21,6 +22,7 @@ namespace QindaOffice::Mail::MsgDetail {
 
 // MS-OXCDATA 2.11.1 property types.
 inline constexpr quint16 kPtLong = 0x0003;
+inline constexpr quint16 kPtDouble = 0x0005;
 inline constexpr quint16 kPtBoolean = 0x000B;
 inline constexpr quint16 kPtObject = 0x000D;
 inline constexpr quint16 kPtString8 = 0x001E;
@@ -56,11 +58,15 @@ public:
     bool load(const CfbReader &cfb, int storageId, MsgObjectKind kind, MsgReadBudget *budget,
               QString *error);
     void setString8CodePage(int codePage) { m_codePage = codePage; }
+    [[nodiscard]] int codePage() const { return m_codePage; }
 
     // A property stream or at least one __substg1.0_ stream exists.
     bool hasProperties() const { return m_hasProperties; }
 
+    // A fixed property (in the property stream) or a stream of this type.
+    bool has(quint16 id, quint16 type) const;
     std::optional<quint32> longValue(quint16 id) const;
+    std::optional<double> doubleValue(quint16 id) const;
     bool boolValue(quint16 id) const;
     QDateTime timeValue(quint16 id) const;   // invalid when absent or null
 
@@ -73,6 +79,11 @@ public:
     // the compressed RTF body).
     QByteArray optionalBinary(quint16 id);
     bool hasStream(quint16 id, quint16 type) const { return streamId(id, type) >= 0; }
+    // M76: multi-valued strings and binaries (MS-OXMSG 2.1.4.2.3): one
+    // "__substg1.0_<tag>-<index>" stream per value, read until the first
+    // missing index (at most 1024 values).
+    QStringList strings(quint16 id);
+    QList<QByteArray> binaries(quint16 id);
 
     int childStorage(const QString &name) const;
     // Child storages named `prefix` + hex number ("__recip_version1.0_#"),

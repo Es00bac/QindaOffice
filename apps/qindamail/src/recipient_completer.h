@@ -10,9 +10,18 @@
 // id and LATER emits finished(id, {candidates: [{label, value, valid}]}) —
 // never inside request(), because the field stores the id only after the
 // call returns and ignores answers to other ids.
+//
+// M76 (D-085): contact groups are offered too, labelled "Name (group)". The
+// TokenField turns a picked suggestion into ONE token through the composer's
+// address validator (a group has no address, so it is an invalid token);
+// ComposerWindow.qml then calls expand(token label) and replaces the token
+// with the members. expand() also accepts a group's plain name, so typing
+// it and pressing Enter works as in Outlook.
 
+#include <QHash>
 #include <QObject>
 #include <QPointer>
+#include <QVariantList>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 
@@ -37,6 +46,11 @@ public:
     void setLimit(int limit);
 
     Q_INVOKABLE QString request(const QString &query);
+    // The members of the group `text` names (a group suggestion's label or
+    // the group's name) as candidates [{label, value, valid}]; [] otherwise.
+    Q_INVOKABLE QVariantList expand(const QString &text);
+    // The id of the group `text` names (as expand() resolves it), or "".
+    Q_INVOKABLE QString groupIdFor(const QString &text) const;
 
 signals:
     void serviceChanged();
@@ -47,6 +61,8 @@ private:
     QPointer<MailService> m_service;
     int m_limit = 8;
     quint64 m_serial = 0;
+    QHash<QString, QString> m_groups;   // group suggestion label → contact id
+
 };
 
 } // namespace QindaOffice::Apps::Mail

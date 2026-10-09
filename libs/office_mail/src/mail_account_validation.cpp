@@ -154,6 +154,7 @@ QStringList MailAccount::validate() const
     else if (kind == QLatin1String(kKindIcs)) allowed = {QStringLiteral("ics")};
     else if (isExchange) allowed = {QStringLiteral("ews")};
     else if (isM365) allowed = {QStringLiteral("graph"), QStringLiteral("none")};
+    else if (kind == QLatin1String(kKindCardDav)) allowed = {QStringLiteral("none")};
     if (!allowed.contains(calendar.protocol)) {
         e << QStringLiteral("calendar.protocol: a %1 account uses %2").arg(kind, allowed.join(QStringLiteral(" or ")));
     }
@@ -189,6 +190,41 @@ QStringList MailAccount::validate() const
                 && !calendarUrlOk(calendar.protocol, c.url, &entryWhy)) {
                 e << path + QStringLiteral(".url: ") + entryWhy;
             }
+        }
+    }
+
+    // M76: CardDAV address books — required by a carddav account, an
+    // add-on anywhere else but on a calendar feed.
+    const bool contactsKind = kind == QLatin1String(kKindCardDav);
+    if (!oneOf(contacts.protocol, {"carddav", "none"})) {
+        e << QStringLiteral("contacts.protocol: must be carddav or none");
+    } else if (contactsKind && contacts.protocol != QLatin1String("carddav")) {
+        e << QStringLiteral("contacts.protocol: a carddav account syncs carddav");
+    } else if (kind == QLatin1String(kKindIcs) && contacts.protocol != QLatin1String("none")) {
+        e << QStringLiteral("contacts.protocol: a calendar feed has no address books");
+    }
+    if (contacts.protocol == QLatin1String("carddav")) {
+        QString why;
+        if (contacts.url.isEmpty()) e << QStringLiteral("contacts.url: an address book server is required");
+        else if (!isSecureOrLoopbackUrl(QUrl(contacts.url), &why)) e << QStringLiteral("contacts.url: ") + why;
+        if (!oneOf(contacts.authMechanism, {"basic", "bearer"})) {
+            e << QStringLiteral("contacts.authMechanism: must be basic or bearer");
+        } else if (contacts.authMechanism == QLatin1String("bearer") && oauth.provider.isEmpty()) {
+            e << QStringLiteral("contacts.authMechanism: bearer needs oauth.provider (google)");
+        } else if (contacts.authMechanism == QLatin1String("basic") && contacts.userName.isEmpty()) {
+            e << QStringLiteral("contacts.userName: a user name is required");
+        }
+        QSet<QString> seen;
+        for (qsizetype i = 0; i < contacts.addressBooks.size(); ++i) {
+            const AddressBookEntry &book = contacts.addressBooks.at(i);
+            const QString path = QStringLiteral("contacts.addressBooks[%1]").arg(i);
+            if (book.id.isEmpty()) e << path + QStringLiteral(".id: required");
+            else if (seen.contains(book.id)) e << path + QStringLiteral(".id: “%1” is used twice").arg(book.id);
+            seen.insert(book.id);
+            QString bookWhy;
+            if (book.url.isEmpty()) e << path + QStringLiteral(".url: required");
+            else if (!book.url.startsWith(QLatin1Char('/')) && !isSecureOrLoopbackUrl(QUrl(book.url), &bookWhy))
+                e << path + QStringLiteral(".url: ") + bookWhy;
         }
     }
 

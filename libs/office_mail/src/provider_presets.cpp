@@ -300,4 +300,18 @@ QString substituteAddress(QString text, const QString &emailAddress)
     return text;
 }
 
+QString ProviderPresets::contactsUrlFor(const QString &emailAddress)
+{
+    const QString address = emailAddress.trimmed().toLower();
+    const QString domain = address.section(QLatin1Char('@'), 1);
+    if (domain.isEmpty() || address.count(QLatin1Char('@')) != 1) return {};
+    if (domain == QLatin1String("gmail.com") || domain == QLatin1String("googlemail.com"))
+        return QStringLiteral("https://www.googleapis.com/carddav/v1/principals/%1/lists/default/").arg(address);
+    if (domain == QLatin1String("icloud.com") || domain == QLatin1String("me.com") || domain == QLatin1String("mac.com"))
+        return QStringLiteral("https://contacts.icloud.com/");
+    if (domain == QLatin1String("fastmail.com") || domain == QLatin1String("fastmail.fm"))
+        return QStringLiteral("https://carddav.fastmail.com/");
+    return QStringLiteral("https://%1/").arg(domain);
+}
+
 } // namespace QindaOffice::Mail
