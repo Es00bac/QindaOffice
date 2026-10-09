@@ -51,7 +51,10 @@ class TestMailHost : public QObject {
                 QStringLiteral("chevron-left"), QStringLiteral("chevron-right"), QStringLiteral("calendar-clock"),
                 QStringLiteral("calendar-range"), QStringLiteral("columns-3"), QStringLiteral("calendar-days"),
                 QStringLiteral("import"), QStringLiteral("file-output"), QStringLiteral("link-2"),
-                QStringLiteral("panels-top-left")};
+                QStringLiteral("panels-top-left"),
+                // M64 (D-072)
+                QStringLiteral("users"), QStringLiteral("book-user"), QStringLiteral("image"), QStringLiteral("save"),
+                QStringLiteral("paperclip"), QStringLiteral("mailbox"), QStringLiteral("file-down")};
     }
 
 private slots:
@@ -60,7 +63,7 @@ private slots:
         MailTest::Env env;
         MailHost host(env.service.get());
         const QStringList ids = MailHost::commandIds();
-        QCOMPARE(ids.size(), 30);
+        QCOMPARE(ids.size(), 41);
         for (const QString &id : ids) {
             ActionEntry *entry = host.actions()->entry(id);
             QVERIFY2(entry != nullptr, qPrintable(id));
@@ -72,9 +75,14 @@ private slots:
         QCOMPARE(newWindow->shortcut(), QKeySequence(QStringLiteral("Ctrl+Shift+N")));
         QCOMPARE(host.actions()->entry(QStringLiteral("mailNewMessageAction"))->shortcut(),
                  QKeySequence(QStringLiteral("Ctrl+N")));
-        // No document: Save and Print stay disabled (D-011).
+        // No document: Save stays disabled (D-011); Print prints the open
+        // message (M64), so with nothing selected it is disabled too.
         QVERIFY(!host.actions()->entry(QStringLiteral("fileSaveAction"))->isEnabled());
         QVERIFY(!host.actions()->entry(QStringLiteral("filePrintAction"))->isEnabled());
+        QCOMPARE(host.actions()->entry(QStringLiteral("contactNewAction"))->shortcut(),
+                 QKeySequence(QStringLiteral("Ctrl+Shift+C")));
+        QCOMPARE(host.actions()->entry(QStringLiteral("mailSaveMessageAction"))->shortcut(), QKeySequence(QStringLiteral("F12")));
+        QCOMPARE(host.actions()->entry(QStringLiteral("mailViewPeopleAction"))->radioGroup(), QStringLiteral("mailView"));
     }
 
     void shortcutsAreUnique()
@@ -159,6 +167,12 @@ private slots:
         service->setMarkReadDelayMs(-1);
         service->setSelectedMessageId(QStringLiteral("local:1"));
         for (const QString &id : respond) QVERIFY2(host.actions()->entry(id)->isEnabled(), qPrintable(id));
+        // M64: the open message prints, saves and gives its sender to People.
+        for (const char *id : {"filePrintAction", "filePrintPreviewAction", "mailExportPdfAction", "mailSaveMessageAction",
+                               "mailAddSenderAction", "mailShowPicturesAction"})
+            QVERIFY2(host.actions()->entry(QString::fromLatin1(id))->isEnabled(), id);
+        QVERIFY(!host.actions()->entry(QStringLiteral("mailSaveAttachmentsAction"))->isEnabled()); // none here
+        QVERIFY(!host.actions()->entry(QStringLiteral("contactDeleteAction"))->isEnabled());
         QCOMPARE(host.actions()->entry(QStringLiteral("mailToggleReadAction"))->plainText(), QStringLiteral("Mark as Read"));
 
         QSignalSpy compose(&host, &MailHost::composeRequested);
@@ -196,8 +210,9 @@ private slots:
         QStringList titles;
         for (const Protocol::MenuItem &item : snapshot.tree.items) titles.append(item.text);
         QCOMPARE(titles, (QStringList{QStringLiteral("File"), QStringLiteral("Edit"), QStringLiteral("View"),
-                                      QStringLiteral("Message"), QStringLiteral("Calendar"), QStringLiteral("Accounts"),
-                                      QStringLiteral("AI"), QStringLiteral("Settings"), QStringLiteral("Help")}));
+                                      QStringLiteral("Message"), QStringLiteral("People"), QStringLiteral("Calendar"),
+                                      QStringLiteral("Accounts"), QStringLiteral("AI"), QStringLiteral("Settings"),
+                                      QStringLiteral("Help")}));
         QStringList ids;
         for (const Protocol::MenuItem &item : snapshot.tree.items) collect(item, ids);
         for (const QString &id : ids) QVERIFY2(host.actions()->entry(id) != nullptr, qPrintable(id));
@@ -205,8 +220,9 @@ private slots:
         // File starts with the new-item commands, then New Window.
         QStringList file;
         collect(snapshot.tree.items.first(), file);
-        QCOMPARE(file.mid(0, 4), (QStringList{QStringLiteral("mailNewMessageAction"), QStringLiteral("mailNewEventAction"),
-                                              QStringLiteral("taskNewAction"), QStringLiteral("fileNewAction")}));
+        QCOMPARE(file.mid(0, 5), (QStringList{QStringLiteral("mailNewMessageAction"), QStringLiteral("mailNewEventAction"),
+                                              QStringLiteral("taskNewAction"), QStringLiteral("contactNewAction"),
+                                              QStringLiteral("fileNewAction")}));
     }
 
     void pathsHandedToTheApp()

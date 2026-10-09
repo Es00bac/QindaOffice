@@ -15,6 +15,9 @@ QQuickRootItem#MailWindow
               QQuickItem#navigationItem_mail
                 QQuickButton#navigationButton_mail
                   Icon#navigationIcon_mail
+              QQuickItem#navigationItem_people
+                QQuickButton#navigationButton_people
+                  Icon#navigationIcon_people
               QQuickItem#navigationItem_tasks
                 QQuickButton#navigationButton_tasks
                   Icon#navigationIcon_tasks
@@ -138,18 +141,6 @@ QQuickRootItem#MailWindow
                       IconButton#messageRowFlag [hidden]
                       Label#messageRowSender
                       Overline#messageDay [hidden]
-                    MessageRow#messageRow_m6
-                      IconButton#messageRowArchive [hidden]
-                      IconButton#messageRowDelete [hidden]
-                      IconButton#messageRowFlag [hidden]
-                      Label#messageRowSender
-                      Overline#messageDay
-                    MessageRow#messageRow_m7
-                      IconButton#messageRowArchive [hidden]
-                      IconButton#messageRowDelete [hidden]
-                      IconButton#messageRowFlag [hidden]
-                      Label#messageRowSender
-                      Overline#messageDay [hidden]
                     Overline#emptyTitle [hidden]
                   QQuickRectangle#boxFocusRing [hidden]
                   SearchField#messageSearch
@@ -169,7 +160,9 @@ QQuickRootItem#MailWindow
                   QQuickRectangle#boxFocusRing [hidden]
                   Scroll#readingScroll [hidden]
                     Caption#readingDate [hidden]
+                    Caption#readingLoading [hidden]
                     Flex#readingActions [hidden]
+                      Button#readingAction_mailAddSenderAction [hidden]
                       Button#readingAction_mailArchiveAction [hidden]
                       Button#readingAction_mailDeleteAction [hidden]
                       Button#readingAction_mailForwardAction [hidden]
@@ -177,19 +170,106 @@ QQuickRootItem#MailWindow
                       Button#readingAction_mailReplyAllAction [hidden]
                       Button#readingAction_mailToggleFlagAction [hidden]
                     Flex#readingAttachments [hidden]
+                    Flex#readingAttachmentsHeader [hidden]
+                      Button#readingSaveAll [hidden]
+                    Flex#readingPicturesBar [hidden]
+                      Button#readingShowPictures [hidden]
+                      Button#readingTrustSender [hidden]
+                      Caption#readingPicturesText [hidden]
                     Heading#readingSubject [hidden]
                     IconButton#noticeDismiss [hidden]
                     Label#noticeText [hidden]
                     Label#noticeTitle [hidden]
                     Label#readingSender [hidden]
+                    Notice#readingTruncated [hidden]
+                      IconButton#noticeDismiss [hidden]
+                      Label#noticeText [hidden]
+                      Label#noticeTitle [hidden]
+                      QQuickRectangle#boxFocusRing [hidden]
                     QQuickRectangle#boxFocusRing [hidden]
                     QQuickRectangle#readingAvatar [hidden]
-                    QQuickTextEdit#readingBody [hidden]
+                      QQuickImage#readingSenderPhoto [hidden]
+                    QQuickRectangle#readingMeeting [hidden]
+                      Button#readingMeetingRemove [hidden]
+                      Button#readingMeeting_accepted [hidden]
+                      Button#readingMeeting_declined [hidden]
+                      Button#readingMeeting_tentative [hidden]
+                      Caption#readingMeetingStatus [hidden]
+                      Caption#readingMeetingWhen [hidden]
+                      Label#readingMeetingTitle [hidden]
+                    QQuickRectangle#readingPaper [hidden]
+                      QQuickTextEdit#readingBody [hidden]
               QQuickRectangle#splitterHandle
                 QQuickMouseArea#splitterHitTarget
                 QQuickRectangle#splitterFocusRing [hidden]
               QQuickRectangle#splitterHandle
                 QQuickMouseArea#splitterHitTarget
+                QQuickRectangle#splitterFocusRing [hidden]
+            Splitter#peopleSplitter [hidden]
+              QQuickContentItem#Splitter [hidden]
+                Box#peopleListPane [hidden]
+                  Caption#peopleCount [hidden]
+                  Heading#peopleTitle [hidden]
+                  IconButton#peopleNew [hidden]
+                  QQuickListView#peopleRows [hidden]
+                    Caption#emptyText [hidden]
+                    Overline#emptyTitle [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                  SearchField#peopleSearch [hidden]
+                    IconButton#fieldClear [hidden]
+                ContactEditor#contactEditor [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                  Scroll#contactEditorScroll [hidden]
+                    Button#contactDelete [hidden]
+                    Button#contactPickPhoto [hidden]
+                    Button#contactRemovePhoto [hidden]
+                    Button#contactRevert [hidden]
+                    Button#contactSave [hidden]
+                    Button#contactWrite [hidden]
+                    Button#contact_address_add [hidden]
+                    Button#contact_email_add [hidden]
+                    Button#contact_phone_add [hidden]
+                    Button#contact_url_add [hidden]
+                    Heading#contactTitle [hidden]
+                    Notice#contactError [hidden]
+                      IconButton#noticeDismiss [hidden]
+                      Label#noticeText [hidden]
+                      Label#noticeTitle [hidden]
+                      QQuickRectangle#boxFocusRing [hidden]
+                    TextArea#contactNotes [hidden]
+                    TextField#contactAnniversary [hidden]
+                      IconButton#fieldClear [hidden]
+                    TextField#contactBirthday [hidden]
+                      IconButton#fieldClear [hidden]
+                    TextField#contactCategories [hidden]
+                      IconButton#fieldClear [hidden]
+                    TextField#contactCompany [hidden]
+                      IconButton#fieldClear [hidden]
+                    TextField#contactDepartment [hidden]
+                      IconButton#fieldClear [hidden]
+                    TextField#contactDisplayName [hidden]
+                      IconButton#fieldClear [hidden]
+                    TextField#contactFamilyName [hidden]
+                      IconButton#fieldClear [hidden]
+                    TextField#contactGivenName [hidden]
+                      IconButton#fieldClear [hidden]
+                    TextField#contactJobTitle [hidden]
+                      IconButton#fieldClear [hidden]
+                    TextField#contactMiddleName [hidden]
+                      IconButton#fieldClear [hidden]
+                    TextField#contactNickname [hidden]
+                      IconButton#fieldClear [hidden]
+                    TextField#contactPrefix [hidden]
+                      IconButton#fieldClear [hidden]
+                    TextField#contactSuffix [hidden]
+                      IconButton#fieldClear [hidden]
+                    Thumbnail#contactPhoto [hidden]
+                      Icon#thumbnailPlaceholder [hidden]
+                      QQuickImage#thumbnailImage [hidden]
+                      QQuickRectangle#thumbnailCaptionBand [hidden]
+                        Caption#thumbnailCaption [hidden]
+              QQuickRectangle#splitterHandle [hidden]
+                QQuickMouseArea#splitterHitTarget [hidden]
                 QQuickRectangle#splitterFocusRing [hidden]
             TaskBoard#mailTaskBoard [hidden]
               Box#taskColumn_doing [hidden]
@@ -289,6 +369,21 @@ QQuickRootItem#MailWindow
                 RibbonButton#ribbonAction_mailNewMessageAction
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_people
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_mailAddSenderAction
+                RibbonButton#ribbonAction_mailAddSenderAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_mailShowPicturesAction
+                RibbonButton#ribbonAction_mailShowPicturesAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
             RibbonGroup#ribbonGroup_respond

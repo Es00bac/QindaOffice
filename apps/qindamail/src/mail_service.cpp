@@ -4,6 +4,7 @@
 
 #include "account_store.h"
 #include "autoconfig.h"
+#include "contact_store.h"
 #include "folder_model.h"
 #include "json_settings.h"
 #include "mail_secrets.h"
@@ -118,6 +119,15 @@ void MailService::initialize(const Options &options)
         m_hiddenCalendars.insert(id);
     }
 
+    // M64: the address book next to the store, and the senders whose
+    // pictures always load.
+    m_contacts = new QindaOffice::Mail::ContactStore(this);
+    m_contacts->setPath(options.contactsPath.isEmpty() ? m_dataDir + QStringLiteral("/contacts.json")
+                                                       : options.contactsPath);
+    for (const QString &address : m_settings->value(QStringLiteral("picturesSenders")).toStringList()) {
+        m_picturesSenders.insert(address.toLower());
+    }
+
     m_folderModel = new FolderModel(this);
     m_messageModel = new MessageListModel(this);
     m_messageModel->setThreaded(m_settings->value(QStringLiteral("threaded"), true).toBool());
@@ -192,6 +202,7 @@ void MailService::initialize(const Options &options)
     }
 
     refreshDerived();
+    QTimer::singleShot(0, this, &MailService::pruneSources);
     if (m_store->status() == QLatin1String("recovered")) {
         QTimer::singleShot(0, this, [this] {
             emit notify(tr("Mail data recovered"), m_store->lastError(), QStringLiteral("warning"));
@@ -229,6 +240,13 @@ void MailService::stopRuntime(const QString &accountId)
     m_runtimes.removeOne(existing);
     delete m_timers.take(accountId);
     existing->deleteLater();
+    // M64: a source download of this account never answers once its
+    // runtime is gone; its waiters get their answer now (IMAP record ids
+    // carry the account id, "imap:<account>:…").
+    const QString prefix = QStringLiteral("imap:") + accountId + QLatin1Char(':');
+    for (const QString &messageId : m_sourceWaiters.keys()) {
+        if (messageId.startsWith(prefix)) finishSource(messageId, {}, tr("The account was changed or removed"));
+    }
     refreshBusy();
 }
 
@@ -479,6 +497,7 @@ void MailService::scheduleRefresh()
 
 void MailService::refreshDerived()
 {
+    m_seenDirty = true;
     rebuildFolders();
     rebuildMessages();
     refreshSelectedMessage();

@@ -4,7 +4,10 @@
 # QindaMail — the account list (accounts.json, no secrets), provider presets,
 # Thunderbird-format autoconfig, OAuth 2.0 (PKCE + loopback redirect), the
 # client-ID registry, keyring secrets (QtKeychain plus a client-owned native
-# imported Password reader, D-067) and XOAUTH2 helpers.
+# imported Password reader, D-067) and XOAUTH2 helpers. M64 (D-072,
+# docs/mail-interchange.md): the address book (contacts, vCard, Outlook CSV),
+# message files (RFC 5322 reader/writer, mbox, Outlook .msg over an MS-CFB
+# reader and compressed RTF) and safe HTML for display (sanitizer, renderer).
 # Qt Core/Network/Qml/DBus + qt6keychain + QindaTK; no Quick, no desktop archives
 # (AGENTS.md rules 8/9). Qt Gui only for QDesktopServices (opening the
 # browser) and through office_core.
@@ -31,6 +34,41 @@ qt_add_qml_module(office_mail
         src/mail_account_validation.cpp
         src/mail_result.h
         src/mail_secrets.cpp src/mail_secrets.h
+        src/cfb_reader.cpp src/cfb_reader.h
+        src/contact.cpp src/contact.h
+        src/contact_rules.cpp
+        src/contact_csv.cpp src/contact_csv.h src/contact_csv_p.h
+        src/contact_csv_row.cpp
+        src/contact_store.cpp src/contact_store.h
+        src/contact_store_io.cpp
+        src/contact_store_photos.cpp
+        src/contact_store_query.cpp
+        src/html_sanitizer.cpp src/html_sanitizer.h src/html_sanitizer_p.h
+        src/html_sanitizer_css.cpp
+        src/html_sanitizer_hidden.cpp
+        src/html_sanitizer_tags.cpp
+        src/html_sanitizer_tree.cpp
+        src/html_sanitizer_urls.cpp
+        src/html_tokenizer.cpp src/html_tokenizer.h
+        src/html_tokenizer_entities.cpp
+        src/mbox.cpp src/mbox.h
+        src/msg_headers.cpp src/msg_headers.h
+        src/msg_properties.cpp src/msg_properties.h
+        src/msg_reader.cpp src/msg_reader.h
+        src/plain_text_html.cpp src/plain_text_html.h
+        src/rtf_codepage.cpp src/rtf_codepage.h
+        src/rtf_compressed.cpp src/rtf_compressed.h
+        src/rtf_text.cpp src/rtf_text.h
+        src/vcard.h src/vcard_p.h
+        src/vcard_reader.cpp src/vcard_reader_p.h
+        src/vcard_reader_properties.cpp
+        src/vcard_text.cpp
+        src/vcard_writer.cpp
+        src/message_content.h
+        src/message_render.cpp src/message_render.h
+        src/mime_header.cpp src/mime_header.h
+        src/rfc822_reader.cpp src/rfc822_reader.h
+        src/rfc822_writer.cpp src/rfc822_writer.h
         src/imported_password_backend.cpp src/imported_password_backend.h
         src/imported_password_codec.cpp src/imported_password_codec.h
         src/imported_password_reader.cpp src/imported_password_reader.h

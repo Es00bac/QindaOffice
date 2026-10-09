@@ -18,4 +18,25 @@ endfunction()
 qqo_add_mail_test(tst_mail_accounts)
 qqo_add_mail_test(tst_mail_autoconfig)
 qqo_add_mail_test(tst_mail_oauth)
+
+# M64 (D-072): message files, contacts, safe HTML and Outlook .msg. No
+# network, no servers: every fixture is written by the test itself (a CFB
+# writer builds the .msg files, cfb_writer.h). Qt Gui only for QImage and a
+# QTextDocument that checks what sanitized HTML asks to load.
+function(qqo_add_mail_unit_test name)
+    add_executable(${name} ${name}.cpp ${ARGN})
+    target_link_libraries(${name} PRIVATE office_mail Qt6::Test Qt6::Gui)
+    qqo_set_strict_warnings(${name})
+    add_test(NAME ${name} COMMAND ${name})
+    set_tests_properties(${name} PROPERTIES ENVIRONMENT
+        "QT_QPA_PLATFORM=offscreen;QQO_MAIL_SECRET_BACKEND=memory")
+endfunction()
+
+qqo_add_mail_unit_test(tst_mail_messages)
+qqo_add_mail_unit_test(tst_mail_contacts)
+qqo_add_mail_unit_test(tst_mail_contact_csv)
+qqo_add_mail_unit_test(tst_mail_contact_store)
+qqo_add_mail_unit_test(tst_mail_html tst_mail_html_support.h tst_mail_html_samples.h)
+qqo_add_mail_unit_test(tst_mail_msg tst_mail_msg_parts.cpp tst_mail_msg_cfb.cpp tst_mail_msg_rtf.cpp
+                       tst_mail_msg.h tst_mail_msg_support.h cfb_writer.h cfb_writer_msg.h)
 add_subdirectory(native_secrets)

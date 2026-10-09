@@ -52,6 +52,7 @@ class OAuth2Session;
 
 namespace QindaOffice::Apps::Mail {
 
+class ImapSourceFetcher;
 class ProviderCalls;
 
 struct RuntimeContext {
@@ -92,6 +93,9 @@ public:
     // actions are per mailbox (the provider's `mailbox` decides which records
     // a result touches), so each mailbox gets its own object.
     [[nodiscard]] QindaTK::ImapMailProvider *imap(const QString &mailbox);
+    // Whole-message downloads for this IMAP account (M64, imap_source_fetcher.h),
+    // created on first use; null for a non-IMAP account.
+    [[nodiscard]] ImapSourceFetcher *sourceFetcher();
     [[nodiscard]] QindaTK::Pop3MailProvider *pop3() const { return m_pop3; }
     [[nodiscard]] QindaTK::SmtpMailProvider *smtp() const { return m_smtp; }
     [[nodiscard]] const QList<CalendarBinding> &calendars() const { return m_calendars; }
@@ -155,6 +159,7 @@ private:
     QindaOffice::Mail::MailAccount m_account;
     RuntimeContext m_context;
     QHash<QString, QindaTK::ImapMailProvider *> m_imap;
+    ImapSourceFetcher *m_sourceFetcher = nullptr;
     QindaTK::Pop3MailProvider *m_pop3 = nullptr;
     QindaTK::SmtpMailProvider *m_smtp = nullptr;
     QList<CalendarBinding> m_calendars;

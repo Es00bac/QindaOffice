@@ -12,7 +12,8 @@ import QindaOffice.Mail.App
 //
 // AGENT-CONTRACT (MailService): `send(draft)` returns the service request
 // id and later emits `sendFinished(requestId, result)`; the composer's own
-// request id is acknowledged with the result's state.
+// request id is acknowledged with the result's state. To / Cc / Bcc suggest
+// recipients from the address book and from mail (RecipientCompleter, M64).
 Tk.AppWindow {
     id: composerWindow
 
@@ -22,6 +23,8 @@ Tk.AppWindow {
     property string pendingComposerRequest: ""
     property string pendingServiceRequest: ""
     property bool finished: false
+    // A non-Item object, not a second window child (AGENTS.md QML rules).
+    readonly property RecipientCompleter completer: RecipientCompleter { service: composerWindow.service }
 
     title: (String(composer.workingDraft.subject || "").length > 0 ? composer.workingDraft.subject : qsTr("New message")) + " — QindaMail"
     width: Tk.Theme.size.dialogWidth * 1.9
@@ -105,6 +108,11 @@ Tk.AppWindow {
                     if (saved && saved.id) composerWindow.draft = Object.assign({}, composerWindow.draft, { id: saved.id })
                     composer.acknowledge(requestId, saved && saved.ok !== false ? "accepted" : "rejected",
                                          saved && saved.ok !== false ? qsTr("Draft saved") : String(saved ? saved.error : ""))
+                }
+                Component.onCompleted: {
+                    toField.completionProvider = composerWindow.completer
+                    ccField.completionProvider = composerWindow.completer
+                    bccField.completionProvider = composerWindow.completer
                 }
                 onAttachmentAddRequested: function(requestId) { attachDialog.requestId = requestId; attachDialog.open() }
                 onAttachmentRemoveRequested: function(requestId, attachmentId) {

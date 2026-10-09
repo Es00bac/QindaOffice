@@ -6,8 +6,10 @@ import QindaOffice.Mail.App
 
 // Create or edit one event (D-042): title, where, when (dates from a month
 // picker, times on a 15-minute list, or all day), which calendar, how it
-// repeats, notes. A repeating occurrence asks whether the edit is for this
-// one or the whole series. Read-only calendars (feeds) open for viewing.
+// repeats, who to invite (M64: suggestions from People and mail; Save sends
+// them a meeting request), notes. A repeating occurrence asks whether the
+// edit is for this one or the whole series. Read-only calendars (feeds) open
+// for viewing.
 Tk.Dialog {
     id: dialog
 
@@ -29,6 +31,10 @@ Tk.Dialog {
         return out
     }
     readonly property var calendarChoices: service !== null ? service.writableCalendars : []
+    // M64: the invitees as TokenField tokens; non-Item helpers are properties.
+    property var invited: []
+    readonly property RecipientCompleter completer: RecipientCompleter { service: dialog.service }
+    readonly property Tk.MailAddressValidator addresses: Tk.MailAddressValidator { }
 
     objectName: "eventDialog"
     title: eventId.length > 0 ? (readOnlyEvent ? qsTr("Event") : qsTr("Edit event")) : qsTr("New event")
@@ -60,6 +66,19 @@ Tk.Dialog {
         repeatBox.currentIndex = !repeating ? 0 : rule.frequency === "daily" ? 1
             : rule.frequency === "weekly" ? ((rule.weekdays || []).length === 5 ? 2 : 3) : rule.frequency === "monthly" ? 4 : 5
         scopeBox.currentIndex = 0
+        dialog.invited = (fields.attendees || []).map(function(a) {
+            const label = a.name ? "\"" + String(a.name).replace(/"/g, "") + "\" <" + a.address + ">" : String(a.address)
+            return { id: "inv-" + Math.random().toString(16).slice(2), label: label, value: String(a.address), valid: true } })
+        attendeesField.tokens = dialog.invited
+    }
+    function newEventId() {
+        return "event:" + "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0
+            return (c === "x" ? r : (r & 3 | 8)).toString(16) })
+    }
+    function checkRecipient(text) {
+        const parsed = dialog.addresses.parseOne(text)
+        return { label: parsed.display, value: parsed.address, valid: parsed.valid, error: parsed.error }
     }
     function openNew(startLocal, endLocal, allDay) {
         eventId = ""; occurrenceId = ""; readOnlyEvent = false
@@ -90,7 +109,16 @@ Tk.Dialog {
     }
     onAccepted: {
         if (readOnlyEvent) return
-        if (eventId.length > 0) service.updateEvent(collect()); else service.createEvent(collect())
+        if (attendeesField.draft.trim().length > 0) attendeesField.commitDraft()
+        const event = collect()
+        if (eventId.length > 0) {
+            service.updateEvent(event)
+        } else {
+            event.id = dialog.newEventId()
+            service.createEvent(event)
+        }
+        const invitees = attendeesField.tokens.filter(function(t) { return t.valid !== false }).map(function(t) { return t.label })
+        if (invitees.length > 0) service.sendInvitations(event.id, invitees)
     }
     onTertiary: service.deleteEvent(eventId, occurrenceId, repeating && scopeBox.currentIndex === 0 ? "occurrence" : "series")
 
@@ -149,6 +177,21 @@ Tk.Dialog {
             visible: dialog.repeating && dialog.eventId.length > 0 && !dialog.readOnlyEvent
             label: qsTr("Apply to")
             Tk.Segmented { id: scopeBox; objectName: "eventScope"; small: true; model: [qsTr("This event"), qsTr("All events")] }
+        }
+        Tk.PropertyRow {
+            label: qsTr("Invite")
+            Tk.TokenField {
+                id: attendeesField
+                objectName: "eventAttendees"
+                standalone: true
+                enabled: !dialog.readOnlyEvent
+                label: qsTr("People to invite")
+                placeholderText: qsTr("Add people to invite")
+                tooltip: qsTr("Invitees · press comma or Enter after each address; Save sends the invitations")
+                validator: dialog.checkRecipient
+                completionProvider: dialog.completer
+                onTokensEdited: function(tokens) { dialog.invited = tokens }
+            }
         }
         Tk.TextArea { id: notesField; objectName: "eventNotes"; rows: 4; placeholderText: qsTr("Notes"); readOnly: dialog.readOnlyEvent }
         Tk.Notice { visible: dialog.readOnlyEvent; variant: "info"; title: qsTr("Read-only calendar"); text: qsTr("This event comes from a subscribed calendar; change it at its source.") }

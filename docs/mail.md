@@ -1,6 +1,10 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Mail accounts (`office_mail`)
 
+> Contacts, vCard/CSV, safe HTML reading, printing and message files
+> (`.eml`, `.mbox`, Outlook `.msg`) are in
+> [mail-interchange.md](mail-interchange.md) (M64, D-072).
+
 `libs/office_mail` (M43, [D-043](decisions.md#d-043-hosted-accounts-sign-in-with-pkce-over-loopback-and-keep-secrets-in-the-keyring))
 is the account layer of QindaMail: what an account is, where its servers are,
 how it signs in, and where its secrets live. The protocols themselves are the
@@ -531,8 +535,11 @@ Tests (`ctest -R exchange`, local servers on 127.0.0.1 only):
 
 `apps/qindamail` (M44, [D-042](decisions.md#d-042-qindamail-is-a-document-less-window-over-one-mail-service-per-process)):
 binary `qindamail`, desktop id `org.qindaqt.QindaMail`
-(`Exec=qindamail %U`, MIME `message/rfc822`, `text/calendar`,
-`x-scheme-handler/mailto`, `x-scheme-handler/webcal`). Static QML module
+(`Exec=qindamail %U`, MIME `message/rfc822`, `application/vnd.ms-outlook`,
+`application/mbox`, `text/vcard`, `text/x-vcard`, `text/calendar`,
+`x-scheme-handler/mailto`, `x-scheme-handler/webcal`). M64 added the People
+workspace, HTML reading, printing and message files:
+[mail-interchange.md](mail-interchange.md) ([D-072](decisions.md#d-072-mail-essentials-contacts-safe-html-message-files)). Static QML module
 `QindaOffice.Mail.App` (its QML imports `QindaOffice.Shell`,
 `QindaOffice.Mail`, `QindaTK`); namespace `QindaOffice::Apps::Mail`.
 

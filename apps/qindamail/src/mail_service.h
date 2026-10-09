@@ -22,11 +22,15 @@
 // _folders (folder tree, message list, selection), _messages (actions,
 // attachments, opened files), _sync (sync, mailbox lists, timers),
 // _compose (drafts, send, mailto), _accounts (add/update/remove/test),
-// _calendar (calendars, events, iCalendar), _tasks.
+// _calendar (calendars, events, iCalendar), _tasks; M64 (D-072): _source
+// (RFC 5322 sources, parsed content, attachment bytes), _files (.eml/.msg/
+// .mbox in, .eml and attachments out), _contacts (address book, recipient
+// suggestions, remote pictures, links), _meetings (iMIP requests, replies).
 
 #include "account_runtime.h"
 #include "account_store.h"
 #include "autoconfig.h"
+#include "contact_store.h"
 #include "folder_model.h"
 #include "mail_secrets.h"
 #include "message_list_model.h"
@@ -61,8 +65,13 @@ class JsonSettings;
 }
 
 namespace QindaOffice::Mail {
+class ContactStore;
 class SecretBackend;
+struct MessageContent;
+struct RenderPolicy;
 }
+
+class QNetworkAccessManager;
 
 namespace QindaOffice::Apps::Mail {
 
@@ -106,6 +115,8 @@ class MailService : public QObject {
     Q_PROPERTY(QVariantList events READ events NOTIFY eventsChanged)
     Q_PROPERTY(QString eventsError READ eventsError NOTIFY eventsChanged)
     Q_PROPERTY(QVariantList taskColumns READ taskColumns NOTIFY taskColumnsChanged)
+    // ---- address book (M64, mail_service_contacts.cpp) ----
+    Q_PROPERTY(QindaOffice::Mail::ContactStore *contacts READ contacts CONSTANT)
 
 public:
     struct Options {
@@ -114,6 +125,8 @@ public:
         QString dataDir;
         QString accountsPath;
         QString settingsPath;
+        // Empty: <dataDir>/contacts.json (M64).
+        QString contactsPath;
         bool autoSync = true;
         // Follow QNetworkInformation for `online` (tests keep it true).
         bool watchNetwork = true;
@@ -146,8 +159,13 @@ public:
     // C++ (tests, the host): the runtime of a configured account.
     [[nodiscard]] AccountRuntime *runtime(const QString &accountId) const;
     [[nodiscard]] ProviderCalls *calls() const { return m_calls; }
-    // C++ (tests): how attachments are opened (default QDesktopServices).
+    // C++ (tests): how attachments and links are opened (default QDesktopServices).
     void setUrlOpener(std::function<bool(const QUrl &)> opener) { m_openUrl = std::move(opener); }
+    // C++ (tests): how remote pictures are downloaded once the user allowed
+    // them (default: a bounded QNetworkAccessManager GET, mail_service_contacts.cpp).
+    using FetchDone = std::function<void(const QByteArray &bytes, const QString &error)>;
+    using RemoteFetcher = std::function<void(const QUrl &url, FetchDone done)>;
+    void setRemoteFetcher(RemoteFetcher fetcher) { m_fetchRemote = std::move(fetcher); }
 
     Q_INVOKABLE QVariantMap addAccount(const QVariantMap &account, const QString &password = {});
     Q_INVOKABLE QVariantMap updateAccount(const QVariantMap &account, const QString &password = {});
@@ -196,8 +214,62 @@ public:
     Q_INVOKABLE QString fetchAttachment(const QString &messageId, const QString &attachmentId);
     Q_INVOKABLE QString openAttachment(const QString &messageId, const QString &attachmentId);
     Q_INVOKABLE QString saveAttachmentAs(const QString &messageId, const QString &attachmentId, const QUrl &url);
-    // A .eml file (path or file: URL) into the local Inbox; returns its id.
+    // A .eml or Outlook .msg file (path or file: URL) into the local Inbox;
+    // returns its id ("" on failure, with a notification). An mbox file is
+    // handed to importMailbox.
     Q_INVOKABLE QString importMessageFile(const QString &path);
+
+    // ---- message sources and files (M64: _source, _files) ----
+    // The RFC 5322 source when this computer has it (never the network).
+    [[nodiscard]] QByteArray storedSource(const QString &messageId) const;
+    // The source, first downloaded whole from the IMAP server when needed
+    // (ImapSourceFetcher) and kept; done(source, error) runs on a later turn.
+    // Empty source: show the record.
+    void loadSource(const QString &messageId, std::function<void(const QByteArray &, const QString &)> done);
+    // What the reading pane and the printer show: the parsed source when this
+    // computer has it, else a message built from the stored record.
+    [[nodiscard]] QindaOffice::Mail::MessageContent contentOf(const QString &messageId) const;
+    // Remote pictures for this message: allowed (shown once, or always for
+    // its sender) and the bytes fetched so far.
+    [[nodiscard]] QindaOffice::Mail::RenderPolicy renderPolicy(const QString &messageId) const;
+    // Downloads the remote pictures of a message whose pictures are allowed
+    // and not fetched yet (no-op otherwise); picturesChanged as they arrive.
+    void fetchRemoteImages(const QString &messageId, const QStringList &urls = {});
+    // An mbox file into a new local folder named after it, a few messages
+    // per event-loop turn; operationFinished(requestId, …) at the end.
+    Q_INVOKABLE QString importMailbox(const QUrl &url);
+    // The message as an .eml file (its original source when known).
+    Q_INVOKABLE QString saveMessageAs(const QString &messageId, const QUrl &url);
+    // Every listed attachment into `folder` (existing names get " (2)" …).
+    Q_INVOKABLE QString saveAllAttachments(const QString &messageId, const QUrl &folder);
+    // http(s) links open in the desktop's browser; anything else is refused.
+    Q_INVOKABLE bool openLink(const QString &url);
+
+    // ---- contacts and pictures (M64: _contacts) ----
+    [[nodiscard]] QindaOffice::Mail::ContactStore *contacts() const { return m_contacts; }
+    // "Add sender to contacts": {ok, id, existed, error}.
+    Q_INVOKABLE QVariantMap addSenderToContacts(const QString &messageId);
+    // Recipient autocomplete: contacts first, then addresses seen in mail,
+    // [{label "Name <addr>", value addr, valid true}].
+    Q_INVOKABLE QVariantList recipientSuggestions(const QString &query, int limit = 8) const;
+    // "Show pictures" for one message (this session) and "always for this sender" (kept).
+    Q_INVOKABLE void showPictures(const QString &messageId);
+    Q_INVOKABLE bool picturesShown(const QString &messageId) const;
+    Q_INVOKABLE void setSenderPicturesAllowed(const QString &address, bool allowed);
+    Q_INVOKABLE bool senderPicturesAllowed(const QString &address) const;
+
+    // ---- meeting requests (M64 P3, iMIP: _meetings) ----
+    // The meeting a message's text/calendar part proposes: the event fields,
+    // method, uid, organizer(Name), attendees [{address, name, status}],
+    // myAddress, myStatus, eventId (when in the calendar), canReply. {} when none.
+    Q_INVOKABLE QVariantMap meetingOf(const QString &messageId) const;
+    // response: accepted | tentative | declined — the local calendar follows,
+    // and a METHOD:REPLY goes to the organizer through the receiving account;
+    // for a CANCEL, "removed" takes the meeting out of the calendar only.
+    Q_INVOKABLE QString respondToMeeting(const QString &messageId, const QString &response);
+    // The event as a METHOD:REQUEST to `invitees` ("Name <addr>" each) through
+    // a sending account (_invitations); the event keeps uid, invitees, SEQUENCE.
+    Q_INVOKABLE QString sendInvitations(const QString &eventId, const QStringList &invitees);
 
     // ---- sync (_sync) ----
     Q_INVOKABLE QString syncAll();
@@ -275,6 +347,10 @@ signals:
     void calendarsDiscovered(const QString &requestId, const QVariantMap &result);
     // variant: info | success | warning | danger (Tk.Toast).
     void notify(const QString &title, const QString &text, const QString &variant);
+    // M64: a message's source arrived, or its remote pictures changed.
+    void sourceLoaded(const QString &messageId);
+    void picturesChanged(const QString &messageId);
+    void meetingChanged(const QString &messageId);
 
 private:
     friend class MailServiceTestAccess;
@@ -326,6 +402,23 @@ private:
     void withAttachment(const QString &messageId, const QString &attachmentId,
                         std::function<void(const QVariantMap &)> done);
     [[nodiscard]] QVariantMap rawMessage(const QString &messageId) const;
+    // _source: attachment bytes from the store, else from the stored source
+    // ({ok, name, mimeType, bytes} or {ok false, error}); no network.
+    [[nodiscard]] QVariantMap attachmentBytes(const QVariantMap &record, const QString &attachmentId) const;
+    [[nodiscard]] QString sourcePath(const QString &messageId) const;
+    [[nodiscard]] bool writeSource(const QString &messageId, const QByteArray &raw, QString *error);
+    void removeSource(const QVariantMap &record);
+    void fetchImapSource(const QVariantMap &record, AccountRuntime *runtime);
+    void finishSource(const QString &messageId, const QByteArray &source, const QString &error);
+    // Source files whose record is gone (an IMAP expunge); run once at start.
+    void pruneSources();
+    [[nodiscard]] QindaOffice::Mail::MessageContent recordContent(const QVariantMap &record) const;
+    // _files: one RFC 5322 message into a local folder; the new record id.
+    QString importRawMessage(const QByteArray &raw, const QString &mailbox, const QString &origin, QString *error);
+    [[nodiscard]] QStringList localMailboxes() const;
+    void importMailboxStep(const QString &requestId);
+    // _contacts
+    void rebuildSeenAddresses() const;
     // _sync
     void syncRuntime(AccountRuntime *runtime, const QString &batchId);
     void loadFolderCache();
@@ -381,6 +474,28 @@ private:
     QVariantList m_events;
     QVariantList m_taskColumns;
     std::function<bool(const QUrl &)> m_openUrl;
+    // ---- M64 ----
+    struct SeenAddress {
+        QString name;
+        QString address;
+        int count = 0;
+        QString lastDate;
+    };
+    struct MboxJob;
+    QindaOffice::Mail::ContactStore *m_contacts = nullptr;
+    QHash<QString, QList<std::function<void(const QByteArray &, const QString &)>>> m_sourceWaiters;
+    mutable QHash<QString, std::shared_ptr<const QindaOffice::Mail::MessageContent>> m_contentCache;
+    mutable QStringList m_contentOrder;
+    QSet<QString> m_picturesShown;
+    QHash<QString, QHash<QString, QByteArray>> m_remoteImages;   // messageId → url → bytes
+    QStringList m_remoteOrder;
+    QSet<QString> m_fetching;                                     // "messageId\nurl" in flight
+    QSet<QString> m_picturesSenders;
+    RemoteFetcher m_fetchRemote;
+    QNetworkAccessManager *m_network = nullptr;
+    QHash<QString, std::shared_ptr<MboxJob>> m_mboxJobs;
+    mutable QList<SeenAddress> m_seen;
+    mutable bool m_seenDirty = true;
     int m_unreadTotal = 0;
     int m_markReadDelayMs = 500;
     bool m_busy = false;

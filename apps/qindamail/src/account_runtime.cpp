@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "account_runtime.h"
 
+#include "imap_source_fetcher.h"
+
 #include "ews_calendar_provider.h"
 #include "graph_calendar_provider.h"
 #include "oauth2_session.h"
@@ -202,6 +204,18 @@ QindaTK::ImapMailProvider *AccountRuntime::imap(const QString &mailbox)
     m_context.calls->watch(provider);
     m_imap.insert(name, provider);
     return provider;
+}
+
+ImapSourceFetcher *AccountRuntime::sourceFetcher()
+{
+    if (!isImap()) return nullptr;
+    if (m_sourceFetcher == nullptr) {
+        const auto &in = m_account.incoming;
+        m_sourceFetcher = new ImapSourceFetcher(
+            {in.host, in.port, in.security, in.userName.isEmpty() ? m_account.emailAddress : in.userName, 20000}, this);
+        m_context.calls->watch(m_sourceFetcher);
+    }
+    return m_sourceFetcher;
 }
 
 const CalendarBinding *AccountRuntime::calendar(const QString &calendarId) const

@@ -8,10 +8,11 @@ import QindaOffice.Mail.App
 
 // The QindaMail main window (D-042): the shared OfficeWindow over a
 // MailHost (no document), a navigation rail choosing the workspace — Mail
-// (folders · messages · reading pane), Calendar (day/week/month grid) or
-// Tasks (a board) — the ribbon for that workspace, and the windows and
-// dialogs the host asks for: composers (one draft per ordinary top-level
-// window), the account dialog, the event dialog, the calendar files.
+// (folders · messages · reading pane), Calendar (day/week/month grid),
+// Tasks (a board) or People (the address book, M64) — the ribbon for that
+// workspace, and the windows and dialogs the host asks for: composers (one
+// draft per ordinary top-level window), the account dialog, the event
+// dialog, the calendar, contact, mailbox and message files (M64).
 //
 // AGENT-NOTE: the service is per PROCESS (every main window shows the same
 // store); everything per window — the workspace, selections, the calendar
@@ -65,7 +66,8 @@ OfficeWindow {
                 { id: "mail", label: qsTr("Mail"), destination: "mailViewMailAction", iconName: "mail",
                   badge: window.service !== null && window.service.unreadTotal > 0 ? String(window.service.unreadTotal) : "" },
                 { id: "calendar", label: qsTr("Calendar"), destination: "mailViewCalendarAction", iconName: "calendar-days" },
-                { id: "tasks", label: qsTr("Tasks"), destination: "mailViewTasksAction", iconName: "list-checks" }] }]
+                { id: "tasks", label: qsTr("Tasks"), destination: "mailViewTasksAction", iconName: "list-checks" },
+                { id: "people", label: qsTr("People"), destination: "mailViewPeopleAction", iconName: "users" }] }]
             onDestinationRequested: function(id, destination) { window.trigger(destination) }
         }
         Tk.Divider { vertical: true }
@@ -93,6 +95,14 @@ OfficeWindow {
             Tk.Flex.grow: 1
             Tk.Flex.basis: 0
             service: window.service
+        }
+        PeopleWorkspace {
+            id: peopleWorkspace
+            visible: window.view === "people"
+            Tk.Flex.grow: 1
+            Tk.Flex.basis: 0
+            service: window.service
+            host: window.mail
         }
       }
     }
@@ -126,6 +136,61 @@ OfficeWindow {
         nameFilters: [qsTr("iCalendar (*.ics)")]
         onAccepted: window.service.exportIcs(selectedFile, calendarWorkspace.targetCalendarId)
     }
+    // ---- M64: contact, mailbox and message files ----
+    Dialogs.FileDialog {
+        id: contactsImportDialog
+        title: qsTr("Import Contacts")
+        fileMode: Dialogs.FileDialog.OpenFile
+        nameFilters: [qsTr("Contacts (*.vcf *.vcard *.csv)"), qsTr("vCard (*.vcf *.vcard)"),
+                      qsTr("Outlook contacts CSV (*.csv)"), qsTr("All files (*)")]
+        onAccepted: {
+            const result = window.service.contacts.importFile(selectedFile)
+            window.toastFor(result.ok ? qsTr("Contacts imported") : qsTr("Could not import the contacts"),
+                            result.ok ? qsTr("%1 added, %2 updated, %3 skipped").arg(result.added || 0).arg(result.updated || 0).arg(result.skipped || 0)
+                                      : String(result.error || ""), result.ok ? "success" : "danger")
+            if (result.ok) window.trigger("mailViewPeopleAction")
+        }
+    }
+    Dialogs.FileDialog {
+        id: contactsExportDialog
+        title: qsTr("Export Contacts")
+        fileMode: Dialogs.FileDialog.SaveFile
+        nameFilters: [qsTr("vCard 3.0 — Outlook, Google, Apple (*.vcf)"), qsTr("vCard 4.0 (*.vcf)")]
+        onAccepted: {
+            const version = selectedNameFilter.index === 1 ? "4.0" : "3.0"
+            const result = window.service.contacts.exportVcf(selectedFile, [], version)
+            window.toastFor(result.ok ? qsTr("Contacts exported") : qsTr("Could not export the contacts"),
+                            result.ok ? qsTr("%n contact(s)", "", result.count || 0) : String(result.error || ""),
+                            result.ok ? "success" : "danger")
+        }
+    }
+    Dialogs.FileDialog {
+        id: mailboxImportDialog
+        title: qsTr("Import Mailbox")
+        fileMode: Dialogs.FileDialog.OpenFile
+        nameFilters: [qsTr("Mailboxes (*.mbox *.mbx)"), qsTr("All files (*)")]
+        onAccepted: window.service.importMailbox(selectedFile)
+    }
+    Dialogs.FileDialog {
+        id: messageSaveDialog
+        title: qsTr("Save Message As")
+        fileMode: Dialogs.FileDialog.SaveFile
+        nameFilters: [qsTr("Mail message (*.eml)")]
+        onAccepted: window.service.saveMessageAs(window.service.selectedMessageId, selectedFile)
+    }
+    Dialogs.FolderDialog {
+        id: attachmentsFolderDialog
+        title: qsTr("Save All Attachments")
+        onAccepted: window.service.saveAllAttachments(window.service.selectedMessageId, selectedFolder)
+    }
+    Dialogs.FileDialog {
+        id: pdfExportDialog
+        title: qsTr("Export as PDF")
+        fileMode: Dialogs.FileDialog.SaveFile
+        nameFilters: [qsTr("PDF (*.pdf)")]
+        onAccepted: window.mail.exportMessagePdf(selectedFile)
+    }
+    function toastFor(title, text, variant) { toast.title = title; toast.message = text; toast.variant = variant; toast.show() }
     Tk.PromptDialog {
         id: subscribeDialog
         objectName: "subscribeDialog"
@@ -147,6 +212,20 @@ OfficeWindow {
         function onSearchRequested() { if (window.view !== "mail") window.trigger("mailViewMailAction"); mailWorkspace.focusSearch() }
         function onMoveRequested() { mailWorkspace.openMoveMenu() }
         function onTaskNewRequested() { window.trigger("mailViewTasksAction"); tasksWorkspace.focusNewTask() }
+        function onContactNewRequested() { peopleWorkspace.newContact() }
+        function onContactDeleteRequested(contactId) { peopleWorkspace.deleteContact(contactId) }
+        function onContactsImportRequested() { contactsImportDialog.open() }
+        function onContactsExportRequested() { contactsExportDialog.open() }
+        function onMailboxImportRequested() { mailboxImportDialog.open() }
+        function onMessageSaveRequested() {
+            messageSaveDialog.selectedFile = window.mail.suggestedSaveUrl(window.mail.suggestedFileName("eml"))
+            messageSaveDialog.open()
+        }
+        function onAttachmentsSaveRequested() { attachmentsFolderDialog.open() }
+        function onPdfExportRequested() {
+            pdfExportDialog.selectedFile = window.mail.suggestedSaveUrl(window.mail.suggestedFileName("pdf"))
+            pdfExportDialog.open()
+        }
     }
     Connections {
         target: window.service

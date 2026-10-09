@@ -22,7 +22,14 @@
 //   calWorkWeekAction calWeekAction calMonthAction (radio group
 //   "calendarMode") calImportAction calExportAction calSubscribeAction
 //   taskNewAction
-// plus the standard fileNewAction re-labelled "New Window" (Ctrl+Shift+N).
+// and, M64 (D-072): mailViewPeopleAction (radio group "mailView")
+//   contactNewAction contactDeleteAction contactImportAction
+//   contactExportAction mailAddSenderAction mailShowPicturesAction
+//   mailSaveMessageAction mailSaveAttachmentsAction mailImportMboxAction
+//   mailExportPdfAction
+// plus the standard fileNewAction re-labelled "New Window" (Ctrl+Shift+N);
+// the standard filePrintAction / filePrintPreviewAction print the selected
+// message (M64; before, a document-less window never printed).
 // Never rename or reuse one. calToday/calPrevious/calNext are answered by
 // the QML (their `triggered`); the view and mode groups are read from the
 // entries' `checked`.
@@ -50,11 +57,13 @@ class MailHost : public Quick::DocumentHost {
     Q_PROPERTY(QindaOffice::Apps::Mail::MailService *service READ service CONSTANT)
     // Settable twin of DocumentHost::preferencesPage (MailPreferencesPage.qml).
     Q_PROPERTY(QUrl preferencesPageUrl READ preferencesPage WRITE setPreferencesPage NOTIFY preferencesPageChanged)
-    // mail | calendar | tasks — the checked member of the "mailView" group.
+    // mail | calendar | tasks | people — the checked member of the "mailView" group.
     Q_PROPERTY(QString view READ view WRITE setView NOTIFY viewChanged)
     // day | workweek | week | month — the checked member of "calendarMode".
     Q_PROPERTY(QString calendarMode READ calendarMode WRITE setCalendarMode NOTIFY calendarModeChanged)
     Q_PROPERTY(bool readingPaneVisible READ readingPaneVisible NOTIFY readingPaneVisibleChanged)
+    // The People workspace's selection (it enables Delete Contact).
+    Q_PROPERTY(QString selectedContactId READ selectedContactId WRITE setSelectedContactId NOTIFY selectedContactIdChanged)
 public:
     explicit MailHost(MailService *service, QObject *parent = nullptr);
     ~MailHost() override;
@@ -67,8 +76,17 @@ public:
     [[nodiscard]] bool readingPaneVisible() const;
     [[nodiscard]] QString title() const override;
 
+    [[nodiscard]] QString selectedContactId() const { return m_selectedContactId; }
+    void setSelectedContactId(const QString &id);
+
     // Opens a composer for `draft` (the same route every command takes).
     Q_INVOKABLE void compose(const QVariantMap &draft);
+    // File ▸ Export as PDF: the selected message through the print renderer.
+    Q_INVOKABLE bool exportMessagePdf(const QUrl &url);
+    // A suggested file name for the selected message ("Subject.eml").
+    Q_INVOKABLE QString suggestedFileName(const QString &suffix) const;
+    // A file: URL for `fileName` in the user's Documents folder (save dialogs).
+    Q_INVOKABLE QUrl suggestedSaveUrl(const QString &fileName) const;
 
     // Every id this host adds (tests; the ribbon layout is written against it).
     [[nodiscard]] static QStringList commandIds();
@@ -84,6 +102,16 @@ signals:
     void searchRequested();
     void moveRequested();
     void taskNewRequested();
+    // M64: the dialogs and the People workspace answer these.
+    void contactNewRequested();
+    void contactDeleteRequested(const QString &contactId);
+    void contactsImportRequested();
+    void contactsExportRequested();
+    void mailboxImportRequested();
+    void messageSaveRequested();
+    void attachmentsSaveRequested();
+    void pdfExportRequested();
+    void selectedContactIdChanged();
     void viewChanged();
     void calendarModeChanged();
     void readingPaneVisibleChanged();
@@ -92,6 +120,7 @@ protected:
     [[nodiscard]] QString filterString() const override;
     [[nodiscard]] bool openWithoutDocument(const QString &path) override;
     [[nodiscard]] bool reusableWithoutDocument() const override { return true; }
+    [[nodiscard]] Quick::PrintRenderCallback printRenderCallback() const override;
 
 private:
     // mail_host_commands.cpp
@@ -106,6 +135,7 @@ private:
     QPointer<MailService> m_service;
     QString m_view = QStringLiteral("mail");
     QString m_calendarMode = QStringLiteral("week");
+    QString m_selectedContactId;
 };
 
 } // namespace QindaOffice::Apps::Mail

@@ -7,6 +7,6 @@ Exec=qindamail %U
 Icon=org.qindaqt.QindaMail
 Terminal=false
 Categories=Qt;Office;Email;Calendar;ContactManagement;
-MimeType=message/rfc822;text/calendar;x-scheme-handler/mailto;x-scheme-handler/webcal;
+MimeType=message/rfc822;application/vnd.ms-outlook;application/mbox;text/vcard;text/x-vcard;text/calendar;x-scheme-handler/mailto;x-scheme-handler/webcal;
 StartupNotify=true
 StartupWMClass=qindamail

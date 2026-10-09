@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// MailService: message actions, attachments and opened .eml files.
+// MailService: message actions and attachments (opened files: _files).
 #include "mail_service.h"
 
 #include "provider_calls.h"
@@ -7,12 +7,9 @@
 #include <qindatk/imap_mail_provider.h>
 #include <qindatk/local_attachment_store.h>
 #include <qindatk/local_productivity_store.h>
-#include <qindatk/mail_mime.h>
-#include <qindatk/mail_record.h>
 #include <qindatk/pop3_mail_provider.h>
 
 #include <QCoreApplication>
-#include <QCryptographicHash>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
@@ -22,8 +19,6 @@
 namespace QindaOffice::Apps::Mail {
 
 namespace {
-
-constexpr qint64 kMaxMessageFileBytes = 32 * 1024 * 1024;
 
 QVariantMap failure(const QString &state, const QString &error)
 {
@@ -75,6 +70,7 @@ void MailService::removeRecordAttachments(const QVariantMap &record)
         if (attachment.value(QStringLiteral("state")).toString() == QLatin1String("local"))
             static_cast<void>(m_attachments->remove(attachment.value(QStringLiteral("id")).toString()));
     }
+    removeSource(record);
 }
 
 void MailService::runMessageAction(const QString &batchId, const QString &messageId, const QString &action,
@@ -226,12 +222,13 @@ QString MailService::moveTo(const QStringList &ids, const QString &folderKey)
 void MailService::withAttachment(const QString &messageId, const QString &attachmentId,
                                  std::function<void(const QVariantMap &)> done)
 {
-    const QVariantMap stored = m_attachments->read(attachmentId);
+    const QVariantMap record = rawMessage(messageId);
+    // The attachment store first, then the message's stored source (M64).
+    const QVariantMap stored = attachmentBytes(record, attachmentId);
     if (stored.value(QStringLiteral("ok")).toBool()) {
         done(stored);
         return;
     }
-    const QVariantMap record = rawMessage(messageId);
     AccountRuntime *rt = runtime(ownerAccountOf(record));
     if (record.isEmpty() || rt == nullptr || !(rt->isImap() || rt->isPop3())) {
         done(failure(QStringLiteral("rejected"), tr("The attachment is not stored on this computer")));
@@ -318,48 +315,6 @@ QString MailService::saveAttachmentAs(const QString &messageId, const QString &a
                                  written ? QString() : tr("Could not write %1").arg(path)));
     });
     return batch;
-}
-
-QString MailService::importMessageFile(const QString &path)
-{
-    const QString local = path.startsWith(QStringLiteral("file:")) ? QUrl(path).toLocalFile() : path;
-    QFile file(local);
-    if (!file.open(QIODevice::ReadOnly) || file.size() > kMaxMessageFileBytes) {
-        emit notify(tr("Could not open the message"), local, QStringLiteral("danger"));
-        return {};
-    }
-    const QByteArray raw = file.readAll();
-    // The same file opened twice is the same message.
-    const QString id = QStringLiteral("local:eml:")
-        + QString::fromLatin1(QCryptographicHash::hash(raw, QCryptographicHash::Sha256).toHex().left(24));
-    const QindaTK::Mime::Parsed parsed = QindaTK::Mime::parse(raw);
-    QVariantMap record = QindaTK::MailRecord::fromParsed(id, parsed, false);
-    QVariantList attachments;
-    const QVariantList listed = record.value(QStringLiteral("attachments")).toList();
-    for (qsizetype i = 0; i < listed.size(); ++i) {
-        QVariantMap attachment = listed.at(i).toMap();
-        for (const QindaTK::Mime::Part &part : parsed.attachments) {
-            if (part.section != attachment.value(QStringLiteral("section")).toString()) continue;
-            const QVariantMap imported = m_attachments->importBytes(attachment.value(QStringLiteral("id")).toString(),
-                                                                    part.name, part.mimeType, part.data);
-            if (imported.value(QStringLiteral("ok")).toBool()) attachment.insert(QStringLiteral("state"), QStringLiteral("local"));
-        }
-        attachments.append(attachment);
-    }
-    record.insert(QStringLiteral("attachments"), attachments);
-    record.insert(QStringLiteral("localMailbox"), QStringLiteral("Inbox"));
-    record.insert(QStringLiteral("unread"), false);
-    record.insert(QStringLiteral("flagged"), false);
-    record.insert(QStringLiteral("sourceFile"), local);
-    static_cast<void>(m_store->upsert(QStringLiteral("messages"), record));
-    QString error;
-    if (!saveStore(&error)) {
-        emit notify(tr("Could not keep the message"), error, QStringLiteral("danger"));
-    }
-    refreshDerived();
-    setCurrentFolderKey(QStringLiteral("acct:local:Inbox"));
-    setSelectedMessageId(id);
-    return id;
 }
 
 } // namespace QindaOffice::Apps::Mail

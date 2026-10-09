@@ -60,6 +60,19 @@ constexpr Command kCommands[] = {
     {"calImportAction", QT_TR_NOOP("&Import Calendar…"), "", "import"},
     {"calExportAction", QT_TR_NOOP("E&xport Calendar…"), "", "file-output"},
     {"calSubscribeAction", QT_TR_NOOP("Su&bscribe to Calendar…"), "", "link-2"},
+    // M64 (D-072): People, message files, pictures, PDF. Ctrl+Shift+C and
+    // F12 are Outlook's New Contact and Save As.
+    {"mailViewPeopleAction", QT_TR_NOOP("&People"), "Ctrl+4", "users"},
+    {"contactNewAction", QT_TR_NOOP("New &Contact"), "Ctrl+Shift+C", "user-plus"},
+    {"contactDeleteAction", QT_TR_NOOP("&Delete Contact"), "", "trash-2"},
+    {"contactImportAction", QT_TR_NOOP("&Import Contacts…"), "", "import"},
+    {"contactExportAction", QT_TR_NOOP("E&xport Contacts…"), "", "file-output"},
+    {"mailAddSenderAction", QT_TR_NOOP("Add Sender to Co&ntacts"), "", "book-user"},
+    {"mailShowPicturesAction", QT_TR_NOOP("Show &Pictures"), "", "image"},
+    {"mailSaveMessageAction", QT_TR_NOOP("Save Message &As…"), "F12", "save"},
+    {"mailSaveAttachmentsAction", QT_TR_NOOP("Save All Attac&hments…"), "", "paperclip"},
+    {"mailImportMboxAction", QT_TR_NOOP("Import Mail&box…"), "", "mailbox"},
+    {"mailExportPdfAction", QT_TR_NOOP("Export as P&DF…"), "", "file-down"},
 };
 
 const QString kViewGroup = QStringLiteral("mailView");
@@ -91,7 +104,8 @@ void MailHost::createCommands()
     newWindow->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+N")));
     newWindow->setIconName(QStringLiteral("panels-top-left"));
 
-    for (const char *id : {"mailViewMailAction", "mailViewCalendarAction", "mailViewTasksAction"}) {
+    for (const char *id : {"mailViewMailAction", "mailViewCalendarAction", "mailViewTasksAction",
+                           "mailViewPeopleAction"}) {
         ActionEntry *entry = action(QString::fromLatin1(id));
         entry->setCheckable(true);
         entry->setRadioGroup(kViewGroup);
@@ -139,13 +153,29 @@ void MailHost::createCommands()
     on("calExportAction", [this] { emit calendarExportRequested(); });
     on("calSubscribeAction", [this] { emit calendarSubscribeRequested(); });
     on("calTodayAction", [this] { setView(QStringLiteral("calendar")); });
+    on("contactNewAction", [this] {
+        setView(QStringLiteral("people"));
+        emit contactNewRequested();
+    });
+    on("contactDeleteAction", [this] {
+        if (!m_selectedContactId.isEmpty()) emit contactDeleteRequested(m_selectedContactId);
+    });
+    on("contactImportAction", [this] { emit contactsImportRequested(); });
+    on("contactExportAction", [this] { emit contactsExportRequested(); });
+    on("mailAddSenderAction", [this, selected] { static_cast<void>(m_service->addSenderToContacts(selected())); });
+    on("mailShowPicturesAction", [this, selected] { m_service->showPictures(selected()); });
+    on("mailSaveMessageAction", [this] { emit messageSaveRequested(); });
+    on("mailSaveAttachmentsAction", [this] { emit attachmentsSaveRequested(); });
+    on("mailImportMboxAction", [this] { emit mailboxImportRequested(); });
+    on("mailExportPdfAction", [this] { emit pdfExportRequested(); });
     connect(action(QString::fromLatin1(ActionId::kEditFind)), &ActionEntry::triggered, this,
             [this] { emit searchRequested(); });
     actions()->setEnabled(QString::fromLatin1(ActionId::kEditFind), true);
 
     const QList<QPair<const char *, QString>> views{{"mailViewMailAction", QStringLiteral("mail")},
                                                     {"mailViewCalendarAction", QStringLiteral("calendar")},
-                                                    {"mailViewTasksAction", QStringLiteral("tasks")}};
+                                                    {"mailViewTasksAction", QStringLiteral("tasks")},
+                                                    {"mailViewPeopleAction", QStringLiteral("people")}};
     for (const auto &[id, view] : views) {
         connect(action(QString::fromLatin1(id)), &ActionEntry::toggled, this, [this, view](bool checked) {
             if (checked) setView(view);
@@ -174,9 +204,15 @@ void MailHost::insertMenus()
     Quick::MenuTree *tree = menuTree();
     const QString file = QStringLiteral("fileMenu");
     const QString newWindow = QString::fromLatin1(ActionId::kFileNew);
-    for (const char *id : {"mailNewMessageAction", "mailNewEventAction", "taskNewAction"})
+    for (const char *id : {"mailNewMessageAction", "mailNewEventAction", "taskNewAction", "contactNewAction"})
         tree->insertInto(file, newWindow, a(id));
     const QString close = QString::fromLatin1(ActionId::kFileCloseWindow);
+    // AGENT-GUARD: an id appears ONCE in the menu tree (the panel export's
+    // validator rejects duplicates); the contact files live in People.
+    for (const char *id : {"mailSaveMessageAction", "mailSaveAttachmentsAction", "mailExportPdfAction",
+                           "mailImportMboxAction"})
+        tree->insertInto(file, close, a(id));
+    tree->insertInto(file, close, MenuNode::separator());
     for (const char *id : {"calImportAction", "calExportAction", "calSubscribeAction"})
         tree->insertInto(file, close, a(id));
     tree->insertInto(file, close, MenuNode::separator());
@@ -185,7 +221,8 @@ void MailHost::insertMenus()
     tree->insertInto(QStringLiteral("editMenu"), QString(), a("mailSearchAction"));
 
     const QString zoomIn = QString::fromLatin1(ActionId::kViewZoomIn);
-    for (const char *id : {"mailViewMailAction", "mailViewCalendarAction", "mailViewTasksAction"})
+    for (const char *id : {"mailViewMailAction", "mailViewCalendarAction", "mailViewTasksAction",
+                           "mailViewPeopleAction"})
         tree->insertInto(QStringLiteral("viewMenu"), zoomIn, a(id));
     tree->insertInto(QStringLiteral("viewMenu"), zoomIn, MenuNode::separator());
     tree->insertInto(QStringLiteral("viewMenu"), zoomIn, a("mailReadingPaneAction"));
@@ -197,7 +234,13 @@ void MailHost::insertMenus()
                                              {a("mailReplyAction"), a("mailReplyAllAction"), a("mailForwardAction"),
                                               MenuNode::separator(), a("mailToggleReadAction"),
                                               a("mailToggleFlagAction"), MenuNode::separator(),
-                                              a("mailArchiveAction"), a("mailMoveAction"), a("mailDeleteAction")}));
+                                              a("mailArchiveAction"), a("mailMoveAction"), a("mailDeleteAction"),
+                                              MenuNode::separator(), a("mailAddSenderAction"),
+                                              a("mailShowPicturesAction")}));
+    tree->insertMenuBefore(QStringLiteral("aiMenu"),
+                           MenuNode::submenu(QStringLiteral("mailPeopleMenu"), tr("&People"),
+                                             {a("contactDeleteAction"), MenuNode::separator(),
+                                              a("contactImportAction"), a("contactExportAction")}));
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("mailCalendarMenu"), tr("&Calendar"),
                                              {a("calTodayAction"), a("calPreviousAction"), a("calNextAction"),
@@ -256,6 +299,16 @@ void MailHost::syncCommandState()
                            QStringLiteral("mailArchiveAction"), QStringLiteral("mailMoveAction")},
                           real);
     actions()->setEnabled(QStringLiteral("mailDeleteAction"), any);
+    // M64: what acts on the open message, and print (a message is the
+    // "document" of a mail window; nothing selected, nothing to print).
+    actions()->setEnabled({QStringLiteral("mailAddSenderAction"), QStringLiteral("mailShowPicturesAction"),
+                           QStringLiteral("mailSaveMessageAction"), QStringLiteral("mailExportPdfAction"),
+                           QString::fromLatin1(ActionId::kFilePrint), QString::fromLatin1(ActionId::kFilePrintPreview)},
+                          real);
+    actions()->setEnabled(QStringLiteral("mailSaveAttachmentsAction"),
+                          real && !message.value(QStringLiteral("attachments")).toList().isEmpty());
+    actions()->setEnabled(QStringLiteral("contactDeleteAction"),
+                          m_view == QLatin1String("people") && !m_selectedContactId.isEmpty());
     action(QStringLiteral("mailToggleReadAction"))
         ->setText(message.value(QStringLiteral("unread")).toBool() ? tr("Mark as &Read") : tr("Mark as &Unread"));
     action(QStringLiteral("mailToggleFlagAction"))

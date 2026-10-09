@@ -93,7 +93,7 @@ QStringList openNameFilters()
 {
     return {QObject::tr("All office documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt "
                         "*.xlsx *.ods *.xls *.xlsm *.csv *.tsv *.odp *.pptx *.ppt *.fodp *.qbooks "
-                        "*.qdiagram *.drawio *.qplan *.qbase *.ics *.eml)"),
+                        "*.qdiagram *.drawio *.qplan *.qbase *.ics *.eml *.msg *.mbox *.vcf)"),
             QObject::tr("Documents (*.odt *.docx *.doc *.rtf *.html *.htm *.md *.txt)"),
             QObject::tr("Spreadsheets (*.xlsx *.ods *.xls *.xlsm *.csv *.tsv)"),
             QObject::tr("Presentations (*.pptx *.ppt *.odp *.fodp)"),
@@ -101,7 +101,7 @@ QStringList openNameFilters()
             QObject::tr("Diagrams (*.qdiagram *.drawio)"),
             QObject::tr("Project plans (*.qplan)"),
             QObject::tr("Databases (*.qbase)"),
-            QObject::tr("Calendars and messages (*.ics *.eml)"),
+            QObject::tr("Mail, contacts and calendars (*.eml *.msg *.mbox *.vcf *.ics)"),
             QObject::tr("All files (*)")};
 }
 
@@ -139,6 +139,11 @@ QString appIdForPath(const QString &path)
         {QStringLiteral("qbase"), QStringLiteral("QindaBase")},
         {QStringLiteral("ics"), QStringLiteral("QindaMail")},
         {QStringLiteral("eml"), QStringLiteral("QindaMail")},
+        // M64 (D-072): Outlook messages, mailboxes and vCards.
+        {QStringLiteral("msg"), QStringLiteral("QindaMail")},
+        {QStringLiteral("mbox"), QStringLiteral("QindaMail")},
+        {QStringLiteral("vcf"), QStringLiteral("QindaMail")},
+        {QStringLiteral("vcard"), QStringLiteral("QindaMail")},
     };
     // A notebook is a DIRECTORY, so anything without a known suffix that is
     // not a file at all belongs to QindaNote.

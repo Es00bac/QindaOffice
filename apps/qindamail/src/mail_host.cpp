@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "mail_host.h"
 
+#include "contact_store.h"
 #include "launch_arguments.h"
 #include "mail_service.h"
+#include "message_print.h"
 
 #include <QFileInfo>
+#include <QStandardPaths>
 #include <QTimer>
 #include <QUrl>
 
@@ -30,10 +33,12 @@ MailHost::~MailHost() = default;
 
 void MailHost::setView(const QString &view)
 {
-    static const QStringList views{QStringLiteral("mail"), QStringLiteral("calendar"), QStringLiteral("tasks")};
+    static const QStringList views{QStringLiteral("mail"), QStringLiteral("calendar"), QStringLiteral("tasks"),
+                                   QStringLiteral("people")};
     if (!views.contains(view)) return;
     const QString id = view == QLatin1String("mail") ? QStringLiteral("mailViewMailAction")
         : view == QLatin1String("calendar")          ? QStringLiteral("mailViewCalendarAction")
+        : view == QLatin1String("people")            ? QStringLiteral("mailViewPeopleAction")
                                                      : QStringLiteral("mailViewTasksAction");
     // The radio group is the source of truth; its toggled handler lands here.
     actions()->setChecked(id, true);
@@ -69,6 +74,7 @@ QString MailHost::title() const
 {
     if (m_view == QLatin1String("calendar")) return tr("Calendar");
     if (m_view == QLatin1String("tasks")) return tr("Tasks");
+    if (m_view == QLatin1String("people")) return tr("People");
     const QString folder = m_service != nullptr ? m_service->currentFolderName() : QString();
     return folder.isEmpty() ? tr("Mail") : folder;
 }
@@ -78,9 +84,51 @@ void MailHost::compose(const QVariantMap &draft)
     if (!draft.isEmpty()) emit composeRequested(draft);
 }
 
+void MailHost::setSelectedContactId(const QString &id)
+{
+    if (id == m_selectedContactId) return;
+    m_selectedContactId = id;
+    emit selectedContactIdChanged();
+    syncCommandState();
+}
+
 QString MailHost::filterString() const
 {
-    return tr("Mail and calendar files (*.eml *.ics);;Messages (*.eml);;Calendars (*.ics);;All files (*)");
+    return tr("Mail, contact and calendar files (*.eml *.msg *.mbox *.vcf *.ics);;Messages (*.eml *.msg);;"
+              "Outlook messages (*.msg);;Mailboxes (*.mbox);;Contacts (*.vcf *.vcard);;Calendars (*.ics);;"
+              "All files (*)");
+}
+
+Quick::PrintRenderCallback MailHost::printRenderCallback() const
+{
+    if (m_service == nullptr || m_view != QLatin1String("mail")) return {};
+    return MessagePrinter::callback(m_service, m_service->selectedMessageId());
+}
+
+bool MailHost::exportMessagePdf(const QUrl &url)
+{
+    const QString path = url.isLocalFile() ? url.toLocalFile() : url.toString();
+    return !path.isEmpty() && exportPdf(path);
+}
+
+QString MailHost::suggestedFileName(const QString &suffix) const
+{
+    QString name = m_service != nullptr ? m_service->selectedMessage().value(QStringLiteral("subject")).toString() : QString();
+    for (const QChar c : {QLatin1Char('/'), QLatin1Char('\\'), QLatin1Char(':'), QLatin1Char('*'), QLatin1Char('?'),
+                          QLatin1Char('"'), QLatin1Char('<'), QLatin1Char('>'), QLatin1Char('|')}) {
+        name.replace(c, QLatin1Char('_'));
+    }
+    name = name.simplified().left(120);
+    if (name.isEmpty()) name = tr("Message");
+    return name + QLatin1Char('.') + suffix;
+}
+
+QUrl MailHost::suggestedSaveUrl(const QString &fileName) const
+{
+    QString name = QFileInfo(fileName).fileName();
+    if (name.isEmpty()) name = tr("Attachment");
+    return QUrl::fromLocalFile(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                               + QLatin1Char('/') + name);
 }
 
 bool MailHost::openWithoutDocument(const QString &path)
@@ -118,7 +166,25 @@ bool MailHost::openWithoutDocument(const QString &path)
         setView(QStringLiteral("calendar"));
         return true;
     }
-    if (suffix == QLatin1String("eml")) {
+    if (suffix == QLatin1String("vcf") || suffix == QLatin1String("vcard")) {
+        // A vCard from the file manager lands in the address book (M64).
+        const QVariantMap result = m_service->contacts()->importFile(QUrl::fromLocalFile(local));
+        const bool ok = result.value(QStringLiteral("ok")).toBool();
+        emit m_service->notify(ok ? tr("Contacts imported") : tr("Could not import the contacts"),
+                               ok ? tr("%1 added, %2 updated").arg(result.value(QStringLiteral("added")).toInt())
+                                        .arg(result.value(QStringLiteral("updated")).toInt())
+                                  : result.value(QStringLiteral("error")).toString(),
+                               ok ? QStringLiteral("success") : QStringLiteral("danger"));
+        if (ok) setView(QStringLiteral("people"));
+        return ok;
+    }
+    if (suffix == QLatin1String("mbox") || suffix == QLatin1String("mbx")) {
+        static_cast<void>(m_service->importMailbox(QUrl::fromLocalFile(local)));
+        setView(QStringLiteral("mail"));
+        return true;
+    }
+    if (suffix == QLatin1String("eml") || suffix == QLatin1String("msg")) {
+        // importMessageFile also recognizes an mbox by its content.
         const bool ok = !m_service->importMessageFile(local).isEmpty();
         if (ok) setView(QStringLiteral("mail"));
         return ok;

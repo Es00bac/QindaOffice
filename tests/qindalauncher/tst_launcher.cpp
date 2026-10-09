@@ -117,6 +117,9 @@ void LauncherTest::pathsGoToTheAppThatOpensThem()
     QCOMPARE(appIdForPath(QStringLiteral("/tmp/a.csv")), QStringLiteral("QindaCalc"));
     QCOMPARE(appIdForPath(QStringLiteral("/tmp/a.fodp")), QStringLiteral("QindaShow"));
     QCOMPARE(appIdForPath(QStringLiteral("/tmp/a.ppt")), QStringLiteral("QindaShow"));
+    // M64: mail files open in QindaMail.
+    for (const char *suffix : {"eml", "MSG", "mbox", "vcf"})
+        QCOMPARE(appIdForPath(QStringLiteral("/tmp/a.") + QLatin1String(suffix)), QStringLiteral("QindaMail"));
     // A notebook is a directory with no suffix at all.
     QCOMPARE(appIdForPath(QStringLiteral("/tmp/Work")), QStringLiteral("QindaNote"));
 }

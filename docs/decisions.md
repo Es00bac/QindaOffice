@@ -5,6 +5,102 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-072: Mail essentials: contacts, safe HTML, message files
+
+**Date:** 2026-10-08 · **Status:** accepted (M64, the mail part of the owner's
+"match Office, nothing missing that somebody would need" request; plan
+[office-parity.md](plans/office-parity.md), details
+[mail-interchange.md](mail-interchange.md))
+
+**Context.** The parity survey found QindaMail without an address book
+(no vCard, no autocomplete), showing HTML mail as plain text with no inline
+pictures, unable to print, and unable to open `.msg` or import `.mbox`.
+Three facts shaped the answer. QindaTK's mail providers parse a message at
+sync time and keep only its plain text and attachment list
+(`MailRecord::fromParsed`): the HTML, the Content-IDs and the part structure
+are gone, and the toolkit is not ours to change in this milestone. Qt's
+rich-text engine will happily fetch any image URL a document names — through
+the QML engine's network access for a QML `TextEdit`, from local files for a
+plain `QTextDocument` — so showing untrusted HTML safely is about what the
+document may load as much as what it may contain. And a document-less mail
+window (D-042) had no printing at all.
+
+**Decision.**
+
+1. **The source is the truth for reading.** QindaMail keeps a message's
+   RFC 5322 source in `<dataDir>/sources/`: local imports at import
+   (`localSource`), IMAP messages on first display (`sourceCached`) through
+   `ImapSourceFetcher` — `UID FETCH … (UID BODY.PEEK[])` over QindaTK's own,
+   exported `Imap::Session`/`Protocol::Channel` (TLS, SASL, redaction stay
+   the toolkit's), started through `AccountRuntime::run` like every request,
+   because the provider's downloads accept numbered parts only. POP3 messages
+   keep the record view. An own MIME reader (`rfc822_reader`) gives the
+   structure the toolkit drops and numbers parts exactly as
+   `QindaTK::Mime::parse` does (identical on the owner's 23 `.eml` files),
+   so `<record>/<section>` attachment ids map both ways; attachment bytes
+   come from the source when the store has none.
+2. **Every message file becomes RFC 5322 first.** `.eml` as is; Outlook
+   `.msg` through an MS-CFB reader, the MS-OXMSG mapping (compressed RTF per
+   MS-OXRTFCP, HTML de-encapsulated per MS-OXRTFEX) and a deterministic
+   RFC 5322 writer; mbox through a pull reader into a folder named after the
+   file. One import path, one record shape, ids from the source's SHA-256
+   (re-imports deduplicate). Save Message As writes the original source, so
+   it goes back to Outlook as `.eml`.
+3. **Untrusted HTML is regenerated, and the document can load nothing it
+   was not given.** The sanitizer tokenizes and rebuilds the HTML from an
+   allow-list (no scripts, frames, objects, forms, event handlers, non-web
+   links, external, positioned or at-rule CSS, hidden content, runaway
+   tables). The renderer decodes the cid parts, `data:` pictures, attached
+   pictures and — only after **Show pictures** or **Always show from this
+   sender** — the remote pictures the service fetched (http(s), bounded,
+   cookie-less), and lists every image URL its HTML names. Each one is
+   registered with the document (the picture or an empty image) BEFORE the
+   HTML is set: `QTextDocument` consults registered resources first and its
+   loader — for a QML TextEdit, QQuickTextEdit's network fetch through the
+   QML engine — before any resource provider, so a provider is no guard
+   (found by the UI test: "Host … not found" from the QML engine). Mail is
+   shown on paper (white, black ink) in every theme.
+4. **The address book is a store of its own** (`ContactStore`,
+   `contacts.json` beside the mail store, pictures as files), following the
+   `AccountStore` rules; vCard 2.1/3.0/4.0 in and 3.0/4.0 out with unknown
+   properties kept, Outlook CSV in; a People workspace in the rail; recipient
+   suggestions from contacts, then from addresses seen in mail.
+5. **A selected message is a mail window's printable document.** File ▸
+   Print, Print Preview and Export as PDF print it as a memo (headers, rule,
+   the body as rendered) through `PrintJob`, laid out in CSS pixels and
+   painted scaled. D-042's "Print stays disabled" no longer holds.
+6. **Meetings go both ways by mail (iMIP).** A `text/calendar;
+   method=REQUEST` part shows a card with Accept / Tentative / Decline; the
+   local calendar follows (the event carries the iCalendar UID and the
+   answer) and a METHOD:REPLY goes to the organizer through the account the
+   request came to; a received CANCEL offers to remove it. The event
+   dialog's Invite field mails a METHOD:REQUEST (the event keeps UID,
+   invitees and SEQUENCE for updates).
+7. **Eleven new commands, no renamed ones**: `mailViewPeopleAction`
+   (Ctrl+4, in the `mailView` group), `contactNewAction` (Ctrl+Shift+C),
+   `contactDeleteAction`, `contactImportAction`, `contactExportAction`,
+   `mailAddSenderAction`, `mailShowPicturesAction`, `mailSaveMessageAction`
+   (F12), `mailSaveAttachmentsAction`, `mailImportMboxAction`,
+   `mailExportPdfAction`; each is on a ribbon tab and in a menu (a People
+   menu between Message and Calendar).
+
+**Consequences.** HTML mail, inline pictures, printing, meeting answers and
+the three file formats work without changing the toolkit, at the cost of a
+second download of an IMAP message when it is first opened (Outlook does the
+same), of QindaMail parsing MIME itself, and of depending on QindaTK's
+exported-but-internal `imap_session.h`. Toolkit follow-ups (QindaTK): keep
+the HTML body and each part's Content-ID / disposition in
+`MailRecord::fromParsed` (the unmerged D-308 work is the start); a
+whole-message fetch on `ImapMailProvider` (then `ImapSourceFetcher` goes)
+and a source-keeping option on `Pop3MailProvider`; an attachment-store limit
+above 8 MiB; `Mime::build` with multipart/related Content-ID parts
+(pictures in the composer) and with a `text/calendar; method=` part (proper
+iMIP replies and invitations); picture insertion in `Tk.FormatBar`;
+a mail-body view control. Until then POP3 messages show text only, and a
+meeting reply or request travels as a `reply.ics` / `invite.ics`
+attachment. Also not done: sending CANCEL, COUNTER, `.pst`, CardDAV,
+contact groups.
+
 ## D-071: QuickBooks migration and reachable bookkeeping; Project XML preservation
 
 **Date:** 2026-10-08 · **Status:** accepted (owner request: QuickBooks and

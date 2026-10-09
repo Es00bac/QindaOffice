@@ -33,6 +33,109 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M64 Mail essentials gates (D-072)
+
+Qualified on qinda (branch `m64-mail-essentials` over `m60-office-formats`):
+the mail and launcher targets only (`ctest --preset dev -R "mail|launcher"`,
+the lead qualifies the whole suite after merging): **25/25 CTest targets
+passed (43.8 s), 468 QtTest cases, 0 failed** (counts include init/cleanup).
+New M64 programs: `tst_mail_messages` 13, `tst_mail_contacts` 14,
+`tst_mail_contact_csv` 8, `tst_mail_contact_store` 15, `tst_mail_msg` 49,
+`tst_mail_html` 137, `tst_qindamail_files` 11, `tst_qindamail_people` 7,
+`tst_qindamail_meetings` 5; extended: `tst_qindamail_host` 10,
+`tst_qindamail_ui` 16, `tst_launcher` 8; unchanged and green: the M43/M44
+mail, Exchange and QindaMail programs. The M64 programs passed five
+repeated runs without a flake. Build warnings: none.
+
+- **Library** (`tests/office_mail`, no network, every fixture written by the
+  test): `tst_mail_messages` — the RFC 5322 reader (headers, encoded words,
+  alternative/related structure, Content-ID, `start`, a calendar part, an
+  attached message, garbage and 40-level nesting without a crash) numbers
+  every part exactly as `QindaTK::Mime::parse` does; the writer is
+  deterministic, CRLF-only and reads back through both readers (inline
+  parts, attached messages, Exchange-only names as empty groups); mbox
+  separators, `>From` unescaping, oversized and counted limits; the renderer
+  resolves `cid:` pictures, blocks remote ones until allowed, shows attached
+  pictures below and escapes and links plain text. `tst_mail_html` — the
+  sanitizer against a hostile corpus (scripts, handlers in every quoting,
+  obfuscated `javascript:`, CSS `url()`/`expression()`, `base`, `meta`,
+  forms, SVG, tracking pixels, hidden preheaders), each output loaded into a
+  `QTextDocument` whose resource requests are recorded: no http(s), file or
+  script URL is ever asked for unless pictures are allowed. `tst_mail_msg` —
+  MS-CFB v3/v4 (mini stream, DIFAT, every corruption and truncation failing
+  cleanly), MS-OXMSG mapping, MS-OXRTFCP (the specification's vectors, CRC
+  and bounds), MS-OXRTFEX de-encapsulation. `tst_mail_contacts` — vCard 2.1
+  (Outlook: QUOTED-PRINTABLE, CHARSET, base64 photo), 3.0, 4.0, folding,
+  round trips, unknown properties, Outlook/Google CSV, the store's bounds,
+  merge, search and persistence.
+- **App** (`tests/qindamail`): `tst_qindamail_files` — `.eml` kept with its
+  source (formatted body, cid picture, attachments read from the source,
+  same file = same message, survives a restart), Save Message As writes the
+  original bytes (and a source-less POP3 message from its record), Save All
+  with unique names and without in-body pictures, an mbox into its own
+  folder (and "(2)" for a second one), pictures fetched only after Show
+  pictures (an injected fetcher; no network) and "always for this sender"
+  kept, links only for http(s), an IMAP message downloaded whole once
+  (`RFC822.SIZE`, then `BODY.PEEK[]`) from a local IMAP server and its
+  attachments then read from the kept source, an Outlook `.msg` (built by
+  the CFB writer) opened as an ordinary message — formatted body, cid
+  picture, attached message, the same file twice = one message, saved as
+  `.eml` and read back, a truncated file refused with a notice — and the
+  selected message printed to PDF. `tst_qindamail_people` — contacts beside the mail
+  store, Add Sender (once), suggestions (contacts first, then mail, one entry
+  per address, the TokenField's later-turn contract), a `.vcf` handed to the
+  app opens People, the People workspace selects, edits, saves and starts a
+  new contact in the real window, and typing "tur" in the composer's To
+  field offers "Alan Turing <alan@example.org>", which a click turns into a
+  recipient (`qindamail_composer_suggestions`). `tst_qindamail_meetings` — an invitation
+  over IMAP: Accept puts it in the calendar and sends METHOD:REPLY with
+  PARTSTAT=ACCEPTED through SMTP (local fakes), Tentative keeps one event,
+  Decline removes it; an invitation opened from a file updates the calendar
+  only, and its later CANCEL removes the meeting without sending anything; an event with invitees goes out as METHOD:REQUEST (organizer,
+  RSVP attendees, SEQUENCE 0) and as "Updated invitation" with SEQUENCE 1
+  the second time. `tst_qindamail_host` — 41 command ids with shipped icons, unique
+  shortcuts (Ctrl+4, Ctrl+Shift+C, F12), print enabled by a selection, the
+  People menu in the panel export (the desktop's validator accepts it, every
+  id resolves). `tst_qindamail_ui` — HTML mail renders formatted on paper
+  with the cid picture, the pictures bar blocks the remote banner until Show
+  pictures is clicked (1280 and 520 px); an invitation shows its meeting
+  card (the calendar part is not listed as an attachment) and Accept puts it
+  in the calendar (`qindamail_meeting_1280`); the ribbon gate (coverage, icons,
+  520 px squeeze) holds in Mail, Calendar, Tasks and People; fixtures
+  `qindamail_{1280,520}.txt` regenerated (`QQO_UPDATE_FIXTURES=1`) and the
+  diff reviewed.
+- **Grabs reviewed** (`QQO_GRAB_DIR`, qinda, offscreen software renderer):
+  `qindamail_html_blocked_{1280,520}` (HTML on paper: heading, bold,
+  italic, the inline cid picture, the blocked banner's alt text, list, link;
+  the pictures bar), `qindamail_html_pictures_{1280,520}` (the banner after
+  Show pictures, the paper still wrapping the body), `qindamail_people_{1280,520}`
+  (list with initials, the card with typed e-mail rows), and the existing
+  mail/calendar/tasks/composer/account grabs. At 520 px the mail panes now
+  stack (folders · list · reader) so the reader and its bar stay inside the
+  window. Found and fixed while looking: Tk.Flex sizes children from their
+  implicit size (paper, avatar, photo used `height:` and collapsed).
+- **Owner's files** (laptop, parsed in place by a throw-away CLI built from
+  the parser sources only, aggregate counts only): 23 `.eml` — 23 parsed,
+  0 failures; 17 with an HTML body, 5 text only, 1 without a body; 6 with
+  inline pictures, 9 inline parts, all 9 `cid:` pictures resolved; 2 with
+  attachments (3); remote content blocked in 15; part numbering identical to
+  `QindaTK::Mime::parse` in all 23; the RFC 5322 writer round trip identical
+  (subject, bodies, attachments) in all 23; slowest sanitize 1 ms. The one
+  `.msg` file there is neither an Outlook compound file nor a mail message,
+  so the Outlook path is covered by the generated files of `tst_mail_msg`
+  and `tst_qindamail_files` only.
+
+**Manual, on the desktop** (with the owner): open an Outlook `.msg` from
+the file manager (body, attachments, an attached message); import a vCard
+exported from Outlook (2.1, with a photo) and an Outlook CSV; open an HTML
+newsletter (pictures blocked, Show pictures, Always show from this sender,
+then Stop); click a link (browser) and a `mailto:` link (composer); type two
+letters of a contact in To and pick the suggestion; Print Preview and print
+a message with an inline picture; Export as PDF; Save Message As, then open
+the `.eml` in Outlook; import a Thunderbird mbox; accept a meeting invitation
+from a real account and check the organizer's calendar; invite a colleague
+from the event dialog and accept on their side.
+
 ## M62 PowerPoint interchange gates (D-070)
 
 Qualified on qinda (branch `m62-powerpoint-interchange`, rebased onto

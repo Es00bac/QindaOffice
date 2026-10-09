@@ -123,6 +123,8 @@ QVector<FolderRow> MailService::accountFolderRows(const QString &accountId,
         add(QStringLiteral("Sent"), QStringLiteral("sent"));
         add(QStringLiteral("Archive"), QStringLiteral("archive"));
         add(QStringLiteral("Trash"), QStringLiteral("trash"));
+        // M64: the folders imported mbox files made (add() skips the fixed ones).
+        for (const QString &name : localMailboxes()) add(name, QString());
     } else if (rt != nullptr && rt->isPop3()) {
         add(QStringLiteral("INBOX"), QStringLiteral("inbox"));
         add(QStringLiteral("Archive"), QStringLiteral("archive"));

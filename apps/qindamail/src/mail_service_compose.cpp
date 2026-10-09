@@ -91,9 +91,11 @@ QVariantMap MailService::forwardDraft(const QString &messageId)
     QVariantList attachments;
     QStringList missing;
     int n = 0;
+    const QVariantMap record = rawMessage(messageId);
     for (const QVariant &value : message.value(QStringLiteral("attachments")).toList()) {
         const QVariantMap source = value.toMap();
-        const QVariantMap read = m_attachments->read(source.value(QStringLiteral("id")).toString());
+        // From the attachment store or the message's stored source (M64).
+        const QVariantMap read = attachmentBytes(record, source.value(QStringLiteral("id")).toString());
         if (!read.value(QStringLiteral("ok")).toBool()) {
             missing.append(source.value(QStringLiteral("name")).toString());
             continue;

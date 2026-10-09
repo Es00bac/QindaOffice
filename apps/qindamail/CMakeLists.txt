@@ -24,6 +24,9 @@ set(qindamail_qml
     qml/ComposerWindow.qml
     qml/AccountDialog.qml
     qml/MailPreferencesPage.qml
+    qml/PeopleWorkspace.qml
+    qml/ContactEditor.qml
+    qml/ContactValueList.qml
 )
 foreach(qml_file IN LISTS qindamail_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -41,6 +44,7 @@ qt_add_qml_module(qindamail_app
         src/account_runtime_credentials.cpp
         src/draft_builder.cpp src/draft_builder.h
         src/folder_model.cpp src/folder_model.h
+        src/imap_source_fetcher.cpp src/imap_source_fetcher.h
         src/launch_arguments.cpp src/launch_arguments.h
         src/mail_host.cpp src/mail_host.h
         src/mail_host_commands.cpp
@@ -54,8 +58,17 @@ qt_add_qml_module(qindamail_app
         src/mail_service_messages.cpp
         src/mail_service_sync.cpp
         src/mail_service_tasks.cpp
+        src/mail_service_source.cpp
+        src/mail_service_files.cpp
+        src/mail_service_contacts.cpp
+        src/mail_service_meetings.cpp
+        src/mail_service_invitations.cpp
+        src/message_document.cpp src/message_document.h
         src/message_list_model.cpp src/message_list_model.h
+        src/message_print.cpp src/message_print.h
+        src/message_view.cpp src/message_view.h
         src/provider_calls.cpp src/provider_calls.h
+        src/recipient_completer.cpp src/recipient_completer.h
     QML_FILES ${qindamail_qml}
 )
 target_include_directories(qindamail_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
