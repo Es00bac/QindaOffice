@@ -286,6 +286,12 @@ and our saved package validate against the Transitional XSDs):
 
 ## M70 Write formatting gates (D-079)
 
+After merging (lead): the full suite on qinda 199/199 at 48e3074; the
+owner's 590 `.docx` read and round-trip with 0 failures, 0 text/table/
+picture changes and 0 schema-invalid packages (`QQO_DOCX_CORPUS_VALIDATE`);
+page counts against Word unchanged by M70 (567 documents: 383 exact, 101
+off by one; 156 of the 211 reliable ones exact, 198 within one).
+
 On qinda (only office_ooxml, office_docx, QindaWrite, their tests and
 `tst_note_word` built; `QQO_OOXML_SCHEMA_DIR` set, so every package a test
 writes is validated against the ECMA-376 Transitional schemas):
