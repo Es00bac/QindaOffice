@@ -79,6 +79,7 @@ bool applyM78SheetPatch(QByteArray *sheetXml, const PatchManifest::SheetPatch &p
     }
     const QList<QPair<QString, QByteArray>> pieces{
         {QStringLiteral("scenarios"), patch.scenariosXml},
+        {QStringLiteral("customSheetViews"), patch.customViewsXml}, // M82 (D-091)
         {QStringLiteral("conditionalFormatting"), patch.condFormatXml},
         {QStringLiteral("dataValidations"), patch.dataValidationsXml},
         // printOptions … colBreaks travel as one block: the first of them

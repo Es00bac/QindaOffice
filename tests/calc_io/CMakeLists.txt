@@ -73,3 +73,6 @@ set_tests_properties(tst_calc_io_whatif PROPERTIES TIMEOUT 600)
 # markup, and the rules the model cannot hold kept byte for byte with their
 # dxfs and priorities (kept_fixtures.h).
 qqo_add_calc_io_test(tst_calc_io_kept)
+# M82 (D-091): Excel's Custom Views read, written schema-valid in their
+# schema slots and read back equal.
+qqo_add_calc_io_test(tst_calc_io_views)

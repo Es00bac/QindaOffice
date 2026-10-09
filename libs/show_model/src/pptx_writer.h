@@ -19,6 +19,8 @@
 
 #include "presentation.h"
 
+#include <QHash>
+
 #include <memory>
 
 namespace QindaOffice::Ooxml {
@@ -32,5 +34,19 @@ bool writePptxFile(const Presentation &deck, const QString &path, QString *error
 // The package writePptx() zips, before it is zipped (M75: pptx_design.h
 // edits it — a new slide size — before reading the deck back).
 [[nodiscard]] std::unique_ptr<Ooxml::PackageWriter> writePptxPackage(const Presentation &deck);
+
+// Where writePptxPackage() put the model's objects (M82, D-091:
+// pptx_slides.h edits the written package around them — a new slide on a
+// layout, another layout, Reset, Duplicate, Reuse Slides, a template's
+// masters — before reading the deck back).
+struct PptxWriteMap {
+    QHash<QString, QString> slideParts;  // model slide id → part
+    QHash<QString, QString> layoutParts; // model layout id → part
+    QHash<QString, QString> masterParts; // model master id ("" = plain slides) → part
+    // Model slide id → model shape id → its written p:cNvPr/@id.
+    QHash<QString, QHash<QString, quint32>> shapeIds;
+    QString notesMaster; // "" = none written
+};
+[[nodiscard]] std::unique_ptr<Ooxml::PackageWriter> writePptxPackage(const Presentation &deck, PptxWriteMap *map);
 
 } // namespace QindaOffice::Show

@@ -56,6 +56,7 @@ class ShowDesignTab;
 class ShowMasterView;
 class ShowMedia;
 class ShowSections;
+class ShowSlideLayouts;
 class ShowTableActions;
 class ShowToolbox;
 
@@ -68,6 +69,7 @@ class ShowHost : public Quick::DocumentHost {
     Q_MOC_INCLUDE("show_master_view.h")
     Q_MOC_INCLUDE("show_media_actions.h")
     Q_MOC_INCLUDE("show_sections.h")
+    Q_MOC_INCLUDE("show_slide_layouts.h")
     QML_ELEMENT
     QML_UNCREATABLE("Created by the application.")
     Q_PROPERTY(int slideCount READ slideCount NOTIFY deckChanged)
@@ -100,6 +102,9 @@ class ShowHost : public Quick::DocumentHost {
     Q_PROPERTY(QindaOffice::Apps::Show::ShowSections *sections READ sections CONSTANT)
     Q_PROPERTY(QindaOffice::Apps::Show::ShowComments *comments READ comments CONSTANT)
     Q_PROPERTY(QindaOffice::Apps::Show::ShowMedia *media READ media CONSTANT)
+    // M82 (D-091): New Slide on the deck's layouts, Layout, Reset, Reuse
+    // Slides, a template's masters (show_slide_layouts.h).
+    Q_PROPERTY(QindaOffice::Apps::Show::ShowSlideLayouts *layouts READ slideLayouts CONSTANT)
 public:
     ShowHost();
     ~ShowHost() override;
@@ -120,6 +125,7 @@ public:
     [[nodiscard]] ShowSections *sections() const { return m_sections; }
     [[nodiscard]] ShowComments *comments() const { return m_comments; }
     [[nodiscard]] ShowMedia *media() const { return m_media; }
+    [[nodiscard]] ShowSlideLayouts *slideLayouts() const { return m_layouts; }
     // M75: the deck's slide at the current row (not the canvas's slide,
     // which in the Slide Master view is a master or layout); nullptr when
     // the deck has none.
@@ -265,6 +271,7 @@ private:
     ShowSections *m_sections = nullptr;
     ShowComments *m_comments = nullptr;
     ShowMedia *m_media = nullptr;
+    ShowSlideLayouts *m_layouts = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;
     Ai::AssistantController *m_assistant = nullptr;
     Ai::InlineActionFlow *m_inline = nullptr;

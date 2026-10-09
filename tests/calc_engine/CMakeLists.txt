@@ -49,3 +49,6 @@ qqo_add_calc_test(tst_calc_pagelayout)
 # sqref, and every validation kind and operator.
 qqo_add_calc_test(tst_calc_condformat)
 qqo_add_calc_test(tst_calc_validation)
+# M82 (D-091): Excel's Custom Views — Add, Show, Delete, the table refusal
+# and structural edits.
+qqo_add_calc_test(tst_calc_views)

@@ -196,11 +196,25 @@ QList<TableSpec> readTables(QXlsx::ZipReader &zip, const QString &sheetPart)
 // Sheet view state: the frozen pane (state="frozen" only — a plain "split"
 // is an unfrozen split view, not a freeze) and the selection cell. The page
 // setup is xlsx_print.h's (M78, D-087).
+// AGENT-GUARD: only <sheetViews> — a Custom View's <customSheetView> has a
+// pane and a selection of its own (xlsx_views.h, M82), which are not the
+// sheet's.
 void readSheetViews(const QByteArray &xml, Sheet *sheet)
 {
     QXmlStreamReader reader(xml);
+    bool inViews = false;
     while (!reader.atEnd()) {
-        if (reader.readNext() != QXmlStreamReader::StartElement) {
+        const QXmlStreamReader::TokenType token = reader.readNext();
+        if (token == QXmlStreamReader::EndElement && reader.name() == QLatin1String("sheetViews")) {
+            break;
+        }
+        if (token != QXmlStreamReader::StartElement) {
+            continue;
+        }
+        if (reader.name() == QLatin1String("sheetViews")) {
+            inViews = true;
+        }
+        if (!inViews) {
             continue;
         }
         const QStringView name = reader.name();

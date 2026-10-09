@@ -11,8 +11,11 @@
 # comments and media — themes (show_theme.h), the Slide Master view's
 # model (master_edit.h), deck-wide re-resolution and slide size
 # (pptx_design.h), sections (sections.h), comments (show_comment.h,
-# pptx_review.h), audio and video (show_media.h). Qt Core/Gui + KArchive
-# + office_ooxml + calc_io; no Quick, no desktop archives.
+# pptx_review.h), audio and video (show_media.h). M82 (D-091): PowerPoint's
+# slide commands on the deck's own layouts — New Slide, Layout, Reset,
+# Duplicate, Reuse Slides, a template's masters (pptx_slides.h) — made in
+# the written package (pptx_package_edit.h, pptx_import.cpp). Qt Core/Gui +
+# KArchive + office_ooxml + calc_io; no Quick, no desktop archives.
 add_library(show_model STATIC
     src/chart_edit.cpp
     src/chart_edit.h
@@ -65,6 +68,9 @@ add_library(show_model STATIC
     src/pptx_timing_media.cpp
     src/pptx_write_chart.cpp
     src/pptx_write_chart_kind.cpp
+    # M82 (D-091): every plot's series, multi-level categories
+    src/pptx_write_chart_internal.h
+    src/pptx_write_chart_series.cpp
     src/pptx_write_context.cpp
     src/pptx_write_context.h
     src/pptx_write_generate.cpp
@@ -84,6 +90,11 @@ add_library(show_model STATIC
     src/pptx_write_text.h
     src/pptx_writer.cpp
     src/pptx_writer.h
+    src/pptx_import.cpp
+    src/pptx_package_edit.cpp
+    src/pptx_package_edit.h
+    src/pptx_slides.cpp
+    src/pptx_slides.h
     src/presentation.cpp
     src/presentation.h
     src/preset_geometry.cpp

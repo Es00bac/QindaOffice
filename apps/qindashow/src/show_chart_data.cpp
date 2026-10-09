@@ -76,6 +76,48 @@ void ChartDataEditor::setKindIndex(int index)
     }
 }
 
+QStringList ChartDataEditor::comboKindNames() const
+{
+    QStringList names;
+    for (int i = 0; i < ChartEdit::kinds().size(); ++i) {
+        if (ChartEdit::comboKind(i)) {
+            names.append(QCoreApplication::translate("ChartEdit", ChartEdit::kinds().at(i).label));
+        }
+    }
+    return names;
+}
+
+QVariantList ChartDataEditor::plots() const
+{
+    // The combo list's index of each plot's kind.
+    QList<int> comboKinds;
+    for (int i = 0; i < ChartEdit::kinds().size(); ++i) {
+        if (ChartEdit::comboKind(i)) {
+            comboKinds.append(i);
+        }
+    }
+    QVariantList out;
+    for (int p = 0; p < m_plotKinds.size(); ++p) {
+        out.append(QVariantMap{{QStringLiteral("label"), m_plotLabels.value(p)},
+                               {QStringLiteral("comboIndex"), qMax(0, int(comboKinds.indexOf(m_plotKinds.at(p))))}});
+    }
+    return out;
+}
+
+void ChartDataEditor::setPlotKind(int plot, int index)
+{
+    QList<int> comboKinds;
+    for (int i = 0; i < ChartEdit::kinds().size(); ++i) {
+        if (ChartEdit::comboKind(i)) {
+            comboKinds.append(i);
+        }
+    }
+    if (plot >= 0 && plot < m_plotKinds.size() && index >= 0 && index < comboKinds.size() && m_plotKinds.at(plot) != comboKinds.at(index)) {
+        m_plotKinds[plot] = comboKinds.at(index);
+        emit kindChanged();
+    }
+}
+
 int ChartDataEditor::categoryCount() const
 {
     return qMax(0, m_grid->rows() - 1);
@@ -108,6 +150,24 @@ bool ChartDataEditor::load()
         }
     }
     m_loadedKind = m_kind;
+    // A combo chart: each plot's kind, named by its series.
+    m_plotKinds.clear();
+    m_plotLabels.clear();
+    if (shape->chart.plots.size() > 1) {
+        for (int p = 0; p < shape->chart.plots.size(); ++p) {
+            QStringList names;
+            for (const ShowModel::ChartSeries &series : shape->chart.series) {
+                if (series.plot == p) {
+                    names.append(series.name);
+                }
+            }
+            m_plotKinds.append(qMax(0, ChartEdit::plotKindIndex(shape->chart, p)));
+            // The plot is named by its series, as PowerPoint's Combo list
+            // names each row (the label column is narrow).
+            m_plotLabels.append(names.join(QStringLiteral(", ")));
+        }
+    }
+    m_loadedPlotKinds = m_plotKinds;
     auto *source = new ChartSheetSource(this);
     QindaTK::GridCellSource *old = m_source;
     m_grid->setSource(source);
@@ -116,11 +176,15 @@ bool ChartDataEditor::load()
     m_grid->setDimensions(int(table.categories.size()) + 1, int(table.series.size()) + 1);
     source->firstRow = m_grid->rowIdAt(0);
     source->firstColumn = m_grid->columnIdAt(0);
+    m_rowSource.clear();
+    m_columnSource.clear();
     for (int s = 0; s < table.series.size(); ++s) {
         source->values.insert(ChartSheetSource::key(source->firstRow, m_grid->columnIdAt(s + 1)), table.series.at(s));
+        m_columnSource.insert(m_grid->columnIdAt(s + 1), s);
     }
     for (int k = 0; k < table.categories.size(); ++k) {
         const QString row = m_grid->rowIdAt(k + 1);
+        m_rowSource.insert(row, k);
         source->values.insert(ChartSheetSource::key(row, source->firstColumn), table.categories.at(k));
         for (int s = 0; s < table.series.size(); ++s) {
             source->values.insert(ChartSheetSource::key(row, m_grid->columnIdAt(s + 1)),
@@ -183,10 +247,12 @@ ChartEdit::ChartTable ChartDataEditor::table() const
     for (int c = 1; c < m_grid->columns(); ++c) {
         table.series.append(m_grid->cellValue(header, m_grid->columnIdAt(c)).toString());
         table.values.append(QList<qreal>());
+        table.seriesSource.append(m_columnSource.value(m_grid->columnIdAt(c), -1));
     }
     for (int r = 1; r < m_grid->rows(); ++r) {
         const QString row = m_grid->rowIdAt(r);
         table.categories.append(m_grid->cellValue(row, labels).toString());
+        table.categorySource.append(m_rowSource.value(row, -1));
         for (int c = 1; c < m_grid->columns(); ++c) {
             table.values[c - 1].append(ChartEdit::parseValue(m_grid->cellValue(row, m_grid->columnIdAt(c)).toString()));
         }
@@ -201,7 +267,9 @@ bool ChartDataEditor::apply()
     }
     const ChartEdit::ChartTable sheet = table();
     const int kind = m_kind;
-    const bool kindChanged = m_kind != m_loadedKind;
+    const bool kindChanged = m_kind != m_loadedKind && m_plotKinds.isEmpty();
+    const QList<int> plotKinds = m_plotKinds;
+    const QList<int> loadedPlotKinds = m_loadedPlotKinds;
     const bool done = m_canvas->editShape(m_shapeId, tr("Edit chart data"), [&](ShowModel::Shape &shape) {
         if (shape.kind != ShowModel::ShapeKind::Chart) {
             return false;
@@ -209,10 +277,16 @@ bool ChartDataEditor::apply()
         if (kindChanged) {
             ChartEdit::setKind(shape.chart, kind);
         }
+        for (int p = 0; p < plotKinds.size(); ++p) {
+            if (plotKinds.at(p) != loadedPlotKinds.value(p, -1)) {
+                ChartEdit::setPlotKind(shape.chart, p, plotKinds.at(p));
+            }
+        }
         ChartEdit::setTable(shape.chart, sheet);
         return true;
     });
     m_loadedKind = m_kind;
+    m_loadedPlotKinds = m_plotKinds;
     return done;
 }
 

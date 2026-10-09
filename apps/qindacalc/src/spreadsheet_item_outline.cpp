@@ -72,7 +72,7 @@ QString SpreadsheetItem::linkTip(const CellAddr &addr) const
     if (const Hyperlink *link = sheet->hyperlinkAt(addr)) {
         where = link->tooltip.isEmpty() ? hyperlinkTarget(*link) : link->tooltip;
     } else {
-        where = hyperlinkFormulaTarget(*m_document->workbook(), m_document->activeSheet(), addr);
+        where = hyperlinkFormulaTarget(*m_document->workbook(), sheetIndex(), addr);
     }
     return tr("%1\nCtrl+click to follow the link.").arg(where);
 }
@@ -244,7 +244,7 @@ void SpreadsheetItem::paintSpillBorder(QPainter &p)
         return;
     }
     const Workbook &wb = *m_document->workbook();
-    const qint32 active = m_document->activeSheet();
+    const qint32 active = sheetIndex();
     const CellAddr anchor = wb.spillAnchorOf(active, m_cursor);
     const auto spill = anchor.isValid() ? wb.spillAt(active, anchor) : std::nullopt;
     if (!spill || spill->blocked || spill->extent.cellCount() < 2) {

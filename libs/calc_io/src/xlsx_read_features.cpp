@@ -72,6 +72,15 @@ SheetProtection protectionFrom(const QXmlStreamAttributes &a)
 
 } // namespace
 
+void applyXfFlags(quint8 flags, CellStyle *style)
+{
+    style->locked = (flags & 1) == 0;
+    style->hiddenFormula = (flags & 2) != 0;
+    if ((flags & 4) != 0) {
+        style->alignment = 3; // Excel's Fill (M82, D-091)
+    }
+}
+
 QVector<quint8> readXfProtection(QXlsx::ZipReader &zip)
 {
     QVector<quint8> out;
@@ -91,8 +100,12 @@ QVector<quint8> readXfProtection(QXlsx::ZipReader &zip)
             out.append(0);
         } else if (inCellXfs && reader.name() == QLatin1String("protection") && !out.isEmpty()) {
             const auto a = reader.attributes();
-            out.last() = quint8((flag(a, QLatin1StringView("locked"), true) ? 0 : 1)
-                                | (flag(a, QLatin1StringView("hidden"), false) ? 2 : 0));
+            out.last() |= quint8((flag(a, QLatin1StringView("locked"), true) ? 0 : 1)
+                                 | (flag(a, QLatin1StringView("hidden"), false) ? 2 : 0));
+        } else if (inCellXfs && reader.name() == QLatin1String("alignment") && !out.isEmpty()
+                   && reader.attributes().value(QLatin1String("horizontal")) == QLatin1String("fill")) {
+            // M82 (D-091): QXlsx writes horizontal="fill" but never reads it.
+            out.last() |= quint8(4);
         }
     }
     return out;

@@ -16,8 +16,9 @@
 //
 // Files: pptx_write_shapes.cpp (dispatch, verbatim, patching),
 // pptx_write_generate.cpp (generation, the picture fallback),
-// pptx_write_table.cpp (a:tbl, M67), pptx_write_chart.cpp and
-// pptx_write_chart_kind.cpp (edited charts, M67).
+// pptx_write_table.cpp (a:tbl, M67), pptx_write_chart.cpp,
+// pptx_write_chart_series.cpp and pptx_write_chart_kind.cpp (edited charts,
+// M67, M82).
 
 #include "pptx_write_text.h"
 
@@ -58,8 +59,9 @@ struct DetachedChart {
 // Writes the edited chart part and names it in the frame; false when the
 // source chart part could not be used (the caller writes a picture).
 [[nodiscard]] bool attachChart(PartWriter &out, const DetachedChart &edit, const ChartData &chart, const ChartData &previous);
-// pptx_write_chart_kind.cpp: the first plot of `plotArea` made `chart`'s
-// kind, with the axes it needs; the plot element now in place.
+// pptx_write_chart_kind.cpp: the plot `plot` of `plotArea` made `chart`'s
+// kind (its type and grouping), with the axes it needs; the plot element
+// now in place.
 Ooxml::XmlElement *convertPlot(Ooxml::XmlElement &plotArea, Ooxml::XmlElement *plot, const ChartData &chart);
 // a:xfrm for a shape (rot/flips; chOff/chExt for groups when `child` is set).
 [[nodiscard]] Ooxml::XmlElementPtr transformElement(const QString &ns, const Shape &shape, bool group);

@@ -30,11 +30,21 @@
 
 #include "presentation.h"
 
+namespace QindaOffice::Ooxml {
+class PackageWriter;
+}
+
 namespace QindaOffice::Show {
 
 // `deck` written and read back (see above); on failure `deck` itself and
 // `error`.
 [[nodiscard]] Presentation reresolved(const Presentation &deck, QString *error = nullptr);
+// `deck` as `written` (its package, edited where PowerPoint keeps things —
+// pptx_slides.h, M82) reads back. `fromDeck[i]` is the index in `deck` of
+// read slide i, or -1 for a slide the edit made: the others keep
+// QindaShow's own state by position. On failure `deck` itself and `error`.
+[[nodiscard]] Presentation readBackEdited(const Presentation &deck, const Ooxml::PackageWriter &written,
+                                          const QList<int> &fromDeck, QString *error = nullptr);
 
 // ---- Slide Size ----
 enum class SlideScale { EnsureFit, Maximize };

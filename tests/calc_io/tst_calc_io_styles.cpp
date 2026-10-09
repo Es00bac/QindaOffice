@@ -2,7 +2,8 @@
 // calc_io style gates (M33): the full CellStyle set round-trips on value,
 // formula AND empty cells; custom number-format codes survive the write
 // (QXlsx 1.5.1 serializes them — this is the proof); theme+tint colours
-// resolve through the package palette.
+// resolve through the package palette; Excel's Fill alignment is read and
+// written as horizontal="fill" (M82, D-091).
 
 #include "xlsx_bridge.h"
 
@@ -84,6 +85,7 @@ private slots:
     void customNumberFormatsRoundTrip();
     void themeColorsResolveToRgb();
     void defaultPaletteIsTheOfficeScheme();
+    void fillAlignmentRoundTrips();
 };
 
 static CellStyle fullStyle()
@@ -275,6 +277,38 @@ int main(int argc, char *argv[])
     QCoreApplication app(argc, argv);
     CalcIoStylesTest test;
     return QTest::qExec(&test, argc, argv);
+}
+
+
+// M82 (D-091): Excel's Fill alignment (the text repeated across the cell,
+// never spilled) is CellStyle::alignment 3, written as horizontal="fill".
+void CalcIoStylesTest::fillAlignmentRoundTrips()
+{
+    Workbook wb;
+    Sheet &sheet = wb.addSheet(QStringLiteral("Fill"));
+    wb.setCellInput(0, {0, 0}, QStringLiteral("ab"));
+    CellStyle style;
+    style.alignment = 3;
+    sheet.setStyleIdAt({0, 0}, wb.addStyle(style));
+    Q_UNUSED(sheet);
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + QStringLiteral("/fill.xlsx");
+    QString error;
+    QVERIFY2(IO::writeXlsxFile(wb, path, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(path);
+    {
+        KZip zip(path);
+        QVERIFY(zip.open(QIODevice::ReadOnly));
+        const KArchiveFile *styles = zip.directory()->file(QStringLiteral("xl/styles.xml"));
+        QVERIFY(styles != nullptr);
+        QVERIFY2(styles->data().contains("horizontal=\"fill\""), styles->data().constData());
+    }
+    Workbook back;
+    QVERIFY2(IO::readXlsxFile(path, &back, &error), qPrintable(error));
+    const CellStyle *read = back.style(back.sheetAt(0).styleIdAt({0, 0}));
+    QVERIFY(read != nullptr);
+    QCOMPARE(read->alignment, 3);
 }
 
 #include "tst_calc_io_styles.moc"

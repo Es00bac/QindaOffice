@@ -5,6 +5,7 @@
 #include "show_document.h"
 #include "show_host.h"
 #include "show_master_view.h"
+#include "show_slide_layouts.h"
 #include "slide_renderer.h"
 
 #include <QPainter>
@@ -74,9 +75,47 @@ void SlideThumbItem::setTemplateIndex(int index)
     update();
 }
 
+void SlideThumbItem::setGalleryIndex(int index)
+{
+    if (m_galleryIndex != index) {
+        m_galleryIndex = index;
+        emit changed();
+        update();
+    }
+}
+
+void SlideThumbItem::setReuseIndex(int index)
+{
+    if (m_reuseIndex != index) {
+        m_reuseIndex = index;
+        emit changed();
+        update();
+    }
+}
+
 void SlideThumbItem::paint(QPainter *painter)
 {
     const ShowModel::Presentation *deck = m_host != nullptr ? m_host->showDocument()->presentation() : nullptr;
+    // M82: a layout of the New Slide gallery, or a slide Reuse Slides offers.
+    if (deck != nullptr && (m_galleryIndex >= 0 || m_reuseIndex >= 0)) {
+        const ShowModel::Presentation *reuse = m_host->slideLayouts()->reuseDeck();
+        const ShowModel::Presentation *shown = m_reuseIndex >= 0 ? reuse : deck;
+        painter->setRenderHint(QPainter::Antialiasing);
+        painter->setRenderHint(QPainter::SmoothPixmapTransform);
+        if (shown == nullptr || (m_reuseIndex >= 0 && m_reuseIndex >= shown->slides.size())) {
+            painter->fillRect(boundingRect(), Qt::white);
+            return;
+        }
+        painter->save();
+        letterbox(painter, boundingRect(), shown->slideSize);
+        if (m_reuseIndex >= 0) {
+            ShowModel::renderSlide(painter, *shown, shown->slides.at(m_reuseIndex));
+        } else {
+            m_host->slideLayouts()->renderEntry(m_galleryIndex, painter, shown->slideSize);
+        }
+        painter->restore();
+        return;
+    }
     if (deck != nullptr && m_templateIndex >= 0) {
         painter->setRenderHint(QPainter::Antialiasing);
         painter->setRenderHint(QPainter::SmoothPixmapTransform);

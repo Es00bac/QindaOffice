@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // ShowHost's M75 (D-084) part: the Design tab, Format Background, the Slide
-// Master view, sections, comments, audio and video — their controllers,
+// Master view, sections, comments, audio and video (and M82's slide
+// commands on the deck's layouts) — their controllers,
 // their menus (the Design and Review menus; Section in the Slide menu,
 // Video and Audio in Insert, Playback in Shape, Slide Master in View), and
 // the whole-deck change every one of them pushes as one undo step.
@@ -15,6 +16,7 @@
 #include "show_master_view.h"
 #include "show_media_actions.h"
 #include "show_sections.h"
+#include "show_slide_layouts.h"
 
 #include "menu_tree.h"
 
@@ -32,6 +34,9 @@ void ShowHost::createDesign()
     m_sections = new ShowSections(this);
     m_comments = new ShowComments(this);
     m_media = new ShowMedia(this);
+    // M82: before insertMenus(), which puts its New Slide and Layout menus
+    // in the Slide menu.
+    m_layouts = new ShowSlideLayouts(this);
 }
 
 void ShowHost::designMenus()

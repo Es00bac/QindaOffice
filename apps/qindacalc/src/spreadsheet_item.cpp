@@ -29,6 +29,9 @@ void SpreadsheetItem::setDocument(SpreadsheetDocument *document)
     m_cursor = {0, 0};
     m_scrollX = 0;
     m_scrollY = 0;
+    m_splits.clear();
+    m_split = SplitState();
+    m_splitSheet.clear();
     refreshAll();
     emit cursorChanged();
     emitSelectionChanged();
@@ -39,11 +42,12 @@ const Sheet *SpreadsheetItem::activeSheet() const
     if (m_document == nullptr || m_document->workbook()->sheetCount() == 0) {
         return nullptr;
     }
-    return &m_document->workbook()->sheetAt(m_document->activeSheet());
+    return &m_document->workbook()->sheetAt(sheetIndex());
 }
 
 void SpreadsheetItem::refreshAll()
 {
+    syncSplitSheet(); // M82: the sheet on show may have changed
     updateScrollRanges();
     update();
     emit cursorChanged(); // the formula text may have changed under the cursor
@@ -84,34 +88,15 @@ void SpreadsheetItem::setCursorCell(const CellAddr &addr, bool extendSelection)
 {
     const CellAddr next{qBound(qint32(0), addr.row, Sheet::kMaxRows - 1),
                         qBound(qint32(0), addr.col, Sheet::kMaxCols - 1)};
+    syncSplitSheet();
     m_cursor = next;
     if (!extendSelection) {
         m_anchor = next;
         m_selectionKind = CellSelection;
     }
-    // Scroll into view. The frozen band is painted over the scrolling one,
-    // so "visible" starts after it.
-    const QRectF rect = cursorItemRect();
-    const qreal leftEdge = headerWidth() + frozenWidthPx();
-    const qreal topEdge = headerHeight() + frozenHeightPx();
-    qreal sx = m_scrollX;
-    qreal sy = m_scrollY;
-    if (m_cursor.col >= frozen().col) {
-        if (rect.left() < leftEdge) {
-            sx += rect.left() - leftEdge;
-        } else if (rect.right() > width()) {
-            sx += rect.right() - width();
-        }
-    }
-    if (m_cursor.row >= frozen().row) {
-        if (rect.top() < topEdge) {
-            sy += rect.top() - topEdge;
-        } else if (rect.bottom() > height()) {
-            sy += rect.bottom() - height();
-        }
-    }
-    setScrollX(sx);
-    setScrollY(sy);
+    // Scroll into view in the pane the cursor is measured in (M82): the
+    // frozen lines never scroll; under a split, the active pane does.
+    scrollIntoView(m_cursor);
     update();
     emit cursorChanged();
     emitSelectionChanged();
@@ -237,95 +222,6 @@ qreal SpreadsheetItem::visibleRowHeightPx(qint32 row, const QSet<qint32> &hidden
     return hidden.contains(row) ? 0.0 : rowHeightPx(row);
 }
 
-int SpreadsheetItem::rowTop(qint32 row) const
-{
-    const Sheet *sheet = activeSheet();
-    const QSet<qint32> hidden = sheet != nullptr ? sheet->filteredOutRows() : QSet<qint32>();
-    qreal y = 0;
-    for (qint32 r = 0; r < row; ++r) {
-        y += visibleRowHeightPx(r, hidden);
-    }
-    return int(row < frozen().row ? y : y - m_scrollY);
-}
-
-int SpreadsheetItem::colLeft(qint32 col) const
-{
-    qreal x = 0;
-    for (qint32 c = 0; c < col; ++c) {
-        x += colWidthPx(c);
-    }
-    return int(col < frozen().col ? x : x - m_scrollX);
-}
-
-QVector<SpreadsheetItem::Band> SpreadsheetItem::visibleRowBands() const
-{
-    QVector<Band> bands;
-    const qreal viewportH = viewportHeight();
-    // AGENT-GUARD: a filtered-out row has NO band — painting, headers,
-    // hit-testing and scroll-into-view all walk this list.
-    const Sheet *sheet = activeSheet();
-    const QSet<qint32> hidden = sheet != nullptr ? sheet->filteredOutRows() : QSet<qint32>();
-    qreal y = 0;
-    for (qint32 r = 0; r < frozen().row && y < viewportH; ++r) {
-        if (hidden.contains(r)) {
-            continue;
-        }
-        const qreal h = rowHeightPx(r);
-        if (h > 0) {
-            bands.append({r, y, h});
-        }
-        y += h;
-    }
-    const qreal split = y;
-    qint32 row = frozen().row;
-    qreal top = split;
-    while (row < Sheet::kMaxRows - 1 && top + visibleRowHeightPx(row, hidden) <= split + m_scrollY) {
-        top += visibleRowHeightPx(row, hidden);
-        ++row;
-    }
-    qreal pos = top - m_scrollY;
-    while (pos < viewportH && row < Sheet::kMaxRows) {
-        const qreal h = visibleRowHeightPx(row, hidden);
-        if (h > 0) {
-            bands.append({row, pos, h});
-        }
-        pos += h;
-        ++row;
-    }
-    return bands;
-}
-
-QVector<SpreadsheetItem::Band> SpreadsheetItem::visibleColumnBands() const
-{
-    QVector<Band> bands;
-    const qreal viewportW = viewportWidth();
-    qreal x = 0;
-    for (qint32 c = 0; c < frozen().col && x < viewportW; ++c) {
-        const qreal w = colWidthPx(c);
-        if (w > 0) {
-            bands.append({c, x, w});
-        }
-        x += w;
-    }
-    const qreal split = x;
-    qint32 col = frozen().col;
-    qreal left = split;
-    while (col < Sheet::kMaxCols - 1 && left + colWidthPx(col) <= split + m_scrollX) {
-        left += colWidthPx(col);
-        ++col;
-    }
-    qreal pos = left - m_scrollX;
-    while (pos < viewportW && col < Sheet::kMaxCols) {
-        const qreal w = colWidthPx(col);
-        if (w > 0) {
-            bands.append({col, pos, w});
-        }
-        pos += w;
-        ++col;
-    }
-    return bands;
-}
-
 QRectF SpreadsheetItem::cellRect(const CellAddr &addr) const
 {
     return {qreal(colLeft(addr.col)), qreal(rowTop(addr.row)), colWidthPx(addr.col),
@@ -339,9 +235,12 @@ QRectF SpreadsheetItem::cursorItemRect() const
 
 CellAddr SpreadsheetItem::cellAtPos(const QPointF &pos) const
 {
-    // Hit-testing walks the SAME band lists painting does (frozen panes).
-    const QVector<Band> rows = visibleRowBands();
-    const QVector<Band> cols = visibleColumnBands();
+    // Hit-testing walks the SAME band lists painting does, of the pane
+    // under the point (frozen panes; M82: a split's four panes).
+    const QVector<AxisPane> rowList = panes(true);
+    const QVector<AxisPane> colList = panes(false);
+    const QVector<Band> rows = paneBands(rowList.at(paneIndexAt(pos.y(), true)), true);
+    const QVector<Band> cols = paneBands(colList.at(paneIndexAt(pos.x(), false)), false);
     qint32 row = rows.isEmpty() ? 0 : rows.last().index;
     for (const Band &band : rows) {
         if (pos.y() < band.pos + band.size) {
@@ -384,14 +283,22 @@ void SpreadsheetItem::updateScrollRanges()
     // scrollable content nor the space available to it.
     m_scrollHeight = qMax<qreal>(0, totalH - frozenHeightPx());
     m_scrollWidth = qMax<qreal>(0, totalW - frozenWidthPx());
-    m_scrollX = qBound<qreal>(0, m_scrollX, qMax<qreal>(0, m_scrollWidth - (viewportWidth() - frozenWidthPx())));
-    m_scrollY = qBound<qreal>(0, m_scrollY, qMax<qreal>(0, m_scrollHeight - (viewportHeight() - frozenHeightPx())));
+    m_scrollX = qBound<qreal>(0, m_scrollX, maxScroll(false));
+    m_scrollY = qBound<qreal>(0, m_scrollY, maxScroll(true));
     emit scrollChanged();
+}
+
+// How far the scrolling pane (the bottom / right one of a split) goes: the
+// content past the frozen lines less what the pane shows.
+qreal SpreadsheetItem::maxScroll(bool rows) const
+{
+    const AxisPane pane = panes(rows).last();
+    return qMax<qreal>(0, (rows ? m_scrollHeight : m_scrollWidth) - (pane.end - pane.start));
 }
 
 void SpreadsheetItem::setScrollX(qreal value)
 {
-    const qreal next = qBound<qreal>(0, value, qMax<qreal>(0, m_scrollWidth - (viewportWidth() - frozenWidthPx())));
+    const qreal next = qBound<qreal>(0, value, maxScroll(false));
     if (qFuzzyCompare(next + 1, m_scrollX + 1)) {
         return;
     }
@@ -405,7 +312,7 @@ void SpreadsheetItem::setScrollX(qreal value)
 
 void SpreadsheetItem::setScrollY(qreal value)
 {
-    const qreal next = qBound<qreal>(0, value, qMax<qreal>(0, m_scrollHeight - (viewportHeight() - frozenHeightPx())));
+    const qreal next = qBound<qreal>(0, value, maxScroll(true));
     if (qFuzzyCompare(next + 1, m_scrollY + 1)) {
         return;
     }
@@ -468,7 +375,7 @@ QRectF SpreadsheetItem::editorRect() const
 
 void SpreadsheetItem::startEditor()
 {
-    if (m_editing || m_document == nullptr) {
+    if (m_editing || m_document == nullptr || m_readOnly) {
         return;
     }
     m_editing = true;
@@ -479,7 +386,7 @@ void SpreadsheetItem::startEditor()
 
 void SpreadsheetItem::startEditorWith(const QString &text)
 {
-    if (m_document == nullptr) {
+    if (m_document == nullptr || m_readOnly) {
         return;
     }
     m_editing = true;

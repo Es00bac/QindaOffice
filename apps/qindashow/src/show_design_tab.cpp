@@ -10,6 +10,9 @@
 #include "show_master_view.h"
 #include "show_theme.h"
 
+#include "ooxml_package.h"
+#include "pptx_slides.h"
+
 #include <QUrl>
 
 namespace QindaOffice::Apps::Show {
@@ -248,6 +251,14 @@ bool ShowDesignTab::applyThemeFile(const QUrl &url)
 {
     const QString path = url.isLocalFile() ? url.toLocalFile() : url.toString();
     QString error;
+    // M82 (D-091): a template (.potx) or deck brings its masters and layouts,
+    // not only its theme (show_slide_layouts.h applies them); a .thmx is a
+    // theme alone.
+    if (const auto package = Ooxml::Package::load(path, &error); package && ShowModel::packageHasMasters(*package)) {
+        emit templateScopeRequested(url);
+        return true;
+    }
+    error.clear();
     const std::optional<ShowModel::ThemeSpec> theme = ShowModel::themeFromFile(path, &error);
     if (!theme) {
         m_host->showStatusMessage(tr("No theme in %1: %2").arg(path, error), 8000);

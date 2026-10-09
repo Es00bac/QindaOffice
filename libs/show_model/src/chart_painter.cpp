@@ -2,12 +2,15 @@
 // Charts for the renderer, drawn from the values the chart part caches
 // (c:numCache / c:strCache): column, bar, line, area (clustered, stacked,
 // percent-stacked), pie, doughnut and scatter, with a title, a value axis
-// with "nice" gridlines, category labels and a legend. An approximation of
-// what PowerPoint draws — the chart part itself travels untouched.
+// with "nice" gridlines, category labels and a legend; a combo chart's
+// plots together on the one value axis (M82: areas, then columns, then
+// lines on top). An approximation of what PowerPoint draws — the chart
+// part itself travels untouched.
 
 #include "render_parts.h"
 #include "text_painter.h"
 
+#include <QHash>
 #include <QLocale>
 #include <QPainter>
 #include <QtMath>
@@ -140,33 +143,65 @@ void paintPie(QPainter *painter, const QRectF &area, const ChartData &chart)
     }
 }
 
+// How one plot of the chart draws (a combo chart has several).
+struct PlotLook {
+    QString type;
+    bool stacked = false;
+    bool percent = false;
+    [[nodiscard]] bool barLike() const { return type == u"column" || type == u"bar"; }
+};
+
+PlotLook lookOf(const ChartData &chart, int plot)
+{
+    const ChartPlot kind = chart.plotAt(plot);
+    PlotLook look;
+    look.type = kind.type;
+    look.stacked = kind.grouping == u"stacked" || kind.grouping == u"percentStacked";
+    look.percent = kind.grouping == u"percentStacked";
+    return look;
+}
+
+// A series' value at a category as its plot draws it (percent-stacked:
+// its share of the category among its plot's series).
+qreal drawnValue(const ChartData &chart, int s, int c)
+{
+    const ChartSeries &series = chart.series.at(s);
+    const qreal v = valueAt(series, c);
+    if (!lookOf(chart, series.plot).percent) {
+        return v;
+    }
+    qreal sum = 0;
+    for (const ChartSeries &other : chart.series) {
+        sum += other.plot == series.plot ? std::abs(valueAt(other, c)) : 0.0;
+    }
+    return sum > 0 ? 100.0 * v / sum : 0;
+}
+
 void paintCategories(QPainter *painter, QRectF area, const ChartData &chart)
 {
     const bool horizontal = chart.type == u"bar";
-    const bool stacked = chart.grouping == u"stacked" || chart.grouping == u"percentStacked";
-    const bool percent = chart.grouping == u"percentStacked";
+    const bool percent = lookOf(chart, 0).percent && chart.plotCount() == 1;
     const int categories = categoryCount(chart);
     if (categories == 0) {
         return;
     }
-    // Value range.
+    // Value range: each plot's stacks, or each series on its own.
     qreal low = 0;
     qreal high = 0;
     for (int c = 0; c < categories; ++c) {
-        qreal positive = 0;
-        qreal negative = 0;
-        for (const ChartSeries &series : chart.series) {
-            const qreal v = valueAt(series, c);
-            if (stacked) {
-                (v >= 0 ? positive : negative) += v;
+        QHash<int, qreal> positive;
+        QHash<int, qreal> negative;
+        for (int s = 0; s < chart.series.size(); ++s) {
+            const int plot = chart.series.at(s).plot;
+            const qreal v = drawnValue(chart, s, c);
+            if (lookOf(chart, plot).stacked) {
+                (v >= 0 ? positive[plot] : negative[plot]) += v;
+                high = qMax(high, positive.value(plot));
+                low = qMin(low, negative.value(plot));
             } else {
                 high = qMax(high, v);
                 low = qMin(low, v);
             }
-        }
-        if (stacked) {
-            high = qMax(high, positive);
-            low = qMin(low, negative);
         }
     }
     if (percent) {
@@ -201,37 +236,65 @@ void paintCategories(QPainter *painter, QRectF area, const ChartData &chart)
         }
     }
     const qreal band = (horizontal ? plot.height() : plot.width()) / categories;
-    const int seriesCount = int(chart.series.size());
-    const bool barLike = chart.type == u"column" || chart.type == u"bar";
-    QList<qreal> positiveBase(categories, 0.0);
-    QList<qreal> negativeBase(categories, 0.0);
-    QList<QPolygonF> areaTops;
-    for (int s = 0; s < seriesCount; ++s) {
+    // The bars share each band: one slot per clustered bar series, one per
+    // stacked bar plot.
+    QList<int> slotOf(chart.series.size(), -1);
+    QHash<int, int> stackSlot;
+    int slotCount = 0;
+    for (int s = 0; s < chart.series.size(); ++s) {
+        const int plotIndex = chart.series.at(s).plot;
+        const PlotLook look = lookOf(chart, plotIndex);
+        if (!look.barLike()) {
+            continue;
+        }
+        if (look.stacked) {
+            if (!stackSlot.contains(plotIndex)) {
+                stackSlot.insert(plotIndex, slotCount++);
+            }
+            slotOf[s] = stackSlot.value(plotIndex);
+        } else {
+            slotOf[s] = slotCount++;
+        }
+    }
+    // Areas first, then bars, then lines over them.
+    QList<int> order;
+    for (const QStringView pass : {QStringView(u"area"), QStringView(u"bar"), QStringView(u"line")}) {
+        for (int s = 0; s < chart.series.size(); ++s) {
+            const PlotLook look = lookOf(chart, chart.series.at(s).plot);
+            const QStringView kind = look.barLike() ? u"bar" : (look.type == u"area" ? u"area" : u"line");
+            if (kind == pass) {
+                order.append(s);
+            }
+        }
+    }
+    QHash<int, QList<qreal>> positiveBase;
+    QHash<int, QList<qreal>> negativeBase;
+    QHash<int, QList<QPolygonF>> areaTops;
+    for (const int s : std::as_const(order)) {
         const ChartSeries &series = chart.series.at(s);
+        const PlotLook look = lookOf(chart, series.plot);
+        const bool stacked = look.stacked;
         const QColor color = seriesColor(chart, s);
+        QList<qreal> &positives = positiveBase[series.plot];
+        QList<qreal> &negatives = negativeBase[series.plot];
+        positives.resize(categories, 0.0);
+        negatives.resize(categories, 0.0);
         QPolygonF points;
         for (int c = 0; c < categories; ++c) {
-            qreal v = valueAt(series, c);
-            if (percent) {
-                qreal sum = 0;
-                for (const ChartSeries &other : chart.series) {
-                    sum += std::abs(valueAt(other, c));
-                }
-                v = sum > 0 ? 100.0 * v / sum : 0;
-            }
+            const qreal v = drawnValue(chart, s, c);
             qreal from = 0;
             qreal to = v;
             if (stacked) {
-                qreal &base = v >= 0 ? positiveBase[c] : negativeBase[c];
+                qreal &base = v >= 0 ? positives[c] : negatives[c];
                 from = base;
                 to = base + v;
                 base = to;
             }
             const qreal bandStart = (horizontal ? plot.top() : plot.left()) + c * band;
-            if (barLike) {
+            if (look.barLike()) {
                 const qreal gap = band * 0.6 / 2.5; // PowerPoint's 150 % gap width
-                const qreal width = stacked ? band - 2 * gap : (band - 2 * gap) / seriesCount;
-                const qreal offset = gap + (stacked ? 0 : s * width);
+                const qreal width = (band - 2 * gap) / qMax(1, slotCount);
+                const qreal offset = gap + slotOf.at(s) * width;
                 const qreal a = toPos(from);
                 const qreal b = toPos(to);
                 const QRectF bar = horizontal ? QRectF(QPointF(qMin(a, b), bandStart + offset), QSizeF(std::abs(b - a), width))
@@ -241,7 +304,7 @@ void paintCategories(QPainter *painter, QRectF area, const ChartData &chart)
                 points.append(horizontal ? QPointF(toPos(to), bandStart + band / 2) : QPointF(bandStart + band / 2, toPos(to)));
             }
         }
-        if (chart.type == u"line") {
+        if (!look.barLike() && look.type != u"area") {
             painter->setPen(QPen(color, 2.25, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
             painter->setBrush(Qt::NoBrush);
             painter->drawPolyline(points);
@@ -249,10 +312,11 @@ void paintCategories(QPainter *painter, QRectF area, const ChartData &chart)
             for (const QPointF &p : points) {
                 painter->drawEllipse(p, 2.5, 2.5);
             }
-        } else if (chart.type == u"area") {
+        } else if (look.type == u"area") {
+            QList<QPolygonF> &tops = areaTops[series.plot];
             QPolygonF shape = points;
-            if (stacked && !areaTops.isEmpty()) {
-                const QPolygonF &below = areaTops.last();
+            if (stacked && !tops.isEmpty()) {
+                const QPolygonF &below = tops.last();
                 for (qsizetype i = below.size() - 1; i >= 0; --i) {
                     shape.append(below.at(i));
                 }
@@ -263,7 +327,7 @@ void paintCategories(QPainter *painter, QRectF area, const ChartData &chart)
             painter->setPen(Qt::NoPen);
             painter->setBrush(color);
             painter->drawPolygon(shape);
-            areaTops.append(points);
+            tops.append(points);
         }
     }
     // Axis line and category labels.

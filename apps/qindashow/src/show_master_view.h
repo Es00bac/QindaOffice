@@ -105,6 +105,11 @@ public:
     void refreshCanvas();
     // A thumbnail of item `index` (the pane's items) in `size`.
     void renderItem(int index, QPainter *painter, const QSizeF &size) const;
+    // A master (`layoutId` empty) or layout of `deck` drawn in `size`, its
+    // placeholders framed — the master view's thumbnails and (M82) the New
+    // Slide gallery's.
+    static void renderTemplate(QPainter *painter, const ShowModel::Presentation &deck, const QString &masterId,
+                               const QString &layoutId, const QSizeF &size);
     // The Text Styles pane: row 0 = Title, rows 1–5 = Text levels 1–5;
     // `look` holds what changed (family, size, bold, italic, underline,
     // color, bullet, alignment, indent).

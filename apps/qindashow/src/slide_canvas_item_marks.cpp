@@ -2,8 +2,9 @@
 // The editor's own marks on the slide (M75, D-084; slide_canvas_item.h):
 // dashed placeholder frames in the Slide Master view, a speech bubble per
 // comment thread at what it is anchored to, and a play mark on audio and
-// video. The renderer never draws these: the show, the thumbnails, print
-// and PDF show the slide as it is.
+// video; M82 (D-091): an empty placeholder's frame and PowerPoint's prompt.
+// The renderer never draws these: the show, the thumbnails, print and PDF
+// show the slide as it is.
 
 #include "slide_canvas_item.h"
 
@@ -54,7 +55,82 @@ void paintPlayMark(QPainter *painter, const QRectF &rect)
     painter->fillPath(play, Qt::white);
 }
 
+// PowerPoint's prompt in an empty placeholder of `type` ("" = none: the
+// date, footer and slide number show nothing until they hold something).
+QString promptFor(const QString &type)
+{
+    if (type == u"title" || type == u"ctrTitle") {
+        return SlideCanvasItem::tr("Click to add title");
+    }
+    if (type == u"subTitle") {
+        return SlideCanvasItem::tr("Click to add subtitle");
+    }
+    if (type == u"pic") {
+        return SlideCanvasItem::tr("Picture placeholder");
+    }
+    if (type == u"dt" || type == u"ftr" || type == u"sldNum" || type == u"hdr") {
+        return {};
+    }
+    return SlideCanvasItem::tr("Click to add text");
+}
+
+bool emptyText(const ShowModel::Shape &shape)
+{
+    for (const ShowModel::TextParagraph &paragraph : shape.paragraphs) {
+        for (const ShowModel::TextRun &run : paragraph.runs) {
+            if (!run.text.isEmpty()) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+void paintPrompt(QPainter *painter, const ShowModel::Shape &shape, const ShowModel::TextRun *look)
+{
+    QString prompt = promptFor(shape.placeholder.type);
+    // A bulleted body's prompt wears its bullet, as PowerPoint's does.
+    if (!prompt.isEmpty() && !shape.paragraphs.isEmpty() && shape.paragraphs.first().bullet
+        && shape.paragraphs.first().autoNumber.isEmpty()) {
+        const QString mark = shape.paragraphs.first().bulletChar;
+        prompt = (mark.isEmpty() ? QStringLiteral("•") : mark) + QLatin1Char(' ') + prompt;
+    }
+    const QRectF rect = shape.rect.normalized();
+    QPen frame(kFrame, 0);
+    frame.setStyle(Qt::DashLine);
+    painter->setPen(frame);
+    painter->setBrush(Qt::NoBrush);
+    painter->drawRect(rect);
+    if (prompt.isEmpty()) {
+        return;
+    }
+    QFont font = painter->font();
+    if (look != nullptr && !look->fontFamily.isEmpty()) {
+        font.setFamily(look->fontFamily);
+    }
+    // Slide points are the canvas's units: the size goes in as pixels.
+    font.setPixelSize(qMax(4, qRound(look != nullptr ? look->pointSize : 18.0)));
+    font.setBold(look != nullptr && look->bold);
+    painter->setFont(font);
+    QColor ink = look != nullptr && look->color.isValid() ? look->color : QColor(Qt::black);
+    ink.setAlphaF(0.55);
+    painter->setPen(ink);
+    const ShowModel::TextBodyStyle &body = shape.textBody;
+    const QRectF inner = rect.adjusted(body.insetLeft, body.insetTop, -body.insetRight, -body.insetBottom);
+    const int vertical = body.anchor == ShowModel::TextAnchor::Middle ? Qt::AlignVCenter
+        : body.anchor == ShowModel::TextAnchor::Bottom                ? Qt::AlignBottom
+                                                                      : Qt::AlignTop;
+    const int alignment = shape.paragraphs.isEmpty() ? 0 : shape.paragraphs.first().alignment & Qt::AlignHorizontal_Mask;
+    painter->drawText(inner, (alignment != 0 ? alignment : Qt::AlignLeft) | vertical | Qt::TextWordWrap, prompt);
+}
+
 } // namespace
+
+void SlideCanvasItem::setPlaceholderLooks(QHash<QString, ShowModel::TextRun> looks)
+{
+    m_placeholderLooks = std::move(looks);
+    update();
+}
 
 void SlideCanvasItem::setTemplateMode(bool on)
 {
@@ -72,6 +148,12 @@ void SlideCanvasItem::paintMarks(QPainter *painter) const
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
     for (const ShowModel::Shape &shape : m_slide->shapes) {
+        // M82: an empty placeholder on a slide shows where to type.
+        if (!m_templateMode && shape.placeholder.isPlaceholder() && shape.id != m_textShapeId
+            && shape.kind == ShowModel::ShapeKind::TextBox && emptyText(shape)) {
+            const auto look = m_placeholderLooks.constFind(shape.id);
+            paintPrompt(painter, shape, look != m_placeholderLooks.constEnd() ? &look.value() : nullptr);
+        }
         if (m_templateMode && shape.placeholder.isPlaceholder()) {
             QPen frame(kFrame, 0);
             frame.setStyle(Qt::DashLine);

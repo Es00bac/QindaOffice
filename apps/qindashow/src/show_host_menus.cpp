@@ -8,6 +8,7 @@
 
 #include "show_arrange.h"
 #include "show_design_actions.h"
+#include "show_slide_layouts.h"
 #include "show_table_actions.h"
 #include "show_toolbox.h"
 #include "standard_actions.h"
@@ -70,6 +71,9 @@ void ShowHost::insertMenus()
 
     QList<MenuNode> slideItems{a(ActionId::kSlideNew), a(ActionId::kSlideDuplicate), a(ActionId::kSlideDelete),
                                MenuNode::separator()};
+    // M82 (D-091): New Slide on a layout, Layout, Reset, Reuse Slides.
+    slideItems += m_layouts->menuItems();
+    slideItems.append(MenuNode::separator());
     slideItems += m_arrange->slideMenuItems();
     slideItems.append(MenuNode::separator());
     slideItems += m_design->slideMenuItems();

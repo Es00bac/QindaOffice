@@ -17,8 +17,11 @@
 # themes, variants, a theme from a file, slide size, backgrounds), the
 # Slide Master view's model (tst_pptx_masters), sections and comments
 # (tst_pptx_review), audio and video (tst_pptx_media, with LibreOffice).
+# M82 (D-091): New Slide on the deck's layouts, Layout, Reset, Duplicate,
+# Reuse Slides and a template's masters (tst_pptx_slides, with LibreOffice).
 foreach(name IN ITEMS tst_show_model tst_fodp tst_pptx_read tst_pptx_write tst_pptx_tables tst_pptx_charts tst_show_effects
-                      tst_pptx_design tst_pptx_masters tst_pptx_review tst_pptx_media)
+                      tst_pptx_design tst_pptx_masters tst_pptx_review tst_pptx_media tst_pptx_slides
+                      tst_pptx_chart_combo)
     add_executable(${name} ${name}.cpp)
     target_link_libraries(${name} PRIVATE show_model office_ooxml Qt6::Test Qt6::Gui)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/tests)
@@ -29,3 +32,6 @@ foreach(name IN ITEMS tst_show_model tst_fodp tst_pptx_read tst_pptx_write tst_p
     set_tests_properties(${name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endforeach()
 target_link_libraries(tst_pptx_charts PRIVATE calc_io)
+# M82 (D-091): combo charts, multi-level categories and kind changes that
+# keep point colours and data labels, with their embedded workbooks.
+target_link_libraries(tst_pptx_chart_combo PRIVATE calc_io)

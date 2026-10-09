@@ -23,6 +23,7 @@
 #include "xlsx_rules.h"
 #include "xlsx_style.h"
 #include "xlsx_text.h"
+#include "xlsx_views.h"
 #include "xlsx_write_book.h"
 #include "xlsx_write_features.h"
 #include "xlsx_write_rules.h"
@@ -382,6 +383,7 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
             fillRulesPatch(wb, sheet, &dxfs, &lists, &patch, manifest->warnings);
         }
         fillSheetPatch(sheet, s, tables, &nextVmlBlock, &patch);
+        patch.customViewsXml = customSheetViewsXml(wb, s); // M82 (D-091)
         fillSheetFeatures(wb, sheet, &patch); // links, outline, protection, source (M66)
         fillWhatIfPatch(wb, s, &patch);       // scenarios and data tables (M78)
         if (manifest != nullptr) {
@@ -421,6 +423,8 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
             manifest->images.append(patch);
         }
         manifest->definedNames = definedNamesForFile(wb);
+        manifest->definedNames += customViewNames(wb); // M82 (D-091): the views' names
+        manifest->customWorkbookViewsXml = customWorkbookViewsXml(wb);
         manifest->dxfsXml = dxfs.xml(); // M78 (D-087)
         planPivotParts(wb, manifest); // M74 (D-083)
         manifest->source = wb.source;

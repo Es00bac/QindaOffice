@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "text_painter.h"
 
+#include <algorithm>
+
 #include <QImage>
 #include <QPainter>
 #include <QTextLayout>
@@ -228,6 +230,14 @@ std::vector<Block> layoutAll(const QList<TextParagraph> &paragraphs, qreal width
     for (const TextParagraph &paragraph : paragraphs) {
         const int level = qBound(0, paragraph.listLevel, 8);
         QString label;
+        // M82: an empty paragraph shows no bullet and takes no number, as in
+        // PowerPoint (a new slide's empty body placeholder showed a dot).
+        const bool empty = std::all_of(paragraph.runs.cbegin(), paragraph.runs.cend(),
+                                       [](const TextRun &run) { return run.text.isEmpty(); });
+        if (empty) {
+            blocks.push_back(layoutParagraph(paragraph, width, style, scale, reduction, label));
+            continue;
+        }
         if (paragraph.bullet && !paragraph.autoNumber.isEmpty()) {
             if (schemes[level] == paragraph.autoNumber && counters[level] > 0) {
                 ++counters[level];

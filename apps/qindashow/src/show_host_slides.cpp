@@ -12,6 +12,7 @@
 #include "show_commands.h"
 #include "show_design_actions.h"
 #include "sections.h"
+#include "show_slide_layouts.h"
 
 #include <QUndoStack>
 #include <QUrl>
@@ -124,6 +125,12 @@ void ShowHost::newDeck()
 
 void ShowHost::addSlide()
 {
+    // M82 (D-091): a deck with layouts of its own takes the next one
+    // PowerPoint would pick, after the current slide.
+    if (m_layouts->deckHasLayouts()) {
+        m_layouts->newSlide();
+        return;
+    }
     ShowModel::Presentation *deck = m_document->presentation();
     const QStringList layouts = layoutNames();
     const QString layout = m_currentRow >= 0 ? layouts.at(layoutIndex()) : QStringLiteral("title+content");
@@ -137,6 +144,11 @@ void ShowHost::addSlide()
 
 void ShowHost::duplicateSlide()
 {
+    // M82: a PowerPoint deck's copy gets a part of its own (show_model's
+    // withDuplicatedSlide); QindaShow's own deck copies the model slide.
+    if (m_layouts->duplicateSlide()) {
+        return;
+    }
     ShowModel::Presentation *deck = m_document->presentation();
     if (m_currentRow < 0 || m_currentRow >= deck->slides.size()) {
         return;

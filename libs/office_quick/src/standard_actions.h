@@ -249,6 +249,11 @@ inline const char kCalcCondFormatAboveAverage[] = "calcCondFormatAboveAverageAct
 inline const char kCalcCondFormatDuplicates[] = "calcCondFormatDuplicatesAction";
 inline const char kCalcCondFormatClearSelection[] = "calcCondFormatClearSelectionAction";
 inline const char kCalcCondFormatClearSheet[] = "calcCondFormatClearSheetAction";
+// M82 (D-091): View ▸ Window's Split and New Window, View ▸ Workbook Views'
+// Custom Views.
+inline const char kCalcViewSplit[] = "calcViewSplitAction";
+inline const char kCalcViewNewWindow[] = "calcViewNewWindowAction";
+inline const char kCalcCustomViews[] = "calcCustomViewsAction";
 
 // QindaShow commands.
 inline const char kShowFillColor[] = "showFillColorAction";

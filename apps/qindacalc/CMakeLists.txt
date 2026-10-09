@@ -43,6 +43,10 @@ set(qindacalc_qml
     qml/ScenarioEditDialog.qml
     qml/ScenarioManagerDialog.qml
     qml/TextToColumnsDialog.qml
+    # M82 (D-091): New Window and Custom Views.
+    qml/CalcViewWindows.qml
+    qml/CustomViewAddDialog.qml
+    qml/CustomViewsDialog.qml
 )
 foreach(qml_file IN LISTS qindacalc_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -103,6 +107,15 @@ qt_add_qml_module(qindacalc_app
         src/calc_print.cpp src/calc_print.h
         src/calc_recovery_m78.cpp src/calc_recovery_m78.h
         src/spreadsheet_item_overlay.cpp
+        # M82 (D-091): Excel's text overflow on screen and paper, panes and Split
+        src/calc_text_overflow.cpp src/calc_text_overflow.h
+        src/calc_print_cells.cpp src/calc_print_internal.h
+        src/spreadsheet_item_cells.cpp
+        src/spreadsheet_item_panes.cpp
+        src/calc_host_views.cpp
+        # M82 (D-091): Custom Views
+        src/calc_recovery_views.cpp src/calc_recovery_views.h
+        src/spreadsheet_item_views.cpp
     QML_FILES ${qindacalc_qml}
 )
 target_include_directories(qindacalc_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

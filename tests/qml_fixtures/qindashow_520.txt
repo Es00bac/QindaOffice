@@ -37,16 +37,37 @@ QQuickRootItem#ShowWindow
                   DockTabStrip#dockTabStrip_slide [hidden]
                   QQuickItem#dockContent_slide
                     QQuickItem#dockPanelContent_slide
-                      Box#propertyEditor
-                        ComboBox#slideTransitionCombo
-                          QQuickText#comboDisplayText
-                        QQuickRectangle#boxFocusRing [hidden]
-                      Box#propertyEditor
-                        ComboBox#slideLayoutCombo
-                          QQuickText#comboDisplayText
-                        QQuickRectangle#boxFocusRing [hidden]
-                      Caption#propertyLabel
-                      Caption#propertyLabel
+                      SlidePanel#slidePanel
+                        Box#propertyEditor
+                          ComboBox#slideTransitionCombo
+                            QQuickText#comboDisplayText
+                          QQuickRectangle#boxFocusRing [hidden]
+                        Caption#propertyLabel
+                        LayoutGallery#layoutGallery
+                          Card#layoutCard_1
+                            IconButton#layoutNewSlide_1
+                            QQuickRectangle#boxFocusRing [hidden]
+                            SlideThumbItem#layoutThumb_1
+                          Card#layoutCard_2
+                            IconButton#layoutNewSlide_2
+                            QQuickRectangle#boxFocusRing [hidden]
+                            SlideThumbItem#layoutThumb_2
+                          Card#layoutCard_3
+                            IconButton#layoutNewSlide_3
+                            QQuickRectangle#boxFocusRing [hidden]
+                            SlideThumbItem#layoutThumb_3
+                          Card#layoutCard_4
+                            IconButton#layoutNewSlide_4
+                            QQuickRectangle#boxFocusRing [hidden]
+                            SlideThumbItem#layoutThumb_4
+                          Card#layoutCard_5
+                            IconButton#layoutNewSlide_5
+                            QQuickRectangle#boxFocusRing [hidden]
+                            SlideThumbItem#layoutThumb_5
+                          Card#layoutCard_6
+                            IconButton#layoutNewSlide_6
+                            QQuickRectangle#boxFocusRing [hidden]
+                            SlideThumbItem#layoutThumb_6
                   QQuickRectangle#boxFocusRing [hidden]
                 Box#panelHeader
                   IconButton#dockPlacement_slide
@@ -344,8 +365,20 @@ QQuickRootItem#ShowWindow
             RibbonGroup#ribbonGroup_slides
               Overline#ribbonGroupCaption
               QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_layoutMenu
+                RibbonButton#ribbonAction_layoutMenu
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_sectionMenu
                 RibbonButton#ribbonAction_sectionMenu
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_showResetSlideAction
+                RibbonButton#ribbonAction_showResetSlideAction
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
@@ -377,7 +410,7 @@ QQuickRootItem#ShowWindow
               RibbonSlot#ribbonItem_slideNewAction
                 RibbonButton#ribbonAction_slideNewAction
                   Icon#ribbonButtonIcon [hidden]
-                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickItem#ribbonButtonMenuArea
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
             RibbonGroup#ribbonGroup_text

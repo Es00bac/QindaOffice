@@ -118,6 +118,9 @@ add_library(calc_engine STATIC
     # conditional-format and validation kind, and the moves of all of it.
     src/cond_format_internal.h
     src/cond_format_stats.cpp
+    # M82 (D-091): Excel's Custom Views
+    src/custom_view.cpp
+    src/custom_view.h
     src/data_table.cpp
     src/data_table.h
     src/data_tools.cpp

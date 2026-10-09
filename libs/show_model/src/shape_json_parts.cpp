@@ -413,16 +413,32 @@ QJsonObject chart(const ChartData &c)
                                   {QStringLiteral("values"), reals(s.values)},
                                   {QStringLiteral("xValues"), reals(s.xValues)},
                                   {QStringLiteral("color"), color(s.color)},
-                                  {QStringLiteral("pointColors"), points}});
+                                  {QStringLiteral("pointColors"), points},
+                                  {QStringLiteral("plot"), s.plot},
+                                  {QStringLiteral("sourceIdx"), s.sourceIdx}});
     }
     QJsonArray palette;
     for (const QColor &p : c.palette) {
         palette.append(color(p));
     }
+    // M82 (D-091): the plots, the category levels and the categories' source.
+    QJsonArray plots;
+    for (const ChartPlot &p : c.plots) {
+        plots.append(QJsonArray{p.type, p.grouping});
+    }
+    QJsonArray levels;
+    for (const QStringList &level : c.categoryLevels) {
+        levels.append(QJsonArray::fromStringList(level));
+    }
+    QJsonArray sources;
+    for (const int source : c.categorySource) {
+        sources.append(source);
+    }
     return {{QStringLiteral("type"), c.type},         {QStringLiteral("grouping"), c.grouping},
             {QStringLiteral("title"), c.title},       {QStringLiteral("legend"), c.legend},
             {QStringLiteral("legendPosition"), c.legendPosition}, {QStringLiteral("series"), series},
-            {QStringLiteral("palette"), palette}};
+            {QStringLiteral("palette"), palette},     {QStringLiteral("plots"), plots},
+            {QStringLiteral("categoryLevels"), levels}, {QStringLiteral("categorySource"), sources}};
 }
 
 ChartData chart(const QJsonObject &o)
@@ -446,10 +462,26 @@ ChartData chart(const QJsonObject &o)
         for (const QJsonValue &p : so.value(QStringLiteral("pointColors")).toArray()) {
             s.pointColors.append(color(p));
         }
+        s.plot = so.value(QStringLiteral("plot")).toInt(0);
+        s.sourceIdx = so.value(QStringLiteral("sourceIdx")).toInt(-1);
         c.series.append(s);
     }
     for (const QJsonValue &p : o.value(QStringLiteral("palette")).toArray()) {
         c.palette.append(color(p));
+    }
+    for (const QJsonValue &p : o.value(QStringLiteral("plots")).toArray()) {
+        const QJsonArray pair = p.toArray();
+        c.plots.append(ChartPlot{pair.at(0).toString(), pair.at(1).toString()});
+    }
+    for (const QJsonValue &level : o.value(QStringLiteral("categoryLevels")).toArray()) {
+        QStringList labels;
+        for (const QJsonValue &label : level.toArray()) {
+            labels.append(label.toString());
+        }
+        c.categoryLevels.append(labels);
+    }
+    for (const QJsonValue &source : o.value(QStringLiteral("categorySource")).toArray()) {
+        c.categorySource.append(source.toInt(-1));
     }
     return c;
 }

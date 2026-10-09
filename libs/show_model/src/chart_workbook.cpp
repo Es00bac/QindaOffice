@@ -107,14 +107,15 @@ QString cellText(Cell cell)
 }
 
 // The block a table of data occupies: header row and category column
-// included.
+// (all the category levels) included.
 Calc::CellRange blockOf(const Layout &layout, const ChartEdit::ChartTable &table)
 {
     const int categories = int(qMax<qsizetype>(1, table.categories.size()));
     const int series = int(qMax<qsizetype>(1, table.series.size()));
     const Cell last = layout.valueCell(series - 1, categories - 1);
-    const int top = qMin(layout.headerRow, layout.firstRow);
-    const int left = qMin(layout.categoryColumn, layout.firstSeriesColumn);
+    const int outer = layout.levels - 1;
+    const int top = qMin(layout.seriesInRows ? layout.headerRow - outer : layout.headerRow, layout.firstRow);
+    const int left = qMin(layout.seriesInRows ? layout.categoryColumn : layout.categoryColumn - outer, layout.firstSeriesColumn);
     return {{qMax(0, top), qMax(0, left)}, {last.row, last.column}};
 }
 
@@ -131,6 +132,12 @@ QByteArray fail(QString *error, const QString &message)
 Cell Layout::categoryCell(int category) const
 {
     return seriesInRows ? Cell{headerRow, firstSeriesColumn + category} : Cell{firstRow + category, categoryColumn};
+}
+
+Cell Layout::levelCell(int level, int category) const
+{
+    return seriesInRows ? Cell{headerRow - level, firstSeriesColumn + category}
+                        : Cell{firstRow + category, categoryColumn - level};
 }
 
 Cell Layout::nameCell(int series) const
@@ -157,7 +164,13 @@ Layout layoutFrom(const QString &nameFormula, const QString &categoryFormula, co
         layout.sheet = values.sheet;
     }
     bool inRows = values.horizontal();
-    if (categories.ok && (categories.vertical() || categories.horizontal())) {
+    // M82: multi-level categories span several columns (or rows) — the
+    // values say which way the series run.
+    const bool levelled = categories.ok && categories.first.row != categories.last.row
+        && categories.first.column != categories.last.column;
+    if (levelled) {
+        inRows = values.horizontal();
+    } else if (categories.ok && (categories.vertical() || categories.horizontal())) {
         inRows = categories.horizontal();
     } else if (categories.ok) {
         inRows = categories.first.column == values.first.column; // one category: same column → across
@@ -166,13 +179,15 @@ Layout layoutFrom(const QString &nameFormula, const QString &categoryFormula, co
     if (!inRows) {
         layout.firstRow = values.first.row;
         layout.firstSeriesColumn = values.first.column;
-        layout.categoryColumn = categories.ok ? categories.first.column : qMax(0, values.first.column - 1);
+        layout.categoryColumn = categories.ok ? categories.last.column : qMax(0, values.first.column - 1);
         layout.headerRow = name.ok ? name.first.row : values.first.row - 1;
+        layout.levels = levelled ? categories.last.column - categories.first.column + 1 : 1;
     } else {
         layout.firstRow = values.first.row;
         layout.firstSeriesColumn = values.first.column;
-        layout.headerRow = categories.ok ? categories.first.row : qMax(0, values.first.row - 1);
+        layout.headerRow = categories.ok ? categories.last.row : qMax(0, values.first.row - 1);
         layout.categoryColumn = name.ok ? name.first.column : values.first.column - 1;
+        layout.levels = levelled ? categories.last.row - categories.first.row + 1 : 1;
     }
     return layout;
 }
@@ -226,6 +241,9 @@ QByteArray write(const QByteArray &source, const ChartData &chart, const ChartDa
     for (int k = 0; k < now.categories.size(); ++k) {
         const qreal number = ChartEdit::parseValue(now.categories.at(k));
         put(layout.categoryCell(k), numericCategories && !std::isnan(number) ? Calc::Value(double(number)) : text(now.categories.at(k)));
+        for (int level = 1; level < layout.levels; ++level) {
+            put(layout.levelCell(level, k), text(chart.categoryLevels.value(level - 1).value(k))); // M82
+        }
     }
     for (int s = 0; s < now.series.size(); ++s) {
         put(layout.nameCell(s), text(now.series.at(s)));
@@ -243,6 +261,9 @@ QByteArray write(const QByteArray &source, const ChartData &chart, const ChartDa
     };
     for (int k = 0; k < was.categories.size(); ++k) {
         clear(layout.categoryCell(k));
+        for (int level = 1; level < layout.levels; ++level) {
+            clear(layout.levelCell(level, k));
+        }
     }
     for (int s = 0; s < was.series.size(); ++s) {
         clear(layout.nameCell(s));

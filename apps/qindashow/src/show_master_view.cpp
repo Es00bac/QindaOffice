@@ -265,12 +265,17 @@ void ShowMasterView::renderItem(int index, QPainter *painter, const QSizeF &size
     if (index < 0 || index >= all.size()) {
         return;
     }
-    const ShowModel::Presentation *deck = m_host->showDocument()->presentation();
     const Item &item = all.at(index);
-    const ShowModel::Slide slide = ShowModel::templateSlide(*deck, item.masterId, item.layoutId);
+    renderTemplate(painter, *m_host->showDocument()->presentation(), item.masterId, item.layoutId, size);
+}
+
+void ShowMasterView::renderTemplate(QPainter *painter, const ShowModel::Presentation &deck, const QString &masterId,
+                                    const QString &layoutId, const QSizeF &size)
+{
+    const ShowModel::Slide slide = ShowModel::templateSlide(deck, masterId, layoutId);
     painter->save();
-    painter->scale(size.width() / deck->slideSize.width(), size.height() / deck->slideSize.height());
-    ShowModel::renderSlide(painter, slide, deck->slideSize, backdropOf(*deck, item.masterId, item.layoutId));
+    painter->scale(size.width() / deck.slideSize.width(), size.height() / deck.slideSize.height());
+    ShowModel::renderSlide(painter, slide, deck.slideSize, backdropOf(deck, masterId, layoutId));
     // Placeholders show their frames, as in PowerPoint's master view.
     QPen frame(QColor(140, 140, 140), 0);
     frame.setStyle(Qt::DashLine);

@@ -38,10 +38,19 @@ class SlideThumbItem : public QQuickPaintedItem {
     // M75: ≥ 0 paints item `templateIndex` of the Slide Master view (the
     // master or a layout, MasterPane.qml) instead of a slide.
     Q_PROPERTY(int templateIndex READ templateIndex WRITE setTemplateIndex NOTIFY changed)
+    // M82: ≥ 0 paints entry `galleryIndex` of the New Slide gallery (a
+    // layout of the deck); `reuseIndex` ≥ 0 paints that slide of the deck
+    // Reuse Slides opened (show_slide_layouts.h).
+    Q_PROPERTY(int galleryIndex READ galleryIndex WRITE setGalleryIndex NOTIFY changed)
+    Q_PROPERTY(int reuseIndex READ reuseIndex WRITE setReuseIndex NOTIFY changed)
 public:
     explicit SlideThumbItem(QQuickItem *parent = nullptr);
     [[nodiscard]] int templateIndex() const { return m_templateIndex; }
     void setTemplateIndex(int index);
+    [[nodiscard]] int galleryIndex() const { return m_galleryIndex; }
+    void setGalleryIndex(int index);
+    [[nodiscard]] int reuseIndex() const { return m_reuseIndex; }
+    void setReuseIndex(int index);
     [[nodiscard]] ShowHost *host() const { return m_host; }
     void setHost(ShowHost *host);
     [[nodiscard]] int slideIndex() const { return m_slideIndex; }
@@ -58,6 +67,8 @@ private:
     int m_slideIndex = -1;
     int m_revision = 0;
     int m_templateIndex = -1;
+    int m_galleryIndex = -1;
+    int m_reuseIndex = -1;
 };
 
 class SlideFrameItem : public QQuickPaintedItem {

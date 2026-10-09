@@ -4,29 +4,28 @@ import QindaTK as Tk
 import QindaOffice.Show
 
 // The current slide's transition and layout (its speaker notes are in the
-// notes pane under the slide since M67, NotesPane.qml).
-Tk.Flex {
+// notes pane under the slide since M67, NotesPane.qml). M82 (D-091): the
+// layout is chosen from the deck's own layouts, shown as thumbnails
+// (LayoutGallery.qml) — the six slide kinds for a deck without layouts.
+Tk.Scroll {
     id: panel
     required property ShowHost showHost
-    direction: Tk.Flex.Column
-    gap: Tk.Theme.space.sm
-    padding: Tk.Theme.space.sm
-    Tk.PropertyRow {
-        label: qsTr("Transition")
-        Tk.ComboBox {
-            objectName: "slideTransitionCombo"
-            model: panel.showHost.transitionNames
-            currentIndex: panel.showHost.transitionIndex
-            onActivated: function(index) { panel.showHost.transitionIndex = index }
+    objectName: "slidePanel"
+    Tk.Flex {
+        width: panel.width
+        direction: Tk.Flex.Column
+        gap: Tk.Theme.space.sm
+        padding: Tk.Theme.space.sm
+        Tk.PropertyRow {
+            label: qsTr("Transition")
+            Tk.ComboBox {
+                objectName: "slideTransitionCombo"
+                model: panel.showHost.transitionNames
+                currentIndex: panel.showHost.transitionIndex
+                onActivated: function(index) { panel.showHost.transitionIndex = index }
+            }
         }
-    }
-    Tk.PropertyRow {
-        label: qsTr("Layout")
-        Tk.ComboBox {
-            objectName: "slideLayoutCombo"
-            model: panel.showHost.layoutNames
-            currentIndex: panel.showHost.layoutIndex
-            onActivated: function(index) { panel.showHost.layoutIndex = index }
-        }
+        Tk.Label { text: qsTr("Layout") }
+        LayoutGallery { showHost: panel.showHost }
     }
 }

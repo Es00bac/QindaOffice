@@ -50,6 +50,7 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
         ss.scenarios = sheet.scenarios();
         ss.dataTables = sheet.dataTables();
         ss.keptRules = sheet.keptRules();
+        ss.customViews = sheet.customViews();
         snap.sheets.append(ss);
     }
     // The style table is indexed by position; copy through the public
@@ -70,6 +71,7 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
     snap.images = workbook.images;
     snap.protection = workbook.protection;
     snap.pivotCaches = workbook.pivotCaches;
+    snap.customViews = workbook.customViews;
     return snap;
 }
 
@@ -116,6 +118,7 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
         sheet.setScenarios(ss.scenarios);
         sheet.setDataTables(ss.dataTables);
         sheet.setKeptRules(ss.keptRules);
+        sheet.setCustomViews(ss.customViews);
     }
     for (const CalcEng::CellStyle &style : snapshot.styles) {
         fresh.addStyle(style);
@@ -133,6 +136,7 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
     fresh.images = snapshot.images;
     fresh.protection = snapshot.protection;
     fresh.pivotCaches = snapshot.pivotCaches;
+    fresh.customViews = snapshot.customViews;
 
     // Re-register the dependency index from the restored ASTs and recalc
     // everything once (restores volatile and cycle-detected state).

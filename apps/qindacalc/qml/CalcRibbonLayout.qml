@@ -202,11 +202,13 @@ QtObject {
         StandardRibbon.viewTab([
             { id: "workbookViews", label: qsTr("Workbook Views"), items: [
                 { action: "calcViewNormalAction", size: "large" },
-                { action: "calcViewPageBreakPreviewAction", size: "large" }] },
+                { action: "calcViewPageBreakPreviewAction", size: "large" },
+                { action: "calcCustomViewsAction", size: "large", label: qsTr("Custom Views") }] },
             { id: "freeze", label: qsTr("Window"), items: [
                 { id: "freezeMenu", action: "calcFreezePanesAction", split: true, size: "large", iconName: "snowflake",
                   label: qsTr("Freeze Panes"),
-                  menu: ["calcFreezePanesAction", "calcFreezeTopRowAction", "calcFreezeFirstColumnAction"] }] },
+                  menu: ["calcFreezePanesAction", "calcFreezeTopRowAction", "calcFreezeFirstColumnAction"] },
+                "calcViewSplitAction", "calcViewNewWindowAction"] },
             StandardRibbon.assistantGroup([])
         ]),
         // ---- PivotTables (M74, D-083): Excel's two contextual tabs ----

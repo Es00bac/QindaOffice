@@ -58,6 +58,7 @@ CalcHost::CalcHost()
     createWhatIfActions();     // Goal Seek, scenarios, data tables (M78)
     createDataToolActions();   // Text to Columns, Flash Fill, … (M78)
     createCondFormatActions(); // every conditional-format command (M78)
+    createViewActions();       // Split, New Window, Custom Views (M82)
     createAssistant();
     insertMenus();
     insertFeatureMenus();
@@ -65,6 +66,7 @@ CalcHost::CalcHost()
     insertPivotMenus();
     insertPageLayoutMenus();
     insertDataToolMenus();
+    insertViewMenus();
     wireEditCommands();
     // Undo of a sheet insert/delete (or a load) changes the sheet list.
     connect(m_document, &SpreadsheetDocument::structureChanged, this, [this] {
@@ -174,6 +176,8 @@ void CalcHost::wireGrid()
         emit filterMenuRequested(column, values, allowed, x, y);
     });
     connect(m_grid, &SpreadsheetItem::zoomChanged, this, [this] { updateSelectionStatus(); });
+    // M82: a split bar dragged away (or a sheet with its own split shown).
+    connect(m_grid, &SpreadsheetItem::splitChanged, this, [this] { syncViewsFromCursor(); });
     // M66 (D-075): Ctrl+click follows a link; the outline gutter's buttons.
     connect(m_grid, &SpreadsheetItem::linkActivated, this, [this](int row, int col) {
         static_cast<void>(openLinkAt(row, col));
@@ -196,6 +200,7 @@ void CalcHost::syncFromCursor()
     syncPivotFromCursor();
     syncPageLayoutFromCursor(); // M78
     syncDataToolsFromCursor();  // M78
+    syncViewsFromCursor();      // M82
 }
 
 void CalcHost::commitInput(const CellAddr &addr, const QString &input)

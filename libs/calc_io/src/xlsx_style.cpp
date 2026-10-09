@@ -89,6 +89,9 @@ void readAlignmentInto(const QXlsx::Format &format, CellStyle *style)
     case QXlsx::Format::AlignRight:
         style->alignment = 2;
         break;
+    case QXlsx::Format::AlignHFill:
+        style->alignment = 3; // Excel's Fill: the text repeated, never spilled (M82, D-091)
+        break;
     default:
         style->alignment = 0;
         break;
@@ -280,6 +283,9 @@ QXlsx::Format formatFromStyle(const CellStyle &style)
         break;
     case 2:
         format.setHorizontalAlignment(QXlsx::Format::AlignRight);
+        break;
+    case 3:
+        format.setHorizontalAlignment(QXlsx::Format::AlignHFill);
         break;
     default:
         break;

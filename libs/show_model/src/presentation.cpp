@@ -54,7 +54,15 @@ bool ChartSeries::operator==(const ChartSeries &other) const
         return true;
     };
     return name == other.name && categories == other.categories && sameValues(values, other.values)
-        && sameValues(xValues, other.xValues) && color == other.color && pointColors == other.pointColors;
+        && sameValues(xValues, other.xValues) && color == other.color && pointColors == other.pointColors
+        && plot == other.plot;
+}
+
+bool ChartData::operator==(const ChartData &other) const
+{
+    return type == other.type && grouping == other.grouping && title == other.title && legend == other.legend
+        && legendPosition == other.legendPosition && series == other.series && palette == other.palette
+        && plots == other.plots && categoryLevels == other.categoryLevels;
 }
 
 namespace {

@@ -36,6 +36,8 @@ OfficeWindow {
         colorIds: window.showHost.design.colorIds
         fontIds: window.showHost.design.fontIds
         effectIds: window.showHost.design.effectIds
+        newSlideIds: window.showHost.layouts.newSlideIds
+        layoutIds: window.showHost.layouts.layoutIds
     }
     ribbonTabs: ribbonLayout.tabs
     ribbonContexts: (shapeContext.enabled ? ["shape"] : []).concat(tableContext.enabled ? ["table"] : [])
@@ -272,6 +274,7 @@ OfficeWindow {
         function onCustomSizeRequested(width, height) { slideSizeDialog.load(width, height); slideSizeDialog.open() }
         function onScaleChoiceRequested(width, height) { scaleChoice.size = Qt.size(width, height); scaleChoice.open() }
         function onThemeFileRequested() { themeDialog.open() }
+        function onTemplateScopeRequested(url) { templateScope.url = url; templateScope.open() }
         function onBackgroundPaneRequested(visible) { window.setPanel("formatBackground", visible) }
     }
     Connections {
@@ -290,6 +293,46 @@ OfficeWindow {
                 if (tabBefore.length > 0) Qt.callLater(function(tab) { window.ribbon.activateTab(tab) }, tabBefore)
             }
         }
+    }
+    // M82 (D-091): Reuse Slides, and a template's masters for all or one slide.
+    Connections {
+        target: window.showHost.layouts
+        // AGENT-GUARD: Tk.Ribbon goes back to its first tab whenever its tab
+        // list changes (ensureCurrent compares the new tabs with a stale
+        // visibleTabs — a QindaTK gap); the New Slide and Layout menus change
+        // that list when the deck's layouts do, so the tab is put back.
+        property string keptTab: ""
+        function onIdsAboutToChange() { if (keptTab.length === 0) keptTab = window.ribbon.currentTabId }
+        function onIdsChanged() {
+            // At once when the ribbon has settled (anything that reads the
+            // tab next must see it), else once it has.
+            const tab = keptTab
+            if (tab.length === 0 || window.ribbon.currentTabId === tab || window.ribbon.activateTab(tab)) {
+                keptTab = ""
+                return
+            }
+            Qt.callLater(function() {
+                if (window.ribbon.currentTabId !== tab) window.ribbon.activateTab(tab)
+                keptTab = ""
+            })
+        }
+        function onReuseFileRequested() { reuseFileDialog.open() }
+        function onReuseDialogRequested() { reuseDialog.open() }
+    }
+    Dialogs.FileDialog {
+        id: reuseFileDialog; title: qsTr("Reuse Slides"); fileMode: Dialogs.FileDialog.OpenFile
+        nameFilters: [qsTr("PowerPoint Presentations (*.pptx *.pptm *.potx *.ppsx)"), qsTr("All files (*)")]
+        onAccepted: window.showHost.layouts.openReuseFile(selectedFile)
+    }
+    ReuseSlidesDialog { id: reuseDialog; showHost: window.showHost }
+    Tk.MessageDialog {
+        id: templateScope; objectName: "templateScopeDialog"
+        property url url
+        title: qsTr("Browse for Themes"); variant: "question"
+        text: qsTr("This file brings its slide masters and layouts. Apply its design to every slide, or only to the selected slide?")
+        primaryText: qsTr("Apply to All Slides"); tertiaryText: qsTr("Apply to Selected Slide"); secondaryText: qsTr("Cancel")
+        onAccepted: window.showHost.layouts.applyTemplate(url, true)
+        onTertiary: { window.showHost.layouts.applyTemplate(url, false); close() }
     }
     Connections {
         target: window.showHost.sections

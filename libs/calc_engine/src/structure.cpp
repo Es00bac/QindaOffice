@@ -389,6 +389,7 @@ void moveSheetContents(Sheet &sheet, const StructureEdit &edit)
     sheet.setTables(std::move(tables));
     sheet.setComments(std::move(comments));
     moveSheetPrintAndKept(sheet, edit); // print area, titles, breaks, kept rules (M78)
+    moveCustomViews(sheet, edit);       // the Custom Views' parts (M82)
 }
 
 } // namespace

@@ -38,17 +38,32 @@ void keepAppState(const std::vector<Shape> *beforeChildren, const QList<Shape> *
 
 Presentation readBack(const Presentation &deck, const Ooxml::PackageWriter &written, QString *error)
 {
+    QList<int> same;
+    for (int i = 0; i < deck.slides.size(); ++i) {
+        same.append(i);
+    }
+    return readBackEdited(deck, written, same, error);
+}
+
+} // namespace
+
+Presentation readBackEdited(const Presentation &deck, const Ooxml::PackageWriter &written, const QList<int> &fromDeck,
+                            QString *error)
+{
     QString problem;
     const std::shared_ptr<const Ooxml::Package> package = Ooxml::Package::fromEntries(written.entries(), &problem);
     Presentation fresh = package ? readPptx(package, &problem) : Presentation();
-    if (!problem.isEmpty() || fresh.slides.size() != deck.slides.size()) {
+    if (!problem.isEmpty() || fresh.slides.size() != fromDeck.size()) {
         if (error != nullptr) {
             *error = problem.isEmpty() ? QStringLiteral("the deck did not read back") : problem;
         }
         return deck;
     }
-    for (qsizetype i = 0; i < deck.slides.size(); ++i) {
-        const Slide &was = deck.slides.at(i);
+    for (qsizetype i = 0; i < fromDeck.size(); ++i) {
+        if (fromDeck.at(i) < 0 || fromDeck.at(i) >= deck.slides.size()) {
+            continue; // a slide the edit made
+        }
+        const Slide &was = deck.slides.at(fromDeck.at(i));
         Slide &now = fresh.slides[i];
         keepAppState(nullptr, &was.shapes, nullptr, &now.shapes);
         if (now.title.isEmpty()) {
@@ -58,8 +73,6 @@ Presentation readBack(const Presentation &deck, const Ooxml::PackageWriter &writ
     fresh.title = deck.title;
     return fresh;
 }
-
-} // namespace
 
 Presentation reresolved(const Presentation &deck, QString *error)
 {

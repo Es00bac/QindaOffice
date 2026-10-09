@@ -6,6 +6,7 @@
 #include "calc_recovery_features.h"
 #include "calc_recovery_pivots.h"
 #include "calc_recovery_rules.h"
+#include "calc_recovery_views.h"
 
 #include "eval.h"
 #include "parser.h"
@@ -274,6 +275,7 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
     root.insert(QStringLiteral("source"), sourceToJson(snapshot.source));
     root.insert(QStringLiteral("protection"), workbookProtectionToJson(snapshot.protection));
     root.insert(QStringLiteral("pivotCaches"), pivotCachesToJson(snapshot.pivotCaches)); // M74
+    root.insert(QStringLiteral("customViews"), customViewSpecsToJson(snapshot.customViews)); // M82
 
     QJsonArray charts;
     for (const CalcEng::ChartSpec &chart : snapshot.charts) {
@@ -370,6 +372,7 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
         out.insert(QStringLiteral("scenarios"), scenariosToJson(sheet.scenarios));
         out.insert(QStringLiteral("dataTables"), dataTablesToJson(sheet.dataTables));
         out.insert(QStringLiteral("keptRules"), keptRulesToJson(sheet.keptRules));
+        out.insert(QStringLiteral("customViews"), sheetCustomViewsToJson(sheet.customViews)); // M82
         sheets.append(out);
     }
     root.insert(QStringLiteral("sheets"), sheets);
@@ -419,6 +422,7 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
     snapshot.source = sourceFromJson(root.value(QStringLiteral("source")).toObject());
     snapshot.protection = workbookProtectionFromJson(root.value(QStringLiteral("protection")).toObject());
     snapshot.pivotCaches = pivotCachesFromJson(root.value(QStringLiteral("pivotCaches")).toArray()); // M74
+    snapshot.customViews = customViewSpecsFromJson(root.value(QStringLiteral("customViews")).toArray()); // M82
     for (const QJsonValue &value : root.value(QStringLiteral("charts")).toArray()) {
         snapshot.charts.append(chartFromJson(value.toObject()));
     }
@@ -509,6 +513,7 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
         sheet.scenarios = scenariosFromJson(object.value(QStringLiteral("scenarios")).toObject());
         sheet.dataTables = dataTablesFromJson(object.value(QStringLiteral("dataTables")).toArray());
         sheet.keptRules = keptRulesFromJson(object.value(QStringLiteral("keptRules")).toArray());
+        sheet.customViews = sheetCustomViewsFromJson(object.value(QStringLiteral("customViews")).toArray()); // M82
         snapshot.sheets.append(sheet);
     }
     snapshot.activeSheet = qBound(0, snapshot.activeSheet, snapshot.sheets.size() - 1);

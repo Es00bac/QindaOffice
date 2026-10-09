@@ -112,6 +112,9 @@ add_library(calc_io STATIC
     src/xlsx_write_print.cpp
     src/xlsx_write_validation.cpp
     src/xlsx_write_whatif.cpp
+    # M82 (D-091): Excel's Custom Views (xlsx_views.h)
+    src/xlsx_views.cpp
+    src/xlsx_views.h
 )
 
 target_include_directories(calc_io

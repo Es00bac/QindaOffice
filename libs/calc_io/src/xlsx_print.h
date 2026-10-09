@@ -27,9 +27,7 @@
 
 #include <QByteArray>
 
-namespace QindaOffice::Calc {
-class Sheet;
-}
+#include "sheet.h"
 
 namespace QindaOffice::Calc::IO {
 
@@ -39,5 +37,10 @@ void readSheetPrint(const QByteArray &sheetXml, Sheet *sheet);
 // The print settings' elements for `patch` (printXml, fitToPage). Nothing
 // is written for settings that are all Excel's defaults.
 void fillPrintPatch(const Sheet &sheet, PatchManifest::SheetPatch *patch);
+
+// A Custom View's print settings (M82, D-091): the same elements in
+// CT_CustomSheetView's order (breaks, margins, options, setup, header and
+// footer), margins and setup always.
+[[nodiscard]] QByteArray viewPrintXml(const Sheet::PageSetup &setup);
 
 } // namespace QindaOffice::Calc::IO

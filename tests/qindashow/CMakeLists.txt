@@ -8,12 +8,14 @@
 # chart data, the notes pane and the presenter view (tst_show_chart_notes).
 # M75 (D-084): the Design tab, Format Background and the Slide Master view
 # (tst_show_design_tab); sections, comments, audio and video
-# (tst_show_review). QQO_SHOW_MEDIA=off keeps every test silent: nothing
+# (tst_show_review). M82 (D-091): New Slide on the deck's layouts, Layout,
+# Reset, Duplicate, Reuse Slides and a template's masters through the window
+# (tst_show_layouts_ui). QQO_SHOW_MEDIA=off keeps every test silent: nothing
 # is ever played (show_media_actions.h).
 # Every test links the app's static QML module, so a source added to
 # apps/qindashow/CMakeLists.txt is in every test.
 foreach(name IN ITEMS tst_qindashow tst_show_ui tst_show_design tst_show_menu_export tst_show_tools tst_show_table
-                      tst_show_chart_notes tst_show_design_tab tst_show_review)
+                      tst_show_chart_notes tst_show_design_tab tst_show_review tst_show_layouts_ui)
     add_executable(${name} ${name}.cpp show_test_support.h)
     target_link_libraries(${name} PRIVATE qindashow_app qindashow_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)

@@ -6,8 +6,9 @@ import QindaOffice.Show
 // Edit Data for a chart (M67, D-076): the chart's data sheet — series
 // names across the first row, category labels down the first column, the
 // values between, lettered as the embedded workbook PowerPoint opens lays
-// them out — and the chart's kind. OK writes both as one undo step; the
-// saved .pptx carries them in the chart part and its workbook alike.
+// them out — and the chart's kind (a combo chart's: one per plot, M82).
+// OK writes both as one undo step; the saved .pptx carries them in the
+// chart part and its workbook alike.
 Tk.Dialog {
     id: dialog
     objectName: "chartDataDialog"
@@ -30,12 +31,29 @@ Tk.Dialog {
         direction: Tk.Flex.Column
         gap: Tk.Theme.space.sm
         Tk.PropertyRow {
+            visible: dialog.editor === null || dialog.editor.plots.length === 0
             label: qsTr("Chart type")
             Tk.ComboBox {
                 objectName: "chartKindCombo"
                 model: dialog.editor !== null ? dialog.editor.kindNames : []
                 currentIndex: dialog.editor !== null ? dialog.editor.kindIndex : 0
                 onActivated: function(index) { dialog.editor.kindIndex = index }
+            }
+        }
+        // A combo chart (M82): one kind per plot, named by its series.
+        Repeater {
+            model: dialog.editor !== null ? dialog.editor.plots : []
+            Tk.PropertyRow {
+                id: plotRow
+                required property var modelData
+                required property int index
+                label: plotRow.modelData.label
+                Tk.ComboBox {
+                    objectName: "chartPlotKind_" + plotRow.index
+                    model: dialog.editor !== null ? dialog.editor.comboKindNames : []
+                    currentIndex: plotRow.modelData.comboIndex
+                    onActivated: function(choice) { dialog.editor.setPlotKind(plotRow.index, choice) }
+                }
             }
         }
         Tk.EditableGrid {

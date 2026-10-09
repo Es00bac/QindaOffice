@@ -147,6 +147,10 @@ void moveRuleFormulas(Workbook &book, const StructureEdit &edit);
 // titles and manual page breaks, and the ranges of the rules it keeps as
 // written (KeptRule). Called by moveSheetContents.
 void moveSheetPrintAndKept(Sheet &sheet, const StructureEdit &edit);
+// M82 (D-091), custom_view.cpp: the edited sheet's parts of the Custom
+// Views — hidden lines, filter range, print area, titles and breaks, the
+// cells shown — move with the cells.
+void moveCustomViews(Sheet &sheet, const StructureEdit &edit);
 // M78 (D-087), structure_whatif.cpp: the edited sheet's scenarios
 // (changing cells, summary result cells) and data tables (results, input
 // cells — a deleted input cell marks the table del1/del2, Excel's #REF!).

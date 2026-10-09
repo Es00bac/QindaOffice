@@ -405,6 +405,23 @@ QList<Relationship> PackageWriter::relationshipsOf(const QString &sourcePart) co
     return m_rels.value(stripSlash(sourcePart));
 }
 
+bool PackageWriter::retargetRelationship(const QString &sourcePart, const QString &id, const QString &target)
+{
+    for (Relationship &rel : m_rels[stripSlash(sourcePart)]) {
+        if (rel.id == id && !rel.external) {
+            rel.target = stripSlash(target);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool PackageWriter::removeRelationship(const QString &sourcePart, const QString &id)
+{
+    QList<Relationship> &list = m_rels[stripSlash(sourcePart)];
+    return list.removeIf([&id](const Relationship &rel) { return rel.id == id; }) > 0;
+}
+
 QByteArray PackageWriter::contentTypesXml() const
 {
     XmlElement root(QString::fromUtf16(Ns::CT), QStringLiteral("Types"));

@@ -196,6 +196,42 @@ public:
     [[nodiscard]] const PageSetup &pageSetup() const { return m_pageSetup; }
     void setPageSetup(const PageSetup &setup) { m_pageSetup = setup; }
 
+    // ---- M82 (D-091): Excel's Custom Views, this sheet's part ----
+    // One per view (custom_view.h; Workbook::customViews names them): what
+    // Show View puts back on this sheet — the window's zoom, split, top-left
+    // cell and selection (the app applies those), the frozen panes, and, as
+    // the view was added with them, the hidden rows and columns with the
+    // filter settings and the print settings. Read and written as the
+    // worksheet's <customSheetView> and the view's Z_<GUID>_.wvu.* names.
+    struct CustomView {
+        QString guid;            // the view's, "{…}" upper case
+        int scale = 100;         // zoom percent
+        double splitX = 0;       // a split's bars, in twips (1/20 pt) as Excel keeps them
+        double splitY = 0;
+        CellAddr topLeft{0, 0};
+        CellAddr splitTopLeft{0, 0}; // the far (bottom-right) pane's first cell, split or frozen
+        CellAddr activeCell{0, 0};
+        qint32 freezeRows = 0;
+        qint32 freezeCols = 0;
+        bool sheetHidden = false;      // state="hidden"
+        // The hidden rows and columns (ascending) and the filter settings —
+        // what the view holds when its CustomViewSpec includes them.
+        QList<qint32> hiddenRows;
+        QList<qint32> hiddenColumns;
+        bool filter = false;
+        AutoFilter autoFilter;
+        bool printSettings = false;    // the view holds print settings
+        PageSetup pageSetup;
+        std::optional<CellRange> printArea;
+        std::optional<CellRange> printTitleRows;
+        std::optional<CellRange> printTitleCols;
+        // <customSheetView>'s other attributes as read (showGridLines="0", …).
+        QList<std::pair<QString, QString>> attributes;
+        bool operator==(const CustomView &) const = default;
+    };
+    [[nodiscard]] const QList<CustomView> &customViews() const { return m_customViews; }
+    void setCustomViews(QList<CustomView> views) { m_customViews = std::move(views); }
+
     // ---- M78 (D-087): what-if analysis and the rules kept as written ----
     // The sheet's scenarios (scenario.h) and data tables (data_table.h):
     // moved by structural edits (structure_whatif.cpp), carried by undo and
@@ -284,6 +320,7 @@ private:
     ScenarioSet m_scenarios;           // M78
     QList<DataTableSpec> m_dataTables; // M78
     QList<KeptRule> m_keptRules;       // M78
+    QList<CustomView> m_customViews;   // M82
 };
 
 } // namespace QindaOffice::Calc

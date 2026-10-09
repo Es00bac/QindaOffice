@@ -79,6 +79,11 @@ public:
 
     // The QML grid item, once (CalcGrid.qml's Component.onCompleted).
     Q_INVOKABLE void attachGrid(SpreadsheetItem *grid);
+    // M82: View ▸ New Window's grid (CalcViewWindows.qml) — view only, on
+    // the same document, repainted with every change; and the sheets it
+    // may show (the visible worksheets, by name).
+    Q_INVOKABLE void attachViewGrid(SpreadsheetItem *grid);
+    Q_INVOKABLE QStringList viewableSheets() const;
 
     // ---- sheets ----
     // The tab strip is VISIBLE sheets only (hidden sheets have no tab,
@@ -277,6 +282,14 @@ public:
     // The validation dialog's answer when the input is refused or
     // questioned (Warning: Yes keeps it; Information: OK keeps it).
     Q_INVOKABLE void answerQuestionedInput(bool keep);
+    // ---- M82 (D-091): View ▸ Custom Views (calc_host_views.cpp) ----
+    // The workbook's views [{name, guid}], in order; Add (the workbook and
+    // this window as they are, as view `name` — one of that name is
+    // replaced) and Show answer "" or what is wrong.
+    Q_INVOKABLE QVariantList customViewList() const;
+    Q_INVOKABLE QString addCustomView(const QString &name, bool printSettings, bool hiddenRowsCols);
+    Q_INVOKABLE QString showCustomView(const QString &guid);
+    Q_INVOKABLE void deleteCustomView(const QString &guid);
     // How a link leaves the app (default QDesktopServices::openUrl, which
     // goes through the desktop portal when sandboxed). Tests record here.
     void setUrlOpener(std::function<bool(const QUrl &)> opener) { m_openUrl = std::move(opener); }
@@ -331,6 +344,8 @@ signals:
     void condFormatRuleRequested(int index);
     void inputQuestioned(const QString &title, const QString &message, bool warning);
     void pageLayoutChanged();
+    void customViewsRequested(); // M82
+    void viewWindowRequested();  // M82: View ▸ New Window
 
 protected:
     [[nodiscard]] QString filterString() const override;
@@ -418,6 +433,11 @@ private:
     void flashFillAtCursor();
     void refreshInvalidCircles();
     void quickCondFormat(CalcEng::CondFormatRule rule, const QString &undoText);
+    // calc_host_views.cpp (M82, D-091): View ▸ Split, New Window and
+    // Custom Views.
+    void createViewActions();
+    void insertViewMenus();
+    void syncViewsFromCursor();
     // A cell reference typed in a dialog ("B2", "$B$2", "Sheet1!B2") on the
     // active sheet; invalid when it is not one.
     [[nodiscard]] CalcEng::CellAddr cellFromText(const QString &text) const;

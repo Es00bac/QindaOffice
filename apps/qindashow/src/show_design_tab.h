@@ -81,6 +81,9 @@ signals:
     void customSizeRequested(qreal width, qreal height);
     void scaleChoiceRequested(qreal width, qreal height);
     void themeFileRequested();
+    // M82 (D-091): Browse for Themes chose a template or deck — its masters
+    // and layouts come along: for every slide, or the selected one?
+    void templateScopeRequested(const QUrl &url);
     // Format Background: show (or hide) the pane.
     void backgroundPaneRequested(bool visible);
     void stateChanged();

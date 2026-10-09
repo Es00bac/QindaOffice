@@ -14,6 +14,8 @@
 
 #include "xlsx_write_pivot.h"
 
+#include "xlsx_views.h"
+
 #include "xlsx_xml.h"
 
 #include "number_format.h"
@@ -210,14 +212,13 @@ bool applyPivotParts(QHash<QString, QByteArray> *parts, const PatchManifest &man
         }
         appendContentTypeOverride(&types, QLatin1Char('/') + table, kType + QStringLiteral("pivotTable+xml"));
     }
-    // <pivotCaches> sits after calcPr (oleSize and customWorkbookViews are
-    // never written); the carry stage adds the carried caches to it.
+    // <pivotCaches> sits after calcPr and the Custom Views (M82; oleSize
+    // is never written); the carry stage adds the carried caches to it.
     QByteArray &book = (*parts)[workbook];
     const QByteArray element = "<pivotCaches>" + caches + "</pivotCaches>";
-    const qsizetype calc = book.indexOf("<calcPr");
-    const qsizetype calcEnd = calc < 0 ? -1 : book.indexOf('>', calc);
-    if (calcEnd > 0) {
-        book.insert(calcEnd + 1, element);
+    const qsizetype anchor = pivotCachesAnchor(book);
+    if (anchor > 0) {
+        book.insert(anchor, element);
     } else if (!insertBeforeAny(&book, {QStringLiteral("<extLst"), QStringLiteral("</workbook>")}, element)) {
         if (error != nullptr) {
             *error = QStringLiteral("pivot tables: no place for <pivotCaches> in xl/workbook.xml");

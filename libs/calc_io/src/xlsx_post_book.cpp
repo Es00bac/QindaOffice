@@ -133,6 +133,17 @@ bool applyWorkbookPatches(QHash<QString, QByteArray> *parts, const PatchManifest
         return fail(error, QStringLiteral("post-pass: no stock <calcPr> in %1").arg(workbookPart));
     }
     workbookXml.replace(calc, calc + QByteArrayLiteral(" fullCalcOnLoad=\"1\""));
+    // M82 (D-091): the Custom Views, after <calcPr/> and before any
+    // <pivotCaches> (xlsx_views.h).
+    if (!manifest.customWorkbookViewsXml.isEmpty()) {
+        const qsizetype pivots = workbookXml.indexOf("<pivotCaches");
+        const qsizetype calcAt = workbookXml.indexOf("<calcPr");
+        const qsizetype at = pivots >= 0 ? pivots : (calcAt < 0 ? -1 : workbookXml.indexOf('>', calcAt) + 1);
+        if (at <= 0) {
+            return fail(error, QStringLiteral("post-pass: no <calcPr> in %1").arg(workbookPart));
+        }
+        workbookXml.insert(at, manifest.customWorkbookViewsXml);
+    }
     if (!applyWorkbookFeatures(parts, manifest, error)) {
         return false;
     }

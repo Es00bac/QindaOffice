@@ -37,8 +37,13 @@ struct Layout {
     int firstSeriesColumn = 1;
     bool seriesInRows = false;
     bool categoriesNumeric = false; // the categories are a c:numRef (numbers, dates)
+    // M82 (D-091): multi-level categories — the series' own labels in the
+    // category column (row), the outer levels in the ones before it.
+    int levels = 1;
 
     [[nodiscard]] Cell categoryCell(int category) const;
+    // Level 0 is categoryCell's; level 1 the next one out, and so on.
+    [[nodiscard]] Cell levelCell(int level, int category) const;
     [[nodiscard]] Cell nameCell(int series) const;
     [[nodiscard]] Cell valueCell(int series, int category) const;
 };
@@ -51,7 +56,8 @@ struct Layout {
 // Sheet1!$B$1), the sheet quoted when its name needs it.
 [[nodiscard]] QString reference(const QString &sheet, Cell first, Cell last);
 
-// The workbook bytes holding `chart`'s data at `layout`. `source` is the
+// The workbook bytes holding `chart`'s data at `layout` (with its category
+// levels when `layout` has room for them). `source` is the
 // embedded workbook as read (empty, or one calc_io cannot read: a new
 // workbook is made). The cells `previous` occupied that the new data does
 // not are emptied, and an Excel table that held exactly the previous data

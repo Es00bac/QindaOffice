@@ -373,6 +373,7 @@ OfficeWindow {
     ProtectDialog { id: protectDialog; host: window.calc }
     UnprotectDialog { id: unprotectDialog; host: window.calc }
     ChartWindows { host: window.calc; parentWindow: window }
+    CalcViewWindows { host: window.calc; parentWindow: window } // M82: View ▸ New Window
     PivotCreateDialog { id: pivotCreate; host: window.calc }
     PivotValueFieldDialog { id: pivotValueField; host: window.calc }
     PivotFieldDialog { id: pivotField; host: window.calc }

@@ -47,7 +47,7 @@ struct CellStyle {
     bool strikeout = false;
     std::optional<Rgb> fg;
     std::optional<Rgb> bg;
-    int alignment = 0; // 0 left, 1 center, 2 right
+    int alignment = 0; // 0 General (text left, numbers right), 1 center, 2 right, 3 Excel's Fill (M82)
     int vAlign = 1;    // 0 top, 1 center, 2 bottom (center matches legacy painting)
     bool wrap = false;
     int borders = 0;   // bit0 left bit1 right bit2 top bit3 bottom

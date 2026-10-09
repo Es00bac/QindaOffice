@@ -173,4 +173,26 @@ void fillPrintPatch(const Sheet &sheet, PatchManifest::SheetPatch *patch)
     patch->printXml = xml;
 }
 
+QByteArray viewPrintXml(const Sheet::PageSetup &s)
+{
+    // CT_CustomSheetView's order: the breaks first, then margins, options,
+    // setup and header / footer.
+    QByteArray xml = breaksXml("rowBreaks", s.rowBreaks, Sheet::kMaxCols - 1)
+        + breaksXml("colBreaks", s.colBreaks, Sheet::kMaxRows - 1);
+    xml += QByteArrayLiteral("<pageMargins") + attribute("left", measureText(s.marginLeft))
+        + attribute("right", measureText(s.marginRight)) + attribute("top", measureText(s.marginTop))
+        + attribute("bottom", measureText(s.marginBottom)) + attribute("header", measureText(s.marginHeader))
+        + attribute("footer", measureText(s.marginFooter)) + QByteArrayLiteral("/>");
+    if (!printOptionsAreDefault(s)) {
+        xml += QByteArrayLiteral("<printOptions") + flagAttribute("horizontalCentered", s.centerHorizontally)
+            + flagAttribute("verticalCentered", s.centerVertically) + flagAttribute("headings", s.headings)
+            + flagAttribute("gridLines", s.gridLines) + QByteArrayLiteral("/>");
+    }
+    xml += pageSetupXml(s);
+    if (!headerFooterIsDefault(s)) {
+        xml += headerFooterXml(s);
+    }
+    return xml;
+}
+
 } // namespace QindaOffice::Calc::IO

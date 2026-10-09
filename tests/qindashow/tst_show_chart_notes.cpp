@@ -6,13 +6,16 @@
 // part and its embedded workbook; the notes pane sits under the slide,
 // typing into it edits the slide's notes undoably and View ▸ Notes hides
 // it; Presenter View on one screen shows the presenter (current and next
-// slide, the notes, the timer) instead of the player. Grabs
-// (QQO_GRAB_DIR): the data sheet, the notes pane, the presenter view.
+// slide, the notes, the timer) instead of the player. M82 (D-091): a
+// combo chart's data sheet offers a kind per plot, and an added series
+// joins the plot of the one before it. Grabs (QQO_GRAB_DIR): the data
+// sheet (also a combo's), the notes pane, the presenter view.
 
 #include "show_test_support.h"
 
 #include "qindashow/src/presentation_controller.h"
 #include "qindashow/src/show_chart_data.h"
+#include "show_model/pptx_fixture_combo.h"
 #include "show_model/pptx_fixture_slides.h"
 #include "support/quick_dump.h"
 
@@ -123,6 +126,62 @@ private slots:
         QCOMPARE(package->partNames().filter(QStringLiteral("ppt/embeddings/")).size(), 1);
         scene.doc->undoStack()->undo();
         QCOMPARE(canvas->slide()->findShape(id)->chart.series.size(), 2);
+    }
+
+    void comboChartEditsEachPlot()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        Scene scene(QSize(1280, 800));
+        QVERIFY2(scene.ready(), qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        const QString path = dir.filePath(QStringLiteral("combo.pptx"));
+        QFile file(path);
+        const QByteArray bytes = PptxComboFixture::deckWith(PptxComboFixture::comboChart(), {});
+        QVERIFY(file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size());
+        file.close();
+        QVERIFY(scene.host.loadPath(path));
+        scene.host.selectSlideRow(3);
+        SlideCanvasItem *canvas = scene.canvas;
+        const QString id = canvas->slide()->shapes.first().id;
+        canvas->setSelected(id, true);
+        QVERIFY(scene.host.actions()->trigger(QStringLiteral("showChartEditDataAction")));
+        QObject *dialog = scene.window->findChild<QObject *>(QStringLiteral("chartDataDialog"));
+        QVERIFY(dialog != nullptr);
+        QTRY_VERIFY(dialog->property("opened").toBool());
+        ChartDataEditor *editor = scene.host.chartData();
+        // A kind per plot, each named by its series; Total is a line.
+        const QVariantList plots = editor->plots();
+        QCOMPARE(plots.size(), 2);
+        QCOMPARE(plots.at(0).toMap().value(QStringLiteral("label")).toString(), QStringLiteral("North, South"));
+        QCOMPARE(plots.at(1).toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Total"));
+        const QStringList kinds = editor->comboKindNames();
+        QCOMPARE(kinds.at(plots.at(1).toMap().value(QStringLiteral("comboIndex")).toInt()), QStringLiteral("Line"));
+        QVERIFY(!kinds.contains(QStringLiteral("Pie")));
+        QTRY_VERIFY(scene.item(QStringLiteral("chartPlotKind_1")) != nullptr);
+        QVERIFY(!scene.item(QStringLiteral("chartKindCombo"))->isVisible());
+        // Total becomes an area; a new series joins it.
+        editor->setPlotKind(1, int(kinds.indexOf(QStringLiteral("Area"))));
+        editor->addSeries();
+        QindaTK::EditableGridModel *grid = editor->grid();
+        for (int row = 1; row < grid->rows(); ++row) {
+            stage(grid, row, 4, QStringLiteral("5"));
+        }
+        QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindashow_m82_combo_data"));
+        QVERIFY(scene.host.applyChartData());
+        const ShowModel::ChartData chart = canvas->slide()->findShape(id)->chart;
+        QCOMPARE(chart.plots.at(0).type, QStringLiteral("column"));
+        QCOMPARE(chart.plots.at(1).type, QStringLiteral("area"));
+        QCOMPARE(chart.series.size(), 4);
+        QCOMPARE(chart.series.at(3).plot, 1);
+        QCOMPARE(chart.categoryLevels.first().at(2), QStringLiteral("West"));
+        QMetaObject::invokeMethod(dialog, "close");
+        const QString saved = dir.filePath(QStringLiteral("saved.pptx"));
+        QVERIFY(scene.doc->save(saved));
+        QString error;
+        const ShowModel::Presentation back = ShowModel::readPptxFile(saved, &error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QCOMPARE(back.slides.at(3).shapes.first().chart, chart);
     }
 
     void notesPaneUnderTheSlide()

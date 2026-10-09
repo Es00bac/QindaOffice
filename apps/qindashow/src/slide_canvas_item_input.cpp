@@ -304,7 +304,10 @@ void SlideCanvasItem::beginTextEdit(const QString &shapeId)
     }
     m_textShapeId = shape->id;
     m_textOriginal = shape->paragraphs;
-    m_textDocument = documentFromParagraphs(shape->paragraphs, this);
+    // M82: an empty placeholder types in its layout's look.
+    const auto look = m_placeholderLooks.constFind(shape->id);
+    m_textDocument = documentFromParagraphs(shape->paragraphs, this,
+                                            look != m_placeholderLooks.constEnd() ? &look.value() : nullptr);
     m_textDocument->setTextWidth(qMax<qreal>(editorRect().width(), 40));
     m_selected = {shape->id};
     notifySelection();

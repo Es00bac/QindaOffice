@@ -5,6 +5,142 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-091: QindaCalc and QindaShow everyday polish
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: the everyday
+parts of Excel and PowerPoint that QindaCalc and QindaShow still lacked;
+M82, closes what D-076, D-084 and D-087 left open in these areas)
+
+**Context.** Text in QindaCalc stopped at its cell's edge where Excel lets
+it run on over empty neighbours, on screen and on paper; View had Freeze
+Panes but no Split, New Window or Custom Views (D-087). In a PowerPoint deck
+QindaShow's New Slide made a slide with no layout, Browse for Themes took a
+template's theme but not its masters and layouts, and Reset Slide and Reuse
+Slides were missing (D-084). A combo chart's Edit Data reached its first
+plot only, multi-level categories became one level and a kind change lost
+per-point colours and data labels (D-076).
+
+**Decision.**
+
+1. **Excel's text overflow, one set of rules for screen and paper**
+   (`apps/qindacalc/src/calc_text_overflow.h`). Left-aligned and General
+   text runs on to the right over empty cells, right-aligned text to the
+   left, centred text both ways; it stops at the first cell holding a value
+   or a formula (one showing nothing too) and at a merged range, and passes
+   hidden columns; a neighbour's background fill does not stop it. Wrapped
+   text, Excel's Fill alignment (now read and written as
+   `horizontal="fill"`), a merged cell's text, numbers, booleans and errors
+   never spill; a number too wide shows `####`, a General number first gives
+   up decimals, then turns scientific. No grid line is drawn under text that
+   runs on. The grid paints it per pane (`spreadsheet_item_cells.cpp`; text
+   in frozen lines is cut at the freeze, a scrolled pane's text comes from
+   its own cells) and the printer per page segment (`calc_print_cells.cpp`;
+   print titles apart, sources inside the print area).
+2. **View ▸ Split** (`spreadsheet_item_panes.cpp`): four panes at the active
+   cell's corner (the middle of the view at A1), each pair scrolling on its
+   own with its own scroll bars, the bars dragged, a double click or a drop
+   at the edge taking one away. Split is the window's view state kept per
+   sheet, never an undo step; Split and Freeze Panes take each other's
+   place, as in Excel.
+3. **View ▸ New Window** opens a second window on the workbook, Excel's
+   "Book:2" (`CalcViewWindows.qml`): any visible worksheet, its own
+   selection, scroll, zoom and Split, repainting with every change made in
+   the document window, closed with it. AGENTS.md rule 1 (ADR-0110) gives a
+   document one document window, so this one **views**: it has no menus,
+   no editor and changes nothing (`SpreadsheetItem::readOnly`, `viewSheet`).
+   It is sized once before it is shown (ADR-0117). **Arrange All is not
+   offered**: where windows go is the desktop's — QindaQt's containers
+   arrange them; an app cannot place windows on Wayland.
+4. **View ▸ Custom Views** (`libs/calc_engine/src/custom_view.h`,
+   `libs/calc_io/src/xlsx_views.h`, `CustomViewsDialog.qml`): Add names the
+   workbook as it is — on every sheet the zoom, frozen panes or Split, the
+   first cell shown in each pane, the selection and whether the sheet is
+   hidden, and as chosen its hidden rows and columns with the filter and
+   its print settings — replacing a view of the same name; Show puts it back
+   and goes to its sheet; Delete removes it. Each is one undo step and the
+   views ride the recovery payload. They are written where Excel keeps them:
+   `<customWorkbookViews>` after `calcPr` (before `pivotCaches`), each
+   worksheet's `<customSheetViews>` before `mergeCells`, and the hidden
+   `Z_<GUID>_.wvu.Rows/.Cols/.PrintArea/.PrintTitles/.FilterData` names —
+   read into the model, not left among the workbook's names. Rows and
+   columns inserted or deleted move a view's hidden lines, print area,
+   titles, breaks and cells. As in Excel, Custom Views is off in a workbook
+   with a table. Before M82 the sheet reader also took a custom view's pane
+   for the sheet's own freeze; it now reads only `<sheetViews>`.
+5. **New Slide on the deck's own layouts** (`libs/show_model/src/pptx_slides.h`,
+   `ShowSlideLayouts`, `LayoutGallery.qml`, `ReuseSlidesDialog.qml`). New
+   Slide offers the deck's masters and layouts by name (the ribbon's split
+   button, Home ▸ Layout, the Slide menu) and as thumbnails in the Slide
+   panel's gallery, and picks PowerPoint's default (Title and Content after
+   a title slide, else the current slide's layout). The new slide's
+   placeholders are the layout's, empty, without a position or look of
+   their own — they inherit, and follow later changes to the layout — and
+   show PowerPoint's prompts ("Click to add title") until typed into, in
+   the layout's look; the date, footer and slide number come along when the
+   slide before shows them. Layout moves the current slide onto another
+   layout (placeholders matched by index, then type), Reset Slide puts its
+   placeholders back to the layout's place and format, keeping their text,
+   Duplicate Slide copies it with its own part and creation id, and Reuse
+   Slides inserts slides of another `.pptx`, keeping their master, layouts
+   and theme ("Keep source formatting") or taking this deck's layout of the
+   same name, else type. Each is one undo step, made the way D-084's design
+   changes are: in the written package (`p:sldLayout` relationships,
+   `sldMasterId`/`sldLayoutId`/`sldId` values PowerPoint accepts), then read
+   back. A deck without layouts keeps QindaShow's six slide kinds.
+6. **Browse for Themes takes a template's masters and layouts**
+   (`withTemplateDesign`): a `.potx`/`.pptx` brings its masters, layouts and
+   themes; Apply to All or to the selected slides moves them onto the
+   template's layout of the same name, else type, else its first content
+   layout; masters no slide uses any more go, unless preserved. A `.thmx`
+   still brings its theme only.
+7. **Charts as PowerPoint makes them** (`show_chart.h`, `chart_edit.h`,
+   `pptx_write_chart_series.cpp`). Every plot of a chart is read (a combo
+   chart's columns and line), each series with its `c:idx` and plot, and
+   multi-level categories with their outer levels. Edit Data reaches every
+   plot: series are matched to the file's by `c:idx`, an added series joins
+   the plot of the series before it, and a combo chart offers a kind per
+   plot (the kinds with axes). Multi-level categories keep their groups —
+   written as `c:multiLvlStrRef` and as the workbook's outer columns — and
+   a point's own colour and data label follow its category through inserts
+   and deletes. A kind change keeps per-point colours (`c:dPt`) and data
+   labels (`c:dLbls`, `c:dLbl`), dropping only a label position the new
+   kind cannot take (PowerPoint repairs a deck that keeps one). The
+   renderer draws a combo's plots together on one value axis.
+8. **Commands.** New stable ids, each on its menu and the ribbon
+   (`standard_actions.h` and app-scoped): `calcViewSplitAction`,
+   `calcViewNewWindowAction`, `calcCustomViewsAction`;
+   `showResetSlideAction`, `showReuseSlidesAction`, and the layout entries
+   `showNewSlideLayout_<n>` / `showSlideLayout_<n>`, ids by position in the
+   deck's layout list, re-labelled when the layouts change (as Open Recent's
+   are), entries past the end hidden and disabled.
+9. **QindaTK gaps, reported and not worked around in the toolkit**:
+   `Tk.Ribbon` goes back to its first tab whenever its `tabs` list changes
+   (its `ensureCurrent` compares the new tabs with a stale `visibleTabs`;
+   QindaShow puts the tab back itself, `ShowWindow.qml`, and changes the
+   layout menus' id lists only when their length does); toolkit menus show
+   icons but no pictures, so the layout thumbnails live in the Slide panel's
+   gallery and the ribbon and menus list the layouts by name.
+
+**Consequences.** A workbook's text looks as it does in Excel, on paper
+too, and its Custom Views survive QindaCalc; a PowerPoint deck grows with
+its own layouts, takes a template's masters, and its combo and grouped
+charts survive an edit. Behaviour changes: booleans and errors are centred
+under General alignment (Excel's default); text in frozen lines no longer
+runs past the freeze; a chart model compares by content (where a series or
+category came from is the writer's bookkeeping, not part of it). Limits:
+the second window views and does not edit; Arrange All, View Side by Side
+and Synchronous Scrolling are not offered; a view's split position is kept
+in twips at 96 dpi from the cell area's edge, as LibreOffice reads Excel's
+(Excel itself was not available to confirm it); a view's printer-settings
+part is not kept (its paper, orientation and scale are); Show puts back the
+sheet's state without regard to sheet protection; the grid zooms 50–300 %
+while views keep Excel's 10–400 %; a combo's secondary axis is drawn on the
+primary one; Edit Data shows the leaf level of multi-level categories (the
+outer levels follow their rows but are not edited there). Microsoft Excel
+and PowerPoint are not available here: written packages are checked
+against the ECMA-376 schemas and LibreOffice; the owner's checks are in
+`docs/verification.md`.
+
 ## D-090: QindaMail: rules, categories, flags, search folders, automatic replies
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
@@ -392,7 +528,8 @@ colours are written as RGB, not theme colours; header and footer pictures
 (`OFFSET(…)`) is kept but not evaluated; Page Break Preview's breaks are not
 dragged; scenarios' `deleted`/`undone` input flags are not written;
 "Automatic except for data tables" is not offered; Solver, Split and Custom
-Views are not done. Microsoft Excel itself is not available here: written
+Views are not done (Split and Custom Views closed by M82, D-091). Microsoft
+Excel itself is not available here: written
 packages are checked against the ECMA-376 schemas and LibreOffice; the
 owner's check in Excel is in verification.md.
 ## D-086: QindaWrite: mail merge, envelopes and labels, endnotes, floating pictures
@@ -910,7 +1047,8 @@ inherited.
 saved as PowerPoint's own markup: themes, masters and layouts where
 PowerPoint keeps them (untouched ones byte for byte), sections, comments of
 the kind the deck had, embedded media with PowerPoint's timing. Not done:
-Browse for Themes takes a file's theme, not its masters and layouts; the
+Browse for Themes takes a file's theme, not its masters and layouts (closed
+by M82, D-091); the
 theme and variant galleries are menus of names, without live previews;
 modern comments are written without `p188:pos` (PowerPoint places them by
 their anchor), with no mentions or reactions, under the login name; media
@@ -918,8 +1056,9 @@ trimming, fades, bookmarks, captions, Play Across Slides, Rewind after
 Playing and a volume control are not offered, a trigger on a shape ("When
 Clicked On") becomes On Click once its playback is edited, and the poster
 is not grabbed from the video; textures are QindaShow's six, not Office's;
-New Slide in a PowerPoint deck still makes QindaShow's layout-less slide;
-M67's chart limits (combo charts, multi-level categories) remain. QindaTK gaps,
+New Slide in a PowerPoint deck still makes QindaShow's layout-less slide
+(closed by M82, D-091); M67's chart limits (combo charts, multi-level
+categories) remain (closed by M82, D-091). QindaTK gaps,
 reported and not worked around in the toolkit: `SlideMasterEditor` edits
 placeholder values, not a master or layout visually (the view is the app's
 canvas and `MasterPane.qml`); `SlideSorter` shows a section caption but has
@@ -1782,7 +1921,8 @@ the file's, the chart's style and colour parts travel, the workbook holds the
 new numbers. Speaker-notes typing joins the undo history (a test that
 counted undo steps was updated). Limits: a combo chart edits its first plot
 only; multi-level categories become one level after an edit; a kind change
-drops per-point colours and data labels; a chart whose source part is gone
+drops per-point colours and data labels (these three closed by M82, D-091);
+a chart whose source part is gone
 (through `.fodp`) still saves as a picture of itself; a table pasted or
 brought through `.fodp` is written fresh; notes stay plain text (the
 formatting of unchanged lines is kept); Grow/Shrink always scales to 150 %

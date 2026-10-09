@@ -2,11 +2,14 @@
 // The sheet printer (calc_print.h, M78, D-087). Geometry is worked out in
 // points (1/72 inch) from page_layout.h and turned into the printer's
 // device pixels per drawing call: a world transform would scale the fonts
-// a second time (QFont point sizes already follow the device's DPI).
+// a second time (QFont point sizes already follow the device's DPI). The
+// cells of a page are calc_print_cells.cpp's (M82: Excel's overflow, as the
+// grid draws it); this file draws the headings, pictures, headers and
+// footers around them.
 
 #include "calc_print.h"
 
-#include "calc_cell_look.h"
+#include "calc_print_internal.h"
 #include "spreadsheet_document.h"
 
 #include "header_footer.h"
@@ -27,155 +30,9 @@
 namespace QindaOffice::Apps::QindaCalc {
 
 using namespace CalcEng;
+using namespace PrintDetail;
 
 namespace {
-
-constexpr qreal kPxToPt = 0.75; // the engine's sizes are pixels at 96 dpi
-const QColor kInk(0x20, 0x20, 0x28);
-const QColor kPrintGrid(0xb8, 0xb8, 0xbc);
-const QColor kHeadingFill(0xf0, 0xf0, 0xf2);
-
-// Points → the printer's device pixels, from the paper's corner.
-struct Canvas {
-    QPainter *p = nullptr;
-    qreal dpp = 1;   // device pixels per point
-    QPointF origin;  // the paper's corner in device pixels
-    [[nodiscard]] QRectF rect(const QRectF &pt) const
-    {
-        return {origin.x() + pt.x() * dpp, origin.y() + pt.y() * dpp, pt.width() * dpp, pt.height() * dpp};
-    }
-    [[nodiscard]] QPointF point(qreal x, qreal y) const { return {origin.x() + x * dpp, origin.y() + y * dpp}; }
-};
-
-struct Line {
-    qint32 index;
-    qreal sizePt;
-};
-
-// The printed rows (or columns) of [first, last]: hidden ones take no space.
-QList<Line> printedLines(const Sheet &sheet, qint32 first, qint32 last, bool rows, qreal scale)
-{
-    QList<Line> out;
-    const QSet<qint32> filtered = rows ? sheet.filteredOutRows() : QSet<qint32>();
-    for (qint32 i = first; i <= last; ++i) {
-        const bool hidden = rows ? (sheet.isRowHidden(i) || filtered.contains(i)) : sheet.isColumnHidden(i);
-        if (!hidden) {
-            out.append({i, (rows ? sheet.rowHeight(i) : sheet.columnWidth(i)) * kPxToPt * scale});
-        }
-    }
-    return out;
-}
-
-struct CellPaint {
-    const Workbook *book = nullptr;
-    qint32 sheet = 0;
-    const Sheet::PageSetup *setup = nullptr;
-    QFont base;
-    qreal scale = 1;
-};
-
-QString printedText(const CellPaint &ctx, const Cell &cell, const CellStyle *style)
-{
-    if (const auto *err = std::get_if<Err>(&cell.value)) {
-        Q_UNUSED(err);
-        switch (ctx.setup->errors) {
-        case 1:
-            return {};
-        case 2:
-            return QStringLiteral("--");
-        case 3:
-            return QStringLiteral("#N/A");
-        default:
-            break;
-        }
-    }
-    const QString code = style != nullptr && !style->numberFormat.isEmpty() ? style->numberFormat : QStringLiteral("General");
-    return NumberFormat(code).format(cell.value).text;
-}
-
-// One cell's look on paper: fill, conditional format (bar, icon, colours),
-// text, borders. `rect` is in points; `textRect` may reach over empty
-// neighbours (Excel lets a left-aligned label overflow).
-void paintCell(const Canvas &canvas, const CellPaint &ctx, const CellAddr &addr, const QRectF &rect, const QRectF &textRect)
-{
-    QPainter &p = *canvas.p;
-    const Sheet &sheet = ctx.book->sheetAt(ctx.sheet);
-    const qint32 styleId = sheet.styleIdAt(addr);
-    const CellStyle *style = styleId != 0 ? ctx.book->style(styleId) : nullptr;
-    const CondFormat conditional = sheet.condFormats().isEmpty() ? CondFormat{} : ctx.book->condFormatFor(ctx.sheet, addr);
-    const bool colour = !ctx.setup->blackAndWhite;
-    const QRectF device = canvas.rect(rect);
-    if (colour && conditional.background) {
-        p.fillRect(device, QColor(conditional.background->r, conditional.background->g, conditional.background->b));
-    } else if (colour && style != nullptr && style->bg) {
-        p.fillRect(device, QColor(style->bg->r, style->bg->g, style->bg->b));
-    }
-    if (conditional.dataBar) {
-        paintDataBar(p, device, *conditional.dataBar);
-    }
-    if (conditional.icon) {
-        paintCfIcon(p, iconBox(device), *conditional.icon);
-    }
-    const Cell *cell = sheet.cellAt(addr);
-    if (cell != nullptr && !isBlank(cell->value) && !conditional.hideValue) {
-        QFont font = ctx.base;
-        if (style != nullptr && !style->fontFamily.isEmpty()) {
-            font.setFamily(style->fontFamily);
-        }
-        const qreal size = style != nullptr && style->fontSize > 0 ? style->fontSize : ctx.base.pointSizeF();
-        font.setPointSizeF(qMax(1.0, size * ctx.scale));
-        font.setBold(conditional.bold.value_or(style != nullptr && style->bold));
-        font.setItalic(conditional.italic.value_or(style != nullptr && style->italic));
-        font.setUnderline(conditional.underline.value_or(style != nullptr && style->underline));
-        font.setStrikeOut(conditional.strikeout.value_or(style != nullptr && style->strikeout));
-        p.setFont(font);
-        const QString code = style != nullptr && !style->numberFormat.isEmpty() ? style->numberFormat : QStringLiteral("General");
-        const FormattedText formatted = NumberFormat(code).format(cell->value);
-        QColor ink = kInk;
-        if (colour && conditional.foreground) {
-            ink = QColor(conditional.foreground->r, conditional.foreground->g, conditional.foreground->b);
-        } else if (colour && formatted.colour) {
-            ink = QColor(formatted.colour->r, formatted.colour->g, formatted.colour->b);
-        } else if (colour && style != nullptr && style->fg) {
-            ink = QColor(style->fg->r, style->fg->g, style->fg->b);
-        }
-        p.setPen(ink);
-        Qt::Alignment alignment = style != nullptr ? (style->vAlign == 0 ? Qt::AlignTop : style->vAlign == 2 ? Qt::AlignBottom : Qt::AlignVCenter)
-                                                   : Qt::AlignVCenter;
-        if (style != nullptr && style->alignment != 0) {
-            alignment |= style->alignment == 1 ? Qt::AlignHCenter : Qt::AlignRight;
-        } else {
-            alignment |= isNumber(cell->value) || isBool(cell->value) || isErr(cell->value) ? Qt::AlignRight : Qt::AlignLeft;
-        }
-        int flags = int(alignment);
-        if (style != nullptr && style->wrap) {
-            flags |= int(Qt::TextWordWrap);
-        }
-        const qreal inset = 2 * ctx.scale;
-        const qreal iconRoom = conditional.icon && !(alignment & Qt::AlignRight) ? iconBox(device).width() / canvas.dpp + 1 : 0;
-        const QRectF target = (style != nullptr && style->wrap) || (alignment & Qt::AlignRight) ? rect : textRect;
-        p.save();
-        p.setClipRect(canvas.rect(target));
-        p.drawText(canvas.rect(target.adjusted(inset + iconRoom, 0, -inset, 0)), flags, printedText(ctx, *cell, style));
-        p.restore();
-    }
-    if (style != nullptr && style->borders != 0) {
-        p.setPen(QPen(kInk, qMax(1.0, 0.75 * canvas.dpp)));
-        const QRectF r = device;
-        if (style->borders & 1) {
-            p.drawLine(r.topLeft(), r.bottomLeft());
-        }
-        if (style->borders & 2) {
-            p.drawLine(r.topRight(), r.bottomRight());
-        }
-        if (style->borders & 4) {
-            p.drawLine(r.topLeft(), r.topRight());
-        }
-        if (style->borders & 8) {
-            p.drawLine(r.bottomLeft(), r.bottomRight());
-        }
-    }
-}
 
 // The header or footer of a page: three sections on one band.
 void paintHeaderFooter(const Canvas &canvas, const QString &code, bool header, const Sheet::PageSetup &setup,
@@ -270,7 +127,7 @@ QPair<QString, QString> headerFooterFor(const Sheet::PageSetup &setup, int index
     return {setup.oddHeader, setup.oddFooter};
 }
 
-void paintPage(const Canvas &canvas, const CellPaint &ctx, const PrintLayout &layout, const PrintPage &page)
+void paintPage(const Canvas &canvas, const PrintContext &ctx, const PrintLayout &layout, const PrintPage &page)
 {
     const Sheet &sheet = ctx.book->sheetAt(ctx.sheet);
     const Sheet::PageSetup &setup = *ctx.setup;
@@ -279,10 +136,12 @@ void paintPage(const Canvas &canvas, const CellPaint &ctx, const PrintLayout &la
     if (page.titleRows) {
         rows += printedLines(sheet, page.titleRows->topLeft.row, page.titleRows->bottomRight.row, true, ctx.scale);
     }
+    const qsizetype titleRowCount = rows.size();
     rows += printedLines(sheet, page.body.topLeft.row, page.body.bottomRight.row, true, ctx.scale);
     if (page.titleCols) {
         cols += printedLines(sheet, page.titleCols->topLeft.col, page.titleCols->bottomRight.col, false, ctx.scale);
     }
+    const qsizetype titleColCount = cols.size();
     cols += printedLines(sheet, page.body.topLeft.col, page.body.bottomRight.col, false, ctx.scale);
     // The headings' bands and the grid's size on paper are the layout's
     // (page_layout.h's renderer contract), so centring matches pagination.
@@ -327,39 +186,29 @@ void paintPage(const Canvas &canvas, const CellPaint &ctx, const PrintLayout &la
             p.drawText(box, Qt::AlignCenter, QString::number(rows.at(r).index + 1));
         }
     }
-    for (qsizetype r = 0; r < rows.size(); ++r) {
-        for (qsizetype c = 0; c < cols.size(); ++c) {
-            const CellAddr addr{rows.at(r).index, cols.at(c).index};
-            QRectF rect(xs.at(c), ys.at(r), cols.at(c).sizePt, rows.at(r).sizePt);
-            const CellRange *merge = sheet.mergeCovering(addr);
-            if (merge != nullptr && merge->topLeft != addr) {
-                continue;
-            }
-            if (merge != nullptr) {
-                for (qsizetype rr = r + 1; rr < rows.size() && rows.at(rr).index <= merge->bottomRight.row; ++rr) {
-                    rect.setBottom(ys.at(rr) + rows.at(rr).sizePt);
-                }
-                for (qsizetype cc = c + 1; cc < cols.size() && cols.at(cc).index <= merge->bottomRight.col; ++cc) {
-                    rect.setRight(xs.at(cc) + cols.at(cc).sizePt);
-                }
-            }
-            // A label runs on over empty cells to its right (Excel's overflow).
-            QRectF textRect = rect;
-            for (qsizetype cc = c + 1; cc < cols.size(); ++cc) {
-                const Cell *next = sheet.cellAt({addr.row, cols.at(cc).index});
-                if ((next != nullptr && !isBlank(next->value)) || sheet.mergeCovering({addr.row, cols.at(cc).index})) {
-                    break;
-                }
-                textRect.setRight(xs.at(cc) + cols.at(cc).sizePt);
-            }
-            if (setup.gridLines && !setup.draft) {
-                p.setPen(QPen(kPrintGrid, qMax(1.0, 0.5 * canvas.dpp)));
-                p.setBrush(Qt::NoBrush);
-                p.drawRect(canvas.rect(rect));
-            }
-            paintCell(canvas, ctx, addr, rect, textRect);
+    // The cells (calc_print_cells.cpp): titles and body as separate
+    // segments, so a title's text runs on only over the titles and the
+    // body's over its print area's columns, as on screen (M82).
+    const CellRange area = page.area >= 0 && page.area < layout.areas.size() ? layout.areas.at(page.area) : layout.area;
+    const auto segments = [](const QList<Line> &lines, const QList<qreal> &starts, qsizetype titleCount,
+                             const std::optional<CellRange> &title, bool rowsAxis, const CellRange &bounds) {
+        QList<Segment> out;
+        if (titleCount > 0) {
+            Segment segment{lines.mid(0, titleCount), starts.mid(0, titleCount), 0, 0};
+            segment.minLine = rowsAxis ? title->topLeft.row : title->topLeft.col;
+            segment.maxLine = rowsAxis ? title->bottomRight.row : title->bottomRight.col;
+            out.append(segment);
         }
-    }
+        if (lines.size() > titleCount) {
+            Segment segment{lines.mid(titleCount), starts.mid(titleCount), 0, 0};
+            segment.minLine = rowsAxis ? bounds.topLeft.row : bounds.topLeft.col;
+            segment.maxLine = rowsAxis ? bounds.bottomRight.row : bounds.bottomRight.col;
+            out.append(segment);
+        }
+        return out;
+    };
+    paintPageCells(canvas, ctx, segments(rows, ys, titleRowCount, page.titleRows, true, area),
+                   segments(cols, xs, titleColCount, page.titleCols, false, area));
     // Pictures anchored on the page's cells (not in draft quality).
     for (const ImageSpec &image : ctx.book->images) {
         if (setup.draft || image.sheet != ctx.sheet || !image.isValid()) {
@@ -407,7 +256,7 @@ Quick::PrintRenderCallback sheetPrintRender(const SpreadsheetDocument *document,
         // Device coordinates start at the printable area; the layout's at
         // the paper's corner.
         canvas.origin = -printer->pageRect(QPrinter::DevicePixel).topLeft();
-        CellPaint ctx;
+        PrintContext ctx;
         ctx.book = &book;
         ctx.sheet = sheet;
         ctx.setup = &setup;

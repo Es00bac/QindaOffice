@@ -124,6 +124,12 @@ public:
     void addRelationshipWithId(const QString &sourcePart, const QString &id, const QString &type,
                                const QString &target, bool external = false);
     [[nodiscard]] QList<Relationship> relationshipsOf(const QString &sourcePart) const;
+    // Points relationship `id` of `sourcePart` at another internal part
+    // (M82: QindaShow moves a slide onto another layout in a written
+    // package); false when there is no such relationship.
+    bool retargetRelationship(const QString &sourcePart, const QString &id, const QString &target);
+    // Takes relationship `id` of `sourcePart` away; false when absent.
+    bool removeRelationship(const QString &sourcePart, const QString &id);
 
     // The finished zip: [Content_Types].xml first, then parts in insertion
     // order, then the .rels parts. Media types already compressed (images)

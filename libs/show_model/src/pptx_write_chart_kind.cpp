@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // A chart kind change for the pptx writer (pptx_write_chart.cpp; M67,
-// D-076): the first plot of the plot area rebuilt as one of the kinds
-// QindaShow draws (show_model/chart_edit.h). Within one plot element only
-// its options change (column ↔ bar, clustered ↔ stacked); across elements
-// the plot is rebuilt in the new element's schema order, each series
-// keeping its index, name and colour — moved from fill to line or back as
-// the new kind draws it — and the plot area gets the axes the kind needs:
-// none for pie and doughnut, two value axes for scatter, a category and a
-// value axis otherwise (the existing ones kept where their kind fits).
-// Per-point overrides and data labels do not survive a kind change; a
-// plot area with more than one plot keeps the others and their axes.
+// D-076): a plot of the plot area rebuilt as one of the kinds QindaShow
+// draws (show_model/chart_edit.h). Within one plot element only its
+// options change (column ↔ bar, clustered ↔ stacked); across elements the
+// plot is rebuilt in the new element's schema order, each series keeping
+// its index, name and colour — moved from fill to line or back as the new
+// kind draws it — and the plot area gets the axes the kind needs: none for
+// pie and doughnut, two value axes for scatter, a category and a value
+// axis otherwise (the existing ones kept where their kind fits). The other
+// plots of a combo chart keep theirs.
+// M82 (D-091): per-point colours (c:dPt) and data labels (the series' and
+// the plot's c:dLbls, each point's c:dLbl) come along; a label position the
+// new kind may not take is dropped (ChartXml::labelsForKind).
 
-#include "pptx_write_shapes.h"
+#include "pptx_write_chart_internal.h"
 
 namespace QindaOffice::Show::Pptx {
 
@@ -102,8 +104,9 @@ XmlElementPtr seriesLook(const QString &type, const XmlElementPtr &color)
     return spPr;
 }
 
-// A series of the new kind: index, order, name and colour kept; its data
-// elements are empty here and filled by the caller (patchSeries).
+// A series of the new kind: index, order, name, colour, per-point colours
+// and data labels kept; its data elements are empty here and filled by the
+// caller (ChartXml::patchPlots).
 XmlElementPtr convertSeries(const XmlElement &ser, const QString &type)
 {
     XmlElementPtr out = make(QStringLiteral("ser"));
@@ -125,6 +128,12 @@ XmlElementPtr convertSeries(const XmlElement &ser, const QString &type)
         }
         out->appendElement(marker);
     }
+    for (const XmlElement *point : ser.elements(nsC(), u"dPt")) {
+        out->appendElement(point->clone());
+    }
+    if (const XmlElement *labels = ser.child(nsC(), u"dLbls")) {
+        out->appendElement(ChartXml::labelsForKind(*labels));
+    }
     const bool scatter = type == u"scatter";
     out->appendElement(make(scatter ? QStringLiteral("xVal") : QStringLiteral("cat")));
     out->appendElement(make(scatter ? QStringLiteral("yVal") : QStringLiteral("val")));
@@ -134,7 +143,7 @@ XmlElementPtr convertSeries(const XmlElement &ser, const QString &type)
     return out;
 }
 
-XmlElementPtr newPlot(const ChartData &chart, const QList<XmlElementPtr> &series)
+XmlElementPtr newPlot(const ChartData &chart, const QList<XmlElementPtr> &series, const XmlElement *labels)
 {
     const QString &type = chart.type;
     XmlElementPtr plot = make(elementFor(type));
@@ -150,6 +159,9 @@ XmlElementPtr newPlot(const ChartData &chart, const QList<XmlElementPtr> &series
     plot->appendElement(valued(QStringLiteral("varyColors"), type == u"pie" || type == u"doughnut" ? QStringLiteral("1") : QStringLiteral("0")));
     for (const XmlElementPtr &ser : series) {
         plot->appendElement(ser);
+    }
+    if (labels != nullptr) {
+        plot->appendElement(ChartXml::labelsForKind(*labels)); // the plot's data labels (M82)
     }
     if (bars) {
         plot->appendElement(valued(QStringLiteral("gapWidth"), QStringLiteral("150")));
@@ -345,12 +357,22 @@ XmlElement *convertPlot(XmlElement &plotArea, XmlElement *plot, const ChartData 
         if (target == u"barChart" || target == u"lineChart" || target == u"areaChart") {
             setValue(*plot, QStringLiteral("grouping"), grouping(chart), {u"varyColors", u"ser", u"dLbls", u"axId", u"extLst"});
         }
+        // M82: a stacked bar takes no label outside its end; the labels
+        // keep their content and take the kind's default place.
+        for (XmlChild &c : plot->children) {
+            XmlElement *labels = c.element && c.element->is(nsC(), u"dLbls") ? c.element.get()
+                : c.element && c.element->is(nsC(), u"ser")                ? c.element->child(nsC(), u"dLbls")
+                                                                            : nullptr;
+            if (labels != nullptr) {
+                *labels = *ChartXml::labelsForKind(*labels);
+            }
+        }
     } else {
         QList<XmlElementPtr> series;
         for (const XmlElement *ser : plot->elements(nsC(), u"ser")) {
             series.append(convertSeries(*ser, chart.type));
         }
-        XmlElementPtr fresh = newPlot(chart, series);
+        XmlElementPtr fresh = newPlot(chart, series, plot->child(nsC(), u"dLbls"));
         for (XmlChild &c : plotArea.children) {
             if (c.element.get() == plot) {
                 c.element = fresh;

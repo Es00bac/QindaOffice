@@ -371,6 +371,8 @@ void SpreadsheetDocument::duplicateSheet(qint32 index, const QString &name)
     copy.setScenarios(source.scenarios());
     copy.setDataTables(source.dataTables());
     copy.setKeptRules(source.keptRules());
+    // M82 (D-091): and its part of each Custom View, as Excel copies it.
+    copy.setCustomViews(source.customViews());
     // The copied formulas' unqualified references now mean the NEW sheet,
     // which is what a duplicate should do; the index still has to be rebuilt
     // because a sheet was inserted in the middle of the list.

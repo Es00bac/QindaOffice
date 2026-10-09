@@ -8,6 +8,7 @@
 
 #include "xlsx_formula.h"
 #include "xlsx_parts.h"
+#include "xlsx_views.h"
 
 #include "ooxml_namespaces.h"
 #include "ooxml_xml.h"
@@ -114,6 +115,9 @@ void readDefinedNames(const QByteArray &workbookXml, Workbook *wb)
         const QString body = formulaFromFile(text);
         if (name.isEmpty() || body.isEmpty() || (isPrintName(name) && mappedPrintName(name, text).has_value())) {
             continue; // print areas and titles the model holds are per-sheet fields (readPrintNames)
+        }
+        if (isCustomViewName(name)) {
+            continue; // a Custom View's (M82, D-091): readCustomViews reads them into the view
         }
         const ParseResult parsed = parseFormula(body);
         const bool parses = parsed.error.isEmpty() && parsed.root;

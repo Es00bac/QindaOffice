@@ -7,6 +7,7 @@
 #include "xlsx_carry_types.h"
 #include "xlsx_carry_xml.h"
 #include "xlsx_parts.h"
+#include "xlsx_views.h"
 #include "xlsx_write_features.h"
 #include "xlsx_xml.h"
 
@@ -169,14 +170,13 @@ void writeWorkbookElements(Context &ctx, const QHash<QString, QString> &ids)
                     + QByteArrayLiteral("\" r:id=\"") + id.toUtf8() + QByteArrayLiteral("\"/>");
             }
         }
-        const qsizetype calc = workbook.indexOf("<calcPr");
-        const qsizetype calcEnd = calc < 0 ? -1 : workbook.indexOf('>', calc);
+        const qsizetype anchor = pivotCachesAnchor(workbook);
         const qsizetype written = workbook.indexOf("</pivotCaches>");
         if (!xml.isEmpty() && written > 0) {
             workbook.insert(written, xml); // the pivots written from the model have the element (M74)
-        } else if (!xml.isEmpty() && calcEnd > 0) {
-            // After <calcPr …/> (oleSize and customWorkbookViews are never written).
-            workbook.insert(calcEnd + 1, QByteArrayLiteral("<pivotCaches>") + xml + QByteArrayLiteral("</pivotCaches>"));
+        } else if (!xml.isEmpty() && anchor > 0) {
+            // After <calcPr …/> and the Custom Views (M82; oleSize is never written).
+            workbook.insert(anchor, QByteArrayLiteral("<pivotCaches>") + xml + QByteArrayLiteral("</pivotCaches>"));
         }
     }
     if (const Ooxml::XmlElement *extensions = root->child(s, u"extLst")) {

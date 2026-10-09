@@ -18,15 +18,20 @@ class ZipReader;
 }
 
 namespace QindaOffice::Calc {
+struct CellStyle;
 class Sheet;
 class Workbook;
 }
 
 namespace QindaOffice::Calc::IO {
 
-// Per xf of styles.xml's cellXfs, in order: bit 1 unlocked, bit 2 formula
-// hidden (0 = Excel's default: locked, shown).
+// Per xf of styles.xml's cellXfs, in order, what QXlsx does not read: bit 1
+// unlocked, bit 2 formula hidden (0 = Excel's default: locked, shown), and
+// (M82) bit 4 Excel's Fill alignment (QXlsx writes horizontal="fill" but
+// reads it as General).
 [[nodiscard]] QVector<quint8> readXfProtection(QXlsx::ZipReader &zip);
+// Those flags onto a cell's style (locked, hiddenFormula, alignment).
+void applyXfFlags(quint8 flags, CellStyle *style);
 
 // The cm values (1-based cell-metadata blocks of xl/metadata.xml) that
 // name a dynamic array: an XLDAPR block whose dynamicArrayProperties say

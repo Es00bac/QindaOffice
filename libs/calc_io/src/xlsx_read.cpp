@@ -21,6 +21,7 @@
 #include "xlsx_rules.h"
 #include "xlsx_style.h"
 #include "xlsx_text.h"
+#include "xlsx_views.h"
 
 #include <QElapsedTimer>
 #include <QLoggingCategory>
@@ -372,8 +373,7 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
                 const QByteArray key = format.formatKey() + QByteArrayLiteral("|p") + QByteArray::number(protection);
                 if (!styleIds.contains(key)) {
                     CellStyle style = styleFromFormat(format, palette);
-                    style.locked = (protection & 1) == 0;
-                    style.hiddenFormula = (protection & 2) != 0;
+                    applyXfFlags(protection, &style); // locked, hidden formula, Fill (M82)
                     styleIds.insert(key, out->addStyle(style));
                 }
                 sheet.setStyleIdAt(addr, styleIds.value(key));
@@ -510,8 +510,8 @@ bool readXlsxFile(const QString &path, Workbook *out, QString *error, QStringLis
     if (!readXlsxImpl(doc, out, paletteForPackage(source), source, error)) {
         return false;
     }
-    // What the save will carry without modelling it (M66, D-075, D-068
-    // rule 2), and what it cannot: said in the warnings the app shows.
+    readCustomViews(zip, out); // M82 (D-091): after the sheets they name
+    // What the save carries without modelling it and what it cannot (M66, D-075, D-068 rule 2): the app shows them.
     QStringList notes = keptRuleNotes(*out); // M78 (D-087): kept rules, said
     readPivotTables(source, out, &notes); // M74 (D-083): the model's pivots, before the carried copy
     out->source.carried = buildCarriedPackage(source, *out, &notes);

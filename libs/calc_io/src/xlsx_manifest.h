@@ -119,6 +119,8 @@ struct PatchManifest {
         // get (a data table's top-left result cell: A1 → <f t="dataTable" …/>).
         QByteArray scenariosXml;
         QHash<QString, QByteArray> cellFormulaXml;
+        // M82 (D-091): the sheet's <customSheetViews> (xlsx_views.h).
+        QByteArray customViewsXml;
     };
     QList<SheetPatch> sheets;
 
@@ -157,6 +159,10 @@ struct PatchManifest {
     // their dxfId — then the ones new and changed formats need. Empty: no
     // conditional formats at all (QXlsx's own element stays).
     QByteArray dxfsXml;
+
+    // ---- M82 (D-091) ----
+    // workbook.xml's <customWorkbookViews> (xlsx_views.h); empty: none.
+    QByteArray customWorkbookViewsXml;
 
     // ---- M74 (D-083): PivotTables (xlsx_write_pivot.h) ----
     // The pivots and caches written from the model, and what the carry

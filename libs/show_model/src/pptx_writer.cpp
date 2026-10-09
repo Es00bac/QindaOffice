@@ -97,6 +97,11 @@ QByteArray writePptx(const Presentation &deck, QString *error)
 
 std::unique_ptr<Ooxml::PackageWriter> writePptxPackage(const Presentation &deck)
 {
+    return writePptxPackage(deck, nullptr);
+}
+
+std::unique_ptr<Ooxml::PackageWriter> writePptxPackage(const Presentation &deck, PptxWriteMap *map)
+{
     WriteSession session(deck);
     Ooxml::PackageWriter &w = session.writer;
     const DeckSource *deckSource = deck.origin.get();
@@ -229,6 +234,9 @@ std::unique_ptr<Ooxml::PackageWriter> writePptxPackage(const Presentation &deck)
             out.relate(relType("notesSlide"), notesPart);
         }
         writeSlideComments(out, *sld, slide, id, writtenIds, comments);
+        if (map != nullptr) {
+            map->shapeIds.insert(slide.id, writtenIds);
+        }
         w.addXmlPart(part, *sld, pmlType("slide+xml"));
         slideIds.append({id, presentation.relate(relType("slide"), part)});
     }
@@ -334,6 +342,16 @@ std::unique_ptr<Ooxml::PackageWriter> writePptxPackage(const Presentation &deck)
         }
     }
 
+    if (map != nullptr) {
+        map->slideParts = session.slideParts;
+        map->notesMaster = notesMaster;
+        for (const MasterOut &m : std::as_const(masters)) {
+            map->masterParts.insert(m.modelId, m.part);
+            for (const auto &[id, type, part] : m.generated ? m.made.modelLayouts : m.layouts) {
+                map->layoutParts.insert(id, part);
+            }
+        }
+    }
     Ooxml::CoreProperties core = session.source ? Ooxml::readCoreProperties(*session.source) : Ooxml::CoreProperties();
     core.title = deck.title;
     core.modified = QDateTime::currentDateTimeUtc();

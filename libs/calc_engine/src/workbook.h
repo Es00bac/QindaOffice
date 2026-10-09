@@ -5,6 +5,7 @@
 #include "image_spec.h"
 #include "dependencies.h"
 #include "eval.h"
+#include "custom_view.h"
 #include "sheet.h"
 
 #include <QDateTime>
@@ -261,6 +262,11 @@ public:
 
     // Floating images (M39, D-040), encoded bytes as the file carried them.
     QList<ImageSpec> images;
+
+    // M82 (D-091): Excel's Custom Views by name (custom_view.h); each
+    // sheet holds its part of them (Sheet::customViews). Document state:
+    // undo and recovery carry it.
+    QList<CustomViewSpec> customViews;
 
     // The source package's theme and document properties (D-069).
     WorkbookSource source;

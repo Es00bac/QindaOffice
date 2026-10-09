@@ -42,7 +42,7 @@ qreal SpreadsheetItem::autofitColumnWidth(int col) const
             continue;
         }
         const CellAddr addr{qint32(packed & 0xffffffffu), qint32(col)};
-        widest = qMax(widest, metrics.horizontalAdvance(m_document->displayTextAt(addr)));
+        widest = qMax(widest, metrics.horizontalAdvance(m_document->displayTextAt(sheetIndex(), addr)));
         Q_UNUSED(wb);
     }
     // Autofit never squeezes below the default width or runs off the screen.
@@ -116,7 +116,9 @@ void SpreadsheetItem::mousePressEvent(QMouseEvent *event)
     // The outline gutter (M66): level buttons and +/- buttons.
     if (pos.x() < rowGutterPx() || pos.y() < colGutterPx()) {
         cancelEditor();
-        static_cast<void>(outlineClick(pos));
+        if (!m_readOnly) {
+            static_cast<void>(outlineClick(pos));
+        }
         return;
     }
     if (pos.x() < headerWidth() && pos.y() < headerHeight()) {
@@ -127,7 +129,7 @@ void SpreadsheetItem::mousePressEvent(QMouseEvent *event)
     if (inColumnHeader) {
         cancelEditor();
         const qint32 boundary = columnBoundaryAt(pos.x() - headerWidth());
-        if (boundary >= 0 && event->button() == Qt::LeftButton) {
+        if (boundary >= 0 && event->button() == Qt::LeftButton && !m_readOnly) {
             m_resizeColumn = boundary;
             m_resizeOriginal = sheet->columnWidth(boundary);
             m_resizeOrigin = pos.x();
@@ -139,7 +141,7 @@ void SpreadsheetItem::mousePressEvent(QMouseEvent *event)
     if (inRowHeader) {
         cancelEditor();
         const qint32 boundary = rowBoundaryAt(pos.y() - headerHeight());
-        if (boundary >= 0 && event->button() == Qt::LeftButton) {
+        if (boundary >= 0 && event->button() == Qt::LeftButton && !m_readOnly) {
             m_resizeRow = boundary;
             m_resizeOriginal = sheet->rowHeight(boundary);
             m_resizeOrigin = pos.y();
@@ -150,9 +152,17 @@ void SpreadsheetItem::mousePressEvent(QMouseEvent *event)
     }
     cancelEditor();
     const QPointF gridPos = pos - QPointF(headerWidth(), headerHeight());
+    // M82: a split bar is dragged, never clicked through; any other click
+    // makes its pane the active one (the keyboard scrolls it).
+    if (event->button() == Qt::LeftButton && splitBarAt(gridPos) != 0) {
+        m_splitDrag = splitBarAt(gridPos);
+        return;
+    }
+    m_activeRowPane = paneIndexAt(gridPos.y(), true);
+    m_activeColPane = paneIndexAt(gridPos.x(), false);
     // The filter dropdown sits inside a header cell: test it before the
     // cell under it takes the click.
-    if (event->button() == Qt::LeftButton) {
+    if (event->button() == Qt::LeftButton && !m_readOnly) {
         const qint32 filterColumn = filterButtonAt(gridPos);
         if (filterColumn >= 0) {
             emit filterButtonClicked(filterColumn, pos.x(), pos.y());
@@ -166,7 +176,7 @@ void SpreadsheetItem::mousePressEvent(QMouseEvent *event)
         emit linkActivated(int(hit.row), int(hit.col));
         return;
     }
-    if (event->button() == Qt::RightButton) {
+    if (event->button() == Qt::RightButton && !m_readOnly) {
         // A right-click inside the current selection keeps it: acting on a
         // multi-cell selection is the whole point of the context menu.
         if (!selectionRange().contains(hit)) {
@@ -182,10 +192,22 @@ void SpreadsheetItem::mouseMoveEvent(QMouseEvent *event)
 {
     const QPointF pos = event->position();
     Sheet *sheet = m_document != nullptr && m_document->workbook()->sheetCount() > 0
-        ? &m_document->workbook()->sheetAt(m_document->activeSheet())
+        ? &m_document->workbook()->sheetAt(sheetIndex())
         : nullptr;
     event->accept();
     if (sheet == nullptr) {
+        return;
+    }
+    if (m_splitDrag != 0) {
+        // While dragging the bar stays inside the cell area; dropped at an
+        // edge it goes away (mouseReleaseEvent).
+        const QPointF gridPos = pos - QPointF(headerWidth(), headerHeight());
+        if (m_splitDrag & 1) {
+            setSplitX(qBound(qreal(30), gridPos.x() - kSplitBar / 2, viewportWidth() - 30 - kSplitBar));
+        }
+        if (m_splitDrag & 2) {
+            setSplitY(qBound(qreal(30), gridPos.y() - kSplitBar / 2, viewportHeight() - 30 - kSplitBar));
+        }
         return;
     }
     if (m_resizeColumn >= 0) {
@@ -214,8 +236,20 @@ void SpreadsheetItem::mouseMoveEvent(QMouseEvent *event)
 void SpreadsheetItem::mouseReleaseEvent(QMouseEvent *event)
 {
     event->accept();
+    if (m_splitDrag != 0) {
+        const QPointF gridPos = event->position() - QPointF(headerWidth(), headerHeight());
+        const int bars = m_splitDrag;
+        m_splitDrag = 0;
+        if ((bars & 1) && (gridPos.x() < 20 || gridPos.x() > viewportWidth() - 20)) {
+            setSplitX(0); // dropped at an edge: that bar goes away
+        }
+        if ((bars & 2) && (gridPos.y() < 20 || gridPos.y() > viewportHeight() - 20)) {
+            setSplitY(0);
+        }
+        return;
+    }
     Sheet *sheet = m_document != nullptr && m_document->workbook()->sheetCount() > 0
-        ? &m_document->workbook()->sheetAt(m_document->activeSheet())
+        ? &m_document->workbook()->sheetAt(sheetIndex())
         : nullptr;
     if (sheet == nullptr) {
         return;
@@ -247,16 +281,26 @@ void SpreadsheetItem::mouseDoubleClickEvent(QMouseEvent *event)
     event->accept();
     if (pos.y() < headerHeight() && pos.x() >= headerWidth()) {
         const qint32 boundary = columnBoundaryAt(pos.x() - headerWidth());
-        if (boundary >= 0) {
+        if (boundary >= 0 && !m_readOnly) {
             emit columnWidthChanged(boundary, autofitColumnWidth(boundary));
         }
         return;
     }
     if (pos.x() >= headerWidth() && pos.y() >= headerHeight()) {
+        // M82: a double click on a split bar takes it away, as in Excel.
+        if (const int bars = splitBarAt(pos - QPointF(headerWidth(), headerHeight())); bars != 0) {
+            if (bars & 1) {
+                setSplitX(0);
+            }
+            if (bars & 2) {
+                setSplitY(0);
+            }
+            return;
+        }
         const CellAddr at = cellAtPos(pos - QPointF(headerWidth(), headerHeight()));
         setCursorCell(at);
         if (m_document != nullptr
-            && CalcEng::pivotAt(*m_document->workbook(), m_document->activeSheet(), at).isValid()) {
+            && CalcEng::pivotAt(*m_document->workbook(), sheetIndex(), at).isValid()) {
             emit pivotCellActivated(at.row, at.col); // a PivotTable's output is not typed into (M74)
             return;
         }
@@ -273,7 +317,9 @@ void SpreadsheetItem::hoverMoveEvent(QHoverEvent *event)
     } else if (pos.x() < headerWidth() && pos.y() >= headerHeight()) {
         setCursor(QCursor(rowBoundaryAt(pos.y() - headerHeight()) >= 0 ? Qt::SplitVCursor : Qt::ArrowCursor));
     } else {
-        setCursor(QCursor(Qt::ArrowCursor));
+        const int bars = splitBarAt(pos - QPointF(headerWidth(), headerHeight()));
+        setCursor(QCursor(bars == 3 ? Qt::SizeAllCursor : bars == 1 ? Qt::SplitHCursor
+                                                        : bars == 2 ? Qt::SplitVCursor : Qt::ArrowCursor));
     }
     // Cell comments as a hover tooltip (the QML shows a Tk.ToolTip).
     QString comment;
@@ -331,8 +377,21 @@ void SpreadsheetItem::wheelEvent(QWheelEvent *event)
     if (event->modifiers() & Qt::ShiftModifier) {
         std::swap(dx, dy);
     }
-    setScrollX(m_scrollX + dx);
-    setScrollY(m_scrollY + dy);
+    // The pane under the pointer scrolls (M82: a split's panes each have
+    // their own scroll; under a freeze only the scrolling part moves).
+    const QPointF gridPos = event->position() - QPointF(headerWidth(), headerHeight());
+    const QVector<AxisPane> rowList = panes(true);
+    const QVector<AxisPane> colList = panes(false);
+    int rowPane = paneIndexAt(gridPos.y(), true);
+    int colPane = paneIndexAt(gridPos.x(), false);
+    if (!rowList.at(rowPane).scrolls) {
+        rowPane = int(rowList.size()) - 1;
+    }
+    if (!colList.at(colPane).scrolls) {
+        colPane = int(colList.size()) - 1;
+    }
+    scrollPaneTo(colPane, false, colList.at(colPane).scroll + dx);
+    scrollPaneTo(rowPane, true, rowList.at(rowPane).scroll + dy);
     event->accept();
 }
 
@@ -385,7 +444,9 @@ void SpreadsheetItem::keyPressEvent(QKeyEvent *event)
     case Qt::Key_Backspace:
         // AGENT-GUARD: the item never mutates the document; the host owns
         // the undo step.
-        emit clearRequested(selectionRange());
+        if (!m_readOnly) {
+            emit clearRequested(selectionRange());
+        }
         return;
     case Qt::Key_F2:
         startEditor();

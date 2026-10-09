@@ -58,6 +58,7 @@ struct SheetSnapshot {
     CalcEng::ScenarioSet scenarios;
     QList<CalcEng::DataTableSpec> dataTables;
     QList<CalcEng::KeptRule> keptRules;
+    QList<CalcEng::Sheet::CustomView> customViews; // M82 (D-091): its part of each Custom View
 };
 
 struct WorkbookSnapshot {
@@ -72,6 +73,7 @@ struct WorkbookSnapshot {
     QList<CalcEng::ImageSpec> images;
     CalcEng::WorkbookProtection protection; // M66 (D-075)
     QList<CalcEng::PivotCache> pivotCaches; // M74 (D-083)
+    QList<CalcEng::CustomViewSpec> customViews; // M82 (D-091)
     qint32 activeSheet = 0;
 };
 

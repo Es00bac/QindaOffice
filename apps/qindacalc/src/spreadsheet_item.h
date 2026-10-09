@@ -16,8 +16,16 @@
 // colours (paper white, black text: D-004); the chrome colours (headers,
 // selection, cursor, grid lines) are properties the QML binds to Tk.Theme.
 //
+// M82 (D-091): the grid is cut into PANES — one, the frozen and the
+// scrolling part of each axis, or the two sides of a Split (View ▸ Split:
+// four panes, each pair scrolling on its own, the bars dragged) — and each
+// pane is painted on its own with Excel's text overflow
+// (calc_text_overflow.h). Split is the window's view state, like the zoom:
+// never the document's, never an undo step.
+//
 // Files: spreadsheet_item.cpp (geometry, cursor, scroll, editor contract),
-// spreadsheet_item_paint.cpp, spreadsheet_item_input.cpp.
+// spreadsheet_item_panes.cpp (panes, Split), spreadsheet_item_paint.cpp,
+// spreadsheet_item_cells.cpp (the cells of a pane), spreadsheet_item_input.cpp.
 
 #include "pivot_style.h"
 #include "value.h"
@@ -55,6 +63,26 @@ class SpreadsheetItem : public QQuickPaintedItem {
     Q_PROPERTY(qreal scrollHeight READ scrollHeight NOTIFY scrollChanged)
     Q_PROPERTY(qreal viewportWidth READ viewportWidth NOTIFY scrollChanged)
     Q_PROPERTY(qreal viewportHeight READ viewportHeight NOTIFY scrollChanged)
+    // M82: View ▸ Split. splitX / splitY: where the vertical / horizontal
+    // bar starts in the cell area (0 = that split is off); the left and top
+    // panes scroll by splitScrollX / splitScrollY, the others by scrollX /
+    // scrollY (the scroll bars the window always shows).
+    Q_PROPERTY(bool split READ isSplit NOTIFY splitChanged)
+    Q_PROPERTY(qreal splitX READ splitX WRITE setSplitX NOTIFY splitChanged)
+    Q_PROPERTY(qreal splitY READ splitY WRITE setSplitY NOTIFY splitChanged)
+    Q_PROPERTY(qreal splitScrollX READ splitScrollX WRITE setSplitScrollX NOTIFY scrollChanged)
+    Q_PROPERTY(qreal splitScrollY READ splitScrollY WRITE setSplitScrollY NOTIFY scrollChanged)
+    // The bars in ITEM coordinates (the headers included), for the window's
+    // second pair of scroll bars; 0 while that split is off.
+    Q_PROPERTY(qreal splitBarX READ splitBarX NOTIFY splitChanged)
+    Q_PROPERTY(qreal splitBarY READ splitBarY NOTIFY splitChanged)
+    Q_PROPERTY(qreal splitBarWidth READ splitBarWidth CONSTANT)
+    // M82: View ▸ New Window's grid (CalcViewWindows.qml): the sheet it
+    // shows by name (empty: the document's active sheet, as the document
+    // window's grid does) and whether it only views — no editor, no edit,
+    // no resize; its selection, scroll, zoom and Split are its own.
+    Q_PROPERTY(QString viewSheet READ viewSheet WRITE setViewSheet NOTIFY viewSheetChanged)
+    Q_PROPERTY(bool readOnly READ isReadOnly WRITE setReadOnly NOTIFY readOnlyChanged)
     Q_PROPERTY(bool editing READ isEditing NOTIFY editingChanged)
     Q_PROPERTY(QRectF editorRect READ editorRect NOTIFY editingChanged)
     Q_PROPERTY(QString editorText READ editorText NOTIFY editingChanged)
@@ -142,6 +170,54 @@ public:
     Q_INVOKABLE void refreshAll();
     [[nodiscard]] QFont cellFont() const { return m_font; }
     void setCellFont(const QFont &font);
+
+    // ---- M82: Split (spreadsheet_item_panes.cpp) ----
+    [[nodiscard]] bool isSplit() const { return splitX() > 0 || splitY() > 0; }
+    [[nodiscard]] qreal splitX() const { return m_split.x; }
+    [[nodiscard]] qreal splitY() const { return m_split.y; }
+    void setSplitX(qreal x);
+    void setSplitY(qreal y);
+    [[nodiscard]] qreal splitScrollX() const { return m_split.scrollX; }
+    [[nodiscard]] qreal splitScrollY() const { return m_split.scrollY; }
+    void setSplitScrollX(qreal value);
+    void setSplitScrollY(qreal value);
+    [[nodiscard]] qreal splitBarX() const { return m_split.x > 0 ? headerWidth() + m_split.x : 0; }
+    [[nodiscard]] qreal splitBarY() const { return m_split.y > 0 ? headerHeight() + m_split.y : 0; }
+    [[nodiscard]] static qreal splitBarWidth() { return kSplitBar; }
+    // Excel's View ▸ Split: off when on; else at the cursor cell's top-left
+    // corner — both bars, only the vertical one for a cursor in row 1, only
+    // the horizontal one in column A, the middle of the view for A1.
+    Q_INVOKABLE void toggleSplit();
+    Q_INVOKABLE void clearSplit();
+    // The width of the bar between split panes, in the cell area.
+    static constexpr qreal kSplitBar = 6;
+
+    // ---- M82: New Window's grid (spreadsheet_item_views.cpp) ----
+    [[nodiscard]] QString viewSheet() const { return m_viewSheet; }
+    void setViewSheet(const QString &sheet);
+    [[nodiscard]] bool isReadOnly() const { return m_readOnly; }
+    void setReadOnly(bool readOnly);
+    // The engine index of the sheet on show (-1 without a document).
+    [[nodiscard]] qint32 sheetIndex() const;
+
+    // ---- M82: a Custom View's window part (spreadsheet_item_views.cpp) ----
+    // A sheet as this window shows it: the zoom (the window's), a split's
+    // bars (px in the cell area, 0: none) and the first cell of the first
+    // pane and of the far, bottom-right one (a split's or frozen panes').
+    // Only the sheet on show has scroll positions; another sheet gives its
+    // split and A1.
+    struct SheetWindow {
+        qreal zoom = 1;
+        qreal splitX = 0;
+        qreal splitY = 0;
+        CalcEng::CellAddr topLeft{0, 0};
+        CalcEng::CellAddr farTopLeft{0, 0};
+    };
+    [[nodiscard]] SheetWindow sheetWindow(const QString &sheet) const;
+    // Puts a sheet's window back: on the sheet on show the zoom, the split
+    // and the scroll positions; on another sheet its split, for when it is
+    // shown.
+    void setSheetWindow(const QString &sheet, const SheetWindow &window);
 
     // ---- the editor contract (QML places a Tk.TextField at editorRect) ----
     [[nodiscard]] bool isEditing() const { return m_editing; }
@@ -233,6 +309,9 @@ signals:
     void outlineToggled(bool rows, int line, int level);
     void zoomChanged();
     void scrollChanged();
+    void splitChanged();
+    void viewSheetChanged();
+    void readOnlyChanged();
     void editingChanged();
     void cellFontChanged();
     void hoverChanged();
@@ -258,10 +337,33 @@ private:
         qreal pos = 0;
         qreal size = 0;
     };
+    // A pane along one axis (M82): the part of the cell area it takes, the
+    // lines it shows and how far it is scrolled. The frozen part of an axis
+    // never scrolls; a split's two sides scroll independently.
+    struct AxisPane {
+        qreal start = 0;   // grid position where the pane begins
+        qreal end = 0;     // and ends
+        qint32 base = 0;   // the first line of its region
+        qint32 limit = -1; // one past its last line (-1: to the sheet's end)
+        qreal scroll = 0;  // px scrolled past `base`
+        bool scrolls = true;
+    };
+    [[nodiscard]] QVector<AxisPane> panes(bool rows) const;
+    [[nodiscard]] QVector<Band> paneBands(const AxisPane &pane, bool rows) const;
+    // The pane `line` is measured in: by index under a freeze, the pane
+    // being painted (else the active one) under a split.
+    [[nodiscard]] int paneIndexFor(qint32 line, bool rows) const;
+    [[nodiscard]] int paneIndexAt(qreal pos, bool rows) const;
+    [[nodiscard]] qreal lineStart(qint32 line, const AxisPane &pane, bool rows) const;
+    [[nodiscard]] qreal lineSize(qint32 line, bool rows) const;
+    void scrollPaneTo(int index, bool rows, qreal value);
+    void scrollIntoView(const CalcEng::CellAddr &addr);
+    // Every pane's bands, frozen / left / top first (headers, hit tests).
     [[nodiscard]] QVector<Band> visibleRowBands() const;
     [[nodiscard]] QVector<Band> visibleColumnBands() const;
     [[nodiscard]] qreal frozenHeightPx() const;
     [[nodiscard]] qreal frozenWidthPx() const;
+    [[nodiscard]] qreal maxScroll(bool rows) const;
     void updateScrollRanges();
     [[nodiscard]] QString inputTextAt(const CalcEng::CellAddr &addr) const;
     [[nodiscard]] QRectF cellRect(const CalcEng::CellAddr &addr) const;
@@ -306,6 +408,14 @@ private:
     mutable QVector<CalcEng::Rgb> m_pivotTheme;
     mutable QByteArray m_pivotThemeKey;
     void paintGrid(QPainter &p);
+    // spreadsheet_item_cells.cpp (M82): one pane's cells — fills, grid
+    // lines (none under overflowing text), text with Excel's overflow,
+    // markers, borders — and the split bars.
+    void paintPaneCells(QPainter &p, const QVector<Band> &rows, const QVector<Band> &cols, const AxisPane &colPane);
+    void paintSplitBars(QPainter &p);
+    // A split bar under `pos` (grid coordinates): 1 vertical, 2 horizontal,
+    // 3 their crossing, 0 none.
+    [[nodiscard]] int splitBarAt(const QPointF &gridPos) const;
     void setChrome(QColor &slot, const QColor &value);
     // spreadsheet_item_overlay.cpp (M78): Page Break Preview and the
     // invalid-data circles, in grid coordinates.
@@ -313,6 +423,27 @@ private:
     void paintInvalidCircles(QPainter &p);
     std::optional<PageBreakView> m_pageBreaks;
     QList<CalcEng::CellAddr> m_invalidCells;
+
+    // M82: the split of the sheet on show (kept per sheet name while the
+    // window lives), the pane being painted (-1 outside paint()) and the
+    // pane the user last clicked or scrolled (keyboard moves scroll it).
+    struct SplitState {
+        qreal x = 0;
+        qreal y = 0;
+        qreal scrollX = 0;
+        qreal scrollY = 0;
+    };
+    SplitState m_split;
+    QHash<QString, SplitState> m_splits;
+    QString m_splitSheet;
+    void syncSplitSheet();
+    int m_paintRowPane = -1;
+    int m_paintColPane = -1;
+    int m_activeRowPane = 0;
+    int m_activeColPane = 0;
+    int m_splitDrag = 0; // the bar being dragged (splitBarAt), 0 none
+    QString m_viewSheet; // M82: New Window's sheet (empty: the active one)
+    bool m_readOnly = false;
 
     SpreadsheetDocument *m_document = nullptr;
     // AGENT-GUARD: A1, never {-1,-1} — the selection readouts describe a

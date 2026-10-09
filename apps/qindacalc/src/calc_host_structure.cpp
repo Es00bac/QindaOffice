@@ -424,6 +424,10 @@ void CalcHost::toggleFreeze(bool on)
         refreshGrid();
         return;
     }
+    // Freeze Panes takes the place of a split (M82, as in Excel).
+    if (m_grid != nullptr) {
+        m_grid->clearSplit();
+    }
     // Freeze above and left of the cursor: put the cursor in B2 and the
     // first row and column stay put. The state lives on the SHEET (it
     // round-trips to xlsx and rides undo/recovery).

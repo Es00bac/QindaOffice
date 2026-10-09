@@ -235,6 +235,11 @@ bool renameSheet(Workbook &book, qint32 index, const QString &newName)
     requalifyWorkbook(book, oldName, newName);
     StructureMath::requalifyLinkLocations(book, oldName, newName);
     requalifyPivotSources(book, oldName, newName); // M74: range sources follow
+    for (CustomViewSpec &view : book.customViews) { // M82: a view's sheet, by name
+        if (view.activeSheet == oldName) {
+            view.activeSheet = newName;
+        }
+    }
     book.reindexAll();
     return true;
 }

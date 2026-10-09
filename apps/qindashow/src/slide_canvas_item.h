@@ -30,7 +30,7 @@
 // slide_canvas_item_order.cpp (multi-selection, z-order),
 // slide_canvas_item_table.cpp (cells, boundaries, cell editing; M67),
 // slide_canvas_item_marks.cpp (placeholder frames, comment and media
-// marks; M75).
+// marks; M75; empty placeholders' prompts, M82).
 
 #include "presentation.h"
 #include "slide_renderer.h"
@@ -142,6 +142,13 @@ public:
     // nothing.
     bool editShape(const QString &shapeId, const QString &label, const std::function<bool(ShowModel::Shape &)> &mutate);
 
+    // ---- M82 (D-091): empty placeholders ----
+    // What each EMPTY placeholder of the slide types in — its layout's look
+    // (the host supplies it, the canvas holds no deck). Empty placeholders
+    // show PowerPoint's prompt ("Click to add title") in that look, in the
+    // editor only.
+    void setPlaceholderLooks(QHash<QString, ShowModel::TextRun> looks);
+
     // ---- M75: the Slide Master view's placeholder frames ----
     // On: placeholders show dashed frames, as in PowerPoint's master view.
     void setTemplateMode(bool on);
@@ -244,6 +251,7 @@ private:
     ShowModel::Shape m_tableBefore;
     std::function<ShowModel::TextRun()> m_tableTextLook;
     bool m_templateMode = false;
+    QHash<QString, ShowModel::TextRun> m_placeholderLooks; // M82
 };
 
 } // namespace QindaOffice::Apps::Show

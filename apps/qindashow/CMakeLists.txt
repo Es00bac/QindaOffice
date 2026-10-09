@@ -10,11 +10,13 @@ set(qindashow_qml
     qml/CommentsPane.qml
     qml/FormatBackgroundPane.qml
     qml/InsertTableDialog.qml
+    qml/LayoutGallery.qml
     qml/MasterDialog.qml
     qml/MasterPane.qml
     qml/NotesPane.qml
     qml/PlayerMedia.qml
     qml/PresenterView.qml
+    qml/ReuseSlidesDialog.qml
     qml/ShowPlayer.qml
     qml/ShowWindow.qml
     qml/ShowRibbonLayout.qml
@@ -63,6 +65,7 @@ qt_add_qml_module(qindashow_app
         src/show_master_view.cpp src/show_master_view.h
         src/show_media_actions.cpp src/show_media_actions.h
         src/show_sections.cpp src/show_sections.h
+        src/show_slide_layouts.cpp src/show_slide_layouts.h
         src/show_table_actions.cpp src/show_table_actions.h
         src/show_toolbox.cpp src/show_toolbox.h
         src/slide_canvas_item.cpp src/slide_canvas_item.h

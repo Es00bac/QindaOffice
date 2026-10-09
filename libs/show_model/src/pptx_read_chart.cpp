@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // A chart part (c:chartSpace) for the pptx reader (pptx_read_shapes.h):
-// the first plot's type and grouping, the title, the legend and every
-// series' cached names, categories and values. Colours resolve against
-// the slide's theme (a chart's own c:clrMapOvr is honoured).
+// every plot's type and grouping (the first one's is the chart's), the
+// title, the legend and every series' cached names, categories and values,
+// in the order the file gives them (c:order), each with its c:idx and
+// plot (M82, D-091); multi-level categories keep their outer levels.
+// Colours resolve against the slide's theme (a chart's own c:clrMapOvr is
+// honoured).
 
 #include "pptx_read_shapes.h"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -54,6 +58,56 @@ QStringList cachedStrings(const Ooxml::XmlElement *holder)
     return values;
 }
 
+// The outer levels of a multi-level category cache (c:multiLvlStrCache):
+// every c:lvl after the first, nearest first, each sized to the points.
+QList<QStringList> outerLevels(const Ooxml::XmlElement *holder)
+{
+    QList<QStringList> levels;
+    const Ooxml::XmlElement *multi = holder != nullptr ? holder->descendant(nsC(), u"multiLvlStrCache") : nullptr;
+    if (multi == nullptr) {
+        return levels;
+    }
+    const int count = multi->child(nsC(), u"ptCount") != nullptr ? multi->child(nsC(), u"ptCount")->attr(u"val").toInt() : 0;
+    const QList<const Ooxml::XmlElement *> lvls = multi->elements(nsC(), u"lvl");
+    for (qsizetype l = 1; l < lvls.size(); ++l) {
+        QStringList labels(qBound(0, count, 100000), QString());
+        for (const Ooxml::XmlElement *pt : lvls.at(l)->elements(nsC(), u"pt")) {
+            const int idx = pt->attr(u"idx").toInt();
+            const Ooxml::XmlElement *v = pt->child(nsC(), u"v");
+            if (idx >= 0 && idx < labels.size()) {
+                labels[idx] = v != nullptr ? v->text() : QString();
+            }
+        }
+        levels.append(labels);
+    }
+    return levels;
+}
+
+QString typeOf(const Ooxml::XmlElement &kind)
+{
+    const QString name = kind.name;
+    if (name == u"barChart" || name == u"bar3DChart") {
+        const Ooxml::XmlElement *dir = kind.child(nsC(), u"barDir");
+        return dir != nullptr && dir->attr(u"val") == u"bar" ? QStringLiteral("bar") : QStringLiteral("column");
+    }
+    if (name == u"lineChart" || name == u"line3DChart" || name == u"radarChart" || name == u"stockChart") {
+        return QStringLiteral("line");
+    }
+    if (name == u"areaChart" || name == u"area3DChart") {
+        return QStringLiteral("area");
+    }
+    if (name == u"pieChart" || name == u"pie3DChart" || name == u"ofPieChart") {
+        return QStringLiteral("pie");
+    }
+    if (name == u"doughnutChart") {
+        return QStringLiteral("doughnut");
+    }
+    if (name == u"scatterChart" || name == u"bubbleChart") {
+        return QStringLiteral("scatter");
+    }
+    return {};
+}
+
 QList<qreal> cachedNumbers(const Ooxml::XmlElement *holder)
 {
     QList<qreal> numbers;
@@ -98,6 +152,42 @@ QString richText(const Ooxml::XmlElement *tx)
     return cachedStrings(tx).join(QLatin1Char(' ')).trimmed();
 }
 
+// One series: name, colour, c:idx, the cached data and per-point colours.
+ChartSeries readSeries(const PartContext &ctx, const Ooxml::XmlElement &serElement, const QString &type)
+{
+    const Ooxml::XmlElement *ser = &serElement;
+    ChartSeries series;
+    series.name = richText(ser->child(nsC(), u"tx"));
+    series.color = seriesFill(ctx, ser->child(nsC(), u"spPr"));
+    if (const Ooxml::XmlElement *idx = ser->child(nsC(), u"idx")) {
+        series.sourceIdx = idx->attr(u"val").toInt();
+    }
+    if (type == u"scatter") {
+        series.categories = cachedStrings(ser->child(nsC(), u"xVal"));
+        series.xValues = cachedNumbers(ser->child(nsC(), u"xVal"));
+        series.values = cachedNumbers(ser->child(nsC(), u"yVal"));
+    } else {
+        series.categories = cachedStrings(ser->child(nsC(), u"cat"));
+        series.values = cachedNumbers(ser->child(nsC(), u"val"));
+    }
+    for (const Ooxml::XmlElement *point : ser->elements(nsC(), u"dPt")) {
+        const int idx = point->child(nsC(), u"idx") != nullptr ? point->child(nsC(), u"idx")->attr(u"val").toInt() : -1;
+        if (idx < 0 || idx > 100000) {
+            continue;
+        }
+        while (series.pointColors.size() <= idx) {
+            series.pointColors.append(QColor());
+        }
+        series.pointColors[idx] = seriesFill(ctx, point->child(nsC(), u"spPr"));
+    }
+    // A last point without a colour of its own is no point colour at all
+    // (chart_edit.cpp's setTable leaves such entries out too).
+    while (!series.pointColors.isEmpty() && !series.pointColors.last().isValid()) {
+        series.pointColors.removeLast();
+    }
+    return series;
+}
+
 } // namespace
 
 ChartData readChart(const PartContext &slideCtx, const QString &chartPart)
@@ -135,57 +225,52 @@ ChartData readChart(const PartContext &slideCtx, const QString &chartPart)
     if (plot == nullptr) {
         return chart;
     }
-    const Ooxml::XmlElement *kind = nullptr;
+    QList<const Ooxml::XmlElement *> kinds;
     for (const Ooxml::XmlElement *e : plot->elements()) {
         if (e->ns == nsC() && e->name.endsWith(QLatin1String("Chart"))) {
-            kind = e;
-            break;
+            kinds.append(e);
         }
     }
-    if (kind == nullptr) {
+    if (kinds.isEmpty()) {
         return chart;
     }
-    const QString name = kind->name;
-    if (name == u"barChart" || name == u"bar3DChart") {
-        const Ooxml::XmlElement *dir = kind->child(nsC(), u"barDir");
-        chart.type = dir != nullptr && dir->attr(u"val") == u"bar" ? QStringLiteral("bar") : QStringLiteral("column");
-    } else if (name == u"lineChart" || name == u"line3DChart" || name == u"radarChart" || name == u"stockChart") {
-        chart.type = QStringLiteral("line");
-    } else if (name == u"areaChart" || name == u"area3DChart") {
-        chart.type = QStringLiteral("area");
-    } else if (name == u"pieChart" || name == u"pie3DChart" || name == u"ofPieChart") {
-        chart.type = QStringLiteral("pie");
-    } else if (name == u"doughnutChart") {
-        chart.type = QStringLiteral("doughnut");
-    } else if (name == u"scatterChart" || name == u"bubbleChart") {
-        chart.type = QStringLiteral("scatter");
-    }
-    if (const Ooxml::XmlElement *grouping = kind->child(nsC(), u"grouping")) {
-        chart.grouping = grouping->attr(u"val");
-    }
-    for (const Ooxml::XmlElement *ser : kind->elements(nsC(), u"ser")) {
-        ChartSeries series;
-        series.name = richText(ser->child(nsC(), u"tx"));
-        series.color = seriesFill(ctx, ser->child(nsC(), u"spPr"));
-        if (chart.type == u"scatter") {
-            series.categories = cachedStrings(ser->child(nsC(), u"xVal"));
-            series.xValues = cachedNumbers(ser->child(nsC(), u"xVal"));
-            series.values = cachedNumbers(ser->child(nsC(), u"yVal"));
-        } else {
-            series.categories = cachedStrings(ser->child(nsC(), u"cat"));
-            series.values = cachedNumbers(ser->child(nsC(), u"val"));
+    // Every plot, and its series with the place the file orders them in.
+    QList<std::pair<int, ChartSeries>> ordered;
+    for (qsizetype p = 0; p < kinds.size(); ++p) {
+        const Ooxml::XmlElement *kind = kinds.at(p);
+        ChartPlot plotKind{typeOf(*kind), QString()};
+        if (const Ooxml::XmlElement *grouping = kind->child(nsC(), u"grouping")) {
+            plotKind.grouping = grouping->attr(u"val");
         }
-        for (const Ooxml::XmlElement *point : ser->elements(nsC(), u"dPt")) {
-            const int idx = point->child(nsC(), u"idx") != nullptr ? point->child(nsC(), u"idx")->attr(u"val").toInt() : -1;
-            if (idx < 0 || idx > 100000) {
-                continue;
+        chart.plots.append(plotKind);
+        for (const Ooxml::XmlElement *ser : kind->elements(nsC(), u"ser")) {
+            ChartSeries series = readSeries(ctx, *ser, plotKind.type);
+            series.plot = int(p);
+            const Ooxml::XmlElement *order = ser->child(nsC(), u"order");
+            ordered.append({order != nullptr ? order->attr(u"val").toInt() : int(ordered.size()), series});
+            if (chart.categoryLevels.isEmpty() && plotKind.type != u"scatter") {
+                chart.categoryLevels = outerLevels(ser->child(nsC(), u"cat"));
             }
-            while (series.pointColors.size() <= idx) {
-                series.pointColors.append(QColor());
-            }
-            series.pointColors[idx] = seriesFill(ctx, point->child(nsC(), u"spPr"));
         }
+    }
+    chart.type = chart.plots.first().type;
+    chart.grouping = chart.plots.first().grouping;
+    if (chart.plots.size() == 1) {
+        chart.plots.clear(); // one plot: the chart's own type says it
+    }
+    std::stable_sort(ordered.begin(), ordered.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
+    for (const auto &[order, series] : ordered) {
         chart.series.append(series);
+    }
+    int points = 0;
+    for (const ChartSeries &series : chart.series) {
+        points = qMax(points, int(qMax(series.values.size(), series.categories.size())));
+    }
+    for (QStringList &level : chart.categoryLevels) {
+        level.resize(points);
+    }
+    for (int k = 0; k < points; ++k) {
+        chart.categorySource.append(k);
     }
     // A single series titles its chart unless the title was deleted.
     if (chart.title.isEmpty() && !titleDeleted && body->child(nsC(), u"title") != nullptr && chart.series.size() == 1) {

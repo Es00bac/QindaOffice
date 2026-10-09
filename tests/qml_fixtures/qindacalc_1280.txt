@@ -31,6 +31,8 @@ QQuickRootItem#CalcWindow
               QQuickRectangle#boxFocusRing [hidden]
             Flex#dockZone_overlay [hidden]
             ScrollBar#gridHScroll
+            ScrollBar#gridSplitHScroll [hidden]
+            ScrollBar#gridSplitVScroll [hidden]
             ScrollBar#gridVScroll
             SpreadsheetItem#calcGrid
               TextField#cellEditor [hidden]

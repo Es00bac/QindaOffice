@@ -33,6 +33,154 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M82 polish gates (D-091)
+
+Qualified on qinda (branch `m82-calc-show-polish`, merged with
+`m60-office-formats` a320863) with `QQO_OOXML_SCHEMA_DIR=~/scratch/qqo/ecma-xsd`
+and xmllint, as a targeted build at the lowest CPU and I/O priority (the
+calc and show libraries, QindaCalc, QindaShow and their tests):
+**86/86 CTest targets passed, 653.01 s**
+(`ctest --preset dev -R "calc|show|pptx|fodp"`). QtTest counts
+(init/cleanup included):
+
+- calc_engine — `tst_calc_parser` 57, `_functions` 6, `_recalc` 12,
+  `_numfmt` 7, `_csv` 8, `_structure` 18, `_rules` 13, `_spill` 11,
+  `_features` 10, `_tables` 13, `_arrays` 12, `_pivot` 25, `_pivot_values`
+  18, `_pivot_edit` 10, `_datatools` 17, `_flashfill` 16, `_whatif` 12,
+  `_datatables` 9, `_pagelayout` 20, `_condformat` 15, `_validation` 5,
+  **`_views` 7**: 321 passed.
+- calc_io — `tst_calc_io` 9, **`_styles` 7**, `_rules` 7, `_charts` 5,
+  `_tables` 4, `_view` 4, `_images` 5, `_excel` 10, `_package` 9, `_links`
+  4, `_outline` 3, `_protect` 3, `_carry` 7, `_carry_sheet` 6, `_arrays` 5,
+  `_structured` 6, `_chartsheets` 5, `_corpus` 2 (1 skipped without a
+  corpus), `_libre` 7, `_print` 9, `_pivot` 12, `_whatif` 6, `_kept` 9,
+  **`_views` 5**: 149 passed.
+- QindaCalc — `tst_calc_window` 12 (1 skipped), `_sample` 3 (8 skipped
+  without `QQO_SAMPLE_XLSX`), `_ui` 16, `_rules_ui` 6, `_menu_export` 3,
+  `_tools` 4, `_agent` 5, `_features_ui` 7, `_tables_ui` 6, `_pivot_ui` 8,
+  `_whatif_ui` 6, `_print_ui` 7, `_datatools_ui` 8, `_condformat_ui` 6,
+  **`_overflow_ui` 9, `_views_ui` 6**, and `calc_agent_process`: 112
+  passed.
+- show_model — `tst_show_model` 8, `tst_fodp` 7, `tst_pptx_read` 17,
+  `_write` 9, `_tables` 10, `_charts` 7, `tst_show_effects` 5,
+  `tst_pptx_design` 13, `_masters` 10, `_review` 12, `_media` 9,
+  **`_slides` 10, `_chart_combo` 7**: 124 passed.
+- QindaShow — `tst_qindashow` 12, `tst_show_ui` 19, `_design` 11,
+  `_menu_export` 3, `_tools` 3, `_table` 8, **`_chart_notes` 6**,
+  `_design_tab` 9, `_review` 10, **`_layouts_ui` 7**: 88 passed.
+
+In all 794 QtTest cases passed and 10 skipped; bold: new or changed in M82.
+
+The gates, per item (packages are built by hand the way Excel 365 and
+PowerPoint 365 write them; every saved package — and every chart's
+embedded workbook — validates against the Transitional XSDs):
+
+- **Text overflow** (`tst_calc_overflow_ui`, `tst_calc_io_styles`): on real
+  window grabs, left-aligned and General text runs on over empty
+  neighbours and ends where the label does, with no grid line under it
+  while the empty row below keeps its; a number, a merged range and a
+  formula showing nothing stop it, a neighbour's fill does not;
+  right-aligned text runs left and centred text both ways; wrapped,
+  Fill-aligned and merged text and numbers never spill (`####` for a
+  number too wide, a General number shortened first); the overflow keeps
+  painting while the sheet scrolls and past a freeze; the PDF Export
+  draws the same (read back through Poppler); the layout rules on their
+  own; `horizontal="fill"` round-trips.
+- **Split** (`tst_calc_views_ui`): View ▸ Split at D10 splits at its corner
+  at 1280 and 520 px; with every pane scrolled home A1 shows in all four
+  (checked on the grab); the top panes scroll together and the bottom ones
+  stay; a dragged bar follows the pointer, a double click takes one away;
+  Freeze Panes and Split take each other's place; the command's check
+  follows.
+- **New Window** (`tst_calc_views_ui`): a second window titled "Book:2",
+  sized from the document window, view-only (a key opens no editor,
+  Delete clears nothing), on its own sheet while the document window moves
+  on, showing that sheet's edits at once (on the grab), with a Split of its
+  own, and gone when the document window closes.
+- **Custom Views** (`tst_calc_views`, `tst_calc_io_views`,
+  `tst_calc_views_ui`): Add, Show (document part: frozen panes, sheet
+  visibility, hidden rows and columns with the filter, print settings, as
+  chosen), Add replacing a view of the same name, Delete, the table
+  refusal, structural edits and a renamed sheet; an Excel package with two
+  views (a frozen one with its own breaks, margins, page setup and filter;
+  a split one) reads into the model — the `Z_…wvu` names not among the
+  workbook's names, a part no workbook view lists dropped — saves
+  schema-valid with `customWorkbookViews` right after `calcPr`,
+  `customSheetViews` before `mergeCells` and the CT_CustomSheetView child
+  order, keeps the sheet's printer-settings part byte for byte and reads
+  back equal; views made in QindaCalc (a quoted sheet name, a split pane)
+  are written the same way; through the window the dialogs add a view,
+  Show puts back zoom, freeze, hidden rows, sheet and cell as one undo
+  step, Delete removes it, the view rides the recovery payload, and a
+  table turns the command off.
+- **Slides on the deck's layouts** (`tst_pptx_slides`,
+  `tst_show_layouts_ui`, over the hand-built decks of
+  `pptx_fixture_m82.h`): the deck's masters and layouts listed in
+  PowerPoint's order; a new slide on a layout written as PowerPoint writes
+  one (related to the layout, placeholders without a position or look of
+  their own, the footers of the slide before, the slide number renumbered)
+  and inheriting it; Layout keeping the text and taking the new places;
+  Reset Slide; Duplicate Slide owning its chart; Reuse Slides keeping or
+  taking the source formatting; Browse for Themes taking a template's
+  masters and layouts for every slide or the selected ones — every package
+  schema-valid, with PowerPoint's id rules (`sldId` ≥ 256, master and
+  layout ids in one space ≥ 2147483648), read back equal, the parts not
+  touched byte for byte; LibreOffice renders a deck made from layouts and
+  reused slides with its shown slides as pages. Through the window: the
+  gallery's thumbnails, the Slide menu and the ribbon's New Slide and
+  Layout menus list the layouts by name; New Slide picks PowerPoint's
+  layout; each command is one undo step; an empty placeholder shows its
+  prompt; Browse for Themes asks All or Selected; the panel export takes
+  the deck's entries; grabs at 1280 and 520 px.
+- **Charts** (`tst_pptx_chart_combo`, `tst_pptx_charts`,
+  `tst_show_chart_notes`): a PowerPoint combo chart over two-level
+  categories reads both plots and the groups; an unedited one travels
+  byte for byte; an edit reaches both plots' formulas and caches (an added
+  series joins the line, an added category the West group) and the
+  workbook (both category columns, the table grown over the data); a
+  deleted category takes its point's colour and label along and leaves its
+  group's label to the next point; a combo's columns turned to a line, to
+  stacked columns, and a pie turned to columns keep per-point colours and
+  data labels without a position the kind cannot take; the slides and
+  notes the edit does not touch are byte for byte against a plain re-save,
+  the media and theme against the source; LibreOffice renders the edited
+  combo. Through the window, Edit Data on a combo offers a kind per plot
+  (the kinds with axes), an added series joins the plot before it, and
+  the saved deck reads back equal.
+- **Commands** (`tst_calc_ui`, `tst_calc_menu_export`, `tst_show_ui`,
+  `tst_show_menu_export`): every new command is on its menu and the
+  ribbon, keeps a visible button at 520 px, and resolves in the panel
+  export.
+- **Fixtures and grabs**: `qindacalc_{1280,520}.txt` and QindaShow's
+  structural fixtures regenerated with `QQO_UPDATE_FIXTURES=1` (the diff
+  is the split scroll bars, the Workbook Views and Window buttons, the
+  Slide panel's gallery and the new Home / Insert buttons); the grabs of
+  the overflow, the split panes, the second window, a Custom View shown,
+  the layout gallery, Reuse Slides and a combo's Edit Data at 1280 and
+  520 px were looked at.
+
+**Owner's desktop check (QindaQt session):**
+
+1. QindaCalc: a sheet with long labels next to empty cells, numbers and a
+   merged range — the labels run on as in Excel, Print Preview and Export
+   PDF agree; View ▸ Split, drag both bars, double-click one away; View ▸
+   New Window, choose another sheet there, edit in the document window and
+   watch it follow; the QindaQt containers place the two windows.
+2. Custom Views: add two views (one without print settings), save as
+   `.xlsx`, open it in Excel: View ▸ Custom Views lists both and Show puts
+   back zoom, hidden rows, filter and print settings; check that a view's
+   split bars land where they were (the twips reading is LibreOffice's).
+3. QindaShow on a PowerPoint deck: New Slide's gallery shows the deck's
+   layouts with thumbnails; a slide on Title and Content, typed into;
+   Layout, Reset Slide, Duplicate Slide; Reuse Slides from another deck
+   with and without Keep source formatting; Browse for Themes with a
+   `.potx`, Apply to All and to one slide. Save and open in PowerPoint: no
+   repair prompt, each slide on the layout chosen.
+4. A combo chart with grouped categories: Edit Data, change both plots'
+   kinds, add a series and a category, save; PowerPoint's Edit Data opens
+   the workbook with both category columns and the new numbers, and the
+   points keep their colours and labels.
+
 ## M81 Mail gates (D-090)
 
 Qualified on qinda (branch `m81-mail-outlook`, merged with

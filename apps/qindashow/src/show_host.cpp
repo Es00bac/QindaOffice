@@ -8,6 +8,7 @@
 #include "show_commands.h"
 #include "show_design_actions.h"
 #include "show_master_view.h"
+#include "show_slide_layouts.h"
 #include "show_toolbox.h"
 #include "slide_renderer.h"
 #include "standard_actions.h"
@@ -143,6 +144,7 @@ void ShowHost::switchSlide(int row)
     // master's type defaults): setSlide repaints.
     const ShowModel::Slide &current = deck->slides.at(row);
     m_canvas->setBackdrop(ShowModel::backdropFor(*deck, current), deck->masterFor(current));
+    m_canvas->setPlaceholderLooks(ShowSlideLayouts::emptyLooks(*deck, current)); // M82
     m_canvas->setSlide(&deck->slides[row], deck->slideSize);
     m_arrange->syncFromSelection();
     m_design->syncFromSelection();

@@ -19,6 +19,11 @@ QtObject {
     property var colorIds: []
     property var fontIds: []
     property var effectIds: []
+    // M82 (D-091): the deck's layouts — New Slide on one, the current slide
+    // onto one (ShowSlideLayouts: showNewSlideLayout_<n>, showSlideLayout_<n>).
+    property var newSlideIds: []
+    property var layoutIds: []
+    readonly property var newSlideMenu: newSlideIds.concat(["|", "slideDuplicateAction", "showReuseSlidesAction"])
 
     readonly property var tableOptionIds: ["showTableHeaderRowAction", "showTableTotalRowAction", "showTableBandedRowsAction",
                                            "showTableFirstColumnAction", "showTableLastColumnAction", "showTableBandedColumnsAction"]
@@ -61,7 +66,10 @@ QtObject {
             StandardRibbon.historyGroup(),
             StandardRibbon.clipboardGroup(),
             { id: "slides", label: qsTr("Slides"), items: [
-                { action: "slideNewAction", size: "large" }, "slideDuplicateAction", "slideDeleteAction",
+                { action: "slideNewAction", split: true, size: "large", label: qsTr("New Slide"),
+                  iconName: "file-plus", menu: newSlideMenu },
+                { id: "layoutMenu", label: qsTr("Layout"), iconName: "layout-template", menu: layoutIds },
+                "showResetSlideAction", "slideDuplicateAction", "slideDeleteAction",
                 "showSlideMoveUpAction", "showSlideMoveDownAction",
                 { id: "sectionMenu", label: qsTr("Section"), iconName: "folder-plus", menu: sectionIds }] },
             { id: "text", label: qsTr("Text"), items: ["formatBoldAction", "formatItalicAction"] },
@@ -76,7 +84,10 @@ QtObject {
             StandardRibbon.editingGroup()
         ] },
         { id: "insert", label: qsTr("Insert"), keyTip: "N", groups: [
-            { id: "newSlide", label: qsTr("Slides"), items: [{ action: "slideNewAction", size: "large" }] },
+            { id: "newSlide", label: qsTr("Slides"), items: [
+                { action: "slideNewAction", split: true, size: "large", label: qsTr("New Slide"),
+                  iconName: "file-plus", menu: newSlideMenu },
+                "showReuseSlidesAction"] },
             { id: "tables", label: qsTr("Tables"), items: [{ action: "showInsertTableAction", size: "large" }] },
             { id: "images", label: qsTr("Images"), items: [{ action: "showInsertImageAction", size: "large" }] },
             { id: "shapes", label: qsTr("Shapes"), items: [

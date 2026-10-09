@@ -7,7 +7,8 @@ import QindaOffice.Calc
 // Goal Seek and its status, the Scenario Manager with Add/Edit Scenario and
 // Scenario Summary, Data Table, Text to Columns (and its overwrite
 // question), Remove Duplicates (and its report), Consolidate, New/Edit
-// Formatting Rule, and a validation Warning / Information question.
+// Formatting Rule, and a validation Warning / Information question; and
+// M82's (D-091) Custom Views with its Add View.
 // AGENT-GUARD: a QtObject, not an Item — the window seats ONE content child
 // (Tk.AppWindow); the dialogs reach the window's overlay through hostItem.
 QtObject {
@@ -95,6 +96,19 @@ QtObject {
         secondaryText: ""
     }
     property ConsolidateDialog consolidate: ConsolidateDialog { host: root.host; hostItem: root.hostItem }
+    property CustomViewsDialog customViews: CustomViewsDialog {
+        host: root.host
+        hostItem: root.hostItem
+        onAddRequested: {
+            root.customViewAdd.load()
+            root.customViewAdd.open()
+        }
+    }
+    property CustomViewAddDialog customViewAdd: CustomViewAddDialog {
+        host: root.host
+        hostItem: root.hostItem
+        onSaved: root.customViews.close() // Excel's Add closes Custom Views too
+    }
     property CondFormatRuleDialog rule: CondFormatRuleDialog {
         host: root.host
         hostItem: root.hostItem
@@ -121,6 +135,7 @@ QtObject {
         function onTextToColumnsRequested() { root.textToColumns.load(); root.textToColumns.open() }
         function onRemoveDuplicatesRequested() { root.removeDuplicates.load(); root.removeDuplicates.open() }
         function onConsolidateRequested() { root.consolidate.load(); root.consolidate.open() }
+        function onCustomViewsRequested() { root.customViews.load(); root.customViews.open() }
         function onCondFormatRuleRequested(index) { root.openRule(index) }
         function onInputQuestioned(title, message, warning) {
             root.question.warning = warning
