@@ -73,13 +73,32 @@ Tk.Box {
                 text: list.service !== null ? list.service.searchText : ""
                 onSearched: function(value) { if (list.service !== null) list.service.searchText = value }
             }
-            Tk.Segmented {
-                objectName: "messageFilter"
-                small: true
-                model: list.filters
-                currentIndex: list.service !== null ? Math.max(0, list.filters.map(function(f) { return f.value }).indexOf(list.service.filter)) : 0
-                tooltip: qsTr("Show only some messages")
-                onActivated: function(index) { list.service.filter = list.filters[index].value }
+            Tk.Flex {
+                direction: Tk.Flex.Row
+                align: Tk.Flex.Center
+                gap: Tk.Theme.space.xs
+                Tk.Segmented {
+                    objectName: "messageFilter"
+                    small: true
+                    model: list.filters
+                    currentIndex: list.service !== null ? Math.max(0, list.filters.map(function(f) { return f.value }).indexOf(list.service.filter)) : 0
+                    tooltip: qsTr("Show only some messages")
+                    onActivated: function(index) { list.service.filter = list.filters[index].value }
+                }
+                // M81: Outlook's Filter ▸ Categorized.
+                Tk.IconButton {
+                    id: categoryFilterButton
+                    objectName: "messageCategoryFilter"
+                    small: true
+                    iconName: "tag"
+                    checkable: true
+                    checked: list.service !== null && list.service.messageModel.categoryFilter.length > 0
+                    tooltip: list.service !== null && list.service.messageModel.categoryFilter.length > 0
+                             ? qsTr("Showing category: %1").arg(list.service.messageModel.categoryFilter === "*" ? qsTr("any")
+                                                                : list.service.messageModel.categoryFilter)
+                             : qsTr("Show only messages with a category")
+                    onClicked: { checked = Qt.binding(function() { return list.service.messageModel.categoryFilter.length > 0 }); categoryFilterMenu.popup() }
+                }
             }
         }
         Tk.Divider { }
@@ -129,7 +148,8 @@ Tk.Box {
         objectName: "messageContextMenu"
         Repeater {
             model: ["mailReplyAction", "mailReplyAllAction", "mailForwardAction", "|", "mailToggleReadAction",
-                    "mailToggleFlagAction", "mailMoveAction", "|", "mailArchiveAction", "mailDeleteAction"]
+                    "mailToggleFlagAction", "mailCategorizeAction", "mailFlagCustomAction", "mailMoveAction", "|",
+                    "mailCreateRuleAction", "mailIgnoreAction", "|", "mailArchiveAction", "mailDeleteAction"]
             delegate: Tk.MenuItem {
                 required property string modelData
                 readonly property var entry: modelData === "|" ? null : list.host.actions.entry(modelData)
@@ -141,6 +161,34 @@ Tk.Box {
                 enabled: entry !== null && entry.enabled
                 onTriggered: entry.trigger()
             }
+        }
+    }
+    Tk.Menu {
+        id: categoryFilterMenu
+        objectName: "messageCategoryFilterMenu"
+        readonly property string accountId: list.service !== null && list.service.currentFolderKey.startsWith("acct:")
+                                            ? list.service.currentFolderKey.split(":")[1] : "local"
+        Tk.MenuItem {
+            text: qsTr("Any category")
+            checkable: true
+            checked: list.service !== null && list.service.messageModel.categoryFilter === "*"
+            onTriggered: list.service.messageModel.categoryFilter = "*"
+        }
+        Repeater {
+            model: list.service !== null && list.service.organizer.revision >= 0 ? list.service.organizer.categoriesFor(categoryFilterMenu.accountId) : []
+            delegate: Tk.MenuItem {
+                required property var modelData
+                text: String(modelData.name)
+                checkable: true
+                checked: list.service.messageModel.categoryFilter === String(modelData.name)
+                onTriggered: list.service.messageModel.categoryFilter = String(modelData.name)
+            }
+        }
+        Tk.MenuSeparator { }
+        Tk.MenuItem {
+            text: qsTr("Show all messages")
+            iconName: "x"
+            onTriggered: list.service.messageModel.categoryFilter = ""
         }
     }
     Tk.Menu {

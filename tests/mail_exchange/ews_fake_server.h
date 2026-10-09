@@ -39,7 +39,30 @@ public:
         QList<QDateTime> occurrenceStarts;     // UTC, pattern order
         QList<QDateTime> deleted;
         QList<Occurrence> modified;
+        QStringList categories;                // M81: item:Categories
     };
+    // ---- M81 (D-090): the mailbox side (ews_fake_mailbox.cpp) ----
+    // Get/SetUserOofSettings, the CategoryList user configuration,
+    // GetInboxRules, FindFolder over mail folders, FindItem over messages
+    // (by message:InternetMessageId, or received since a date) and
+    // UpdateItem of item:Categories / item:Flag on a message or a calendar
+    // item (SendMeetingInvitationsOrCancellations required for the latter).
+    struct MailItem {
+        QString internetMessageId;             // with <>, as Exchange stores it
+        QString folderId = QStringLiteral("inbox");
+        QStringList categories;
+        QString flagStatus = QStringLiteral("NotFlagged");
+        QDateTime start, due, completed, received;
+        int changeKey = 1;
+    };
+    QMap<QString, MailItem> mail;              // item id -> message
+    QMap<QString, QString> mailFolders;        // folder id -> display name (FindFolder Deep)
+    QString oofState = QStringLiteral("Disabled"), oofAudience = QStringLiteral("All");
+    QString oofInternal, oofExternal;          // HTML
+    QDateTime oofStart, oofEnd;
+    QByteArray categoryList;                   // CategoryList XML; empty: ErrorItemNotFound
+    QByteArray inboxRules;                     // the <InboxRules> children (t: elements)
+    QString lastUpdateSend;                    // SendMeetingInvitationsOrCancellations of the last tag update
 
     EwsFakeServer();
     FakeHttpServer http;
@@ -56,6 +79,8 @@ public:
 
 private:
     FakeHttpServer::Reply handle(const FakeHttpServer::Request &request);
+    // True when `operation` is a mailbox operation; `reply` holds the answer.
+    bool mailboxOperation(const QindaOffice::Mail::XmlNode &operation, FakeHttpServer::Reply *reply);
     void findItem(QXmlStreamWriter &w);
     void getItem(QXmlStreamWriter &w, const QindaOffice::Mail::XmlNode &operation);
     void createItem(QXmlStreamWriter &w, const QindaOffice::Mail::XmlNode &operation);

@@ -339,6 +339,39 @@ private slots:
         verifyNoToken(results);
     }
 
+    void consentGapKeepsTheSignIn()
+    {
+        // M81 (D-090): a resource the user never consented to (Graph's
+        // mailbox scopes on an account made before) is refused with
+        // AADSTS65001 — the saved sign-in stays for everything else.
+        Harness h(QStringLiteral("microsoft"));
+        h.session.setResources({QStringLiteral("mail"), QStringLiteral("calendar"), QStringLiteral("mailbox")});
+        QVERIFY(h.signIn().value(QStringLiteral("ok")).toBool());
+        h.refreshAnswer = [](const FakeRequest &r) {
+            if (r.form(QStringLiteral("scope")).contains(QStringLiteral("MailboxSettings.ReadWrite")))
+                return json({{QStringLiteral("error"), QStringLiteral("invalid_grant")},
+                             {QStringLiteral("error_description"),
+                              QStringLiteral("AADSTS65001: The user or administrator has not consented to use the application.")}}, 400);
+            return json({{QStringLiteral("access_token"), kCalendarToken}, {QStringLiteral("token_type"), QStringLiteral("Bearer")},
+                         {QStringLiteral("expires_in"), 3600}, {QStringLiteral("refresh_token"), kRefreshToken}});
+        };
+        QVariantMap result = h.token(QStringLiteral("mb"), QStringLiteral("mailbox"));
+        QVERIFY(!result.value(QStringLiteral("ok")).toBool());
+        QVERIFY(result.value(QStringLiteral("consentRequired")).toBool());
+        QVERIFY(h.backend->contains(QStringLiteral("acc-1/oauth-refresh-microsoft")));
+        QCOMPARE(h.tokenRequests().last().form(QStringLiteral("scope")),
+                 QStringLiteral("offline_access MailboxSettings.ReadWrite Mail.ReadWrite"));
+        result = h.token(QStringLiteral("cal"), QStringLiteral("calendar"), true);
+        QVERIFY2(result.value(QStringLiteral("ok")).toBool(), qPrintable(result.value(QStringLiteral("error")).toString()));
+        // A dead sign-in on the primary resource still signs out.
+        h.refreshAnswer = [](const FakeRequest &) { return json({{QStringLiteral("error"), QStringLiteral("invalid_grant")}}, 400); };
+        result = h.token(QStringLiteral("m"), QStringLiteral("mail"), true);
+        QVERIFY(!result.value(QStringLiteral("ok")).toBool());
+        QVERIFY(!result.value(QStringLiteral("consentRequired")).toBool());
+        QVERIFY(result.value(QStringLiteral("reauthorizeRequired")).toBool());
+        QTRY_VERIFY(!h.backend->contains(QStringLiteral("acc-1/oauth-refresh-microsoft")));
+    }
+
     void applyAccessToken()
     {
         Harness h(QStringLiteral("microsoft"));
@@ -386,7 +419,8 @@ private slots:
         QCOMPARE(session.tenant(), QStringLiteral("organizations"));
         QCOMPARE(session.accountId(), QStringLiteral("acc-9"));
         QCOMPARE(session.loginHint(), QStringLiteral("bo@contoso.com"));
-        QCOMPARE(session.resources(), (QStringList{QStringLiteral("mail"), QStringLiteral("calendar")}));
+        // M81: a Microsoft 365 mailbox also consents to Graph's mailbox scopes.
+        QCOMPARE(session.resources(), (QStringList{QStringLiteral("mail"), QStringLiteral("calendar"), QStringLiteral("mailbox")}));
         const QVariantMap noOAuth{{QStringLiteral("kind"), QStringLiteral("imap")}};
         QVERIFY(!session.configure(noOAuth).value(QStringLiteral("ok")).toBool());
         // Real endpoints are https and carry the tenant.

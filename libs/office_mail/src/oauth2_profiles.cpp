@@ -51,6 +51,11 @@ std::optional<OAuthProfile> OAuthProfile::forProvider(const QString &provider)
         p.resourceScopes.insert(QStringLiteral("ews"),
                                 {QStringLiteral("offline_access"),
                                  QStringLiteral("https://outlook.office365.com/EWS.AccessAsUser.All")});
+        // M81 (D-090): Graph for automatic replies, the master category list,
+        // the inbox's rules and a message's categories and flag.
+        p.resourceScopes.insert(QStringLiteral("mailbox"),
+                                {QStringLiteral("offline_access"), QStringLiteral("MailboxSettings.ReadWrite"),
+                                 QStringLiteral("Mail.ReadWrite")});
         return p;
     }
     return std::nullopt;

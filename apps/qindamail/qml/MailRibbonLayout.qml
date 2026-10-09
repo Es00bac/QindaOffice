@@ -5,9 +5,11 @@ import QindaOffice.Shell
 // QindaMail's ribbon (D-041, D-042): the Home tab follows the workspace —
 // mail commands in Mail, calendar commands in Calendar, tasks in Tasks,
 // contacts in People (M64; groups and CardDAV address books, M76) — while
-// File (M76: an Import group), Accounts and View stay put. Every
-// string is an ActionEntry id MailHost registers (app-scoped literals,
-// AGENTS.md rule 5).
+// File (M76: an Import group), Accounts and View stay put. M81 (D-090):
+// Home ▸ Tags gains Categorize and Follow Up, Delete gains Clean Up and
+// Ignore, Move gains Rules; a Folder tab (Mail) holds the search folders
+// and the rules; Accounts holds Automatic Replies. Every string is an
+// ActionEntry id MailHost registers (app-scoped literals, AGENTS.md rule 5).
 QtObject {
     property string view: "mail"
 
@@ -40,12 +42,21 @@ QtObject {
             { action: "mailNewMessageAction", size: "large", split: true,
               menu: ["mailNewMessageAction", "mailNewEventAction", "taskNewAction"] }] },
         { id: "delete", label: qsTr("Delete"), items: [
-            { action: "mailDeleteAction", size: "large" }, "mailArchiveAction"] },
+            { action: "mailDeleteAction", size: "large" }, "mailArchiveAction", "mailCleanUpAction", "mailIgnoreAction"] },
         { id: "respond", label: qsTr("Respond"), items: [
             { action: "mailReplyAction", size: "large" }, "mailReplyAllAction", "mailForwardAction"] },
-        { id: "tags", label: qsTr("Tags"), items: ["mailToggleReadAction", "mailToggleFlagAction"] },
+        { id: "tags", label: qsTr("Tags"), items: [
+            "mailToggleReadAction",
+            { id: "categorize", label: qsTr("Categorize"), iconName: "tag", split: true, action: "mailCategorizeAction",
+              menu: ["mailCategorizeAction", "mailCategoriesAction", "mailClearCategoriesAction"] },
+            { id: "followUp", label: qsTr("Follow Up"), iconName: "flag", split: true, action: "mailToggleFlagAction",
+              menu: ["mailFlagTodayAction", "mailFlagTomorrowAction", "mailFlagThisWeekAction", "mailFlagNextWeekAction",
+                     "mailFlagNoDateAction", "mailFlagCustomAction", "|", "mailFlagCompleteAction", "mailFlagClearAction"] }] },
         { id: "people", label: qsTr("People"), items: ["mailAddSenderAction", "mailShowPicturesAction"] },
-        { id: "move", label: qsTr("Move"), items: [{ action: "mailMoveAction", size: "large" }] },
+        { id: "move", label: qsTr("Move"), items: [
+            { action: "mailMoveAction", size: "large" },
+            { id: "rules", label: qsTr("Rules"), iconName: "wand",
+              menu: ["mailCreateRuleAction", "mailRulesAction", "mailRunRulesAction"] }] },
         { id: "find", label: qsTr("Find"), items: [
             { action: "mailSearchAction", size: "large" }, "mailSyncAction"] }
     ] }
@@ -71,7 +82,7 @@ QtObject {
             { action: "contactNewAction", size: "large", split: true,
               menu: ["contactNewAction", "contactNewGroupAction", "mailNewMessageAction", "mailNewEventAction"] },
             "contactNewGroupAction"] },
-        { id: "manage", label: qsTr("Manage"), items: [{ action: "contactDeleteAction", size: "large" }] },
+        { id: "manage", label: qsTr("Manage"), items: [{ action: "contactDeleteAction", size: "large" }, "mailCategorizeAction"] },
         { id: "share", label: qsTr("Import & export"), items: [
             { action: "contactImportAction", size: "large" }, "contactExportAction"] },
         { id: "addressBooks", label: qsTr("Address books"), items: ["contactAddressBookAction", "mailSyncAction"] }
@@ -79,7 +90,15 @@ QtObject {
     readonly property var accountsTab: { "id": "accounts", "label": qsTr("Accounts"), "keyTip": "A", "groups": [
         { id: "accountManage", label: qsTr("Accounts"), items: [
             { action: "mailAddAccountAction", size: "large" }, { action: "mailAccountSettingsAction", size: "large" }] },
+        { id: "accountReplies", label: qsTr("Out of office"), items: [{ action: "mailAutoRepliesAction", size: "large" }] },
         { id: "accountSync", label: qsTr("Send & receive"), items: [{ action: "mailSyncAction", size: "large" }] }
+    ] }
+    // M81: Outlook's Folder tab — saved searches and the rules.
+    readonly property var folderTab: { "id": "folder", "label": qsTr("Folder"), "keyTip": "O", "groups": [
+        { id: "searchFolders", label: qsTr("Search folders"), items: [
+            { action: "mailNewSearchFolderAction", size: "large" }, "mailEditSearchFolderAction", "mailDeleteSearchFolderAction"] },
+        { id: "folderRules", label: qsTr("Rules"), items: [
+            { action: "mailRulesAction", size: "large" }, "mailCreateRuleAction", "mailRunRulesAction"] }
     ] }
     readonly property var viewTab: StandardRibbon.viewTab([
         { id: "workspace", label: qsTr("Workspace"), items: [
@@ -89,7 +108,7 @@ QtObject {
         StandardRibbon.assistantGroup([])
     ])
 
-    readonly property var tabs: [fileTab, view === "calendar" ? calendarHome : view === "tasks" ? tasksHome
-                                          : view === "people" ? peopleHome : mailHome,
+    readonly property var tabs: view === "mail" ? [fileTab, mailHome, folderTab, accountsTab, viewTab]
+                              : [fileTab, view === "calendar" ? calendarHome : view === "tasks" ? tasksHome : peopleHome,
                                  accountsTab, viewTab]
 }

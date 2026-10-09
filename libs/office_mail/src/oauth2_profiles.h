@@ -6,7 +6,8 @@
 //
 // Resources: "mail" (IMAP + SMTP), "calendar" (CalDAV for Google,
 // Microsoft Graph for Microsoft), Microsoft only "ews" (Exchange Online
-// Web Services) and, Google only, "contacts" (CardDAV, M76). Google issues one token that covers every
+// Web Services) and "mailbox" (Graph mailbox settings and mail, M81) and,
+// Google only, "contacts" (CardDAV, M76). Google issues one token that covers every
 // granted scope; Microsoft issues one token PER RESOURCE, so the Graph token
 // is a second refresh-token grant with the calendar scopes
 // (OAuth2Session::ensureToken(…, "calendar")).

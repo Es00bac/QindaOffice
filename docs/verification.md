@@ -33,6 +33,164 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M81 Mail gates (D-090)
+
+Qualified on qinda (branch `m81-mail-outlook`, merged with
+`m60-office-formats` 2ed1d90) as a targeted build — `office_mail`,
+`mail_exchange`, the QindaMail app and their tests only, configured with
+`-O0` and built and run at the lowest CPU and I/O priority (`nice -n 19
+ionice -c3`) beside the owner's game server — with `ctest --preset dev -R
+"tst_mail_|tst_qindamail_" -V`: **36/36 CTest targets passed,
+643 QtTest cases, 0 failed, 0 skipped, 335 s** (init/cleanup
+included; bold = new or extended in M81); no compiler warnings in the M81
+sources and tests (all recompiled for the check). Every server is a local
+fake on 127.0.0.1; no real account was contacted and no mail was sent.
+
+- office_mail — `tst_mail_accounts` 39, `tst_mail_autoconfig` 20,
+  **`tst_mail_oauth` 19**, `tst_mail_messages` 13,
+  `tst_mail_contacts` 14, `tst_mail_contact_csv` 8,
+  `tst_mail_contact_store` 15, `tst_mail_contact_groups` 9,
+  `tst_mail_html` 137, `tst_mail_msg` 49, `tst_mail_pst` 30,
+  `tst_mail_carddav` 13, **`tst_mail_rules` 29**,
+  **`tst_mail_organize` 36**, **`tst_mail_sieve` 12** (443).
+- mail_exchange — `tst_mail_exchange_mapping` 7, `…_ews` 4,
+  `…_ews_writes` 5, `…_graph` 4,
+  `…_graph_writes` 5, **`…_mailbox` 8** (33).
+- QindaMail — `tst_qindamail_drafts` 33, `tst_qindamail_service` 8,
+  `tst_qindamail_accounts` 18, `tst_qindamail_calendar` 8,
+  **`tst_qindamail_host` 10**, `tst_qindamail_flow` 6,
+  `tst_qindamail_ui` 16, `tst_qindamail_files` 11,
+  `tst_qindamail_people` 8, `tst_qindamail_meetings` 5,
+  `tst_qindamail_pst` 9, `tst_qindamail_carddav` 8,
+  **`tst_qindamail_rules` 10**, **`tst_qindamail_organize` 8**,
+  **`tst_qindamail_organizer_ui` 9** (167).
+
+What they check:
+
+- **The rule engine** (`tst_mail_rules`): every condition type with
+  matching and non-matching messages (from, sent to, sent only to me, to
+  me, To or Cc me, subject, body, subject or body, header, attachment,
+  importance from `Importance` / `X-Priority` / `Priority`, size bounds,
+  received dates, account, category, flagged, unread, older than) and
+  that a condition without its facts (no header block, unknown size) does
+  not match, an unknown (newer) type never matches and is reported, several
+  values are alternatives and several conditions must all match; every
+  action's effect on the plan; rule order, exceptions,
+  turned-off rules, Run Rules Now's chosen rules, `stop`, the first move
+  winning and later moves becoming copies, delete beating a move and
+  permanent delete beating both; validation (folder, flag, category,
+  importance, forward and redirect addresses through the composer's
+  parser); JSON export and import (schema, fresh ids, unknown keys kept, a
+  bad rule coming in turned off).
+- **Categories, flags and search folders** (`tst_mail_organize`): the
+  25 presets and the six defaults, colours both ways; the IMAP keyword
+  encoding round trip for plain, spaced, underscore, `&`, atom-special,
+  leading-`$`, accented and emoji names, every keyword an RFC 3501 atom,
+  `$`-keywords and system flags never categories, a known category winning
+  over decoding; Outlook's follow-up dates for each preset on the days that
+  change them (Friday's Tomorrow, This Week from Monday, Thursday, Friday
+  and Saturday, Next Week), a Sunday week start, a four-day work week,
+  custom dates, completion, the due labels; every search folder preset
+  with and without its argument, the account scope, a custom folder
+  matching any or all.
+- **Sieve and ManageSieve** (`tst_mail_sieve`, `fake_managesieve_server.h`
+  on 127.0.0.1 with a Sieve check that refuses unrequired extensions): the
+  require line and the block placed after the script's own requires with
+  its line endings (CRLF and LF, without requires, empty, only a comment),
+  the user's script restored byte for byte, a scheduled block (`date`,
+  `relational`), reading the settings back, a foreign vacation left alone;
+  through the server: turning on, changing and turning off over PLAIN and
+  LOGIN, CHECKSCRIPT before PUTSCRIPT, the secret (and its SASL form) in no
+  answer, a mailbox without a script (`qindamail` created, activated, then
+  removed); refusals: a wrong password, a server without `vacation`
+  (plainly unavailable), a time range without `date`/`relational`, and
+  STARTTLS asked for but not offered (no credentials sent).
+- **Exchange mailboxes** (`tst_mail_exchange_mailbox`, the Graph and EWS
+  fakes): Graph automatic replies read and written (always, scheduled,
+  audiences), master categories listed and added, inbox rules listed, a
+  message found by Internet message id and its categories and flag dates
+  patched, an event's categories, recent tags pulled; the same over EWS
+  (`Get/SetUserOofSettings`, `CategoryList`, `GetInboxRules`, `FindItem`
+  + `UpdateItem` with `item:Flag`), addCategory refused for EWS; a refused
+  token (`authRejected`), no credentials, an EWS mailbox without its
+  address, a malformed item, and no secret in any result or log line. `tst_mail_oauth`
+  adds the `mailbox` resource and the consent gap that keeps the sign-in.
+- **The app** (fake IMAP with folders, keywords, PERMANENTFLAGS with and
+  without `\*`, MOVE/COPY/UIDPLUS; fake SMTP; fake ManageSieve; the EWS
+  fake): `tst_qindamail_rules` — rules on arrival but not on a mailbox's
+  first download; a header condition (one `BODY.PEEK[HEADER]`), a copy
+  (`UID COPY`) and a permanent delete (`UID STORE` + `EXPUNGE`); forward,
+  redirect (Resent-* block, the sender's From kept) and a desktop alert,
+  never back to the sender; a redirect waiting offline in the Outbox and
+  delivered when back online; order, exceptions and stop on Run Rules Now;
+  Create Rule, export and import; Ignore and Clean Up Conversation,
+  arrivals in an ignored conversation going to Trash.
+  `tst_qindamail_organize` — the local list (Outlook's six) with a category
+  on a message, an event, a task and a contact, renamed on every item,
+  recoloured, deleted from the list (items keep it); categories as IMAP
+  keywords both ways, a server
+  without keyword support keeping them local with one notice; follow-up
+  flags as `\Flagged`, the task board's cards (Done completes, deleting
+  clears); an Exchange account's tags pulled after a sync and pushed
+  through the EWS fake (no IMAP keywords; `\Flagged` as well) and its
+  automatic replies; search
+  folders following the mail as it changes; automatic replies over
+  ManageSieve and "not available" for POP3.
+  `tst_qindamail_organizer_ui` — through the real window at 1280 and
+  520 px: Rules and Alerts and the rule editor (a rule made by clicking,
+  saved, listed, turned off), Create Rule from a message, Categorize, the
+  Color Categories dialog (Enter adds a category and keeps the dialog up),
+  Follow Up ▸ Tomorrow in the reading pane and the row, Mark Complete, the
+  flagged card on the task board, New Search Folder in the folder tree
+  (edit and delete enabled on it), Automatic Replies over the fake
+  ManageSieve server and plainly unavailable for POP3.
+  `tst_qindamail_host` — 64 ids with shipped icons, the Folder menu and the
+  M81 submenus, every shortcut unique (Ctrl+Shift+G, Ctrl+Delete), the
+  panel export through the desktop's validator. `tst_qindamail_ui` — the
+  ribbon gate (coverage, icons, the 520 px squeeze) in Mail, Calendar,
+  Tasks and People with the new commands; fixtures `qindamail_{1280,520}.txt`
+  regenerated (`QQO_UPDATE_FIXTURES=1`) and the diff reviewed: the Folder
+  ribbon tab, Categorize and Follow Up in Home ▸ Tags, Clean Up and Ignore
+  in Delete, Rules in Move, the list's category filter button and each
+  row's due, complete and importance markers, the reading pane's tags bar,
+  the task board's category filter and the seeded flagged messages as
+  `mailflag:` cards.
+- **Grabs reviewed** (`QQO_GRAB_DIR`, offscreen software renderer):
+  `qindamail_rules_empty_{1280,520}`, `qindamail_rule_editor_{1280,520}`,
+  `qindamail_rules_{1280,520}`, `qindamail_create_rule_1280`,
+  `qindamail_categorize_menu_1280`, `qindamail_follow_up_1280`,
+  `qindamail_categories_dialog_1280`, `qindamail_tasks_flagged_1280`,
+  `qindamail_search_folder_dialog_{1280,520}`,
+  `qindamail_search_folder_{1280,520}`, `qindamail_auto_replies_{1280,520}`,
+  `qindamail_auto_replies_pop3_{1280,520}`, and the workspaces' ribbons in
+  `qindamail_mail_{1280,520}`, `qindamail_tasks_520` (flagged mail as
+  cards) and `qindamail_people_520`. Found and fixed while looking: Enter in Color Categories'
+  name field also accepted the dialog; Rules and Alerts offered a Cancel
+  that cancelled nothing; Create Rule's editor was titled "Edit rule"; the
+  Automatic Replies account box kept the previous account; dialogs
+  listed accounts and folders as they were when the window opened.
+- Not run: a check against real servers (by design); Graph automatic
+  replies through the app (the library test covers Graph, the app test
+  EWS).
+
+**Manual, on the desktop** (with the owner, real accounts): Create Rule
+on a message from a mailing list (Move to a folder), let new mail arrive
+and see it filed; a rule with "Display a desktop alert" (the notification
+appears, silent); Run Rules Now on a folder; a forward and a redirect to
+another address of the owner's; Categorize a message on an IMAP account
+and see the keyword in another client (Thunderbird shows it as a tag); on
+Microsoft 365, sign in again once (the `mailbox` scope), categorize and
+flag Next Week, and check Outlook on the web shows the category, the flag
+and its dates, then change one there and see it come back after a sync;
+New Search Folder ▸ Unread Mail and watch it follow reading; Automatic
+Replies on Microsoft 365 (scheduled) and on an IMAP server with
+ManageSieve (Dovecot / Pigeonhole), a test message from another address
+getting the reply, then turning it off and checking the server's script
+is as it was; Ignore Conversation on a thread and a reply landing in
+Trash; the new commands from the panel's global menu (Message ▸
+Categorize, Follow Up, Rules; Folder); the new dialogs in the dark and
+light themes and at comfortable density.
+
 ## M80 Base gates (D-089)
 
 Qualified on qinda (branch `m80-base-access`, merged with

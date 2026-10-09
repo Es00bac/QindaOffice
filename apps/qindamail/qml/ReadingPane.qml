@@ -179,6 +179,13 @@ Tk.Box {
                     }
                 }
             }
+            // M81 (D-090): the follow-up flag, the importance and the categories.
+            MessageTagsBar {
+                width: column.inner
+                service: pane.service
+                host: pane.host
+                message: pane.message
+            }
             Tk.Flex {
                 objectName: "readingPicturesBar"
                 visible: bodyView.remoteBlocked || (bodyView.senderTrusted && bodyView.remoteImageCount > 0)

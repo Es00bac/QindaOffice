@@ -46,4 +46,10 @@ qqo_add_mail_unit_test(tst_mail_pst tst_mail_pst_items.cpp tst_mail_pst_corrupt.
                        pst_builder.h pst_builder_ltp.h pst_builder_ndb.h pst_fixture.h cfb_writer.h cfb_writer_msg.h)
 # M76 (D-085): CardDAV against a local fake server (fake_carddav_server.h).
 qqo_add_mail_unit_test(tst_mail_carddav fake_carddav_server.h)
+# M81 (D-090): the rule engine, categories / follow-up flags / search
+# folders, and automatic replies over Sieve against a local fake
+# ManageSieve server (fake_managesieve_server.h).
+qqo_add_mail_unit_test(tst_mail_rules)
+qqo_add_mail_unit_test(tst_mail_organize)
+qqo_add_mail_unit_test(tst_mail_sieve fake_managesieve_server.h)
 add_subdirectory(native_secrets)

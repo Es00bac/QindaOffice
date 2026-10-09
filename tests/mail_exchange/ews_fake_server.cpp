@@ -79,6 +79,8 @@ FakeHttpServer::Reply EwsFakeServer::handle(const FakeHttpServer::Request &reque
             "<t:MessageXml xmlns:t=\"" + T.toUtf8() + "\"><t:Value Name=\"BackOffMilliseconds\">30000</t:Value></t:MessageXml>"
             "</detail></s:Fault></s:Body></s:Envelope>"};
     }
+    FakeHttpServer::Reply mailboxReply;
+    if (mailboxOperation(operation, &mailboxReply)) return mailboxReply;
     QByteArray out;
     QXmlStreamWriter w(&out);
     w.writeNamespace(S, QStringLiteral("s"));
@@ -129,6 +131,11 @@ void EwsFakeServer::writeItem(QXmlStreamWriter &w, const Item &item, bool full)
     w.writeAttribute(QStringLiteral("BodyType"), QStringLiteral("Text"));
     w.writeCharacters(item.body.isEmpty() ? QString() : item.body + QStringLiteral("\r\n"));
     w.writeEndElement();
+    if (!item.categories.isEmpty()) {
+        w.writeStartElement(T, QStringLiteral("Categories"));
+        for (const QString &category : item.categories) text(w, QStringLiteral("String"), category);
+        w.writeEndElement();
+    }
     w.writeStartElement(T, QStringLiteral("EffectiveRights"));
     text(w, QStringLiteral("Modify"), item.canModify ? QStringLiteral("true") : QStringLiteral("false"));
     w.writeEndElement();

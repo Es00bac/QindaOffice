@@ -3,6 +3,7 @@
 // (mail_host.h lists the ids).
 #include "mail_host.h"
 
+#include "mail_organizer.h"
 #include "mail_service.h"
 #include "pst_import.h"
 #include "standard_actions.h"
@@ -95,7 +96,7 @@ QStringList MailHost::commandIds()
 {
     QStringList ids;
     for (const Command &command : kCommands) ids.append(QString::fromLatin1(command.id));
-    return ids;
+    return ids + organizerCommandIds();
 }
 
 void MailHost::createCommands()
@@ -180,6 +181,7 @@ void MailHost::createCommands()
         emit contactGroupNewRequested();
     });
     on("contactAddressBookAction", [this] { emit addressBookRequested(); });
+    createOrganizerCommands();   // M81
     connect(action(QString::fromLatin1(ActionId::kEditFind)), &ActionEntry::triggered, this,
             [this] { emit searchRequested(); });
     actions()->setEnabled(QString::fromLatin1(ActionId::kEditFind), true);
@@ -265,7 +267,8 @@ void MailHost::insertMenus()
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("mailAccountsMenu"), tr("A&ccounts"),
                                              {a("mailAddAccountAction"), a("mailAccountSettingsAction"),
-                                              MenuNode::separator(), a("mailSyncAction")}));
+                                              a("mailAutoRepliesAction"), MenuNode::separator(), a("mailSyncAction")}));
+    insertOrganizerMenus();   // M81: Message ▸ Categorize / Follow Up / Rules, the Folder menu
 }
 
 QString MailHost::currentAccountId() const
@@ -297,8 +300,11 @@ void MailHost::toggleSelectedRead()
 
 void MailHost::toggleSelectedFlag()
 {
+    // Outlook's Quick Click: a flag due today, or off again (M81).
     const QVariantMap message = m_service->selectedMessage();
-    static_cast<void>(m_service->setFlagged(selectedIds(), !message.value(QStringLiteral("flagged")).toBool()));
+    const bool flagged = message.value(QStringLiteral("flagged")).toBool()
+        || message.value(QStringLiteral("followUpStatus")).toString() == QLatin1String("flagged");
+    static_cast<void>(m_service->organizer()->followUp(selectedIds(), flagged ? QStringLiteral("clear") : QStringLiteral("today")));
 }
 
 void MailHost::syncCommandState()
@@ -331,6 +337,7 @@ void MailHost::syncCommandState()
         ->setText(message.value(QStringLiteral("flagged")).toBool() ? tr("C&lear Flag") : tr("F&lag"));
     // M76: one Outlook import at a time per process.
     actions()->setEnabled(QStringLiteral("mailImportPstAction"), !m_service->outlookImport()->running());
+    syncOrganizerState();   // M81
     const bool calendar = m_view == QLatin1String("calendar");
     actions()->setEnabled({QStringLiteral("calPreviousAction"), QStringLiteral("calNextAction")}, calendar);
     actions()->setEnabled(QStringLiteral("mailReadingPaneAction"), mail);

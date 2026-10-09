@@ -111,7 +111,7 @@ QString eventSelect()
 {
     return QStringLiteral("id,type,subject,body,bodyPreview,location,start,end,isAllDay,originalStartTimeZone,"
                           "originalEndTimeZone,recurrence,iCalUId,organizer,attendees,isOnlineMeeting,onlineMeeting,"
-                          "onlineMeetingUrl,isCancelled,seriesMasterId");
+                          "onlineMeetingUrl,isCancelled,seriesMasterId,categories");
 }
 
 QString instanceSelect()
@@ -231,6 +231,7 @@ CalendarSync::RemoteEvent mapEvent(const QJsonObject &event, const QList<QJsonOb
     const QString joinUrl = event.value(QLatin1String("onlineMeeting")).toObject().value(QLatin1String("joinUrl")).toString();
     f.insert(QStringLiteral("onlineMeetingUrl"), joinUrl.isEmpty() ? str(event, "onlineMeetingUrl") : joinUrl);
     f.insert(QStringLiteral("readOnly"), context.readOnly);
+    f.insert(QStringLiteral("categories"), event.value(QLatin1String("categories")).toVariant().toStringList());
     return out;
 }
 

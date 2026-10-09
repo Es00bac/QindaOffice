@@ -80,6 +80,10 @@ FakeHttpServer::Reply GraphFakeServer::handle(const FakeHttpServer::Request &req
     if (!request.path.startsWith(QLatin1String("/v1.0/"))) return {404, {}, {}};
     const QString path = request.path.mid(5);
     const QByteArray &method = request.method;
+    if (path.startsWith(QLatin1String("/me/mailboxSettings")) || path.startsWith(QLatin1String("/me/outlook/"))
+        || path.startsWith(QLatin1String("/me/mailFolders/")) || path == QLatin1String("/me/messages")
+        || path.startsWith(QLatin1String("/me/messages/")))
+        return mailbox(request, path);
     if (method == "GET" && path == QLatin1String("/me/calendar"))
         return json(200, {{QStringLiteral("id"), QStringLiteral("cal-default")}, {QStringLiteral("canEdit"), canEdit}});
     if (method == "GET" && path == QLatin1String("/me/calendars")) {

@@ -284,6 +284,8 @@ ContactSearchKey contactSearchKey(const Contact &c)
         addWords(key.tokens, foldForSearch(field));
     }
     for (const ContactValue &e : c.emails) addWords(key.tokens, foldForSearch(e.value));
+    // M81 (D-090): People finds contacts by their categories too.
+    for (const QString &category : c.categories) addWords(key.tokens, foldForSearch(category));
     for (const ContactValue &p : c.phones) {
         const QString digits = digitsOnly(p.value);
         if (!digits.isEmpty()) key.phoneDigits.append(digits);

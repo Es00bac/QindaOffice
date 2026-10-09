@@ -4,6 +4,7 @@
 // written through its calendar provider after the local save.
 #include "mail_service.h"
 
+#include "mail_organizer.h"
 #include "provider_calls.h"
 
 #include <qindatk/local_productivity_store.h>
@@ -49,8 +50,11 @@ void MailService::rebuildTasks()
                                      {QStringLiteral("dueDate"), task.value(QStringLiteral("dueDate"))},
                                      {QStringLiteral("priority"), task.value(QStringLiteral("priority"))},
                                      {QStringLiteral("syncState"), task.value(QStringLiteral("syncState"))},
-                                     {QStringLiteral("accountId"), ownerAccountOf(task)}});
+                                     {QStringLiteral("accountId"), ownerAccountOf(task)},
+                                     {QStringLiteral("categories"), task.value(QStringLiteral("categories")).toStringList()}});
         }
+        // M81: flagged mail is on the board too, as Outlook's To-Do shows it.
+        cards += m_organizer->flagCards(status);
         result.append(QVariantMap{{QStringLiteral("status"), status}, {QStringLiteral("label"), label},
                                   {QStringLiteral("tasks"), cards}});
     }
@@ -87,6 +91,10 @@ QString MailService::addTask(const QString &title)
 
 void MailService::moveTask(const QString &requestId, const QString &taskId, const QString &toStatus, int index)
 {
+    if (MailOrganizer::isFlagCard(taskId)) {
+        m_organizer->moveFlagCard(requestId, taskId, toStatus);   // Done = Mark Complete
+        return;
+    }
     const QVariantMap moved = m_store->moveTask(taskId, toStatus, index);
     QString error = moved.value(QStringLiteral("error")).toString();
     if (!moved.value(QStringLiteral("ok")).toBool() || !saveStore(&error)) {
@@ -126,6 +134,7 @@ QString MailService::updateTask(const QVariantMap &task)
 
 QString MailService::deleteTask(const QString &taskId)
 {
+    if (MailOrganizer::isFlagCard(taskId)) return m_organizer->followUp({taskId.mid(9)}, QStringLiteral("clear"));
     const QString batch = beginBatch(QStringLiteral("task"), 1);
     const QVariantMap record = findTask(m_store->tasks(), taskId);
     AccountRuntime *rt = runtime(record.value(QStringLiteral("remoteAccount")).toString());

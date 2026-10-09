@@ -96,6 +96,7 @@ OfficeWindow {
             Tk.Flex.grow: 1
             Tk.Flex.basis: 0
             service: window.service
+            onOpenMessageRequested: function(messageId) { window.showMessage(messageId) }
         }
         PeopleWorkspace {
             id: peopleWorkspace
@@ -122,6 +123,36 @@ OfficeWindow {
     }
     AccountDialog { id: accountDialog; service: window.service }
     EventDialog { id: eventDialog; service: window.service }
+    // ---- M81 (D-090): rules, categories, follow-up, search folders, automatic replies ----
+    RulesDialog {
+        id: rulesDialog
+        service: window.service
+        onEditRequested: function(rule) { ruleEditor.openFor(rule, {}, "") }
+        onRunRequested: runRulesDialog.openFor(window.service.currentFolderKey)
+    }
+    RuleEditor { id: ruleEditor; service: window.service }
+    RunRulesDialog { id: runRulesDialog; service: window.service }
+    CategoriesDialog { id: categoriesDialog; service: window.service }
+    CategorizeMenu {
+        id: categorizeMenu
+        service: window.service
+        onAllCategoriesRequested: categoriesDialog.openFor(categorizeMenu.kind, categorizeMenu.ids, categorizeMenu.accountId)
+    }
+    FollowUpDialog { id: followUpDialog; service: window.service }
+    SearchFolderDialog {
+        id: searchFolderDialog
+        service: window.service
+        onSaved: function(key) { window.trigger("mailViewMailAction"); window.service.currentFolderKey = key }
+    }
+    AutoRepliesDialog { id: autoRepliesDialog; service: window.service }
+    // A flagged message from the task board, shown in Mail.
+    function showMessage(messageId) {
+        const message = window.service.messageById(messageId)
+        if (!message.messageId) return
+        window.trigger("mailViewMailAction")
+        window.service.currentFolderKey = String(message.folderKey)
+        window.service.selectedMessageId = messageId
+    }
 
     Dialogs.FileDialog {
         id: icsOpenDialog
@@ -242,6 +273,17 @@ OfficeWindow {
         function onOutlookImportRequested() { pstOpenDialog.open() }
         function onContactGroupNewRequested() { peopleWorkspace.newGroup() }
         function onAddressBookRequested() { accountDialog.openAddressBook() }
+        function onRulesRequested() { rulesDialog.openDialog() }
+        function onRuleEditRequested(rule, suggestions) { ruleEditor.openFor(rule, suggestions, "") }
+        function onRunRulesRequested() { runRulesDialog.openFor(window.service.currentFolderKey) }
+        function onCategorizeRequested(kind, ids, accountId) { categorizeMenu.openFor(kind, ids, accountId) }
+        function onCategoriesRequested(kind, ids, accountId) { categoriesDialog.openFor(kind, ids, accountId) }
+        function onFollowUpCustomRequested(ids) { followUpDialog.openFor(ids) }
+        function onSearchFolderRequested(key) { searchFolderDialog.openFor(key) }
+        function onAutoRepliesRequested() {
+            const key = window.service.currentFolderKey
+            autoRepliesDialog.openFor(key.startsWith("acct:") ? key.split(":")[1] : "")
+        }
         function onPdfExportRequested() {
             pdfExportDialog.selectedFile = window.mail.suggestedSaveUrl(window.mail.suggestedFileName("pdf"))
             pdfExportDialog.open()
@@ -250,6 +292,12 @@ OfficeWindow {
     Connections {
         target: window.service
         function onNotify(title, text, variant) { toast.title = title; toast.message = text; toast.variant = variant; toast.show() }
+    }
+    Connections {
+        target: window.service !== null ? window.service.organizer : null
+        function onRulesRunFinished(requestId, result) {
+            window.toastFor(qsTr("Rules ran"), qsTr("%1 message(s) checked, %2 handled by a rule.").arg(result.processed || 0).arg(result.matched || 0), "info")
+        }
     }
     Component.onCompleted: window.mail.preferencesPageUrl = Qt.resolvedUrl("MailPreferencesPage.qml")
 }

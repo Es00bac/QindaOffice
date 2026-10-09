@@ -33,6 +33,16 @@ public:
     QString foreignNextLink;                // when set, the first page links there
     QList<QJsonObject> posted;              // POST bodies as received
 
+    // ---- M81 (D-090): the mailbox side (graph_fake_mailbox.cpp) ----
+    // mailboxSettings/automaticRepliesSetting, outlook/masterCategories,
+    // mailFolders/inbox/messageRules and /me/messages by internetMessageId
+    // or receivedDateTime, with PATCH of categories and flag.
+    QJsonObject automaticReplies{{QStringLiteral("status"), QStringLiteral("disabled")},
+                                 {QStringLiteral("externalAudience"), QStringLiteral("all")}};
+    QList<QJsonObject> masterCategories;           // {id, displayName, color}
+    QList<QJsonObject> messageRules;
+    QMap<QString, QJsonObject> messages;           // id -> {internetMessageId, receivedDateTime, categories, flag}
+
     QString base() const { return http.origin() + QStringLiteral("/v1.0"); }
     QString etag(const QString &id) const { return QStringLiteral("W/\"e%1\"").arg(events.value(id).etag); }
     void bump(const QString &id) { ++events[id].etag; }
@@ -46,6 +56,7 @@ public:
 
 private:
     FakeHttpServer::Reply handle(const FakeHttpServer::Request &request);
+    FakeHttpServer::Reply mailbox(const FakeHttpServer::Request &request, const QString &path);
     FakeHttpServer::Reply page(const FakeHttpServer::Request &request, const QList<QJsonObject> &rows);
     FakeHttpServer::Reply patch(const QString &id, const FakeHttpServer::Request &request);
     FakeHttpServer::Reply remove(const QString &id, const FakeHttpServer::Request &request);

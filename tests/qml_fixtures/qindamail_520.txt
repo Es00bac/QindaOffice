@@ -5,6 +5,8 @@ QQuickRootItem#MailWindow
       QQuickItem#appContent
         QQuickItem#mailContent
           Flex#mailRoot
+            ComboBox#taskCategoryFilter [hidden]
+              QQuickText#comboDisplayText [hidden]
             NavigationRail#mailRail
               QQuickItem#navigationGroup_workspaces [hidden]
                 QQuickButton#navigationButton_workspaces [hidden]
@@ -108,34 +110,50 @@ QQuickRootItem#MailWindow
                   QQuickRectangle#boxFocusRing [hidden]
                 MessageList#messageList
                   Heading#messageListTitle
+                  IconButton#messageCategoryFilter
                   IconButton#messageListSync
                   QQuickListView#messageRows
                     Caption#emptyText [hidden]
                     MessageRow#messageRow_m1
+                      Caption#messageRowDue [hidden]
+                      Icon#messageRowComplete [hidden]
+                      Icon#messageRowImportance [hidden]
                       IconButton#messageRowArchive [hidden]
                       IconButton#messageRowDelete [hidden]
                       IconButton#messageRowFlag [hidden]
                       Label#messageRowSender
                       Overline#messageDay
                     MessageRow#messageRow_m2
+                      Caption#messageRowDue [hidden]
+                      Icon#messageRowComplete [hidden]
+                      Icon#messageRowImportance [hidden]
                       IconButton#messageRowArchive [hidden]
                       IconButton#messageRowDelete [hidden]
                       IconButton#messageRowFlag [hidden]
                       Label#messageRowSender
                       Overline#messageDay [hidden]
                     MessageRow#messageRow_m3
+                      Caption#messageRowDue [hidden]
+                      Icon#messageRowComplete [hidden]
+                      Icon#messageRowImportance [hidden]
                       IconButton#messageRowArchive [hidden]
                       IconButton#messageRowDelete [hidden]
                       IconButton#messageRowFlag [hidden]
                       Label#messageRowSender
                       Overline#messageDay
                     MessageRow#messageRow_m4
+                      Caption#messageRowDue [hidden]
+                      Icon#messageRowComplete [hidden]
+                      Icon#messageRowImportance [hidden]
                       IconButton#messageRowArchive [hidden]
                       IconButton#messageRowDelete [hidden]
                       IconButton#messageRowFlag [hidden]
                       Label#messageRowSender
                       Overline#messageDay
                     MessageRow#messageRow_m5
+                      Caption#messageRowDue [hidden]
+                      Icon#messageRowComplete [hidden]
+                      Icon#messageRowImportance [hidden]
                       IconButton#messageRowArchive [hidden]
                       IconButton#messageRowDelete [hidden]
                       IconButton#messageRowFlag [hidden]
@@ -181,6 +199,13 @@ QQuickRootItem#MailWindow
                     Label#noticeText [hidden]
                     Label#noticeTitle [hidden]
                     Label#readingSender [hidden]
+                    MessageTagsBar#readingTags [hidden]
+                      Flex#readingCategories [hidden]
+                      Flex#readingFollowUp [hidden]
+                        Button#readingFlagClear [hidden]
+                        Button#readingFlagComplete [hidden]
+                        Caption#readingFollowUpText [hidden]
+                      Flex#readingImportance [hidden]
                     Notice#readingTruncated [hidden]
                       IconButton#noticeDismiss [hidden]
                       Label#noticeText [hidden]
@@ -310,6 +335,16 @@ QQuickRootItem#MailWindow
               Box#taskColumn_done [hidden]
                 QQuickRectangle#boxFocusRing [hidden]
               Box#taskColumn_todo [hidden]
+                Box#taskCard_mailflag:m2 [hidden]
+                  Badge#taskSyncState [hidden]
+                  IconButton#taskMoveDown [hidden]
+                  IconButton#taskMoveUp [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
+                Box#taskCard_mailflag:m7 [hidden]
+                  Badge#taskSyncState [hidden]
+                  IconButton#taskMoveDown [hidden]
+                  IconButton#taskMoveUp [hidden]
+                  QQuickRectangle#boxFocusRing [hidden]
                 QQuickRectangle#boxFocusRing [hidden]
               Box#taskConflicts [hidden]
                 QQuickRectangle#boxFocusRing [hidden]
@@ -352,6 +387,7 @@ QQuickRootItem#MailWindow
               IconButton#fieldClear [hidden]
           QQuickTabButton#ribbonTab_accounts
           QQuickTabButton#ribbonTab_file
+          QQuickTabButton#ribbonTab_folder
           QQuickTabButton#ribbonTab_home
           QQuickTabButton#ribbonTab_view
         QQuickItem#ribbonGroupViewport
@@ -365,8 +401,20 @@ QQuickRootItem#MailWindow
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_mailCleanUpAction
+                RibbonButton#ribbonAction_mailCleanUpAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_mailDeleteAction
                 RibbonButton#ribbonAction_mailDeleteAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_mailIgnoreAction
+                RibbonButton#ribbonAction_mailIgnoreAction
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
@@ -391,6 +439,12 @@ QQuickRootItem#MailWindow
               QQuickRectangle#ribbonGroupCard
               RibbonSlot#ribbonItem_mailMoveAction
                 RibbonButton#ribbonAction_mailMoveAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_rules
+                RibbonButton#ribbonAction_rules
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
@@ -443,10 +497,16 @@ QQuickRootItem#MailWindow
             RibbonGroup#ribbonGroup_tags
               Overline#ribbonGroupCaption
               QQuickRectangle#ribbonGroupCard
-              RibbonSlot#ribbonItem_mailToggleFlagAction
-                RibbonButton#ribbonAction_mailToggleFlagAction
+              RibbonSlot#ribbonItem_categorize
+                RibbonButton#ribbonAction_categorize
                   Icon#ribbonButtonIcon [hidden]
-                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickItem#ribbonButtonMenuArea
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_followUp
+                RibbonButton#ribbonAction_followUp
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_mailToggleReadAction

@@ -259,9 +259,17 @@ void OAuth2Session::startRefresh(const QString &resource)
     postToken(form, [this, resource, previous](const TokenGrant &grant) {
         if (grant.aborted) return;
         if (!grant.ok) {
-            if (grant.invalidGrant) forgetRefreshToken();
+            // AGENT-GUARD (M81, D-090): Microsoft answers invalid_grant with
+            // AADSTS65001 when the user never consented to a resource's
+            // scopes (a resource added after they signed in). That refresh
+            // token still works for the resources they did grant: forgetting
+            // it would sign the whole account out for one optional feature.
+            const bool consent = grant.invalidGrant && resource != primaryResource()
+                && grant.error.contains(QStringLiteral("AADSTS65001"));
+            if (grant.invalidGrant && !consent) forgetRefreshToken();
             QVariantMap result = baseResult({}, grant.state, resource, grant.error, grant.retryable);
             result.insert(QStringLiteral("reauthorizeRequired"), grant.invalidGrant);
+            result.insert(QStringLiteral("consentRequired"), consent);
             finishRefresh(resource, result);
             return;
         }

@@ -3,7 +3,12 @@
 
 #include "carddav_provider.h"
 #include "contact_store.h"
+#include "imap_extras.h"
 #include "imap_source_fetcher.h"
+#include "smtp_redirector.h"
+
+#include "exchange_mailbox.h"
+#include "managesieve_provider.h"
 
 #include "ews_calendar_provider.h"
 #include "graph_calendar_provider.h"
@@ -18,6 +23,7 @@
 #include <qindatk/pop3_mail_provider.h>
 #include <qindatk/smtp_mail_provider.h>
 
+#include <QJsonObject>
 #include <QTimeZone>
 #include <QUrl>
 
@@ -234,6 +240,82 @@ ImapSourceFetcher *AccountRuntime::sourceFetcher()
         m_context.calls->watch(m_sourceFetcher);
     }
     return m_sourceFetcher;
+}
+
+ImapExtras *AccountRuntime::imapExtras()
+{
+    if (!isImap()) return nullptr;
+    if (m_imapExtras == nullptr) {
+        const auto &in = m_account.incoming;
+        m_imapExtras = new ImapExtras(
+            {in.host, in.port, in.security, in.userName.isEmpty() ? m_account.emailAddress : in.userName, 20000}, this);
+        m_context.calls->watch(m_imapExtras);
+    }
+    return m_imapExtras;
+}
+
+QindaOffice::Mail::ManageSieveProvider *AccountRuntime::sieve()
+{
+    if (!isImap()) return nullptr;
+    if (m_sieve == nullptr) {
+        // The account's "sieve" {host, port, security} (kept as an unknown
+        // field of accounts.json) wins; else ManageSieve's port on the IMAP host.
+        const QVariantMap own = m_account.extra.value(QStringLiteral("sieve")).toObject().toVariantMap();
+        const auto &in = m_account.incoming;
+        QindaOffice::Mail::ManageSieveProvider::Server server;
+        server.host = own.value(QStringLiteral("host"), in.host).toString();
+        server.port = own.value(QStringLiteral("port"), 4190).toInt();
+        server.security = own.value(QStringLiteral("security"),
+                                    in.security == QLatin1String("none") ? QStringLiteral("none") : QStringLiteral("starttls")).toString();
+        server.userName = in.userName.isEmpty() ? m_account.emailAddress : in.userName;
+        m_sieve = new QindaOffice::Mail::ManageSieveProvider(server, this);
+        m_context.calls->watch(m_sieve);
+    }
+    return m_sieve;
+}
+
+QString AccountRuntime::mailboxService() const
+{
+    if (m_account.kind == QLatin1String(QindaOffice::Mail::kKindMicrosoft365)) return QStringLiteral("graph");
+    if (m_account.kind == QLatin1String(QindaOffice::Mail::kKindExchange) && m_account.calendar.protocol == QLatin1String("ews")
+        && !m_account.calendar.url.isEmpty())
+        return QStringLiteral("ews");
+    return {};
+}
+
+QindaOffice::Mail::ExchangeMailbox *AccountRuntime::mailbox()
+{
+    const QString service = mailboxService();
+    if (service.isEmpty()) return nullptr;
+    if (m_mailbox == nullptr) {
+        m_mailbox = new QindaOffice::Mail::ExchangeMailbox(this);
+        m_mailbox->setProperty("service", service);
+        m_mailbox->setProperty("mailbox", m_account.emailAddress);
+        if (service == QLatin1String("ews")) {
+            m_mailbox->setProperty("url", m_account.calendar.url);
+            m_mailbox->setProperty("userName", m_account.calendar.userName.isEmpty() ? m_account.emailAddress
+                                                                                    : m_account.calendar.userName);
+        }
+        m_context.calls->watch(m_mailbox);
+    }
+    return m_mailbox;
+}
+
+SmtpRedirector *AccountRuntime::redirector()
+{
+    if (m_smtp == nullptr) return nullptr;
+    if (m_redirector == nullptr) {
+        const auto &out = m_account.outgoing;
+        SmtpRedirector::Server server;
+        server.host = out.host;
+        server.port = out.port;
+        server.security = out.security;
+        server.userName = m_smtp->property("userName").toString();
+        server.fromAddress = m_account.emailAddress;
+        m_redirector = new SmtpRedirector(server, this);
+        m_context.calls->watch(m_redirector);
+    }
+    return m_redirector;
 }
 
 const CalendarBinding *AccountRuntime::calendar(const QString &calendarId) const

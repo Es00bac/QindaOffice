@@ -201,7 +201,8 @@ or `offline` + `retryable` when no step reached a server.
    the tenant, the login hint, the account id (keyring key) and the
    **resources** the account needs: `mail` (IMAP/SMTP), `calendar` (Graph,
    or Google CalDAV with bearer), `ews` (Exchange Online EWS), `contacts`
-   (Google CardDAV with bearer, M76).
+   (Google CardDAV with bearer, M76), `mailbox` (Microsoft 365's mailbox
+   settings and message tags over Graph, M81).
 2. `authorize(requestId)` listens on **127.0.0.1**, ephemeral port, generates
    a 43-character verifier and a `state` from the system CSPRNG, and opens
    the authorization URL (`QDesktopServices::openUrl`, injectable). The
@@ -220,7 +221,7 @@ or `offline` + `retryable` when no step reached a server.
 | Provider | Authorize / token | Scopes |
 | --- | --- | --- |
 | Google | `https://accounts.google.com/o/oauth2/v2/auth`, `https://oauth2.googleapis.com/token`; `access_type=offline&prompt=consent`; the desktop client's `client_secret` is sent (Google requires it and documents it as not confidential) | `https://mail.google.com/ https://www.googleapis.com/auth/calendar`, plus `https://www.googleapis.com/auth/carddav` when the account syncs contacts (M76; an account made before signs in once more to grant it) — ONE token for mail, calendar and contacts |
-| Microsoft | `https://login.microsoftonline.com/<tenant\|common>/oauth2/v2.0/authorize` / `…/token` | mail: `offline_access https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send`; calendar: `offline_access Calendars.ReadWrite`; ews: `offline_access https://outlook.office365.com/EWS.AccessAsUser.All` — ONE TOKEN PER RESOURCE |
+| Microsoft | `https://login.microsoftonline.com/<tenant\|common>/oauth2/v2.0/authorize` / `…/token` | mail: `offline_access https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send`; calendar: `offline_access Calendars.ReadWrite`; ews: `offline_access https://outlook.office365.com/EWS.AccessAsUser.All`; mailbox (M81): `offline_access MailboxSettings.ReadWrite Mail.ReadWrite` — ONE TOKEN PER RESOURCE |
 
 Microsoft issues a token for one resource at a time, so the code redemption
 asks for the primary resource and `ensureToken(requestId, "calendar")`
@@ -236,7 +237,11 @@ refresh tokens); a rotated refresh token replaces the stored one.
 
 Token-endpoint errors map as: `invalid_grant` → `rejected` +
 `reauthorizeRequired` (the refresh token is forgotten and wiped from the
-keyring; run `authorize()` again); `invalid_client` / `unauthorized_client`
+keyring; run `authorize()` again) — except a *consent gap* (M81): an
+`invalid_grant` with `AADSTS65001` for a resource other than the primary
+one means the user never granted that resource's scopes (an account signed
+in before M81 asking for `mailbox`), so the refresh token is kept, mail and
+calendar go on working, and the result carries `consentRequired: true`; `invalid_client` / `unauthorized_client`
 → `rejected` (check the client ID); `temporarily_unavailable`,
 `server_error`, HTTP 5xx and unreachable → `offline` + `retryable`. Result
 keys add `provider`, `resource`, `expiresAt` (ISO UTC), `scope`,
@@ -445,11 +450,16 @@ Records carry the fields `CalDavProvider` writes, in the same text forms
 | `remoteUid`, `remoteItemType`, `remoteOccurrences` | `UID`, `CalendarItemType`, exception `ItemId`s | `iCalUId`, `type`, instance ids |
 | `readOnly` | `EffectiveRights/Modify` is false | the calendar's `canEdit` is false |
 | `organizer`, `attendees`, `isOnlineMeeting`, `onlineMeetingUrl` | `Organizer`, `Required/OptionalAttendees`, `Resources`, `IsOnlineMeeting`, `JoinOnlineMeetingUrl` | `organizer`, `attendees`, `isOnlineMeeting`, `onlineMeeting.joinUrl` |
+| `categories` (M81, read; written by `ExchangeMailbox.setItemState`) | `Categories` | `categories` |
 
 Adapter bookkeeping: `remoteAccount`, `remoteBaseline` (the mapped fields
 at the last sync, so a write sends only what changed and never rewrites an
 HTML body, attendees or categories), `syncDigest` and `syncState`
-(`synced | conflict`). Display-only fields are never written back.
+(`synced | conflict`). Display-only fields are never written back. The
+calendar adapters never write `categories`; QindaMail sends a change
+through the mailbox adapter and marks the record `categoriesPending` until
+the server has it, and a sync keeps the local `categories` of such a
+record instead of the server's (M81).
 
 ### Sync semantics
 
@@ -547,8 +557,45 @@ proxy); results are applied to the store on the GUI thread.
 Tests (`ctest -R exchange`, local servers on 127.0.0.1 only):
 `tst_mail_exchange_mapping`, `tst_mail_exchange_ews`,
 `tst_mail_exchange_ews_writes`, `tst_mail_exchange_graph`,
-`tst_mail_exchange_graph_writes`; gates in
-[verification.md](verification.md#m43-gates-exchange).
+`tst_mail_exchange_graph_writes`, `tst_mail_exchange_mailbox` (M81); gates in
+[verification.md](verification.md#m43-gates-exchange) and
+[M81](verification.md#m81-mail-gates-d-090).
+
+## Exchange and Microsoft 365 mailboxes
+
+`ExchangeMailbox` (`libs/mail_exchange`, M81,
+[D-090](decisions.md#d-090-qindamail-rules-categories-flags-search-folders-automatic-replies))
+reaches what an Exchange mailbox keeps beside its calendar: automatic
+replies, the master category list, the server's inbox rules (listed
+read-only) and the categories and follow-up flag of one message or event.
+`service` picks the protocol — `graph` (`baseUrl`, bearer only) or `ews`
+(`url`, `userName`, `serverVersion`; basic or bearer) — and the adapter has
+the providers' surface (`setSecret`, `clearSecret`, `hasSecret`, `busy`,
+`timeoutMs`, `allowInsecureAuth`; one request id answered once on a later
+turn), so `AccountRuntime::run` signs it in like the calendar adapters. The
+transport rules of [Credentials and transport](#credentials-and-transport)
+apply unchanged (`HttpTransport`, redaction, https or loopback only).
+
+| Invokable → signal | Graph v1.0 | EWS |
+| --- | --- | --- |
+| `readAutoReplies` / `writeAutoReplies(settings)` → `autoRepliesFinished` | `GET`/`PATCH /me/mailboxSettings` `automaticRepliesSetting` (`status` disabled / alwaysEnabled / scheduled, `externalAudience` none / contactsOnly / all, UTC `scheduled…DateTime`) | `GetUserOofSettings` / `SetUserOofSettings` (`OofState`, `ExternalAudience` None / Known / All, `Duration`) |
+| `listCategories` → `categoriesFinished` | `GET /me/outlook/masterCategories` (`preset0`…`preset24`) | `GetUserConfiguration` `CategoryList` on the calendar folder (the XML's `color` 0…24) |
+| `addCategory(name, preset)` → `categoriesFinished` | `POST /me/outlook/masterCategories` (409 = already there) | refused with a reason: Outlook owns that list |
+| `listServerRules` → `serverRulesFinished` | `GET /me/mailFolders/inbox/messageRules` | `GetInboxRules` |
+| `setItemState(item)` → `itemStateFinished` | message: `GET /me/messages?$filter=internetMessageId eq '<…>'`, then `PATCH` `categories` and `flag` (`flagStatus`, `startDateTime`/`dueDateTime` in the item's zone, `completedDateTime`); event: `PATCH /me/events/{id}` `categories` | message: `FindFolder` for the mailbox, `FindItem` by `message:InternetMessageId`, `UpdateItem` `item:Categories` and `item:Flag` (Exchange 2013+); event: `UpdateItem` by `ItemId` |
+| `pullItemStates(days)` → `itemStateFinished` (`items`) | `GET /me/messages?$select=internetMessageId,categories,flag&$filter=receivedDateTime ge …` (paged, at most 20 pages) | `FindItem` over the inbox's recent items with `Categories` and `Flag` |
+
+Settings are `{enabled, scheduled, start, end (ISO UTC), internalMessage,
+externalMessage (plain text), externalAudience none | contacts | all}`
+(`auto_reply.h` in `office_mail` validates the same map). Messages are found
+by their Internet message id because QindaMail reads Microsoft 365 and
+Exchange mail over IMAP; the `folder` hint (the IMAP mailbox name) narrows
+EWS's search. When the `mailbox` token cannot be had because its scopes
+were never granted, `AccountRuntime::run` answers with the token result's
+`consentRequired` (see [OAuth](#oauth-20)) and QindaMail keeps the tags on
+this computer until the next sign-in. Tests: `tst_mail_exchange_mailbox`
+over the existing Graph and EWS fakes (`graph_fake_mailbox.cpp`,
+`ews_fake_mailbox.cpp`).
 
 ## QindaMail (app)
 
@@ -575,12 +622,14 @@ MailHost (one per main window, DocumentHost without a document)
         ├─ AccountStore, MailSecrets, AutoConfig          (office_mail)
         ├─ ContactStore             $XDG_DATA_HOME/qindaoffice/mail/contacts.json (M64)
         ├─ PstImporter              File ▸ Import ▸ Outlook Data File (M76)
+        ├─ MailOrganizer            rules, categories, flags, search folders, automatic replies (M81, below)
         └─ AccountRuntime per account
              ├─ ImapMailProvider per mailbox | Pop3MailProvider
              ├─ SmtpMailProvider
              ├─ CalDavProvider | IcsCalendarProvider | EwsCalendarProvider |
              │  GraphCalendarProvider per enabled calendar
              ├─ CardDavProvider (accounts with contacts, M76)
+             ├─ ImapExtras, SmtpRedirector, ManageSieveProvider, ExchangeMailbox (M81)
              └─ OAuth2Session (OAuth accounts)
 ```
 
@@ -593,7 +642,14 @@ SMTP with `sameCredentialsAsIncoming` reads the incoming key; CardDAV
 without its own key reads the incoming, else the CalDAV one) or an OAuth
 access token (`ensureToken(resource)` → `applyAccessToken`; resources `mail`
 for IMAP/POP3/SMTP, `calendar` for Google CalDAV and Graph, `ews` for EWS,
-`contacts` for Google CardDAV).
+`contacts` for Google CardDAV, `mailbox` for Microsoft 365's mailbox
+settings and tags). M81 adds the services `sieve` (ManageSieve, signed in
+with the IMAP credential: same keyring key, same OAuth token) and
+`graphmail` (`ExchangeMailbox` over Graph, resource `mailbox`); an EWS
+mailbox runs as `ews` with the calendar's credential. `run(…, affectsStatus
+= false)` keeps an optional request (tags, keywords, header blocks,
+automatic replies, a rule's copy) from marking the whole account `error`
+or `needsSignIn`; a rule's redirect is a send and counts like one.
 An authentication rejection (`authRejected`, or the providers' refusal texts:
 IMAP `AUTHENTICATIONFAILED`, POP3 `-ERR [AUTH]`, SMTP 535, HTTP 401/403) is
 retried once with a forced token refresh or a fresh keyring read; a second one,
@@ -699,3 +755,231 @@ unread, flagged, hasAttachments, accountId, accountColor, isDraft` (+ `count`,
 
 Tests: `ctest -R qindamail`; gates in
 [verification.md](verification.md#m44-gates-qindamail-core--appsqindamail-c).
+
+## Organizing mail (M81)
+
+M81 ([D-090](decisions.md#d-090-qindamail-rules-categories-flags-search-folders-automatic-replies))
+brings Outlook's everyday mail handling to QindaMail, under Outlook's names.
+The value code — conditions, rules, categories, follow-up flags, search
+folders, automatic-reply settings, the Sieve vacation block and the
+ManageSieve client — is in `office_mail` (no Quick, headless tests); the
+Exchange side is `ExchangeMailbox` in `mail_exchange`
+([above](#exchange-and-microsoft-365-mailboxes)); the app's
+`MailOrganizer` (`MailService.organizer`, `apps/qindamail/src/mail_organizer*.cpp`)
+keeps the state, runs the rules and talks to the servers through the
+account runtimes:
+
+```
+MailService
+   └─ MailOrganizer             organizer.json beside view.json (schema qindaoffice.mail.organizer/1)
+        ├─ rules, categories {listKey → list}, searchFolders, baselines,
+        │  keywordSupport, ignoredThreads, autoReplies (unknown keys kept)
+        └─ through AccountRuntime::run (affectsStatus = false but for a redirect's send):
+             ImapExtras        keywords, UID STORE ±FLAGS, header blocks, UID COPY (imap_extras.cpp)
+             SmtpRedirector    a redirect's prepared bytes (smtp_redirector.cpp)
+             ManageSieveProvider   automatic replies on IMAP servers (office_mail)
+             ExchangeMailbox   Graph (`graphmail`) or EWS (`ews`) mailboxes (mail_exchange)
+```
+
+Message records gain `categories` (names), `followUp` (below),
+`importance` (`low | normal | high`, from `Importance`, `X-Priority` or
+`Priority` when the source was read, else set by a rule) and `tagsPending`
+(a change not yet on the server); IMAP records also `remoteCategories`
+(what the server had at the last look). Events, tasks and contacts carry
+`categories` too.
+
+### Rules and Alerts
+
+`mail_rules.h` / `mail_criteria.h`: a rule is `{id, name, enabled,
+conditions, exceptions, actions}`; rules run in their order (Rules and
+Alerts ▸ Run earlier / Run later), turned-off ones are skipped.
+
+| Conditions (and exceptions) | Value |
+| --- | --- |
+| `from`, `sentTo` (To or Cc), `subject`, `body`, `subjectOrBody`, `header` | words or addresses, any one matches (case-insensitive substrings) |
+| `sentOnlyToMe`, `toMe`, `toOrCcMe` | — (against every account's address) |
+| `hasAttachment` | — |
+| `importance` | `low \| normal \| high` |
+| `size` | `min`, `max` KB (0 = open) |
+| `received` | `after`, `before` (`yyyy-MM-dd`, inclusive local dates) |
+| `account` | account ids |
+| `category` (search folders too) | names; empty = any category |
+| `flagged`, `unread`, `olderThan` (`days`) | search folders only |
+
+A message matches a rule when every condition matches and no exception
+does. `header` reads the header block: the stored source's when there is
+one, else — only when a rule needs it — one `UID FETCH BODY.PEEK[HEADER]`
+for the message (IMAP).
+
+| Actions | |
+| --- | --- |
+| `moveTo`, `copyTo` | `folderKey`; the first move wins and a later rule's move becomes a copy (Outlook files the message in both places); copies stay in the message's account (IMAP `UID COPY`, else a second local record with its own source and attachment bytes) |
+| `delete`, `deletePermanently` | to the account's Trash / expunged; delete beats a move and deleting permanently beats both |
+| `markRead`, `flag` (`today`…`noDate`), `clearFlag`, `assignCategory` (names), `clearCategories`, `setImportance` | edits of the record, sent to the server like a manual change |
+| `forward` | a forward draft through `MailService.send` (the Outbox when offline); never back to the sender |
+| `redirect` | the original bytes with a `Resent-From/To/Date/Message-ID` block (RFC 5322 §3.6.6) in an Outbox draft with `redirectOf` and its own copy of the source, delivered by `SmtpRedirector` when online |
+| `notify` | a desktop notification (freedesktop `Notify`, `suppress-sound`: Outlook's "display a desktop alert", no sound) with the text, or the rule's name |
+| `stop` | stop processing more rules |
+
+Forward and redirect addresses are checked as the composer checks them
+(`Mime::parseAddressList`) when the rule is saved. One message's plan is
+carried out in a fixed order: tags, read state, forwards, redirects,
+alerts, copies, then the move or delete.
+
+**On arrival** the rules run on what a sync of an account's INBOX (or a
+POP3 download) added, once that mailbox has a *baseline*: the first
+download of a mailbox and a download after a UIDVALIDITY reset are old mail
+and never trigger rules (`AGENT-GUARD` in `mail_organizer.h`). Arrivals are
+queued and handled one message at a time. **Run Rules Now** (Rules ▸ Run
+Rules Now…, or from Rules and Alerts) runs the chosen rules — turned-off
+ones too — on a folder (and its subfolders), on all, read or unread
+messages, and reports how many it checked and how many a rule acted on.
+**Create Rule** opens the editor with the selected message's sender checked
+and its subject, the account and "sent to me" offered. Rules export and
+import as JSON (`{"schema": "qindaoffice.mail.rules/1", "rules": [...]}`);
+imported rules get fresh ids, go after the others, and come in turned off
+when they have a problem (an unknown folder, a bad address).
+Exchange and Microsoft 365 **server rules** are listed read-only at the
+foot of Rules and Alerts with a note; they are changed in Outlook on the web.
+
+### Categories
+
+`mail_categories.h`: a category is `{name, color, preset}`; names compare
+case-insensitively. The **master list** is per mailbox: Microsoft 365 and
+Exchange accounts use the server's list (Graph `masterCategories`, EWS's
+`CategoryList`; refreshed after each INBOX sync, new names added to Graph;
+EWS's list and renames or deletions on either are Outlook's to make), every
+other account and this computer share the local list, which starts with
+Outlook's six colour categories. Outlook's 25 preset colours map to Graph
+`preset0`…`preset24` and EWS colour indexes. Categories are assigned to
+messages (Home ▸ Categorize, the reading pane's chips, Color Categories…),
+events and tasks (their dialogs' Categories field) and contacts (People ▸
+Categorize); the message list filters by category and search takes
+`category:<name>`. **Server mapping**: IMAP keeps a category as a keyword
+(`keywordFor`: spaces become `_`, anything an RFC 3501 atom cannot hold
+goes into a modified-UTF-7 `&…-` run, read back exactly; `$`-keywords such
+as `$Forwarded` are never categories) when the mailbox's PERMANENTFLAGS
+allow new keywords — otherwise the user is told once and the categories
+stay local. Exchange and Microsoft 365 messages (read over IMAP) are found
+by Internet message id and get `categories` through Graph or EWS; events
+on Graph or EWS calendars too (`categoriesPending` until the server has
+them). CalDAV events and tasks, POP3 mail and this computer keep them
+locally (QindaTK's VEVENT/VTODO mapping has no `CATEGORIES`).
+
+### Follow-up flags
+
+`follow_up.h`: `followUp` is `{status flagged | complete, preset, start,
+due, completed, column}`; `flagged` mirrors status `flagged`. Today,
+Tomorrow, This Week (due the last work day of the week, start two days
+from today but not after it), Next Week (the first to the last work day of
+next week), No Date, Custom… (start and due, Ctrl+Shift+G), Mark Complete
+and Clear Flag, on the selection; the Quick Click flag in the list sets
+Today or clears. The list shows when it is due ("Today", "Tomorrow", a
+weekday, a date, "Overdue", "Done"); the reading pane shows "Follow up.
+Start by …. Due by …." with Mark Complete and Clear Flag. **Server mapping**: IMAP `\Flagged` (status only); Graph `flag`
+(`flagStatus`, `startDateTime`, `dueDateTime`, `completedDateTime`) and EWS
+`item:Flag` keep the dates and the completion. **The task board** shows
+flagged mail beside the tasks (`mailflag:<messageId>` cards: To do / In
+progress while flagged, Done when complete); moving a card to Done marks
+the flag complete, back from Done flags it again, deleting the card clears
+the flag.
+
+### Search folders
+
+`search_folders.h`: a saved search `{id, name, preset, match all | any,
+conditions, accounts}` listed under **Search Folders** in the folder tree
+(`searches` header row, `search:<id>` rows) and evaluated over the store
+whenever the folder is shown, so it stays live. Presets (Outlook's New
+Search Folder list): Unread Mail, For Follow Up, Unread or For Follow Up,
+Important Mail, Mail from Specific People, Mail Sent Directly to Me, Mail
+with Attachments, Categorized Mail, Large Mail (100 KB by default), Old
+Mail (7 days), Mail with Specific Words, and a custom
+folder from the rule conditions plus flagged, unread and older-than. Search
+folders never list Trash, Junk, Drafts or the Outbox. Folder ▸ Customize
+This Search Folder edits one as a custom folder; Delete Search Folder
+removes the search, not the mail.
+
+### Automatic replies
+
+Accounts ▸ Automatic Replies… (Outlook's Out of Office), per account:
+
+| Account | How | What is kept |
+| --- | --- | --- |
+| Microsoft 365 (Graph) | `mailboxSettings.automaticRepliesSetting` (OAuth resource `mailbox`) | on or scheduled, inside and outside replies, outside audience none / contacts / all |
+| Exchange (EWS) | `GetUserOofSettings` / `SetUserOofSettings` | the same |
+| IMAP with ManageSieve (RFC 5804; `sieve` in the account, else the IMAP host on 4190 with STARTTLS) | a Sieve `vacation` block in the active script | one reply for everyone, a subject, once per sender per day; scheduled with `date` / `relational` (`currentdate :value "ge"/"le"`) |
+| POP3, CalDAV-only, this computer | — | says plainly that the server cannot; the dialog's OK stays off |
+
+The Sieve block (`sieve_script.h`) is QindaMail's alone: a require line
+marked `# QindaMail automatic reply` first, then `# BEGIN … # END QindaMail
+automatic reply` (with the settings as JSON in a comment, for reading back)
+after the script's own leading `require`s; turning the reply off restores
+the user's script byte for byte. The script is checked with `CHECKSCRIPT`
+(when the server has it) before `PUTSCRIPT`; with no active script QindaMail creates and activates
+`qindamail` (and removes it again when the reply goes off and nothing else
+is in it). A vacation another program put in the script is left alone and
+the dialog says so. Credentials: the IMAP keyring key or OAuth token
+(`PLAIN`, `LOGIN`, `XOAUTH2`, `OAUTHBEARER`); never in a result or a log.
+
+### Conversations
+
+Clean Up Conversation moves to Trash the read, unflagged, uncategorised
+messages of the selected conversation whose text a later message quotes;
+Ignore Conversation (Ctrl+Delete) moves the conversation to Trash and does
+the same with what arrives in it later (up to 1 000 ignored conversations
+remembered); on an ignored conversation the command reads Stop Ignoring
+Conversation.
+
+### Commands (M81)
+
+Twenty new persistent ids, none renamed or reused; every one is in the
+menu tree and on the ribbon (the squeeze gate holds at 520 px):
+
+| Id | Menu | Ribbon |
+| --- | --- | --- |
+| `mailRulesAction`, `mailCreateRuleAction`, `mailRunRulesAction` | Message ▸ Rules | Home ▸ Move ▸ Rules; Folder ▸ Rules |
+| `mailCategorizeAction`, `mailCategoriesAction`, `mailClearCategoriesAction` | Message ▸ Categorize | Home ▸ Tags ▸ Categorize; People ▸ Manage (Categorize) |
+| `mailFlagTodayAction` … `mailFlagNoDateAction`, `mailFlagCustomAction` (Ctrl+Shift+G), `mailFlagCompleteAction`, `mailFlagClearAction` | Message ▸ Follow Up | Home ▸ Tags ▸ Follow Up |
+| `mailNewSearchFolderAction`, `mailEditSearchFolderAction`, `mailDeleteSearchFolderAction` | Folder | Folder ▸ Search folders |
+| `mailAutoRepliesAction` | Accounts | Accounts ▸ Out of office |
+| `mailCleanUpAction`, `mailIgnoreAction` (Ctrl+Delete) | Message | Home ▸ Delete |
+
+### QML API (M81)
+
+`MailService.organizer` (`MailOrganizer`, uncreatable): properties
+`revision` (bumped on every change of rules, categories or search folders),
+`rules`, `searchFolders`, `serverRules`, `running`. Rules: `newRule()`,
+`ruleFromMessage(id)` → `{rule, suggestions}`, `validateRule(rule)`,
+`describeRule(rule)`, `saveRule(rule)` → `{ok, id, errors}`,
+`deleteRule`, `copyRule`, `moveRule(id, index)`, `setRuleEnabled`,
+`exportRules(url, ids)`, `importRules(url)`, `runRulesNow(ruleIds,
+folderKey, includeSubfolders, which)` → request id answered by
+`rulesRunFinished(requestId, {state, processed, matched, error})`,
+`folderLabel(key)`. Categories: `categoriesFor(accountId)`,
+`listKeyFor(accountId)`, `categoryColor`, `categoryPalette()`,
+`addCategory`, `updateCategory`, `deleteCategory`, `categoriesOf(kind, id)`,
+`accountOf(kind, id)`, `setCategories(kind, ids, names)`,
+`toggleCategory(kind, ids, name, on)` (kind `message | event | task |
+contact`; answered by `tagsFinished`). Flags: `followUp(ids, preset)`,
+`followUpCustom(ids, start, due)`, `followUpOf(id)`. Search folders:
+`searchFolderPresets()`, `newSearchFolder(preset, argument)`,
+`searchFolderByKey(key)`, `saveSearchFolder(folder)` → `{ok, id, key, errors}`,
+`deleteSearchFolder(idOrKey)`. Conversations: `cleanUpConversation(id)`,
+`ignoreConversation(id)`, `isIgnored(id)`. Automatic replies:
+`autoReplyAccounts()` → `[{id, name, address, method graph | ews | sieve |
+none, reason}]`, `readAutoReplies(accountId)`, `writeAutoReplies(accountId,
+settings)` → `autoRepliesFinished(requestId, {ok, state, available, method,
+settings, foreignVacation, error})`, `refreshServerRules()`. Every request
+id is answered once, on a later turn. `MailHost` adds the signals
+`rulesRequested`, `ruleEditRequested(rule, suggestions)`,
+`runRulesRequested`, `categorizeRequested(kind, ids, accountId)`,
+`categoriesRequested(…)`, `followUpCustomRequested(ids)`,
+`searchFolderRequested(key)` and `autoRepliesRequested`. `messageModel`
+roles gain `categoryChips` [{name, color}], `followUpStatus`, `followUpDue`
+and `importance`; `MessageListModel.categoryFilter` (RW; a name, `"*"` = any
+category, `""` = off) narrows the list.
+
+Tests: `tst_mail_rules`, `tst_mail_organize`, `tst_mail_sieve`
+(`office_mail`), `tst_mail_exchange_mailbox`, `tst_qindamail_rules`,
+`tst_qindamail_organize`, `tst_qindamail_organizer_ui`; gates in
+[verification.md](verification.md#m81-mail-gates-d-090).

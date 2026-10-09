@@ -6,6 +6,7 @@
 #include "carddav_provider.h"
 #include "contact_store.h"
 
+#include "mail_organizer.h"
 #include "provider_calls.h"
 
 #include <qindatk/imap_mail_provider.h>
@@ -97,15 +98,24 @@ void MailService::syncRuntime(AccountRuntime *runtime, const QString &batchId)
                          for (const QString &mailbox : std::as_const(mailboxes)) {
                              QindaTK::ImapMailProvider *provider = rt->imap(mailbox);
                              ++fold->pending;
+                             // M81: new mail meets the rules; the servers' tags come back.
                              rt->run(QStringLiteral("imap"), provider,
-                                     [provider](const QString &rid) { return provider->sync(rid); }, one);
+                                     [provider](const QString &rid) { return provider->sync(rid); },
+                                     [this, rt, mailbox, one](const QVariantMap &result) {
+                                         if (rt != nullptr) m_organizer->noteSyncResult(rt, mailbox, result);
+                                         one(result);
+                                     });
                          }
                          fold->add(listed);
                      });
     } else if (runtime->isPop3()) {
         ++fold->pending;
         QindaTK::Pop3MailProvider *pop3 = runtime->pop3();
-        runtime->run(QStringLiteral("pop3"), pop3, [pop3](const QString &rid) { return pop3->sync(rid); }, one);
+        runtime->run(QStringLiteral("pop3"), pop3, [pop3](const QString &rid) { return pop3->sync(rid); },
+                     [this, rt, one](const QVariantMap &result) {
+                         if (rt != nullptr) m_organizer->noteSyncResult(rt, QStringLiteral("INBOX"), result);
+                         one(result);
+                     });
     }
     for (const CalendarBinding &binding : runtime->calendars()) {
         QObject *provider = binding.provider;
@@ -118,7 +128,10 @@ void MailService::syncRuntime(AccountRuntime *runtime, const QString &batchId)
                          QMetaObject::invokeMethod(provider, "sync", Q_RETURN_ARG(bool, started), Q_ARG(QString, rid));
                          return started;
                      },
-                     one);
+                     [this, rt, one](const QVariantMap &result) {
+                         if (rt != nullptr) m_organizer->noteCalendarSync(rt);   // M81: pending event categories
+                         one(result);
+                     });
     }
     if (QindaOffice::Mail::CardDavProvider *carddav = runtime->carddav()) {
         // M76: the account's address books, two ways; a conflict keeps the
@@ -176,7 +189,12 @@ QString MailService::syncFolder(const QString &folderKey)
     }
     const QString batch = beginBatch(QStringLiteral("sync"), int(targets.size()));
     for (const auto &[rt, mailbox] : std::as_const(targets)) {
-        const auto done = [this, batch](const QVariantMap &result) { batchDone(batch, result); };
+        QPointer<AccountRuntime> guard(rt);
+        const QString box = mailbox;
+        const auto done = [this, batch, guard, box](const QVariantMap &result) {
+            if (guard != nullptr) m_organizer->noteSyncResult(guard, box, result);   // M81
+            batchDone(batch, result);
+        };
         if (rt->isPop3()) {
             QindaTK::Pop3MailProvider *pop3 = rt->pop3();
             rt->run(QStringLiteral("pop3"), pop3, [pop3](const QString &rid) { return pop3->sync(rid); }, done);

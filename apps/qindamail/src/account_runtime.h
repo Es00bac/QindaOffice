@@ -21,6 +21,9 @@
 //   Secret keys are `<accountId>/<imap|pop3|smtp|caldav|ews|ics|carddav>`
 //   (MailSecrets::services());
 //   SMTP with sameCredentialsAsIncoming reads the incoming key.
+//   M81: "sieve" uses the incoming IMAP credential; "graphmail" the OAuth
+//   resource "mailbox" (Graph MailboxSettings + Mail).
+
 // AGENT-GUARD: a secret or token is never stored here, never logged and
 // never put in a result: it passes from the keyring/OAuth session straight
 // into the provider's write-only setSecret().
@@ -49,14 +52,18 @@ class SmtpMailProvider;
 namespace QindaOffice::Mail {
 class CardDavProvider;
 class ContactStore;
+class ExchangeMailbox;
 class MailSecrets;
+class ManageSieveProvider;
 class OAuth2Session;
 }
 
 namespace QindaOffice::Apps::Mail {
 
+class ImapExtras;
 class ImapSourceFetcher;
 class ProviderCalls;
+class SmtpRedirector;
 
 struct RuntimeContext {
     QindaTK::LocalProductivityStore *store = nullptr;
@@ -106,6 +113,20 @@ public:
     // M76: the account's CardDAV address books (service "carddav"), or null.
     [[nodiscard]] QindaOffice::Mail::CardDavProvider *carddav() const { return m_carddav; }
     [[nodiscard]] const CalendarBinding *calendar(const QString &calendarId) const;
+    // ---- M81 (D-090), each created on first use; null when the account
+    // has no such server ----
+    // IMAP keywords, header blocks and UID COPY (imap_extras.h), service "imap".
+    [[nodiscard]] ImapExtras *imapExtras();
+    // Automatic replies over ManageSieve on the IMAP host (or the account's
+    // "sieve" {host, port, security} override), service "sieve".
+    [[nodiscard]] QindaOffice::Mail::ManageSieveProvider *sieve();
+    // The Exchange / Microsoft 365 mailbox (exchange_mailbox.h): Graph for
+    // microsoft365 accounts (service "graphmail", OAuth resource "mailbox"),
+    // EWS for exchange accounts with an EWS URL (service "ews").
+    [[nodiscard]] QindaOffice::Mail::ExchangeMailbox *mailbox();
+    [[nodiscard]] QString mailboxService() const;
+    // Redirect with a Resent block (smtp_redirector.h), service "smtp".
+    [[nodiscard]] SmtpRedirector *redirector();
     [[nodiscard]] QindaOffice::Mail::OAuth2Session *oauth() const { return m_oauth; }
     [[nodiscard]] QString oauthConfigureError() const { return m_oauthError; }
 
@@ -121,7 +142,10 @@ public:
     // testAccount(): the dialog's password instead of the keyring.
     void setPasswordOverride(const QString &password) { m_passwordOverride = password; }
 
-    void run(const QString &service, QObject *provider, Starter start, Done done);
+    // `affectsStatus` false (M81: automatic replies, tags, rule extras): the
+    // result does not change the account's status — an optional feature a
+    // server lacks must not mark the whole account "error" or "needsSignIn".
+    void run(const QString &service, QObject *provider, Starter start, Done done, bool affectsStatus = true);
 
     // ---- status ----
     // idle | syncing | offline | error | needsSignIn
@@ -169,6 +193,10 @@ private:
     RuntimeContext m_context;
     QHash<QString, QindaTK::ImapMailProvider *> m_imap;
     ImapSourceFetcher *m_sourceFetcher = nullptr;
+    ImapExtras *m_imapExtras = nullptr;
+    QindaOffice::Mail::ManageSieveProvider *m_sieve = nullptr;
+    QindaOffice::Mail::ExchangeMailbox *m_mailbox = nullptr;
+    SmtpRedirector *m_redirector = nullptr;
     QindaTK::Pop3MailProvider *m_pop3 = nullptr;
     QindaTK::SmtpMailProvider *m_smtp = nullptr;
     QList<CalendarBinding> m_calendars;

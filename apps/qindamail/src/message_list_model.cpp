@@ -66,6 +66,10 @@ QHash<int, QByteArray> MessageListModel::roleNames() const
         {AccountIdRole, "accountId"},
         {AccountColorRole, "accountColor"},
         {IsDraftRole, "isDraft"},
+        {CategoryChipsRole, "categoryChips"},
+        {FollowUpStatusRole, "followUpStatus"},
+        {FollowUpDueRole, "followUpDue"},
+        {ImportanceRole, "importance"},
     };
 }
 
@@ -99,6 +103,16 @@ void MessageListModel::setFilter(const QString &filter)
     }
     m_filter = value;
     emit filterChanged();
+    rebuild();
+}
+
+void MessageListModel::setCategoryFilter(const QString &category)
+{
+    if (category == m_categoryFilter) {
+        return;
+    }
+    m_categoryFilter = category;
+    emit categoryFilterChanged();
     rebuild();
 }
 
@@ -167,7 +181,21 @@ bool MessageListModel::matches(const QVariantMap &record, const QStringList &ter
     if (filter == QLatin1String("attachments") && !hasAttachments(record)) {
         return false;
     }
-    if (terms.isEmpty()) {
+    // M81: "category:Red" (or category:"Red category") matches the categories.
+    QStringList words;
+    const QStringList categories = record.value(QStringLiteral("categories")).toStringList();
+    for (const QString &term : terms) {
+        if (!term.startsWith(QStringLiteral("category:"), Qt::CaseInsensitive)) {
+            words.append(term);
+            continue;
+        }
+        const QString wanted = term.mid(9).remove(QLatin1Char('"')).replace(QLatin1Char('_'), QLatin1Char(' ')).trimmed();
+        const bool hit = std::any_of(categories.cbegin(), categories.cend(), [&wanted](const QString &name) {
+            return wanted.isEmpty() || name.contains(wanted, Qt::CaseInsensitive);
+        });
+        if (!hit) return false;
+    }
+    if (words.isEmpty()) {
         return true;
     }
     const QString haystack = QStringList{record.value(QStringLiteral("sender")).toString(),
@@ -176,7 +204,7 @@ bool MessageListModel::matches(const QVariantMap &record, const QStringList &ter
                                          record.value(QStringLiteral("snippet")).toString(),
                                          record.value(QStringLiteral("bodyPlain")).toString()}
                                  .join(QLatin1Char('\n'));
-    return std::all_of(terms.cbegin(), terms.cend(), [&haystack](const QString &term) {
+    return std::all_of(words.cbegin(), words.cend(), [&haystack](const QString &term) {
         return haystack.contains(term, Qt::CaseInsensitive);
     });
 }
@@ -219,6 +247,10 @@ QVariantMap MessageListModel::rowFor(const QVariantList &messages, const QDateTi
         {QStringLiteral("accountId"), newest.value(QStringLiteral("accountId"))},
         {QStringLiteral("accountColor"), newest.value(QStringLiteral("accountColor"))},
         {QStringLiteral("isDraft"), newest.value(QStringLiteral("isDraft")).toBool()},
+        {QStringLiteral("categoryChips"), newest.value(QStringLiteral("categoryChips")).toList()},
+        {QStringLiteral("followUpStatus"), newest.value(QStringLiteral("followUpStatus")).toString()},
+        {QStringLiteral("followUpDue"), newest.value(QStringLiteral("followUpDue")).toString()},
+        {QStringLiteral("importance"), newest.value(QStringLiteral("importance"), QStringLiteral("normal")).toString()},
     };
 }
 
@@ -229,6 +261,12 @@ void MessageListModel::rebuild()
     QList<QVariantMap> matching;
     for (const QVariant &value : std::as_const(m_source)) {
         const QVariantMap record = value.toMap();
+        if (!m_categoryFilter.isEmpty()) {
+            const QStringList categories = record.value(QStringLiteral("categories")).toStringList();
+            if (m_categoryFilter == QLatin1String("*") ? categories.isEmpty()
+                                                       : !categories.contains(m_categoryFilter, Qt::CaseInsensitive))
+                continue;
+        }
         if (matches(record, terms, m_filter)) {
             matching.append(record);
         }

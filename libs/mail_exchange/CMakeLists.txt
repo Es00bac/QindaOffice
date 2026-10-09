@@ -6,6 +6,8 @@
 # the store need no change for Exchange or Microsoft 365 accounts.
 # Qt Core/Network + QindaTK only: no Quick code, no desktop archives, no
 # dependency on office_mail (secrets arrive through setSecret()).
+# M81 (D-090): ExchangeMailbox — automatic replies, master categories, the
+# server's inbox rules and item categories/flags over Graph and EWS.
 qt_add_library(mail_exchange STATIC
     src/calendar_sync.cpp
     src/calendar_sync.h
@@ -19,6 +21,9 @@ qt_add_library(mail_exchange STATIC
     src/ews_soap.cpp
     src/ews_soap.h
     src/ews_writes.cpp
+    src/ews_mailbox.cpp
+    src/exchange_mailbox.cpp
+    src/exchange_mailbox.h
     src/exchange_common.cpp
     src/exchange_common.h
     src/graph_backend.cpp
@@ -28,10 +33,13 @@ qt_add_library(mail_exchange STATIC
     src/graph_mapping.cpp
     src/graph_mapping.h
     src/graph_writes.cpp
+    src/graph_mailbox.cpp
     src/hosted_calendar_provider.cpp
     src/hosted_calendar_provider.h
     src/http_transport.cpp
     src/http_transport.h
+    src/mailbox_jobs.cpp
+    src/mailbox_jobs.h
     src/recurrence_pattern.cpp
     src/recurrence_pattern.h
     src/windows_zones.cpp

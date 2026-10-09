@@ -62,7 +62,10 @@ const QStringList &remoteExtraFields()
 {
     static const QStringList fields{QStringLiteral("remoteUid"), QStringLiteral("remoteItemType"),
         QStringLiteral("remoteOccurrences"), QStringLiteral("readOnly"), QStringLiteral("organizer"),
-        QStringLiteral("attendees"), QStringLiteral("isOnlineMeeting"), QStringLiteral("onlineMeetingUrl")};
+        QStringLiteral("attendees"), QStringLiteral("isOnlineMeeting"), QStringLiteral("onlineMeetingUrl"),
+        // M81 (D-090): the server's categories, read on every pull; QindaMail
+        // writes a change through ExchangeMailbox::setItemState at once.
+        QStringLiteral("categories")};
     return fields;
 }
 

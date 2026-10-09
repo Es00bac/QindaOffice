@@ -18,14 +18,13 @@
 // AGENT-GUARD: no property, result, status text or log line carries a
 // password or token (AccountRuntime is the only code that handles them).
 //
-// Files: mail_service.cpp (lifecycle, accounts list, status),
-// _folders (folder tree, message list, selection), _messages (actions,
-// attachments, opened files), _sync (sync, mailbox lists, timers),
-// _compose (drafts, send, mailto), _accounts (add/update/remove/test),
-// _calendar (calendars, events, iCalendar), _tasks; M64 (D-072): _source
-// (RFC 5322 sources, parsed content, attachment bytes), _files (.eml/.msg/
-// .mbox in, .eml and attachments out), _contacts (address book, recipient
-// suggestions, remote pictures, links), _meetings (iMIP requests, replies).
+// Files: mail_service.cpp (lifecycle, accounts, status), _folders (tree,
+// list, selection), _messages (actions, attachments), _sync (sync, mailbox
+// lists, timers), _compose (drafts, send, mailto), _accounts, _calendar,
+// _tasks; M64 (D-072): _source (RFC 5322 sources, content, attachment
+// bytes), _files (.eml/.msg/.mbox in, .eml out), _contacts (address book,
+// suggestions, pictures, links), _meetings (iMIP). M81 (D-090): rules,
+// categories, flags, search folders, automatic replies — mail_organizer.h.
 
 #include "account_runtime.h"
 #include "account_store.h"
@@ -75,10 +74,12 @@ class QNetworkAccessManager;
 
 namespace QindaOffice::Apps::Mail {
 
+class MailOrganizer;
 class ProviderCalls;
 class PstImporter;
 
 Q_MOC_INCLUDE("pst_import.h")
+Q_MOC_INCLUDE("mail_organizer.h")
 
 inline constexpr const char kLocalAccountId[] = "local";
 inline constexpr const char kLocalCalendarId[] = "local";
@@ -122,6 +123,7 @@ class MailService : public QObject {
     Q_PROPERTY(QindaOffice::Mail::ContactStore *contacts READ contacts CONSTANT)
     // ---- Outlook data files (M76, pst_import.h) ----
     Q_PROPERTY(QindaOffice::Apps::Mail::PstImporter *outlookImport READ outlookImport CONSTANT)
+    Q_PROPERTY(QindaOffice::Apps::Mail::MailOrganizer *organizer READ organizer CONSTANT)   // M81
 
 public:
     struct Options {
@@ -260,6 +262,7 @@ public:
     // ---- contacts and pictures (M64: _contacts) ----
     [[nodiscard]] QindaOffice::Mail::ContactStore *contacts() const { return m_contacts; }
     [[nodiscard]] PstImporter *outlookImport() const { return m_outlookImport; }
+    [[nodiscard]] MailOrganizer *organizer() const { return m_organizer; }
     // "Add sender to contacts": {ok, id, existed, error}.
     Q_INVOKABLE QVariantMap addSenderToContacts(const QString &messageId);
     // Recipient autocomplete: contacts first, then addresses seen in mail,
@@ -369,6 +372,7 @@ signals:
 private:
     friend class MailServiceTestAccess;
     friend class PstImporter;   // M76: imports through importRawMessage and the store
+    friend class MailOrganizer; // M81: rule actions through the message actions and the store
     struct Batch {
         int pending = 0;
         QString state = QStringLiteral("accepted");
@@ -504,6 +508,7 @@ private:
     struct MboxJob;
     QindaOffice::Mail::ContactStore *m_contacts = nullptr;
     PstImporter *m_outlookImport = nullptr;
+    MailOrganizer *m_organizer = nullptr;
     bool m_bulkSources = false;
     QHash<QString, QList<std::function<void(const QByteArray &, const QString &)>>> m_sourceWaiters;
     mutable QHash<QString, std::shared_ptr<const QindaOffice::Mail::MessageContent>> m_contentCache;

@@ -17,7 +17,8 @@ namespace {
 
 bool isMailService(const QString &service)
 {
-    return service == QLatin1String("imap") || service == QLatin1String("pop3") || service == QLatin1String("smtp");
+    return service == QLatin1String("imap") || service == QLatin1String("pop3") || service == QLatin1String("smtp")
+        || service == QLatin1String("sieve");   // M81: ManageSieve signs in as IMAP does
 }
 
 } // namespace
@@ -28,15 +29,18 @@ QString AccountRuntime::secretServiceFor(const QString &service) const
         && !m_account.incoming.isEmpty()) {
         return m_account.incoming.protocol;
     }
-    if (service == QLatin1String("graph")) {
+    if (service == QLatin1String("graph") || service == QLatin1String("graphmail")) {
         return {};
+    }
+    if (service == QLatin1String("sieve")) {
+        return m_account.incoming.protocol;
     }
     return service;
 }
 
 QString AccountRuntime::mechanismFor(const QString &service) const
 {
-    if (service == QLatin1String("imap")) {
+    if (service == QLatin1String("imap") || service == QLatin1String("sieve")) {
         return m_account.incoming.authMechanism.isEmpty() ? QStringLiteral("auto") : m_account.incoming.authMechanism;
     }
     if (service == QLatin1String("pop3")) {
@@ -52,7 +56,7 @@ QString AccountRuntime::mechanismFor(const QString &service) const
         const QString m = m_account.outgoing.authMechanism;
         return m.isEmpty() ? QStringLiteral("auto") : m;
     }
-    if (service == QLatin1String("graph")) {
+    if (service == QLatin1String("graph") || service == QLatin1String("graphmail")) {
         return QStringLiteral("bearer");
     }
     if (service == QLatin1String("carddav")) {   // M76
@@ -77,6 +81,7 @@ QString AccountRuntime::oauthResourceFor(const QString &service)
     if (isMailService(service)) return QStringLiteral("mail");
     if (service == QLatin1String("ews")) return QStringLiteral("ews");
     if (service == QLatin1String("carddav")) return QStringLiteral("contacts");
+    if (service == QLatin1String("graphmail")) return QStringLiteral("mailbox");   // M81
     return QStringLiteral("calendar");
 }
 
@@ -222,7 +227,7 @@ void AccountRuntime::readSecretInto(const QString &secretService, QPointer<QObje
                             });
 }
 
-void AccountRuntime::run(const QString &service, QObject *provider, Starter start, Done done)
+void AccountRuntime::run(const QString &service, QObject *provider, Starter start, Done done, bool affectsStatus)
 {
     if (provider == nullptr) {
         done(ProviderCalls::result({}, QStringLiteral("rejected"), tr("This account has no %1 server").arg(service)));
@@ -230,10 +235,10 @@ void AccountRuntime::run(const QString &service, QObject *provider, Starter star
     }
     adjustPending(+1);
     QPointer<AccountRuntime> self(this);
-    Done finish = [self, done = std::move(done)](const QVariantMap &result) {
+    Done finish = [self, affectsStatus, done = std::move(done)](const QVariantMap &result) {
         if (self != nullptr) {
             self->adjustPending(-1);
-            self->noteResult(result);
+            if (affectsStatus) self->noteResult(result);
         }
         done(result);
     };

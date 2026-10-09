@@ -4,6 +4,7 @@
 #include "mail_service.h"
 
 #include "account_store.h"
+#include "mail_organizer.h"
 #include "message_list_model.h"
 
 #include <qindatk/local_productivity_store.h>
@@ -239,6 +240,8 @@ void MailService::rebuildFolders()
         rows.append(header);
         if (header.expanded) rows += accountFolderRows(id, counts);
     }
+    // M81: the saved searches, under their own header, kept live.
+    rows += m_organizer->searchRows(!m_collapsed.contains(QStringLiteral("searches")));
     m_folderModel->setRows(rows);
     if (unreadTotal != m_unreadTotal) {
         m_unreadTotal = unreadTotal;
@@ -246,7 +249,7 @@ void MailService::rebuildFolders()
     }
     // A folder that went away (account removed) falls back to the first inbox.
     const bool known = !m_currentFolderKey.isEmpty()
-        && (m_folderModel->indexOfKey(m_currentFolderKey) >= 0
+        && (m_folderModel->indexOfKey(m_currentFolderKey) >= 0 || m_organizer->isSearchKey(m_currentFolderKey)
             || accountFolderRows(m_currentFolderKey.section(QLatin1Char(':'), 1, 1), counts).size() > 0);
     if (!known) {
         m_currentFolderKey = inboxKey(accountIds.first());
@@ -351,6 +354,7 @@ QVariantList MailService::folderRecords(const QString &key) const
     const QString local = QString::fromLatin1(kLocalAccountId);
     if (key == folderKey(local, QStringLiteral("Drafts"))) return draftRows(false);
     if (key == folderKey(local, QStringLiteral("Outbox"))) return draftRows(true);
+    if (m_organizer->isSearchKey(key)) return m_organizer->searchRecords(key);
     QSet<QString> inboxes;
     if (key == kAllInbox) {
         for (const AccountRuntime *rt : m_runtimes) inboxes.insert(inboxKey(rt->id()));
@@ -367,6 +371,7 @@ QVariantList MailService::folderRecords(const QString &key) const
         const QString owner = ownerAccountOf(record);
         record.insert(QStringLiteral("accountId"), owner);
         record.insert(QStringLiteral("accountColor"), colors.value(owner));
+        m_organizer->decorate(&record);   // M81: categories, follow-up, importance
         records.append(record);
     }
     return records;
@@ -401,6 +406,7 @@ QVariantMap MailService::messageById(const QString &messageId) const
         record.insert(QStringLiteral("isDraft"), false);
         record.insert(QStringLiteral("bodyTruncated"), record.value(QStringLiteral("bodyTruncated")).toBool());
         if (!record.contains(QStringLiteral("attachments"))) record.insert(QStringLiteral("attachments"), QVariantList());
+        m_organizer->decorate(&record);
         return record;
     }
     for (const QVariant &value : m_store->drafts()) {

@@ -9,13 +9,17 @@
 # People workspace). M76 (D-085): tst_qindamail_pst (Outlook data files
 # through the service and the window) and tst_qindamail_carddav (address
 # books through the account runtime against the local fake CardDAV server,
-# and Connect Address Book through the window). Every test links the
+# and Connect Address Book through the window). M81 (D-090):
+# tst_qindamail_rules (rules on arrival, Run Rules Now, forward/redirect,
+# conversations), tst_qindamail_organize (categories, flags, search folders,
+# automatic replies; the EWS and ManageSieve fakes) and
+# tst_qindamail_organizer_ui (the dialogs through the window). Every test links the
 # app's static QML module, so a source added to apps/qindamail is in every
 # test.
 foreach(name IN ITEMS tst_qindamail_drafts tst_qindamail_service tst_qindamail_accounts
                       tst_qindamail_calendar tst_qindamail_host tst_qindamail_flow tst_qindamail_ui
                       tst_qindamail_files tst_qindamail_people tst_qindamail_meetings tst_qindamail_pst
-                      tst_qindamail_carddav)
+                      tst_qindamail_carddav tst_qindamail_rules tst_qindamail_organize tst_qindamail_organizer_ui)
     add_executable(${name} ${name}.cpp mail_test_support.h fake_mail_server.h fake_imap_server.h)
     target_link_libraries(${name} PRIVATE qindamail_app qindamail_appplugin
         Qt6::Test Qt6::Network Qt6::GuiPrivate)
@@ -27,3 +31,6 @@ foreach(name IN ITEMS tst_qindamail_drafts tst_qindamail_service tst_qindamail_a
     set_tests_properties(${name} PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QQO_MAIL_SECRET_BACKEND=memory")
 endforeach()
+# M81 (D-090): Exchange tags and automatic replies through the EWS fake of
+# the mail_exchange tests.
+target_link_libraries(tst_qindamail_organize PRIVATE mail_exchange_test_support)

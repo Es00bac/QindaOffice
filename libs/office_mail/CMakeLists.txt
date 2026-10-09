@@ -12,6 +12,11 @@
 # NDB, LTP and messaging layers of MS-PST), the MAPI mapping .msg and .pst
 # share (mail, contacts, contact groups, appointments, tasks), contact
 # groups in vCard, and CardDAV address-book sync.
+# M81 (D-090, docs/mail.md#rules-and-alerts): Outlook's mail handling as
+# values and engines — rule and search-folder conditions, rules (plan,
+# JSON import/export), color categories (presets, IMAP keywords), follow-up
+# flags, search folders, automatic replies (the settings, the Sieve
+# vacation block, the ManageSieve client) and silent desktop alerts.
 # Qt Core/Network/Qml/DBus + qt6keychain + QindaTK; no Quick, no desktop archives
 # (AGENTS.md rules 8/9). Qt Gui only for QDesktopServices (opening the
 # browser) and through office_core.
@@ -106,6 +111,16 @@ qt_add_qml_module(office_mail
         src/provider_presets.cpp src/provider_presets.h
         src/secret_backend.cpp src/secret_backend.h
         src/xoauth2.cpp src/xoauth2.h
+        src/auto_reply.cpp src/auto_reply.h
+        src/desktop_notifier.cpp src/desktop_notifier.h
+        src/follow_up.cpp src/follow_up.h
+        src/mail_categories.cpp src/mail_categories.h
+        src/mail_criteria.cpp src/mail_criteria.h
+        src/mail_rules.cpp src/mail_rules.h
+        src/managesieve_provider.cpp src/managesieve_provider.h
+        src/managesieve_session.cpp src/managesieve_session.h
+        src/search_folders.cpp src/search_folders.h
+        src/sieve_script.cpp src/sieve_script.h
 )
 
 target_include_directories(office_mail

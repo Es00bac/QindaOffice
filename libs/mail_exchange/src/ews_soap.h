@@ -57,6 +57,8 @@ struct Response {
 };
 
 // Parses a response envelope. False with `error` when the body is not SOAP.
+// `messages` are the ResponseMessages children, the single ResponseMessage
+// of Get/SetUserOofSettings, or GetInboxRulesResponse itself (M81).
 // AGENT-GUARD: Response is not copyable in practice: `messages[i].node`
 // points into `root`; keep the Response alive while using them.
 bool parse(const QByteArray &body, Response *out, QString *error);

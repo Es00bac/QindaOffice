@@ -160,7 +160,8 @@ const QStringList &itemFieldUris()
         QStringLiteral("calendar:Resources"), QStringLiteral("calendar:TimeZone"), QStringLiteral("calendar:Recurrence"),
         QStringLiteral("calendar:ModifiedOccurrences"), QStringLiteral("calendar:DeletedOccurrences"),
         QStringLiteral("calendar:StartTimeZone"), QStringLiteral("calendar:IsOnlineMeeting"),
-        QStringLiteral("calendar:StartTimeZoneId"), QStringLiteral("calendar:JoinOnlineMeetingUrl")};
+        QStringLiteral("calendar:StartTimeZoneId"), QStringLiteral("calendar:JoinOnlineMeetingUrl"),
+        QStringLiteral("item:Categories")};
     return uris;
 }
 
@@ -256,6 +257,10 @@ CalendarSync::RemoteEvent mapItem(const XmlNode &item, const QHash<QString, cons
     f.insert(QStringLiteral("onlineMeetingUrl"), item.childText(u"JoinOnlineMeetingUrl"));
     const XmlNode *rights = item.child(u"EffectiveRights");
     f.insert(QStringLiteral("readOnly"), rights && rights->childText(u"Modify").compare(QLatin1String("false"), Qt::CaseInsensitive) == 0);
+    QStringList categories;
+    if (const XmlNode *list = item.child(u"Categories"))
+        for (const XmlNode &value : list->children) categories.append(value.text.trimmed());
+    f.insert(QStringLiteral("categories"), categories);
     return out;
 }
 

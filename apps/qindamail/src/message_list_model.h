@@ -14,6 +14,11 @@
 // the newest matching message's fields, `threadCount` messages, unread /
 // flagged / hasAttachments when ANY of them is, `threadMessageIds` oldest
 // first. Without it every row is one message (threadCount 1).
+// M81 (D-090): roles categoryChips [{name, color}], followUpStatus
+// ("" | flagged | complete), followUpDue (a short label), importance
+// (low | normal | high), all of the newest message; `categoryFilter`
+// keeps only rows with that category ("*" = any), and a search term
+// "category:<name>" (quotes allowed) matches a message's categories.
 
 #include <QAbstractListModel>
 #include <QDateTime>
@@ -35,6 +40,7 @@ class MessageListModel : public QAbstractListModel {
     // all | unread | flagged | attachments
     Q_PROPERTY(QString filter READ filter WRITE setFilter NOTIFY filterChanged)
     Q_PROPERTY(bool threaded READ threaded WRITE setThreaded NOTIFY threadedChanged)
+    Q_PROPERTY(QString categoryFilter READ categoryFilter WRITE setCategoryFilter NOTIFY categoryFilterChanged)
 public:
     enum Role {
         MessageIdRole = Qt::UserRole + 1,
@@ -55,6 +61,10 @@ public:
         AccountIdRole,
         AccountColorRole,
         IsDraftRole,
+        CategoryChipsRole,
+        FollowUpStatusRole,
+        FollowUpDueRole,
+        ImportanceRole,
     };
 
     explicit MessageListModel(QObject *parent = nullptr);
@@ -69,6 +79,8 @@ public:
     void setFilter(const QString &filter);
     [[nodiscard]] bool threaded() const { return m_threaded; }
     void setThreaded(bool threaded);
+    [[nodiscard]] QString categoryFilter() const { return m_categoryFilter; }
+    void setCategoryFilter(const QString &category);
 
     // The folder's records (store `messages` rows, or drafts mapped to the
     // same fields with isDraft) plus accountId/accountColor.
@@ -94,6 +106,7 @@ signals:
     void searchTextChanged();
     void filterChanged();
     void threadedChanged();
+    void categoryFilterChanged();
 
 private:
     void rebuild();
@@ -103,6 +116,7 @@ private:
     QVector<QVariantMap> m_rows;
     QString m_searchText;
     QString m_filter = QStringLiteral("all");
+    QString m_categoryFilter;
     bool m_threaded = true;
     QDateTime m_referenceTime;
 };

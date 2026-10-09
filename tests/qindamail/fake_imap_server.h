@@ -6,13 +6,19 @@
 // SASL-IR), SELECT INBOX, sync (UID FETCH … (UID FLAGS), (UID RFC822.SIZE),
 // (UID FLAGS BODY.PEEK[])) and download sections — including the HEADER and
 // TEXT sections QindaMail fetches to keep a message's source. Plain text,
-// loopback only, one INBOX; every command line is recorded in `commands`.
+// loopback only; every command line is recorded in `commands`.
+// M81 (D-090): other mailboxes (`folders`), \Flagged and keywords in FLAGS,
+// PERMANENTFLAGS with or without "\*" (`keywords`), UID STORE ±FLAGS, UID
+// MOVE and UID COPY (MOVE and UIDPLUS advertised), UID EXPUNGE / EXPUNGE —
+// what rules, categories and follow-up flags send.
 
 #include <QByteArray>
 #include <QHostAddress>
 #include <QList>
+#include <QMap>
 #include <QObject>
 #include <QRegularExpression>
+#include <QStringList>
 #include <QTcpServer>
 #include <QTcpSocket>
 
@@ -25,6 +31,9 @@ public:
         qint64 uid = 0;
         QByteArray source;
         bool seen = false;
+        bool flagged = false;
+        QStringList keywords{};          // initialised, so {uid, source, seen} draws no -Wmissing-field-initializers
+        bool deleted = false;
     };
 
     explicit FakeImapServer(QByteArray password, QObject *parent = nullptr)
@@ -36,15 +45,21 @@ public:
     }
 
     [[nodiscard]] quint16 port() const { return m_server.serverPort(); }
+    // The messages of a mailbox ("INBOX" is `inbox`).
+    QList<Message> &box(const QString &name) { return name.compare(QStringLiteral("INBOX"), Qt::CaseInsensitive) == 0 ? inbox : folders[name]; }
 
     QList<Message> inbox;
+    QMap<QString, QList<Message>> folders;
     QList<QByteArray> commands;
     qint64 uidValidity = 4242;
+    bool keywords = true;         // PERMANENTFLAGS has "\*": new keywords are stored
+    qint64 nextUid = 1000;
 
 private:
     struct Session {
         QByteArray buffer;
         bool authenticated = false;
+        QString selected = QStringLiteral("INBOX");
     };
 
     void accept()
@@ -56,7 +71,7 @@ private:
                 socket->deleteLater();
             });
             connect(socket, &QTcpSocket::readyRead, this, [this, socket, session] { read(socket, session); });
-            socket->write("* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN SASL-IR] fake IMAP ready\r\n");
+            socket->write("* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN SASL-IR MOVE UIDPLUS] fake IMAP ready\r\n");
         }
     }
 
@@ -72,6 +87,17 @@ private:
     }
 
     static QByteArray literal(const QByteArray &bytes) { return "{" + QByteArray::number(bytes.size()) + "}\r\n" + bytes; }
+    static QString mailboxName(const QByteArray &argument) { return QString::fromUtf8(argument).remove(QLatin1Char('"')).trimmed(); }
+
+    static QByteArray flagsOf(const Message &message)
+    {
+        QStringList flags;
+        if (message.seen) flags << QStringLiteral("\\Seen");
+        if (message.flagged) flags << QStringLiteral("\\Flagged");
+        if (message.deleted) flags << QStringLiteral("\\Deleted");
+        flags += message.keywords;
+        return "FLAGS (" + flags.join(QLatin1Char(' ')).toUtf8() + ")";
+    }
 
     void handle(QTcpSocket *socket, Session *session, const QByteArray &line)
     {
@@ -82,7 +108,7 @@ private:
         commands.append(upper.startsWith("AUTHENTICATE") ? QByteArray("AUTHENTICATE") : rest);
         const auto ok = [&](const QByteArray &what) { socket->write(tag + " OK " + what + " completed\r\n"); };
         if (upper == "CAPABILITY") {
-            socket->write("* CAPABILITY IMAP4rev1 AUTH=PLAIN SASL-IR\r\n");
+            socket->write("* CAPABILITY IMAP4rev1 AUTH=PLAIN SASL-IR MOVE UIDPLUS\r\n");
             ok("CAPABILITY");
         } else if (upper.startsWith("AUTHENTICATE PLAIN ")) {
             const QList<QByteArray> fields = QByteArray::fromBase64(rest.mid(19)).split('\0');
@@ -95,32 +121,95 @@ private:
         } else if (!session->authenticated) {
             socket->write(tag + " BAD Authenticate first\r\n");
         } else if (upper.startsWith("SELECT ")) {
-            socket->write("* FLAGS (\\Seen \\Flagged \\Deleted)\r\n* " + QByteArray::number(inbox.size()) + " EXISTS\r\n"
-                          "* OK [UIDVALIDITY " + QByteArray::number(uidValidity) + "] UIDs valid\r\n");
+            session->selected = mailboxName(rest.mid(7));
+            socket->write("* FLAGS (\\Seen \\Flagged \\Deleted)\r\n* " + QByteArray::number(box(session->selected).size())
+                          + " EXISTS\r\n* OK [UIDVALIDITY " + QByteArray::number(uidValidity) + "] UIDs valid\r\n"
+                          + "* OK [PERMANENTFLAGS (\\Seen \\Flagged \\Deleted" + (keywords ? " \\*" : "") + ")] Limited\r\n");
             socket->write(tag + " OK [READ-WRITE] SELECT completed\r\n");
         } else if (upper.startsWith("UID FETCH ")) {
-            fetch(socket, rest.mid(10));
+            fetch(socket, session, rest.mid(10));
             ok("FETCH");
+        } else if (upper.startsWith("UID STORE ")) {
+            store(socket, tag, session, rest.mid(10));
+        } else if (upper.startsWith("UID MOVE ") || upper.startsWith("UID COPY ")) {
+            const bool move = upper.startsWith("UID MOVE ");
+            const QList<QByteArray> parts = rest.mid(9).split(' ');
+            const qint64 uid = parts.value(0).toLongLong();
+            QList<Message> &from = box(session->selected);
+            QList<Message> &to = box(mailboxName(rest.mid(9 + parts.value(0).size() + 1)));
+            for (qsizetype i = 0; i < from.size(); ++i) {
+                if (from.at(i).uid != uid) continue;
+                Message copy = from.at(i);
+                copy.uid = ++nextUid;
+                to.append(copy);
+                if (move) from.removeAt(i);
+                break;
+            }
+            ok(move ? "MOVE" : "COPY");
+        } else if (upper.startsWith("UID EXPUNGE") || upper == "EXPUNGE") {
+            QList<Message> &list = box(session->selected);
+            list.removeIf([](const Message &m) { return m.deleted; });
+            ok("EXPUNGE");
         } else {
             socket->write(tag + " BAD Unknown command\r\n");
         }
     }
 
-    void fetch(QTcpSocket *socket, const QByteArray &arguments)
+    void store(QTcpSocket *socket, const QByteArray &tag, Session *session, const QByteArray &arguments)
+    {
+        static const QRegularExpression re(QStringLiteral("^(\\d+) ([+-])FLAGS(\\.SILENT)? \\(([^)]*)\\)$"),
+                                           QRegularExpression::CaseInsensitiveOption);
+        const QRegularExpressionMatch m = re.match(QString::fromUtf8(arguments));
+        if (!m.hasMatch()) {
+            socket->write(tag + " BAD STORE syntax\r\n");
+            return;
+        }
+        const qint64 uid = m.captured(1).toLongLong();
+        const bool add = m.captured(2) == QLatin1String("+");
+        const QStringList flags = m.captured(4).split(QLatin1Char(' '), Qt::SkipEmptyParts);
+        for (const QString &flag : flags) {
+            if (!flag.startsWith(QLatin1Char('\\')) && add && !keywords) {
+                socket->write(tag + " NO [CANNOT] Keywords are not supported\r\n");
+                return;
+            }
+        }
+        for (Message &message : box(session->selected)) {
+            if (message.uid != uid) continue;
+            for (const QString &flag : flags) {
+                if (flag.compare(QStringLiteral("\\Seen"), Qt::CaseInsensitive) == 0) message.seen = add;
+                else if (flag.compare(QStringLiteral("\\Flagged"), Qt::CaseInsensitive) == 0) message.flagged = add;
+                else if (flag.compare(QStringLiteral("\\Deleted"), Qt::CaseInsensitive) == 0) message.deleted = add;
+                else if (add && !message.keywords.contains(flag, Qt::CaseInsensitive)) message.keywords.append(flag);
+                else if (!add) message.keywords.removeIf([&flag](const QString &k) { return k.compare(flag, Qt::CaseInsensitive) == 0; });
+            }
+        }
+        socket->write(tag + " OK STORE completed\r\n");
+    }
+
+    void fetch(QTcpSocket *socket, Session *session, const QByteArray &arguments)
     {
         const qsizetype space = arguments.indexOf(' ');
-        const QList<QByteArray> range = arguments.left(space).split(':');
+        const QByteArray set = arguments.left(space);
         const QByteArray items = arguments.mid(space + 1).toUpper();
+        const QList<Message> &list = box(session->selected);
         qint64 maxUid = 0;
-        for (const Message &message : std::as_const(inbox)) maxUid = std::max(maxUid, message.uid);
-        qint64 low = range.value(0).toLongLong();
-        const qint64 high = range.size() < 2 ? low : range.value(1) == "*" ? maxUid : range.value(1).toLongLong();
-        if (range.value(1) == "*" && low > maxUid) low = maxUid;
-        for (qsizetype i = 0; i < inbox.size(); ++i) {
-            const Message &message = inbox.at(i);
-            if (message.uid < std::min(low, high) || message.uid > std::max(low, high)) continue;
+        for (const Message &message : list) maxUid = std::max(maxUid, message.uid);
+        // "a:b", "a:*" or a comma list.
+        const auto wanted = [&](qint64 uid) {
+            for (const QByteArray &piece : set.split(',')) {
+                const QList<QByteArray> range = piece.split(':');
+                qint64 low = range.value(0).toLongLong();
+                const qint64 high = range.size() < 2 ? low : range.value(1) == "*" ? maxUid : range.value(1).toLongLong();
+                if (range.value(1) == "*" && low > maxUid) low = maxUid;
+                if (uid >= std::min(low, high) && uid <= std::max(low, high)) return true;
+            }
+            return false;
+        };
+        for (qsizetype i = 0; i < list.size(); ++i) {
+            const Message &message = list.at(i);
+            if (!wanted(message.uid)) continue;
             QByteArray response = "* " + QByteArray::number(i + 1) + " FETCH (UID " + QByteArray::number(message.uid);
-            if (items.contains("FLAGS")) response += message.seen ? " FLAGS (\\Seen)" : " FLAGS ()";
+            if (items.contains("FLAGS")) response += ' ' + flagsOf(message);
             if (items.contains("RFC822.SIZE")) response += " RFC822.SIZE " + QByteArray::number(message.source.size());
             static const QRegularExpression section(QStringLiteral("BODY\\.PEEK\\[([^\\]]*)\\]"));
             const QRegularExpressionMatch match = section.match(QString::fromLatin1(items));

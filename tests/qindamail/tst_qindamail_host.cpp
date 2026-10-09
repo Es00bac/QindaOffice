@@ -57,7 +57,13 @@ class TestMailHost : public QObject {
                 QStringLiteral("users"), QStringLiteral("book-user"), QStringLiteral("image"), QStringLiteral("save"),
                 QStringLiteral("paperclip"), QStringLiteral("mailbox"), QStringLiteral("file-down"),
                 // M76 (D-085)
-                QStringLiteral("archive-restore"), QStringLiteral("users-round"), QStringLiteral("cloud")};
+                QStringLiteral("archive-restore"), QStringLiteral("users-round"), QStringLiteral("cloud"),
+                // M81 (D-090)
+                QStringLiteral("wand"), QStringLiteral("wand-sparkles"), QStringLiteral("play"), QStringLiteral("tag"),
+                QStringLiteral("sliders-horizontal"), QStringLiteral("eraser"), QStringLiteral("calendar-plus"),
+                QStringLiteral("check-check"), QStringLiteral("circle-x"), QStringLiteral("folder-plus"),
+                QStringLiteral("settings-2"), QStringLiteral("trash"), QStringLiteral("message-square"),
+                QStringLiteral("sparkles"), QStringLiteral("mail-x")};
     }
 
 private slots:
@@ -66,7 +72,7 @@ private slots:
         MailTest::Env env;
         MailHost host(env.service.get());
         const QStringList ids = MailHost::commandIds();
-        QCOMPARE(ids.size(), 44);
+        QCOMPARE(ids.size(), 64);                                   // M81 added 20
         for (const QString &id : ids) {
             ActionEntry *entry = host.actions()->entry(id);
             QVERIFY2(entry != nullptr, qPrintable(id));
@@ -86,6 +92,10 @@ private slots:
                  QKeySequence(QStringLiteral("Ctrl+Shift+C")));
         QCOMPARE(host.actions()->entry(QStringLiteral("mailSaveMessageAction"))->shortcut(), QKeySequence(QStringLiteral("F12")));
         QCOMPARE(host.actions()->entry(QStringLiteral("mailViewPeopleAction"))->radioGroup(), QStringLiteral("mailView"));
+        // M81: Outlook's Custom flag and Ignore keys.
+        QCOMPARE(host.actions()->entry(QStringLiteral("mailFlagCustomAction"))->shortcut(), QKeySequence(QStringLiteral("Ctrl+Shift+G")));
+        QCOMPARE(host.actions()->entry(QStringLiteral("mailIgnoreAction"))->shortcut(), QKeySequence(QStringLiteral("Ctrl+Delete")));
+        QCOMPARE(host.actions()->entry(QStringLiteral("mailRulesAction"))->plainText(), QStringLiteral("Manage Rules & Alerts…"));
     }
 
     void shortcutsAreUnique()
@@ -213,9 +223,9 @@ private slots:
         QStringList titles;
         for (const Protocol::MenuItem &item : snapshot.tree.items) titles.append(item.text);
         QCOMPARE(titles, (QStringList{QStringLiteral("File"), QStringLiteral("Edit"), QStringLiteral("View"),
-                                      QStringLiteral("Message"), QStringLiteral("People"), QStringLiteral("Calendar"),
-                                      QStringLiteral("Accounts"), QStringLiteral("AI"), QStringLiteral("Settings"),
-                                      QStringLiteral("Help")}));
+                                      QStringLiteral("Message"), QStringLiteral("Folder"), QStringLiteral("People"),
+                                      QStringLiteral("Calendar"), QStringLiteral("Accounts"), QStringLiteral("AI"),
+                                      QStringLiteral("Settings"), QStringLiteral("Help")}));
         QStringList ids;
         for (const Protocol::MenuItem &item : snapshot.tree.items) collect(item, ids);
         for (const QString &id : ids) QVERIFY2(host.actions()->entry(id) != nullptr, qPrintable(id));
@@ -233,6 +243,22 @@ private slots:
         QStringList imports;
         collect(*import, imports);
         QCOMPARE(imports, (QStringList{QStringLiteral("mailImportPstAction"), QStringLiteral("mailImportMboxAction")}));
+        // M81: Message ▸ Categorize / Follow Up / Rules, the Folder menu, Accounts ▸ Automatic Replies.
+        const auto menuIds = [&snapshot](const QString &title) {
+            QStringList out;
+            for (const Protocol::MenuItem &item : snapshot.tree.items)
+                if (item.text == title) collect(item, out);
+            return out;
+        };
+        const QStringList message = menuIds(QStringLiteral("Message"));
+        for (const char *id : {"mailCategorizeAction", "mailCategoriesAction", "mailClearCategoriesAction", "mailFlagTodayAction",
+                               "mailFlagCustomAction", "mailFlagCompleteAction", "mailFlagClearAction", "mailCreateRuleAction",
+                               "mailRulesAction", "mailRunRulesAction", "mailCleanUpAction", "mailIgnoreAction"})
+            QVERIFY2(message.contains(QLatin1String(id)), id);
+        QCOMPARE(menuIds(QStringLiteral("Folder")), (QStringList{QStringLiteral("mailNewSearchFolderAction"),
+                                                                 QStringLiteral("mailEditSearchFolderAction"),
+                                                                 QStringLiteral("mailDeleteSearchFolderAction")}));
+        QVERIFY(menuIds(QStringLiteral("Accounts")).contains(QStringLiteral("mailAutoRepliesAction")));
     }
 
     void pathsHandedToTheApp()

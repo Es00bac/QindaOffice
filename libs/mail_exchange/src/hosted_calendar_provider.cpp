@@ -83,7 +83,13 @@ CalendarSync::LocalItem HostedCalendarProvider::localItem(const QVariantMap &row
 QVariantMap HostedCalendarProvider::merged(QVariantMap row, const QString &id, const QString &remoteId,
                                            const QString &version, const QVariantMap &fields) const
 {
-    for (const QString &key : digestFields() + remoteExtraFields()) row.insert(key, fields.value(key));
+    for (const QString &key : digestFields() + remoteExtraFields()) {
+        // AGENT-CONTRACT (M81, QindaMail's MailOrganizer): categories set here
+        // and not yet on the server (`categoriesPending`) survive the pull;
+        // the host writes them after the sync and clears the mark.
+        if (key == QLatin1String("categories") && row.value(QStringLiteral("categoriesPending")).toBool()) continue;
+        row.insert(key, fields.value(key));
+    }
     row.insert(QStringLiteral("id"), id);
     row.insert(QStringLiteral("eventId"), id);
     row.insert(QStringLiteral("remoteAccount"), m_accountId);

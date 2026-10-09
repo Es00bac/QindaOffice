@@ -8,6 +8,7 @@
 #include "folder_model.h"
 #include "json_settings.h"
 #include "mail_secrets.h"
+#include "mail_organizer.h"
 #include "message_list_model.h"
 #include "paths.h"
 #include "provider_calls.h"
@@ -130,6 +131,8 @@ void MailService::initialize(const Options &options)
     }
     // M76: File ▸ Import ▸ Outlook Data File (one import at a time per process).
     m_outlookImport = new PstImporter(this);
+    // M81: rules, categories, flags, search folders, automatic replies.
+    m_organizer = new MailOrganizer(this, QFileInfo(settingsPath).absolutePath() + QStringLiteral("/organizer.json"), this);
 
     m_folderModel = new FolderModel(this);
     m_messageModel = new MessageListModel(this);

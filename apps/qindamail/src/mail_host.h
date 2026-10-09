@@ -30,6 +30,14 @@
 // and, M76 (D-085): mailImportPstAction (File ▸ Import, with the mbox
 //   import in the same submenu) contactNewGroupAction (Ctrl+Shift+L)
 //   contactAddressBookAction (CardDAV)
+// and, M81 (D-090; mail_host_organizer.cpp): mailRulesAction
+//   mailCreateRuleAction mailRunRulesAction mailCategorizeAction
+//   mailCategoriesAction mailClearCategoriesAction mailFlagTodayAction
+//   mailFlagTomorrowAction mailFlagThisWeekAction mailFlagNextWeekAction
+//   mailFlagNoDateAction mailFlagCustomAction (Ctrl+Shift+G)
+//   mailFlagCompleteAction mailFlagClearAction mailNewSearchFolderAction
+//   mailEditSearchFolderAction mailDeleteSearchFolderAction
+//   mailAutoRepliesAction mailCleanUpAction mailIgnoreAction (Ctrl+Delete)
 // plus the standard fileNewAction re-labelled "New Window" (Ctrl+Shift+N);
 // the standard filePrintAction / filePrintPreviewAction print the selected
 // message (M64; before, a document-less window never printed).
@@ -118,6 +126,16 @@ signals:
     void outlookImportRequested();
     void contactGroupNewRequested();
     void addressBookRequested();
+    // M81: the rules, category, follow-up, search folder and automatic
+    // reply dialogs; ruleEditRequested carries Create Rule's prefilled rule.
+    void rulesRequested();
+    void ruleEditRequested(const QVariantMap &rule, const QVariantMap &suggestions);
+    void runRulesRequested();
+    void categorizeRequested(const QString &kind, const QStringList &ids, const QString &accountId);
+    void categoriesRequested(const QString &kind, const QStringList &ids, const QString &accountId);
+    void followUpCustomRequested(const QStringList &messageIds);
+    void searchFolderRequested(const QString &key);
+    void autoRepliesRequested();
     void selectedContactIdChanged();
     void viewChanged();
     void calendarModeChanged();
@@ -134,6 +152,13 @@ private:
     void createCommands();
     void insertMenus();
     void syncCommandState();
+    // mail_host_organizer.cpp (M81)
+    void createOrganizerCommands();
+    void insertOrganizerMenus();
+    void syncOrganizerState();
+    [[nodiscard]] static QStringList organizerCommandIds();
+    // What Categorize acts on: {kind, ids, accountId} for the view's selection.
+    [[nodiscard]] QVariantMap categorizeTarget() const;
     void toggleSelectedRead();
     void toggleSelectedFlag();
     [[nodiscard]] QString currentAccountId() const;

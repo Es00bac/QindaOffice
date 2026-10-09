@@ -9,7 +9,7 @@ import QindaOffice.Mail.App
 // repeats, who to invite (M64: suggestions from People and mail; Save sends
 // them a meeting request), notes. A repeating occurrence asks whether the
 // edit is for this one or the whole series. Read-only calendars (feeds) open
-// for viewing.
+// for viewing. M81 (D-090): categories from the calendar account's list.
 Tk.Dialog {
     id: dialog
 
@@ -70,6 +70,7 @@ Tk.Dialog {
             const label = a.name ? "\"" + String(a.name).replace(/"/g, "") + "\" <" + a.address + ">" : String(a.address)
             return { id: "inv-" + Math.random().toString(16).slice(2), label: label, value: String(a.address), valid: true } })
         attendeesField.tokens = dialog.invited
+        eventCategories.names = fields.categories || []          // M81
     }
     function newEventId() {
         return "event:" + "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
@@ -119,6 +120,8 @@ Tk.Dialog {
         }
         const invitees = attendeesField.tokens.filter(function(t) { return t.valid !== false }).map(function(t) { return t.label })
         if (invitees.length > 0) service.sendInvitations(event.id, invitees)
+        // M81: categories go through the organizer (Exchange and Graph calendars keep them too).
+        service.organizer.setCategories("event", [eventId.length > 0 ? eventId : event.id], eventCategories.names)
     }
     onTertiary: service.deleteEvent(eventId, occurrenceId, repeating && scopeBox.currentIndex === 0 ? "occurrence" : "series")
 
@@ -191,6 +194,16 @@ Tk.Dialog {
                 validator: dialog.checkRecipient
                 completionProvider: dialog.completer
                 onTokensEdited: function(tokens) { dialog.invited = tokens }
+            }
+        }
+        Tk.PropertyRow {
+            label: qsTr("Categories")
+            CategoryField {
+                id: eventCategories
+                objectName: "eventCategories"
+                service: dialog.service
+                readOnly: dialog.readOnlyEvent
+                accountId: dialog.calendarChoices.length > 0 ? String(dialog.calendarChoices[calendarBox.currentIndex].accountId || "local") : "local"
             }
         }
         Tk.TextArea { id: notesField; objectName: "eventNotes"; rows: 4; placeholderText: qsTr("Notes"); readOnly: dialog.readOnlyEvent }

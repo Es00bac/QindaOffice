@@ -30,6 +30,21 @@ set(qindamail_qml
     qml/ContactGroupEditor.qml
     qml/PstImportDialog.qml
     qml/AddressBookSection.qml
+    # M81 (D-090)
+    qml/AutoRepliesDialog.qml
+    qml/CategoriesDialog.qml
+    qml/CategorizeMenu.qml
+    qml/CategoryField.qml
+    qml/FollowUpDialog.qml
+    qml/MailDateField.qml
+    qml/MessageTagsBar.qml
+    qml/RuleActionList.qml
+    qml/RuleConditionList.qml
+    qml/RuleEditor.qml
+    qml/RulesDialog.qml
+    qml/RunRulesDialog.qml
+    qml/SearchFolderDialog.qml
+    qml/TaskDialog.qml
 )
 foreach(qml_file IN LISTS qindamail_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -75,6 +90,18 @@ qt_add_qml_module(qindamail_app
         src/message_view.cpp src/message_view.h
         src/provider_calls.cpp src/provider_calls.h
         src/recipient_completer.cpp src/recipient_completer.h
+        # M81 (D-090): rules, categories, flags, search folders, automatic replies
+        src/imap_extras.cpp src/imap_extras.h
+        src/mail_host_organizer.cpp
+        src/mail_organizer.cpp src/mail_organizer.h
+        src/mail_organizer_actions.cpp
+        src/mail_organizer_board.cpp
+        src/mail_organizer_conversations.cpp
+        src/mail_organizer_replies.cpp
+        src/mail_organizer_rules.cpp
+        src/mail_organizer_search.cpp
+        src/mail_organizer_tags.cpp
+        src/smtp_redirector.cpp src/smtp_redirector.h
     QML_FILES ${qindamail_qml}
 )
 target_include_directories(qindamail_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

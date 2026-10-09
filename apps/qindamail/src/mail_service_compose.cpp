@@ -11,6 +11,7 @@
 #include "mail_service.h"
 
 #include "draft_builder.h"
+#include "mail_organizer.h"
 #include "provider_calls.h"
 
 #include <qindatk/imap_mail_provider.h>
@@ -18,6 +19,7 @@
 #include <qindatk/local_productivity_store.h>
 #include <qindatk/smtp_mail_provider.h>
 
+#include <QFile>
 #include <QFileInfo>
 #include <QLocale>
 #include <QTimer>
@@ -204,6 +206,8 @@ bool MailService::discardDraft(const QString &draftId)
         const QString id = a.toMap().value(QStringLiteral("id")).toString();
         if (!used.contains(id)) static_cast<void>(m_attachments->remove(id));
     }
+    // M81: a rule's redirect keeps its own copy of the message (mail_organizer_actions.cpp).
+    if (draft.contains(QStringLiteral("redirectOf"))) QFile::remove(sourcePath(draftId));
     return true;
 }
 
@@ -228,6 +232,11 @@ QString MailService::send(const QVariantMap &draft)
 
 void MailService::deliver(const QString &requestId, const QVariantMap &draft)
 {
+    if (draft.contains(QStringLiteral("redirectOf"))) {
+        // M81: a rule's redirect waiting in the Outbox (mail_organizer_actions.cpp).
+        m_organizer->deliverQueuedRedirect(requestId, draft);
+        return;
+    }
     const QString draftId = draft.value(QStringLiteral("id")).toString();
     const auto reject = [this, requestId, draftId](const QString &state, const QString &error) {
         QVariantMap result = ProviderCalls::result(requestId, state, error);

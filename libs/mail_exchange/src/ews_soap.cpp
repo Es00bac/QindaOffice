@@ -97,12 +97,7 @@ bool parse(const QByteArray &body, Response *out, QString *error)
         return true;
     }
     const XmlNode *operation = &soapBody->children.first();
-    const XmlNode *messages = operation->child(u"ResponseMessages");
-    if (!messages) {
-        *error = QStringLiteral("The EWS response has no ResponseMessages");
-        return false;
-    }
-    for (const XmlNode &node : messages->children) {
+    const auto append = [out](const XmlNode &node) {
         ResponseMessage message;
         message.responseClass = node.attribute(QStringLiteral("ResponseClass"));
         message.code = node.childText(u"ResponseCode");
@@ -110,6 +105,19 @@ bool parse(const QByteArray &body, Response *out, QString *error)
         message.backOffMs = backOffOf(node.child(u"MessageXml"));
         message.node = &node;
         out->messages.append(message);
+    };
+    // AGENT-NOTE (M81): the availability and rule operations answer without
+    // the ResponseMessages wrapper — Get/SetUserOofSettingsResponse hold one
+    // ResponseMessage, GetInboxRulesResponse IS the response message.
+    if (const XmlNode *messages = operation->child(u"ResponseMessages")) {
+        for (const XmlNode &node : messages->children) append(node);
+    } else if (const XmlNode *single = operation->child(u"ResponseMessage")) {
+        append(*single);
+    } else if (operation->attributes.contains(QStringLiteral("ResponseClass"))) {
+        append(*operation);
+    } else {
+        *error = QStringLiteral("The EWS response has no ResponseMessages");
+        return false;
     }
     return true;
 }

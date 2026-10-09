@@ -5,6 +5,132 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-090: QindaMail: rules, categories, flags, search folders, automatic replies
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart; M81, builds on D-042, D-044, D-072 and D-085;
+details in [mail.md](mail.md#organizing-mail-m81))
+
+**Context.** QindaMail read, wrote and filed mail but lacked what Outlook
+users do with it every day: Rules and Alerts, color categories, follow-up
+flags with dates, search folders and automatic replies. Four facts shaped
+the answer. QindaMail reads every account's mail over IMAP or POP3 —
+Microsoft 365 and Exchange too — so a rule, a category or a flag starts
+from an IMAP record, and the Exchange side has to find the same message by
+its Internet message id. QindaTK's `ImapMailProvider` tracks only `\Seen`
+and `\Flagged`, has no keywords, no header fetch and no `UID COPY`, its
+`SmtpMailProvider` cannot send prepared bytes, and there is no ManageSieve
+client — and QindaTK is installed through Portage and not this milestone's
+to change. Rules that forward or delete must never fire on old mail. And
+the user's own Sieve script, server category list and server rules belong
+to them.
+
+**Decision.**
+
+1. **Rules are client-side, Outlook's, and pure.** `office_mail` holds the
+   conditions (`mail_criteria.h`: from, sent to, sent only to me, my name
+   in To / To or Cc, subject, body, subject or body, header, attachment,
+   importance, size, received dates, account, category) and the rules
+   (`mail_rules.h`): ordered, on or off, conditions all matching and no
+   exception (the same conditions) matching, actions move, copy, delete,
+   delete permanently, mark read, flag, clear flag, assign / clear
+   categories, set importance, forward, redirect, desktop alert, stop. The
+   engine returns a `RulePlan` with Outlook's precedence (the first move
+   wins and later moves become copies; delete beats a move; deleting
+   permanently beats both; stop ends the list); the app's `MailOrganizer`
+   carries it out in a fixed order (tags, read, forwards, redirects,
+   alerts, copies, then the move or delete) through the paths a user's own
+   action takes. Rules run **on arrival** for what an INBOX sync or a
+   POP3 download added — only once that mailbox has a baseline, so the
+   first download and a UIDVALIDITY reset never trigger them — and on
+   demand (**Run Rules Now**: chosen rules, turned-off ones too, a folder
+   and its subfolders, all / read / unread). **Create Rule** starts from
+   the selected message. Rules import and export as JSON
+   (`qindaoffice.mail.rules/1`; imported rules get new ids and come in
+   off when they name an unknown folder or have a problem). Exchange and
+   Microsoft 365 server rules are listed read-only with a note.
+2. **What the toolkit lacks is done app-side, over the toolkit's own
+   protocol pieces.** `ImapExtras` (keywords, `UID STORE ±FLAGS`,
+   `BODY.PEEK[HEADER]`, `UID COPY`) runs on QindaTK's exported
+   `Protocol::Channel` / `Imap::Session` on a worker; `SmtpRedirector`
+   sends a redirect's prepared bytes — the original message with a
+   `Resent-*` block (RFC 5322 §3.6.6) — and a redirect waits in the Outbox
+   like any message; forwards go through `MailService.send` with the
+   composer's address checks; a desktop alert is a freedesktop
+   notification with `suppress-sound`. All run through
+   `AccountRuntime::run` (keyring or OAuth, one retry); everything but a
+   redirect's send passes `affectsStatus = false`, so an optional feature
+   a server lacks never marks the account broken.
+3. **Categories are named, coloured and per mailbox.** The master list is
+   the server's for Microsoft 365 (Graph `masterCategories`, new names
+   added there) and Exchange (EWS `CategoryList`, read-only), and one local
+   list (Outlook's six to start) for every other account and this
+   computer; Outlook's 25 preset colours map both ways. Messages, events,
+   tasks and contacts take categories; the list filters by one, search
+   takes `category:`. IMAP keeps them as keywords with an exact,
+   reversible encoding (spaces as `_`, everything an RFC 3501 atom cannot
+   hold in modified-UTF-7 `&…-` runs, `$`-keywords never categories) when
+   PERMANENTFLAGS allow new keywords, else they stay local and the user is
+   told once. Exchange and Microsoft 365 messages and their Graph / EWS
+   events get them through `ExchangeMailbox` (`mail_exchange`), found by
+   Internet message id or event id, with `tagsPending` / `categoriesPending`
+   holding a change until the server has it and a sync not overwriting it.
+4. **Follow-up flags keep Outlook's dates.** Today, Tomorrow, This Week,
+   Next Week, No Date, Custom, Mark Complete, Clear Flag with Outlook's
+   start and due dates (`follow_up.h`); IMAP carries the state as
+   `\Flagged`, Graph and EWS the dates and the completion too. Flagged
+   mail is on the task board (`mailflag:` cards; Done completes the flag,
+   deleting the card clears it).
+5. **Search folders are saved criteria evaluated live** over the store
+   (`search_folders.h`): Outlook's presets and a custom folder from the rule
+   conditions plus flagged, unread and older-than, over all accounts or one,
+   under Search Folders in the folder tree; never Trash, Junk, Drafts or
+   the Outbox.
+6. **Automatic replies use what the server has, or say plainly that it
+   cannot.** Microsoft 365: Graph `mailboxSettings` (a new OAuth resource
+   `mailbox`, `MailboxSettings.ReadWrite Mail.ReadWrite`; an
+   `AADSTS65001` consent gap on a secondary resource keeps the refresh
+   token and asks for a new sign-in only for that feature). Exchange:
+   EWS `Get/SetUserOofSettings`. IMAP: a Sieve `vacation` over ManageSieve
+   (RFC 5804, `office_mail`'s own client; PLAIN, LOGIN, XOAUTH2,
+   OAUTHBEARER; CHECKSCRIPT before PUTSCRIPT) in a marked block that is
+   QindaMail's alone — the user's script is restored byte for byte when
+   the reply goes off, a vacation another program wrote is left alone,
+   and a script QindaMail had to create is removed again. POP3 and the
+   rest: not available, with the reason.
+7. **Conversations** (time remained): Clean Up Conversation (quoted, read,
+   unflagged, uncategorised messages to Trash) and Ignore Conversation
+   (now and on arrival).
+8. **Twenty new command ids, none renamed or reused**, in the menu tree
+   (Message ▸ Categorize / Follow Up / Rules, Clean Up, Ignore; a Folder
+   menu) and on the ribbon (Home ▸ Tags, Delete and Move; a Folder tab;
+   Accounts ▸ Out of office; People ▸ Manage). Outlook's Ctrl+Shift+G and
+   Ctrl+Delete are kept; its Ctrl+Shift+P is the suite's Print Preview, so
+   New Search Folder has no shortcut. State lives in `organizer.json`
+   beside `view.json` (schema `qindaoffice.mail.organizer/1`, unknown keys
+   kept, bounded: 512 rules, 256 categories per list, 100 search folders,
+   1000 ignored conversations).
+
+**Consequences.** The everyday Outlook habits work in QindaMail against
+the user's own servers, tested only against local fakes (IMAP, SMTP,
+ManageSieve, Graph, EWS). Not done: Quick Steps; editing server rules;
+categories on CalDAV events and tasks (QindaTK's VEVENT/VTODO mapping has
+no `CATEGORIES`) and on POP3 mail (local only); one Sieve reply for
+everyone (no inside/outside split, no contacts-only audience); EWS's
+category list is read-only here; Graph and EWS tags come back for the last
+30 days of the inbox, IMAP keywords for at most 5 000 records per mailbox;
+a message found twice by Internet message id gets the first match. A
+Microsoft 365 account signed in before M81 needs one new sign-in for
+automatic replies and Outlook-side tags. QindaTK gaps, reported and not
+worked around in the toolkit: `ImapMailProvider` has no keywords, header
+fetch or `UID COPY`; `SmtpMailProvider` cannot send prepared bytes (nor
+Reply-To or Importance); no ManageSieve client; no `CATEGORIES` in the
+VEVENT/VTODO mapping; `ImapFolders::validFlag` is narrower than RFC 3501's
+atom; `decodeMailboxName` refuses runs that encode ASCII; no freedesktop
+notification helper; `Tk.TaskBoard` cards have no categories or extra
+fields; a checkable `Tk.MenuItem` hides its icon (no colour swatch in the
+Categorize menu); `LocalProductivityStore::upsert` has no bulk call.
+
 ## D-089: QindaBase: Access's queries, forms and reports
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

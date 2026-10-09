@@ -236,6 +236,11 @@ QVariantMap OAuth2Session::configure(const QVariantMap &accountMap)
     // M76: CardDAV with the account's token (Google's CardDAV API).
     if (account.hasContacts() && account.contacts.authMechanism == QLatin1String("bearer"))
         resources << QStringLiteral("contacts");
+    // M81: Microsoft 365 mailboxes consent to Graph's mailbox scopes too
+    // (automatic replies, categories, flags); an account made before signs
+    // in once more to grant them, and until then only those features wait.
+    if (account.kind == QLatin1String(kKindMicrosoft365) && !resources.contains(QStringLiteral("mailbox")))
+        resources << QStringLiteral("mailbox");
     if (resources.isEmpty()) resources << QStringLiteral("mail");
     setResources(resources);
     setResourceScopes(QStringLiteral("mail"), account.oauth.scopes);
