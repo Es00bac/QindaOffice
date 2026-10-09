@@ -33,6 +33,11 @@ QString addPicture(QTextDocument *document, QHash<QString, QByteArray> *media, c
 
 // The document as HTML with every qwmedia: picture inlined as a data: URI,
 // so the file stands alone (QTextDocument::setHtml decodes them back).
+// Removes the display-only page breaks QindaWrite's pagination added
+// (kSyntheticBreak), restoring each block's own flags; returns how many
+// there were. Not undo-neutral: for clones and freshly read documents.
+int removeSyntheticBreaks(QTextDocument *document);
+
 [[nodiscard]] QString htmlWithEmbeddedPictures(const QTextDocument &document,
                                                const QHash<QString, QByteArray> &media);
 

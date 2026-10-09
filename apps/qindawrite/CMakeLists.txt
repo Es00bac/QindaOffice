@@ -47,6 +47,7 @@ qt_add_qml_module(qindawrite_app
         src/write_tools.cpp src/write_tools.h
         src/write_host_menus.cpp
         src/write_host_text.cpp
+        src/write_pagination.cpp src/write_pagination.h
         src/write_review_actions.cpp src/write_review_actions.h
         src/write_revisions.cpp src/write_revisions.h
         src/write_toc.cpp src/write_toc.h

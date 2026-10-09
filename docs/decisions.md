@@ -282,8 +282,11 @@ differs from Word's (first-block top margin, empty paragraph after a table,
 row heights, paragraph borders, tall headers, header-less cover sections),
 the reader adds display-only state the writer never exports — see
 [word-interchange.md](word-interchange.md#layout-adjustments-display-only-never-written).
-Write keeps one header set and one page layout per document; keep-with-next
-is not laid out yet.
+Write keeps one header set and one page layout per document. Word's
+keep-with-next (paragraphs and a table's leading rows) and widow/orphan
+control are laid out as display-only page breaks (`write_pagination`);
+pagination still differs where the document's fonts are missing — Word sets
+line height from the requested font's metrics, Qt from the substitute's.
 
 **QindaNote (M65).** *Export as Word Document* writes a page through
 `office_docx` rather than through QindaWrite: the title as Word's Title,

@@ -34,6 +34,9 @@ ParagraphStyle make(int id, const QString &name, int headingLevel, int pointSize
     style.blockFormat.setPageBreakPolicy(QTextFormat::PageBreak_Auto);
     if (headingLevel > 0) {
         style.blockFormat.setHeadingLevel(headingLevel);
+        // Word's headings keep with the next paragraph (the built-in style
+        // XML says <w:keepNext/>); write_pagination.h lays that out.
+        style.blockFormat.setProperty(Docx::kKeepWithNext, true);
         if (headingLevel == 1) {
             style.blockFormat.setPageBreakPolicy(QTextFormat::PageBreak_AlwaysBefore);
         }

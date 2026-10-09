@@ -12,6 +12,7 @@
 #include "libre_office_converter.h"
 #include "ooxml_package.h"
 #include "recovery_journal.h"
+#include "write_pagination.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -169,6 +170,9 @@ void WriteDocument::finishLoad(const QString &path)
             }
         }
     }
+    // Word's pagination rules before the undo stack is cleared, so their
+    // breaks are part of the opened document, not an undo step.
+    m_keepRules->applyAll();
     // Both flags: ours drives the title and close consent, QTextDocument's
     // drives the signal that sets ours.
     m_text->clearUndoRedoStacks();
@@ -292,6 +296,7 @@ bool WriteDocument::loadRecovery(const QByteArray &snapshot, QString *error)
     } else {
         m_text->setHtml(QString::fromUtf8(snapshot)); // a journal written before D-068
     }
+    m_keepRules->applyAll();
     m_text->setModified(true);
     setDirty(true);
     emit contentChanged();

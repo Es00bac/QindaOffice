@@ -91,6 +91,14 @@ closed with state the writer ignores (D-068):
 | keeps a row's `trHeight` minimum | has no row heights | the row's first cell is padded |
 | draws paragraph borders | has none | `drawParagraphBorders` paints them |
 | pushes the body below a tall header | overlaps | the root frame margin grows |
+| keeps a keep-with-next paragraph (headings) on the page of the next one | breaks anywhere | a page break before the run (`write_pagination`) |
+| keeps a table's keep-with-next leading rows together | splits between any rows | a page break before the table |
+| never leaves a paragraph's first line alone at a page bottom (widow/orphan control, on unless the file turns it off) | does | a page break before the paragraph (a two-line one moves whole) |
+
+The pagination breaks (`Docx::kSyntheticBreak`, which keeps the block's own
+break flags) are laid out again after edits from the first changed
+paragraph on, joined to the user's last undo step so Undo, Redo and the
+modified flag never show them; the `.docx` and HTML writers ignore them.
 | shows no header on a header-less cover section | one header set | different first page with empty slots |
 
 ## Writing (`docx_writer*`)
@@ -124,8 +132,16 @@ Session Review panel) and *Open in QindaWrite* write a page through
 
 - One set of headers/footers and one page layout for the whole document;
   a multi-section document keeps its sections on save while untouched.
-- Keep-with-next and widow control are not applied on screen (Qt has no
-  such layout rule), so page breaks can fall earlier than in Word.
+- Pagination follows Word's keep rules (above) but not its line metrics:
+  Word sizes a single-spaced line from the font's Windows metrics (Calibri
+  1.22 em), Qt from the font actually drawn. Without Calibri, or its
+  metric-compatible clone Carlito (`media-fonts/crosextrafonts-carlito`,
+  Cambria → `crosextrafonts-caladea`), Calibri text is set in Liberation
+  Sans: wider, but lines about 5 % shorter, so a long Calibri document can
+  end a page or two early (the 25-page guide: 23 pages).
+- A widow (a paragraph's last line alone at a page top) is left alone when
+  the paragraph has three lines or more: a block format cannot break inside
+  a paragraph. Keep rules inside a table apply to its leading rows only.
 - Floating pictures, text boxes and shapes are not editable as objects.
 - Comments are kept but not shown; there is no comments pane yet.
 - Content controls (`w:sdt`) and legacy form fields are read as their

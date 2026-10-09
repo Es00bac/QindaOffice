@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "docx_text.h"
 
+#include "docx_format.h"
 #include "docx_properties.h"
 
 #include <QAbstractTextDocumentLayout>
@@ -102,9 +103,49 @@ QString addPicture(QTextDocument *document, QHash<QString, QByteArray> *media, c
     return name;
 }
 
+int removeSyntheticBreaks(QTextDocument *document)
+{
+    int removed = 0;
+    for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+        QTextBlockFormat format = block.blockFormat();
+        if (!format.hasProperty(kSyntheticBreak)) {
+            continue;
+        }
+        format.setPageBreakPolicy(ownPageBreaks(format));
+        format.clearProperty(kSyntheticBreak);
+        QTextCursor(block).setBlockFormat(format);
+        ++removed;
+    }
+    // A table moved whole (its leading rows keep with the next).
+    for (QTextFrame *frame : document->rootFrame()->childFrames()) {
+        QTextFrameFormat format = frame->frameFormat();
+        if (format.hasProperty(kSyntheticBreak)) {
+            format.setPageBreakPolicy(QTextFormat::PageBreakFlags(format.intProperty(kSyntheticBreak)));
+            format.clearProperty(kSyntheticBreak);
+            frame->setFrameFormat(format);
+            ++removed;
+        }
+    }
+    return removed;
+}
+
 QString htmlWithEmbeddedPictures(const QTextDocument &document, const QHash<QString, QByteArray> &media)
 {
-    QString html = document.toHtml();
+    // Display-only page breaks (write_pagination) are not the author's: an
+    // exported page must not carry them as page-break-before.
+    bool synthetic = false;
+    for (QTextBlock block = document.begin(); block.isValid() && !synthetic; block = block.next()) {
+        synthetic = block.blockFormat().hasProperty(kSyntheticBreak);
+    }
+    for (const QTextFrame *frame : document.rootFrame()->childFrames()) {
+        synthetic = synthetic || frame->frameFormat().hasProperty(kSyntheticBreak);
+    }
+    std::unique_ptr<QTextDocument> clean;
+    if (synthetic) {
+        clean.reset(document.clone());
+        removeSyntheticBreaks(clean.get());
+    }
+    QString html = (clean ? *clean : document).toHtml();
     for (auto it = media.cbegin(); it != media.cend(); ++it) {
         const QString extension = it.key().section(QLatin1Char('.'), -1);
         const QString uri = QStringLiteral("data:%1;base64,%2").arg(mimeFor(extension), QString::fromLatin1(it.value().toBase64()));

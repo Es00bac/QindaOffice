@@ -4,6 +4,7 @@
 #include "docx_text.h"
 #include "page_geometry.h"
 #include "write_footnotes.h"
+#include "write_pagination.h"
 
 #include <QTextCursor>
 #include <QTextFrame>
@@ -12,6 +13,7 @@ namespace QindaOffice::Apps::Write {
 
 WriteDocument::WriteDocument()
     : m_text(std::make_unique<QTextDocument>())
+    , m_keepRules(std::make_unique<KeepRules>(m_text.get()))
 {
     // A4 with QindaWrite's historical 1-inch (96 px) margins.
     setupPaged(QSizeF(PageGeometry::kDefaultPageW, PageGeometry::kDefaultPageH), 96);
@@ -39,6 +41,8 @@ WriteDocument::WriteDocument()
                 }
             });
 }
+
+WriteDocument::~WriteDocument() = default;
 
 void WriteDocument::applyLayout()
 {
@@ -75,6 +79,7 @@ void WriteDocument::applyLayout()
         root.setBottomMargin(bottom);
         m_text->rootFrame()->setFrameFormat(root);
     }
+    m_keepRules->schedule(0); // new page height, new breaks
     emit pageSetupChanged();
 }
 

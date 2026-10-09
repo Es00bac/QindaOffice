@@ -215,7 +215,15 @@ XmlElementPtr BodyWriter::paragraphProperties(const QTextBlock &block)
             setChildVal(*pPr, QStringLiteral("keepLines"), QStringLiteral("0"));
         }
     }
-    const bool breakBefore = bf.pageBreakPolicy() & QTextFormat::PageBreak_AlwaysBefore;
+    if (changed("keepNext")) {
+        pPr->removeChildren(kW, u"keepNext");
+        if (bf.boolProperty(kKeepWithNext)) {
+            wChild(*pPr, QStringLiteral("keepNext"));
+        } else if (imported) {
+            setChildVal(*pPr, QStringLiteral("keepNext"), QStringLiteral("0"));
+        }
+    }
+    const bool breakBefore = ownPageBreaks(bf) & QTextFormat::PageBreak_AlwaysBefore;
     if (!bf.boolProperty(kPageBreakRun) && changed("break")) {
         pPr->removeChildren(kW, u"pageBreakBefore");
         if (breakBefore && block.position() > 0) {

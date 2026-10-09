@@ -53,6 +53,8 @@ struct ParagraphSpacing {
 [[nodiscard]] QString paragraphBordersSpec(const Ooxml::XmlElement &pBdr, const Ooxml::Theme &theme);
 
 [[nodiscard]] QVariantMap blockSnapshot(const QTextBlockFormat &format);
+// A block's page-break flags without a display-only break (kSyntheticBreak).
+[[nodiscard]] QTextFormat::PageBreakFlags ownPageBreaks(const QTextBlockFormat &format);
 [[nodiscard]] QVariantMap charSnapshot(const QTextCharFormat &format);
 
 // The font family a w:rFonts element names for Latin text (theme fonts

@@ -3,6 +3,7 @@
 // fields, tracked changes, bookmarks, footnote references, pictures and
 // preserved objects.
 
+#include "docx_format.h"
 #include "docx_properties.h"
 #include "docx_writer_p.h"
 #include "ooxml_namespaces.h"
@@ -151,7 +152,7 @@ void BodyWriter::writeBlock(const QTextBlock &block, XmlElement &container, bool
         }
         p.appendElement(pPr);
     }
-    if (bf.boolProperty(kPageBreakRun) && (bf.pageBreakPolicy() & QTextFormat::PageBreak_AlwaysBefore)
+    if (bf.boolProperty(kPageBreakRun) && (ownPageBreaks(bf) & QTextFormat::PageBreak_AlwaysBefore)
         && block.position() > 0) {
         XmlElement &run = p.appendElement(kW, QStringLiteral("r"));
         run.appendElement(kW, QStringLiteral("br")).setAttribute(kW, QStringLiteral("type"), QStringLiteral("page"));

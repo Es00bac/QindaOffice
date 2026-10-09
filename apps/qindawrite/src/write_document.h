@@ -23,10 +23,13 @@
 
 namespace QindaOffice::Apps::Write {
 
+class KeepRules;
+
 class WriteDocument final : public Core::Document {
     Q_OBJECT
 public:
     WriteDocument();
+    ~WriteDocument() override;
 
     [[nodiscard]] QTextDocument *textDocument() { return m_text.get(); }
     [[nodiscard]] const QTextDocument *textDocument() const { return m_text.get(); }
@@ -79,6 +82,8 @@ public:
     // print path and the PDF exporter all render from this one struct.
     [[nodiscard]] PageDecoration decoration() const;
     [[nodiscard]] const Docx::WordParts &parts() const { return m_parts; }
+    // The pagination rules (write_pagination.h); tests shorten its delay.
+    [[nodiscard]] KeepRules *keepRules() { return m_keepRules.get(); }
     // What the last open approximated ("2 text boxes …"), for the status bar.
     [[nodiscard]] QStringList openWarnings() const { return m_parts.warnings; }
 
@@ -103,6 +108,8 @@ private:
 
     std::unique_ptr<QTextDocument> m_text;
     Docx::WordParts m_parts;
+    // Word's keep-with-next / widow rules as display-only page breaks.
+    std::unique_ptr<KeepRules> m_keepRules;
 };
 
 } // namespace QindaOffice::Apps::Write

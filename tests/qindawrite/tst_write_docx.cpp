@@ -14,6 +14,7 @@
 #include "qindawrite/src/format_controller.h"
 #include "qindawrite/src/pdf_exporter.h"
 #include "qindawrite/src/write_document.h"
+#include "qindawrite/src/write_pagination.h"
 #include "recovery_journal.h"
 #include "support/soffice_env.h"
 
@@ -248,6 +249,8 @@ void WriteDocxTest::rendersListedDocuments()
         QString error;
         QVERIFY2(doc.load(path, &error), qPrintable(error));
         const QString pdf = QStringLiteral("%1/write-%2.pdf").arg(grabs).arg(++n);
+        qInfo("document %d: %d pages on screen, %d display-only page breaks", n, doc.textDocument()->pageCount(),
+              Apps::Write::KeepRules::count(doc.textDocument()));
         QVERIFY2(Apps::Write::exportDocumentPdf(doc.textDocument(), pdf, &error, doc.decoration()), qPrintable(error));
     }
 }

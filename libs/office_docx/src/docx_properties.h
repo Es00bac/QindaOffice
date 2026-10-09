@@ -56,6 +56,16 @@ inline constexpr int kParagraphSynthetic = kDocxBase + 6; // bool
 // with side top/bottom/left/right/between. Qt draws no paragraph borders;
 // drawParagraphBorders() paints these (docx_text.h).
 inline constexpr int kParagraphBorders = kDocxBase + 7; // QString
+// Word's pagination rules, read from the effective w:pPr (style chain
+// included) for display; the preserved markup carries them on save.
+inline constexpr int kKeepWithNext = kDocxBase + 8; // bool: w:keepNext
+inline constexpr int kWidowControl = kDocxBase + 9; // bool, set only when false: w:widowControl="0"
+// A display-only page break QindaWrite added for those rules (Qt's layout
+// has neither): the value is the block's OWN QTextFormat::PageBreakFlags.
+// AGENT-CONTRACT: ownPageBreaks() (docx_format.h) is what the writer and
+// the snapshot read; apps/qindawrite/src/write_pagination.cpp sets and
+// clears it.
+inline constexpr int kSyntheticBreak = kDocxBase + 24; // int
 
 // Char formats (QTextImageFormat included).
 inline constexpr int kRunStyleId = kDocxBase + 10;      // QString w:rStyle value

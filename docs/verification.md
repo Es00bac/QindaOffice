@@ -119,6 +119,18 @@ set, prefixed OPC package parts LibreOffice refused, first-block spacing,
 collapsed empty paragraphs after tables, row heights, paragraph borders,
 header overlap, cover-page headers, PDF page size (px passed as points).
 
+**Pagination (keep rules):** `tst_write_pagination` 8/8 — a keep-with-next
+paragraph, a run of them, an orphaned first line, widow control switched
+off, a table split after its keep-with-next title row, no break in the
+`.docx` or HTML, a reopened file laid out again, one Undo taking back an
+edit together with its breaks and Redo intact, 3,000 paragraphs (75 pages)
+in under 0.1 s. Against the page counts Word itself recorded in the four
+review documents (`docProps/app.xml`: 5, 4, 25, 15) Write now lays out 5, 4,
+23 and 14; LibreOffice 5, 4, 25, 14. The guide's first eight pages break
+exactly where LibreOffice's do (they did not before); the rest of the gap
+is line metrics: Calibri is not installed on either machine and its
+substitute sets lines about 5 % shorter (11 pt: 17.0 px vs Word's 17.9 px).
+
 **QindaNote Word export (M65):** `tst_note_word` 3/3 (XSD-validated; the
 page's title, Heading 2, list, typed text, checklist, picture and handwriting
 read back), the Note suite 16/16 with the ribbon/squeeze gate and the

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "docx_format.h"
 
+#include "docx_properties.h"
 #include "docx_styles.h"
 #include "ooxml_namespaces.h"
 #include "ooxml_units.h"
@@ -275,6 +276,15 @@ QTextBlockFormat blockFormatFromPPr(const XmlElement *pPr, const Ooxml::Theme &t
     if (onOff(pPr, u"keepLines")) {
         f.setNonBreakableLines(true);
     }
+    if (onOff(pPr, u"keepNext")) {
+        f.setProperty(kKeepWithNext, true);
+    }
+    // AGENT-NOTE: Word keeps widow/orphan control ON when no level of the
+    // style chain mentions it (LibreOffice's DOCX import does the same); the
+    // corpus never sets it and one document turns it off explicitly.
+    if (pPr != nullptr && pPr->child(kW, u"widowControl") != nullptr && !onOff(pPr, u"widowControl")) {
+        f.setProperty(kWidowControl, false);
+    }
     if (onOff(pPr, u"pageBreakBefore")) {
         f.setPageBreakPolicy(QTextFormat::PageBreak_AlwaysBefore);
     }
@@ -390,8 +400,9 @@ QVariantMap blockSnapshot(const QTextBlockFormat &f)
         {QStringLiteral("lhType"), f.lineHeightType()},
         {QStringLiteral("lh"), qRound(f.lineHeight() * 100)},
         {QStringLiteral("bg"), colorKey(f.background(), f.hasProperty(QTextFormat::BackgroundBrush))},
-        {QStringLiteral("break"), int(f.pageBreakPolicy())},
+        {QStringLiteral("break"), int(ownPageBreaks(f))},
         {QStringLiteral("keep"), f.nonBreakableLines()},
+        {QStringLiteral("keepNext"), f.boolProperty(kKeepWithNext)},
         {QStringLiteral("heading"), f.headingLevel()},
         {QStringLiteral("tabs"), tabs.join(QLatin1Char(';'))},
         {QStringLiteral("dir"), int(f.layoutDirection())},
@@ -452,6 +463,14 @@ QString wordFontFamily(const QString &family)
         return QStringLiteral("Courier New");
     }
     return family;
+}
+
+QTextFormat::PageBreakFlags ownPageBreaks(const QTextBlockFormat &format)
+{
+    if (format.hasProperty(kSyntheticBreak)) {
+        return QTextFormat::PageBreakFlags(format.intProperty(kSyntheticBreak));
+    }
+    return format.pageBreakPolicy();
 }
 
 } // namespace QindaOffice::Docx
