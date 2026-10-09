@@ -14,7 +14,8 @@
 // freeze/sheets + the menus), calc_host_rules.cpp (conditional formatting,
 // validation, autofilter, comments), calc_host_format.cpp (the cell format
 // commands and the strip's combos), calc_host_text.cpp (find/replace,
-// templates, print, charts), calc_host_ai.cpp (the assistant).
+// templates, print, charts), calc_host_ai.cpp (the assistant),
+// calc_host_tables.cpp (Excel tables and the chart sheet view, M69).
 
 #include "assistant_controller.h"
 #include "document_host.h"
@@ -49,8 +50,13 @@ class CalcHost : public Quick::DocumentHost {
     Q_PROPERTY(QString cellFontSize READ cellFontSize NOTIFY cursorChanged)
     Q_PROPERTY(int cellNumberFormatIndex READ cellNumberFormatIndex NOTIFY cursorChanged)
     Q_PROPERTY(bool chartsAvailable READ chartsAvailable CONSTANT)
-    // [{index, title, kind, anchorRow, anchorCol, widthPx, heightPx}]
+    // [{index, title, kind, anchorRow, anchorCol, widthPx, heightPx}] —
+    // the floating charts; a chart sheet's chart is not among them (M69).
     Q_PROPERTY(QVariantList charts READ charts NOTIFY chartsChanged)
+    // M69 (D-078): the active sheet is a chart sheet, and the chart it
+    // shows in the grid's place (chartSeriesData's map).
+    Q_PROPERTY(bool chartSheetActive READ chartSheetActive NOTIFY chartSheetChanged)
+    Q_PROPERTY(QVariantMap chartSheetData READ chartSheetData NOTIFY chartSheetChanged)
     Q_PROPERTY(QindaOffice::Ai::AssistantController *assistant READ assistant CONSTANT)
 public:
     CalcHost();
@@ -132,6 +138,9 @@ public:
     // Series data for a chart preview / window (chart_series.h).
     Q_INVOKABLE QVariantMap chartSeries(const QVariantMap &spec) const;
     Q_INVOKABLE QVariantMap chartSeriesAt(int index) const;
+    // ---- tables and chart sheets (calc_host_tables.cpp, M69) ----
+    [[nodiscard]] bool chartSheetActive() const;
+    [[nodiscard]] QVariantMap chartSheetData() const;
 
     [[nodiscard]] Ai::AssistantController *assistant() const { return m_assistant; }
 
@@ -163,6 +172,7 @@ signals:
     void sheetsChanged();
     void cursorChanged();
     void chartsChanged();
+    void chartSheetChanged();
     // Dialogs the window answers (see the invokables above).
     void rowHeightRequested(qreal current);
     void columnWidthRequested(qreal current);
@@ -236,6 +246,12 @@ private:
     void createFeatureActions();
     void insertFeatureMenus();
     void syncFeaturesFromCursor();
+    // calc_host_tables.cpp (M69)
+    void createTableActions();
+    void insertTableMenus();
+    void syncTablesFromCursor();
+    // True when `input` was an array formula ("{=…}") and has been entered.
+    bool commitArrayInput(const CalcEng::CellAddr &addr, const QString &input);
     [[nodiscard]] CalcEng::OutlineAxis groupAxis() const;
 
     SpreadsheetDocument *m_document = nullptr;

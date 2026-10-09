@@ -216,10 +216,17 @@ void markDynamicArrays(Workbook *wb, qint32 sheetIndex, const CellScan &scan, co
     Sheet &sheet = wb->sheetAt(sheetIndex);
     for (const CellScan::ArrayFormula &array : scan.arrays) {
         Cell *anchor = sheet.cellAt(array.anchor);
-        if (array.cm <= 0 || !dynamicCms.contains(array.cm) || anchor == nullptr || !anchor->ast) {
+        if (anchor == nullptr || !anchor->ast) {
             continue;
         }
-        anchor->dynamicArray = true;
+        if (array.cm > 0 && dynamicCms.contains(array.cm)) {
+            anchor->dynamicArray = true;
+        } else {
+            // A legacy (Ctrl+Shift+Enter) array formula keeps its block
+            // (M69, D-078): it evaluates as an array and fills the block
+            // the file names; before M69 it became an ordinary formula.
+            anchor->arrayRange = array.ref;
+        }
         for (qint32 r = array.ref.topLeft.row; r <= array.ref.bottomRight.row; ++r) {
             for (qint32 c = array.ref.topLeft.col; c <= array.ref.bottomRight.col; ++c) {
                 Cell *spilled = sheet.cellAt({r, c});

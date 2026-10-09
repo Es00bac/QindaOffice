@@ -2,10 +2,14 @@
 #include "eval.h"
 
 #include "eval_array.h"
+#include "eval_lift.h"
+#include "eval_refs.h"
 
 #include <functional>
 
 namespace QindaOffice::Calc {
+
+using namespace EvalRefs;
 
 namespace {
 
@@ -14,77 +18,64 @@ Value scalarFromArg(const EvalContext &ctx, const Arg &arg)
     const auto *view = std::get_if<RangeView>(&arg);
     if (view != nullptr) {
         // A range-valued function result (OFFSET/INDIRECT) in scalar
-        // position dereferences to the top-left cell (legacy Excel implicit
-        // intersection). The earlier release mapped every such result to
-        // #VALUE!, making both functions dead on arrival.
+        // position. A Legacy formula intersects it with its own cell, as
+        // Excel does (M69, D-078 — it used to take the top-left cell, which
+        // is what a Dynamic formula's one-value slot still does).
         if (!view->isValid()) {
             return Err::Ref;
+        }
+        if (ctx.mode == ArrayMode::Legacy) {
+            return implicitIntersection(ctx, arg);
         }
         return ctx.host->cellValue(view->sheet, view->range.topLeft.row,
                                    view->range.topLeft.col);
     }
     if (const auto *array = std::get_if<ArrayValue>(&arg)) {
-        // A computed grid collapses only when it holds exactly one cell;
-        // anything larger would need spilling, which this engine does not do.
-        return array->isSingleCell() ? array->cells.first() : Value(Err::Value);
+        // A computed grid in one cell: a Legacy formula shows its first
+        // element (Excel before dynamic arrays); otherwise only a one-cell
+        // grid collapses (a Dynamic formula spills, spill.cpp).
+        if (array->isSingleCell() || (ctx.mode == ArrayMode::Legacy && !array->cells.isEmpty())) {
+            return array->cells.first();
+        }
+        return Err::Value;
     }
     return std::get<Value>(arg);
 }
 
-qint32 resolveSheet(const RangeRef &ref, const EvalContext &ctx, bool *ok)
+// An array constant as the evaluator carries arrays.
+ArrayValue arrayOf(const ArrayConstant &constant)
 {
-    if (ref.sheet.isEmpty()) {
-        *ok = true;
-        return ctx.sheet;
-    }
-    QString name = ref.sheet;
-    if (name.startsWith(QLatin1Char('\'')) && name.endsWith(QLatin1Char('\''))) {
-        name = name.mid(1, name.size() - 2).replace(QStringLiteral("''"), QStringLiteral("'"));
-    }
-    const qint32 index = ctx.host->sheetIndex(name);
-    *ok = index >= 0;
-    return index;
+    ArrayValue array;
+    array.rows = constant.rows;
+    array.cols = constant.cols;
+    array.cells = constant.cells;
+    return array;
 }
 
-RangeView viewFromRef(const RangeRef &ref, const EvalContext &ctx)
+// A function result used as one end of the range operator: INDEX(…):INDEX(…)
+// and OFFSET(…):B9 are references (M69).
+bool callView(const NodePtr &node, EvalContext &ctx, RangeView *view)
 {
-    bool ok = false;
-    const qint32 sheet = resolveSheet(ref, ctx, &ok);
-    if (!ok) {
-        return {ctx.sheet, {{-1, -1}, {-1, -1}}};
-    }
-    return {sheet, ref.range};
-}
-
-// Resolves a reference node to its view; false for non-reference nodes.
-bool refView(const NodePtr &node, const EvalContext &ctx, RangeView *view)
-{
-    if (node->kind != Node::Kind::Ref) {
+    if (node->kind != Node::Kind::Call) {
         return false;
     }
-    *view = viewFromRef(node->ref, ctx);
-    return view->isValid();
+    const Arg result = evalArg(node, ctx);
+    const auto *range = std::get_if<RangeView>(&result);
+    if (range == nullptr || !range->isValid()) {
+        return false;
+    }
+    *view = *range;
+    return true;
 }
 
-// Defined names bound to a formula, a constant or one sheet (D-069) expand
-// to their body; a name that reaches itself again stops here as #NAME?.
-constexpr int kMaxNameDepth = 32;
-
-// The body `node` (a Name) stands for on the evaluating sheet, with the
-// context it must be evaluated in: the caller's position, none of the
-// caller's LET bindings (a name is workbook state, not formula state).
-NodePtr nameBody(const NodePtr &node, const EvalContext &ctx, EvalContext *inner)
+// A one-cell reference is its value in arithmetic (INDEX(…)*2 is no array).
+Arg oneCellAsValue(const Arg &arg, const EvalContext &ctx)
 {
-    NodePtr body = ctx.host->nameFormula(node->text, ctx.sheet);
-    if (!body) {
-        return body;
+    const auto *view = std::get_if<RangeView>(&arg);
+    if (view != nullptr && view->isValid() && view->range.cellCount() == 1) {
+        return ctx.host->cellValue(view->sheet, view->range.topLeft.row, view->range.topLeft.col);
     }
-    *inner = ctx;
-    inner->locals.clear();
-    if (++inner->nameDepth > kMaxNameDepth) {
-        return Node::makeError(Err::Name);
-    }
-    return body;
+    return arg;
 }
 
 } // namespace
@@ -94,12 +85,21 @@ QVector<Arg> buildCallArgs(const NodePtr &node, const FunctionSpec &spec, EvalCo
 {
     QVector<Arg> args;
     args.reserve(node->args.size());
-    for (const NodePtr &argNode : node->args) {
+    // An array-typed parameter is worked out as an array even in a Legacy
+    // formula, as Excel does (FunctionSpec::arrayParams, M69).
+    EvalContext arrays;
+    if (ctx.mode == ArrayMode::Legacy && spec.arrayParams != 0) {
+        arrays = ctx;
+        arrays.mode = ArrayMode::Dynamic;
+    }
+    for (int i = 0; i < node->args.size(); ++i) {
+        const NodePtr &argNode = node->args.at(i);
+        EvalContext &use = ctx.mode == ArrayMode::Legacy && spec.takesArrayAt(i) ? arrays : ctx;
         RangeView view;
-        if (spec.preserveRefArgs && refView(argNode, ctx, &view)) {
+        if (spec.preserveRefArgs && refView(argNode, use, &view)) {
             args.append(view);
         } else {
-            args.append(evalArg(argNode, ctx));
+            args.append(evalArg(argNode, use));
         }
     }
     return args;
@@ -148,13 +148,27 @@ Arg evalCallArg(const NodePtr &node, EvalContext &ctx)
         return Err::Value;
     }
     const QVector<Arg> args = buildCallArgs(node, spec, ctx);
-    return spec.fn(ctx, args);
+    return callFunction(spec, args, ctx, node); // lifting / intersection (M69)
 }
 
 Arg evalArg(const NodePtr &node, EvalContext &ctx)
 {
     if (!node) {
         return Err::Value;
+    }
+    if (node->kind == Node::Kind::StructRef) {
+        // Like a reference: one cell reads its value, more stay a range.
+        const StructTarget target = structTarget(node, ctx);
+        if (!target.ok()) {
+            return target.error;
+        }
+        if (target.range.cellCount() == 1) {
+            return ctx.host->cellValue(target.sheet, target.range.topLeft.row, target.range.topLeft.col);
+        }
+        return RangeView{target.sheet, target.range};
+    }
+    if (node->kind == Node::Kind::Array) {
+        return node->array ? Arg(arrayOf(*node->array)) : Arg(Value(Err::Value));
     }
     if (node->kind == Node::Kind::Ref) {
         const bool single = node->ref.isSingleCell();
@@ -177,7 +191,7 @@ Arg evalArg(const NodePtr &node, EvalContext &ctx)
         if (const NodePtr body = nameBody(node, ctx, &inner)) {
             return evalArg(body, inner);
         }
-        const auto target = ctx.host->namedRange(node->text.toUpper());
+        const auto target = namedTarget(node, ctx);
         if (!target.has_value()) {
             return Err::Name;
         }
@@ -199,8 +213,8 @@ Arg evalArg(const NodePtr &node, EvalContext &ctx)
         // the range construction fails with #VALUE!.
         RangeView lView;
         RangeView rView;
-        const bool lIsView = refView(node->left, ctx, &lView);
-        const bool rIsView = refView(node->right, ctx, &rView);
+        const bool lIsView = refView(node->left, ctx, &lView) || callView(node->left, ctx, &lView);
+        const bool rIsView = refView(node->right, ctx, &rView) || callView(node->right, ctx, &rView);
         if (lIsView && rIsView) {
             if (lView.sheet != rView.sheet) {
                 return Err::Ref; // 3-D refs are #NAME?-class in v1
@@ -213,15 +227,14 @@ Arg evalArg(const NodePtr &node, EvalContext &ctx)
                 qMax(lView.range.bottomRight.col, rView.range.bottomRight.col);
             return lView;
         }
-        if (!lIsView && !rIsView) {
-            return evalNode(node, ctx);
-        }
+        // AGENT-GUARD: never hand this back to evalNode — its range branch
+        // evaluates through here (M69), and the two would recurse forever.
         return Err::Value;
     }
     if (node->kind == Node::Kind::Unary) {
         // Array arithmetic (M38): -A1:A10, and the --(A1:A10>5) idiom that
         // coerces a comparison grid to ones and zeroes.
-        const Arg operand = evalArg(node->left, ctx);
+        const Arg operand = oneCellAsValue(evalArg(node->left, ctx), ctx);
         if (isArrayLike(operand)) {
             return broadcastUnary(ctx, node->op, operand);
         }
@@ -232,8 +245,8 @@ Arg evalArg(const NodePtr &node, EvalContext &ctx)
         // element-wise when either side carries a grid. That is what makes
         // SUMPRODUCT($C$8:$C$19,(1+rate)^$B$8:$B$19) a twelve-cell product
         // instead of #VALUE! — a range in an operand used to be fatal.
-        const Arg lhs = evalArg(node->left, ctx);
-        const Arg rhs = evalArg(node->right, ctx);
+        const Arg lhs = oneCellAsValue(evalArg(node->left, ctx), ctx);
+        const Arg rhs = oneCellAsValue(evalArg(node->right, ctx), ctx);
         if (isArrayLike(lhs) || isArrayLike(rhs)) {
             return broadcastBinary(ctx, node->op, lhs, rhs);
         }
@@ -268,35 +281,54 @@ Value evalNode(const NodePtr &node, EvalContext &ctx)
             return evalNode(body, inner);
         }
         // Named ranges resolve through the host (Workbook::namedRange).
-        const auto target = ctx.host->namedRange(node->text.toUpper());
+        const auto target = namedTarget(node, ctx);
         if (!target.has_value()) {
             return Err::Name;
         }
+        const RangeView view = viewFromRef(*target, ctx);
+        if (!view.isValid()) {
+            return Err::Ref;
+        }
         if (target->isSingleCell()) {
-            const RangeView view = viewFromRef(*target, ctx);
-            if (!view.isValid()) {
-                return Err::Ref;
-            }
             return ctx.host->cellValue(view.sheet, view.range.topLeft.row,
                                        view.range.topLeft.col);
         }
-        return Err::Value; // range in scalar position
+        // A range in a one-value position: Excel's implicit intersection in
+        // a Legacy formula (M69, D-078), #VALUE! otherwise.
+        return ctx.mode == ArrayMode::Legacy ? implicitIntersection(ctx, view) : Value(Err::Value);
     }
     case Node::Kind::Ref: {
-        if (!node->ref.isSingleCell()) {
-            return Err::Value; // range in scalar position
-        }
         const RangeView view = viewFromRef(node->ref, ctx);
         if (!view.isValid()) {
             return Err::Ref;
         }
+        if (!node->ref.isSingleCell()) {
+            return ctx.mode == ArrayMode::Legacy ? implicitIntersection(ctx, view) : Value(Err::Value);
+        }
         return ctx.host->cellValue(view.sheet, view.range.topLeft.row, view.range.topLeft.col);
     }
+    case Node::Kind::StructRef: {
+        const StructTarget target = structTarget(node, ctx);
+        if (!target.ok()) {
+            return target.error;
+        }
+        const RangeView view{target.sheet, target.range};
+        if (target.range.cellCount() == 1) {
+            return ctx.host->cellValue(view.sheet, view.range.topLeft.row, view.range.topLeft.col);
+        }
+        return ctx.mode == ArrayMode::Legacy ? implicitIntersection(ctx, view) : Value(Err::Value);
+    }
+    case Node::Kind::Array:
+        return node->array ? scalarFromArg(ctx, arrayOf(*node->array)) : Value(Err::Value);
+    case Node::Kind::Missing:
+        return Value(); // an omitted argument: blank, read as 0 or ""
     case Node::Kind::Unary:
         return applyUnaryOp(node->op, evalNode(node->left, ctx));
     case Node::Kind::Binary: {
         if (node->op == Op::Range || node->op == Op::Union) {
-            return Err::Value; // ranges only survive in argument position
+            // A range built in one-value position: intersected in a Legacy
+            // formula (M69), #VALUE! otherwise.
+            return scalarFromArg(ctx, evalArg(node, ctx));
         }
         const Value lhs = evalNode(node->left, ctx);
         if (isErr(lhs)) return lhs;
@@ -316,100 +348,10 @@ Value evalNode(const NodePtr &node, EvalContext &ctx)
             return Err::Value;
         }
         const QVector<Arg> args = buildCallArgs(node, spec, ctx);
-        return scalarFromArg(ctx, spec.fn(ctx, args));
+        return scalarFromArg(ctx, callFunction(spec, args, ctx, node));
     }
     }
     return Err::Value;
-}
-
-QVector<DepTarget> collectTargets(const NodePtr &node, const EvalContext &ctx)
-{
-    QVector<DepTarget> out;
-    if (!node) {
-        return out;
-    }
-    int nameDepth = 0;
-    std::function<void(const NodePtr &)> walk = [&](const NodePtr &n) {
-        if (!n) {
-            return;
-        }
-        switch (n->kind) {
-        case Node::Kind::Ref: {
-            bool ok = false;
-            const qint32 sheet = resolveSheet(n->ref, ctx, &ok);
-            if (ok) {
-                out.append({sheet, n->ref.range});
-            }
-            break;
-        }
-        case Node::Kind::Name: {
-            // A name with a formula or constant body depends on whatever
-            // its body references (D-069).
-            if (const NodePtr body = ctx.host->nameFormula(n->text, ctx.sheet)) {
-                if (nameDepth < kMaxNameDepth) {
-                    ++nameDepth;
-                    walk(body);
-                    --nameDepth;
-                }
-                break;
-            }
-            // Named ranges index their resolved target so edits inside the
-            // range propagate to formulas using the name.
-            const auto target = ctx.host->namedRange(n->text.toUpper());
-            if (target.has_value()) {
-                bool ok = false;
-                const qint32 sheet = resolveSheet(*target, ctx, &ok);
-                if (ok) {
-                    out.append({sheet, target->range});
-                }
-            }
-            break;
-        }
-        case Node::Kind::Unary:
-            walk(n->left);
-            break;
-        case Node::Kind::Binary:
-            walk(n->left);
-            walk(n->right);
-            break;
-        case Node::Kind::Call:
-            for (const NodePtr &arg : n->args) {
-                walk(arg);
-            }
-            break;
-        default:
-            break;
-        }
-    };
-    walk(node);
-    return out;
-}
-
-bool containsVolatileCall(const NodePtr &node)
-{
-    if (!node) {
-        return false;
-    }
-    if (node->kind == Node::Kind::Call) {
-        const auto it = functionRegistry().constFind(node->text.toUpper());
-        if (it != functionRegistry().constEnd() && it->isVolatile) {
-            return true;
-        }
-    }
-    if (node->kind == Node::Kind::Unary) {
-        return containsVolatileCall(node->left);
-    }
-    if (node->kind == Node::Kind::Binary) {
-        return containsVolatileCall(node->left) || containsVolatileCall(node->right);
-    }
-    if (node->kind == Node::Kind::Call) {
-        for (const NodePtr &arg : node->args) {
-            if (containsVolatileCall(arg)) {
-                return true;
-            }
-        }
-    }
-    return false;
 }
 
 } // namespace QindaOffice::Calc

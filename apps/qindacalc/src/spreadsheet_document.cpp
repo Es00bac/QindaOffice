@@ -346,6 +346,14 @@ void SpreadsheetDocument::pushUndo(const WorkbookSnapshot &before, const QString
 
 QString SpreadsheetDocument::inputTextAt(const CalcEng::CellAddr &addr) const
 {
+    // Every cell of a legacy array formula shows it in braces, as Excel's
+    // formula bar does (M69, D-078); committing the braces re-enters it.
+    if (const auto block = m_workbook.arrayBlockAt(m_activeSheet, addr)) {
+        const CalcEng::Cell *anchor = m_workbook.sheetAt(m_activeSheet).cellAt(block->topLeft);
+        if (anchor != nullptr && !m_workbook.isFormulaHidden(m_activeSheet, block->topLeft)) {
+            return QStringLiteral("{=") + anchor->formula + QLatin1Char('}');
+        }
+    }
     const CalcEng::Cell *cell = m_workbook.sheetAt(m_activeSheet).cellAt(addr);
     if (cell == nullptr) {
         return QString();

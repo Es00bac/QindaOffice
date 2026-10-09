@@ -27,13 +27,21 @@ namespace QindaOffice::Calc::IO {
 
 // The engine spelling of a formula read from a file (no leading '='): the
 // documented prefixes dropped, _xlpm. dropped from LET/LAMBDA parameters.
-[[nodiscard]] QString formulaFromFile(const QString &text);
+// M69 (D-078): structured references in the formula bar's spelling —
+// Table1[[#This Row],[Sales]] is Table1[@Sales], and [@Sales] when the
+// formula sits in `containingTable` (the table holding its cell; empty:
+// none) — and _xlfn.SINGLE(x) as Excel 365 shows it, @x.
+[[nodiscard]] QString formulaFromFile(const QString &text, const QString &containingTable = {});
 
 // The file spelling of an engine formula: known function names upper-cased
 // and prefixed where Excel requires it, LET/LAMBDA parameters given _xlpm.,
 // and ';' — which the engine accepts as an argument separator on input —
 // written as ',' (inside an array constant it separates rows and stays).
-[[nodiscard]] QString formulaForFile(const QString &text);
+// M69 (D-078): structured references as Excel stores them — qualified with
+// `containingTable` where the formula left the table out, [#This Row]
+// spelled out (an unqualified reference outside any table is #REF!) — and
+// '@' as _xlfn.SINGLE(…), the only spelling a file has for it.
+[[nodiscard]] QString formulaForFile(const QString &text, const QString &containingTable = {});
 
 // A formula's text with its relative references moved by (dr, dc), token by
 // token. Shared-formula cells whose master the engine cannot parse are

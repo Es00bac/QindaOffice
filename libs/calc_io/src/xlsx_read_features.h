@@ -41,7 +41,8 @@ void readSheetFeatures(QXlsx::ZipReader &zip, const QString &sheetPart, Sheet *s
 // dynamic formulas and the cached values in their spill ranges are marked
 // spilled, so the end-of-load recalculation spills them afresh instead of
 // finding them in the way (#SPILL!). A legacy array formula (no cm, or a
-// cm that is not XLDAPR) is left as it was.
+// cm that is not XLDAPR) becomes an array block over its ref (M69, D-078;
+// Cell::arrayRange), its other cells marked the same way.
 void markDynamicArrays(Workbook *wb, qint32 sheetIndex, const CellScan &scan, const QSet<int> &dynamicCms);
 
 // <workbookProtection>, <workbookPr codeName> and a VBA project.

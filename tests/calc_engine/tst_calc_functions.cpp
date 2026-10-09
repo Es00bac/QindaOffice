@@ -15,6 +15,7 @@
 #include <QFile>
 #include <QtTest>
 
+#include <cmath>
 #include <limits>
 
 using namespace QindaOffice::Calc;
@@ -25,6 +26,7 @@ private slots:
     void fixtureRows();
     void arrayArithmeticBroadcasts();
     void excelRulesBeyondTheOracle();
+    void m69RulesBeyondTheOracle();
 };
 
 static Value parseInput(const QString &input)
@@ -67,6 +69,9 @@ static void buildDataBlock(Workbook &wb)
         {"O6", "46000"},
         {"P1", "7"}, {"P2", "3"}, {"P3", "7"}, {"P4", "1"}, {"P5", "7"},
         {"Q1", "2"}, {"Q2", "2"}, {"Q3", "5"}, {"Q4", "5"}, {"Q5", "9"},
+        // M69: criteria ranges for the database functions over I1:L4.
+        {"R1", "k1"}, {"R2", "c"}, {"S1", "v1"}, {"S2", ">2"}, {"T1", "v2"}, {"T2", "<5"},
+        {"U1", "k1"}, {"U2", "a"}, {"U3", "e"},
     };
     for (const Lit &lit : kLit) {
         const QString text = QString::fromLatin1(lit.addr);
@@ -141,7 +146,8 @@ void CalcFunctionsTest::fixtureRows()
     int row = 0;
     int failed = 0;
     for (const char *fixture : {SOURCE_DIR "/../fixtures/functions/functions.tsv",
-                                SOURCE_DIR "/../fixtures/functions/functions_m61.tsv"}) {
+                                SOURCE_DIR "/../fixtures/functions/functions_m61.tsv",
+                                SOURCE_DIR "/../fixtures/functions/functions_m69.tsv"}) {
         QFile file(QString::fromLatin1(fixture));
         QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(file.fileName()));
         while (!file.atEnd()) {
@@ -307,6 +313,58 @@ void CalcFunctionsTest::excelRulesBeyondTheOracle()
     QCOMPARE(eval("COUNTIFS(Scratch!B1:B3,\">0\",Scratch!C1:C3,\">0\")"), Value(2.0));
     QCOMPARE(eval("SUMIFS(Scratch!C1:C3,Scratch!B1:B3,\">2\")"), Value(30.0));
     QCOMPARE(eval("MAXIFS(Scratch!C1:C3,Scratch!B1:B3,\">0\")"), Value(30.0));
+    // A number stored as text (imported workbooks are full of them)
+    // matches a numeric criterion, and a text criterion over it neither
+    // matches nor throws (M69 — it used to end the recalculation).
+    wb.setCellValue(1, {0, 3}, Value(QStringLiteral("5")));
+    wb.setCellValue(1, {1, 3}, 5.0);
+    wb.setCellValue(1, {2, 3}, Value(QStringLiteral("Abc")));
+    QCOMPARE(eval("COUNTIF(Scratch!D1:D3,\"5\")"), Value(2.0));
+    QCOMPARE(eval("COUNTIF(Scratch!D1:D3,\"abc\")"), Value(1.0));
+    QCOMPARE(eval("COUNTIF(Scratch!D1:D3,\"x\")"), Value(0.0));
+}
+
+// M69 (D-078): the rows LibreOffice 25.2 answers differently from
+// Microsoft's documentation, worked by hand against Excel's rules.
+void CalcFunctionsTest::m69RulesBeyondTheOracle()
+{
+    Workbook wb;
+    buildDataBlock(wb);
+    EvalContext ctx{&wb, 0, {}, {}};
+    const auto eval = [&ctx](const char *expr) {
+        const ParseResult parsed = parseFormula(QString::fromUtf8(expr));
+        return parsed.root ? evalNode(parsed.root, ctx) : Value(Err::Name);
+    };
+    // PERCENTRANK truncates to its significant digits (Microsoft's own
+    // example: PERCENTRANK.EXC(…,5.43,1) is 0.3); LibreOffice rounds.
+    QCOMPARE(eval("PERCENTRANK.INC(B1:B5,33,2)"), Value(0.57));
+    QCOMPARE(eval("PERCENTRANK.EXC(A1:A5,2.5)"), Value(0.416));
+    QCOMPARE(eval("PERCENTRANK.INC(A1:A5,6)"), Value(Err::NA)); // outside the data
+    QCOMPARE(eval("EXPON.DIST(-1,1,TRUE)"), Value(Err::Num));  // x < 0
+    // SKEW.P (absent from LibreOffice): Σ((x-μ)/σ)³/n over Q1:Q5.
+    const QList<double> q{2, 2, 5, 5, 9};
+    const double mu = 4.6;
+    double variance = 0;
+    double cubes = 0;
+    for (const double x : q) {
+        variance += (x - mu) * (x - mu) / 5;
+    }
+    for (const double x : q) {
+        cubes += std::pow((x - mu) / std::sqrt(variance), 3) / 5;
+    }
+    QVERIFY(qFuzzyCompare(std::get<double>(eval("SKEW.P(Q1:Q5)")), cubes));
+    // DOLLAR in Excel's en-US spelling: negatives in brackets.
+    QCOMPARE(eval("DOLLAR(-1234.567,4)"), Value(QStringLiteral("($1,234.5670)")));
+    // Comparison operators as Excel has them: a blank is "" (or 0, or
+    // FALSE) and text ignores case (EXACT is the case-sensitive test).
+    QCOMPARE(eval("C4=\"\""), Value(true)); // C4 is blank in the data block
+    QCOMPARE(eval("C4=0"), Value(true));
+    QCOMPARE(eval("C1=C2"), Value(true));     // apple = Apple
+    QCOMPARE(eval("\"b\">\"A\""), Value(true));
+    QCOMPARE(eval("EXACT(C1,C2)"), Value(false));
+    // Omitted arguments read as blank: VLOOKUP's is FALSE (exact).
+    QCOMPARE(eval("VLOOKUP(\"b\",I2:L4,2,)"), Value(Err::NA));
+    QCOMPARE(nodeText(parseFormula(QStringLiteral("IF(A1,,1)")).root), QStringLiteral("IF(A1,,1)"));
 }
 
 int main(int argc, char *argv[])

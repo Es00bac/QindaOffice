@@ -159,6 +159,9 @@ void CalcStructureTest::namedRangesFollowTheEdit()
     RangeRef ref;
     ref.sheet = QStringLiteral("Sheet1");
     ref.range = {at(4, 0), at(4, 0)};
+    // Absolute, as every name QindaCalc defines is: a relative name follows
+    // the cell using it (M69, D-078; relativeNamesFollowTheUsingCell).
+    ref.absRow0 = ref.absCol0 = ref.absRow1 = ref.absCol1 = true;
     book.defineName(QStringLiteral("TOTAL"), ref);
     book.setCellInput(0, at(0, 1), QStringLiteral("=TOTAL"));
     QCOMPARE(numberAt(book, 0, at(0, 1)), 7.0);
@@ -395,7 +398,8 @@ void CalcStructureTest::definedNamesEvaluateAndFollowEdits()
     QCOMPARE(numberAt(book, 1, at(0, 0)), 3.0);
     QCOMPARE(numberAt(book, 1, at(1, 0)), 3.0);
     QCOMPARE(book.cellValue(1, 2, 0), Value(Err::Name)); // stops, does not recurse forever
-    QCOMPARE(book.cellValue(1, 3, 0), Value(Err::Name)); // kept, but not evaluable
+    // A structured reference parses since M69 (D-078); there is no Table1.
+    QCOMPARE(book.cellValue(1, 3, 0), Value(Err::Ref));
     QCOMPARE(definedBody(book, QStringLiteral("Broken")), QStringLiteral("Table1[Col]"));
 
     // What a formula name references is a dependency of every cell using it.

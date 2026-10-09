@@ -203,6 +203,12 @@ QJsonObject cellToJson(quint64 key, const CalcEng::Cell &cell)
         if (cell.dynamicArray) {
             out.insert(QStringLiteral("da"), true); // spills (M66); its spill is recomputed
         }
+        if (cell.arrayRange.isValid()) {
+            // A legacy array formula's block (M69); its other cells are
+            // recomputed like a spill's.
+            out.insert(QStringLiteral("ar"), QJsonArray{cell.arrayRange.topLeft.row, cell.arrayRange.topLeft.col,
+                                                       cell.arrayRange.bottomRight.row, cell.arrayRange.bottomRight.col});
+        }
         return out;
     }
     const QJsonObject value = valueToJson(cell.value);
@@ -221,6 +227,10 @@ CalcEng::Cell cellFromJson(const QJsonObject &object)
         cell.ast = parsed.root;
         cell.isVolatile = CalcEng::containsVolatileCall(cell.ast);
         cell.dynamicArray = object.value(QStringLiteral("da")).toBool(false);
+        const QJsonArray block = object.value(QStringLiteral("ar")).toArray();
+        if (block.size() == 4) {
+            cell.arrayRange = {{block.at(0).toInt(), block.at(1).toInt()}, {block.at(2).toInt(), block.at(3).toInt()}};
+        }
         return cell;
     }
     cell.value = valueFromJson(object);
@@ -318,6 +328,9 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
         }
         if (sheet.hidden) {
             out.insert(QStringLiteral("hidden"), true);
+        }
+        if (sheet.chartSheet) {
+            out.insert(QStringLiteral("chartSheet"), true); // M69: a chart sheet
         }
         if (sheet.cursor != CalcEng::CellAddr{0, 0}) {
             out.insert(QStringLiteral("cursor"), QJsonArray{sheet.cursor.row, sheet.cursor.col});
@@ -459,6 +472,7 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
             sheet.freezeCols = freeze.at(1).toInt();
         }
         sheet.hidden = object.value(QStringLiteral("hidden")).toBool(false);
+        sheet.chartSheet = object.value(QStringLiteral("chartSheet")).toBool(false);
         const QJsonArray cursor = object.value(QStringLiteral("cursor")).toArray();
         if (cursor.size() == 2) {
             sheet.cursor = {cursor.at(0).toInt(), cursor.at(1).toInt()};

@@ -31,6 +31,7 @@ struct DestSheet {
     QString part;          // the written worksheet part
     QString name;
     QString sheetId;       // its sheetId in the written workbook.xml
+    QString relId;         // the workbook relationship naming its part (M69)
     const PatchManifest::SheetPatch *patch = nullptr;
 };
 

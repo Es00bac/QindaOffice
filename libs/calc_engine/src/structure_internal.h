@@ -10,7 +10,9 @@
 #include "structure.h"
 
 namespace QindaOffice::Calc {
+class Sheet;
 class Workbook;
+struct TableSpec;
 }
 
 namespace QindaOffice::Calc::StructureMath {
@@ -127,5 +129,17 @@ void moveSheetFeatures(Workbook &book, const StructureEdit &edit);
 // A sheet rename re-points internal link locations; a removal (`to`
 // empty) leaves them as they are — a dead link, the way Excel keeps one.
 void requalifyLinkLocations(Workbook &book, const QString &from, const QString &to);
+
+// M69 (D-078), structure_tables.cpp: Excel tables through the edit.
+// BEFORE the cells move: structured references to columns or tables the
+// edit removes become #REF! (a column range keeps what remains of it).
+void rewriteTableRefs(Workbook &book, const StructureEdit &edit);
+// The edited sheet's tables after the edit (read before the cells move):
+// ranges moved, inserted columns added and removed ones dropped from the
+// column records, a removed header or totals row gone.
+[[nodiscard]] QList<TableSpec> movedTables(const Sheet &sheet, const StructureEdit &edit);
+// AFTER the cells moved: inserted columns are named (Column<N>, written
+// into their headers) and inserted data rows get the calculated columns.
+void fillTablesAfterEdit(Workbook &book, const StructureEdit &edit);
 
 } // namespace QindaOffice::Calc::StructureMath

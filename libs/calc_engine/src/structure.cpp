@@ -29,6 +29,10 @@ using namespace StructureMath;
     case Node::Kind::Bool:
     case Node::Kind::Error:
     case Node::Kind::Name:
+    case Node::Kind::Array:
+    case Node::Kind::Missing:
+        return node;
+    case Node::Kind::StructRef: // follows its table by name (structure_tables.cpp)
         return node;
     case Node::Kind::Ref: {
         RangeRef ref = node->ref;
@@ -153,7 +157,10 @@ void rewriteValidationSources(Workbook &book, const StructureEdit &edit)
 // Charts carry a range and/or series references plus an anchor cell on one
 // sheet; all move with the edit. A series whose range dies is dropped, and
 // a chart is dropped when its last data source (range and series alike)
-// goes with the band.
+// goes with the band. Series name their sheet, so they follow an edit on
+// any sheet — a chart elsewhere, a chart sheet's chart (M69: before, only
+// charts anchored on the edited sheet followed). A chart sheet keeps its
+// chart even with no data left.
 void rewriteCharts(Workbook &book, const StructureEdit &edit)
 {
     const Band band = bandOf(edit);
@@ -162,11 +169,8 @@ void rewriteCharts(Workbook &book, const StructureEdit &edit)
     QList<ChartSpec> kept;
     kept.reserve(book.charts.size());
     for (ChartSpec spec : std::as_const(book.charts)) {
-        if (spec.sheet != edit.sheet) {
-            kept.append(spec);
-            continue;
-        }
-        if (!spec.rangeText.isEmpty()) {
+        const bool onEdited = spec.sheet == edit.sheet;
+        if (onEdited && !spec.rangeText.isEmpty()) {
             CellRange range = parseChartRange(spec.rangeText);
             if (range.isValid()) {
                 qint32 lo = rows ? range.topLeft.row : range.topLeft.col;
@@ -187,9 +191,12 @@ void rewriteCharts(Workbook &book, const StructureEdit &edit)
             }
         }
         for (ChartSeriesSpec &series : spec.series) {
-            for (QString *refText : {&series.catRange, &series.valRange}) {
+            for (QString *refText : {&series.catRange, &series.valRange, &series.name}) {
                 const ParseResult parsed = parseFormula(*refText);
-                if (!parsed.root || parsed.root->kind != Node::Kind::Ref) {
+                // A name is moved only when it is a sheet-qualified cell
+                // (a series named after a cell, M69), never a literal "Q1".
+                if (!parsed.root || parsed.root->kind != Node::Kind::Ref
+                    || (refText == &series.name && parsed.root->ref.sheet.isEmpty())) {
                     continue;
                 }
                 RangeRef ref = parsed.root->ref;
@@ -208,13 +215,17 @@ void rewriteCharts(Workbook &book, const StructureEdit &edit)
                                              return series.valRange.isEmpty();
                                          }),
                           spec.series.end());
+        const bool chartSheet = spec.sheet >= 0 && spec.sheet < book.sheetCount()
+            && book.sheetAt(spec.sheet).isChartSheet();
         const bool hasRange = parseChartRange(spec.rangeText).isValid();
-        if (!hasRange && spec.series.isEmpty()) {
+        if (!hasRange && spec.series.isEmpty() && !chartSheet) {
             continue; // no data source left
         }
-        qint32 &anchor = rows ? spec.anchorRow : spec.anchorCol;
-        const qint32 moved = movedIndex(anchor, band);
-        anchor = moved < 0 ? band.at : moved;
+        if (onEdited) {
+            qint32 &anchor = rows ? spec.anchorRow : spec.anchorCol;
+            const qint32 moved = movedIndex(anchor, band);
+            anchor = moved < 0 ? band.at : moved;
+        }
         kept.append(spec);
     }
     book.charts = kept;
@@ -244,6 +255,23 @@ void moveSheetContents(Sheet &sheet, const StructureEdit &edit)
     const Band band = bandOf(edit);
     const bool rows = editsRows(edit);
 
+    // A range that survives the edit, or nullopt when the whole span went.
+    const auto movedRange = [&band, rows](CellRange range) -> std::optional<CellRange> {
+        qint32 lo = rows ? range.topLeft.row : range.topLeft.col;
+        qint32 hi = rows ? range.bottomRight.row : range.bottomRight.col;
+        if (!movedSpan(lo, hi, band)) {
+            return std::nullopt;
+        }
+        if (rows) {
+            range.topLeft.row = lo;
+            range.bottomRight.row = hi;
+        } else {
+            range.topLeft.col = lo;
+            range.bottomRight.col = hi;
+        }
+        return range;
+    };
+
     QHash<quint64, Cell> cells;
     cells.reserve(sheet.cells().size());
     for (const auto &[packed, cell] : sheet.cells().asKeyValueRange()) {
@@ -253,7 +281,13 @@ void moveSheetContents(Sheet &sheet, const StructureEdit &edit)
             continue;
         }
         (rows ? addr.row : addr.col) = moved;
-        cells.insert(addr.key(), cell);
+        Cell copy = cell;
+        if (copy.arrayRange.isValid()) {
+            // A legacy array formula's block moves with its anchor (M69);
+            // its other cells are spilled values the reindex rewrites.
+            copy.arrayRange = movedRange(copy.arrayRange).value_or(CellRange{addr, addr});
+        }
+        cells.insert(addr.key(), copy);
     }
 
     QHash<quint64, qint32> styles;
@@ -283,23 +317,6 @@ void moveSheetContents(Sheet &sheet, const StructureEdit &edit)
     };
     colWidths = rows ? sheet.columnWidths() : moveGeometry(sheet.columnWidths());
     rowHeights = rows ? moveGeometry(sheet.rowHeights()) : sheet.rowHeights();
-
-    // A range that survives the edit, or nullopt when the whole span went.
-    const auto movedRange = [&band, rows](CellRange range) -> std::optional<CellRange> {
-        qint32 lo = rows ? range.topLeft.row : range.topLeft.col;
-        qint32 hi = rows ? range.bottomRight.row : range.bottomRight.col;
-        if (!movedSpan(lo, hi, band)) {
-            return std::nullopt;
-        }
-        if (rows) {
-            range.topLeft.row = lo;
-            range.bottomRight.row = hi;
-        } else {
-            range.topLeft.col = lo;
-            range.bottomRight.col = hi;
-        }
-        return range;
-    };
 
     QList<CellRange> merges;
     for (const CellRange &merge : sheet.merges()) {
@@ -334,14 +351,9 @@ void moveSheetContents(Sheet &sheet, const StructureEdit &edit)
         }
     }
     // Tables are range-addressed state like every other rule: a table whose
-    // span dies with the band is dropped, one straddling an insertion grows.
-    QList<TableSpec> tables;
-    for (TableSpec table : sheet.tables()) {
-        if (const auto moved = movedRange(table.range)) {
-            table.range = *moved;
-            tables.append(table);
-        }
-    }
+    // span dies with the band is dropped, one straddling an insertion grows
+    // — and (M69) its column records follow inserted and removed columns.
+    QList<TableSpec> tables = movedTables(sheet, edit);
     QHash<quint64, CellComment> comments;
     comments.reserve(sheet.comments().size());
     for (const auto &[packed, comment] : sheet.comments().asKeyValueRange()) {
@@ -374,6 +386,7 @@ void applyStructureEdit(Workbook &book, const StructureEdit &edit)
     // rewrite reads the pre-edit sheet name/contents and must see every
     // formula exactly once — including the ones that are about to be
     // deleted, which simply disappear with their cells.
+    rewriteTableRefs(book, edit); // structured references to what goes (M69)
     rewriteFormulas(book, edit);
     rewriteNames(book, edit);
     rewriteValidationSources(book, edit);
@@ -381,7 +394,11 @@ void applyStructureEdit(Workbook &book, const StructureEdit &edit)
     rewriteImages(book, edit);
     moveSheetFeatures(book, edit); // links, outline, source journal (M66)
     moveSheetContents(book.sheetAt(edit.sheet), edit);
-    book.reindexAll();
+    // Inserted table columns are named and inserted table rows filled with
+    // the calculated columns (M69); endBulkLoad then reindexes once.
+    book.beginBulkLoad();
+    fillTablesAfterEdit(book, edit);
+    book.endBulkLoad();
 }
 
 } // namespace QindaOffice::Calc

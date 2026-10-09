@@ -13,6 +13,8 @@
 
 #include "parser.h"
 
+#include <algorithm>
+
 namespace QindaOffice::Calc {
 
 namespace {
@@ -94,6 +96,13 @@ QString wrapped(const NodePtr &node, bool parenthesize)
     return parenthesize ? QStringLiteral("(") + text + QStringLiteral(")") : text;
 }
 
+// A coordinate moved by `delta` around a sheet edge of `size` (Excel wraps
+// a defined name's relative references, M69).
+qint32 wrappedIndex(qint32 value, qint32 delta, qint32 size)
+{
+    return qint32(((qint64(value) + delta) % size + size) % size);
+}
+
 RangeRef shiftRef(const RangeRef &ref, qint32 dr, qint32 dc)
 {
     RangeRef out = ref;
@@ -107,6 +116,42 @@ RangeRef shiftRef(const RangeRef &ref, qint32 dr, qint32 dc)
     if (!ref.absRow1) out.range.bottomRight.row += rows;
     if (!ref.absCol1) out.range.bottomRight.col += cols;
     return out;
+}
+
+QString literalText(const Value &value)
+{
+    if (const auto *number = std::get_if<double>(&value)) {
+        return QString::number(*number, 'g', 15);
+    }
+    if (const auto *text = std::get_if<QString>(&value)) {
+        return QLatin1Char('"') + QString(*text).replace(QLatin1Char('"'), QStringLiteral("\"\"")) + QLatin1Char('"');
+    }
+    if (const auto *flag = std::get_if<bool>(&value)) {
+        return *flag ? QStringLiteral("TRUE") : QStringLiteral("FALSE");
+    }
+    if (const auto *err = std::get_if<Err>(&value)) {
+        return errText(*err);
+    }
+    return QStringLiteral("0");
+}
+
+// {1,2;3,4}: ',' between columns, ';' between rows (Excel's file and en-US
+// spelling; xlsx_formula keeps the ';' inside braces).
+QString arrayConstantText(const ArrayConstant &array)
+{
+    QString out = QStringLiteral("{");
+    for (qint32 r = 0; r < array.rows; ++r) {
+        for (qint32 c = 0; c < array.cols; ++c) {
+            if (c > 0) {
+                out += QLatin1Char(',');
+            }
+            out += literalText(array.cells.value(r * array.cols + c));
+        }
+        if (r + 1 < array.rows) {
+            out += QLatin1Char(';');
+        }
+    }
+    return out + QLatin1Char('}');
 }
 
 } // namespace
@@ -162,6 +207,11 @@ QString nodeText(const NodePtr &node)
             && node->args.first() && node->args.first()->kind == Node::Kind::Ref) {
             return nodeText(node->args.first()) + QLatin1Char('#');
         }
+        // SINGLE(x) is the '@' operator (M69, D-078); it takes the range
+        // operand after it, anything looser goes in brackets.
+        if (node->text.compare(QLatin1String("SINGLE"), Qt::CaseInsensitive) == 0 && node->args.size() == 1) {
+            return QLatin1Char('@') + wrapped(node->args.first(), levelOf(node->args.first()) < kRange);
+        }
         QString out = node->text + QStringLiteral("(");
         for (int i = 0; i < node->args.size(); ++i) {
             if (i > 0) {
@@ -173,8 +223,85 @@ QString nodeText(const NodePtr &node)
     }
     case Node::Kind::Name:
         return node->text;
+    case Node::Kind::StructRef:
+        return node->structRef ? structRefText(*node->structRef, StructRefSpelling::Display) : errText(Err::Ref);
+    case Node::Kind::Array:
+        return node->array ? arrayConstantText(*node->array) : QStringLiteral("{}");
+    case Node::Kind::Missing:
+        return QString(); // an omitted argument prints as nothing between its commas
     }
     return QString();
+}
+
+RangeRef shiftRefWrapped(const RangeRef &ref, qint32 dr, qint32 dc)
+{
+    constexpr qint32 kRows = 1048576;
+    constexpr qint32 kCols = 16384;
+    RangeRef out = ref;
+    if (!ref.wholeCols) {
+        if (!ref.absRow0) out.range.topLeft.row = wrappedIndex(ref.range.topLeft.row, dr, kRows);
+        if (!ref.absRow1) out.range.bottomRight.row = wrappedIndex(ref.range.bottomRight.row, dr, kRows);
+    }
+    if (!ref.wholeRows) {
+        if (!ref.absCol0) out.range.topLeft.col = wrappedIndex(ref.range.topLeft.col, dc, kCols);
+        if (!ref.absCol1) out.range.bottomRight.col = wrappedIndex(ref.range.bottomRight.col, dc, kCols);
+    }
+    // A range whose corners wrapped past each other reads the other way.
+    if (out.range.topLeft.row > out.range.bottomRight.row) {
+        std::swap(out.range.topLeft.row, out.range.bottomRight.row);
+    }
+    if (out.range.topLeft.col > out.range.bottomRight.col) {
+        std::swap(out.range.topLeft.col, out.range.bottomRight.col);
+    }
+    return out;
+}
+
+namespace {
+
+bool hasRelativeRef(const NodePtr &node)
+{
+    if (!node) {
+        return false;
+    }
+    switch (node->kind) {
+    case Node::Kind::Ref:
+        return !(node->ref.absRow0 && node->ref.absRow1) || !(node->ref.absCol0 && node->ref.absCol1);
+    case Node::Kind::Unary:
+        return hasRelativeRef(node->left);
+    case Node::Kind::Binary:
+        return hasRelativeRef(node->left) || hasRelativeRef(node->right);
+    case Node::Kind::Call:
+        return std::any_of(node->args.begin(), node->args.end(), [](const NodePtr &arg) { return hasRelativeRef(arg); });
+    default:
+        return false;
+    }
+}
+
+} // namespace
+
+NodePtr shiftNodeWrapped(const NodePtr &node, qint32 dr, qint32 dc)
+{
+    if (!node || (dr == 0 && dc == 0) || !hasRelativeRef(node)) {
+        return node;
+    }
+    switch (node->kind) {
+    case Node::Kind::Ref:
+        return Node::makeRef(shiftRefWrapped(node->ref, dr, dc));
+    case Node::Kind::Unary:
+        return Node::makeUnary(node->op, shiftNodeWrapped(node->left, dr, dc));
+    case Node::Kind::Binary:
+        return Node::makeBinary(node->op, shiftNodeWrapped(node->left, dr, dc), shiftNodeWrapped(node->right, dr, dc));
+    case Node::Kind::Call: {
+        QVector<NodePtr> args;
+        args.reserve(node->args.size());
+        for (const NodePtr &arg : node->args) {
+            args.append(shiftNodeWrapped(arg, dr, dc));
+        }
+        return Node::makeCall(node->text, std::move(args));
+    }
+    default:
+        return node;
+    }
 }
 
 NodePtr shiftNode(const NodePtr &node, qint32 dr, qint32 dc)
@@ -188,6 +315,9 @@ NodePtr shiftNode(const NodePtr &node, qint32 dr, qint32 dc)
     case Node::Kind::Bool:
     case Node::Kind::Error:
     case Node::Kind::Name:
+    case Node::Kind::StructRef: // names its table and columns: nothing moves
+    case Node::Kind::Array:
+    case Node::Kind::Missing:
         return node;
     case Node::Kind::Ref:
         return Node::makeRef(shiftRef(node->ref, dr, dc));

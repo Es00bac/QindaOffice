@@ -237,11 +237,15 @@ QHash<quint64, CellComment> readComments(QXlsx::ZipReader &zip, const QString &s
     return out;
 }
 
-// One table part: attributes, columns, style info. Table-scoped filters are
-// NOT read (the sheet's AutoFilter stays singular — D-036).
+// One table part: attributes, columns, style info. Table-scoped filter
+// criteria are NOT read (the sheet's AutoFilter stays singular — D-036);
+// since M69 (D-078) the filter buttons and the calculated column formulas
+// are (the totals row is the cells' business: calc_io derives its part
+// attributes from them on save).
 TableSpec readTablePart(const QByteArray &xml)
 {
     TableSpec table;
+    table.autoFilter = false; // a part without <autoFilter> shows no buttons
     QXmlStreamReader reader(xml);
     while (!reader.atEnd()) {
         const auto token = reader.readNext();
@@ -263,6 +267,12 @@ TableSpec readTablePart(const QByteArray &xml)
             table.totalsRow = attributes.value(QLatin1String("totalsRowCount")).toInt() > 0;
         } else if (name == QLatin1String("tableColumn")) {
             table.columnNames.append(reader.attributes().value(QLatin1String("name")).toString());
+            table.calculatedColumns.append(QString());
+        } else if (name == QLatin1String("calculatedColumnFormula") && !table.calculatedColumns.isEmpty()) {
+            // Excel's spelling (Table1[[#This Row],[Qty]]) → the engine's.
+            table.calculatedColumns.last() = formulaFromFile(reader.readElementText().trimmed(), table.name);
+        } else if (name == QLatin1String("autoFilter")) {
+            table.autoFilter = true;
         } else if (name == QLatin1String("tableStyleInfo")) {
             const auto attributes = reader.attributes();
             table.styleName = attributes.value(QLatin1String("name")).toString();

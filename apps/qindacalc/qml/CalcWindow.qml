@@ -145,6 +145,15 @@ OfficeWindow {
                         Tk.Flex.grow: 1
                         text: window.calc.formulaText
                         onAccepted: { window.calc.commitFormulaBar(text); gridHost.grid.forceActiveFocus() }
+                        // Ctrl+Shift+Enter: an array formula (M69, D-078).
+                        Keys.onPressed: function(event) {
+                            if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+                                    && (event.modifiers & Qt.ControlModifier) && (event.modifiers & Qt.ShiftModifier)) {
+                                window.calc.commitFormulaBar(gridHost.asArrayFormula(text))
+                                gridHost.grid.forceActiveFocus()
+                                event.accepted = true
+                            }
+                        }
                         Keys.onEscapePressed: { text = window.calc.formulaText; gridHost.grid.forceActiveFocus() }
                         Connections { target: window.calc; function onCursorChanged() { if (!formulaField.activeFocus) formulaField.text = window.calc.formulaText } }
                     }

@@ -236,6 +236,9 @@ QJsonArray tablesToJson(const QList<CalcEng::TableSpec> &tables)
             {QStringLiteral("colStripes"), table.colStripes},
             {QStringLiteral("columns"), QJsonArray::fromStringList(table.columnNames)},
             {QStringLiteral("sourcePart"), table.sourcePart}, // M66: its query table travels
+            // M69 (D-078): calculated columns and the filter buttons.
+            {QStringLiteral("calculated"), QJsonArray::fromStringList(table.calculatedColumns)},
+            {QStringLiteral("autoFilter"), table.autoFilter},
         });
     }
     return array;
@@ -258,6 +261,11 @@ QList<CalcEng::TableSpec> tablesFromJson(const QJsonArray &array)
         for (const QJsonValue &column : item.value(QStringLiteral("columns")).toArray()) {
             table.columnNames.append(column.toString());
         }
+        // Absent before M69: no calculated columns, filter buttons shown.
+        for (const QJsonValue &formula : item.value(QStringLiteral("calculated")).toArray()) {
+            table.calculatedColumns.append(formula.toString());
+        }
+        table.autoFilter = item.value(QStringLiteral("autoFilter")).toBool(true);
         if (table.range.isValid() && !table.name.isEmpty()) {
             tables.append(table);
         }

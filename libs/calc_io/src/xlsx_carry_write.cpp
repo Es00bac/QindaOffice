@@ -40,7 +40,11 @@ bool applyCarry(QHash<QString, QByteArray> *parts, const PatchManifest &manifest
     if (!Carry::carrySheets(ctx, state, drawingPartCount, error)) {
         return false;
     }
-    return ctx.flush(error);
+    QList<Carry::ChartSheetSwap> chartSheets;
+    Carry::carryChartSheets(ctx, &chartSheets);
+    // The chart sheets' workbook relationships are re-pointed only once
+    // flush has written every relationship part it owns (M69).
+    return ctx.flush(error) && Carry::finishChartSheets(parts, chartSheets, error);
 }
 
 } // namespace QindaOffice::Calc::IO

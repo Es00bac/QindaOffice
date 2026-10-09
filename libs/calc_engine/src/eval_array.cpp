@@ -62,6 +62,30 @@ Value arrayFromArg(const EvalContext &ctx, const Arg &arg, ArrayValue *out)
     return Value();
 }
 
+namespace {
+
+// Excel's comparison operators (M69, D-078): a blank compares as the other
+// side's empty value — "" against text, 0 against a number, FALSE against a
+// boolean — and text compares without regard to case. Before M69 =A1=""
+// was FALSE for an empty A1 and ="a"="A" was FALSE.
+int operatorCompare(const Value &a, const Value &b)
+{
+    const auto emptyLike = [](const Value &other) -> Value {
+        if (isText(other)) {
+            return QString();
+        }
+        return isBool(other) ? Value(false) : Value(0.0);
+    };
+    const Value x = isBlank(a) ? emptyLike(b) : a;
+    const Value y = isBlank(b) ? emptyLike(x) : b;
+    if (isText(x) && isText(y)) {
+        return QString::compare(std::get<QString>(x), std::get<QString>(y), Qt::CaseInsensitive);
+    }
+    return compareValues(x, y);
+}
+
+} // namespace
+
 Value applyBinaryOp(Op op, const Value &lhs, const Value &rhs)
 {
     if (isErr(lhs)) {
@@ -96,12 +120,12 @@ Value applyBinaryOp(Op op, const Value &lhs, const Value &rhs)
         return Err::Value;
     }
     case Op::Concat: return toText(lhs) + toText(rhs);
-    case Op::Eq: return compareValues(lhs, rhs) == 0;
-    case Op::Ne: return compareValues(lhs, rhs) != 0;
-    case Op::Lt: return compareValues(lhs, rhs) < 0;
-    case Op::Le: return compareValues(lhs, rhs) <= 0;
-    case Op::Gt: return compareValues(lhs, rhs) > 0;
-    case Op::Ge: return compareValues(lhs, rhs) >= 0;
+    case Op::Eq: return operatorCompare(lhs, rhs) == 0;
+    case Op::Ne: return operatorCompare(lhs, rhs) != 0;
+    case Op::Lt: return operatorCompare(lhs, rhs) < 0;
+    case Op::Le: return operatorCompare(lhs, rhs) <= 0;
+    case Op::Gt: return operatorCompare(lhs, rhs) > 0;
+    case Op::Ge: return operatorCompare(lhs, rhs) >= 0;
     default: break;
     }
     return Err::Value; // Range/Union only survive in argument position

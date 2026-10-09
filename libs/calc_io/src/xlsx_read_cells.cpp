@@ -122,9 +122,33 @@ CellScan scanSheetCells(const QByteArray &sheetXml, const QStringList &sharedStr
             continue;
         }
         if (reader.name() == QLatin1String("row")) {
-            const QString r = reader.attributes().value(QLatin1String("r")).toString();
+            const auto rowAttributes = reader.attributes();
+            const QString r = rowAttributes.value(QLatin1String("r")).toString();
             row = r.isEmpty() ? row + 1 : r.toInt();
             col = 0;
+            bool sized = false;
+            const double height = rowAttributes.value(QLatin1String("ht")).toDouble(&sized);
+            if (sized && height > 0 && row >= 1) {
+                out.rowHeights.insert(row - 1, height);
+            }
+            continue;
+        }
+        if (reader.name() == QLatin1String("sheetFormatPr")) {
+            const auto format = reader.attributes();
+            bool given = false;
+            const double width = format.value(QLatin1String("defaultColWidth")).toDouble(&given);
+            const int base = format.value(QLatin1String("baseColWidth")).toInt();
+            out.defaultColumnWidth = given ? width : (base > 0 ? base : 8);
+            continue;
+        }
+        if (reader.name() == QLatin1String("col")) {
+            const auto span = reader.attributes();
+            bool given = false;
+            const double width = span.value(QLatin1String("width")).toDouble(&given);
+            if (given) {
+                out.columnWidths.append({span.value(QLatin1String("min")).toInt(),
+                                         span.value(QLatin1String("max")).toInt(), width});
+            }
             continue;
         }
         if (reader.name() != QLatin1String("c")) {
@@ -179,6 +203,17 @@ CellScan scanSheetCells(const QByteArray &sheetXml, const QStringList &sharedStr
         }
     }
     return out;
+}
+
+double scannedColumnWidth(const CellScan &scan, int column)
+{
+    // A later span wins, as in QXlsx (valid files never overlap them).
+    for (auto it = scan.columnWidths.crbegin(); it != scan.columnWidths.crend(); ++it) {
+        if (column >= it->first && column <= it->last) {
+            return it->width;
+        }
+    }
+    return scan.defaultColumnWidth;
 }
 
 } // namespace QindaOffice::Calc::IO

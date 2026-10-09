@@ -150,9 +150,12 @@ struct CellComment {
 
 // A structured table over a range: banded rows and a styled header supplied
 // by its tableStyle name, column captions, and (in files) its own filter
-// and totals row. Table-scoped filters are NOT imported (the sheet's
-// AutoFilter stays singular — D-036); the totals row is recorded but not
-// evaluated.
+// and totals row. Table-scoped filter criteria are NOT imported (the
+// sheet's AutoFilter stays singular — D-036); the filter buttons are.
+// M69 (D-078): structured references resolve against this record
+// (structured_ref.h) and table_edit.h keeps it in step with the cells —
+// the totals row holds ordinary formulas (SUBTOTAL(109,[Sales])), and
+// calc_io derives the table part's totalsRowFunction from them.
 struct TableSpec {
     QString name;        // displayName (unique workbook-wide in a valid file)
     CellRange range;     // header row first, body rows after
@@ -161,11 +164,21 @@ struct TableSpec {
     QString styleName;   // e.g. "TableStyleMedium2"; empty = Medium2
     bool rowStripes = true;
     bool colStripes = false;
+    // AGENT-CONTRACT: index i names the table's column i. table_edit.h
+    // keeps these equal to the header cells (renaming references when a
+    // header is retyped); an entry missing or empty falls back to the
+    // header cell's text (show_model's chart tables leave it empty).
     QStringList columnNames;
     // M66 (D-075): the table part it was read from; a query table (Power
     // Query output) hangs from that part and is carried with the table.
     // Empty for a table made here.
     QString sourcePart;
+    // M69 (D-078): each column's calculated column formula in the engine's
+    // spelling, relative to the first data row ("[@Price]*[@Qty]"); empty
+    // when the column is not calculated. Index-aligned like columnNames;
+    // missing entries are empty. New rows of the table get it.
+    QStringList calculatedColumns;
+    bool autoFilter = true; // the header shows Excel's filter buttons (<autoFilter> in the part)
     bool operator==(const TableSpec &) const = default;
 };
 

@@ -50,6 +50,7 @@ struct SheetSnapshot {
     CalcEng::SheetOutline outline;
     CalcEng::SheetProtection protection;
     CalcEng::SheetSource source;
+    bool chartSheet = false; // M69 (D-078)
 };
 
 struct WorkbookSnapshot {

@@ -33,6 +33,118 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M69 Calc gates (D-078)
+
+Qualified on qinda (branch `m69-calc-formulas`, merged with
+`m60-office-formats` 48e3074) with `QQO_OOXML_SCHEMA_DIR=~/scratch/qqo/ecma-xsd`
+and xmllint, as a targeted build (only the targets below; qinda's disk is
+shared): **45/45 CTest targets passed, 124.20 s** (`ctest --preset dev -R`
+over every calc target and the calc_io consumers `tst_pptx_charts`,
+`tst_books_io_reports`, `tst_books_io_orders`, `tst_plan_output`,
+`tst_qindabase_interchange`). QtTest counts (init/cleanup included):
+
+- calc_engine — `tst_calc_parser` 57, `_functions` 6, `_recalc` 12,
+  `_numfmt` 7, `_csv` 8, `_structure` 18, `_rules` 13, `_spill` 11,
+  `_features` 10, **`_tables` 13, `_arrays` 12**: 167 passed.
+- calc_io — `tst_calc_io` 9, `_styles` 6, `_rules` 7, `_charts` 5, `_tables`
+  4, `_view` 4, `_images` 5, `_excel` 10, `_package` 9, `_links` 4,
+  `_outline` 3, `_protect` 3, `_carry` 7, `_carry_sheet` 6, `_arrays` 5,
+  **`_structured` 6, `_chartsheets` 5, `_corpus` 2** (1 skipped without a
+  corpus), `_libre` 6: 106 passed.
+- QindaCalc — `tst_calc_window` 12 (1 skipped), `_sample` 3 (8 skipped
+  without `QQO_SAMPLE_XLSX`), `_ui` 16, `_rules_ui` 6, `_menu_export` 3,
+  `_tools` 4, `_agent` 5, `_features_ui` 7, **`_tables_ui` 6**, and
+  `calc_agent_process`: 62 passed.
+- Consumers of calc_io — `tst_pptx_charts` 7, `tst_books_io_reports` 11,
+  `tst_books_io_orders` 5, `tst_plan_output` 7, `tst_qindabase_interchange`
+  6: 36 passed.
+
+The gates, per item (every package is built by hand in the test the way
+Excel writes it — `excel_package.h`, `m69_fixtures.h` — and both the source
+and our saved package validate against the Transitional XSDs):
+
+- **Structured references** (`tst_calc_tables`, `tst_calc_io_structured`):
+  every specifier parses and prints in both spellings and resolves
+  (`#VALUE!` for `[@…]` outside the data rows, `#REF!` for what is gone);
+  references follow their cells; calculated columns fill and follow new
+  rows; typing below or beside a table grows it; a retyped header renames
+  every reference; inserted and deleted rows and columns, a deleted table;
+  the totals row on and off; Insert ▸ Table names blank headers. In the
+  file: `Table1[[#This Row],[Sales]]` read as `[@Sales]` inside the table
+  and written back qualified, `calculatedColumnFormula`,
+  `totalsRowFunction`/`totalsRowLabel`/`totalsRowFormula`, `_xlfn.SINGLE`
+  as `@`; an edit (a row inserted in the table, a retyped header) reaches
+  the saved table part and every `<f>`.
+- **Chart sheets** (`tst_calc_io_chartsheets`): a chart sheet opens in its
+  place with its chart; the saved chartsheet, drawing, chart and style parts
+  are byte-identical to the source and every relationship resolves; after a
+  rename of the data sheet and inserted rows only the chart's `<c:f>`
+  references change.
+- **Array formulas** (`tst_calc_arrays`, `tst_calc_io_arrays`,
+  `tst_calc_io_structured`): array constants; `@`; dynamic formulas lift
+  (`LEN(A1:A3)` spills) and legacy ones intersect; legacy blocks fill by
+  Excel's rules (`#N/A` past the result), refuse partial edits, move with
+  structural edits and are written back as `<f t="array" ref>` without `cm`;
+  array-typed parameters in legacy formulas; relative names follow the
+  using cell; the array and shaping functions.
+- **Functions** (`tst_calc_functions`): 132 new rows in
+  `tests/fixtures/functions/functions_m69.tsv`, expected values from headless
+  LibreOffice 25.2 (`tools/lo_oracle.py`); the rows where it departs from
+  Microsoft's documentation (PERCENTRANK truncation, error kinds, SKEW.P,
+  EXPON.DIST below 0) and Excel's comparison semantics, numbers stored as
+  text in criteria, are asserted by hand (`m69RulesBeyondTheOracle`,
+  `excelRulesBeyondTheOracle`).
+- **Sizes** (`tst_calc_io_excel`): only the row with `ht` comes back with
+  `customHeight="1"`; widths from `<cols>` and `baseColWidth`; a workbook
+  with cells in row 1,048,576 and in column XFD loads and saves in under a
+  second.
+- **LibreOffice re-opens the outputs** (`tst_calc_io_libre`, headless 25.2.7
+  to flat ODS): the edited table workbook with its calculated column, totals
+  row and legacy array values; the chart sheet re-opens as a chart sheet in
+  its place between the worksheets.
+- **QindaCalc UI** (`tst_calc_tables_ui`, the real window): Insert ▸ Table
+  over typed data, a column typed beside it joining it, a formula filling a
+  calculated column, the Total Row, a retyped header renaming references —
+  one undo step each; Ctrl+Shift+Enter's braces over a selection, shown as
+  `{=…}`, a partial edit refused; a workbook with a chart sheet showing its
+  chart in the grid's place; the Insert tab's Tables group at 1280 and
+  520 px (squeeze). The ribbon gate (`tst_calc_ui`) and the menu export
+  (`calcInsertTableAction`, `calcTableTotalRowAction` resolve) are green.
+- **Fixtures** regenerated deliberately (`QQO_UPDATE_FIXTURES=1`): at 1280 and
+  520 the only change is the hidden chart sheet view (`Box#chartSheetView`,
+  `ChartItem#chartSheetChart`). **Grabs** looked at: the table with its
+  calculated column and totals row, the chart sheet filling the window with
+  its legend, and the Insert tab at 1280 and 520 px.
+- **Real-workbook gate** (`tst_calc_io_corpus`, M69): reads every
+  `.xlsx`/`.xlsm` listed in the file `QQO_XLSX_CORPUS` names (one path per
+  line), saves each through `writeXlsxFile` as QindaCalc's Save does, reads
+  it again and prints only aggregate counts (sheets, cells, formulas,
+  changed cells and formula texts, charts, pictures, tables, notes, carried
+  parts; schema errors the save adds when `QQO_OOXML_SCHEMA_DIR` is set).
+  Run it as `QQO_XLSX_CORPUS=<list> QQO_OOXML_SCHEMA_DIR=<xsd dir>
+  QTEST_FUNCTION_TIMEOUT=3600000 build/dev/tests/calc_io/tst_calc_io_corpus`
+  (the one test function has QtTest's 5-minute limit otherwise). On qinda,
+  over the 482 Excel-written test workbooks vendored with QXlsx
+  (`third_party/QXlsx/**`, libxlsxwriter's reference files): 482 read, 0
+  failed, 482 written and re-read, 0 cells or formula texts changed, 271
+  charts and 48 pictures kept, 0 schema-invalid, slowest round trip 265 ms;
+  one non-Excel package (`IssueTest/test.xlsx`, parts at the root) counts
+  one carried part differently (an empty relationships part). `data03.xlsx`
+  (cells at XFD1 and XFD1048576) is left out: QXlsx's writer needs about
+  half an hour for it (D-078 limits). The first runs found the reader's
+  rectangle walk (hung on such cells), the custom row heights and QXlsx's
+  quadratic column lookups — fixed (D-078 item 8). Not run here: the
+  owner's workbooks (the lead runs them on the laptop).
+- Not verified: Microsoft Excel itself (none here).
+- **Desktop check (owner):** in QindaCalc on the desktop, open an Excel
+  workbook that has a table with a calculated column and a totals row, a
+  chart sheet and an array formula; type a row under the table, retype a
+  header, change a number the chart shows; save; open the file in Excel: no
+  repair prompt, the table has grown with its formulas and totals, the
+  renamed column's formulas still work, the chart sheet shows the edited
+  chart, the array formula is still `{=…}`. In QindaCalc, Ctrl+T and the
+  Total Row read in dark and light themes.
+
 ## M70 Write formatting gates (D-079)
 
 On qinda (only office_ooxml, office_docx, QindaWrite, their tests and

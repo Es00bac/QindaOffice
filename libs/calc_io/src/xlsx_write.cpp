@@ -77,6 +77,14 @@ std::optional<PatchManifest::CellType> realType(const Value &value)
 
 using FormatFor = std::function<QXlsx::Format(qint32)>;
 
+// The table holding a cell (the qualifier its structured references take
+// in the file), or empty.
+QString tableName(const Workbook &wb, qint32 sheet, const CellAddr &addr)
+{
+    const TableSpec *table = wb.tableAt(sheet, addr);
+    return table != nullptr ? table->name : QString();
+}
+
 // Every cell of one sheet. `headerText` overrides table header cells (see
 // tableForFile); `patch` collects the cells the post-pass must retype.
 void writeSheetCells(QXlsx::Worksheet *worksheet, const Workbook &wb, qint32 sheetIndex, const FormatFor &formatFor,
@@ -99,23 +107,30 @@ void writeSheetCells(QXlsx::Worksheet *worksheet, const Workbook &wb, qint32 she
         // (LibreOffice's default for xlsx) still show correct data.
         if (cell.hasFormula()) {
             const double cached = isNumber(cell.value) ? std::get<double>(cell.value) : 0.0;
+            // Excel's spelling: structured references qualified with the
+            // table the cell is in, '@' as _xlfn.SINGLE (M69, D-078).
+            const QString text = formulaForFile(cell.formula, tableName(wb, sheetIndex, addr));
             // A dynamic-array anchor (M66, D-075): <f t="array" ref="spill">
             // here, cm="1" from the post-pass; its spilled cells are plain
-            // values below. A blocked spill names the anchor alone.
+            // values below. A blocked spill names the anchor alone. A legacy
+            // array formula (M69) is <f t="array"> over its block, no cm.
             const auto spill = cell.dynamicArray ? wb.spillAt(sheetIndex, addr) : std::nullopt;
-            if (spill.has_value()) {
-                const CellRange ref = spill->blocked ? CellRange{addr, addr} : spill->extent;
+            const std::optional<CellRange> block = spill.has_value()
+                ? std::optional<CellRange>(spill->blocked ? CellRange{addr, addr} : spill->extent)
+                : (cell.arrayRange.isValid() ? std::optional<CellRange>(cell.arrayRange) : std::nullopt);
+            if (block.has_value()) {
+                const CellRange &ref = *block;
                 worksheet->writeFormula(row, col,
-                                        QXlsx::CellFormula(formulaForFile(cell.formula),
+                                        QXlsx::CellFormula(text,
                                                            QXlsx::CellRange(ref.topLeft.row + 1, ref.topLeft.col + 1,
                                                                             ref.bottomRight.row + 1, ref.bottomRight.col + 1),
                                                            QXlsx::CellFormula::ArrayType),
                                         format, cached);
-                if (patch != nullptr) {
+                if (patch != nullptr && spill.has_value()) {
                     patch->arrayRefs.insert(addrText(addr), rangeText(ref));
                 }
             } else {
-                worksheet->writeFormula(row, col, QXlsx::CellFormula(formulaForFile(cell.formula)), format, cached);
+                worksheet->writeFormula(row, col, QXlsx::CellFormula(text), format, cached);
             }
             if (const auto type = realType(cell.value); type.has_value() && patch != nullptr) {
                 patch->cellTypes.insert(addrText(addr), *type);
@@ -163,7 +178,7 @@ void writeSheetCells(QXlsx::Worksheet *worksheet, const Workbook &wb, qint32 she
 }
 
 // The post-pass work one sheet needs; `tables` are already file-ready.
-void fillSheetPatch(const Sheet &sheet, qint32 index, const QList<TableSpec> &tables, int *nextVmlBlock,
+void fillSheetPatch(const Sheet &sheet, qint32 index, const QList<PatchManifest::TablePart> &tables, int *nextVmlBlock,
                     PatchManifest::SheetPatch *patch)
 {
     if (sheet.autoFilter().active) {
@@ -208,7 +223,8 @@ void writeCharts(QXlsx::Document *doc, const Workbook &wb, PatchManifest *manife
 {
     int qxlsxChartCount = 0;
     for (const ChartSpec &chart : wb.charts) {
-        if (chart.sheet < 0 || chart.sheet >= wb.sheetCount()) {
+        // A chart sheet's chart travels with its carried part (M69).
+        if (chart.sheet < 0 || chart.sheet >= wb.sheetCount() || wb.sheetAt(chart.sheet).isChartSheet()) {
             continue;
         }
         if (manifest != nullptr && !chart.series.isEmpty()) {
@@ -318,21 +334,34 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
             worksheet->setSheetState(QXlsx::AbstractSheet::SS_Hidden);
         }
         QHash<quint64, QString> headerText;
-        QList<TableSpec> tables;
+        QList<PatchManifest::TablePart> tables;
         for (const TableSpec &table : sheet.tables()) {
-            tables.append(tableForFile(wb, s, table, &headerText));
+            tables.append(tablePartForFile(wb, s, table, &headerText));
         }
         // QXlsx's sheet part naming is deterministic (document order); the
         // post-pass asserts it before touching anything.
         PatchManifest::SheetPatch patch;
         patch.sheetPart = QStringLiteral("xl/worksheets/sheet%1.xml").arg(s + 1);
+        patch.chartSheet = sheet.isChartSheet();
         writeSheetCells(worksheet, wb, s, formatFor, headerText, &patch);
         for (const CellRange &merge : sheet.merges()) {
             doc->mergeCells(QXlsx::CellRange(merge.topLeft.row + 1, merge.topLeft.col + 1,
                                              merge.bottomRight.row + 1, merge.bottomRight.col + 1));
         }
-        for (const qint32 col : sheet.sizedColumns()) {
-            worksheet->setColumnWidth(col + 1, col + 1, pxToCharWidth(sheet.columnWidth(col)));
+        // A run of equal widths is one call: QXlsx splits its column records
+        // on every call, so a width per column out to XFD took it minutes
+        // (M69, found by tst_calc_io_corpus).
+        QList<qint32> sized = sheet.sizedColumns();
+        std::sort(sized.begin(), sized.end());
+        for (qsizetype i = 0; i < sized.size();) {
+            const qreal width = sheet.columnWidth(sized.at(i));
+            qsizetype last = i;
+            while (last + 1 < sized.size() && sized.at(last + 1) == sized.at(last) + 1
+                   && sheet.columnWidth(sized.at(last + 1)) == width) {
+                ++last;
+            }
+            worksheet->setColumnWidth(sized.at(i) + 1, sized.at(last) + 1, pxToCharWidth(width));
+            i = last + 1;
         }
         for (const qint32 row : sheet.sizedRows()) {
             worksheet->setRowHeight(row + 1, row + 1, pxToPt(sheet.rowHeight(row)));

@@ -130,7 +130,7 @@ struct RangeRef {
 [[nodiscard]] QString rangeRefText(const RangeRef &ref);
 // The name to compare against Workbook::sheetIndex: RangeRef.sheet keeps the
 // file's display spelling, quotes included ("'Data'!A1" → "'Data'"), so a
-// comparison without this never matches (eval.cpp's resolveSheet unquotes
+// comparison without this never matches (eval_refs.cpp's resolveSheet unquotes
 // the same way).
 [[nodiscard]] QString unquotedSheetName(QString name);
 // True when a sheet name has to be quoted in a reference ('Q1 Sales'!A1):

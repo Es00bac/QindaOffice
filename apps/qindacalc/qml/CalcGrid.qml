@@ -7,14 +7,21 @@ import QindaOffice.Calc
 
 // The grid: the SpreadsheetItem with its two scroll bars, the one live
 // cell editor placed at editorRect (Return commits and moves down, Tab
-// commits and moves right, Escape cancels), the comment tooltip and the
-// context menu built from the host's entries.
+// commits and moves right, Escape cancels, Ctrl+Shift+Enter enters an array
+// formula), the comment tooltip and the context menu built from the host's
+// entries; over all of it, a chart sheet's chart when one is active (M69).
 Item {
     id: root
 
     required property CalcHost host
     property var contextMenuNode: null
     readonly property SpreadsheetItem grid: sheet
+
+    // "=f" → "{=f}": the form an array formula takes (CalcHost::commitInput).
+    function asArrayFormula(text) {
+        const t = text.trim()
+        return t.startsWith("=") ? "{" + t + "}" : t
+    }
 
     SpreadsheetItem {
         id: sheet
@@ -59,7 +66,12 @@ Item {
                 }
             }
             Keys.onPressed: function(event) {
-                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                const arrayEntry = (event.modifiers & Qt.ControlModifier) && (event.modifiers & Qt.ShiftModifier)
+                if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && arrayEntry) {
+                    // Ctrl+Shift+Enter: a legacy array formula (M69).
+                    sheet.commitEditor(root.asArrayFormula(editor.text), true)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                     sheet.commitEditor(editor.text, !(event.modifiers & Qt.ShiftModifier))
                     event.accepted = true
                 } else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
@@ -109,6 +121,21 @@ Item {
         position: sheet.scrollWidth > 0 ? sheet.scrollX / sheet.scrollWidth : 0
         onPositionChanged: if (pressed || hovered) sheet.scrollX = position * sheet.scrollWidth
         stepSize: sheet.scrollWidth > 0 ? 96 / sheet.scrollWidth : 0.1
+    }
+
+    // A chart sheet (M69, D-078): its chart in the grid's place, the size of
+    // the window.
+    Tk.Box {
+        objectName: "chartSheetView"
+        anchors.fill: parent
+        visible: root.host.chartSheetActive
+        color: Tk.Theme.color.panel
+        padding: Tk.Theme.space.lg
+        ChartItem {
+            objectName: "chartSheetChart"
+            chartData: root.host.chartSheetData
+            inkColor: Tk.Theme.color.text
+        }
     }
 
     MenuFromNode {

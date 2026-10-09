@@ -13,6 +13,7 @@
 #include "excel_package.h"
 
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QTemporaryDir>
 
@@ -35,6 +36,7 @@ private slots:
     void sharedFormulasKeepTheirGrouping();
     void formulaSpellingsRoundTrip();
     void laterSheetsAreDependencies();
+    void sizesAreTheOnesThePartStates();
 
 private:
     QTemporaryDir m_dir;
@@ -303,11 +305,13 @@ void CalcIoExcelTest::textIsWrittenAsText()
     }
 }
 
-// A formula the engine cannot parse (a structured table reference, the
-// space intersection operator) used to load as the TEXT "=…", which the
-// honest writer would then save as a string: the formula would be gone.
-// It loads as a formula that shows #NAME?, keeps its text, and is written
-// back as a formula — shared-formula dependents included, shifted per cell.
+// A formula the engine cannot parse (the space intersection operator) used
+// to load as the TEXT "=…", which the honest writer would then save as a
+// string: the formula would be gone. It loads as a formula that shows
+// #NAME?, keeps its text, and is written back as a formula — shared-formula
+// dependents included, shifted per cell. (A structured reference parses
+// since M69, D-078: it reads in the formula bar's spelling, is #REF!
+// without its table, and is written back in Excel's.)
 void CalcIoExcelTest::unparseableFormulasKeepTheirText()
 {
     ExcelWorkbook book;
@@ -323,8 +327,8 @@ void CalcIoExcelTest::unparseableFormulasKeepTheirText()
     Workbook wb;
     QString error;
     QVERIFY2(IO::readXlsxFile(source, &wb, &error), qPrintable(error));
-    QCOMPARE(formulaText(wb, 0, "B1"), QStringLiteral("Table1[[#This Row],[Qty]]*2"));
-    QCOMPARE(value(wb, 0, "B1"), Value(Err::Name));
+    QCOMPARE(formulaText(wb, 0, "B1"), QStringLiteral("Table1[@Qty]*2"));
+    QCOMPARE(value(wb, 0, "B1"), Value(Err::Ref));
     QCOMPARE(formulaText(wb, 0, "B2"), QStringLiteral("SUM(A2:A4 A3:B3)"));
     QCOMPARE(formulaText(wb, 0, "B3"), QStringLiteral("SUM(A3:A5 A4:B4)"));
     QCOMPARE(formulaText(wb, 0, "B4"), QStringLiteral("SUM(A4:A6 A5:B5)"));
@@ -341,7 +345,7 @@ void CalcIoExcelTest::unparseableFormulasKeepTheirText()
         QindaOffice::Test::savedCells(*package, QStringLiteral("xl/worksheets/sheet1.xml"));
     QCOMPARE(cells.value(QStringLiteral("B1")).formula, QStringLiteral("Table1[[#This Row],[Qty]]*2"));
     QCOMPARE(cells.value(QStringLiteral("B1")).type, QStringLiteral("e"));
-    QCOMPARE(cells.value(QStringLiteral("B1")).value, QStringLiteral("#NAME?"));
+    QCOMPARE(cells.value(QStringLiteral("B1")).value, QStringLiteral("#REF!"));
     QCOMPARE(cells.value(QStringLiteral("B3")).formula, QStringLiteral("SUM(A3:A5 A4:B4)"));
     QCOMPARE(cells.value(QStringLiteral("C1")).formula, QStringLiteral("VLOOKUP(2,$A:$A,1,FALSE)"));
     QCOMPARE(cells.value(QStringLiteral("D1")).formula, QStringLiteral("SUM($A:$A)"));
@@ -413,6 +417,54 @@ void CalcIoExcelTest::laterSheetsAreDependencies()
     QVERIFY(wb.setCellInput(1, addr("B3"), QStringLiteral("10")));
     QCOMPARE(value(wb, 1, "B2"), Value(17.0));
     QCOMPARE(value(wb, 0, "A1"), Value(34.0));
+}
+
+// Row heights and column widths as the sheet part states them (M69, found
+// by tst_calc_io_corpus): a row without ht gets no height of its own —
+// every row of the used range used to be saved back with customHeight="1",
+// so Excel stopped fitting it to its text — and a cell in the last row, or
+// in column XFD, loads without walking the rectangle out to it (minutes).
+void CalcIoExcelTest::sizesAreTheOnesThePartStates()
+{
+    ExcelWorkbook book;
+    ExcelSheet tall(QStringLiteral("Tall"), QByteArrayLiteral(
+        "<row r=\"1\"><c r=\"A1\"><v>1</v></c><c r=\"C1\"><v>2</v></c></row>"
+        "<row r=\"2\" ht=\"30\" customHeight=\"1\"><c r=\"A2\"><v>3</v></c></row>"
+        "<row r=\"3\"><c r=\"A3\"><v>4</v></c></row>"
+        "<row r=\"1048576\"><c r=\"A1048576\"><v>5</v></c></row>"));
+    tall.beforeData = QByteArrayLiteral("<sheetFormatPr defaultRowHeight=\"15\"/>"
+                                        "<cols><col min=\"2\" max=\"2\" width=\"20\" customWidth=\"1\"/></cols>");
+    book.sheets.append(tall);
+    book.sheets.append(ExcelSheet{QStringLiteral("Wide"), QByteArrayLiteral(
+        "<row r=\"1\"><c r=\"XFD1\"><v>6</v></c></row>"), {}, {}});
+    Workbook wb;
+    QString error;
+    QElapsedTimer timer;
+    timer.start();
+    QVERIFY2(IO::readXlsxFile(writeSource(QStringLiteral("sizes.xlsx"), book), &wb, &error), qPrintable(error));
+    QVERIFY2(timer.elapsed() < 30000, "the far cells were walked to");
+    QCOMPARE(wb.sheetAt(0).sizedRows(), QList<qint32>{1});
+    QCOMPARE(wb.sheetAt(0).rowHeight(1), 40.0);             // 30 pt
+    QCOMPARE(wb.sheetAt(0).columnWidth(1), 20 * 7.0 + 5.0); // its own width
+    QCOMPARE(wb.sheetAt(0).columnWidth(0), 8 * 7.0 + 5.0);  // the sheet's (baseColWidth 8)
+    QCOMPARE(value(wb, 0, "A1048576"), Value(5.0));
+    QCOMPARE(value(wb, 1, "XFD1"), Value(6.0));
+
+    const QString saved = m_dir.filePath(QStringLiteral("sizes-saved.xlsx"));
+    QVERIFY2(IO::writeXlsxFile(wb, saved, &error), qPrintable(error));
+    QQO_VERIFY_XLSX_SCHEMA(saved);
+    const auto package = QindaOffice::Ooxml::Package::load(saved);
+    QVERIFY(package);
+    const auto root = package->xml(QStringLiteral("xl/worksheets/sheet1.xml"));
+    const auto *data = root ? root->child(QindaOffice::Test::sml(), u"sheetData") : nullptr;
+    QVERIFY(data != nullptr);
+    QStringList custom;
+    for (const auto *row : data->elements(QindaOffice::Test::sml(), u"row")) {
+        if (row->attr(u"customHeight") == QLatin1String("1")) {
+            custom.append(row->attr(u"r") + QLatin1Char('@') + row->attr(u"ht"));
+        }
+    }
+    QCOMPARE(custom, QStringList{QStringLiteral("2@30")});
 }
 
 // The spelling transforms themselves, both directions: nested LET and a

@@ -20,6 +20,7 @@
 #include "calc_io_schema.h"
 #include "carry_fixtures.h"
 #include "carry_inspect.h"
+#include "m69_fixtures.h"
 #include "support/soffice_env.h"
 
 #include "hyperlink.h"
@@ -31,6 +32,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QSet>
 #include <QTemporaryDir>
 #include <QXmlStreamReader>
@@ -165,6 +167,7 @@ private slots:
     void linksOutlinesProtectionAndSpills();
     void carriedPivotTableIsImported();
     void carriedWorkbookAndSheetPartsReopen();
+    void tablesArraysAndChartSheetsReopen();
 
 private:
     QTemporaryDir m_dir;
@@ -403,6 +406,50 @@ void CalcIoLibreTest::carriedWorkbookAndSheetPartsReopen()
                              }),
                  qPrintable(item.saved + QLatin1Char(' ') + QStringList(first.text.keys()).join(u',')));
     }
+}
+
+// M69 (D-078): a table with structured references, a calculated column, a
+// totals row and legacy array formulas, edited and saved, re-opens with
+// every value; a chart sheet re-opens as a sheet holding its chart, in its
+// place between the worksheets.
+void CalcIoLibreTest::tablesArraysAndChartSheetsReopen()
+{
+    Workbook wb;
+    QVERIFY(openFixture(ordersBook(), QStringLiteral("orders-source.xlsx"), &wb));
+    wb.setCellValue(0, {2, 1}, Value(6.0)); // South's Qty: 5 → 6, its Total 24
+    const QString saved = saveChecked(wb, QStringLiteral("orders.xlsx"));
+    QVERIFY(!saved.isEmpty());
+    QString log;
+    const QString fods = convert(saved, &log);
+    QVERIFY2(!fods.isEmpty(), qPrintable(log));
+    const OdsBook book = readFlatOds(fods);
+    QCOMPARE(book.sheets.value(QStringLiteral("Orders")).text.value(QStringLiteral("D3")), QStringLiteral("24"));
+    QCOMPARE(book.sheets.value(QStringLiteral("Orders")).text.value(QStringLiteral("D5")), QStringLiteral("65"));
+    const OdsSheet &report = book.sheets.value(QStringLiteral("Report"));
+    const QList<std::pair<const char *, const char *>> expected{{"A1", "65"}, {"A2", "11"}, {"B3", "4"}, {"C3", "6"},
+                                                                {"E1", "4"},  {"E2", "12"}, {"E3", "6"}, {"F1", "9"},
+                                                                {"A7", "10"}};
+    for (const auto &[cell, text] : expected) {
+        QCOMPARE(report.text.value(QString::fromLatin1(cell)), QString::fromLatin1(text));
+    }
+    Workbook charts;
+    QVERIFY(openFixture(chartBook(), QStringLiteral("chart-source.xlsx"), &charts));
+    charts.setCellValue(0, {1, 1}, Value(15.0));
+    const QString chartSaved = saveChecked(charts, QStringLiteral("chartsheet.xlsx"));
+    QVERIFY(!chartSaved.isEmpty());
+    const QString chartFods = convert(chartSaved, &log);
+    QVERIFY2(!chartFods.isEmpty(), qPrintable(log));
+    const OdsBook chartBookOds = readFlatOds(chartFods);
+    QStringList order;
+    static const QRegularExpression kTable(QStringLiteral("<table:table table:name=\"([^\"]+)\""));
+    auto tables = kTable.globalMatch(QString::fromUtf8(chartBookOds.xml));
+    while (tables.hasNext()) {
+        order.append(tables.next().captured(1));
+    }
+    order.removeAll(QStringLiteral("local-table")); // the chart's own data table, inside its object
+    QCOMPARE(order, (QStringList{QStringLiteral("Q1 Data"), QStringLiteral("Sales Chart"), QStringLiteral("Summary")}));
+    QVERIFY(chartBookOds.xml.contains("chart:chart"));
+    QCOMPARE(chartBookOds.sheets.value(QStringLiteral("Summary")).text.value(QStringLiteral("A1")), QStringLiteral("65"));
 }
 
 QTEST_GUILESS_MAIN(CalcIoLibreTest)

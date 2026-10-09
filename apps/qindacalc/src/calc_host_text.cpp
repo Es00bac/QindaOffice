@@ -330,9 +330,14 @@ bool CalcHost::chartsAvailable() const
 QVariantList CalcHost::charts() const
 {
     QVariantList list;
-    int index = 0;
-    for (const ChartSpec &spec : m_document->workbook()->charts) {
-        list.append(QVariantMap{{QStringLiteral("index"), index++},
+    int index = -1;
+    const Workbook *wb = m_document->workbook();
+    for (const ChartSpec &spec : wb->charts) {
+        ++index; // the workbook's index, which chartSeriesAt takes
+        if (spec.sheet >= 0 && spec.sheet < wb->sheetCount() && wb->sheetAt(spec.sheet).isChartSheet()) {
+            continue; // a chart sheet shows it in the grid's place (M69)
+        }
+        list.append(QVariantMap{{QStringLiteral("index"), index},
                                 {QStringLiteral("title"), spec.title},
                                 {QStringLiteral("kind"), int(spec.kind)},
                                 {QStringLiteral("rangeText"), spec.rangeText},

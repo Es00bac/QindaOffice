@@ -83,8 +83,9 @@ QByteArray autoFilterXml(const AutoFilter &filter)
     return xml;
 }
 
-QByteArray tablePartXml(const TableSpec &table, int tableId)
+QByteArray tablePartXml(const PatchManifest::TablePart &part, int tableId)
 {
+    const TableSpec &table = part.spec;
     QByteArray xml;
     QXmlStreamWriter writer(&xml);
     writer.writeStartDocument();
@@ -103,14 +104,37 @@ QByteArray tablePartXml(const TableSpec &table, int tableId)
                           QString::number(table.totalsRow ? 1 : 0));
     writer.writeAttribute(QStringLiteral("totalsRowShown"),
                           QString::number(table.totalsRow ? 1 : 0));
+    // The header's filter buttons: over the header and data rows (M69).
+    if (table.autoFilter && table.headerRow) {
+        CellRange filtered = table.range;
+        filtered.bottomRight.row -= table.totalsRow ? 1 : 0;
+        writer.writeEmptyElement(QStringLiteral("autoFilter"));
+        writer.writeAttribute(QStringLiteral("ref"), QStringLiteral("%1:%2").arg(addrText(filtered.topLeft),
+                                                                               addrText(filtered.bottomRight)));
+    }
     const int columns = table.range.bottomRight.col - table.range.topLeft.col + 1;
     writer.writeStartElement(QStringLiteral("tableColumns"));
     writer.writeAttribute(QStringLiteral("count"), QString::number(columns));
     for (int i = 0; i < columns; ++i) {
-        writer.writeEmptyElement(QStringLiteral("tableColumn"));
+        const PatchManifest::TablePart::Column column = part.columns.value(i);
+        writer.writeStartElement(QStringLiteral("tableColumn"));
         writer.writeAttribute(QStringLiteral("id"), QString::number(i + 1));
         writer.writeAttribute(QStringLiteral("name"),
                               table.columnNames.value(i, QStringLiteral("Column%1").arg(i + 1)));
+        if (!column.totalsLabel.isEmpty()) {
+            writer.writeAttribute(QStringLiteral("totalsRowLabel"), column.totalsLabel);
+        }
+        if (!column.totalsFunction.isEmpty()) {
+            writer.writeAttribute(QStringLiteral("totalsRowFunction"), column.totalsFunction);
+        }
+        // Schema order: calculatedColumnFormula, then totalsRowFormula.
+        if (!column.calculatedFormula.isEmpty()) {
+            writer.writeTextElement(QStringLiteral("calculatedColumnFormula"), column.calculatedFormula);
+        }
+        if (!column.totalsFormula.isEmpty()) {
+            writer.writeTextElement(QStringLiteral("totalsRowFormula"), column.totalsFormula);
+        }
+        writer.writeEndElement(); // tableColumn
     }
     writer.writeEndElement(); // tableColumns
     writer.writeStartElement(QStringLiteral("tableStyleInfo"));

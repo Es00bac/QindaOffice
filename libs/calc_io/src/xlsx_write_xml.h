@@ -6,6 +6,7 @@
 // parts. The callers know the engine model; these produce the bytes.
 
 #include "sheet_rules.h"
+#include "xlsx_manifest.h"
 
 #include <QByteArray>
 
@@ -17,9 +18,10 @@ namespace QindaOffice::Calc::IO {
 // The <autoFilter> element for a sheet's filter model (empty when inactive).
 [[nodiscard]] QByteArray autoFilterXml(const AutoFilter &filter);
 
-// One xl/tables/tableN.xml part for a TableSpec (id is workbook-wide and
-// assigned by the post-pass).
-[[nodiscard]] QByteArray tablePartXml(const TableSpec &table, int tableId);
+// One xl/tables/tableN.xml part (id is workbook-wide and assigned by the
+// post-pass): the filter buttons, each column's calculated column formula
+// and totals row function, label or formula (M69, D-078), the style.
+[[nodiscard]] QByteArray tablePartXml(const PatchManifest::TablePart &table, int tableId);
 
 // The legacy VML drawing Excel draws a sheet's notes from (M61, D-069): one
 // hidden note shape per commented cell. `number` is N of

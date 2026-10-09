@@ -151,6 +151,24 @@ public:
     bool refuseLockedCells(const CalcEng::CellRange &range);
     bool refuseOnProtectedSheet(bool actionLocked, const QString &action);
     bool refuseStructureChange();
+    // ---- M69 (D-078): calc_table_ops.cpp. One undo step each. ----
+    // The guard every cell-content edit asks first: a chart sheet has no
+    // cells, part of a legacy array formula cannot change (Excel's rule),
+    // and locked cells of a protected sheet refuse (refuseLockedCells).
+    bool refuseCellEdit(const CalcEng::CellRange &range);
+    // Inserting or deleting rows (columns) through a legacy array block is
+    // refused, as in Excel.
+    bool refuseArraySplit(bool rows, qint32 at, qint32 count, bool insert);
+    // Ctrl+Shift+Enter: `input` ("=…", or "{=…}" as the formula bar shows
+    // one) as a legacy array formula over `block`. Refused (editRefused)
+    // over part of another array, merged cells or a table, or when the
+    // formula does not parse.
+    void applyArrayFormula(const CalcEng::CellRange &block, const QString &input);
+    // Insert ▸ Table over `range`: false, with editRefused, when it cannot
+    // be one (calc_engine's createTable says why).
+    bool insertTable(const CalcEng::CellRange &range);
+    // The Total Row of the table at `addr` on or off.
+    bool setTotalsRow(const CalcEng::CellAddr &addr, bool on);
     // What the last opened file holds that a save cannot keep (calc_io's
     // open warnings), for the window to show once.
     [[nodiscard]] QStringList openWarnings() const { return m_openWarnings; }

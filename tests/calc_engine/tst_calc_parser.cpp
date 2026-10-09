@@ -124,11 +124,12 @@ void CalcParserTest::errorLiterals()
         QCOMPARE(parsed.root->kind, Node::Kind::Error);
         QCOMPARE(nodeText(parsed.root), QString::fromLatin1(lit));
     }
-    // Array constants are #NAME? in v1 (plan section 7.2).
+    // Array constants parse since M69 (D-078; they were #NAME? before).
     ParseResult array = parseFormula(QStringLiteral("{1,2;3,4}"));
     QVERIFY(array.error.isEmpty());
-    QCOMPARE(array.root->kind, Node::Kind::Error);
-    QCOMPARE(array.root->error, Err::Name);
+    QCOMPARE(array.root->kind, Node::Kind::Array);
+    QCOMPARE(array.root->array->rows, 2);
+    QCOMPARE(array.root->array->cols, 2);
 }
 
 void CalcParserTest::badInput()

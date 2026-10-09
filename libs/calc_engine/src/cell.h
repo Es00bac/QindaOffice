@@ -23,9 +23,16 @@ struct Cell {
     // rewrites spilled cells whenever the anchor recalculates.
     bool dynamicArray = false; // the formula spills (typed in the app, or Excel's cm/XLDAPR)
     CellAddr spillAnchor;      // set on a spilled cell: the anchor it shows a value of
+    // A legacy array formula (Ctrl+Shift+Enter, <f t="array" ref> without
+    // cm — M69, D-078), set on its anchor: the fixed block it fills. The
+    // other cells of the block hold values and name the anchor in
+    // spillAnchor, like a spill; unlike a spill the block never moves or
+    // blocks, and it is edited only as a whole (Workbook::arrayBlockAt).
+    CellRange arrayRange;
 
     [[nodiscard]] bool hasFormula() const { return ast != nullptr; }
     [[nodiscard]] bool isSpilled() const { return spillAnchor.isValid() && !ast; }
+    [[nodiscard]] bool isArrayAnchor() const { return ast != nullptr && arrayRange.isValid(); }
 };
 
 // Formatting record. NumberFormat code follows Excel syntax (plan section

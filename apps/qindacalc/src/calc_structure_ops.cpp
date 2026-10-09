@@ -16,6 +16,7 @@
 #include "parser.h"
 #include "sheet.h"
 #include "structure.h"
+#include "table_edit.h"
 
 namespace QindaOffice::Apps::QindaCalc {
 
@@ -40,6 +41,13 @@ void SpreadsheetDocument::insertRows(qint32 at, qint32 count)
     if (at < 0 || count <= 0 || count > kMaxBand) {
         return;
     }
+    // Through an array formula, or on a chart sheet, nothing moves (M69).
+    if (m_workbook.sheetAt(m_activeSheet).isChartSheet() || refuseArraySplit(true, at, count, true)) {
+        if (m_workbook.sheetAt(m_activeSheet).isChartSheet()) {
+            emit editRefused(tr("A chart sheet has no rows or columns."));
+        }
+        return;
+    }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     CalcEng::applyStructureEdit(m_workbook, {StructureOp::InsertRows, m_activeSheet, at, count});
     pushUndo(before, count == 1 ? tr("Insert row") : tr("Insert rows"));
@@ -55,6 +63,13 @@ void SpreadsheetDocument::removeRows(qint32 at, qint32 count)
     if (at < 0 || count <= 0 || count > kMaxBand) {
         return;
     }
+    // Through an array formula, or on a chart sheet, nothing moves (M69).
+    if (m_workbook.sheetAt(m_activeSheet).isChartSheet() || refuseArraySplit(true, at, count, false)) {
+        if (m_workbook.sheetAt(m_activeSheet).isChartSheet()) {
+            emit editRefused(tr("A chart sheet has no rows or columns."));
+        }
+        return;
+    }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     CalcEng::applyStructureEdit(m_workbook, {StructureOp::RemoveRows, m_activeSheet, at, count});
     pushUndo(before, count == 1 ? tr("Delete row") : tr("Delete rows"));
@@ -68,6 +83,13 @@ void SpreadsheetDocument::insertColumns(qint32 at, qint32 count)
         return;
     }
     if (at < 0 || count <= 0 || count > kMaxBand) {
+        return;
+    }
+    // Through an array formula, or on a chart sheet, nothing moves (M69).
+    if (m_workbook.sheetAt(m_activeSheet).isChartSheet() || refuseArraySplit(false, at, count, true)) {
+        if (m_workbook.sheetAt(m_activeSheet).isChartSheet()) {
+            emit editRefused(tr("A chart sheet has no rows or columns."));
+        }
         return;
     }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
@@ -86,6 +108,13 @@ void SpreadsheetDocument::removeColumns(qint32 at, qint32 count)
     if (at < 0 || count <= 0 || count > kMaxBand) {
         return;
     }
+    // Through an array formula, or on a chart sheet, nothing moves (M69).
+    if (m_workbook.sheetAt(m_activeSheet).isChartSheet() || refuseArraySplit(false, at, count, false)) {
+        if (m_workbook.sheetAt(m_activeSheet).isChartSheet()) {
+            emit editRefused(tr("A chart sheet has no rows or columns."));
+        }
+        return;
+    }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     CalcEng::applyStructureEdit(m_workbook,
                                 {StructureOp::RemoveColumns, m_activeSheet, at, count});
@@ -97,7 +126,7 @@ void SpreadsheetDocument::removeColumns(qint32 at, qint32 count)
 void SpreadsheetDocument::sortRange(const CellRange &range, qint32 keyColumn, bool ascending,
                                     bool headerRow)
 {
-    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().sort, tr("sort")) || refuseLockedCells(range)) {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().sort, tr("sort")) || refuseCellEdit(range)) {
         return;
     }
     if (!range.isValid()) {
@@ -197,7 +226,7 @@ void SpreadsheetDocument::setRowHeights(const QList<qint32> &rows, qreal px)
 
 void SpreadsheetDocument::fillRange(const CellRange &range, bool down)
 {
-    if (refuseLockedCells(range)) {
+    if (refuseCellEdit(range)) {
         return;
     }
     if (!range.isValid() || range.cellCount() < 2) {
@@ -294,11 +323,26 @@ void SpreadsheetDocument::duplicateSheet(qint32 index, const QString &name)
         || m_workbook.sheetIndex(name) >= 0) {
         return;
     }
+    if (m_workbook.sheetAt(index).isChartSheet()) {
+        // Its chart lives in the parts carried from the file it came from;
+        // a copy would have nothing to save (M69).
+        emit editRefused(tr("A chart sheet cannot be duplicated in QindaCalc."));
+        return;
+    }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     const CalcEng::Sheet &source = m_workbook.sheetAt(index);
     CalcEng::Sheet &copy = m_workbook.insertSheet(index + 1, name);
     copy.replaceContents(source.cells(), source.styleIds(), source.columnWidths(),
                          source.rowHeights(), source.merges());
+    // Its tables come along under names of their own (Excel's Table1 copy
+    // is Table2), so the copied [@Col] references find their table (M69).
+    QList<CalcEng::TableSpec> tables;
+    for (CalcEng::TableSpec table : m_workbook.sheetAt(index).tables()) {
+        table.name = CalcEng::nextTableName(m_workbook);
+        table.sourcePart.clear();
+        tables.append(table);
+        copy.setTables(tables);
+    }
     copy.setCondFormats(source.condFormats());
     copy.setValidations(source.validations());
     copy.setAutoFilter(source.autoFilter());

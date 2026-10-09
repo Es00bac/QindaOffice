@@ -372,7 +372,8 @@ void carryQueryTables(Context &ctx, const CarryState &state)
 bool carrySheets(Context &ctx, CarryState &state, int *drawingPartCount, QString *error)
 {
     for (const DestSheet &dest : ctx.destSheets()) {
-        if (dest.patch == nullptr || !ctx.source().contains(dest.patch->source.part)) {
+        // A chart sheet is carried whole (xlsx_carry_chartsheet.cpp, M69).
+        if (dest.patch == nullptr || dest.patch->chartSheet || !ctx.source().contains(dest.patch->source.part)) {
             continue;
         }
         // Drawings first: a sheet that gains a drawing or a legacy drawing

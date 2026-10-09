@@ -161,6 +161,9 @@ inline const char kCalcProtectWorkbook[] = "calcProtectWorkbookAction";
 inline const char kCalcUnprotectWorkbook[] = "calcUnprotectWorkbookAction";
 inline const char kCalcLockCell[] = "calcLockCellAction";
 inline const char kCalcHideFormula[] = "calcHideFormulaAction";
+// M69 (D-078): Excel tables — Insert ▸ Table and the Total Row.
+inline const char kCalcInsertTable[] = "calcInsertTableAction";
+inline const char kCalcTableTotalRow[] = "calcTableTotalRowAction";
 
 // QindaShow commands.
 inline const char kShowFillColor[] = "showFillColorAction";

@@ -52,9 +52,11 @@ CalcHost::CalcHost()
     createRuleActions();
     createTextActions();
     createFeatureActions(); // links, outline, protection (M66)
+    createTableActions();   // tables, the chart sheet view (M69)
     createAssistant();
     insertMenus();
     insertFeatureMenus();
+    insertTableMenus();
     wireEditCommands();
     // Undo of a sheet insert/delete (or a load) changes the sheet list.
     connect(m_document, &SpreadsheetDocument::structureChanged, this, [this] {
@@ -175,11 +177,14 @@ void CalcHost::syncFromCursor()
     syncStructureFromCursor();
     syncRulesFromCursor();
     syncFeaturesFromCursor();
+    syncTablesFromCursor();
 }
 
 void CalcHost::commitInput(const CellAddr &addr, const QString &input)
 {
-    m_document->applyInput(addr, input);
+    if (!commitArrayInput(addr, input)) { // "{=…}" (M69, calc_host_tables.cpp)
+        m_document->applyInput(addr, input);
+    }
     refreshGrid();
 }
 

@@ -31,6 +31,19 @@ struct CarryState {
     QHash<QString, QString> sourceToDestTable; // source table part → written table part
 };
 
+// 4. (M69, D-078, xlsx_carry_chartsheet.cpp) chart sheets: each one's
+//    source part copied whole with its drawing and chart, the chart's data
+//    references moved through the edit journals; after flush the workbook
+//    relationship is re-pointed and the placeholder worksheet removed.
+struct ChartSheetSwap {
+    QString placeholder; // the empty worksheet QXlsx wrote in its place
+    QString chartSheet;  // the copied chartsheet part
+    QString relId;       // the workbook relationship that names the sheet
+};
+void carryChartSheets(Context &ctx, QList<ChartSheetSwap> *swaps);
+[[nodiscard]] bool finishChartSheets(QHash<QString, QByteArray> *parts, const QList<ChartSheetSwap> &swaps,
+                                     QString *error);
+
 void carryPivotTables(Context &ctx, CarryState &state);
 void carryWorkbookParts(Context &ctx, CarryState &state);
 [[nodiscard]] bool carrySheets(Context &ctx, CarryState &state, int *drawingPartCount, QString *error);

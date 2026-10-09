@@ -44,6 +44,7 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
         ss.outline = sheet.outline();
         ss.protection = sheet.protection();
         ss.source = sheet.source();
+        ss.chartSheet = sheet.isChartSheet();
         snap.sheets.append(ss);
     }
     // The style table is indexed by position; copy through the public
@@ -104,6 +105,7 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
         sheet.setOutline(ss.outline);
         sheet.setProtection(ss.protection);
         sheet.setSource(ss.source);
+        sheet.setChartSheet(ss.chartSheet);
     }
     for (const CalcEng::CellStyle &style : snapshot.styles) {
         fresh.addStyle(style);

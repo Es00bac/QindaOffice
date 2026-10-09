@@ -9,8 +9,11 @@ namespace QindaOffice::Calc {
 
 // Evaluates a formula AST against an EvalHost. Errors propagate from the
 // first failing operand. Ranges carry as RangeView through function
-// arguments; a range reaching a scalar position is #VALUE! (plan section
-// 7.2: no implicit intersection).
+// arguments. A range or array reaching a one-value position follows the
+// formula's ArrayMode (M69, D-078): a Legacy formula — one Excel wrote
+// before dynamic arrays — intersects a range with its own row or column
+// and takes an array's first element; a Dynamic formula lifts the call over
+// the array (eval_lift.h). Reference resolution lives in eval_refs.cpp.
 
 [[nodiscard]] Arg evalArg(const NodePtr &node, EvalContext &ctx);
 [[nodiscard]] Value evalNode(const NodePtr &node, EvalContext &ctx);

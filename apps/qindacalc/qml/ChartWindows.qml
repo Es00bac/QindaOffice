@@ -34,10 +34,12 @@ QtObject {
                 anchors.fill: parent
                 chartData: ({})
                 inkColor: Tk.Theme.color.text
-                Component.onCompleted: chartItem.chartData = root.host.chartSeriesAt(chartWindow.index)
+                // modelData.index is the workbook's chart index: the list
+                // leaves chart sheets' charts out (M69).
+                Component.onCompleted: chartItem.chartData = root.host.chartSeriesAt(chartWindow.modelData.index)
                 Connections {
                     target: root.host
-                    function onChartsChanged() { chartItem.chartData = root.host.chartSeriesAt(chartWindow.index) }
+                    function onChartsChanged() { chartItem.chartData = root.host.chartSeriesAt(chartWindow.modelData.index) }
                 }
             }
         }

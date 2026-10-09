@@ -8,6 +8,7 @@
 #include "chart_spec.h"
 #include "sheet.h"
 #include "structure_internal.h"
+#include "table_refs.h"
 #include "workbook.h"
 
 #include <algorithm>
@@ -28,6 +29,10 @@ namespace {
     case Node::Kind::Bool:
     case Node::Kind::Error:
     case Node::Kind::Name:
+    case Node::Kind::Array:
+    case Node::Kind::Missing:
+        return node;
+    case Node::Kind::StructRef: // follows its table by name (structure_tables.cpp)
         return node;
     case Node::Kind::Ref: {
         // Unquote first: 'Q1 Sales'!A1 names the sheet Q1 Sales (M61).
@@ -126,6 +131,26 @@ void requalifyWorkbook(Workbook &book, const QString &from, const QString &to)
     if (touched) {
         book.setDefinedNames(defined);
     }
+    // Chart series name their sheet too (M69): they follow a rename, and a
+    // series whose sheet is removed goes (a chart sheet keeps its chart).
+    for (ChartSpec &chart : book.charts) {
+        for (ChartSeriesSpec &series : chart.series) {
+            for (QString *refText : {&series.catRange, &series.valRange, &series.name}) {
+                const ParseResult parsed = parseFormula(*refText);
+                if (refText->isEmpty() || !parsed.root || parsed.root->kind != Node::Kind::Ref
+                    || parsed.root->ref.sheet.isEmpty()) {
+                    continue;
+                }
+                const NodePtr adjusted = requalify(parsed.root, from, to);
+                if (adjusted != parsed.root) {
+                    *refText = adjusted->kind == Node::Kind::Ref ? rangeRefText(adjusted->ref) : QString();
+                }
+            }
+        }
+        chart.series.erase(std::remove_if(chart.series.begin(), chart.series.end(),
+                                          [](const ChartSeriesSpec &series) { return series.valRange.isEmpty(); }),
+                           chart.series.end());
+    }
 }
 
 } // namespace
@@ -139,6 +164,18 @@ bool removeSheet(Workbook &book, qint32 index)
     // Formulas are requalified while the sheet still exists, so every
     // reference to it can be found by name before the indices shift.
     requalifyWorkbook(book, gone, QString());
+    // Its tables go with it: structured references to them are #REF! (M69).
+    const QList<TableSpec> goneTables = book.sheetAt(index).tables();
+    if (!goneTables.isEmpty()) {
+        rewriteStructRefs(book, [&goneTables](const StructRef &, const QString &tableName) -> NodePtr {
+            for (const TableSpec &table : goneTables) {
+                if (table.name.compare(tableName, Qt::CaseInsensitive) == 0) {
+                    return Node::makeError(Err::Ref);
+                }
+            }
+            return nullptr;
+        });
+    }
     QList<ChartSpec> charts;
     for (ChartSpec spec : std::as_const(book.charts)) {
         if (spec.sheet == index) {

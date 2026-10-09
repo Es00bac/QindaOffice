@@ -130,6 +130,13 @@ public:
     void beginBulkLoad() { m_bulkLoading = true; }
     void endBulkLoad();
     [[nodiscard]] bool isBulkLoading() const { return m_bulkLoading; }
+    // Edits made between beginBatch and endBatch (nesting) record what
+    // they changed and recalculate it once, at the end — for an operation
+    // that writes many cells into a live workbook, like filling a
+    // calculated column (M69, D-078). Unlike a bulk load the dependency
+    // index stays live, so no reindex is needed.
+    void beginBatch() { ++m_batchDepth; }
+    void endBatch();
 
     // Style table shared by the sheets.
     [[nodiscard]] qint32 addStyle(const CellStyle &style);
@@ -189,6 +196,28 @@ public:
     // EvalHost: A1# (ANCHORARRAY) — the unblocked spill of an anchor.
     [[nodiscard]] std::optional<CellRange> spillExtent(qint32 sheet, const CellAddr &anchor) const override;
 
+    // ---- legacy array formulas (M69, D-078; spill.cpp) ----
+    // Installs a Ctrl+Shift+Enter array formula over `block`: the anchor is
+    // its top-left cell, every cell of the block shows its element of the
+    // result (a scalar fills the block, one row or column repeats, cells
+    // beyond the result are #N/A — Excel's rules). Whatever the block held
+    // is replaced. Recalculates unless bulk loading.
+    void installArrayFormula(qint32 sheet, const CellRange &block, const NodePtr &ast, const QString &formula);
+    // The legacy array block covering `addr`, if any (its anchor is the
+    // block's top-left cell).
+    [[nodiscard]] std::optional<CellRange> arrayBlockAt(qint32 sheet, const CellAddr &addr) const;
+
+    // ---- Excel tables (M69, D-078; table_refs.cpp, table_edit.h) ----
+    // EvalHost: a table by name (case-insensitive) on any sheet, and the
+    // table covering a cell.
+    [[nodiscard]] const TableSpec *tableNamed(const QString &name, qint32 *sheet) const override;
+    [[nodiscard]] const TableSpec *tableAt(qint32 sheet, const CellAddr &addr) const override;
+    // After a table changed shape or names (it grew, a column was renamed,
+    // one was made): every formula with a structured reference has its
+    // dependencies collected again and is recalculated. Much cheaper than
+    // reindexAll, which the structural edits use anyway.
+    void refreshStructuredRefs();
+
     // ---- protection (M66, D-075) ----
     // True when the sheet is protected and the cell's format is locked.
     [[nodiscard]] bool isCellLocked(qint32 sheet, const CellAddr &addr) const;
@@ -213,6 +242,12 @@ private:
     // wrote or cleared land in `spillChanged` for the next pass.
     void recalcPass(const QSet<CellKey> &edited, bool withVolatile, QSet<CellKey> *spillChanged);
     void applySpill(qint32 sheet, const CellAddr &anchor, const Arg &result, QSet<CellKey> *changed);
+    // A legacy array formula's result into its fixed block (M69).
+    void applyArrayBlock(qint32 sheet, const CellAddr &anchor, const CellRange &block, const Arg &result,
+                         QSet<CellKey> *changed);
+    // A cell about to hold something else lets go of the array block it
+    // anchors: its other cells are emptied (and land in `changed`).
+    void releaseArrayBlock(qint32 sheet, const CellAddr &addr, QSet<CellKey> *changed);
     void dropSpill(const CellKey &anchor, QSet<CellKey> *changed);
     // Removes every spilled cell and forgets every spill (the next full
     // recalculation rebuilds them) — after edits that move cells.
@@ -235,6 +270,11 @@ private:
     // recalculation. Mutable: condFormatFor is a const evaluation.
     mutable QHash<quint64, QPair<double, double>> m_dataBarExtents;
     QHash<CellKey, SpillState> m_spills; // anchor → its spill (see spillAt)
+    int m_batchDepth = 0;
+    QSet<CellKey> m_batchEdited;
+    // The recalculation an edit asks for: none while bulk loading, deferred
+    // while batching, at once otherwise.
+    void editedCells(const QSet<CellKey> &edited);
 };
 
 } // namespace QindaOffice::Calc

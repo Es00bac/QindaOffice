@@ -3,7 +3,8 @@ import QtQuick
 import QindaOffice.Shell
 
 // QindaCalc's ribbon (D-041): File · Home · Insert · Data · Review · Sheet ·
-// View (Review since M66, D-075: notes and protection).
+// View (Review since M66, D-075: notes and protection; Insert's Tables
+// group since M69, D-078: Insert Table, Total Row).
 // Every string is an ActionEntry id (AGENTS.md rule 5); icons given here
 // only fill in for entries whose menu rows carry none. The slots are the
 // window's font, size, colour and number-format widgets.
@@ -54,6 +55,9 @@ QtObject {
                 { action: "editSelectAllAction", iconName: "text-select" }] }
         ] },
         { id: "insert", label: qsTr("Insert"), keyTip: "N", groups: [
+            { id: "tables", label: qsTr("Tables"), items: [
+                { action: "calcInsertTableAction", size: "large", iconName: "table" },
+                { action: "calcTableTotalRowAction", iconName: "sigma" }] },
             { id: "charts", label: qsTr("Charts"), items: [{ action: "insertChartAction", size: "large" }] },
             { id: "illustrations", label: qsTr("Illustrations"), items: [
                 { action: "insertImageAction", size: "large", iconName: "image" }] },

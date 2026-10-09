@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "functions.h"
 
+#include "../eval_array.h"
 #include "../parser.h"
 
 namespace QindaOffice::Calc {
@@ -50,39 +51,12 @@ void registerLookupFunctions(QHash<QString, FunctionSpec> &r)
                           }};
     columnsSpec.preserveRefArgs = true;
     r.insert(QStringLiteral("COLUMNS"), columnsSpec);
-    r.insert(QStringLiteral("INDEX"),
-             FunctionSpec{1, 4, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
-                              RangeView view;
-                              if (std::holds_alternative<RangeView>(args.at(0))) {
-                                  view = std::get<RangeView>(args.at(0));
-                              } else {
-                                  view = {ctx.sheet, {{0, 0}, {0, 0}}};
-                              }
-                              const auto rowNum = args.size() >= 2 ? scalarNumber(args.at(1))
-                                                                   : std::optional<double>();
-                              const auto colNum = args.size() >= 3 ? scalarNumber(args.at(2))
-                                                                    : std::optional<double>();
-                              qint32 row = view.range.topLeft.row;
-                              qint32 col = view.range.topLeft.col;
-                              if (rowNum.has_value()) {
-                                  if (*rowNum < 1) return Err::Value;
-                                  row = view.range.topLeft.row + qint32(*rowNum) - 1;
-                              }
-                              if (colNum.has_value()) {
-                                  if (*colNum < 1) return Err::Value;
-                                  col = view.range.topLeft.col + qint32(*colNum) - 1;
-                              }
-                              if (row > view.range.bottomRight.row
-                                  || col > view.range.bottomRight.col) {
-                                  return Err::Ref;
-                              }
-                              return ctx.host->cellValue(view.sheet, row, col);
-                          }});
+    // INDEX lives in array_more.cpp since M69 (D-078): a reference, arrays.
     r.insert(QStringLiteral("MATCH"),
              FunctionSpec{2, 3, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
                               const Value needle = scalarOrValue(args.at(0));
-                              const auto *view = std::get_if<RangeView>(&args.at(1));
-                              if (!view) return Err::NA;
+                              // A range or (M69) an array, one row or column of it.
+                              if (std::holds_alternative<Value>(args.at(1))) return Err::NA;
                               int matchType = 1;
                               if (args.size() > 2) {
                                   const auto m = scalarNumber(args.at(2));
@@ -90,7 +64,7 @@ void registerLookupFunctions(QHash<QString, FunctionSpec> &r)
                                   matchType = int(*m);
                               }
                               QVector<Value> values;
-                              const Value err = flatRangeValues(ctx, *view, &values);
+                              const Value err = flatArgValues(ctx, args.at(1), &values);
                               if (isErr(err)) return err;
                               if (matchType == 0) {
                                   for (int i = 0; i < values.size(); ++i) {
@@ -221,6 +195,8 @@ void registerLookupFunctions(QHash<QString, FunctionSpec> &r)
                                   : ctx.host->cellValue(returnView->sheet, r.topLeft.row,
                                                         r.topLeft.col + offset);
                           }});
+    // The base is a reference, a single cell included (preserveRefArgs —
+    // before M69 OFFSET(A1,…) was #VALUE!, its base read as a value).
     r.insert(QStringLiteral("OFFSET"),
              FunctionSpec{3, 5, true, [](EvalContext &ctx, const QVector<Arg> &args) -> Arg {
                               const auto *base = std::get_if<RangeView>(&args.at(0));
@@ -246,7 +222,8 @@ void registerLookupFunctions(QHash<QString, FunctionSpec> &r)
                                       out.range.topLeft.col + qint32(*w) - 1;
                               }
                               return out.isValid() ? Arg(out) : Arg(Err::Ref);
-                          }});
+                          },
+                          true});
     r.insert(QStringLiteral("INDIRECT"),
              FunctionSpec{1, 2, true, [](EvalContext &ctx, const QVector<Arg> &args) -> Arg {
                               const QString text = toText(scalarOrValue(args.at(0)));
@@ -287,32 +264,42 @@ void registerLookupFunctions(QHash<QString, FunctionSpec> &r)
                               out += addrText({qint32(*row) - 1, qint32(*col) - 1}, absRow, absCol);
                               return out;
                           }});
+    // LOOKUP(x, vector, [result]) and LOOKUP(x, array): the last element
+    // of x's type that is <= x — what Excel's binary search gives on sorted
+    // data, and what the LOOKUP(2,1/(A1:A9<>""),A1:A9) idiom relies on
+    // (M69: errors are passed over, arrays are accepted; it stopped at the
+    // first larger value and failed on any error cell before).
     r.insert(QStringLiteral("LOOKUP"),
-             FunctionSpec{2, 3, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Value {
+             FunctionSpec{2, 3, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Arg {
                               const Value needle = scalarOrValue(args.at(0));
-                              const auto *lookupView = std::get_if<RangeView>(&args.at(1));
-                              if (!lookupView) return Err::Value;
-                              const RangeView returnView =
-                                  args.size() > 2 && std::holds_alternative<RangeView>(args.at(2))
-                                  ? std::get<RangeView>(args.at(2))
-                                  : *lookupView;
-                              QVector<Value> keys;
-                              const Value err = flatRangeValues(ctx, *lookupView, &keys);
-                              if (isErr(err)) return err;
-                              int best = -1;
-                              for (int i = 0; i < keys.size(); ++i) {
-                                  if (compareValues(keys.at(i), needle) <= 0) best = i;
-                                  else break;
+                              if (isErr(needle)) return needle;
+                              ArrayValue keys;
+                              if (const Value err = arrayFromArg(ctx, args.at(1), &keys); isErr(err)) return err;
+                              // The array form searches the longer side's first line and
+                              // answers from its last one.
+                              const bool across = args.size() < 3 && keys.cols > keys.rows;
+                              const qint32 count = across ? keys.cols : (args.size() < 3 ? keys.rows : qint32(keys.cells.size()));
+                              const auto key = [&](qint32 i) {
+                                  if (args.size() > 2) return keys.cells.at(i);
+                                  return across ? keys.cells.at(i) : keys.cells.at(i * keys.cols);
+                              };
+                              const auto sameKind = [&needle](const Value &v) {
+                                  return (isNumber(v) && isNumber(needle)) || (isText(v) && isText(needle))
+                                      || (isBool(v) && isBool(needle));
+                              };
+                              qint32 best = -1;
+                              for (qint32 i = 0; i < count; ++i) {
+                                  const Value k = key(i);
+                                  if (!isErr(k) && sameKind(k) && compareValues(k, needle) <= 0) best = i;
                               }
-                              if (best < 0) return Err::NA;
-                              const qint32 offset = best;
-                              const qint32 r = returnView.range.topLeft.row
-                                  + qMin(offset, returnView.range.bottomRight.row
-                                                      - returnView.range.topLeft.row);
-                              const qint32 c = returnView.range.topLeft.col
-                                  + qMin(offset, returnView.range.bottomRight.col
-                                                      - returnView.range.topLeft.col);
-                              return ctx.host->cellValue(returnView.sheet, r, c);
+                              if (best < 0) return Value(Err::NA);
+                              if (args.size() < 3) {
+                                  return across ? keys.cells.at((keys.rows - 1) * keys.cols + best)
+                                                : keys.cells.at(best * keys.cols + keys.cols - 1);
+                              }
+                              ArrayValue results;
+                              if (const Value err = arrayFromArg(ctx, args.at(2), &results); isErr(err)) return err;
+                              return best < results.cells.size() ? results.cells.at(best) : Value(Err::NA);
                           }});
 }
 

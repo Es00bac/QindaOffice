@@ -37,6 +37,15 @@ qqo_add_calc_io_test(tst_calc_io_protect)
 qqo_add_calc_io_test(tst_calc_io_carry)
 qqo_add_calc_io_test(tst_calc_io_carry_sheet)
 qqo_add_calc_io_test(tst_calc_io_arrays)
+# M69 (D-078): Excel tables, structured references and array formulas as
+# Excel stores them; chart sheets carried whole.
+qqo_add_calc_io_test(tst_calc_io_structured)
+qqo_add_calc_io_test(tst_calc_io_chartsheets)
+# M69 (D-078): the real-workbook gate, tst_docx_corpus's twin — open, save
+# and re-open every workbook listed in the file QQO_XLSX_CORPUS names,
+# aggregate counts only (the owner's files stay on the laptop); skips
+# without the variable.
+qqo_add_calc_io_test(tst_calc_io_corpus Qt6::Gui)
 # The second reader: LibreOffice re-opens the M66 outputs (converted to flat
 # ODS headless, svp, private profile) and keeps links, outlines,
 # protection, spills and the carried pivot table. Skips without soffice.

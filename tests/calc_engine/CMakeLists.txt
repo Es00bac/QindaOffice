@@ -20,3 +20,7 @@ qqo_add_calc_test(tst_calc_rules)
 qqo_add_calc_test(tst_calc_spill)
 # M66 (D-075): links, outlines, protection and the source journal.
 qqo_add_calc_test(tst_calc_features)
+# M69 (D-078): Excel tables and structured references; array constants,
+# lifting, implicit intersection, legacy array formulas, relative names.
+qqo_add_calc_test(tst_calc_tables)
+qqo_add_calc_test(tst_calc_arrays)

@@ -19,7 +19,12 @@ struct Token {
         Ref,        // A1, $A$1, ABC123
         SheetName,  // identifier immediately followed by '!'
         QuotedSheetName, // 'My Sheet'!
-        Op,         // : , ; % ^ * / + - & = < > <= >= <> ( ) { } !
+        // A structured reference with its table name and balanced brackets,
+        // as one token: Table1[Sales], [@Sales], Table1[[#This Row],[Q1]]
+        // (M69, D-078). What is inside the brackets is column text, never
+        // an operator, a function or an address.
+        StructRef,
+        Op,         // : , ; % ^ * / + - & = < > <= >= <> ( ) { } ! @
         End,
     };
     Type type = Type::End;

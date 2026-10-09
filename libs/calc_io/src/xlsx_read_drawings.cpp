@@ -346,4 +346,57 @@ void readSheetDrawings(const QString &packagePath, Workbook *wb, qint32 sheetInd
     wb->sheetAt(sheetIndex).setSource(source);
 }
 
+void readChartSheet(const QString &packagePath, Workbook *wb, qint32 sheetIndex, const QString &sheetPart)
+{
+    Sheet &sheet = wb->sheetAt(sheetIndex);
+    sheet.setChartSheet(true);
+    SheetSource source = sheet.source();
+    source.part = sheetPart;
+    sheet.setSource(source);
+    QXlsx::ZipReader zip(packagePath);
+    if (!zip.exists() || sheetPart.isEmpty()) {
+        return;
+    }
+    const QString ownerDir = sheetPart.left(sheetPart.lastIndexOf(QLatin1Char('/')));
+    QString drawingPart;
+    for (const auto &[type, target] : readRels(zip, relsPathFor(sheetPart))) {
+        if (type.endsWith(QLatin1String("/drawing"))) {
+            drawingPart = resolveTarget(ownerDir, target);
+            break;
+        }
+    }
+    const QByteArray drawingXml = drawingPart.isEmpty() ? QByteArray() : zip.fileData(drawingPart);
+    if (drawingXml.isEmpty()) {
+        return;
+    }
+    // A chart sheet's drawing holds one absolute anchor with the chart.
+    ChartSpec spec;
+    spec.sheet = sheetIndex;
+    QString chartRid;
+    QXmlStreamReader reader(drawingXml);
+    while (!reader.atEnd()) {
+        if (reader.readNext() != QXmlStreamReader::StartElement) {
+            continue;
+        }
+        if (reader.name() == QLatin1String("ext") && spec.widthPx == ChartSpec{}.widthPx) {
+            const int width = reader.attributes().value(QLatin1String("cx")).toInt() / 9525;
+            const int height = reader.attributes().value(QLatin1String("cy")).toInt() / 9525;
+            if (width > 0 && height > 0) {
+                spec.widthPx = width;
+                spec.heightPx = height;
+            }
+        } else if (reader.name() == QLatin1String("chart") && chartRid.isEmpty()) {
+            chartRid = reader.attributes().value(QLatin1String("r:id")).toString();
+        }
+    }
+    const QString drawingDir = drawingPart.left(drawingPart.lastIndexOf(QLatin1Char('/')));
+    const QString chartPart = resolveTarget(drawingDir, readRels(zip, relsPathFor(drawingPart)).value(chartRid).second);
+    const QByteArray chartXml = chartRid.isEmpty() ? QByteArray() : zip.fileData(chartPart);
+    if (chartXml.isEmpty()) {
+        return;
+    }
+    readChartPart(chartXml, &spec);
+    wb->charts.append(spec);
+}
+
 } // namespace QindaOffice::Calc::IO

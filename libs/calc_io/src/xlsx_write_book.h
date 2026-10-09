@@ -27,4 +27,13 @@ namespace QindaOffice::Calc::IO {
 [[nodiscard]] TableSpec tableForFile(const Workbook &wb, qint32 sheet, const TableSpec &table,
                                      QHash<quint64, QString> *headerText);
 
+// The table part to write (M69, D-078): tableForFile's record and, per
+// column, the calculated column formula (the first data row's formula
+// while it has one, so the part never trails an edit; else the record's)
+// and what the totals row cell is — one of Excel's totals functions
+// (SUBTOTAL(1xx,[Column]) of its own column), a custom formula or a label —
+// all in Excel's spelling.
+[[nodiscard]] PatchManifest::TablePart tablePartForFile(const Workbook &wb, qint32 sheet, const TableSpec &table,
+                                                        QHash<quint64, QString> *headerText);
+
 } // namespace QindaOffice::Calc::IO

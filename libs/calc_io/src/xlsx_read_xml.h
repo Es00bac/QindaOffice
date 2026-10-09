@@ -38,6 +38,12 @@ void readSheetExtras(const QString &packagePath, qint32 sheetIndex, const ThemeP
 // `sheetIndex` set.
 void readSheetDrawings(const QString &packagePath, Workbook *wb, qint32 sheetIndex);
 
+// A chart sheet (M69, D-078): the sheet becomes a chart sheet tied to its
+// source part (the save carries the part, its drawing and chart verbatim),
+// and its chart — read like a worksheet's — is the workbook chart on that
+// sheet, sized from the drawing's absolute anchor.
+void readChartSheet(const QString &packagePath, Workbook *wb, qint32 sheetIndex, const QString &sheetPart);
+
 // The xlsx_read_parts.cpp readers (called by readSheetExtras).
 [[nodiscard]] QList<ValidationRule> readValidations(const QByteArray &xml, int *skipped);
 [[nodiscard]] AutoFilter readAutoFilter(const QByteArray &xml);

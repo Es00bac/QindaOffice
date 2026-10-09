@@ -19,6 +19,21 @@
 namespace QindaOffice::Calc::IO {
 
 struct PatchManifest {
+    // A table part as the post-pass writes it (M69, D-078): the model's
+    // record — its column names already the file's (tableForFile) — and,
+    // per column, what the cells say: the calculated column formula and the
+    // totals row's function, label or formula, in Excel's spelling.
+    struct TablePart {
+        TableSpec spec;
+        struct Column {
+            QString calculatedFormula;
+            QString totalsFunction; // sum, average, count, countNums, max, min, stdDev, var, custom; empty: none
+            QString totalsLabel;
+            QString totalsFormula;  // with totalsFunction "custom"
+        };
+        QList<Column> columns;
+    };
+
     // A cell QXlsx can only write as a number (it has no API for an error
     // cell, and writeFormula caches a double): the t attribute and <v> text
     // it really needs (M61, D-069). t is "e", "str" or "b".
@@ -37,7 +52,7 @@ struct PatchManifest {
         QByteArray commentsXml;  // the comments part's content
         QList<CellAddr> commentCells; // where the notes sit (their legacy VML shapes)
         int vmlNumber = 0;       // N of xl/drawings/vmlDrawingN.vml (and its shape-id block)
-        QList<TableSpec> tables; // structured tables (parts + tableParts element)
+        QList<TablePart> tables; // structured tables (parts + tableParts element)
         // View state: frozen panes (0/0 = none), the selection cell, and
         // page setup (empty = default). Written by expanding QXlsx's
         // self-closed <sheetView> and inserting <pageSetup>.
@@ -81,6 +96,10 @@ struct PatchManifest {
         // Table parts in this sheet's order → the source table part each
         // came from (empty: a new table), for query tables.
         QStringList tableSources;
+        // M69 (D-078): the sheet is a chart sheet. QXlsx writes an empty
+        // worksheet in its place (every sheet keeps its part number) and
+        // the carry stage swaps in the source chartsheet part.
+        bool chartSheet = false;
     };
     QList<SheetPatch> sheets;
 

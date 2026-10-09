@@ -4,8 +4,9 @@
 // Function registry (plan section 7.2): QHash<QString, FunctionSpec> keyed
 // by upper-case name, one registration function per category file. Every
 // function declares argument bounds and volatility; range arguments arrive
-// as RangeView and a range in scalar position is #VALUE! (no implicit
-// intersection).
+// as RangeView. A range in a single-value slot is read the way the formula's
+// ArrayMode says (M69, D-078: implicit intersection or lifting, eval_lift.h);
+// before M69 it was always #VALUE!.
 
 #include "../value.h"
 
@@ -18,6 +19,7 @@
 namespace QindaOffice::Calc {
 
 struct Node;
+struct TableSpec;
 class Workbook;
 
 // A lazy range argument: resolved through the eval host on demand.
@@ -82,7 +84,34 @@ public:
         Q_UNUSED(col);
         return {};
     }
+    // Excel tables (M69, D-078) for structured references: a table by name
+    // (case-insensitive; `sheet` receives its sheet) and the table holding a
+    // cell; nullptr when there is none. Borrowed: valid until the next
+    // change to that sheet's tables.
+    [[nodiscard]] virtual const TableSpec *tableNamed(const QString &name, qint32 *sheet) const
+    {
+        Q_UNUSED(name);
+        Q_UNUSED(sheet);
+        return nullptr;
+    }
+    [[nodiscard]] virtual const TableSpec *tableAt(qint32 sheet, const CellAddr &addr) const
+    {
+        Q_UNUSED(sheet);
+        Q_UNUSED(addr);
+        return nullptr;
+    }
 };
+
+// What a formula does with a range or an array where one value is wanted
+// (M69, D-078; eval_lift.cpp).
+//   Legacy  — a formula Excel stored without the dynamic-array mark: Excel's
+//             implicit intersection (the cell in the formula's own row or
+//             column — what Excel 365 shows as '@'); an array gives its
+//             first element.
+//   Dynamic — a dynamic-array formula (typed here, or cm in the file) and a
+//             Ctrl+Shift+Enter array formula: the function is applied to
+//             each element and the results form an array ("lifting").
+enum class ArrayMode : quint8 { Legacy, Dynamic };
 
 struct EvalContext {
     const EvalHost *host = nullptr;
@@ -95,6 +124,7 @@ struct EvalContext {
     // whose body refers back to itself stops at a fixed depth as #NAME?
     // instead of recursing until the stack runs out.
     int nameDepth = 0;
+    ArrayMode mode = ArrayMode::Legacy;
 };
 
 struct FunctionSpec {
@@ -104,6 +134,12 @@ struct FunctionSpec {
     // ROW/COLUMN and friends need the reference itself, not the cell value:
     // single-cell refs stay one-cell RangeViews when this is set.
     bool preserveRefArgs = false;
+    // M69 (D-078): the parameters Excel evaluates as arrays even in a
+    // formula without the dynamic-array mark (bit i = parameter i, bit 63
+    // every later one): SUMPRODUCT(LEN(A1:A3)), LOOKUP(2,1/(A1:A9<>""),…)
+    // and INDEX(…,0) work without Ctrl+Shift+Enter in every Excel.
+    quint64 arrayParams = 0;
+    [[nodiscard]] bool takesArrayAt(int index) const { return ((arrayParams >> qMin(index, 63)) & 1) != 0; }
     std::function<Arg(EvalContext &, const QVector<Arg> &)> fn;
 
     FunctionSpec() = default;
@@ -121,7 +157,12 @@ struct FunctionSpec {
 [[nodiscard]] const QHash<QString, FunctionSpec> &functionRegistry();
 
 // Argument helpers shared by all categories.
-[[nodiscard]] Value scalarOrValue(const Arg &arg);          // range in scalar slot -> #VALUE!
+// The one value an argument holds where a function wants one (M69, D-078):
+// a value is itself, a one-cell range or array its cell. A range or array
+// of more cells, inside a function call, is recorded for lifting or
+// intersection and answers its first cell meanwhile (eval_lift.h);
+// anywhere else it is intersected (Legacy) or #VALUE! (Dynamic).
+[[nodiscard]] Value scalarOrValue(const Arg &arg);
 [[nodiscard]] std::optional<double> scalarNumber(const Arg &arg);
 // Ordered full-grid read (grid alignment required, e.g. SUMPRODUCT, MATCH).
 // Returns the first error cell's value, or an empty Value.
@@ -167,5 +208,16 @@ void registerDateMoreFunctions(QHash<QString, FunctionSpec> &registry);
 // M66 (D-075): the dynamic-array functions — FILTER, SORT, SORTBY, UNIQUE,
 // SEQUENCE, RANDARRAY — and ANCHORARRAY behind the A1# spill reference.
 void registerDynamicArrayFunctions(QHash<QString, FunctionSpec> &registry);
+// M69 (D-078): SINGLE (the '@' operator), INDEX as a reference, array
+// functions (TRANSPOSE, MMULT, the shaping family CHOOSECOLS … WRAPCOLS,
+// MDETERM, MINVERSE, MUNIT), and the commonly used functions the engine
+// lacked: statistics (AGGREGATE, FREQUENCY, PERCENTRANK, KURT, SKEW, the
+// binomial, Poisson and exponential distributions, …), engineering (base
+// conversions, BIT*, DELTA, GESTEP), DOLLAR, and the database functions.
+void registerArrayMoreFunctions(QHash<QString, FunctionSpec> &registry);
+void registerArrayShapeFunctions(QHash<QString, FunctionSpec> &registry);
+void registerStatisticalM69Functions(QHash<QString, FunctionSpec> &registry);
+void registerEngineeringFunctions(QHash<QString, FunctionSpec> &registry);
+void registerDatabaseFunctions(QHash<QString, FunctionSpec> &registry);
 
 } // namespace QindaOffice::Calc

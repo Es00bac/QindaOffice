@@ -3,14 +3,16 @@
 # (tst_calc_window), the grid, strips, clipboard, find/replace and
 # structural commands through the real window (tst_calc_ui), the rule
 # commands (tst_calc_rules_ui), links / outlines / protection / spills
-# (tst_calc_features_ui, M66) and the panel export through the desktop's
+# (tst_calc_features_ui, M66), tables, array formulas and chart sheets
+# (tst_calc_tables_ui, M69) and the panel export through the desktop's
 # validator (tst_calc_menu_export). Every test links the app's static QML
 # module, so a source added to apps/qindacalc/CMakeLists.txt is in every test.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(POPPLER_QT6 REQUIRED poppler-qt6)
 
 foreach(name IN ITEMS tst_calc_window tst_calc_sample tst_calc_ui tst_calc_rules_ui
-                      tst_calc_menu_export tst_calc_tools tst_calc_agent tst_calc_features_ui)
+                      tst_calc_menu_export tst_calc_tools tst_calc_agent tst_calc_features_ui
+                      tst_calc_tables_ui)
     add_executable(${name} ${name}.cpp calc_test_support.h)
     target_link_libraries(${name} PRIVATE qindacalc_app qindacalc_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)
@@ -33,6 +35,10 @@ add_test(NAME calc_agent_process
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/agent_process_smoke.py
             $<TARGET_FILE:qindacalc> ${QQO_AGENT_CLI})
 set_tests_properties(calc_agent_process PROPERTIES TIMEOUT 120)
+
+# M69 (D-078): tables, array formulas and chart sheets through the window;
+# its chart-sheet workbook is built with calc_io's Excel package builder.
+target_link_libraries(tst_calc_tables_ui PRIVATE office_ooxml KF6::Archive)
 
 # The print-path gate in tst_calc_window reads the produced PDF back.
 target_link_libraries(tst_calc_window PRIVATE ${POPPLER_QT6_LIBRARIES})

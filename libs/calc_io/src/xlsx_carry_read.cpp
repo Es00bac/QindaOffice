@@ -5,7 +5,9 @@
 //
 // AGENT-NOTE: the copy keeps what a save may need and nothing else — the
 // workbook part, every worksheet part with its <sheetData> emptied (the
-// cells live in the engine), their relationships, every part a carried
+// cells live in the engine), every chart sheet part (M69, D-078: its
+// drawing and chart travel through the same drawing branch below), their
+// relationships, every part a carried
 // relationship reaches, the drawing and legacy drawing of a sheet with
 // objects the engine does not model, the notes a threaded comment stands
 // behind, and the table parts a query table hangs from. Cell data, shared
@@ -220,22 +222,12 @@ QByteArray buildCarriedPackage(const QString &packagePath, const Workbook &wb, Q
             }
         }
     }
-    QStringList chartSheets;
-    for (const Relationship &rel : source->relationships(workbook)) {
-        if (relKind(rel.type) == QLatin1String("chartsheet")) {
-            chartSheets.append(rel.target);
-        }
-    }
     if (warnings != nullptr) {
         if (richData) {
             warnings->append(QObject::tr("Pictures placed in cells and linked data types are not kept when the workbook is saved."));
         }
         if (signature) {
             warnings->append(QObject::tr("The workbook's digital signature is removed on save: an edited workbook is no longer the one that was signed."));
-        }
-        if (!chartSheets.isEmpty()) {
-            warnings->append(QObject::tr("%n chart sheet(s) open as empty sheets and are saved without their chart.", nullptr,
-                                         int(chartSheets.size())));
         }
         if (!unreachable.isEmpty()) {
             unreachable.removeDuplicates();

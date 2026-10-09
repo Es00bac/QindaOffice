@@ -104,6 +104,7 @@ Context::Context(QHash<QString, QByteArray> *parts, const PatchManifest &manifes
         dest.index = index++;
         dest.name = sheet.at(0);
         dest.sheetId = sheet.at(1);
+        dest.relId = sheet.at(2);
         for (const Ooxml::Relationship &rel : destRels) {
             if (rel.id == sheet.at(2)) {
                 dest.part = Ooxml::Package::resolveTarget(kWorkbook, rel.target);

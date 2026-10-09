@@ -10,12 +10,30 @@
 #include "calc_undo.h"
 
 #include "sheet.h"
+#include "table_edit.h"
 
 namespace QindaOffice::Apps::QindaCalc {
 
+namespace {
+
+// The anchors of the legacy array formulas lying wholly in `range`.
+QList<CalcEng::CellAddr> arrayAnchorsIn(const CalcEng::Sheet &sheet, const CalcEng::CellRange &range)
+{
+    QList<CalcEng::CellAddr> anchors;
+    for (auto it = sheet.cells().constBegin(); it != sheet.cells().constEnd(); ++it) {
+        const CalcEng::CellRange &block = it.value().arrayRange;
+        if (it.value().isArrayAnchor() && range.contains(block.topLeft) && range.contains(block.bottomRight)) {
+            anchors.append(block.topLeft);
+        }
+    }
+    return anchors;
+}
+
+} // namespace
+
 void SpreadsheetDocument::applyInput(const CalcEng::CellAddr &addr, const QString &input)
 {
-    if (refuseLockedCells({addr, addr})) {
+    if (refuseCellEdit({addr, addr})) {
         return;
     }
     // AGENT-GUARD: validation is enforced HERE, on the one path every UI
@@ -28,7 +46,9 @@ void SpreadsheetDocument::applyInput(const CalcEng::CellAddr &addr, const QStrin
         return;
     }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
-    m_workbook.setCellInput(m_activeSheet, addr, input);
+    // Tables react the way Excel's do (M69): a retyped header renames its
+    // column, the row below grows the table, a formula fills its column.
+    CalcEng::setTableAwareInput(m_workbook, m_activeSheet, addr, input);
     pushUndo(before, tr("Set cell"));
     setDirty(true);
     emit contentChanged();
@@ -42,13 +62,13 @@ void SpreadsheetDocument::applyInputs(const QList<QPair<CalcEng::CellAddr, QStri
     }
     for (const auto &[addr, input] : edits) {
         Q_UNUSED(input);
-        if (refuseLockedCells({addr, addr})) {
+        if (refuseCellEdit({addr, addr})) {
             return; // the whole batch, or none of it
         }
     }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     for (const auto &[addr, input] : edits) {
-        m_workbook.setCellInput(m_activeSheet, addr, input);
+        CalcEng::setTableAwareInput(m_workbook, m_activeSheet, addr, input);
     }
     pushUndo(before, undoText);
     setDirty(true);
@@ -57,11 +77,15 @@ void SpreadsheetDocument::applyInputs(const QList<QPair<CalcEng::CellAddr, QStri
 
 void SpreadsheetDocument::clearCells(const CalcEng::CellRange &range)
 {
-    if (!range.isValid() || refuseLockedCells(range)) {
+    if (!range.isValid() || refuseCellEdit(range)) {
         return;
     }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     CalcEng::Sheet &sheet = m_workbook.sheetAt(m_activeSheet);
+    // A whole array formula in the range goes with its block (M69).
+    for (const CalcEng::CellAddr &anchor : arrayAnchorsIn(sheet, range)) {
+        m_workbook.setCellValue(m_activeSheet, anchor, CalcEng::Value());
+    }
     QSet<CalcEng::CellKey> cleared;
     for (qint32 row = range.topLeft.row; row <= range.bottomRight.row; ++row) {
         for (qint32 col = range.topLeft.col; col <= range.bottomRight.col; ++col) {
@@ -76,6 +100,7 @@ void SpreadsheetDocument::clearCells(const CalcEng::CellRange &range)
         return;
     }
     m_workbook.recalc(cleared);
+    CalcEng::syncTableHeaders(m_workbook, m_activeSheet); // a cleared header is Column<N> (M69)
     pushUndo(before, tr("Clear cells"));
     setDirty(true);
     emit contentChanged();
@@ -90,7 +115,7 @@ void SpreadsheetDocument::pasteCells(const CalcEng::CellAddr &at, const QStringL
     for (const QString &line : rows) {
         width = qMax(width, qint32(line.count(QLatin1Char('\t'))) + 1);
     }
-    if (refuseLockedCells({at, {at.row + qint32(rows.size()) - 1, at.col + width - 1}})) {
+    if (refuseCellEdit({at, {at.row + qint32(rows.size()) - 1, at.col + width - 1}})) {
         return;
     }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
@@ -103,8 +128,9 @@ void SpreadsheetDocument::pasteCells(const CalcEng::CellAddr &at, const QStringL
         for (const QString &input : cells) {
             if (!input.isEmpty()) {
                 // setCellInput parses formulas ('=' prefix), numbers,
-                // booleans and dates, falling back to text.
-                m_workbook.setCellInput(m_activeSheet, {row, col}, input);
+                // booleans and dates, falling back to text; a paste below a
+                // table grows it, as typing does (M69).
+                CalcEng::setTableAwareInput(m_workbook, m_activeSheet, {row, col}, input);
             } else if (sheet.clearCell({row, col})) {
                 // An empty source cell clears the target (Excel semantics):
                 // paste over existing data must be idempotent with the copy.
@@ -118,6 +144,7 @@ void SpreadsheetDocument::pasteCells(const CalcEng::CellAddr &at, const QStringL
     }
     if (!cleared.isEmpty()) {
         m_workbook.recalc(cleared);
+        CalcEng::syncTableHeaders(m_workbook, m_activeSheet);
     }
     pushUndo(before, tr("Paste"));
     setDirty(true);

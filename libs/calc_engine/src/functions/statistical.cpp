@@ -336,10 +336,10 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
     r.insert(QStringLiteral("PERCENTILE"),
              FunctionSpec{2, 2, false, [percentile](EvalContext &ctx,
                                                     const QVector<Arg> &args) -> Value {
-                              const auto *rangeView = std::get_if<RangeView>(&args.at(0));
-                              if (!rangeView) return Err::Value;
+                              // A range or (M69) an array: AGGREGATE(16, …) and
+                              // PERCENTILE(IF(…)) hand over arrays.
                               QVector<Value> values;
-                              const Value err = sparseRangeValues(ctx, *rangeView, &values);
+                              const Value err = sparseArgValues(ctx, args.at(0), &values);
                               if (isErr(err)) return err;
                               const auto k = scalarNumber(args.at(1));
                               if (!k) return Err::Value;
@@ -355,10 +355,10 @@ void registerStatisticalFunctions(QHash<QString, FunctionSpec> &r)
     r.insert(QStringLiteral("QUARTILE"),
              FunctionSpec{2, 2, false, [percentile](EvalContext &ctx,
                                                     const QVector<Arg> &args) -> Value {
-                              const auto *rangeView = std::get_if<RangeView>(&args.at(0));
-                              if (!rangeView) return Err::Value;
+                              // A range or (M69) an array: AGGREGATE(16, …) and
+                              // PERCENTILE(IF(…)) hand over arrays.
                               QVector<Value> values;
-                              const Value err = sparseRangeValues(ctx, *rangeView, &values);
+                              const Value err = sparseArgValues(ctx, args.at(0), &values);
                               if (isErr(err)) return err;
                               const auto q = scalarNumber(args.at(1));
                               if (!q) return Err::Value;

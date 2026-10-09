@@ -41,6 +41,7 @@ qt_add_qml_module(qindacalc_app
         src/calc_host_rules.cpp
         src/calc_host_structure.cpp
         src/calc_host_text.cpp
+        src/calc_host_tables.cpp
         src/calc_recovery.cpp src/calc_recovery.h
         src/calc_recovery_rules.cpp src/calc_recovery_rules.h
         src/calc_recovery_features.cpp src/calc_recovery_features.h
@@ -48,6 +49,7 @@ qt_add_qml_module(qindacalc_app
         src/calc_object_ops.cpp
         src/calc_cell_ops.cpp
         src/calc_feature_ops.cpp
+        src/calc_table_ops.cpp
     src/calc_structure_ops.cpp
         src/calc_undo.cpp src/calc_undo.h
         src/chart_item.cpp src/chart_item.h

@@ -5,6 +5,158 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-078: QindaCalc: structured references, chart sheets, array formulas
+
+**Date:** 2026-10-09 · **Status:** accepted (M69; the owner's workbooks use
+Excel tables, charts and comments and must open, edit and save with nothing
+missing and still open in Microsoft Office; closes D-075 item 6 and the
+formula limits D-069 and D-075 recorded)
+
+**Context.** After M66 a table's formulas (`=[@Qty]*[@Price]`,
+`=SUM(Sales[Amount])`, a totals row) loaded as unevaluated `#NAME?`
+formulas; a chart sheet opened as an empty sheet and saved without its
+chart; a Ctrl+Shift+Enter array formula kept only its anchor and saved as
+an ordinary formula; array constants (`{1,2;3,4}`) did not parse; a range
+where a function wants one value was `#VALUE!`, where Excel intersects it
+(older formulas) or applies the function to each element (dynamic ones);
+relative references in a defined name evaluated as anchored at A1; and
+functions business workbooks use (the database family, AGGREGATE,
+FREQUENCY, TRANSPOSE, MMULT, the array-shaping family, base conversions)
+were missing.
+
+**Decision.**
+
+1. **Structured references are references** (`structured_ref.h`, a
+   `StructRef` parser node): `Table1[Sales]`, `[@Sales]`,
+   `Table1[[#This Row],[Sales]]`, `[#All]`, `[#Headers]`, `[#Data]`,
+   `[#Totals]`, `[[#Headers],[#Data]]`, `[[#Data],[#Totals]]`, column ranges
+   `[[Jan]:[Mar]]`, `Table1[]`, Excel's `'` escapes, and a table's bare name
+   for its data rows (`SUM(Table1)`). Every evaluation resolves against the
+   sheet's `TableSpec`, never a remembered address, so a reference follows
+   its table; column names match without case; a missing table, column or
+   part is `#REF!` and `[@…]` outside the data rows `#VALUE!`. The
+   dependency index holds the cells reached now and is refreshed when a
+   table changes (`Workbook::refreshStructuredRefs`).
+2. **Two spellings, converted only at the package boundary.** The engine
+   stores and shows the formula bar's (`[@Sales]`, unqualified inside its
+   own table); the file has Excel's (`Table1[[#This Row],[Sales]]`, always
+   qualified) in `<f>`, `calculatedColumnFormula` and `totalsRowFormula`.
+   `xlsx_formula.h` converts both ways token by token, given the table
+   holding the cell; `_xlfn.SINGLE(…)` is the formula bar's `@`.
+3. **A table is edited the way Excel edits it** (`table_edit.h`,
+   `table_refs.h`, `structure_tables.cpp`). Typing a header renames the
+   column and every reference to it — cells, defined names, calculated
+   columns, in one walk; a blank header becomes `Column<N>`, a duplicate is
+   numbered. A value typed just below a table without a totals row, or just
+   right of it, grows the table. A formula typed into an otherwise empty
+   data column fills the column and becomes its calculated column (read and
+   written as `calculatedColumnFormula`); rows added by typing, inserting or
+   growing get it. Rows and columns inserted inside a table grow it (new
+   columns are named); a deleted column takes the references to it to
+   `#REF!` and shrinks a column range over it. **Insert ▸ Table** (Ctrl+T)
+   makes `Table<N>` over the selection or the data around the cursor, with
+   filter buttons; **Data ▸ Total Row** adds or removes the totals row
+   (`Total` and `SUBTOTAL(109,[Last])`, 103 for a text column), written with
+   Excel's `totalsRowFunction` (sum, average, count, countNums, max, min,
+   stdDev, var from SUBTOTAL 101–110) or `custom` with `totalsRowFormula`,
+   and `totalsRowLabel`. The ribbon's Insert ▸ Tables group carries both
+   (new ids `calcInsertTableAction`, `calcTableTotalRowAction`).
+4. **Chart sheets are sheets with a chart** (`Sheet::isChartSheet`,
+   `xlsx_read_drawings.cpp`, `xlsx_carry_chartsheet.cpp`). A chart sheet
+   keeps its place in the tab strip; while it is active the window shows its
+   chart sized to the window where the grid was, and cell commands are
+   refused with a message. A save copies the chartsheet part, its drawing,
+   chart and chart style parts verbatim in its place in the sheet order
+   (QXlsx writes an empty worksheet there; the carry stage swaps it out and
+   re-points the workbook relationship). The only text that changes is the
+   chart's `<c:f>` data references, which follow renamed sheets and
+   inserted or deleted rows and columns through the data sheets' edit
+   journals (D-075 rule 4). A chart sheet can be renamed, moved, hidden and
+   deleted; it cannot be duplicated or created in QindaCalc.
+5. **Array formulas** (`spill.cpp`, `Cell::arrayRange`). Array constants
+   (numbers, text, booleans, errors; `,` between columns, `;` between rows)
+   parse, print and evaluate. A legacy array formula (`<f t="array" ref>`
+   without the dynamic-array mark) is one formula over its block: evaluated
+   once and laid out as Excel does — a single value, row or column repeats
+   to fill the block, anything else past the result's size is `#N/A` — and
+   written back on the anchor with the members' cached values. The formula
+   bar shows `{=…}`; Ctrl+Shift+Enter (or typing `{=…}`) enters one over the
+   selection; changing or clearing part of an array, or inserting or
+   deleting rows or columns through one, is refused with Excel's message;
+   the whole block can be changed or cleared. Not in a table or a merged
+   cell, as in Excel.
+6. **Lifting and implicit intersection** (`eval_lift.h`, `ArrayMode`). In a
+   dynamic-array formula — every formula typed in QindaCalc, a `cm`-marked
+   one from a file, an array formula — a function over a range where it
+   wants one value is applied to each element: `=LEN(A1:A3)` spills. A
+   formula Excel stored without the mark keeps pre-2019 semantics: implicit
+   intersection with its own row or column (`=A1:A10*2` in row 5 reads A5),
+   what Excel 365 shows as `@`. The engine finds those arguments by
+   watching which ones a function reads as one value (no per-function
+   table). Parameters Excel types as arrays (SUMPRODUCT, MMULT, MDETERM,
+   MINVERSE, TRANSPOSE, FREQUENCY, the SUMX* family, LOOKUP, INDEX's array,
+   AGGREGATE's data) take arrays in both modes. INDEX returns a reference
+   (`INDEX(…):INDEX(…)` is a range), as in Excel.
+7. **Names, comparisons, functions.** Relative references in a defined
+   name follow the cell using it (Excel stores them relative to A1). The
+   comparison operators follow Excel: a blank equals `""`, 0 and FALSE, and
+   text compares without case, so `LOOKUP(2,1/(A:A<>""),A:A)` finds the
+   last entry. Omitted arguments (`IF(A1,,1)`) parse. A number stored as
+   text matches a numeric COUNTIF/SUMIF criterion (and a text criterion over
+   one no longer throws out of the recalculation). New functions: DSUM,
+   DCOUNT, DCOUNTA, DAVERAGE, DMAX, DMIN, DGET, DPRODUCT, DSTDEV, DSTDEVP,
+   DVAR, DVARP; AGGREGATE, FREQUENCY, PERCENTRANK(.INC/.EXC), KURT, SKEW,
+   SKEW.P, PERMUT, PERMUTATIONA, COMBINA, CONFIDENCE(.NORM), BINOM.DIST,
+   POISSON.DIST, EXPON.DIST (and the old names), GAMMA, GAMMALN(.PRECISE),
+   FISHER, FISHERINV, PEARSON; SINGLE, TRANSPOSE, MMULT, MDETERM, MINVERSE,
+   MUNIT, CHOOSECOLS, CHOOSEROWS, TAKE, DROP, VSTACK, HSTACK, TOCOL, TOROW,
+   EXPAND, WRAPROWS, WRAPCOLS; DEC2BIN … HEX2OCT, BIN2DEC, OCT2DEC,
+   HEX2DEC, DELTA, GESTEP, BITAND, BITOR, BITXOR, BITLSHIFT, BITRSHIFT,
+   DOLLAR. ROW and COLUMN over a range give arrays; PERCENTILE and QUARTILE
+   take arrays.
+8. **Sizes and cells come from the sheet part** (found by
+   `tst_calc_io_corpus` over QXlsx's own Excel test files). The reader walks
+   the cells that exist — not the rectangle out to the last one, which hung
+   on a single cell in row 1,048,576 or column XFD; it takes row heights only
+   from rows that state one (before, every row of the used range got the
+   sheet default and was saved back with `customHeight="1"`, so Excel no
+   longer fitted those rows to their text) and column widths from `<cols>`
+   and `<sheetFormatPr>` itself (QXlsx's per-column lookup is quadratic);
+   the writer sets a run of equal widths in one call.
+
+**Consequences.** A workbook with tables, a chart sheet and array formulas
+opens with its values and saves with its formulas spelled as Excel spells
+them; every package the tests write is schema-valid with every relationship
+resolving, the chart sheet's parts come back byte for byte, and LibreOffice
+25.2 re-opens the outputs with the same values. Expected function values
+come from headless LibreOffice where it agrees with Microsoft's
+documentation (`tests/fixtures/functions/functions_m69.tsv`); where it
+differs (PERCENTRANK's truncation, out-of-range error kinds, SKEW.P, which
+it lacks, EXPON.DIST below 0) they are worked by hand. Undo snapshots and
+the recovery payload carry calculated columns, totals rows, array blocks
+and chart sheets. `tst_calc_io_corpus` re-saves a list of real workbooks
+and compares aggregate counts (run on the laptop by the lead). Behaviour
+changes: a range where one value is wanted is no longer `#VALUE!`; text
+comparisons ignore case (EXACT is the case-sensitive test); INDEX returns
+references; `eval.h`'s "no implicit intersection" (plan section 7.2) is
+gone; a saved sheet gives only the rows that had a height of their own one.
+Limits: no completion of table and column names while typing (the
+toolkit's text field offers no completion list — a QindaTK gap); a legacy
+formula that intersects is shown without Excel 365's `@`, and entering it
+again makes it a dynamic formula, which may spill; SUBTOTAL and AGGREGATE
+do not skip hidden or filtered rows, so a totals row over a filtered table
+counts every row; legacy array arithmetic inside an ordinary function's
+argument stays element-wise (D-038) where pre-2019 Excel intersects;
+tables cannot be renamed in QindaCalc, and a duplicated sheet's tables are
+renamed while references qualified with the old name keep meaning the
+original; a formula whose result is an empty cell (`=A1` of a blank,
+`IF(TRUE,,1)`) shows nothing where Excel shows 0, as before; a sheet whose
+cells reach both its last row and its last column (`XFD1048576` with
+anything in column A) still takes QXlsx's writer about half an hour, because
+it walks the used rectangle to write row spans (QXlsx is vendored
+unpatched); Microsoft
+Excel itself was not available to open the outputs.
+
 ## D-079: QindaWrite: Word's table, paragraph and font formatting
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
@@ -435,6 +587,7 @@ item).
 6. **Not done** (the request's optional item): chart sheets still open as
    empty sheets and save without their chart (warned at open); structured
    references (`Table1[Sales]`) still stay unevaluated formulas (D-069).
+   *(Closed by M69, D-078.)*
 
 **Consequences.** A workbook from Excel survives a QindaCalc save with its
 links, outline, protection, pivot tables, slicers, connections, threaded
@@ -449,8 +602,8 @@ extension prefixes (x15, xr, xr2, xr3, xda, xm, the slicer and timeline
 drawing namespaces). Limits: legacy (Ctrl+Shift+Enter) array formulas keep
 their anchor formula and the other cells' values and save as an ordinary
 formula; array constants (`{1,2;3,4}`) still do not parse and scalar
-functions over a range (`=LEN(A1:A3)`) do not spill yet; protection is not
-encryption.
+functions over a range (`=LEN(A1:A3)`) do not spill yet (these three closed
+by M69, D-078); protection is not encryption.
 
 ## D-074: QindaBase: Excel import, the complete Access import, file fields
 
@@ -1067,10 +1220,10 @@ COVARIANCE.P, NORM.INV) are worked by hand against Excel's rules. D-034's
 written back, although entries are still checked against its values at
 load. Limits that remain: a formula the engine cannot parse is not adjusted
 by row inserts; relative references in a defined name evaluate as anchored
-at A1; structured references, CSE array formulas (written as ordinary
-ones) and the spilling functions (FILTER, SORT, UNIQUE, SEQUENCE) evaluate
-`#NAME?`; cell hyperlinks are not modelled; a chart sheet loads as an empty
-sheet.
+at A1 (closed by M69, D-078); structured references and CSE array formulas
+(written as ordinary ones) (closed by M69, D-078) and the spilling functions
+(FILTER, SORT, UNIQUE, SEQUENCE) evaluate `#NAME?`; cell hyperlinks are not
+modelled; a chart sheet loads as an empty sheet (closed by M69, D-078).
 
 ## D-068: Native Office Open XML, mapped where modelled and preserved where not
 

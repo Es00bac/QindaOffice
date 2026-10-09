@@ -10,6 +10,9 @@ QQuickRootItem#CalcWindow
           DockZone#dockZone_right [hidden]
           DockZone#dockZone_top [hidden]
           QQuickItem#dockCanvas
+            Box#chartSheetView [hidden]
+              ChartItem#chartSheetChart [hidden]
+              QQuickRectangle#boxFocusRing [hidden]
             Box#formulaBar
               QQuickRectangle#boxFocusRing [hidden]
               TextField#formulaField

@@ -5,6 +5,8 @@
 
 #include "xlsx_formula.h"
 
+#include "structured_ref.h"
+
 #include <QSet>
 
 #include <algorithm>
@@ -12,6 +14,52 @@
 namespace QindaOffice::Calc::IO {
 
 namespace {
+
+// The totals row functions Excel names, by the SUBTOTAL code each writes.
+QString totalsFunctionFor(int code)
+{
+    switch (code) {
+    case 101: return QStringLiteral("average");
+    case 102: return QStringLiteral("countNums");
+    case 103: return QStringLiteral("count");
+    case 104: return QStringLiteral("max");
+    case 105: return QStringLiteral("min");
+    case 107: return QStringLiteral("stdDev");
+    case 109: return QStringLiteral("sum");
+    case 110: return QStringLiteral("var");
+    default: return {};
+    }
+}
+
+// What the totals row cell of column `i` says (M69, D-078).
+PatchManifest::TablePart::Column totalsColumn(const Workbook &wb, qint32 sheet, const TableSpec &table, qint32 i)
+{
+    PatchManifest::TablePart::Column column;
+    const Cell *cell = wb.sheetAt(sheet).cellAt({table.range.bottomRight.row, table.range.topLeft.col + i});
+    if (cell == nullptr) {
+        return column;
+    }
+    if (!cell->ast) {
+        column.totalsLabel = isText(cell->value) ? std::get<QString>(cell->value) : QString();
+        return column;
+    }
+    const NodePtr &ast = cell->ast;
+    if (ast->kind == Node::Kind::Call && ast->text == QLatin1String("SUBTOTAL") && ast->args.size() == 2
+        && ast->args.at(0)->kind == Node::Kind::Number && ast->args.at(1)->kind == Node::Kind::StructRef) {
+        const StructRef &ref = *ast->args.at(1)->structRef;
+        const bool own = (ref.table.isEmpty() || ref.table.compare(table.name, Qt::CaseInsensitive) == 0)
+            && ref.items == 0 && ref.lastColumn.isEmpty()
+            && ref.firstColumn.trimmed().compare(table.columnNames.value(i).trimmed(), Qt::CaseInsensitive) == 0;
+        const QString function = totalsFunctionFor(int(ast->args.at(0)->number));
+        if (own && !function.isEmpty()) {
+            column.totalsFunction = function;
+            return column;
+        }
+    }
+    column.totalsFunction = QStringLiteral("custom");
+    column.totalsFormula = formulaForFile(cell->formula, table.name);
+    return column;
+}
 
 // "'Q1 Sales'!$A$1:$D$20" for a print area.
 QString areaText(const QString &sheet, const CellRange &range)
@@ -95,6 +143,26 @@ TableSpec tableForFile(const Workbook &wb, qint32 sheet, const TableSpec &table,
         }
     }
     return out;
+}
+
+PatchManifest::TablePart tablePartForFile(const Workbook &wb, qint32 sheet, const TableSpec &table,
+                                          QHash<quint64, QString> *headerText)
+{
+    PatchManifest::TablePart part;
+    part.spec = tableForFile(wb, sheet, table, headerText);
+    const qint32 columns = table.range.bottomRight.col - table.range.topLeft.col + 1;
+    const qint32 firstData = table.range.topLeft.row + (table.headerRow ? 1 : 0);
+    for (qint32 i = 0; i < columns; ++i) {
+        PatchManifest::TablePart::Column column = table.totalsRow ? totalsColumn(wb, sheet, part.spec, i)
+                                                                  : PatchManifest::TablePart::Column{};
+        if (!table.calculatedColumns.value(i).isEmpty()) {
+            const Cell *first = wb.sheetAt(sheet).cellAt({firstData, table.range.topLeft.col + i});
+            const QString text = first != nullptr && first->ast ? first->formula : table.calculatedColumns.at(i);
+            column.calculatedFormula = formulaForFile(text, table.name);
+        }
+        part.columns.append(column);
+    }
+    return part;
 }
 
 } // namespace QindaOffice::Calc::IO

@@ -72,6 +72,26 @@ NodePtr Node::makeName(const QString &identifier)
     n->text = identifier;
     return n;
 }
+NodePtr Node::makeStructRef(const StructRef &ref)
+{
+    auto n = std::make_shared<Node>();
+    n->kind = Kind::StructRef;
+    n->structRef = std::make_shared<const StructRef>(ref);
+    return n;
+}
+NodePtr Node::makeMissing()
+{
+    auto n = std::make_shared<Node>();
+    n->kind = Kind::Missing;
+    return n;
+}
+NodePtr Node::makeArray(const ArrayConstant &array)
+{
+    auto n = std::make_shared<Node>();
+    n->kind = Kind::Array;
+    n->array = std::make_shared<const ArrayConstant>(array);
+    return n;
+}
 
 namespace {
 
@@ -84,6 +104,11 @@ struct Parser {
     const Token &take()
     {
         Q_ASSERT(pos < tokens.size());
+        // AGENT-GUARD: never step past End — an unterminated array constant
+        // takes tokens until it finds one, and peek() must stay in range.
+        if (tokens[pos].type == Token::Type::End) {
+            return tokens[pos];
+        }
         return tokens[pos++];
     }
     bool isOp(const QString &op) const
@@ -202,6 +227,15 @@ struct Parser {
         case Token::Type::Ref:
             take();
             return Node::makeRef(parseRefText(token.text, QString(), QString()));
+        case Token::Type::StructRef: {
+            take();
+            const std::optional<StructRef> ref = parseStructRef(token.text);
+            if (!ref) {
+                failed = true;
+                return Node::makeError(Err::Ref);
+            }
+            return Node::makeStructRef(*ref);
+        }
         case Token::Type::Identifier: {
             take();
             if (isOp(QStringLiteral("("))) {
@@ -209,10 +243,17 @@ struct Parser {
                 QVector<NodePtr> args;
                 if (!isOp(QStringLiteral(")"))) {
                     while (true) {
-                        // AGENT-NOTE: min precedence 6 keeps ',' out of the
-                        // arg (it is the separator here, not the union
-                        // operator, which lives only in non-call parens).
-                        args.append(parseBinary(6));
+                        // An omitted argument — IF(A1,,1), VLOOKUP(…,2,)
+                        // — is a blank (M69: these were parse errors).
+                        if (isOp(QStringLiteral(",")) || isOp(QStringLiteral(";")) || isOp(QStringLiteral(")"))) {
+                            args.append(Node::makeMissing());
+                        } else {
+                            // AGENT-NOTE: min precedence 6 keeps ',' out of
+                            // the arg (it is the separator here, not the
+                            // union operator, which lives only in non-call
+                            // parens).
+                            args.append(parseBinary(6));
+                        }
                         if (isOp(QStringLiteral(",")) || isOp(QStringLiteral(";"))) {
                             take();
                             continue;
@@ -259,14 +300,15 @@ struct Parser {
                 return inner;
             }
             if (token.text == QLatin1String("{")) {
-                // Array constants are #NAME? in v1 (plan section 7.2).
-                int depth = 0;
-                do {
-                    if (peek().text == QLatin1String("{") && peek().type == Token::Type::Op) ++depth;
-                    if (peek().text == QLatin1String("}") && peek().type == Token::Type::Op) --depth;
-                    take();
-                } while (depth > 0 && peek().type != Token::Type::End);
-                return Node::makeError(Err::Name);
+                take();
+                return parseArrayConstant();
+            }
+            if (token.text == QLatin1String("@")) {
+                // Excel's implicit-intersection operator (M69, D-078): it
+                // binds to the whole range operand after it (@A1:A10), and
+                // is the function SINGLE in the file (_xlfn.SINGLE).
+                take();
+                return Node::makeCall(QStringLiteral("SINGLE"), {parseRangeOperand()});
             }
             failed = true;
             return Node::makeError(Err::Value);
@@ -276,6 +318,61 @@ struct Parser {
         }
         failed = true;
         return Node::makeError(Err::Value);
+    }
+
+    // {1,2;3,4} after its '{': literal elements only (a sign may precede a
+    // number), ',' between columns, ';' between rows, every row as long as
+    // the first. Anything else makes the formula unparseable, as in Excel.
+    NodePtr parseArrayConstant()
+    {
+        ArrayConstant array;
+        QVector<Value> row;
+        while (true) {
+            const Token element = take();
+            double sign = 1;
+            Token value = element;
+            if (element.type == Token::Type::Op && (element.text == QLatin1String("-") || element.text == QLatin1String("+"))) {
+                sign = element.text == QLatin1String("-") ? -1 : 1;
+                value = take();
+                if (value.type != Token::Type::Number) {
+                    failed = true;
+                    return Node::makeError(Err::Value);
+                }
+            }
+            if (value.type == Token::Type::Number) {
+                row.append(sign * value.text.toDouble());
+            } else if (value.type == Token::Type::String) {
+                row.append(value.text);
+            } else if (value.type == Token::Type::ErrorLit) {
+                row.append(errFromExport(value.text));
+            } else if (value.type == Token::Type::Identifier
+                       && (value.text.compare(QLatin1String("TRUE"), Qt::CaseInsensitive) == 0
+                           || value.text.compare(QLatin1String("FALSE"), Qt::CaseInsensitive) == 0)) {
+                row.append(value.text.compare(QLatin1String("TRUE"), Qt::CaseInsensitive) == 0);
+            } else {
+                failed = true;
+                return Node::makeError(Err::Value);
+            }
+            const Token separator = take();
+            const bool endRow = separator.type == Token::Type::Op
+                && (separator.text == QLatin1String(";") || separator.text == QLatin1String("}"));
+            if (endRow) {
+                if (array.rows > 0 && row.size() != array.cols) {
+                    failed = true; // ragged rows
+                    return Node::makeError(Err::Value);
+                }
+                array.cols = qint32(row.size());
+                array.cells += row;
+                ++array.rows;
+                row.clear();
+                if (separator.text == QLatin1String("}")) {
+                    return Node::makeArray(array);
+                }
+            } else if (separator.type != Token::Type::Op || separator.text != QLatin1String(",")) {
+                failed = true;
+                return Node::makeError(Err::Value);
+            }
+        }
     }
 
     static RangeRef parseRefText(const QString &text, const QString &sheetName,

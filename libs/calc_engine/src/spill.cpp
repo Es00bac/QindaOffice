@@ -68,13 +68,24 @@ void Workbook::recalcPass(const QSet<CellKey> &edited, bool withVolatile, QSet<C
             continue;
         }
         EvalContext ctx{this, key.sheet(), {key.row(), key.col()}};
-        if (!cell->dynamicArray) {
+        const CellRange block = cell->arrayRange;
+        if (!cell->dynamicArray && !block.isValid()) {
+            // A formula Excel stored without the dynamic-array mark keeps
+            // its implicit intersection (M69, D-078).
+            ctx.mode = ArrayMode::Legacy;
             cell->value = evalNode(cell->ast, ctx);
             continue;
         }
+        // Dynamic arrays and legacy array formulas evaluate as arrays: a
+        // function wanting one value is applied to each element (lifting).
+        ctx.mode = ArrayMode::Dynamic;
         // AGENT-GUARD: hold the AST and never touch `cell` again here —
         // spilling inserts cells, which may rehash the sheet under it.
         const NodePtr ast = cell->ast;
+        if (block.isValid()) {
+            applyArrayBlock(key.sheet(), {key.row(), key.col()}, block, evalArg(ast, ctx), spillChanged);
+            continue;
+        }
         applySpill(key.sheet(), {key.row(), key.col()}, evalArg(ast, ctx), spillChanged);
     }
     for (const CellKey &key : cycles) {
@@ -124,6 +135,14 @@ void Workbook::applySpill(qint32 sheetIndex, const CellAddr &anchor, const Arg &
         }
     };
     ArrayValue grid;
+    if (const auto *view = std::get_if<RangeView>(&result); view != nullptr && view->isValid()
+        && view->range.cellCount() == 1) {
+        // A one-cell reference (INDEX(…), OFFSET(…)) is a value, not an
+        // array: nothing spills (M69).
+        dropSpill(key, changed);
+        setAnchorValue(cellValue(view->sheet, view->range.topLeft.row, view->range.topLeft.col));
+        return;
+    }
     if (const auto *view = std::get_if<RangeView>(&result)) {
         if (view->isValid() && view->range.cellCount() > kMaxSpillCells) {
             // =A:A and the like: too large to spill here (see the limit).
@@ -158,8 +177,12 @@ void Workbook::applySpill(qint32 sheetIndex, const CellAddr &anchor, const Arg &
         return isBlank(value) ? Value(0.0) : value;
     };
     CellRange extent{anchor, {anchor.row + grid.rows - 1, anchor.col + grid.cols - 1}};
+    // A table takes no spill (Excel's rule); a one-cell result is no spill
+    // at all, so [@Price]*2 or INDEX(…) in a table cell keeps its value
+    // (M69 — a one-cell range result in a table had shown #SPILL!).
     bool blocked = extent.bottomRight.row >= Sheet::kMaxRows || extent.bottomRight.col >= Sheet::kMaxCols
-        || extent.cellCount() > kMaxSpillCells || sheet.tableCovering(anchor) != nullptr;
+        || extent.cellCount() > kMaxSpillCells
+        || (sheet.tableCovering(anchor) != nullptr && extent.cellCount() > 1);
     extent.bottomRight.row = qMin(extent.bottomRight.row, Sheet::kMaxRows - 1);
     extent.bottomRight.col = qMin(extent.bottomRight.col, Sheet::kMaxCols - 1);
     for (qint32 r = extent.topLeft.row; !blocked && r <= extent.bottomRight.row; ++r) {
@@ -249,6 +272,150 @@ void Workbook::resetSpills()
             sheet.dropCellContent(addr);
         }
     }
+}
+
+// ---- legacy array formulas (M69, D-078) ----------------------------------
+
+void Workbook::applyArrayBlock(qint32 sheetIndex, const CellAddr &anchor, const CellRange &block, const Arg &result,
+                               QSet<CellKey> *changed)
+{
+    Sheet &sheet = sheetAt(sheetIndex);
+    ArrayValue grid;
+    EvalContext ctx;
+    ctx.host = this;
+    ctx.sheet = sheetIndex;
+    ctx.here = anchor;
+    if (const Value failed = arrayFromArg(ctx, result, &grid); isErr(failed)) {
+        grid = {1, 1, {failed}};
+    }
+    if (grid.cells.isEmpty()) {
+        grid = {1, 1, {Value(Err::Calc)}};
+    }
+    // Excel's rules for a result that does not fit the block: a single
+    // value fills it, a single row or column repeats, the rest is #N/A; an
+    // empty element shows as 0.
+    const auto element = [&grid](qint32 r, qint32 c) -> Value {
+        const qint32 row = grid.rows == 1 ? 0 : r;
+        const qint32 col = grid.cols == 1 ? 0 : c;
+        if (row >= grid.rows || col >= grid.cols) {
+            return Err::NA;
+        }
+        const Value &value = grid.cells.at(row * grid.cols + col);
+        return isBlank(value) ? Value(0.0) : value;
+    };
+    for (qint32 r = block.topLeft.row; r <= block.bottomRight.row; ++r) {
+        for (qint32 c = block.topLeft.col; c <= block.bottomRight.col; ++c) {
+            const Value value = element(r - block.topLeft.row, c - block.topLeft.col);
+            const CellAddr at{r, c};
+            if (at == anchor) {
+                if (Cell *cell = sheet.cellAt(anchor)) {
+                    cell->value = value;
+                }
+                continue;
+            }
+            Cell &member = sheet.ensureCell(at);
+            if (member.spillAnchor != anchor || !(member.value == value) || member.ast) {
+                changed->insert(CellKey(sheetIndex, r, c));
+            }
+            member.formula.clear();
+            member.ast.reset();
+            member.isVolatile = false;
+            member.dynamicArray = false;
+            member.arrayRange = {};
+            member.value = value;
+            member.spillAnchor = anchor;
+        }
+    }
+}
+
+void Workbook::releaseArrayBlock(qint32 sheetIndex, const CellAddr &addr, QSet<CellKey> *changed)
+{
+    Sheet &sheet = sheetAt(sheetIndex);
+    const Cell *anchor = sheet.cellAt(addr);
+    if (anchor == nullptr || !anchor->arrayRange.isValid()) {
+        return;
+    }
+    const CellRange block = anchor->arrayRange;
+    for (qint32 r = block.topLeft.row; r <= block.bottomRight.row; ++r) {
+        for (qint32 c = block.topLeft.col; c <= block.bottomRight.col; ++c) {
+            const Cell *member = sheet.cellAt({r, c});
+            if (CellAddr{r, c} != addr && member != nullptr && member->isSpilled() && member->spillAnchor == addr) {
+                sheet.dropCellContent({r, c});
+                changed->insert(CellKey(sheetIndex, r, c));
+            }
+        }
+    }
+    if (Cell *cell = sheet.cellAt(addr)) {
+        cell->arrayRange = {};
+    }
+}
+
+void Workbook::installArrayFormula(qint32 sheetIndex, const CellRange &block, const NodePtr &ast,
+                                   const QString &formula)
+{
+    if (!block.isValid()) {
+        return;
+    }
+    QSet<CellKey> changed;
+    Sheet &sheet = sheetAt(sheetIndex);
+    // Whatever the block held goes: other blocks' anchors inside it let go
+    // of theirs, and every cell is emptied (styles stay).
+    for (qint32 r = block.topLeft.row; r <= block.bottomRight.row; ++r) {
+        for (qint32 c = block.topLeft.col; c <= block.bottomRight.col; ++c) {
+            releaseArrayBlock(sheetIndex, {r, c}, &changed);
+            if (sheet.dropCellContent({r, c})) {
+                m_dependencies.updateCell(CellKey(sheetIndex, r, c), {});
+                changed.insert(CellKey(sheetIndex, r, c));
+            }
+        }
+    }
+    {
+        // AGENT-GUARD: `anchor` is not used after the members below are
+        // created — ensureCell may rehash the sheet.
+        Cell &anchor = sheet.ensureCell(block.topLeft);
+        anchor.formula = formula;
+        anchor.ast = ast;
+        anchor.isVolatile = containsVolatileCall(ast);
+        anchor.dynamicArray = false;
+        anchor.arrayRange = block;
+        claimCell(anchor);
+        const CellKey key(sheetIndex, block.topLeft.row, block.topLeft.col);
+        EvalContext ctx;
+        ctx.host = this;
+        ctx.sheet = sheetIndex;
+        ctx.here = block.topLeft;
+        m_dependencies.updateCell(key, collectTargets(ast, ctx));
+        if (anchor.isVolatile) {
+            m_dependencies.addVolatile(key);
+        }
+    }
+    for (qint32 r = block.topLeft.row; r <= block.bottomRight.row; ++r) {
+        for (qint32 c = block.topLeft.col; c <= block.bottomRight.col; ++c) {
+            if (CellAddr{r, c} != block.topLeft) {
+                sheet.ensureCell({r, c}).spillAnchor = block.topLeft;
+            }
+        }
+    }
+    changed.insert(CellKey(sheetIndex, block.topLeft.row, block.topLeft.col));
+    editedCells(changed);
+}
+
+std::optional<CellRange> Workbook::arrayBlockAt(qint32 sheetIndex, const CellAddr &addr) const
+{
+    if (sheetIndex < 0 || sheetIndex >= sheetCount()) {
+        return std::nullopt;
+    }
+    const Sheet &sheet = sheetAt(sheetIndex);
+    const Cell *cell = sheet.cellAt(addr);
+    if (cell == nullptr) {
+        return std::nullopt;
+    }
+    const CellAddr anchorAddr = cell->arrayRange.isValid() ? addr : cell->spillAnchor;
+    const Cell *anchor = anchorAddr.isValid() ? sheet.cellAt(anchorAddr) : nullptr;
+    if (anchor == nullptr || !anchor->isArrayAnchor() || !anchor->arrayRange.contains(addr)) {
+        return std::nullopt;
+    }
+    return anchor->arrayRange;
 }
 
 std::optional<Workbook::SpillState> Workbook::spillAt(qint32 sheet, const CellAddr &anchor) const

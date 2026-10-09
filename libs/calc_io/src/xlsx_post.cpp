@@ -260,7 +260,7 @@ bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest, QStr
             const QString relsPath = relsPathFor(patch.sheetPart);
             QByteArray relsXml = parts.value(relsPath);
             QStringList rids;
-            for (const TableSpec &table : patch.tables) {
+            for (const PatchManifest::TablePart &table : patch.tables) {
                 const QString tablePart = QStringLiteral("xl/tables/table%1.xml").arg(++tablePartCount);
                 parts.insert(tablePart, tablePartXml(table, tablePartCount));
                 tableSources.append({tablePart, patch.tableSources.value(rids.size())});

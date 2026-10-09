@@ -76,6 +76,13 @@ QVariantMap seriesDataFromSeries(const ChartSpec &spec, const Workbook &wb)
     QVariantList series;
     for (const ChartSeriesSpec &ser : spec.series) {
         QString name = ser.name;
+        // A name read from a cell ('Q1 Data'!$B$1, the file had no cached
+        // text) shows that cell's text, live (M69).
+        if (name.contains(QLatin1Char('!'))) {
+            if (const auto cell = resolveRef(wb, name); cell && cell->second.cellCount() == 1) {
+                name = toText(wb.cellValue(cell->first, cell->second.topLeft.row, cell->second.topLeft.col));
+            }
+        }
         if (name.isEmpty()) {
             name = QStringLiteral("Series %1").arg(series.size() + 1);
         }

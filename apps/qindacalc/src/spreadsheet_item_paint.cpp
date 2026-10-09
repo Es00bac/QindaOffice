@@ -191,8 +191,12 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                         - (table->headerRow ? 1 : 0);
                     if (header) {
                         p.fillRect(cell, colors.headerFill);
-                    } else if (!totals && table->rowStripes && bodyIndex >= 0
-                               && bodyIndex % 2 == 1) {
+                    } else if (totals) {
+                        // The totals row under its double rule, as the
+                        // table styles draw it (M69).
+                        p.fillRect(QRectF(cell.left(), cell.top(), cell.width(), 1), colors.headerFill);
+                        p.fillRect(QRectF(cell.left(), cell.top() + 2, cell.width(), 1), colors.headerFill);
+                    } else if (table->rowStripes && bodyIndex >= 0 && bodyIndex % 2 == 1) {
                         p.fillRect(cell, colors.bandFill);
                     }
                 }

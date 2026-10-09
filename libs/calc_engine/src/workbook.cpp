@@ -194,41 +194,34 @@ bool Workbook::setCellInput(qint32 sheet, const CellAddr &addr, const QString &i
     NodePtr ast;
     QString formulaText;
     const Value literal = parseLiteral(input, &isFormula, &ast, &formulaText);
-    Cell &cell = sheetAt(sheet).ensureCell(addr);
     if (isFormula && ast) {
         // Every typed formula is a dynamic-array formula, as in Excel 365:
         // an array result spills (M66, D-075).
         installFormula(sheet, addr, ast, formulaText, true);
         return true;
     }
-    // Literal: drop any formula state and dependency edges. Typing into a
-    // spilled cell makes it the user's (its anchor then shows #SPILL!).
-    cell.formula.clear();
-    cell.ast.reset();
-    cell.isVolatile = false;
-    cell.dynamicArray = false;
-    claimCell(cell);
-    cell.value = literal;
-    m_dependencies.updateCell(CellKey(sheet, addr.row, addr.col), {});
-    if (!m_bulkLoading) {
-        recalc({CellKey(sheet, addr.row, addr.col)});
-    }
+    setCellValue(sheet, addr, literal);
     return true;
 }
 
 void Workbook::setCellValue(qint32 sheet, const CellAddr &addr, const Value &value)
 {
+    // Literal: drop any formula state and dependency edges. Typing into a
+    // spilled cell makes it the user's (its anchor then shows #SPILL!); an
+    // array formula's anchor lets go of its block first (M69).
+    QSet<CellKey> changed;
+    releaseArrayBlock(sheet, addr, &changed);
     Cell &cell = sheetAt(sheet).ensureCell(addr);
     cell.formula.clear();
     cell.ast.reset();
     cell.isVolatile = false;
     cell.dynamicArray = false;
+    cell.arrayRange = {};
     claimCell(cell);
     cell.value = value;
     m_dependencies.updateCell(CellKey(sheet, addr.row, addr.col), {});
-    if (!m_bulkLoading) {
-        recalc({CellKey(sheet, addr.row, addr.col)});
-    }
+    changed.insert(CellKey(sheet, addr.row, addr.col));
+    editedCells(changed);
 }
 
 void Workbook::installFormula(qint32 sheet, const CellAddr &addr, const NodePtr &ast,
@@ -240,11 +233,14 @@ void Workbook::installFormula(qint32 sheet, const CellAddr &addr, const NodePtr 
 void Workbook::installFormula(qint32 sheet, const CellAddr &addr, const NodePtr &ast,
                               const QString &formula, bool dynamicArray)
 {
+    QSet<CellKey> released;
+    releaseArrayBlock(sheet, addr, &released); // before ensureCell: it may rehash
     Cell &cell = sheetAt(sheet).ensureCell(addr);
     cell.formula = formula;
     cell.ast = ast;
     cell.isVolatile = containsVolatileCall(ast);
     cell.dynamicArray = dynamicArray;
+    cell.arrayRange = {};
     claimCell(cell);
     const CellKey key(sheet, addr.row, addr.col);
     EvalContext ctx{this, sheet, addr};
@@ -256,8 +252,28 @@ void Workbook::installFormula(qint32 sheet, const CellAddr &addr, const NodePtr 
     if (cell.isVolatile) {
         m_dependencies.addVolatile(key);
     }
-    if (!m_bulkLoading) {
-        recalc({key});
+    released.insert(key);
+    editedCells(released);
+}
+
+void Workbook::editedCells(const QSet<CellKey> &edited)
+{
+    if (m_bulkLoading) {
+        return;
+    }
+    if (m_batchDepth > 0) {
+        m_batchEdited |= edited;
+        return;
+    }
+    recalc(edited);
+}
+
+void Workbook::endBatch()
+{
+    if (m_batchDepth > 0 && --m_batchDepth == 0 && !m_batchEdited.isEmpty()) {
+        const QSet<CellKey> edited = std::move(m_batchEdited);
+        m_batchEdited.clear();
+        recalc(edited);
     }
 }
 

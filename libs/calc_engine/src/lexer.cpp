@@ -76,6 +76,25 @@ bool lexesAsCellRange(const QString &word)
     return lexesAsCellRef(word.left(colon)) && lexesAsCellRef(word.mid(colon + 1));
 }
 
+// The end of the bracket group that opens at s[i] (one past its ']'), or
+// -1 when it never closes. Inside, a single quote escapes the next
+// character ('[ '] '# '' — Excel's structured-reference escapes).
+int bracketGroupEnd(const QString &s, int i)
+{
+    int depth = 0;
+    for (int j = i; j < s.size(); ++j) {
+        const QChar c = s[j];
+        if (c == QLatin1Char('\'')) {
+            ++j;
+        } else if (c == QLatin1Char('[')) {
+            ++depth;
+        } else if (c == QLatin1Char(']') && --depth == 0) {
+            return j + 1;
+        }
+    }
+    return -1;
+}
+
 bool lexesAsWholeRow(const QString &word)
 {
     // \$?[0-9]+:\$?[0-9]+
@@ -228,6 +247,16 @@ QVector<Token> lexFormula(const QString &input)
                 ++i;
             }
             QString word = input.mid(start, i - start);
+            if (i < n && input[i] == QLatin1Char('[')) {
+                // Table1[Sales]: the table name and its brackets are one
+                // structured-reference token (M69, D-078).
+                const int end = bracketGroupEnd(input, i);
+                if (end > 0) {
+                    out.append({Token::Type::StructRef, input.mid(start, end - start), start});
+                    i = end;
+                    continue;
+                }
+            }
             while (i < n && input[i] == QLatin1Char(':')) {
                 int j = i + 1;
                 while (j < n && (input[j].isLetterOrNumber() || input[j] == QLatin1Char('_')
@@ -262,6 +291,21 @@ QVector<Token> lexFormula(const QString &input)
                 out.append({Token::Type::Identifier, word, start});
             }
             continue;
+        }
+        if (c == QLatin1Char('[')) {
+            // An unqualified structured reference ([@Sales], [Sales]). A
+            // group that runs straight into a name is an external
+            // workbook's index ([1]Sheet1!A1, [1]!Total): it stays the Op
+            // tokens it always was, which the parser refuses.
+            const int end = bracketGroupEnd(input, i);
+            const bool external = end > 0 && end < n
+                && (input[end].isLetterOrNumber() || input[end] == QLatin1Char('_') || input[end] == QLatin1Char('!')
+                    || input[end] == QLatin1Char('$') || input[end] == QLatin1Char('\''));
+            if (end > 0 && !external) {
+                out.append({Token::Type::StructRef, input.mid(start, end - start), start});
+                i = end;
+                continue;
+            }
         }
         // Two-character comparison operators.
         if ((c == QLatin1Char('<') || c == QLatin1Char('>') || c == QLatin1Char('='))

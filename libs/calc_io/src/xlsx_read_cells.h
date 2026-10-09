@@ -50,8 +50,24 @@ struct CellScan {
         int cm = 0;
     };
     QList<ArrayFormula> arrays;
+    // M69: the sheet's sizes as the part states them — the rows whose <row>
+    // carries ht (points, by 0-based row), the <col> spans with a width
+    // (characters, 1-based columns as in the file) and the width every
+    // other column has (QXlsx's rule: sheetFormatPr's defaultColWidth, else
+    // its baseColWidth, else 8; 8.43 with no sheetFormatPr).
+    QHash<qint32, double> rowHeights;
+    struct ColumnSpan {
+        int first = 0;
+        int last = 0;
+        double width = 0;
+    };
+    QList<ColumnSpan> columnWidths;
+    double defaultColumnWidth = 8.43;
 };
 [[nodiscard]] CellScan scanSheetCells(const QByteArray &sheetXml, const QStringList &sharedStrings,
                                       const QSet<int> &watchedXfs);
+
+// The width of a 1-based column by the scan's rules, in characters.
+[[nodiscard]] double scannedColumnWidth(const CellScan &scan, int column);
 
 } // namespace QindaOffice::Calc::IO

@@ -4,6 +4,8 @@
 
 #include "xlsx_formula.h"
 
+#include "xlsx_formula_tokens.h"
+
 #include "functions/functions.h"
 #include "lexer.h"
 #include "parser.h"
@@ -114,7 +116,9 @@ namespace {
 
 // Square brackets hold structured-reference parts (Table1[Q1],
 // [[#This Row],[Amount]]): column names there are text, never a function,
-// a parameter or a cell address — the walkers leave them alone.
+// a parameter or a cell address — the walkers leave them alone. Since M69
+// the lexer hands a balanced structured reference over as ONE token, which
+// the walkers skip; only a bracket it could not pair is counted here.
 int bracketDelta(const Token &token)
 {
     if (isOp(token, QLatin1StringView("["))) {
@@ -125,7 +129,29 @@ int bracketDelta(const Token &token)
 
 } // namespace
 
-QString formulaFromFile(const QString &text)
+namespace {
+// The M61 walks (below): Excel's prefixes off, and back on.
+QString withoutPrefixes(const QString &text);
+QString withPrefixes(const QString &text);
+} // namespace
+
+QString formulaFromFile(const QString &text, const QString &containingTable)
+{
+    // M69 (D-078): the prefixes go first, so _xlfn.SINGLE is SINGLE by the
+    // time it becomes '@'.
+    return singleAsAt(structRefsForDisplay(withoutPrefixes(text), containingTable));
+}
+
+QString formulaForFile(const QString &text, const QString &containingTable)
+{
+    // M69 (D-078): structured references and '@' in the file's spelling
+    // first; the walk below then gives SINGLE its _xlfn. prefix.
+    return withPrefixes(atAsSingle(structRefsForFile(text, containingTable)));
+}
+
+namespace {
+
+QString withoutPrefixes(const QString &text)
 {
     const QVector<Token> tokens = lexFormula(text);
     Splicer splice{text, {}};
@@ -150,7 +176,7 @@ QString formulaFromFile(const QString &text)
     return splice.finish();
 }
 
-QString formulaForFile(const QString &text)
+QString withPrefixes(const QString &text)
 {
     const QVector<Token> tokens = lexFormula(text);
     Splicer splice{text, {}};
@@ -258,6 +284,8 @@ QString formulaForFile(const QString &text)
     }
     return splice.finish();
 }
+
+} // namespace
 
 QString shiftedFormulaText(const QString &text, qint32 dr, qint32 dc)
 {

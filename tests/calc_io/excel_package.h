@@ -72,6 +72,10 @@ struct ExcelSheet {
     QByteArray beforeData; // M66: sheetPr … cols, verbatim, before <sheetData>
     QList<ExcelRel> rels;  // M66: the sheet part's relationships (fixed ids)
     QByteArray rootAttributes; // M66: extra declarations on <worksheet> (mc, x14ac, xr, …)
+    // M69 (D-078): a chart sheet — the whole xl/chartsheets/sheet<N>.xml
+    // part, verbatim (its drawing hangs from `rels`); the worksheet fields
+    // above are unused.
+    QByteArray chartSheetXml;
 };
 
 struct ExcelWorkbook {
@@ -129,18 +133,22 @@ struct ExcelWorkbook {
         QByteArray sheetsXml;
         for (int i = 0; i < sheets.size(); ++i) {
             const ExcelSheet &sheet = sheets.at(i);
-            const QString part = QStringLiteral("xl/worksheets/sheet%1.xml").arg(i + 1);
+            const bool chart = !sheet.chartSheetXml.isEmpty();
+            const QString kind = chart ? QStringLiteral("chartsheet") : QStringLiteral("worksheet");
+            const QString part = QStringLiteral("xl/%1s/sheet%2.xml").arg(kind).arg(i + 1);
             const QString rid = QStringLiteral("rIdSheet%1").arg(i + 1);
-            writer.addRelationshipWithId(workbookPart, rid, rel + QStringLiteral("worksheet"), part);
+            writer.addRelationshipWithId(workbookPart, rid, rel + kind, part);
             addRels(part, sheet.rels);
-            writer.addPart(part,
-                           QByteArrayLiteral("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
-                                             "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
-                                             "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"")
-                               + sheet.rootAttributes + QByteArrayLiteral(">") + sheet.beforeData
-                               + QByteArrayLiteral("<sheetData>") + sheet.sheetData + QByteArrayLiteral("</sheetData>")
-                               + sheet.afterData + QByteArrayLiteral("</worksheet>"),
-                           ct + QStringLiteral("worksheet+xml"));
+            QByteArray data = sheet.chartSheetXml;
+            if (!chart) {
+                data = QByteArrayLiteral("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+                                         "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+                                         "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"")
+                    + sheet.rootAttributes + QByteArrayLiteral(">") + sheet.beforeData
+                    + QByteArrayLiteral("<sheetData>") + sheet.sheetData + QByteArrayLiteral("</sheetData>")
+                    + sheet.afterData + QByteArrayLiteral("</worksheet>");
+            }
+            writer.addPart(part, data, ct + kind + QStringLiteral("+xml"));
             sheetsXml += QByteArrayLiteral("<sheet name=\"") + sheet.name.toUtf8().replace('&', "&amp;")
                 + QByteArrayLiteral("\" sheetId=\"") + QByteArray::number(i + 1) + '"'
                 + (sheet.state.isEmpty() ? QByteArray() : QByteArrayLiteral(" state=\"") + sheet.state.toUtf8() + '"')

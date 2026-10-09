@@ -11,11 +11,15 @@
 # outlines, protection and dynamic arrays (xlsx_read_features,
 # xlsx_write_features, xlsx_post_sheet), and the carry stage that keeps the
 # parts the engine does not model (xlsx_carry*, through office_ooxml's
-# RelationshipCopier). Qt Core+Gui + KArchive.
+# RelationshipCopier). M69 (D-078): structured references and '@' in
+# Excel's spelling (xlsx_formula_tokens), table parts with calculated
+# columns and totals rows, legacy array formulas, chart sheets carried
+# whole (xlsx_carry_chartsheet). Qt Core+Gui + KArchive.
 add_library(calc_io STATIC
     src/xlsx_bridge.h
     src/xlsx_carry.h
     src/xlsx_carry_book.cpp
+    src/xlsx_carry_chartsheet.cpp
     src/xlsx_carry_context.cpp
     src/xlsx_carry_context.h
     src/xlsx_carry_drawing.cpp
@@ -28,6 +32,8 @@ add_library(calc_io STATIC
     src/xlsx_carry_xml.h
     src/xlsx_formula.cpp
     src/xlsx_formula.h
+    src/xlsx_formula_tokens.cpp
+    src/xlsx_formula_tokens.h
     src/xlsx_manifest.h
     src/xlsx_package.cpp
     src/xlsx_package.h

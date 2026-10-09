@@ -160,6 +160,11 @@ public:
             m_source.steps.append(step);
         }
     }
+    // M69 (D-078): a chart sheet — a sheet that is one chart (Excel's
+    // chartsheet part). It has no cells; its chart is the workbook chart
+    // whose `sheet` is this sheet, and calc_io carries its parts verbatim.
+    [[nodiscard]] bool isChartSheet() const { return m_chartSheet; }
+    void setChartSheet(bool chartSheet) { m_chartSheet = chartSheet; }
     // Drops a cell's CONTENT, keeping its style (the spill engine removes
     // spilled values from cells the user may have formatted).
     bool dropCellContent(const CellAddr &addr) { return m_cells.remove(addr.key()) > 0; }
@@ -194,6 +199,7 @@ private:
     SheetOutline m_outline;
     SheetProtection m_protection;
     SheetSource m_source;
+    bool m_chartSheet = false;
 };
 
 } // namespace QindaOffice::Calc
