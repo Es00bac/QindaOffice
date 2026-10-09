@@ -45,10 +45,18 @@ struct DocumentLine {
     // back from the file carry false (the stored flag is authoritative).
     bool taxableFromItem = true;
     qint64 classId = 0;
-    qint64 partyId = 0;     // journal entries: per-line name
+    qint64 partyId = 0;     // journal entries: per-line name; purchase orders and
+                            // bills (M68): the customer:job (stored, never posted)
     qint64 linkDocId = 0;   // deposits: the payment being deposited
     Money debit;            // journal entries only
     Money credit;
+    // M68 (D-077; schema v4). AGENT-CONTRACT (with purchase_orders.h and
+    // time_tracking.h): write() keeps poLineId only on bill lines,
+    // timeEntryId only on invoice lines and `closed` only on purchase-order
+    // lines; every other kind stores them as 0.
+    qint64 poLineId = 0;    // a bill line: the purchase-order line it receives
+    qint64 timeEntryId = 0; // an invoice line: the time entry it bills
+    bool closed = false;    // a purchase-order line closed by hand
 };
 
 struct Discount {
@@ -103,6 +111,8 @@ struct BusinessDocument {
     qint64 sourceDocId = 0; // estimate an invoice came from
     qint64 templateId = 0;  // recurring template that generated it
     qint64 txnId = 0;       // live posting (0 for drafts, estimates, void)
+    QString shipTo;         // M68: a purchase order's ship-to address (lines)
+    bool toPrint = false;   // M68: a check / bill payment in the print queue
     // Stored totals (written by the engine from DocumentTotals):
     Money subtotal;
     Money discountAmount;
@@ -158,8 +168,11 @@ public:
 
     [[nodiscard]] QJsonObject toJson(const BusinessDocument &doc) const;
 
-    // ---- engine-internal: callers hold a SqlTransaction ----
+    // ---- engine-internal: callers hold a SqlTransaction (documents_write.cpp) ----
     // Inserts (id == 0) or rewrites header + lines; sets doc.id.
+    // AGENT-GUARD (M68): a rewrite keeps the id of every line that already
+    // belonged to the document (bill lines name purchase-order lines by id);
+    // a line carrying another document's id gets a new one.
     Result write(BusinessDocument &doc);
     Result setState(qint64 docId, DocState state);
     Result addApplication(qint64 sourceDocId, qint64 targetDocId, const Money &amount,

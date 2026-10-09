@@ -34,6 +34,8 @@ struct CompanySettings {
     qint64 nextCreditMemoNumber = 1001;
     QString salesReceiptPrefix = QStringLiteral("SR-");
     qint64 nextSalesReceiptNumber = 1001;
+    QString purchaseOrderPrefix = QStringLiteral("PO-"); // M68 (D-077)
+    qint64 nextPurchaseOrderNumber = 1001;
     qint64 defaultTermsId = 0;                // 0 = Net 30 row created with the file
     QByteArray logo;                          // PNG/JPEG/SVG bytes as supplied
     QString accentColor = QStringLiteral("#1F5FBF"); // the one colour on invoices

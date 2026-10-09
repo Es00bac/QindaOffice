@@ -237,6 +237,7 @@ QList<Reports::Catalog> Reports::catalog()
     const QString sales = QStringLiteral("Sales and customers");
     const QString expenses = QStringLiteral("Expenses and vendors");
     const QString accountant = QStringLiteral("For my accountant");
+    const QString time = QStringLiteral("Jobs and time");
     return {
         {QStringLiteral("profit_and_loss"), QStringLiteral("Profit and Loss"), overview,
          QStringLiteral("Income minus cost of goods sold and expenses for a period: whether the business made money.")},
@@ -274,6 +275,15 @@ QList<Reports::Catalog> Reports::catalog()
          QStringLiteral("Spending with each vendor in a period.")},
         {QStringLiteral("expenses_by_category"), QStringLiteral("Expenses by Category"), expenses,
          QStringLiteral("Spending per expense account in a period, with its share of the total.")},
+        // M68 (D-077): purchase orders and time.
+        {QStringLiteral("open_purchase_orders"), QStringLiteral("Open Purchase Orders"), expenses,
+         QStringLiteral("Purchase orders still to receive, by vendor: each order's amount and what is left to receive.")},
+        {QStringLiteral("time_by_job"), QStringLiteral("Time by Job"), time,
+         QStringLiteral("Hours worked for each customer:job in a period, by service.")},
+        {QStringLiteral("time_by_name"), QStringLiteral("Time by Name"), time,
+         QStringLiteral("Hours each employee or vendor worked in a period, by customer:job.")},
+        {QStringLiteral("unbilled_time_by_job"), QStringLiteral("Unbilled Time by Job"), time,
+         QStringLiteral("Billable time not yet on an invoice, per customer:job, with what it will bill.")},
         {QStringLiteral("trial_balance"), QStringLiteral("Trial Balance"), accountant,
          QStringLiteral("Every account's debit or credit balance on a date; total debits equal total credits.")},
         {QStringLiteral("general_ledger"), QStringLiteral("General Ledger"), accountant,

@@ -57,11 +57,12 @@ namespace Format {
 // Document kinds as the QML API names them: invoice, estimate,
 // salesReceipt, payment, creditMemo, refund, bill, billPayment, expense,
 // check, creditCardCharge, vendorCredit, journalEntry, transfer, deposit,
-// salesTaxPayment, recurringTemplate, openingBalance.
+// salesTaxPayment, recurringTemplate, openingBalance, purchaseOrder (M68).
 [[nodiscard]] QString kindKey(Engine::DocKind kind);
 [[nodiscard]] std::optional<Engine::DocKind> kindFromKey(const QString &key);
 [[nodiscard]] QString kindLabel(Engine::DocKind kind);
-// draft, open, partial, paid, overdue, void, pending, closed.
+// draft, open, partial, paid, overdue, void, pending, closed,
+// partiallyReceived (M68: a purchase order bills have received in part).
 [[nodiscard]] QString statusKey(Engine::DocumentStatus status);
 [[nodiscard]] QString statusLabel(Engine::DocumentStatus status);
 

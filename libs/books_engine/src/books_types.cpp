@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "books_types.h"
 
-
 namespace QindaOffice::Books {
 
 QString docKindName(DocKind kind)
@@ -25,13 +24,14 @@ QString docKindName(DocKind kind)
     case DocKind::SalesTaxPayment: return QStringLiteral("Sales Tax Payment");
     case DocKind::InvoiceTemplate: return QStringLiteral("Recurring Template");
     case DocKind::OpeningBalance: return QStringLiteral("Opening Balance");
+    case DocKind::PurchaseOrder: return QStringLiteral("Purchase Order");
     }
     return QStringLiteral("Transaction");
 }
 
 bool docKindPosts(DocKind kind)
 {
-    return kind != DocKind::Estimate && kind != DocKind::InvoiceTemplate;
+    return kind != DocKind::Estimate && kind != DocKind::InvoiceTemplate && kind != DocKind::PurchaseOrder;
 }
 
 bool docKindIsReceivable(DocKind kind)
@@ -55,6 +55,7 @@ QString documentStatusName(DocumentStatus status)
     case DocumentStatus::Void: return QStringLiteral("void");
     case DocumentStatus::Pending: return QStringLiteral("pending");
     case DocumentStatus::Closed: return QStringLiteral("closed");
+    case DocumentStatus::PartiallyReceived: return QStringLiteral("partiallyReceived");
     }
     return QString();
 }

@@ -48,6 +48,11 @@ const QStringList kCommandIds{
     QStringLiteral("booksBudgetsAction"),          QStringLiteral("booksSalesTaxPaymentAction"),
     QStringLiteral("booksImportIifAction"),        QStringLiteral("booksExportReportXlsxAction"),
     QStringLiteral("booksPrintCheckAction"),
+    // M68 (D-077)
+    QStringLiteral("booksNewPurchaseOrderAction"),  QStringLiteral("booksCreateBillFromOrderAction"),
+    QStringLiteral("booksPrintChecksAction"),       QStringLiteral("booksCheckAlignmentAction"),
+    QStringLiteral("booksTimeActivityAction"),      QStringLiteral("booksWeeklyTimesheetAction"),
+    QStringLiteral("booksNewEmployeeAction"),       QStringLiteral("booksViewTimeAction"),
 };
 
 // A host with a company at `dir/name`.
@@ -146,7 +151,11 @@ private slots:
         host.setCurrentView(QStringLiteral("nowhere"));
         QCOMPARE(host.currentView(), QStringLiteral("banking"));
         QCOMPARE(viewChanged.count(), 2);
-        QCOMPARE(BooksHost::viewKeys().size(), 6);
+        viewChanged.clear();
+        QCOMPARE(BooksHost::viewKeys().size(), 7); // M68: Time
+        host.setCurrentView(QStringLiteral("time"));
+        QCOMPARE(checkedViews(host), QStringList{QStringLiteral("booksViewTimeAction")});
+        QCOMPARE(host.action(QStringLiteral("booksViewTimeAction"))->shortcut(), QKeySequence(QStringLiteral("Ctrl+7")));
     }
 
     void commandsEmitTheirRequests()
@@ -163,7 +172,8 @@ private slots:
             {QStringLiteral("booksNewBillAction"), QStringLiteral("bill")},
             {QStringLiteral("booksNewExpenseAction"), QStringLiteral("expense")},
             {QStringLiteral("booksNewCheckAction"), QStringLiteral("check")},
-            {QStringLiteral("booksNewVendorCreditAction"), QStringLiteral("vendorCredit")}};
+            {QStringLiteral("booksNewVendorCreditAction"), QStringLiteral("vendorCredit")},
+            {QStringLiteral("booksNewPurchaseOrderAction"), QStringLiteral("purchaseOrder")}};
         for (const auto &[id, kind] : editors) {
             QVERIFY(host.actions()->trigger(id));
             QCOMPARE(editor.last().at(0).toString(), kind);
@@ -199,7 +209,13 @@ private slots:
             {QStringLiteral("booksRunReportAction"), SIGNAL(reportRequested(QString))},
             {QStringLiteral("booksImportListsAction"), SIGNAL(importListsRequested())},
             {QStringLiteral("booksCompanySettingsAction"), SIGNAL(companySettingsRequested())},
-            {QStringLiteral("booksCloseBooksAction"), SIGNAL(closeBooksRequested())}};
+            {QStringLiteral("booksCloseBooksAction"), SIGNAL(closeBooksRequested())},
+            // M68 (D-077)
+            {QStringLiteral("booksPrintChecksAction"), SIGNAL(printChecksRequested())},
+            {QStringLiteral("booksCheckAlignmentAction"), SIGNAL(checkAlignmentRequested())},
+            {QStringLiteral("booksTimeActivityAction"), SIGNAL(timeActivityRequested(qint64))},
+            {QStringLiteral("booksWeeklyTimesheetAction"), SIGNAL(timesheetRequested())},
+            {QStringLiteral("booksNewEmployeeAction"), SIGNAL(employeeDialogRequested(qint64))}};
         for (const auto &[id, signal] : plain) {
             QSignalSpy spy(&host, signal);
             QVERIFY(host.actions()->trigger(id));
@@ -341,6 +357,47 @@ private slots:
         // Voiding the selected check takes the command away.
         QVERIFY(ok(books->voidDocument(check, QStringLiteral("spoiled"))));
         QVERIFY(!printCheck->isEnabled());
+    }
+
+    // M68 (D-077): Create Bill from Order follows the selection — an order
+    // with something left to receive — and asks for that order's bill.
+    void createBillFollowsTheSelectedOrder()
+    {
+        QTemporaryDir dir;
+        BooksHost host;
+        QVERIFY(ok(withCompany(host, dir)));
+        BooksService *books = host.books();
+        const qint64 vendor = idOf(books->saveParty({{QStringLiteral("kind"), QStringLiteral("vendor")},
+                                                     {QStringLiteral("name"), QStringLiteral("Copperleaf Paper")}}));
+        const QVariantMap line{{QStringLiteral("description"), QStringLiteral("Paper")},
+                               {QStringLiteral("accountId"), find(books->accounts(), QStringLiteral("number"), QStringLiteral("6400")).value(QStringLiteral("id"))},
+                               {QStringLiteral("amount"), QStringLiteral("80.00")}};
+        const qint64 po = idOf(books->saveDocument({{QStringLiteral("kind"), QStringLiteral("purchaseOrder")},
+                                                    {QStringLiteral("partyId"), vendor},
+                                                    {QStringLiteral("lines"), QVariantList{line}}}));
+        const qint64 bill = idOf(books->saveDocument({{QStringLiteral("kind"), QStringLiteral("bill")},
+                                                      {QStringLiteral("partyId"), vendor},
+                                                      {QStringLiteral("lines"), QVariantList{line}}}));
+        QVERIFY(po != 0 && bill != 0);
+        ActionEntry *create = host.action(QStringLiteral("booksCreateBillFromOrderAction"));
+        QVERIFY(!create->isEnabled());
+        host.setSelectedDocumentId(bill);
+        QVERIFY(!create->isEnabled());
+        host.setSelectedDocumentId(po);
+        QVERIFY(create->isEnabled());
+        QSignalSpy requested(&host, &BooksHost::billFromOrderRequested);
+        QVERIFY(host.actions()->trigger(QStringLiteral("booksCreateBillFromOrderAction")));
+        QCOMPARE(requested.last().at(0).toLongLong(), po);
+        // A purchase order prints as its form through the document source.
+        host.setPrintSource(QStringLiteral("document"), po);
+        QCOMPARE(host.printSourceKind(), QStringLiteral("document"));
+        QVERIFY(host.exportPdf(dir.filePath(QStringLiteral("po.pdf"))));
+        // Closed by hand, there is nothing to receive.
+        QVERIFY(ok(books->setOrderClosed(po, true)));
+        QVERIFY(!create->isEnabled());
+        // A "checks" source refuses anything that is not a check.
+        host.setPrintSource(QStringLiteral("checks"), QVariantList{po});
+        QCOMPARE(host.printSourceKind(), QString());
     }
 
     void theWindowInstantiatesOverTheHost()

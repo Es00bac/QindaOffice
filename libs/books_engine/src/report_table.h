@@ -6,8 +6,9 @@
 // PDF and CSV — neither re-derives a number.
 //
 // AGENT-CONTRACT (shape):
-//  * columns: typed (text, money, number, percent, date); column 0 is the
-//    row label for grouped reports.
+//  * columns: typed (text, money, number, percent, date, duration); column
+//    0 is the row label for grouped reports. A duration (M68, the time
+//    reports) is whole minutes, shown h:mm.
 //  * rows: kind (Section header, Account/Detail line, Subtotal, Total,
 //    Spacer) + depth for indentation + one cell per column + a drill-down
 //    key the app turns into "show the transactions behind this number".
@@ -24,7 +25,7 @@
 
 namespace QindaOffice::Books {
 
-enum class ColumnType { Text, Money, Number, Percent, Date };
+enum class ColumnType { Text, Money, Number, Percent, Date, Duration };
 
 struct ReportColumn {
     QString id;    // stable key ("label", "total", "2026-01", "prior")
@@ -38,7 +39,7 @@ struct ReportCell {
     ColumnType type = ColumnType::Text;
     bool empty = true;
     QString text;
-    qint64 value = 0; // money minor units, or fixed-point number
+    qint64 value = 0; // money minor units, fixed-point number, or minutes
     int scale = 0;    // decimals of a Number/Percent value
     QDate date;
 
@@ -47,9 +48,11 @@ struct ReportCell {
     [[nodiscard]] static ReportCell ofNumber(qint64 value, int scale = 0);
     [[nodiscard]] static ReportCell ofPercent(qint64 value, int scale = 1);
     [[nodiscard]] static ReportCell ofDate(const QDate &date);
+    [[nodiscard]] static ReportCell ofDuration(qint64 minutes); // shown "1:05"
+
     [[nodiscard]] static ReportCell blank() { return {}; }
     // Display text: money via Money::format(locale), numbers with their
-    // decimals, dates ISO. `currency` is the table's.
+    // decimals, dates ISO, durations h:mm. `currency` is the table's.
     [[nodiscard]] QString display(const QString &currency, const QLocale &locale = QLocale::c()) const;
 };
 

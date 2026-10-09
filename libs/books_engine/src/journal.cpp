@@ -4,6 +4,7 @@
 #include "accounts.h"
 #include "company_file.h"
 #include "documents.h"
+#include "purchase_orders.h"
 #include "sql_util.h"
 
 #include <QJsonDocument>
@@ -200,6 +201,12 @@ Result Ledger::voidDocument(qint64 docId, const QString &reason, const PostOptio
     }
     if (doc->state == DocState::Void) {
         return Result::failure(ErrorCode::AlreadyVoided, QStringLiteral("already void"));
+    }
+    // M68: a purchase order bills have received stays (close it instead).
+    if (doc->kind == DocKind::PurchaseOrder) {
+        if (const Result r = PurchaseOrders(m_file).checkVoidable(docId); !r.ok) {
+            return r;
+        }
     }
     SqlTransaction txn(m_file);
     const Result voided = voidLiveTransaction(docId, reason, options);

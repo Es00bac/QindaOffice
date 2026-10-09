@@ -5,7 +5,8 @@ import QindaTK as Tk
 
 // The lines of a document: product/service (sales) or category account
 // (bills and expenses), description, quantity, rate, the computed amount
-// and — on sales — taxable. Quantities and rates stay TEXT here; the
+// and — on sales — taxable. A line received from a purchase order or
+// billing time carries a badge (M68); its link rides along in the line. Quantities and rates stay TEXT here; the
 // service parses them exactly (Decimal) and returns each line's amount in
 // `amounts`, so this view never multiplies money.
 Tk.Flex {
@@ -78,6 +79,13 @@ Tk.Flex {
                 text: String(line.lineData.description || "")
                 placeholderText: qsTr("Description")
                 onEditingFinished: if (text !== String(line.lineData.description || "")) table.update(line.index, "description", text)
+            }
+            // M68: a line that receives a purchase order or bills time says so.
+            Tk.Badge {
+                objectName: "lineLink"
+                visible: Number(line.lineData.poLineId || 0) > 0 || Number(line.lineData.timeEntryId || 0) > 0
+                text: Number(line.lineData.poLineId || 0) > 0 ? String(line.lineData.orderNumber || qsTr("P.O.")) : qsTr("Time")
+                variant: "info"
             }
             Tk.TextField {
                 objectName: "lineQuantity"

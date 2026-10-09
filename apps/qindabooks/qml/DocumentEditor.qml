@@ -12,6 +12,9 @@ import QindaOffice.Books.App
 // BooksService.computeTotals on every edit — the editor never computes
 // money. A posted document is edited through the service's update path
 // (void and repost with an audit reason); a voided one is read-only.
+// M68 (D-077): a bill offers the vendor's open purchase orders to receive
+// (ReceiveOrderDialog), an invoice the customer's unbilled billable time
+// (BillableTimeDialog); a new check can wait in the print queue.
 Tk.Dialog {
     id: editor
 
@@ -31,7 +34,15 @@ Tk.Dialog {
     property var paymentAccounts: []
     property var terms: []
     property var taxRates: []
+    property var bankIds: []
     property string linkRequest: ""
+    // M68: what the chosen party has waiting (bills: order lines; invoices:
+    // time) and is not on this document yet.
+    readonly property var linked: (doc.lines || []).map(function(l) { return Number(kind === "bill" ? l.poLineId || 0 : l.timeEntryId || 0) })
+    readonly property int waiting: !visible || voided || Number(doc.partyId || 0) === 0 ? 0
+        : kind === "bill" ? books.openOrderLines(doc.partyId).filter(function(l) { return editor.linked.indexOf(l.lineId) < 0 }).length
+        : kind === "invoice" ? books.unbilledTime(doc.partyId).filter(function(t) { return editor.linked.indexOf(t.id) < 0 }).length : 0
+    readonly property bool canQueue: kind === "check" && !existing && bankIds.indexOf(Number(doc.paymentAccountId || 0)) >= 0
 
     objectName: "documentEditor"
     title: (existing ? "" : qsTr("New ")) + (titles[kind] || kind) + (existing && doc.number ? " " + doc.number : "")
@@ -48,6 +59,7 @@ Tk.Dialog {
         parties = [{ id: 0, name: sales ? qsTr("Choose a customer") : qsTr("Choose a payee") }]
                   .concat(books.parties(sales ? "customer" : "vendor", false))
         paymentAccounts = books.paymentAccounts()
+        bankIds = books.bankAccounts().filter(function(a) { return a.type === "Bank" }).map(function(a) { return a.id })
         terms = books.terms()
         taxRates = [{ id: 0, name: qsTr("No sales tax") }].concat(books.taxRates())
         if (loaded !== null) {
@@ -60,6 +72,18 @@ Tk.Dialog {
         error.visible = false
         recompute()
         open()
+    }
+    // A new bill prepared elsewhere (Create Bill from a purchase order, M68).
+    function openDraft(draft) {
+        openFor(String(draft.kind || "bill"), 0)
+        doc = Object.assign({}, doc, draft)
+        recompute()
+    }
+    // Lines another dialog chose (received order lines, billable time),
+    // in place of the empty trailing row.
+    function appendLines(more) {
+        const kept = (doc.lines || []).filter(function(l) { return l.itemId || l.accountId || String(l.description || "").length > 0 })
+        edit("lines", kept.concat(more))
     }
     function edit(field, value) { const next = Object.assign({}, doc); next[field] = value; doc = next; recompute() }
     function recompute() { totals = books !== null ? books.computeTotals(Object.assign({}, doc, { kind: kind })) : ({}) }
@@ -86,6 +110,27 @@ Tk.Dialog {
         gap: Tk.Theme.space.md
 
         Tk.Notice { id: error; visible: false; variant: "danger"; title: qsTr("Not saved") }
+        Tk.Notice {
+            objectName: "documentWaiting"
+            visible: editor.waiting > 0
+            variant: "info"
+            title: editor.kind === "bill" ? qsTr("Open purchase orders") : qsTr("Billable time")
+            text: editor.kind === "bill"
+                  ? (editor.waiting === 1 ? qsTr("1 order line from this vendor is waiting to be received.")
+                                          : qsTr("%1 order lines from this vendor are waiting to be received.").arg(editor.waiting))
+                  : (editor.waiting === 1 ? qsTr("1 time entry for this customer is not billed yet.")
+                                          : qsTr("%1 time entries for this customer are not billed yet.").arg(editor.waiting))
+            actions: [Tk.Button {
+                objectName: "documentWaitingOpen"
+                small: true; variant: "outline"
+                text: editor.kind === "bill" ? qsTr("Receive…") : qsTr("Add time…")
+                onClicked: {
+                    const name = editor.parties[partyBox.currentIndex].name
+                    if (editor.kind === "bill") receiveDialog.openFor(editor.doc.partyId, name, editor.linked)
+                    else timeDialog.openFor(editor.doc.partyId, name, editor.linked)
+                }
+            }]
+        }
         Tk.Notice { visible: editor.voided; variant: "warning"; title: qsTr("Voided"); text: qsTr("This document was voided; it stays in the records with no effect on the books.") }
 
         Tk.Grid {
@@ -127,7 +172,16 @@ Tk.Dialog {
             }
             Tk.PropertyRow {
                 label: editor.kind === "check" ? qsTr("Check no.") : qsTr("Number")
-                Tk.TextField { objectName: "documentNumber"; small: true; mono: true; readOnly: editor.voided; placeholderText: qsTr("Automatic"); text: String(editor.doc.number || ""); onEditingFinished: editor.edit("number", text) }
+                Tk.TextField { objectName: "documentNumber"; small: true; mono: true; readOnly: editor.voided || editor.doc.toPrint === true
+                               placeholderText: editor.doc.toPrint === true ? qsTr("Given when it prints") : qsTr("Automatic")
+                               text: editor.doc.toPrint === true ? "" : String(editor.doc.number || ""); onEditingFinished: editor.edit("number", text) }
+            }
+            Tk.PropertyRow {
+                visible: editor.canQueue || (editor.kind === "check" && editor.doc.toPrint === true)
+                label: qsTr("Print later")
+                Tk.Switch { objectName: "documentToPrint"; enabled: editor.canQueue; checked: editor.doc.toPrint === true
+                            tooltip: qsTr("Save it to the print queue: Expenses > Checks to Print numbers it as it prints")
+                            onToggled: { editor.edit("toPrint", checked); checked = Qt.binding(function() { return editor.doc.toPrint === true }) } }
             }
             Tk.PropertyRow {
                 visible: !editor.paidNow && editor.kind !== "creditMemo" && editor.kind !== "vendorCredit"
@@ -153,8 +207,9 @@ Tk.Dialog {
             objectName: "documentLines"
             lines: editor.doc.lines || []
             mode: editor.sales ? "item" : "account"
-            items: editor.books !== null ? editor.books.items(false) : []
-            accounts: editor.books !== null ? editor.books.expenseAccounts() : []
+            // revision: an item or category added since the window opened shows too.
+            items: editor.books !== null && editor.books.revision >= 0 ? editor.books.items(false) : []
+            accounts: editor.books !== null && editor.books.revision >= 0 ? editor.books.expenseAccounts() : []
             showTax: editor.sales
             readOnly: editor.voided
             amounts: (editor.totals.lines || []).map(function(l) { return l.amountText })
@@ -231,6 +286,8 @@ Tk.Dialog {
         nameFilters: [qsTr("PDF (*.pdf)")]
         onAccepted: editor.books.exportDocumentPdf(editor.doc.id, selectedFile)
     }
+    ReceiveOrderDialog { id: receiveDialog; books: editor.books; onReceived: function(lines) { editor.appendLines(lines) } }
+    BillableTimeDialog { id: timeDialog; books: editor.books; onChosen: function(lines) { editor.appendLines(lines) } }
     Tk.PromptDialog {
         id: voidPrompt
         title: qsTr("Void this document")

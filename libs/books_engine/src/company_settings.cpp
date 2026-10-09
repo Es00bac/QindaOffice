@@ -45,6 +45,8 @@ QVariantMap toMap(const CompanySettings &s)
         {QStringLiteral("next_credit_memo_number"), s.nextCreditMemoNumber},
         {QStringLiteral("sales_receipt_prefix"), s.salesReceiptPrefix},
         {QStringLiteral("next_sales_receipt_number"), s.nextSalesReceiptNumber},
+        {QStringLiteral("purchase_order_prefix"), s.purchaseOrderPrefix},
+        {QStringLiteral("next_purchase_order_number"), s.nextPurchaseOrderNumber},
         {QStringLiteral("default_terms_id"), s.defaultTermsId},
         {QStringLiteral("logo"), s.logo},
         {QStringLiteral("accent_color"), s.accentColor},
@@ -78,6 +80,9 @@ std::optional<Counter> counterFor(DocKind kind)
     case DocKind::SalesReceipt:
         return Counter{QStringLiteral("sales_receipt_prefix"),
                        QStringLiteral("next_sales_receipt_number")};
+    case DocKind::PurchaseOrder:
+        return Counter{QStringLiteral("purchase_order_prefix"),
+                       QStringLiteral("next_purchase_order_number")};
     default:
         return std::nullopt;
     }
@@ -126,6 +131,8 @@ CompanySettings CompanyFile::settings() const
     number("next_credit_memo_number", s.nextCreditMemoNumber);
     text("sales_receipt_prefix", s.salesReceiptPrefix);
     number("next_sales_receipt_number", s.nextSalesReceiptNumber);
+    text("purchase_order_prefix", s.purchaseOrderPrefix);
+    number("next_purchase_order_number", s.nextPurchaseOrderNumber);
     number("default_terms_id", s.defaultTermsId);
     s.logo = map.value(QStringLiteral("logo")).toByteArray();
     text("accent_color", s.accentColor);

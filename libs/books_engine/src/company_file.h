@@ -66,8 +66,9 @@ public:
     [[nodiscard]] QDate lockDate() const;
     [[nodiscard]] QString currency() const { return m_currency; }
     [[nodiscard]] Money money(qint64 minorUnits) const { return Money(minorUnits, m_currency); }
-    // Reserves the next number for invoices, estimates, credit memos and
-    // sales receipts ("INV-1001"); empty for kinds without a counter.
+    // Reserves the next number for invoices, estimates, credit memos,
+    // sales receipts and purchase orders (M68) ("INV-1001", "PO-1001");
+    // empty for kinds without a counter.
     [[nodiscard]] QString takeNextNumber(DocKind kind);
     [[nodiscard]] QString peekNextNumber(DocKind kind) const;
 

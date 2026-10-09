@@ -89,6 +89,71 @@ QString formatDate(const QDate &date, const QLocale &locale)
     return date.isValid() ? locale.toString(date, QStringLiteral("MMM d, yyyy")) : QString();
 }
 
+namespace {
+
+// A purchase order (M68, D-077): what the vendor is asked to send, where to,
+// by when. Item and Customer columns only when some line uses them.
+void buildPurchaseOrder(CompanyFile &file, const BusinessDocument &doc, PrintableDocument *p)
+{
+    Lists lists(file);
+    const QLocale &loc = p->locale;
+    p->kind = PrintableDocument::Kind::PurchaseOrder;
+    p->title = QStringLiteral("PURCHASE ORDER");
+    p->partyLabel = QStringLiteral("Vendor");
+    p->meta << qMakePair(QStringLiteral("P.O. No."), doc.number) << qMakePair(QStringLiteral("Date"), formatDate(doc.date, loc));
+    if (doc.dueDate.isValid()) {
+        p->meta << qMakePair(QStringLiteral("Expected"), formatDate(doc.dueDate, loc));
+    }
+    if (!doc.reference.isEmpty()) {
+        p->meta << qMakePair(QStringLiteral("Reference"), doc.reference);
+    }
+    if (!doc.shipTo.trimmed().isEmpty()) {
+        p->shipToLabel = QStringLiteral("Ship to");
+        p->shipToLines = splitLines(doc.shipTo);
+    }
+    bool items = false;
+    bool jobs = false;
+    for (const DocumentLine &line : doc.lines) {
+        items = items || line.itemId != 0;
+        jobs = jobs || line.partyId != 0;
+    }
+    if (items) {
+        p->columns << PrintableColumn{QStringLiteral("Item"), 3, false};
+    }
+    p->columns << PrintableColumn{QStringLiteral("Description"), items ? 4 : 7, false};
+    if (jobs) {
+        p->columns << PrintableColumn{QStringLiteral("Customer"), 2, false};
+    }
+    p->columns << PrintableColumn{QStringLiteral("Qty"), 1, true} << PrintableColumn{QStringLiteral("Rate"), 2, true}
+               << PrintableColumn{QStringLiteral("Amount"), 2, true};
+    const DocumentTotals totals = Documents(file).computeTotals(doc);
+    for (qsizetype i = 0; i < doc.lines.size(); ++i) {
+        const DocumentLine &line = doc.lines[i];
+        QStringList row;
+        if (items) {
+            const std::optional<Item> item = lists.item(line.itemId);
+            row << (item ? item->name : QString());
+        }
+        row << line.description;
+        if (jobs) {
+            const std::optional<Party> job = lists.party(line.partyId);
+            row << (job ? job->displayName : QString());
+        }
+        const Money amount = i < totals.lineAmounts.size() ? totals.lineAmounts[i] : line.amount;
+        row << line.quantity.toString() << (line.unitPrice.isZero() ? QString() : line.unitPrice.format(loc, false))
+            << amount.format(loc, false);
+        p->rows << row;
+    }
+    p->totals << PrintableTotal{QStringLiteral("Total"), totals.total.format(loc), true};
+    p->highlightLabel = QStringLiteral("Order total");
+    p->highlightAmount = totals.total.format(loc);
+    p->message = doc.message; // the vendor message
+    p->paymentInstructions.clear();
+    p->payOnlineUrl.clear();
+}
+
+} // namespace
+
 bool buildPrintableDocument(CompanyFile &file, qint64 docId, PrintableDocument *out, QString *error)
 {
     Documents documents(file);
@@ -106,6 +171,13 @@ bool buildPrintableDocument(CompanyFile &file, qint64 docId, PrintableDocument *
         return fail(QStringLiteral("a void document is not printed"));
     }
     PrintableDocument p;
+    if (doc->kind == DocKind::PurchaseOrder) {
+        fillCompany(file, &p);
+        fillParty(file, doc->partyId, &p);
+        buildPurchaseOrder(file, *doc, &p);
+        *out = p;
+        return true;
+    }
     QString numberLabel;
     switch (doc->kind) {
     case DocKind::Invoice:

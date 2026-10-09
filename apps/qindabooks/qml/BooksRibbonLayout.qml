@@ -4,9 +4,10 @@ import QindaOffice.Shell
 
 // QindaBooks' ribbon (D-041, D-047): File (company, backups, import and
 // export) · Home (the everyday transactions, statements and recurring
-// invoices) · Banking · Accounting (journal, budgets and sales tax, the
-// period) · Reports · View. Every string is an ActionEntry id BooksHost
-// registers.
+// invoices) · Purchases (orders, the check queue and alignment; M68) · Time
+// (activities, the weekly timesheet, employees; M68) · Banking · Accounting
+// (journal, budgets and sales tax, the period) · Reports · View. Every
+// string is an ActionEntry id BooksHost registers.
 QtObject {
     readonly property var tabs: [
         (function() {
@@ -35,12 +36,24 @@ QtObject {
                 "booksStatementsAction", "booksRecurringAction"] },
             { id: "vendors", label: qsTr("Vendors"), items: [
                 { action: "booksNewExpenseAction", size: "large", split: true,
-                  menu: ["booksNewExpenseAction", "booksNewCheckAction", "booksNewBillAction", "booksNewVendorCreditAction"] },
+                  menu: ["booksNewExpenseAction", "booksNewCheckAction", "booksNewBillAction", "booksNewVendorCreditAction",
+                         "booksNewPurchaseOrderAction"] },
                 { action: "booksPayBillsAction", size: "large" },
                 "booksNewBillAction", "booksNewCheckAction", "booksNewVendorCreditAction", "booksNewVendorAction"] },
             { id: "lists", label: qsTr("Lists"), items: ["booksNewItemAction", "booksNewAccountAction"] },
             { id: "document", label: qsTr("Document"), items: [
                 "booksPrintDocumentAction", "booksPrintCheckAction", "booksEmailDocumentAction", "booksVoidAction"] }
+        ] },
+        { id: "purchases", label: qsTr("Purchases"), keyTip: "P", groups: [
+            { id: "orders", label: qsTr("Purchase orders"), items: [
+                { action: "booksNewPurchaseOrderAction", size: "large" }, "booksCreateBillFromOrderAction"] },
+            { id: "checks", label: qsTr("Checks"), items: [
+                { action: "booksPrintChecksAction", size: "large" }, "booksCheckAlignmentAction"] }
+        ] },
+        { id: "time", label: qsTr("Time"), keyTip: "T", groups: [
+            { id: "enter", label: qsTr("Enter time"), items: [
+                { action: "booksTimeActivityAction", size: "large" }, { action: "booksWeeklyTimesheetAction", size: "large" }] },
+            { id: "people", label: qsTr("People"), items: ["booksNewEmployeeAction"] }
         ] },
         { id: "banking", label: qsTr("Banking"), keyTip: "B", groups: [
             { id: "connections", label: qsTr("Connections"), items: [
@@ -66,7 +79,7 @@ QtObject {
         StandardRibbon.viewTab([
             { id: "workspace", label: qsTr("Workspace"), items: [
                 { action: "booksViewDashboardAction", size: "large" }, "booksViewSalesAction", "booksViewExpensesAction",
-                "booksViewBankingAction", "booksViewAccountingAction", "booksViewReportsAction"] },
+                "booksViewBankingAction", "booksViewAccountingAction", "booksViewReportsAction", "booksViewTimeAction"] },
             StandardRibbon.assistantGroup([])
         ])
     ]

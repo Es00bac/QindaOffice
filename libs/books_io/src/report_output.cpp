@@ -46,7 +46,7 @@ struct Columns {
 
 bool isNumeric(ColumnType t)
 {
-    return t == ColumnType::Money || t == ColumnType::Number || t == ColumnType::Percent;
+    return t == ColumnType::Money || t == ColumnType::Number || t == ColumnType::Percent || t == ColumnType::Duration;
 }
 
 Columns measure(const ReportTable &t, const ReportStyle &style, qreal width, const Fonts &f)
@@ -290,6 +290,7 @@ QString reportCellPlain(const ReportCell &cell, const QString &currency)
     case ColumnType::Number:
     case ColumnType::Percent: return Decimal(cell.value, cell.scale).toString();
     case ColumnType::Date: return cell.date.toString(Qt::ISODate);
+    case ColumnType::Duration: return cell.display(currency); // h:mm, as QuickBooks exports time
     }
     return QString();
 }

@@ -37,6 +37,11 @@ QStringList optionsFor(const QString &id)
         {QStringLiteral("journal"), {QStringLiteral("from"), QStringLiteral("to")}},
         {QStringLiteral("transaction_list"), {QStringLiteral("from"), QStringLiteral("to")}},
         {QStringLiteral("reconciliation"), {}},
+        // M68: purchases and time — no basis, nothing posts.
+        {QStringLiteral("open_purchase_orders"), {QStringLiteral("asOf")}},
+        {QStringLiteral("time_by_job"), {QStringLiteral("from"), QStringLiteral("to")}},
+        {QStringLiteral("time_by_name"), {QStringLiteral("from"), QStringLiteral("to")}},
+        {QStringLiteral("unbilled_time_by_job"), {QStringLiteral("from"), QStringLiteral("to")}},
     };
     if (table.contains(id)) {
         return table.value(id);
@@ -171,6 +176,19 @@ std::optional<ReportTable> BooksService::buildReport(const QString &id, const QV
     }
     if (id == QLatin1String("sales_tax_liability")) {
         return reports.salesTaxLiability(from, to);
+    }
+    // M68 (D-077).
+    if (id == QLatin1String("open_purchase_orders")) {
+        return reports.openPurchaseOrders(asOf);
+    }
+    using Period = ReportTable (Reports::*)(const QDate &, const QDate &) const;
+    static const QHash<QString, Period> time{
+        {QStringLiteral("time_by_job"), &Reports::timeByJob},
+        {QStringLiteral("time_by_name"), &Reports::timeByName},
+        {QStringLiteral("unbilled_time_by_job"), &Reports::unbilledTimeByJob},
+    };
+    if (time.contains(id)) {
+        return (reports.*time.value(id))(from, to);
     }
     using AsOf = ReportTable (Reports::*)(const QDate &) const;
     static const QHash<QString, AsOf> asOfReports{

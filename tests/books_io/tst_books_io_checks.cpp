@@ -72,6 +72,22 @@ qint64 bill(Company &c, const char *number, qint64 cents, const QDate &date)
     return Purchases(*c.file).createBill(b).id;
 }
 
+// The box of the first word on page 1 that reads `word` (points from the
+// sheet's top-left); an invalid rectangle when there is none.
+QRectF boxOf(const QString &pdf, const QString &word)
+{
+    std::unique_ptr<Poppler::Document> doc = Poppler::Document::load(pdf);
+    if (!doc || doc->numPages() < 1) {
+        return {};
+    }
+    for (const std::unique_ptr<Poppler::TextBox> &box : doc->page(0)->textList()) {
+        if (box->text() == word) {
+            return box->boundingBox();
+        }
+    }
+    return {};
+}
+
 // Text Poppler finds inside `band` (points from the sheet's top-left).
 QString textIn(const QString &pdf, int page, const QRectF &band)
 {
@@ -231,6 +247,70 @@ private slots:
         QVERIFY(QRegularExpression(str("\\+ \\d+ more")).match(textIn(pdf, 1, QRectF(0, 252, 612, 252))).hasMatch());
         QVERIFY(pages.at(1).contains(str("$477.99")));
         saveGalleryPng(pdf, str("books-check-voucher.png"));
+    }
+
+    // M68 (D-077): the printer's alignment moves every field by exactly
+    // its offset; the offsets read and keep as typed; the test page shows
+    // the sample check and says how to read it.
+    void theAlignmentOffsetMovesEveryField()
+    {
+        Company c = build(m_dir.filePath(str("aligned.qbooks")));
+        const qint64 check = writeCheck(c);
+        const QString plain = m_dir.filePath(str("plain.pdf"));
+        const QString moved = m_dir.filePath(str("moved.pdf"));
+        QString error;
+        QVERIFY2(CheckRenderer::writeChecksPdf(*c.file, {check}, plain, &error), qPrintable(error));
+        const std::optional<CheckAlignment> laser =
+            CheckAlignment::make(str("Office Laser"), str("0.25"), str("0.5"), str("in"), &error);
+        QVERIFY2(laser, qPrintable(error));
+        QCOMPARE(laser->offset().dx, 18.0);
+        QCOMPARE(laser->offset().dy, 36.0);
+        QCOMPARE(laser->describe(), str("0.25 in right, 0.5 in down"));
+        QVERIFY(CheckRenderer::writeChecksPdf(*c.file, {check}, moved, &error, laser->offset()));
+        for (const char *word : {"03/09/2026", "Pixel", "**449.99", "Spring", "Mounting"}) {
+            const QRectF before = boxOf(plain, str(word));
+            const QRectF after = boxOf(moved, str(word));
+            QVERIFY2(before.isValid() && after.isValid(), word);
+            QVERIFY2(qAbs(after.left() - before.left() - 18.0) < 0.5, word);
+            QVERIFY2(qAbs(after.top() - before.top() - 36.0) < 0.5, word);
+        }
+        // Millimetres, left and up.
+        const std::optional<CheckAlignment> metric =
+            CheckAlignment::make(str("Inkjet"), str("-5"), str("-2.5"), str("mm"), &error);
+        QVERIFY(metric);
+        QVERIFY(qAbs(metric->offset().dx + 5 * 72 / 25.4) < 1e-9);
+        QCOMPARE(metric->describe(), str("5 mm left, 2.5 mm up"));
+        // What does not read: too far, too fine, not a number.
+        for (const auto &[x, unit] : {std::pair{"1.01", "in"}, std::pair{"0.125", "in"}, std::pair{"25.5", "mm"},
+                                      std::pair{"0.05", "mm"}, std::pair{"abc", "in"}}) {
+            QVERIFY2(!CheckAlignment::make(str("p"), str(x), str("0"), str(unit)), x);
+        }
+        // Per printer, kept as typed; a zero offset removes the entry.
+        const QString storePath = m_dir.filePath(str("alignment/check-alignment.json"));
+        CheckAlignmentStore store(storePath);
+        QVERIFY(store.alignment(str("Office Laser")).isZero());
+        QVERIFY(store.save(*laser, &error));
+        QVERIFY(store.save(*metric, &error));
+        QCOMPARE(CheckAlignmentStore(storePath).alignment(str("Office Laser")).x, str("0.25"));
+        QCOMPARE(CheckAlignmentStore(storePath).alignment(str("Inkjet")).unitKey(), str("mm"));
+        QCOMPARE(store.printers(), (QStringList{str("Inkjet"), str("Office Laser")}));
+        QVERIFY(store.save(*CheckAlignment::make(str("Inkjet"), str("0"), str("0"), str("mm")), &error));
+        QCOMPARE(store.printers(), QStringList{str("Office Laser")});
+
+        // The test page: a sample check where the stock wants it, shifted.
+        const QString page = m_dir.filePath(str("alignment.pdf"));
+        const PrintableCheck sample = CheckRenderer::sampleCheck(*c.file, QDate(2026, 3, 31));
+        QVERIFY(writePdf(page, CheckRenderer::alignmentTestPainter(laser->offset(), laser->printer, laser->describe(), sample),
+                         QPageSize(QPageSize::Letter), QPageLayout::Portrait, &error));
+        const QStringList text = pdfPages(page);
+        QCOMPARE(text.size(), 1);
+        for (const char *expected : {"CHECK ALIGNMENT TEST", "Sample Payee", "**1,234.56", "One thousand two hundred",
+                                     "03/31/2026", "Office Laser", "0.25 in right, 0.5 in down"}) {
+            QVERIFY2(text.first().contains(str(expected)), expected);
+        }
+        const QRectF date = boxOf(page, str("03/31/2026"));
+        QVERIFY(qAbs(date.left() - boxOf(plain, str("03/09/2026")).left() - 18.0) < 0.5);
+        saveGalleryPng(page, str("books-check-alignment.png"));
     }
 
 private:

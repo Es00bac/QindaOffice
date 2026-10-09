@@ -6,9 +6,9 @@ import QindaOffice.Shell
 import QindaOffice.Books.App
 
 // The QindaBooks window (D-047): one company file per window. A rail picks
-// the workspace — Dashboard, Sales, Expenses, Banking, Accounting, Reports
-// — and the window answers the host's requests with the editors and
-// dialogs. A brand-new window with no company opens the setup wizard.
+// the workspace — Dashboard, Sales, Expenses, Banking, Accounting, Reports,
+// Time (M68) — and the window answers the host's requests with the editors
+// and dialogs. A brand-new window with no company opens the setup wizard.
 //
 // AGENT-NOTE: every amount arrives from BooksService as minor units plus
 // formatted text; this QML never does arithmetic on money.
@@ -50,7 +50,8 @@ OfficeWindow {
                 { id: "expenses", label: qsTr("Expenses"), destination: "booksViewExpensesAction", iconName: "wallet" },
                 { id: "banking", label: qsTr("Banking"), destination: "booksViewBankingAction", iconName: "landmark" },
                 { id: "accounting", label: qsTr("Accounting"), destination: "booksViewAccountingAction", iconName: "book-text" },
-                { id: "reports", label: qsTr("Reports"), destination: "booksViewReportsAction", iconName: "chart-line" }] }]
+                { id: "reports", label: qsTr("Reports"), destination: "booksViewReportsAction", iconName: "chart-line" },
+                { id: "time", label: qsTr("Time"), destination: "booksViewTimeAction", iconName: "timer" }] }]
             onDestinationRequested: function(id, destination) { window.trigger(destination) }
         }
         Tk.Divider { vertical: true }
@@ -64,6 +65,7 @@ OfficeWindow {
             BankingView { id: banking; anchors.fill: parent; visible: window.view === "banking"; books: window.books; host: window.booksHost }
             AccountsView { anchors.fill: parent; visible: window.view === "accounting"; books: window.books; host: window.booksHost }
             ReportsView { id: reports; anchors.fill: parent; visible: window.view === "reports"; books: window.books; host: window.booksHost }
+            TimeView { anchors.fill: parent; visible: window.view === "time"; books: window.books; host: window.booksHost }
             Tk.EmptyState {
                 anchors.centerIn: parent
                 visible: window.books === null || !window.books.hasCompany
@@ -117,12 +119,29 @@ OfficeWindow {
     BudgetDialog { id: budgetDialog; books: window.books; host: window.booksHost }
     SalesTaxPaymentDialog { id: salesTaxDialog; books: window.books }
     IifImportDialog { id: iifDialog; books: window.books }
+    // M68 (D-077): purchase orders, the check queue and alignment, time.
+    PurchaseOrderEditor { id: orderEditor; books: window.books; host: window.booksHost; onBillRequested: function(id) { window.billFromOrder(id) } }
+    PrintChecksDialog { id: printChecks; books: window.books; host: window.booksHost }
+    CheckAlignmentDialog { id: alignment; books: window.books; host: window.booksHost }
+    TimeActivityDialog { id: timeActivity; books: window.books }
+    TimesheetDialog { id: timesheet; books: window.books }
+    EmployeeDialog { id: employeeDialog; books: window.books }
+    function openDocument(kind, id) {
+        const isOrder = kind === "purchaseOrder" || (Number(id) > 0 && String(window.books.document(id).kind) === "purchaseOrder")
+        if (isOrder) orderEditor.openFor(id)
+        else editor.openFor(kind, id)
+    }
+    function billFromOrder(id) {
+        const r = window.books.billFromOrder(id)
+        if (r.ok) { editor.openDraft(r.draft); return }
+        toast.title = qsTr("Create bill"); toast.message = String(r.error || ""); toast.variant = "warning"; toast.show()
+    }
 
     Connections {
         target: window.booksHost
         function onCompanySetupRequested() { setup.open() }
         function onCompanySettingsRequested() { window.trigger("settingsPreferencesAction") }
-        function onDocumentEditorRequested(kind, id) { editor.openFor(kind, id) }
+        function onDocumentEditorRequested(kind, id) { window.openDocument(kind, id) }
         function onPaymentDialogRequested(kind) { payment.openFor(kind) }
         function onPartyDialogRequested(kind, id) { partyDialog.openFor(kind, id) }
         function onItemDialogRequested(id) { itemDialog.openFor(id) }
@@ -135,7 +154,13 @@ OfficeWindow {
         function onCloseBooksRequested() { closeBooks.text = window.books.lockDate; closeBooks.open() }
         function onReportRequested(reportId) { window.trigger("booksViewReportsAction"); if (reportId.length > 0) reports.reportId = reportId }
         function onBankRulesRequested() { window.trigger("booksViewBankingAction"); banking.tab = 2 }
-        function onVoidRequested(id) { editor.openFor("", id) }
+        function onVoidRequested(id) { window.openDocument("", id) }
+        function onBillFromOrderRequested(id) { window.billFromOrder(id) }
+        function onPrintChecksRequested() { printChecks.openDialog() }
+        function onCheckAlignmentRequested() { alignment.openDialog() }
+        function onTimeActivityRequested(id) { timeActivity.openFor(id) }
+        function onTimesheetRequested() { timesheet.openDialog("", window.books.today) }
+        function onEmployeeDialogRequested(id) { employeeDialog.openFor(id) }
         function onExportRequested(what) {
             if (what === "backup") { const r = window.books.backupNow(); return }
             exportDialog.what = what

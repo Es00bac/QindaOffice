@@ -79,9 +79,17 @@ constexpr Command kCommands[] = {
     {"booksSalesTaxPaymentAction", QT_TRANSLATE_NOOP("BooksHost", "Pay Sales &Tax…"), "", "percent"},
     // M63 (D-071 item 7): the selected check or bill payment onto voucher stock.
     {"booksPrintCheckAction", QT_TRANSLATE_NOOP("BooksHost", "Print Chec&k…"), "", "printer"},
+    // M68 (D-077): purchase orders, the check print queue, time.
+    {"booksNewPurchaseOrderAction", QT_TRANSLATE_NOOP("BooksHost", "Purchase &Order…"), "", "clipboard-list"},
+    {"booksCreateBillFromOrderAction", QT_TRANSLATE_NOOP("BooksHost", "Create Bill from Or&der"), "", "clipboard-check"},
+    {"booksPrintChecksAction", QT_TRANSLATE_NOOP("BooksHost", "Checks to Prin&t…"), "", "list-checks"},
+    {"booksCheckAlignmentAction", QT_TRANSLATE_NOOP("BooksHost", "Check Printer &Alignment…"), "", "crosshair"},
+    {"booksTimeActivityAction", QT_TRANSLATE_NOOP("BooksHost", "&Time Activity…"), "Ctrl+Shift+T", "clock"},
+    {"booksWeeklyTimesheetAction", QT_TRANSLATE_NOOP("BooksHost", "&Weekly Timesheet…"), "", "calendar-days"},
+    {"booksNewEmployeeAction", QT_TRANSLATE_NOOP("BooksHost", "New &Employee…"), "", "user-round"},
 };
 
-// The workspace radio group, in Ctrl+1…6 order (BooksHost::viewKeys()).
+// The workspace radio group, in Ctrl+1…7 order (BooksHost::viewKeys()).
 constexpr Command kViews[] = {
     {"booksViewDashboardAction", QT_TRANSLATE_NOOP("BooksHost", "&Dashboard"), "Ctrl+1", "layout-dashboard"},
     {"booksViewSalesAction", QT_TRANSLATE_NOOP("BooksHost", "&Sales"), "Ctrl+2", "trending-up"},
@@ -89,6 +97,7 @@ constexpr Command kViews[] = {
     {"booksViewBankingAction", QT_TRANSLATE_NOOP("BooksHost", "&Banking"), "Ctrl+4", "landmark"},
     {"booksViewAccountingAction", QT_TRANSLATE_NOOP("BooksHost", "&Accounting"), "Ctrl+5", "book-text"},
     {"booksViewReportsAction", QT_TRANSLATE_NOOP("BooksHost", "&Reports"), "Ctrl+6", "chart-pie"},
+    {"booksViewTimeAction", QT_TRANSLATE_NOOP("BooksHost", "&Time"), "Ctrl+7", "timer"}, // M68
 };
 
 QString id(const char *raw)
@@ -140,6 +149,13 @@ void BooksHost::createActions()
     editor("booksNewExpenseAction", "expense");
     editor("booksNewCheckAction", "check");
     editor("booksNewVendorCreditAction", "vendorCredit");
+    editor("booksNewPurchaseOrderAction", "purchaseOrder");
+    on("booksCreateBillFromOrderAction", [this] { emit billFromOrderRequested(m_selectedDocumentId); });
+    on("booksPrintChecksAction", [this] { emit printChecksRequested(); });
+    on("booksCheckAlignmentAction", [this] { emit checkAlignmentRequested(); });
+    on("booksTimeActivityAction", [this] { emit timeActivityRequested(0); });
+    on("booksWeeklyTimesheetAction", [this] { emit timesheetRequested(); });
+    on("booksNewEmployeeAction", [this] { emit employeeDialogRequested(0); });
     on("booksReceivePaymentAction", [this] { emit paymentDialogRequested(QStringLiteral("receive")); });
     on("booksPayBillsAction", [this] { emit paymentDialogRequested(QStringLiteral("payBills")); });
     on("booksNewCustomerAction", [this] { emit partyDialogRequested(QStringLiteral("customer"), 0); });
@@ -227,10 +243,17 @@ void BooksHost::insertMenus()
                                                       a("booksEmailDocumentAction"), a("booksPrintDocumentAction")}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("booksExpensesMenu"), tr("E&xpenses"),
                                                      {a("booksNewBillAction"), a("booksPayBillsAction"),
-                                                      MenuNode::separator(), a("booksNewExpenseAction"),
-                                                      a("booksNewCheckAction"), a("booksNewVendorCreditAction"),
-                                                      MenuNode::separator(), a("booksNewVendorAction"),
-                                                      MenuNode::separator(), a("booksPrintCheckAction")}));
+                                                      MenuNode::separator(), a("booksNewPurchaseOrderAction"),
+                                                      a("booksCreateBillFromOrderAction"), MenuNode::separator(),
+                                                      a("booksNewExpenseAction"), a("booksNewCheckAction"),
+                                                      a("booksNewVendorCreditAction"), MenuNode::separator(),
+                                                      a("booksNewVendorAction"), MenuNode::separator(),
+                                                      a("booksPrintCheckAction"), a("booksPrintChecksAction"),
+                                                      a("booksCheckAlignmentAction")}));
+    // M68: time — QuickBooks keeps it under Employees.
+    tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("booksTimeMenu"), tr("&Time"),
+                                                     {a("booksTimeActivityAction"), a("booksWeeklyTimesheetAction"),
+                                                      MenuNode::separator(), a("booksNewEmployeeAction")}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("booksBankingMenu"), tr("&Banking"),
                                                      {a("booksSyncBankAction"), a("booksConnectionsAction"),
                                                       MenuNode::separator(), a("booksImportStatementAction"),
@@ -270,6 +293,15 @@ void BooksHost::syncEnablement()
                           selected);
     actions()->setEnabled(id("booksPrintCheckAction"),
                           selected && ::QindaOffice::Books::isPrintableCheck(*m_service->file(), m_selectedDocumentId));
+    // M68: Create Bill from Order needs a selected order with something to receive.
+    bool receivable = false;
+    if (selected) {
+        const QVariantMap doc = m_service->document(m_selectedDocumentId);
+        const QString status = doc.value(QStringLiteral("status")).toString();
+        receivable = doc.value(QStringLiteral("kind")).toString() == QLatin1String("purchaseOrder")
+            && (status == QLatin1String("open") || status == QLatin1String("partiallyReceived"));
+    }
+    actions()->setEnabled(id("booksCreateBillFromOrderAction"), receivable);
     const bool reportShown = company && m_printKind == QLatin1String("report");
     actions()->setEnabled({id("booksExportReportPdfAction"), id("booksExportReportCsvAction"),
                            id("booksExportReportXlsxAction")},

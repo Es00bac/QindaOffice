@@ -25,3 +25,7 @@ qqo_add_books_io_test(tst_books_io_iif)
 # M63 (D-071 item 7): voucher check printing (words, builder, refusals,
 # one check per page with the values where the stock expects them).
 qqo_add_books_io_test(tst_books_io_checks)
+# M68 (D-077): the purchase-order form, QuickBooks purchase orders (IIF),
+# durations in CSV and Excel (read back with QXlsx through calc_io).
+qqo_add_books_io_test(tst_books_io_orders)
+target_link_libraries(tst_books_io_orders PRIVATE calc_io)

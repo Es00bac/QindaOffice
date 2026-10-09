@@ -8,6 +8,7 @@
 #include "company_file.h"
 #include "lists.h"
 #include "sql_util.h"
+#include "time_tracking.h"
 
 #include <QJsonDocument>
 
@@ -106,6 +107,13 @@ Result Sales::validateSalesDocument(BusinessDocument &doc) const
         if (!line.unitPrice.sameCurrency(m_file.money(0)) || !line.amount.sameCurrency(m_file.money(0))) {
             return Result::failure(ErrorCode::CurrencyMismatch,
                                    QStringLiteral("amounts must be in %1").arg(m_file.currency()));
+        }
+    }
+    // M68: an invoice line that bills time must bill this customer's
+    // unbilled billable time (time_tracking.h).
+    if (doc.kind == DocKind::Invoice) {
+        if (const Result time = TimeTracking(m_file).checkInvoiceLines(doc); !time.ok) {
+            return time;
         }
     }
     if (doc.taxRateId == 0) {

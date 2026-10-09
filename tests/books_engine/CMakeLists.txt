@@ -22,3 +22,7 @@ qqo_add_books_test(tst_books_reports)
 qqo_add_books_test(tst_books_analysis)
 qqo_add_books_test(tst_books_perf)
 qqo_add_books_test(tst_books_document books_document)
+# M68 (D-077): purchase orders, time tracking, the check print queue.
+qqo_add_books_test(tst_books_orders)
+qqo_add_books_test(tst_books_time)
+qqo_add_books_test(tst_books_checks)

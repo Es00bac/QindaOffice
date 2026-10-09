@@ -5,6 +5,99 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-077: QindaBooks: purchase orders, time tracking, check printing workflow
+
+**Date:** 2026-10-08 · **Status:** accepted (owner request: every app at par
+with its Microsoft Office / QuickBooks counterpart, "nothing missing that
+somebody would need"; M68, closes what D-071 left open)
+
+**Context.** D-071 made QindaBooks reachable from QuickBooks and printed
+checks, and recorded what a QuickBooks user still could not do every week:
+order from a vendor and receive against the order, enter time and bill it,
+print a run of checks with numbers given at printing, and correct a printer
+that feeds the stock off by a little. Payroll was then out of scope; the
+owner has since put it in scope as its own milestone (M71), built on this
+one.
+
+**Decision.**
+
+1. **A purchase order is a document that never posts.** `DocKind::
+   PurchaseOrder` (19) with QuickBooks' fields — vendor, date, number
+   (`PO-` + a counter in settings), expected date, ship-to, vendor message,
+   memo, lines with an item or a category, quantity, rate, amount and a
+   customer:job — through the forms path for print, PDF and e-mail. Status
+   is derived: Open, Partially received, Closed (by hand, the whole order or
+   one line, or because everything was received), Void.
+2. **Received quantities are derived from live bills, never stored.** A bill
+   line that receives an order line names it (`document_lines.po_line_id`);
+   a line's received quantity is the sum over non-void bills. Voiding a bill,
+   or editing it so the line is gone, puts the quantity back with no
+   bookkeeping of its own. Receipts are checked where bills are validated
+   (no more than remains, the order's vendor, not a closed line); an order a
+   live bill receives cannot be voided, loses no received line and keeps its
+   vendor. To keep those links through edits, a document rewrite now keeps
+   the id of every line it already had (`Documents::write`, kept ids
+   re-inserted before new lines).
+3. **Billed time is derived the same way.** An invoice line that bills a
+   time entry names it (`document_lines.time_entry_id`); an entry is billed
+   while a non-void invoice (a draft included) has such a line. Billed time
+   cannot be edited or deleted; voiding the invoice or removing the line
+   unbills it. The invoice line bills hours to two decimals, half-up (20
+   minutes = 0.33 h), at the employee's default hourly rate when one is set,
+   else the service item's price; the entry keeps exact minutes and the time
+   reports total minutes (a new `Duration` report column, h:mm on screen, in
+   PDF and CSV, `[h]:mm` numbers in Excel).
+4. **Time is entered for an employee or a vendor.** A minimal `employees`
+   list (name, contact fields, active, optional default hourly billing rate)
+   — not a party kind — and vendors for contractors; a time entry names
+   exactly one (a CHECK in the file). Payroll (M71) extends this list in its
+   own schema version; it holds no pay rate, tax field or identity number.
+   The weekly timesheet writes a person's week in one SQL transaction.
+5. **The check queue numbers checks at print time, through the ledger's
+   edit.** A check, or a bill payment drawn on a bank account, can be saved
+   to print later: it posts at once without a number (`documents.to_print`).
+   Printing gives the chosen checks consecutive numbers from the account's
+   next number (`next_check_number:<account>` in settings, never below one
+   past the highest number used). Because a posted transaction's number is
+   immutable (D-045), giving or taking a number voids the live transaction
+   and posts the same lines again under the new number — refused for a
+   check that has cleared or sits in a closed period. After printing the
+   user says which printed; a misprint goes back to the queue and its number
+   is recorded as a void check (number, payee, account, the payment it was
+   for), so the checkbook has no gap; "nothing printed" takes the run back
+   with its numbers unused.
+6. **Printer alignment is per user, per printer name, applied when the page
+   is painted.** Offsets in inches (hundredths) or millimetres (tenths), at
+   most an inch either way, kept as typed in
+   `$XDG_CONFIG_HOME/qindaoffice/books/check-alignment.json` — not in the
+   company file, because one printer serves every company the user keeps.
+   The check painter shifts the whole sheet by the offset of the printer the
+   job goes to (looked up from the QPrinter at paint time); a PDF is never
+   shifted. An alignment test page prints a sample check with a mark at each
+   field's anchor and a scale in tenths of an inch.
+7. **QuickBooks purchase orders come in through IIF.** `PURCHORDR` blocks
+   (on QuickBooks' non-posting "Purchase Orders" account) were refused as
+   unmapped accounts; they now become purchase orders (vendor, number,
+   expected date, ship-to, lines with item, quantity, rate and customer:job;
+   `PAID Y` closed) and are skipped when already in the books.
+8. **Schema version 4** adds the columns and tables above
+   (`documents.ship_to`, `to_print`; `document_lines.po_line_id`,
+   `time_entry_id`, `closed`; `employees`; `time_entries`) and seeds the
+   purchase-order counter for older files; opening a version-3 file backs it
+   up and migrates it.
+
+**Consequences.** Purchase orders, time and the check queue are in the menus
+(Expenses, a new Time menu), the ribbon (new Purchases and Time tabs), a
+seventh workspace (Time, Ctrl+7) and a purchase-orders tab in Expenses; the
+bill editor offers the vendor's open orders and the invoice editor the
+customer's unbilled time. Reports gain Open Purchase Orders, Time by Job,
+Time by Name and Unbilled Time by Job (26 in the catalog). A number given at
+printing leaves a voided transaction behind it in the history, as every edit
+does. Not done: a customer:job on a bill line is stored but not posted (no
+job costing), billing rate levels and billable expenses, blank-stock (MICR)
+checks and words in other languages, QuickBooks time (TIMEACT) and employee
+(EMP) IIF import, and payroll itself (M71).
+
 ## D-080: QindaWrite: Word forms (content controls) kept and filled in
 
 **Date:** 2026-10-08 · **Status:** accepted (owner request: "open, edit and

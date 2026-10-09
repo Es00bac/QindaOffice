@@ -32,7 +32,11 @@
 // books_service_connections.cpp (Mercury / Stripe connections, M48),
 // books_service_recurring.cpp, books_service_statements.cpp (statements
 // and the company logo), books_service_budgets.cpp and
-// books_service_migration.cpp (QuickBooks IIF import) (M63, D-071).
+// books_service_migration.cpp (QuickBooks IIF import) (M63, D-071);
+// books_service_document_map.cpp (the draft map, list rows, live totals),
+// books_service_orders.cpp (purchase orders), books_service_time.cpp
+// (employees and time) and books_service_checks.cpp (the check print queue
+// and printer alignment) (M68, D-077).
 
 #include "books_format.h"
 
@@ -262,6 +266,82 @@ public:
     // batch. Options and result keys: books_service_migration.cpp.
     Q_INVOKABLE QVariantMap previewIif(const QUrl &fileUrl, const QVariantMap &options = {});
     Q_INVOKABLE QVariantMap importIif(const QUrl &fileUrl, const QVariantMap &options = {});
+
+    // ---- purchase orders (books_service_orders.cpp, M68, D-077) ----
+    // An order reads and saves through document() / saveDocument() with kind
+    // "purchaseOrder" (dueDate = the expected date, shipTo, notes = the
+    // vendor message, lines with customerId, closed; document() adds each
+    // line's `received` and `remaining`). Bill lines carry `poLineId`.
+    // Order lines: [{lineId, orderId, orderNumber, orderDate, expected,
+    // itemId, itemName, accountId, description, customerId, customerName,
+    // ordered, received, remaining (decimal text), rate (plain), rateText,
+    // amountText, remainingAmount, remainingText, closed}].
+    Q_INVOKABLE QVariantList orderLines(qint64 orderId) const;
+    // The vendor's receivable lines (open orders, oldest first) — the bill
+    // editor's "receive" offer.
+    Q_INVOKABLE QVariantList openOrderLines(qint64 vendorId) const;
+    // Bill-editor lines receiving [{lineId, quantity (text)}] → {ok, error, lines}.
+    Q_INVOKABLE QVariantMap receiveOrderLines(const QVariantList &receipts) const;
+    // Create Bill: a new bill draft (kind, partyId, date, lines) receiving
+    // everything the order still has to receive → {ok, error, draft}.
+    Q_INVOKABLE QVariantMap billFromOrder(qint64 orderId) const;
+    Q_INVOKABLE QVariantMap setOrderClosed(qint64 orderId, bool closed);
+    Q_INVOKABLE QVariantMap setOrderLineClosed(qint64 lineId, bool closed);
+
+    // ---- employees and time (books_service_time.cpp, M68, D-077) ----
+    // AGENT-CONTRACT (payroll M71 extends these): employees are
+    // {id, name, email, phone, address, notes, rate (plain text, "" = none),
+    // rateText, active}; saveEmployee takes the same keys (rate as text).
+    Q_INVOKABLE QVariantList employees(bool includeInactive = false) const;
+    Q_INVOKABLE QVariantMap employee(qint64 id) const;
+    Q_INVOKABLE QVariantMap saveEmployee(const QVariantMap &map);
+    Q_INVOKABLE QVariantMap setEmployeeActive(qint64 id, bool active);
+    // Who can do work: active employees, then vendors —
+    // [{key ("employee:3" | "vendor:7"), name, kindLabel}].
+    Q_INVOKABLE QVariantList workers() const;
+    // filter {worker (key), customerId, from, to, status: all | unbilled |
+    // billed | notBillable} → [{id, date, worker, workerName, customerId,
+    // customerName, itemId, itemName, minutes, duration ("1:30"), billable,
+    // status, statusLabel, notes, invoiceId, invoiceNumber, classId}].
+    Q_INVOKABLE QVariantList timeEntries(const QVariantMap &filter) const;
+    Q_INVOKABLE QVariantMap timeEntry(qint64 id) const;
+    // {id?, date, worker, customerId, itemId, duration (text: "1:30",
+    // "1.5", "90m"), billable, notes, classId}.
+    Q_INVOKABLE QVariantMap saveTimeEntry(const QVariantMap &map);
+    Q_INVOKABLE QVariantMap deleteTimeEntry(qint64 id);
+    // The week (Monday first) that holds `dateIso`: {ok, worker, weekStart,
+    // days[7] {date, label}, rows [{customerId, itemId, billable, notes,
+    // cells[7] {entryId, duration, billed}, totalText}], dayTotals[7],
+    // totalText}. saveTimesheet takes {worker, weekStart, rows} back
+    // (durations as text; "" or "0" empties a cell).
+    Q_INVOKABLE QVariantMap timesheet(const QString &worker, const QString &dateIso) const;
+    Q_INVOKABLE QVariantMap saveTimesheet(const QVariantMap &sheet);
+    // The customer's billable, unbilled time — the invoice editor's offer:
+    // [{id, date, workerName, itemName, notes, duration, hours, rateText,
+    // amount, amountText}].
+    Q_INVOKABLE QVariantList unbilledTime(qint64 customerId) const;
+    // Invoice-editor lines billing `entryIds` → {ok, error, lines}.
+    Q_INVOKABLE QVariantMap timeInvoiceLines(qint64 customerId, const QVariantList &entryIds) const;
+
+    // ---- the check print queue and alignment (books_service_checks.cpp, M68, D-077) ----
+    // [{id, kind, kindLabel, date, payeeName, amount, amountText, number}].
+    Q_INVOKABLE QVariantList checkQueue(qint64 bankAccountId) const;
+    Q_INVOKABLE qint64 nextCheckNumber(qint64 bankAccountId) const;
+    Q_INVOKABLE QVariantMap setToPrint(qint64 id, bool toPrint);
+    // Numbers the chosen queued checks from `firstNumber` → {ok, error,
+    // checks: [{id, number, payeeName, amountText}]}; then print them
+    // (BooksHost "checks" print source) and confirm or take them back.
+    Q_INVOKABLE QVariantMap assignCheckNumbers(qint64 bankAccountId, const QVariantList &ids, const QString &firstNumber);
+    Q_INVOKABLE QVariantMap confirmCheckPrint(const QVariantList &misprintedIds);
+    Q_INVOKABLE QVariantMap takeBackChecks(qint64 bankAccountId, const QVariantList &ids);
+    // The printers this computer lists plus those with a stored alignment:
+    // [{name, x, y, unit, description}].
+    Q_INVOKABLE QVariantList checkPrinters() const;
+    Q_INVOKABLE QVariantMap checkAlignment(const QString &printer) const;
+    // {printer, x, y, unit ("in" | "mm")} → {ok, error, description}.
+    Q_INVOKABLE QVariantMap saveCheckAlignment(const QVariantMap &map);
+    // The alignment test page with `printer`'s offset, as a PDF.
+    Q_INVOKABLE QVariantMap exportAlignmentTestPdf(const QString &printer, const QUrl &fileUrl);
 
     // ---- bank and payment connections (books_service_connections.cpp, M48, D-048) ----
     // AGENT-CONTRACT (the lead's ConnectionsDialog.qml): providers are

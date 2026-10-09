@@ -4,6 +4,7 @@
 #include "accounts.h"
 #include "company_file.h"
 #include "lists.h"
+#include "purchase_orders.h"
 #include "sql_util.h"
 
 #include <QJsonDocument>
@@ -73,6 +74,20 @@ Result Purchases::validate(BusinessDocument &doc) const
         if (!isPaymentAccount(chart.account(doc.accountId))) {
             return Result::failure(ErrorCode::UnknownAccount,
                                    QStringLiteral("choose the bank or credit card account it was paid from"));
+        }
+    }
+    // M68: only a check drawn on a bank account waits to print; its number
+    // comes from the print run (check_queue.h).
+    if (doc.toPrint) {
+        const std::optional<Account> bank = chart.account(doc.accountId);
+        if (doc.kind != DocKind::Check || !bank || bank->type != AccountType::Bank) {
+            return Result::failure(ErrorCode::Invalid, QStringLiteral("only a check from a bank account can be printed later"));
+        }
+        doc.number.clear();
+    }
+    if (doc.kind == DocKind::Bill) {
+        if (const Result received = PurchaseOrders(m_file).checkReceipts(doc); !received.ok) {
+            return received;
         }
     }
     const DocumentTotals totals = documents.finalize(doc);
@@ -157,6 +172,7 @@ Result Purchases::createBill(BusinessDocument bill, const PostOptions &options)
     bill.kind = DocKind::Bill;
     bill.id = 0;
     bill.state = DocState::Open;
+    bill.toPrint = false;
     return postPurchase(bill, options, true, {});
 }
 
@@ -171,6 +187,7 @@ Result Purchases::updateBill(BusinessDocument bill, const QString &reason, const
     }
     bill.kind = DocKind::Bill;
     bill.state = DocState::Open;
+    bill.toPrint = false;
     return postPurchase(bill, options, false, reason);
 }
 
@@ -189,16 +206,23 @@ Result Purchases::createVendorCredit(BusinessDocument credit, const PostOptions 
     credit.kind = DocKind::VendorCredit;
     credit.id = 0;
     credit.state = DocState::Open;
+    credit.toPrint = false;
     return postPurchase(credit, options, true, {});
 }
 
 Result Purchases::payBills(const QDate &date, qint64 paymentAccountId, const QList<PaymentApplication> &payments,
-                           const QString &reference, const PostOptions &options, QList<qint64> *paymentIds)
+                           const QString &reference, const PostOptions &options, QList<qint64> *paymentIds,
+                           bool toPrint)
 {
     ChartOfAccounts chart(m_file);
-    if (!isPaymentAccount(chart.account(paymentAccountId))) {
+    const std::optional<Account> from = chart.account(paymentAccountId);
+    if (!isPaymentAccount(from)) {
         return Result::failure(ErrorCode::UnknownAccount, QStringLiteral("choose a bank or credit card account"));
     }
+    if (toPrint && from->type != AccountType::Bank) {
+        return Result::failure(ErrorCode::Invalid, QStringLiteral("only a payment from a bank account prints as a check"));
+    }
+    const QString ref = toPrint ? QString() : reference;
     if (payments.isEmpty()) {
         return Result::failure(ErrorCode::Invalid, QStringLiteral("choose the bills to pay"));
     }
@@ -228,18 +252,19 @@ Result Purchases::payBills(const QDate &date, qint64 paymentAccountId, const QLi
         doc.kind = DocKind::BillPayment;
         doc.partyId = it.key();
         doc.date = date;
-        doc.reference = reference;
+        doc.reference = ref;
         doc.accountId = paymentAccountId;
         doc.total = total;
         doc.subtotal = total;
+        doc.toPrint = toPrint;
         if (const Result w = documents.write(doc); !w.ok) {
             return w;
         }
         const QList<PostingLine> lines{
-            PostingLine{payable, total.minor(), 0, it.key(), 0, 0, 0, 0, reference},
-            PostingLine{paymentAccountId, 0, total.minor(), it.key(), 0, 0, 0, 0, reference},
+            PostingLine{payable, total.minor(), 0, it.key(), 0, 0, 0, 0, ref},
+            PostingLine{paymentAccountId, 0, total.minor(), it.key(), 0, 0, 0, 0, ref},
         };
-        if (const Result p = Ledger(m_file).postLines(doc.id, doc.kind, date, reference, {}, lines, options); !p.ok) {
+        if (const Result p = Ledger(m_file).postLines(doc.id, doc.kind, date, ref, {}, lines, options); !p.ok) {
             return p;
         }
         for (const PaymentApplication &p : it.value()) {

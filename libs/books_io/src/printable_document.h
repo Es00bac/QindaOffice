@@ -2,7 +2,8 @@
 #pragma once
 
 // PrintableDocument: everything an invoice, estimate, sales receipt,
-// credit memo or customer statement shows on paper, already formatted —
+// credit memo, customer statement or purchase order (M68) shows on paper,
+// already formatted —
 // built once from the engine, then painted by form_renderer.h onto PDF,
 // paper or the print preview (one value, one painter: they cannot drift).
 //
@@ -39,7 +40,7 @@ struct PrintableTotal {
 };
 
 struct PrintableDocument {
-    enum class Kind { Invoice, Estimate, SalesReceipt, CreditMemo, Statement };
+    enum class Kind { Invoice, Estimate, SalesReceipt, CreditMemo, Statement, PurchaseOrder };
     Kind kind = Kind::Invoice;
     QString title; // "INVOICE"
 
@@ -54,6 +55,9 @@ struct PrintableDocument {
     QString partyLabel; // "Bill to"
     QString partyName;
     QStringList partyLines;
+    // M68: a second address under the party (a purchase order's "Ship to").
+    QString shipToLabel;
+    QStringList shipToLines;
 
     // Right-hand facts: ("Invoice #", "INV-1001"), ("Date", …), …
     QList<QPair<QString, QString>> meta;
@@ -77,8 +81,10 @@ struct PrintableDocument {
     QLocale locale;
 };
 
-// Invoice / estimate / sales receipt / credit memo. Other kinds, unknown
-// ids and void documents return false with `error`.
+// Invoice / estimate / sales receipt / credit memo / purchase order (M68:
+// vendor, ship-to, expected date, the lines with their customer:job; the
+// vendor message prints as the notes). Other kinds, unknown ids and void
+// documents return false with `error`.
 bool buildPrintableDocument(CompanyFile &file, qint64 docId, PrintableDocument *out, QString *error = nullptr);
 // A customer statement for [from, to] (Sales::statement).
 bool buildPrintableStatement(CompanyFile &file, qint64 customerId, const QDate &from, const QDate &to,

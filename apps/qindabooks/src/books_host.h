@@ -11,9 +11,9 @@
 //  * Commands are ActionEntries with the app-scoped ids below (rule 5 —
 //    never rename one). Each handler only emits a request signal the QML
 //    answers with a dialog or a view; the host never opens UI itself.
-//  * The workspace is a radio group (booksView…Action, Ctrl+1…6) mirrored
+//  * The workspace is a radio group (booksView…Action, Ctrl+1…7) mirrored
 //    by `currentView` ("dashboard" | "sales" | "expenses" | "banking" |
-//    "accounting" | "reports").
+//    "accounting" | "reports" | "time" (M68)).
 //  * A window that has no company when it first reaches the event loop
 //    emits companySetupRequested() once (File ▸ New Company opens such a
 //    window; Open into a pristine window loads instead).
@@ -52,7 +52,8 @@ class BooksHost : public Quick::DocumentHost {
     // The document selected in a list (Void / E-mail / Print Document act on it).
     Q_PROPERTY(qint64 selectedDocumentId READ selectedDocumentId WRITE setSelectedDocumentId NOTIFY
                    selectedDocumentIdChanged)
-    // "report" | "document" | "statement" | "check" | "" and whether a report prints better wide.
+    // "report" | "document" | "statement" | "check" | "checks" | "alignment"
+    // | "" and whether a report prints better wide.
     Q_PROPERTY(QString printSourceKind READ printSourceKind NOTIFY printSourceChanged)
     Q_PROPERTY(bool printLandscape READ printLandscape NOTIFY printSourceChanged)
 public:
@@ -74,6 +75,12 @@ public:
     // account (check_print.h), printed onto voucher check stock; anything
     // else clears the source. A "document" that is such a payment becomes
     // "check" — File ▸ Print on a selected check prints the check.
+    // kind "checks" (M68): id = a list of such payments, one per page (the
+    // Print Checks run). kind "alignment" (M68): id = a printer name; the
+    // check alignment test page.
+    // AGENT-NOTE (M68): checks and the test page are shifted by the
+    // alignment of the printer the job goes to (check_alignment.h), looked
+    // up when the page is painted; a PDF is never shifted.
     // Anything else clears the source.
     Q_INVOKABLE void setPrintSource(const QString &kind, const QVariant &id, const QVariantMap &options = {});
     Q_INVOKABLE void clearPrintSource() { setPrintSource(QString(), {}); }
@@ -124,6 +131,16 @@ signals:
     void budgetsRequested();
     void salesTaxPaymentRequested();
     void voidRequested(qint64 documentId);
+    // M68 (D-077): purchase orders, time, the check queue. Create Bill from
+    // Order opens a bill editor receiving what the order still has to
+    // receive; the others open PrintChecksDialog, CheckAlignmentDialog,
+    // TimeActivityDialog (0 = new), TimesheetDialog and EmployeeDialog.
+    void billFromOrderRequested(qint64 orderId);
+    void printChecksRequested();
+    void checkAlignmentRequested();
+    void timeActivityRequested(qint64 entryId);
+    void timesheetRequested();
+    void employeeDialogRequested(qint64 id);
 
 protected:
     [[nodiscard]] QString filterString() const override;
@@ -143,6 +160,8 @@ private:
     QString m_printKind;
     QString m_printReportId;
     qint64 m_printDocumentId = 0; // the document or check, or the statement's customer
+    QList<qint64> m_printDocumentIds; // "checks": the print run, in order (M68)
+    QString m_printPrinter;           // "alignment": the printer the test page is for
     QVariantMap m_printOptions;
     bool m_printLandscape = false;
 };

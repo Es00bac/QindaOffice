@@ -19,6 +19,20 @@ namespace QindaOffice::Apps::Books {
 using namespace ::QindaOffice::Books;
 namespace ActionId = Quick::ActionId;
 
+namespace {
+
+// The alignment of the printer a job goes to; a PDF (preview, Export PDF)
+// has no printer and is never shifted (check_alignment.h).
+CheckAlignment alignmentFor(QPrinter *printer)
+{
+    if (printer == nullptr || printer->outputFormat() != QPrinter::NativeFormat) {
+        return CheckAlignment{};
+    }
+    return CheckAlignmentStore().alignment(printer->printerName());
+}
+
+} // namespace
+
 BooksHost::BooksHost()
     : m_document(new BooksDocument)
 {
@@ -63,7 +77,8 @@ void BooksHost::documentReplaced()
 QStringList BooksHost::viewKeys()
 {
     return {QStringLiteral("dashboard"), QStringLiteral("sales"),      QStringLiteral("expenses"),
-            QStringLiteral("banking"),   QStringLiteral("accounting"), QStringLiteral("reports")};
+            QStringLiteral("banking"),   QStringLiteral("accounting"), QStringLiteral("reports"),
+            QStringLiteral("time")}; // M68
 }
 
 void BooksHost::setCurrentView(const QString &view)
@@ -98,6 +113,8 @@ void BooksHost::setPrintSource(const QString &kind, const QVariant &id, const QV
     m_printKind.clear();
     m_printReportId.clear();
     m_printDocumentId = 0;
+    m_printDocumentIds.clear();
+    m_printPrinter.clear();
     m_printOptions = options;
     m_printLandscape = false;
     if (kind == QLatin1String("report") && m_service->hasCompany()) {
@@ -119,6 +136,21 @@ void BooksHost::setPrintSource(const QString &kind, const QVariant &id, const QV
                && isPrintableCheck(*m_service->file(), Format::id(id))) {
         m_printKind = kind;
         m_printDocumentId = Format::id(id);
+    } else if (kind == QLatin1String("checks") && m_service->hasCompany()) {
+        // M68: a Print Checks run — every id must print as a check.
+        for (const QVariant &v : id.toList()) {
+            if (!isPrintableCheck(*m_service->file(), Format::id(v))) {
+                m_printDocumentIds.clear();
+                break;
+            }
+            m_printDocumentIds << Format::id(v);
+        }
+        if (!m_printDocumentIds.isEmpty()) {
+            m_printKind = kind;
+        }
+    } else if (kind == QLatin1String("alignment") && m_service->hasCompany()) {
+        m_printKind = kind;
+        m_printPrinter = id.toString();
     }
     emit printSourceChanged();
     syncEnablement();
@@ -151,12 +183,25 @@ Quick::PrintRenderCallback BooksHost::printRenderCallback() const
             return {};
         }
         painter = FormRenderer::painter(printable);
-    } else if (m_printKind == QLatin1String("check")) {
-        PrintableCheck check;
-        if (!buildPrintableCheck(*file, m_printDocumentId, &check)) {
-            return {}; // voided since it was chosen
+    } else if (m_printKind == QLatin1String("check") || m_printKind == QLatin1String("checks")) {
+        QList<PrintableCheck> checks;
+        for (const qint64 id : m_printKind == QLatin1String("check") ? QList<qint64>{m_printDocumentId} : m_printDocumentIds) {
+            PrintableCheck check;
+            if (!buildPrintableCheck(*file, id, &check)) {
+                return {}; // voided since it was chosen
+            }
+            checks << check;
         }
-        painter = CheckRenderer::painter({check});
+        // M68: the printer's alignment, looked up when the job paints.
+        return [checks](QPrinter *printer, QPainter *qp) {
+            CheckRenderer::paint(printer, qp, checks, alignmentFor(printer).offset());
+        };
+    } else if (m_printKind == QLatin1String("alignment")) {
+        const PrintableCheck sample = CheckRenderer::sampleCheck(*file, m_service->todayDate());
+        return [sample](QPrinter *printer, QPainter *qp) {
+            const CheckAlignment a = alignmentFor(printer);
+            CheckRenderer::paintAlignmentTest(printer, qp, a.offset(), a.printer, a.describe(), sample);
+        };
     } else {
         PrintableDocument printable;
         if (!buildPrintableDocument(*file, m_printDocumentId, &printable)) {

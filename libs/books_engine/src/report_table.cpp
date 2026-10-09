@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "report_table.h"
 
+#include "time_tracking.h"
+
 namespace QindaOffice::Books {
 
 ReportCell ReportCell::ofText(const QString &text)
@@ -47,6 +49,15 @@ ReportCell ReportCell::ofDate(const QDate &date)
     return c;
 }
 
+ReportCell ReportCell::ofDuration(qint64 minutes)
+{
+    ReportCell c;
+    c.type = ColumnType::Duration;
+    c.empty = false;
+    c.value = minutes;
+    return c;
+}
+
 QString ReportCell::display(const QString &currency, const QLocale &locale) const
 {
     if (empty) {
@@ -58,6 +69,7 @@ QString ReportCell::display(const QString &currency, const QLocale &locale) cons
     case ColumnType::Number: return Decimal(value, scale).toString();
     case ColumnType::Percent: return Decimal(value, scale).toString() + QLatin1Char('%');
     case ColumnType::Date: return date.toString(Qt::ISODate);
+    case ColumnType::Duration: return TimeTracking::durationText(value);
     }
     return QString();
 }

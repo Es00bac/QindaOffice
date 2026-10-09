@@ -56,6 +56,13 @@ public:
     // Value compare, independent of scale (1.50 == 1.5).
     friend bool operator==(const Decimal &a, const Decimal &b);
 
+    // Exact sum and difference at the larger of the two scales (M68:
+    // ordered, received and remaining quantities); nullopt on overflow.
+    [[nodiscard]] static std::optional<Decimal> sum(const Decimal &a, const Decimal &b);
+    [[nodiscard]] static std::optional<Decimal> difference(const Decimal &a, const Decimal &b);
+    // −1, 0 or +1 by value, independent of scale.
+    [[nodiscard]] static int compare(const Decimal &a, const Decimal &b);
+
 private:
     qint64 m_mantissa = 0;
     int m_scale = 0;

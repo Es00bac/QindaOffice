@@ -299,7 +299,12 @@ void importTransactions(Context &ctx, const QList<IifTransaction> &transactions)
     }
     QHash<QString, QList<int>> unknown;
     QList<TxPlan> plans;
+    QList<IifTransaction> orders; // M68: non-posting, never planned as postings
     for (int i = 0; i < transactions.size(); ++i) {
+        if (isPurchaseOrder(transactions.at(i))) {
+            orders << transactions.at(i);
+            continue;
+        }
         plans << plan(ctx, transactions.at(i), i, &unknown);
     }
     for (auto it = unknown.cbegin(); it != unknown.cend(); ++it) {
@@ -361,6 +366,7 @@ void importTransactions(Context &ctx, const QList<IifTransaction> &transactions)
             ctx.report.postedDebits += std::max<qint64>(r.amount, 0);
         }
     }
+    importPurchaseOrders(ctx, orders);
 }
 
 } // namespace QindaOffice::Books::IifInternal

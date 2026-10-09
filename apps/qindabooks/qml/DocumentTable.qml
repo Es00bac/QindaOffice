@@ -12,6 +12,8 @@ Tk.DataTable {
     property var rows: []
     property bool showDue: true
     property string partyTitle: qsTr("Customer")
+    property string dueTitle: qsTr("Due")
+    property string balanceTitle: qsTr("Balance")
     readonly property var current: currentIndex >= 0 && currentIndex < sortedRows.length ? sortedRows[currentIndex] : null
     readonly property var sortedRows: {
         const key = sortKey || "date"
@@ -36,7 +38,8 @@ Tk.DataTable {
 
     function tone(status) {
         return status === "overdue" ? "danger" : status === "paid" ? "success" : status === "draft" ? "default"
-             : status === "void" ? "default" : status === "partial" ? "warning" : "info"
+             : status === "void" ? "default" : status === "partial" || status === "partiallyReceived" ? "warning"
+             : status === "closed" ? "success" : "info"
     }
 
     columns: [
@@ -44,10 +47,10 @@ Tk.DataTable {
         Tk.TableColumn { key: "kindLabel"; title: qsTr("Type"); width: Tk.Theme.size.tableColumn * 1.3 },
         Tk.TableColumn { key: "number"; title: qsTr("No."); width: Tk.Theme.size.tableColumn; mono: true },
         Tk.TableColumn { key: "partyName"; title: table.partyTitle; flex: 1 },
-        Tk.TableColumn { key: "dueDate"; title: qsTr("Due"); width: Tk.Theme.size.tableColumn * 1.2; mono: true; visible: table.showDue },
+        Tk.TableColumn { key: "dueDate"; title: table.dueTitle; width: Tk.Theme.size.tableColumn * 1.2; mono: true; visible: table.showDue },
         Tk.TableColumn { key: "total"; title: qsTr("Total"); width: Tk.Theme.size.tableColumn * 1.4; align: Qt.AlignRight; mono: true
                          formatter: function(value, row) { return row.totalText } },
-        Tk.TableColumn { key: "balance"; title: qsTr("Balance"); width: Tk.Theme.size.tableColumn * 1.4; align: Qt.AlignRight; mono: true
+        Tk.TableColumn { key: "balance"; title: table.balanceTitle; width: Tk.Theme.size.tableColumn * 1.4; align: Qt.AlignRight; mono: true
                          formatter: function(value, row) { return row.balanceText } },
         Tk.TableColumn {
             key: "status"; title: qsTr("Status"); width: Tk.Theme.size.tableColumn * 1.2

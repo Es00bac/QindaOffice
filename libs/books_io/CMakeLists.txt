@@ -6,7 +6,8 @@
 # bank statement import (CSV, OFX/QFX, QIF), CSV/IIF export, CSV list
 # import, QuickBooks IIF import (M63: lists and transactions, one batch, a
 # dry run first), reports as xlsx (M63, through calc_io), timestamped
-# backups.
+# backups; M68 (D-077): the purchase-order form, per-printer check
+# alignment with its test page, QuickBooks purchase orders (PURCHORDR).
 # Qt Core/Gui (+ PrintSupport for the device types) over books_engine;
 # never links office_quick or the desktop archives (AGENTS.md rules 8/9).
 add_library(books_io STATIC
@@ -17,6 +18,8 @@ add_library(books_io STATIC
     src/bank_import_ofx.cpp
     src/bank_import_qif.cpp
     src/bank_import_util.cpp
+    src/check_alignment.cpp
+    src/check_alignment.h
     src/check_print.cpp
     src/check_print.h
     src/check_renderer.cpp
@@ -27,6 +30,7 @@ add_library(books_io STATIC
     src/iif_import.h
     src/iif_import_documents.cpp
     src/iif_import_lists.cpp
+    src/iif_import_orders.cpp
     src/iif_import_p.h
     src/iif_import_transactions.cpp
     src/iif_import_tx_p.h

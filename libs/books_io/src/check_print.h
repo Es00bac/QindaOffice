@@ -17,14 +17,17 @@
 // blank on the stock and print in full: payee, date, number, what the
 // check pays (the bills, or the expense lines) and the check amount.
 // Printing on BLANK stock (MICR toner, the bank's routing digits) is not
-// supported, and there is no per-printer alignment offset yet
-// (docs/books.md "Check printing").
+// supported. M68 (D-077): every page can be shifted by the printer's
+// alignment offset (check_alignment.h), and an alignment test page shows
+// where the fields land (docs/books.md "Check printing").
 
 #include "books_types.h"
+#include "check_alignment.h"
 #include "money.h"
 #include "page_output.h"
 #include "printable_document.h"
 
+#include <QDate>
 #include <QList>
 #include <QLocale>
 #include <QString>
@@ -67,14 +70,30 @@ bool buildPrintableCheck(CompanyFile &file, qint64 docId, PrintableCheck *out, Q
 
 class CheckRenderer {
 public:
-    // One page per check, in order (page_output.h contract).
-    static void paint(QPagedPaintDevice *device, QPainter *painter, const QList<PrintableCheck> &checks);
-    [[nodiscard]] static PagePainter painter(const QList<PrintableCheck> &checks);
+    // One page per check, in order (page_output.h contract). `offset`
+    // (M68) moves everything on the sheet — check third and stubs.
+    static void paint(QPagedPaintDevice *device, QPainter *painter, const QList<PrintableCheck> &checks,
+                      const CheckOffset &offset = {});
+    [[nodiscard]] static PagePainter painter(const QList<PrintableCheck> &checks, const CheckOffset &offset = {});
     // Convenience: build every check and write them to one PDF on US
     // Letter (voucher stock is letter-sized whatever the locale). Fails —
     // writing nothing — when any of them is not a printable check.
     static bool writeChecksPdf(CompanyFile &file, const QList<qint64> &docIds, const QString &path,
-                               QString *error = nullptr);
+                               QString *error = nullptr, const CheckOffset &offset = {});
+
+    // M68: the alignment test page, printed on plain paper and held over a
+    // sheet of check stock against the light — a sample check (`sample`;
+    // empty fields get sample values) with a crosshair at each field's
+    // anchor, shifted by `offset`, and how to read it in the stubs.
+    // `printer` and `alignmentText` ("0.05 in right, 0.10 in down") are
+    // printed in the instructions.
+    static void paintAlignmentTest(QPagedPaintDevice *device, QPainter *painter, const CheckOffset &offset,
+                                   const QString &printer, const QString &alignmentText,
+                                   const PrintableCheck &sample = {});
+    [[nodiscard]] static PagePainter alignmentTestPainter(const CheckOffset &offset, const QString &printer,
+                                                          const QString &alignmentText, const PrintableCheck &sample = {});
+    // A sample check for the test page: the company, today, $1,234.56.
+    [[nodiscard]] static PrintableCheck sampleCheck(CompanyFile &file, const QDate &date);
 };
 
 } // namespace QindaOffice::Books

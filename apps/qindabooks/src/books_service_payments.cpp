@@ -103,8 +103,11 @@ QVariantMap BooksService::payBills(const QVariantMap &map)
         return Format::failure(tr("Choose at least one bill and the amount to pay."));
     }
     QList<qint64> ids;
+    // M68: `toPrint` puts the payments (by check, from a bank account) in
+    // the print queue; printing gives them their numbers.
     const Result r = Purchases(*c).payBills(date, Format::id(map.value(QStringLiteral("paymentAccountId"))), payments,
-                                            map.value(QStringLiteral("reference")).toString().trimmed(), {}, &ids);
+                                            map.value(QStringLiteral("reference")).toString().trimmed(), {}, &ids,
+                                            map.value(QStringLiteral("toPrint")).toBool());
     QVariantMap out = Format::result(r);
     QVariantList idList;
     for (qint64 id : ids) {
@@ -211,19 +214,24 @@ QVariantMap BooksService::emailDocument(qint64 id)
     const MoneyFormat money = moneyFormat();
     QString body = tr("Hello %1,\n\n%2 %3 for %4").arg(customer ? customer->displayName : QString(), kind,
                                                        doc->number, money.text(doc->total.minor()));
+    const bool order = doc->kind == DocKind::PurchaseOrder; // M68: to the vendor
     if (doc->kind == DocKind::Invoice && doc->dueDate.isValid()) {
         body += tr(" is due on %1").arg(money.locale.toString(doc->dueDate, QLocale::LongFormat));
+    } else if (order && doc->dueDate.isValid()) {
+        body += tr(", expected by %1").arg(money.locale.toString(doc->dueDate, QLocale::LongFormat));
     }
     body += QStringLiteral(".\n\n");
     // M48: the invoice's Stripe payment link while it charges the balance due.
     if (const QString online = payOnlineLine(id); !online.isEmpty()) {
         body += online + QStringLiteral("\n\n");
     }
-    if (!c->settings().paymentInstructions.isEmpty()) {
+    if (!order && !c->settings().paymentInstructions.isEmpty()) {
         body += c->settings().paymentInstructions + QStringLiteral("\n\n");
     }
     body += tr("Thank you,\n%1").arg(company);
-    return mailWithAttachment(id, path, email, customer ? customer->displayName : tr("The customer"), subject, body);
+    return mailWithAttachment(id, path, email,
+                              customer ? customer->displayName : order ? tr("The vendor") : tr("The customer"), subject,
+                              body);
 }
 
 QString BooksService::outboxPath(const QString &base)

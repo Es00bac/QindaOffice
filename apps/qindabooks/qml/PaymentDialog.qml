@@ -16,6 +16,9 @@ Tk.Dialog {
     property var accounts: []
     property var openRows: []                // open invoices / unpaid bills
     property var applied: ({})               // id -> amount text
+    property var bankIds: []                 // M68: a bank account pays by check
+    readonly property bool byCheck: kind === "payBills" && accountBox.currentIndex >= 0 && accountBox.currentIndex < accounts.length
+                                    && bankIds.indexOf(Number(accounts[accountBox.currentIndex].id)) >= 0
 
     objectName: "paymentDialog"
     title: kind === "receive" ? qsTr("Receive payment") : qsTr("Pay bills")
@@ -28,6 +31,8 @@ Tk.Dialog {
         kind = k
         parties = kind === "receive" ? [{ id: 0, name: qsTr("Choose a customer") }].concat(books.parties("customer", false)) : []
         accounts = books.paymentAccounts()
+        bankIds = books.bankAccounts().filter(function(a) { return a.type === "Bank" }).map(function(a) { return a.id })
+        toPrint.checked = false
         applied = ({})
         error.visible = false
         amountField.text = ""
@@ -50,7 +55,8 @@ Tk.Dialog {
                 applications: rows.map(function(k) { return { invoiceId: Number(k), amount: dialog.applied[k] } }) })
         } else {
             result = books.payBills({ date: dateField.text, paymentAccountId: dialog.accounts[accountBox.currentIndex].id,
-                reference: referenceField.text, bills: rows.map(function(k) { return { billId: Number(k), amount: dialog.applied[k] } }) })
+                reference: referenceField.text, toPrint: dialog.byCheck && toPrint.checked,
+                bills: rows.map(function(k) { return { billId: Number(k), amount: dialog.applied[k] } }) })
         }
         if (!result.ok) { error.text = String(result.error || ""); error.visible = true; open() }
     }
@@ -76,7 +82,10 @@ Tk.Dialog {
             }
             Tk.PropertyRow { visible: dialog.kind === "receive"; label: qsTr("Amount received"); Tk.TextField { id: amountField; objectName: "paymentAmount"; small: true; mono: true; placeholderText: qsTr("Total of the lines below") } }
             Tk.PropertyRow { visible: dialog.kind === "receive"; label: qsTr("Method"); Tk.TextField { id: methodField; small: true; placeholderText: qsTr("Check, card, transfer…") } }
-            Tk.PropertyRow { label: qsTr("Reference"); Tk.TextField { id: referenceField; small: true; placeholderText: qsTr("Check or transaction number") } }
+            Tk.PropertyRow { label: qsTr("Reference"); Tk.TextField { id: referenceField; small: true; enabled: !(dialog.byCheck && toPrint.checked)
+                                                                      placeholderText: dialog.byCheck && toPrint.checked ? qsTr("Numbered when the checks print") : qsTr("Check or transaction number") } }
+            // M68: QuickBooks' "To be printed" — the payments wait in Expenses > Checks to Print.
+            Tk.PropertyRow { visible: dialog.byCheck; label: qsTr("Print checks later"); Tk.Switch { id: toPrint; objectName: "paymentToPrint"; tooltip: qsTr("Put the checks in the print queue; they get their numbers as they print") } }
         }
         Tk.Overline { title: dialog.kind === "receive" ? qsTr("Open invoices") : qsTr("Unpaid bills") }
         Tk.Caption { visible: dialog.openRows.length === 0; text: dialog.kind === "receive" ? qsTr("Pick a customer to see what they owe.") : qsTr("No unpaid bills.") }

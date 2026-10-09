@@ -43,6 +43,7 @@ constexpr KindRow kKinds[] = {
     {DocKind::SalesTaxPayment, "salesTaxPayment"},
     {DocKind::InvoiceTemplate, "recurringTemplate"},
     {DocKind::OpeningBalance, "openingBalance"},
+    {DocKind::PurchaseOrder, "purchaseOrder"}, // M68 (D-077)
 };
 
 QString rowKindKey(RowKind kind)
@@ -66,6 +67,7 @@ QString columnTypeKey(ColumnType type)
     case ColumnType::Number: return QStringLiteral("number");
     case ColumnType::Percent: return QStringLiteral("percent");
     case ColumnType::Date: return QStringLiteral("date");
+    case ColumnType::Duration: return QStringLiteral("duration"); // M68: minutes, shown h:mm
     }
     return QStringLiteral("text");
 }
@@ -192,6 +194,7 @@ QString statusLabel(DocumentStatus status)
     case DocumentStatus::Void: return tr("Void");
     case DocumentStatus::Pending: return tr("Pending");
     case DocumentStatus::Closed: return tr("Closed");
+    case DocumentStatus::PartiallyReceived: return tr("Partially received");
     }
     return QString();
 }

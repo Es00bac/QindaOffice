@@ -42,4 +42,9 @@ struct TxPlan {
 // back and post a journal entry instead. The caller holds a savepoint.
 bool postDocument(Context &ctx, const TxPlan &plan, QList<qint64> *docs);
 
+// M68 (iif_import_orders.cpp): PURCHORDR blocks never post; they become
+// purchase orders, counted under their own type in the report.
+[[nodiscard]] bool isPurchaseOrder(const IifTransaction &t);
+void importPurchaseOrders(Context &ctx, const QList<IifTransaction> &orders);
+
 } // namespace QindaOffice::Books::IifInternal

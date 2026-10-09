@@ -2,7 +2,8 @@
 
 # books_engine: the QindaBooks double-entry ledger (M45, D-045) — company
 # file (SQLite), money, chart of accounts, journal, sales, purchases,
-# banking, reconciliation, sales tax, reports and financial analysis.
+# banking, reconciliation, sales tax, reports and financial analysis;
+# purchase orders, time tracking and the check print queue (M68, D-077).
 # Qt Core + Qt Sql (QSQLITE) only: no Gui, no Quick, no desktop archives
 # (AGENTS.md rules 8/9), so every behavior is testable offscreen.
 # AGENT-GUARD: never add Gui here — books_document (Core::Document adapter)
@@ -25,6 +26,8 @@ add_library(books_engine STATIC
     src/books_types.h
     src/chart_templates.cpp
     src/chart_templates.h
+    src/check_queue.cpp
+    src/check_queue.h
     src/company_file.cpp
     src/company_file.h
     src/company_settings.cpp
@@ -35,6 +38,9 @@ add_library(books_engine STATIC
     src/decimal.h
     src/documents.cpp
     src/documents.h
+    src/documents_write.cpp
+    src/employees.cpp
+    src/employees.h
     src/journal.cpp
     src/journal.h
     src/ledger_query.cpp
@@ -43,6 +49,8 @@ add_library(books_engine STATIC
     src/lists.h
     src/money.cpp
     src/money.h
+    src/purchase_orders.cpp
+    src/purchase_orders.h
     src/purchases.cpp
     src/purchases.h
     src/reconciliation.cpp
@@ -56,6 +64,7 @@ add_library(books_engine STATIC
     src/reports_cashflow.cpp
     src/reports_financial.cpp
     src/reports_ledger.cpp
+    src/reports_orders_time.cpp
     src/reports_sales.cpp
     src/reports_util.cpp
     src/reports_util.h
@@ -68,6 +77,9 @@ add_library(books_engine STATIC
     src/sql_util.h
     src/tax.cpp
     src/tax.h
+    src/time_sheet.cpp
+    src/time_tracking.cpp
+    src/time_tracking.h
 )
 
 target_include_directories(books_engine

@@ -41,6 +41,17 @@ set(qindabooks_qml
     qml/BudgetDialog.qml
     qml/SalesTaxPaymentDialog.qml
     qml/IifImportDialog.qml
+    # M68 (D-077): purchase orders, time, the check queue and alignment.
+    qml/PurchaseOrderEditor.qml
+    qml/OrderLinesTable.qml
+    qml/ReceiveOrderDialog.qml
+    qml/BillableTimeDialog.qml
+    qml/PrintChecksDialog.qml
+    qml/CheckAlignmentDialog.qml
+    qml/TimeView.qml
+    qml/TimeActivityDialog.qml
+    qml/TimesheetDialog.qml
+    qml/EmployeeDialog.qml
 )
 foreach(qml_file IN LISTS qindabooks_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -63,10 +74,14 @@ qt_add_qml_module(qindabooks_app
         src/books_service_analysis.cpp
         src/books_service_banking.cpp
         src/books_service_connections.cpp
+        src/books_service_checks.cpp
+        src/books_service_document_map.cpp
         src/books_service_documents.cpp
+        src/books_service_kinds.h
         src/books_service_journal.cpp
         src/books_service_lists.cpp
         src/books_service_migration.cpp
+        src/books_service_orders.cpp
         src/books_service_payments.cpp
         src/books_service_reconcile.cpp
         src/books_service_recurring.cpp
@@ -74,6 +89,7 @@ qt_add_qml_module(qindabooks_app
         src/books_service_budgets.cpp
         src/books_service_statements.cpp
         src/books_service_tax.cpp
+        src/books_service_time.cpp
     QML_FILES ${qindabooks_qml}
 )
 target_include_directories(qindabooks_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

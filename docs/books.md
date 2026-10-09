@@ -5,7 +5,9 @@ Bookkeeping for small businesses — proper double-entry records, invoices,
 bills, banking, reconciliation, sales tax, reports and financial analysis
 (M45–M48; decisions [D-045](decisions.md#d-045-bookkeeping-model-one-company-file-integer-money-immutable-postings),
 [D-046](decisions.md#d-046-bookkeeping-io-one-page-painter-for-pdf-and-paper-bank-files-in-accountant-files-out)
-and [D-048](decisions.md#d-048-bank-and-payment-connections-feed-lines-first-tokens-in-the-keyring)).
+and [D-048](decisions.md#d-048-bank-and-payment-connections-feed-lines-first-tokens-in-the-keyring));
+purchase orders, employees and time, and the check print queue (M68,
+[D-077](decisions.md#d-077-qindabooks-purchase-orders-time-tracking-check-printing-workflow)).
 QuickBooks is the reference for *scope*, not for look or file format.
 
 | Target | Depends on | What it is |
@@ -23,7 +25,7 @@ cannot mix; one file is one window (rule 1). The file is complete on its
 own: copy it and you have copied the books.
 
 - `PRAGMA application_id = 0x51424B53` ("QBKS"), `PRAGMA user_version` =
-  schema version (currently **3**).
+  schema version (currently **4**, M68).
 - `foreign_keys = ON`, `journal_mode = DELETE` (no `-wal`/`-shm`
   sidecars), `synchronous = FULL`, 5 s busy timeout.
 - Opening an **older** file backs it up to `<file>.pre-v<N>.bak` and
@@ -38,7 +40,7 @@ own: copy it and you have copied the books.
   (nested calls use savepoints) and commits immediately;
   `CompanyFile::changed()` fires after each outermost commit.
 
-### Schema (v3)
+### Schema (v4)
 
 | Table | Holds |
 | --- | --- |
@@ -48,7 +50,7 @@ own: copy it and you have copied the books.
 | `items` | products/services: price, cost, income and expense accounts, taxable |
 | `classes`, `terms` | classes/tags; payment terms (Due on receipt, Net 15/30/60 seeded) |
 | `tax_agencies`, `tax_components`, `tax_rates`, `tax_rate_components` | sales tax |
-| `documents`, `document_lines` | the business documents the user edits (mutable, audited) |
+| `documents`, `document_lines` | the business documents the user edits (mutable, audited); v4: a purchase order's `ship_to`, a check's `to_print`, a bill line's `po_line_id`, an invoice line's `time_entry_id`, a purchase-order line's `closed` |
 | `transactions`, `journal_lines` | the postings (immutable; see below) |
 | `applications` | payment/credit → invoice/bill/refund links |
 | `recurring_templates` | schedules over an `InvoiceTemplate` document |
@@ -58,6 +60,8 @@ own: copy it and you have copied the books.
 | `budgets` (v2) | amount per account per month (per class) |
 | `connections` (v3) | one row per online connection (`mercury`, `stripe`): status, settings JSON, sync cursor, last sync, last error — never a token |
 | `payment_links` (v3) | online payment links made for invoices (amount, currency, URL, Stripe id) |
+| `employees` (v4) | the people time is entered for: name, email, phone, address, notes, an optional default hourly **billing** rate, active — nothing else (payroll, M71, extends this table in its own schema version) |
+| `time_entries` (v4) | date, an employee **or** a vendor (exactly one, a CHECK), customer:job, service item, whole minutes (1 … 1440), billable, notes, class |
 
 `journal_lines` duplicates the transaction's date, kind and void flag so
 every report aggregates one indexed table.
@@ -134,9 +138,9 @@ transaction** in the same SQL transaction as the document write:
 | Sales tax payment | Sales Tax Payable (agency) | bank |
 | Journal entry / Opening balance | as entered / account ↔ Opening Balance Equity | |
 
-Estimates, drafts and recurring templates never post. Every journal line
-carries the customer/vendor, and where relevant the item, class, tax
-component and agency.
+Estimates, drafts, recurring templates and purchase orders (M68) never
+post. Every journal line carries the customer/vendor, and where relevant the
+item, class, tax component and agency.
 
 - **Balanced**: debits = credits, ≥ 2 lines, each line one-sided and
   non-negative, every account exists and is active — else `Unbalanced`,
@@ -195,6 +199,83 @@ component and agency.
   non-inventory products or other charges with a price, a cost and
   accounts; nothing tracks stock on hand.
 
+## Purchase orders (M68, D-077)
+
+`PurchaseOrders` (`purchase_orders.h`). A purchase order is a document of
+kind `PurchaseOrder` that **never posts**: vendor, date, number (`PO-1001`;
+the prefix and counter are company settings), expected date (the document's
+due date), ship-to address, vendor message (printed), internal memo, and
+lines — an item (its cost and expense account fill in) or a category,
+description, quantity, rate, amount and a customer:job.
+
+- **Receiving.** A bill line that receives an order line remembers it
+  (`po_line_id`). An order line's received quantity is the sum of the
+  quantities of the **live** bill lines that name it — nothing is stored —
+  so voiding the bill, or editing it so the line is gone, puts the quantity
+  back. A receipt is refused when it is more than what remains, comes from
+  another vendor's bill, or names a closed line (a bill that already
+  received it may keep it). Rate × received quantity is the bill line; an
+  amount-only line is received in proportion.
+- **Status** (derived): Open; Partially received once a bill received
+  anything; Closed when everything is received, when every line not
+  received was closed by hand, or when the whole order was closed by hand
+  (reopening is allowed); Void. A received line cannot be removed from the
+  order nor ordered below what was received, the vendor cannot change once
+  anything was received, and an order a live bill receives cannot be voided
+  — close it instead.
+- **In the app.** *Expenses ▸ Purchase Order…* opens `PurchaseOrderEditor.qml`
+  (with `OrderLinesTable.qml`: received "6 of 10" per line, a Closed box per
+  saved line, a Closed switch for the order; Print, Save PDF…, Email to the
+  vendor, Create bill, Void…). *Expenses ▸ Create Bill from Order* (or the
+  editor's Create bill) opens a bill receiving everything left. A new bill
+  for a vendor with open order lines offers them (`ReceiveOrderDialog.qml`:
+  tick a line to receive all of it, or type part of it); received lines
+  carry the order number as a badge. Expenses has a *Purchase orders* tab
+  (All / Open / Partly received / Closed; the balance column is what is
+  still to receive) and the vendor list an *On order* column.
+- **Report.** Open Purchase Orders (by vendor, as of a date): each order
+  neither closed nor void, its amount and its open balance — what is left
+  to receive at the order's prices, received as of the date.
+- **QuickBooks.** IIF `PURCHORDR` blocks import as purchase orders (below).
+
+## Employees and time (M68, D-077)
+
+`Employees` (`employees.h`) and `TimeTracking` (`time_tracking.h`,
+`time_sheet.cpp`).
+
+- **Employees** are a minimal list of their own — name (unique), email,
+  phone, address, notes, active, and an optional **default hourly rate**
+  that their billable time bills at (else the service's price). Contractors
+  are vendors. **Payroll extends this list (M71)**: pay rates, tax setup and
+  identity numbers arrive in their own schema version and never in these
+  fields.
+- **A time entry**: date, an employee or a vendor, customer:job (none =
+  internal time), service item, duration (typed `1:30`, `1.5` or `90m`;
+  stored as whole minutes, at most 24:00), billable, notes. Billable time
+  needs a customer:job and a service.
+- **Billed** is derived: an entry is billed while a non-void invoice (a
+  draft too) has a line naming it (`time_entry_id`). Billed time cannot be
+  edited or deleted; voiding the invoice or removing the line makes it
+  unbilled again. The invoice line is the service item, the hours as the
+  quantity — minutes ÷ 60 to two decimals, half-up (20 minutes = 0.33 h,
+  45 = 0.75) — the rate (employee rate, else the item's price) and the notes
+  (else the item's description) as the description.
+- **Weekly timesheet**: one person's week, Monday first, a row per
+  customer:job, service, billable and notes with a cell per day; a second
+  entry for the same row and day opens another row. Saving writes the week
+  in one SQL transaction; a billed cell is read-only and an attempt to
+  change it saves nothing.
+- **In the app.** *Time ▸ Time Activity…* (`TimeActivityDialog.qml`),
+  *Time ▸ Weekly Timesheet…* (`TimesheetDialog.qml`), *Time ▸ New
+  Employee…* (`EmployeeDialog.qml`), and the **Time** workspace (Ctrl+7,
+  `TimeView.qml`: activities with All / Unbilled / Billed / Not billable,
+  and the employees). A new invoice for a customer with unbilled billable
+  time offers it (`BillableTimeDialog.qml`: pick which; each becomes a line).
+- **Reports** (QuickBooks' names; durations as h:mm): Time by Job
+  (customer:job → service), Time by Name (person → customer:job) and
+  Unbilled Time by Job (each unbilled billable entry with its rate and what
+  it will bill), for a period.
+
 ## Banking and reconciliation
 
 - **Registers** per bank/card account with running balance in the
@@ -243,6 +324,8 @@ party, item or document ids). Cells hold integers only.
 | Sales Tax Liability | Per agency and component: taxable sales, rate, tax collected, tax paid, balance due. |
 | Budget vs. Actual | Actual, budget, over budget and % of budget per income/expense account (budgets are per account per month; `setAnnual` spreads a year exactly; `setFiscalYearMonths` writes a fiscal year's twelve months in one transaction — the app's budget editor). |
 | Reconciliation Report | See above. |
+| Open Purchase Orders (M68) | Per vendor, each open order's amount and what is left to receive, as of a date. |
+| Time by Job / Time by Name / Unbilled Time by Job (M68) | Durations (h:mm) per customer:job and service, per person and customer:job; unbilled billable time with rate and amount. |
 
 ### Cash vs accrual
 
@@ -351,8 +434,42 @@ the check amount, the company and the bank account; a stub that cannot hold
 every line says how many it left out. Debit-card expenses, credit-card
 payments, void and draft documents and zero amounts are refused with the
 reason (`isPrintableCheck`). Not yet: blank stock (MICR toner, the bank's
-routing digits), a per-printer alignment offset, a "to be printed" queue
-that numbers checks as they print, words in languages other than English.
+routing digits), words in languages other than English. (M68: the print
+queue and the per-printer alignment, below.)
+
+**Check printing workflow** (M68, D-077; `check_queue.h`,
+`check_alignment.h`). A check, or a bill payment from a bank account, can
+be saved **to print later** (the check editor's *Print later*, Pay Bills'
+*Print checks later*): it posts at once, without a number. *Expenses ▸
+Checks to Print…* (`PrintChecksDialog.qml`) lists the queue of a bank
+account and the first check number — the account's next one, never below
+one past the highest number the account used — and *Print* gives the
+chosen checks consecutive numbers and sends them to the printer through the
+`"checks"` print source. Because a posted transaction's number cannot
+change (D-045), giving or taking a number voids the live transaction and
+posts the same lines under the new number; a check that has cleared, or is
+dated in a closed period, is refused. Then the confirmation: *Done* when all
+printed; a check ticked *Reprint* goes back to the queue without its number
+and that number is **recorded void** (a void check with the number, payee,
+bank account and the payment it was printed for), so the reprint takes the
+next numbers; *Nothing printed* takes the run back with its numbers unused.
+**Alignment** (*Expenses ▸ Check Printer Alignment…*,
+`CheckAlignmentDialog.qml`): per printer name, move every field right and
+down (inches to the hundredth or millimetres to the tenth, at most an inch
+either way; negative moves left and up), kept per user in
+`$XDG_CONFIG_HOME/qindaoffice/books/check-alignment.json` because one
+printer serves every company file. The check painter shifts the whole sheet
+by the offset of the printer the job goes to, looked up when it paints; a
+PDF is never shifted. *Print test page* prints a sample check with a mark at
+each field's anchor and a scale in tenths of an inch, to hold over the stock
+against the light; *Save test page as PDF…* writes it with the printer's
+offset.
+
+**Purchase orders print** through the same forms path (`PurchaseOrder`
+kind of `PrintableDocument`): vendor, ship-to, P.O. number, date, expected
+date, item / description / customer / quantity / rate / amount (the item and
+customer columns only when a line uses them), the order total and the
+vendor message; e-mail goes to the vendor without payment instructions.
 
 AGENT-NOTE (fonts): Noto Sans, no OpenType features, ligatures off. Qt's
 PDF engine gives glyphs substituted by a font feature (`tnum`, `ffi`) no
@@ -439,6 +556,15 @@ UTF-8 else Windows-1252.
   post as journal entries). A transaction already in the books (same date,
   same account/amount rows, posted for the same main name — counted per
   occurrence) is skipped: importing a file twice adds nothing.
+- **Purchase orders (M68).** `PURCHORDR` blocks — QuickBooks' open
+  purchase orders, on its non-posting "Purchase Orders" account — never
+  post: they become purchase orders (TRNS NAME the vendor, DOCNUM the
+  number, DUEDATE else SHIPDATE the expected date, SADDR1–5 the ship-to;
+  each SPL an INVITEM / ACCNT line with QNTY, PRICE — kept only where price
+  × quantity is the AMOUNT —, MEMO as the description and NAME as the
+  customer:job), `PAID Y` imports one closed, and an order already in the
+  books (vendor, date, number, total) is skipped. Before M68 these blocks
+  were refused for an unmapped account.
 - **One batch, previewed.** The import runs in one SQL transaction; the
   preview is the same run rolled back, so its counts are what Import does.
   Import refuses while any transaction is refused unless the user chooses
@@ -611,7 +737,9 @@ BooksHost adds `booksSyncBankAction` ("Sync Mercury & Stripe", F5,
 
 ## Out of scope — plainly
 
-Payroll; inventory quantities and COGS from stock; multi-currency and
+Payroll (its own milestone, M71, which extends the employees list); inventory
+quantities and COGS from stock; job costing (a bill line's customer:job is
+kept, not posted), billing rate levels and billable expenses; multi-currency and
 currency revaluation (one company, one currency); online bank-feed
 connections other than Mercury and Stripe (every other bank's statements
 are imported from the files it lets you download); e-filing of tax returns and 1099s (vendors carry a 1099 flag
@@ -629,8 +757,9 @@ company file.
 
 - **`BooksHost : DocumentHost`** owns the document, the commands and the
   menus (File ▸ New Company… / Open… / Backup… / Import and Export ▸ /
-  Company Settings… / Close the Books…; Sales, Expenses, Banking,
-  Accounting and Reports menus; View ▸ the six workspaces, Ctrl+1…6).
+  Company Settings… / Close the Books…; Sales, Expenses, Time (M68),
+  Banking, Accounting and Reports menus; View ▸ the seven workspaces,
+  Ctrl+1…7 — Time is the seventh, M68).
   Every command is an `ActionEntry` with a `books…Action` id
   (`books_host_actions.cpp` lists them) whose handler only **emits a
   request** (`documentEditorRequested(kind, id)`,
@@ -672,6 +801,9 @@ company file.
 | Recurring (M63) | `recurringTemplates()` rows also carry `remaining`, `scheduleText`, `statusText`; `recurringTemplate(id)` adds the body as `document`; `saveRecurring` edits an existing id (`nextDate`, invoices still to come in `maxOccurrences`; the service passes an unchanged schedule back as stored so nothing re-bases), `setRecurringActive`, `deleteRecurring` |
 | Budgets, sales tax (M63) | `currentFiscalYear()`, `budget(fiscalYear)` (every active income/expense account, twelve month texts), `saveBudget({fiscalYear, rows})` (all parsed before anything is written), `budgetSpread(annual)` / `budgetTotal(months)` (exact splits and sums for the dialog); `salesTaxOwed(asOf)` (per agency: collected − paid), `recordSalesTaxPayment({agencyId, bankAccountId, amount, date, memo})` |
 | QuickBooks (M63) | `previewIif(url, options)` (the whole import, rolled back) and `importIif(url, options)` (backup copy, then one batch); options `{accountMap: {name: accountId}, autoApply, skipRefused}`; answer `{ok, committed, error, backupPath, posted, postedText, lists[{key, label, added, existing, skipped}], transactions[{type, count, documents, journal, duplicates, refused}], refused[{firstLine, lastLine, type, reason}], unmapped[{name, lines, linesText}], notes[]}` |
+| Purchase orders (M68) | `saveDocument`/`document` with kind `purchaseOrder` (`dueDate` = expected, `shipTo`, `notes` = vendor message, lines with `customerId`, `closed`; `document()` adds each line's `received`/`remaining` and `closedByHand`; the balance is what is left to receive); `documents({kind: "orders", status: open \| partiallyReceived \| closed})`; `orderLines(orderId)`, `openOrderLines(vendorId)` (`[{lineId, orderNumber, itemName, description, customerName, ordered, received, remaining, rateText, remainingText, closed}]`), `receiveOrderLines([{lineId, quantity}])` → `{ok, error, lines}` (bill-editor lines with `poLineId` and `orderNumber`), `billFromOrder(orderId)` → `{ok, draft}`, `setOrderClosed`, `setOrderLineClosed`; vendor rows of `parties("vendor")` add `openOrders`, `toReceive(Text)`; `exportDocumentPdf`/`emailDocument` take an order |
+| Employees and time (M68) | `employees(includeInactive)`, `employee(id)`, `saveEmployee({id?, name, email, phone, address, notes, rate (text, "" = none), active})`, `setEmployeeActive`; `workers()` → `[{key ("employee:<id>" \| "vendor:<id>"), name, kindLabel}]`; `timeEntries({worker, customerId, from, to, status: all \| unbilled \| billed \| notBillable})`, `timeEntry(id)` (`{id, date, worker, workerName, customerId, customerName, itemId, itemName, minutes, duration, billable, status, statusLabel, notes, invoiceId, invoiceNumber}`), `saveTimeEntry({id?, date, worker, customerId, itemId, duration (text), billable, notes})`, `deleteTimeEntry`; `timesheet(worker, dateIso)` → `{weekStart, days[7], rows[{customerId, itemId, billable, notes, cells[7]{entryId, duration, billed}, totalText}], dayTotals[7], totalText}` and `saveTimesheet({worker, weekStart, rows})`; `unbilledTime(customerId)`, `timeInvoiceLines(customerId, entryIds)` → `{ok, lines}` (invoice-editor lines with `timeEntryId`) |
+| Check queue and alignment (M68) | `saveDocument` of a check with `toPrint: true`, `payBills({…, toPrint: true})`; `checkQueue(bankAccountId)`, `nextCheckNumber(bankAccountId)`, `setToPrint(id, on)`, `assignCheckNumbers(bankAccountId, ids, firstNumber)` → `{ok, checks[{id, number, payeeName, amountText}]}`, `confirmCheckPrint(misprintedIds)`, `takeBackChecks(bankAccountId, ids)`; `checkPrinters()` (this computer's printers and those with a stored alignment), `checkAlignment(printer)` → `{printer, x, y, unit, description}`, `saveCheckAlignment({printer, x, y, unit: in \| mm})`, `exportAlignmentTestPdf(printer, url)` |
 | Housekeeping | `backupNow()` (timestamped copies in `$XDG_DATA_HOME/qindaoffice/books/backups`, newest 20 kept), `backupTo(url)`, `exportIif`, `exportJournalCsv`, `exportListCsv(kind, url)`, `importListCsv(kind, url)` → `{ok, error, kind, added, skipped, errors[]}` (M63: `kind` is `customers`, `vendors`, `items` or `accounts`; the singular party kinds and obvious synonyms are accepted; refused rows come back as `row N: …` even when others were added) |
 
 **Printing the current source.** Print, Print Preview and File ▸ Export
@@ -715,6 +847,25 @@ bill payment; it is enabled only while the selection is one, the check
 editor shows the memo that prints on it, and its Print and Save PDF… give
 the check page (`exportDocumentPdf` writes a check as its check).
 
+**Reached since M68** (D-077). *Expenses ▸ Purchase Order…*
+(`booksNewPurchaseOrderAction`), *Create Bill from Order*
+(`booksCreateBillFromOrderAction`, enabled for a selected order with
+something to receive; emits `billFromOrderRequested(orderId)`), *Checks to
+Print…* (`booksPrintChecksAction`, `printChecksRequested()`) and *Check
+Printer Alignment…* (`booksCheckAlignmentAction`,
+`checkAlignmentRequested()`); a new **Time** menu: *Time Activity…*
+(`booksTimeActivityAction`, Ctrl+Shift+T, `timeActivityRequested(0)`),
+*Weekly Timesheet…* (`booksWeeklyTimesheetAction`, `timesheetRequested()`)
+and *New Employee…* (`booksNewEmployeeAction`,
+`employeeDialogRequested(0)`); the **Time** workspace
+(`booksViewTimeAction`, Ctrl+7, view key `"time"`). On the ribbon: the
+order command in Home's expense split menu, a **Purchases** tab (Purchase
+orders, Checks) and a **Time** tab (Enter time, People), and the Time
+workspace in View. `BooksHost.setPrintSource("checks", [ids])` prints a run
+of checks and `setPrintSource("alignment", printerName)` the alignment test
+page — both shifted by the alignment of the printer the job goes to; a
+`"document"` source naming a purchase order prints the order form.
+
 **E-mailing an invoice.** `emailDocument(id)` writes the form's PDF to
 `$XDG_CACHE_HOME/qindaoffice/books/outbox/<number>.pdf` and starts
 `qindamail --attach <pdf> mailto:<customer>?subject=Invoice INV-1001 from <company>&body=…`
@@ -741,6 +892,12 @@ one second), `tst_books_document`. `tests/books_io/` (M46): see
 `tst_qindabooks_banking`, `tst_qindabooks_host`,
 `tst_qindabooks_menu_export` — see
 [verification](verification.md#m47-gates-the-qindabooks-app).
+M68 (D-077): `tst_books_orders`, `tst_books_time`, `tst_books_checks` and
+the v3 → v4 migration in `tst_books_company`; `tst_books_io_orders` (the
+purchase-order form, IIF `PURCHORDR`, durations in CSV and Excel) and the
+alignment case of `tst_books_io_checks`; `tst_qindabooks_m68` and
+`tst_qindabooks_m68_dialogs` — see
+[verification](verification.md#m68-books-gates-d-077).
 `tests/books_connect/` (M48): `tst_books_connect_mercury`,
 `tst_books_connect_stripe` against a fake Mercury/Stripe API on 127.0.0.1
 (`fake_bank_api.h`), plus `tst_qindabooks_connections` — see

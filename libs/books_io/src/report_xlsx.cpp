@@ -156,6 +156,11 @@ bool ReportXlsx::write(const ReportTable &table, const QString &path, QString *e
             case ColumnType::Date:
                 put(row, c, Calc::Value(dateSerial(cell.date)), s.date);
                 break;
+            case ColumnType::Duration:
+                // M68: minutes as a fraction of a day under [h]:mm — a
+                // duration Excel sums and shows as 6:05, never text.
+                put(row, c, Calc::Value(double(cell.value) / (24.0 * 60.0)), numberStyle(QStringLiteral("[h]:mm"), total));
+                break;
             case ColumnType::Text: {
                 // Indentation as the screen and the PDF show it.
                 const QString indent = c == 0 ? QString(r.depth * 3, QLatin1Char(' ')) : QString();

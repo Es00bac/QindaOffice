@@ -118,6 +118,51 @@ private slots:
         QCOMPARE(Ledger(*file).auditTrail(QStringLiteral("schema")).size(), 1);
     }
 
+    // M68 (D-077): a version-3 file with books in it opens as version 4 —
+    // its documents and lines intact, the new columns at their defaults,
+    // the time table empty and the purchase-order counter seeded.
+    void migratesAVersion3FileWithBooksInIt()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("v3.qbooks"));
+        QString error;
+        QVERIFY2(CompanyFile::createBareAtVersion(path, 3, &error), qPrintable(error));
+        {
+            QSqlDatabase db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("v3"));
+            db.setDatabaseName(path);
+            QVERIFY(db.open());
+            QCOMPARE(Schema::readUserVersion(db), 3);
+            QVERIFY(Sql::exec(db, QStringLiteral("INSERT INTO settings(key, value) VALUES('legal_name', 'Three Co')")));
+            QVERIFY(Sql::exec(db, QStringLiteral("INSERT INTO settings(key, value) VALUES('currency', 'USD')")));
+            QVERIFY(Sql::exec(db, QStringLiteral("INSERT INTO accounts(id, name, type, created_at) VALUES(1, 'Rent', 14, 'now')")));
+            QVERIFY(Sql::exec(db, QStringLiteral("INSERT INTO documents(id, kind, state, number, date, total, created_at,"
+                                                 " updated_at) VALUES(7, 8, 1, 'B-7', '2026-01-05', 1500, 'now', 'now')")));
+            QVERIFY(Sql::exec(db, QStringLiteral("INSERT INTO document_lines(id, doc_id, line_no, account_id, description,"
+                                                 " quantity, amount) VALUES(70, 7, 1, 1, 'Rent', '1', 1500)")));
+            db.close();
+        }
+        QSqlDatabase::removeDatabase(QStringLiteral("v3"));
+        auto file = CompanyFile::open(path, &error);
+        QVERIFY2(file, qPrintable(error));
+        QCOMPARE(file->schemaVersion(), 4);
+        QVERIFY(QFileInfo::exists(path + QStringLiteral(".pre-v4.bak")));
+        const std::optional<BusinessDocument> bill = Documents(*file).load(7);
+        QVERIFY(bill);
+        QCOMPARE(bill->number, QStringLiteral("B-7"));
+        QCOMPARE(bill->total.minor(), 1500);
+        QVERIFY(!bill->toPrint);
+        QVERIFY(bill->shipTo.isEmpty());
+        QCOMPARE(bill->lines.size(), 1);
+        QCOMPARE(bill->lines.first().id, 70);
+        QCOMPARE(bill->lines.first().poLineId, 0);
+        QVERIFY(!bill->lines.first().closed);
+        QCOMPARE(Sql::scalarInt(file->database(), QStringLiteral("SELECT COUNT(*) FROM time_entries")), 0);
+        QCOMPARE(Sql::scalarInt(file->database(), QStringLiteral("SELECT COUNT(*) FROM employees")), 0);
+        QCOMPARE(file->takeNextNumber(DocKind::PurchaseOrder), QStringLiteral("PO-1001"));
+        QCOMPARE(file->settings().nextPurchaseOrderNumber, 1002);
+        QVERIFY(file->integrityProblems().isEmpty());
+    }
+
     void backupAndIntegrity()
     {
         TestCompany c;

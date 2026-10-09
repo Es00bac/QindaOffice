@@ -2,6 +2,7 @@
 #include "documents.h"
 
 #include "company_file.h"
+#include "purchase_orders.h"
 #include "sql_util.h"
 #include "tax.h"
 
@@ -21,7 +22,7 @@ bool isSourceKind(DocKind kind)
 const QString kHeaderColumns = QStringLiteral(
     "id, kind, state, number, party_id, date, due_date, terms_id, memo, message, reference, account_id,"
     " to_account_id, discount, tax_rate_id, subtotal, discount_amount, tax_amount, total, source_doc_id,"
-    " template_id, txn_id");
+    " template_id, txn_id, ship_to, to_print");
 
 BusinessDocument readHeader(const QSqlQuery &q, const QString &currency)
 {
@@ -48,6 +49,8 @@ BusinessDocument readHeader(const QSqlQuery &q, const QString &currency)
     d.sourceDocId = q.value(19).toLongLong();
     d.templateId = q.value(20).toLongLong();
     d.txnId = q.value(21).toLongLong();
+    d.shipTo = q.value(22).toString();
+    d.toPrint = q.value(23).toBool();
     return d;
 }
 
@@ -101,8 +104,8 @@ std::optional<BusinessDocument> Documents::load(qint64 id) const
     }
     QSqlQuery q(db);
     Sql::run(q, QStringLiteral("SELECT id, item_id, account_id, description, quantity, unit_price, amount, debit,"
-                               " credit, taxable, class_id, party_id, link_doc_id FROM document_lines"
-                               " WHERE doc_id = ? ORDER BY line_no"),
+                               " credit, taxable, class_id, party_id, link_doc_id, po_line_id, time_entry_id, closed"
+                               " FROM document_lines WHERE doc_id = ? ORDER BY line_no"),
              {id});
     while (q.next()) {
         DocumentLine line;
@@ -120,6 +123,9 @@ std::optional<BusinessDocument> Documents::load(qint64 id) const
         line.classId = q.value(10).toLongLong();
         line.partyId = q.value(11).toLongLong();
         line.linkDocId = q.value(12).toLongLong();
+        line.poLineId = q.value(13).toLongLong();
+        line.timeEntryId = q.value(14).toLongLong();
+        line.closed = q.value(15).toBool();
         doc.lines << line;
     }
     return doc;
@@ -331,6 +337,9 @@ DocumentStatus Documents::status(const BusinessDocument &doc, const QDate &today
     if (doc.kind == DocKind::Estimate) {
         return doc.state == DocState::Closed ? DocumentStatus::Closed : DocumentStatus::Pending;
     }
+    if (doc.kind == DocKind::PurchaseOrder) {
+        return purchaseOrderStatus(m_file, doc); // received quantities, not money
+    }
     const Money open = openBalance(doc.id);
     if (open.isZero() || open.isNegative()) {
         return DocumentStatus::Paid;
@@ -356,7 +365,10 @@ QJsonObject Documents::toJson(const BusinessDocument &doc) const
                                  {QStringLiteral("credit"), l.credit.toPlainString()},
                                  {QStringLiteral("taxable"), l.taxable},
                                  {QStringLiteral("class"), l.classId},
-                                 {QStringLiteral("party"), l.partyId}});
+                                 {QStringLiteral("party"), l.partyId},
+                                 {QStringLiteral("po_line"), l.poLineId},
+                                 {QStringLiteral("time_entry"), l.timeEntryId},
+                                 {QStringLiteral("closed"), l.closed}});
     }
     return QJsonObject{{QStringLiteral("id"), doc.id},
                        {QStringLiteral("kind"), docKindName(doc.kind)},
@@ -370,114 +382,9 @@ QJsonObject Documents::toJson(const BusinessDocument &doc) const
                        {QStringLiteral("discount"), doc.discount.toText()},
                        {QStringLiteral("tax_rate"), doc.taxRateId},
                        {QStringLiteral("total"), doc.total.toPlainString()},
+                       {QStringLiteral("ship_to"), doc.shipTo},
+                       {QStringLiteral("to_print"), doc.toPrint},
                        {QStringLiteral("lines"), lines}};
-}
-
-Result Documents::write(BusinessDocument &doc)
-{
-    const QSqlDatabase db = m_file.database();
-    const QVariantList header{int(doc.kind),
-                              int(doc.state),
-                              doc.number,
-                              Sql::idOrNull(doc.partyId),
-                              Sql::isoDate(doc.date),
-                              doc.dueDate.isValid() ? QVariant(Sql::isoDate(doc.dueDate)) : QVariant(),
-                              Sql::idOrNull(doc.termsId),
-                              doc.memo,
-                              doc.message,
-                              doc.reference,
-                              Sql::idOrNull(doc.accountId),
-                              Sql::idOrNull(doc.toAccountId),
-                              doc.discount.toText(),
-                              Sql::idOrNull(doc.taxRateId),
-                              doc.subtotal.minor(),
-                              doc.discountAmount.minor(),
-                              doc.taxAmount.minor(),
-                              doc.total.minor(),
-                              Sql::idOrNull(doc.sourceDocId),
-                              Sql::idOrNull(doc.templateId),
-                              CompanyFile::nowStamp()};
-    QString error;
-    if (doc.id == 0) {
-        QVariantList binds = header;
-        binds << CompanyFile::nowStamp();
-        doc.id = Sql::insert(
-            db,
-            QStringLiteral("INSERT INTO documents(kind, state, number, party_id, date, due_date, terms_id, memo,"
-                           " message, reference, account_id, to_account_id, discount, tax_rate_id, subtotal,"
-                           " discount_amount, tax_amount, total, source_doc_id, template_id, updated_at,"
-                           " created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"),
-            binds, &error);
-        if (doc.id == 0) {
-            return Result::failure(ErrorCode::Storage, error);
-        }
-    } else {
-        QVariantList binds = header;
-        binds << doc.id;
-        if (!Sql::exec(db,
-                       QStringLiteral("UPDATE documents SET kind = ?, state = ?, number = ?, party_id = ?, date = ?,"
-                                      " due_date = ?, terms_id = ?, memo = ?, message = ?, reference = ?,"
-                                      " account_id = ?, to_account_id = ?, discount = ?, tax_rate_id = ?,"
-                                      " subtotal = ?, discount_amount = ?, tax_amount = ?, total = ?,"
-                                      " source_doc_id = ?, template_id = ?, updated_at = ? WHERE id = ?"),
-                       binds, &error)
-            || !Sql::exec(db, QStringLiteral("DELETE FROM document_lines WHERE doc_id = ?"), {doc.id}, &error)) {
-            return Result::failure(ErrorCode::Storage, error);
-        }
-    }
-    int lineNo = 0;
-    for (DocumentLine &line : doc.lines) {
-        line.id = Sql::insert(
-            db,
-            QStringLiteral("INSERT INTO document_lines(doc_id, line_no, item_id, account_id, description, quantity,"
-                           " unit_price, amount, debit, credit, taxable, class_id, party_id, link_doc_id)"
-                           " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)"),
-            {doc.id, ++lineNo, Sql::idOrNull(line.itemId), Sql::idOrNull(line.accountId), line.description,
-             line.quantity.toString(), line.unitPrice.minor(), line.amount.minor(), line.debit.minor(),
-             line.credit.minor(), line.taxable ? 1 : 0, Sql::idOrNull(line.classId), Sql::idOrNull(line.partyId),
-             Sql::idOrNull(line.linkDocId)},
-            &error);
-        if (line.id == 0) {
-            return Result::failure(ErrorCode::Storage, error);
-        }
-    }
-    return Result::success(doc.id);
-}
-
-Result Documents::setState(qint64 docId, DocState state)
-{
-    QString error;
-    if (!Sql::exec(m_file.database(), QStringLiteral("UPDATE documents SET state = ?, updated_at = ? WHERE id = ?"),
-                   {int(state), CompanyFile::nowStamp(), docId}, &error)) {
-        return Result::failure(ErrorCode::Storage, error);
-    }
-    return Result::success(docId);
-}
-
-Result Documents::addApplication(qint64 sourceDocId, qint64 targetDocId, const Money &amount, const QDate &date)
-{
-    if (!amount.isPositive()) {
-        return Result::failure(ErrorCode::Invalid, QStringLiteral("an applied amount must be positive"));
-    }
-    QString error;
-    const qint64 id = Sql::insert(m_file.database(),
-                                  QStringLiteral("INSERT INTO applications(source_doc_id, target_doc_id, amount, date,"
-                                                 " created_at) VALUES(?,?,?,?,?)"),
-                                  {sourceDocId, targetDocId, amount.minor(), Sql::isoDate(date),
-                                   CompanyFile::nowStamp()},
-                                  &error);
-    return id == 0 ? Result::failure(ErrorCode::Storage, error) : Result::success(id);
-}
-
-Result Documents::voidApplicationsOf(qint64 docId)
-{
-    QString error;
-    if (!Sql::exec(m_file.database(),
-                   QStringLiteral("UPDATE applications SET voided = 1 WHERE source_doc_id = ? OR target_doc_id = ?"),
-                   {docId, docId}, &error)) {
-        return Result::failure(ErrorCode::Storage, error);
-    }
-    return Result::success(docId);
 }
 
 } // namespace QindaOffice::Books

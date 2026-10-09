@@ -121,6 +121,20 @@ qreal drawFirstHeader(QPainter *p, const PrintableDocument &d, const QRectF &c, 
         }
         party += lineHeight(f.body) + 1.5;
     }
+    // M68: a purchase order's ship-to address, under the vendor.
+    if (!d.shipToLines.isEmpty()) {
+        party += 10;
+        if (p != nullptr) {
+            drawText(p, c.left(), party, d.shipToLabel.toUpper(), f.label, kMuted);
+        }
+        party += lineHeight(f.label) + 5;
+        for (const QString &line : d.shipToLines) {
+            if (p != nullptr) {
+                drawText(p, c.left(), party, elide(f.body, line, c.width() * 0.5), f.body, kInk);
+            }
+            party += lineHeight(f.body) + 1.5;
+        }
+    }
     qreal box = bottom + 18;
     if (!d.highlightLabel.isEmpty()) {
         const qreal h = 12 + lineHeight(f.small) + 4 + lineHeight(f.highlight) + 12;

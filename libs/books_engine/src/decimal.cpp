@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "decimal.h"
 
+#include <algorithm>
 #include <limits>
 
 namespace QindaOffice::Books {
@@ -157,6 +158,51 @@ QString Decimal::toPercentString() const
         return Decimal(m_mantissa, m_scale - 2).toString() + QLatin1Char('%');
     }
     return Decimal(m_mantissa * pow10i(2 - m_scale), 0).toString() + QLatin1Char('%');
+}
+
+namespace {
+
+// Both mantissas at the larger scale, in 128 bits (scales are ≤ kMaxScale,
+// so 10^12 × a qint64 still fits).
+struct Aligned {
+    Wide a = 0;
+    Wide b = 0;
+    int scale = 0;
+};
+
+Aligned align(const Decimal &a, const Decimal &b)
+{
+    const int scale = std::max(a.scale(), b.scale());
+    return Aligned{static_cast<Wide>(a.mantissa()) * pow10i(scale - a.scale()),
+                   static_cast<Wide>(b.mantissa()) * pow10i(scale - b.scale()), scale};
+}
+
+std::optional<Decimal> fromWide(Wide mantissa, int scale)
+{
+    if (mantissa > std::numeric_limits<qint64>::max() || mantissa < std::numeric_limits<qint64>::min()) {
+        return std::nullopt;
+    }
+    return Decimal(static_cast<qint64>(mantissa), scale).normalized();
+}
+
+} // namespace
+
+std::optional<Decimal> Decimal::sum(const Decimal &a, const Decimal &b)
+{
+    const Aligned x = align(a, b);
+    return fromWide(x.a + x.b, x.scale);
+}
+
+std::optional<Decimal> Decimal::difference(const Decimal &a, const Decimal &b)
+{
+    const Aligned x = align(a, b);
+    return fromWide(x.a - x.b, x.scale);
+}
+
+int Decimal::compare(const Decimal &a, const Decimal &b)
+{
+    const Aligned x = align(a, b);
+    return x.a < x.b ? -1 : x.a > x.b ? 1 : 0;
 }
 
 bool operator==(const Decimal &a, const Decimal &b)

@@ -11,6 +11,11 @@
 //   Vendor credit    Dr A/P · Cr each line's account
 // Purchases carry no sales tax and no document discount (tax paid on
 // purchases is part of the expense line); the fields are ignored.
+//
+// M68 (D-077): a bill line may receive a purchase-order line (poLineId,
+// checked by PurchaseOrders::checkReceipts); a check, or a bill payment
+// from a bank account, may be saved "to print" (toPrint): it posts without
+// a number and waits in the check queue (check_queue.h).
 
 #include "books_types.h"
 #include "documents.h"
@@ -34,9 +39,11 @@ public:
     // One BillPayment document per vendor among `payments`, all dated
     // `date`, paid from `paymentAccountId` (bank or credit card). The ids of
     // the created payments go to `paymentIds`; Result.id is the first.
+    // `toPrint` (M68): the payments wait in the check queue (a bank
+    // account only; the reference is then left empty — printing numbers them).
     Result payBills(const QDate &date, qint64 paymentAccountId, const QList<PaymentApplication> &payments,
                     const QString &reference = {}, const PostOptions &options = {},
-                    QList<qint64> *paymentIds = nullptr);
+                    QList<qint64> *paymentIds = nullptr, bool toPrint = false);
     // kind: Expense, Check or CreditCardCharge; accountId = payment account.
     Result createExpense(BusinessDocument expense, const PostOptions &options = {});
     Result createVendorCredit(BusinessDocument credit, const PostOptions &options = {});

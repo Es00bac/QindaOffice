@@ -174,7 +174,8 @@ void drawStub(QPainter *p, const PrintableCheck &c, qreal top, const Fonts &f)
 
 } // namespace
 
-void CheckRenderer::paint(QPagedPaintDevice *device, QPainter *painter, const QList<PrintableCheck> &checks)
+void CheckRenderer::paint(QPagedPaintDevice *device, QPainter *painter, const QList<PrintableCheck> &checks,
+                          const CheckOffset &offset)
 {
     const Fonts f;
     painter->setRenderHint(QPainter::Antialiasing);
@@ -183,6 +184,9 @@ void CheckRenderer::paint(QPagedPaintDevice *device, QPainter *painter, const QL
             device->newPage();
         }
         beginSheet(device, painter);
+        // AGENT-NOTE (M68): the printer's alignment moves the whole sheet,
+        // as QuickBooks' Align does; every position below stays nominal.
+        painter->translate(offset.dx, offset.dy);
         const PrintableCheck &c = checks.at(i);
         drawCheck(painter, c, f);
         // Both stubs alike: one goes with the check, one stays in the file.
@@ -191,12 +195,80 @@ void CheckRenderer::paint(QPagedPaintDevice *device, QPainter *painter, const QL
     }
 }
 
-PagePainter CheckRenderer::painter(const QList<PrintableCheck> &checks)
+namespace {
+
+// A small "+" at a field's anchor (its baseline start) on the test page.
+void cross(QPainter *p, qreal x, qreal baseline)
 {
-    return [checks](QPagedPaintDevice *device, QPainter *painter) { paint(device, painter, checks); };
+    p->setPen(QPen(kMuted, 0.5));
+    p->drawLine(QPointF(x - 6, baseline), QPointF(x + 6, baseline));
+    p->drawLine(QPointF(x, baseline - 6), QPointF(x, baseline + 6));
 }
 
-bool CheckRenderer::writeChecksPdf(CompanyFile &file, const QList<qint64> &docIds, const QString &path, QString *error)
+} // namespace
+
+void CheckRenderer::paintAlignmentTest(QPagedPaintDevice *device, QPainter *painter, const CheckOffset &offset,
+                                       const QString &printer, const QString &alignmentText, const PrintableCheck &sample)
+{
+    const Fonts f;
+    painter->setRenderHint(QPainter::Antialiasing);
+    beginSheet(device, painter);
+    painter->save();
+    painter->translate(offset.dx, offset.dy);
+    drawCheck(painter, sample, f);
+    for (const QPointF &anchor : {QPointF(kDateX, kDateBase), QPointF(kPayeeX, kPayeeBase), QPointF(kFiguresX, kPayeeBase),
+                                  QPointF(kWordsX, kWordsBase), QPointF(kAddressX, kAddressBase),
+                                  QPointF(kMemoX, kMemoBase)}) {
+        cross(painter, anchor.x(), anchor.y());
+    }
+    // A two-inch scale in tenths under the memo line, to measure a miss.
+    const qreal scaleTop = 3.15 * kInch;
+    painter->setPen(QPen(kMuted, 0.5));
+    painter->drawLine(QPointF(kMemoX, scaleTop), QPointF(kMemoX + 2 * kInch, scaleTop));
+    for (int tick = 0; tick <= 20; ++tick) {
+        const qreal x = kMemoX + tick * kInch / 10;
+        painter->drawLine(QPointF(x, scaleTop), QPointF(x, scaleTop + (tick % 10 == 0 ? 8 : tick % 5 == 0 ? 5 : 3)));
+    }
+    painter->restore();
+    // How to read it, in the lower stub — clear of the check even when the
+    // offset moves it a whole inch down.
+    qreal y = 2 * kCheckHeight + kStubPad;
+    drawText(painter, kStubLeft, y, QStringLiteral("CHECK ALIGNMENT TEST"), f.heading);
+    y += lineHeight(f.heading) + 8;
+    const QStringList steps{
+        QStringLiteral("1. Print this page on plain paper, on the printer you print checks with."),
+        QStringLiteral("2. Lay it over a sheet of your check stock and hold both up to the light."),
+        QStringLiteral("3. Each value should start at its + and sit on its line."),
+        QStringLiteral("4. Too far left? Move it right (a positive horizontal offset). Too high? Move it down (a positive"),
+        QStringLiteral("    vertical offset). The scale under the memo line is in tenths of an inch."),
+        QStringLiteral("5. Enter the offsets in Expenses > Check Printer Alignment, print this page again, and repeat."),
+    };
+    for (const QString &line : steps) {
+        drawText(painter, kStubLeft, y, line, f.body, kInk);
+        y += lineHeight(f.body) + 3;
+    }
+    y += 8;
+    drawText(painter, kStubLeft, y,
+             QStringLiteral("Printer: %1    Offset now: %2")
+                 .arg(printer.isEmpty() ? QStringLiteral("(a PDF is never shifted)") : printer, alignmentText),
+             f.small, kMuted);
+}
+
+PagePainter CheckRenderer::alignmentTestPainter(const CheckOffset &offset, const QString &printer,
+                                                const QString &alignmentText, const PrintableCheck &sample)
+{
+    return [offset, printer, alignmentText, sample](QPagedPaintDevice *device, QPainter *painter) {
+        paintAlignmentTest(device, painter, offset, printer, alignmentText, sample);
+    };
+}
+
+PagePainter CheckRenderer::painter(const QList<PrintableCheck> &checks, const CheckOffset &offset)
+{
+    return [checks, offset](QPagedPaintDevice *device, QPainter *painter) { paint(device, painter, checks, offset); };
+}
+
+bool CheckRenderer::writeChecksPdf(CompanyFile &file, const QList<qint64> &docIds, const QString &path, QString *error,
+                                   const CheckOffset &offset)
 {
     QList<PrintableCheck> checks;
     for (const qint64 id : docIds) {
@@ -212,7 +284,7 @@ bool CheckRenderer::writeChecksPdf(CompanyFile &file, const QList<qint64> &docId
         }
         return false;
     }
-    return writePdf(path, painter(checks), QPageSize(QPageSize::Letter), QPageLayout::Portrait, error);
+    return writePdf(path, painter(checks, offset), QPageSize(QPageSize::Letter), QPageLayout::Portrait, error);
 }
 
 } // namespace QindaOffice::Books

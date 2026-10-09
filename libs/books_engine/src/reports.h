@@ -13,7 +13,9 @@
 //
 // Row keys are stable (AGENT-CONTRACT with the app's drill-down and the
 // tests): "section:<name>", "account:<id>", "subtotal:account:<id>",
-// "total:<name>", "party:<id>", "item:<id>", "doc:<id>", "txn:<id>".
+// "total:<name>", "party:<id>", "item:<id>", "doc:<id>", "txn:<id>"; the
+// M68 time reports nest them ("party:<id>:item:<id>",
+// "employee:<id>:party:<id>", "vendor:<id>:party:<id>", "time:<id>").
 
 #include "books_types.h"
 #include "report_table.h"
@@ -82,6 +84,22 @@ public:
     [[nodiscard]] ReportTable budgetVsActual(const QDate &from, const QDate &to,
                                              std::optional<Basis> basis = {}) const;
     [[nodiscard]] ReportTable reconciliation(qint64 sessionId) const;
+
+    // ---- purchases and time (M68, D-077; reports_orders_time.cpp) ----
+    // Open purchase orders by vendor: every order neither void nor closed
+    // with something left to receive as of `asOf`, its amount and its open
+    // balance (what is still to receive, at the order's prices).
+    [[nodiscard]] ReportTable openPurchaseOrders(const QDate &asOf) const;
+    // Durations (h:mm, whole minutes) per customer:job and service item,
+    // and per worker (employee or vendor) and customer:job, for time dated
+    // in the period; time without a customer is "No customer:job".
+    [[nodiscard]] ReportTable timeByJob(const QDate &from, const QDate &to) const;
+    [[nodiscard]] ReportTable timeByName(const QDate &from, const QDate &to) const;
+    // Billable time not on an invoice, per customer:job: date, name,
+    // service, notes, duration, the rate it bills at (TimeTracking::rateFor)
+    // and what it would bill (rate × hours to two decimals, half-up — what
+    // the invoice line will say).
+    [[nodiscard]] ReportTable unbilledTimeByJob(const QDate &from, const QDate &to) const;
 
     // Every report id with its title, for the app's report list.
     struct Catalog {

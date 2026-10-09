@@ -210,4 +210,25 @@ bool buildPrintableCheck(CompanyFile &file, qint64 docId, PrintableCheck *out, Q
     return true;
 }
 
+PrintableCheck CheckRenderer::sampleCheck(CompanyFile &file, const QDate &date)
+{
+    const QLocale locale = companyLocale(file);
+    const Money amount(123456, file.currency());
+    PrintableCheck c;
+    c.number = QStringLiteral("1001");
+    c.date = checkDate(date, locale);
+    c.payee = QStringLiteral("Sample Payee");
+    c.address = {c.payee, QStringLiteral("123 Main Street"), QStringLiteral("Springfield, ST 00000")};
+    c.amount = QStringLiteral("**") + amount.format(locale, false);
+    c.amountWords = amountInWords(amount);
+    c.memo = QStringLiteral("Alignment test");
+    c.companyName = file.settings().displayName();
+    c.bankAccount = QStringLiteral("Checking");
+    c.total = amount.format(locale);
+    c.columns = {{QStringLiteral("Account"), 4, false}, {QStringLiteral("Description"), 5, false},
+                 {QStringLiteral("Amount"), 2, true}};
+    c.rows = {QStringList{QStringLiteral("Sample"), QStringLiteral("Alignment test"), amount.format(locale, false)}};
+    return c;
+}
+
 } // namespace QindaOffice::Books

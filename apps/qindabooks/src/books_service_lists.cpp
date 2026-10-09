@@ -6,6 +6,7 @@
 #include "accounts.h"
 #include "company_file.h"
 #include "lists.h"
+#include "purchase_orders.h"
 #include "purchases.h"
 #include "sales.h"
 
@@ -270,6 +271,19 @@ QVariantList BooksService::parties(const QString &kind, bool includeInactive) co
             ++overdue[d.partyId];
         }
     }
+    // M68: each vendor's open purchase orders and what they still have to receive.
+    QHash<qint64, int> orders;
+    QHash<qint64, qint64> toReceive;
+    if (vendors) {
+        PurchaseOrders purchaseOrders(*c);
+        for (const BusinessDocument &po : Documents(*c).list({{DocKind::PurchaseOrder}, 0, {}, {}, false, false})) {
+            const DocumentStatus status = purchaseOrders.status(po);
+            if (status == DocumentStatus::Open || status == DocumentStatus::PartiallyReceived) {
+                ++orders[po.partyId];
+                toReceive[po.partyId] += purchaseOrders.remainingAmount(po.id).minor();
+            }
+        }
+    }
     const MoneyFormat money = moneyFormat();
     for (const Party &p : Lists(*c).parties(vendors ? PartyKind::Vendor : PartyKind::Customer, includeInactive)) {
         const qint64 balance =
@@ -277,6 +291,11 @@ QVariantList BooksService::parties(const QString &kind, bool includeInactive) co
         QVariantMap row = partyMap(p, balance, money);
         row.insert(QStringLiteral("openCount"), open.value(p.id));
         row.insert(QStringLiteral("overdueCount"), overdue.value(p.id));
+        if (vendors) {
+            row.insert(QStringLiteral("openOrders"), orders.value(p.id));
+            row.insert(QStringLiteral("toReceive"), toReceive.value(p.id));
+            row.insert(QStringLiteral("toReceiveText"), money.text(toReceive.value(p.id)));
+        }
         out << row;
     }
     return out;

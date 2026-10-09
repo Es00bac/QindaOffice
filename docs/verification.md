@@ -33,6 +33,154 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M68 Books gates (D-077)
+
+Qualified on qinda (branch `m68-books-orders-time`, merged with
+`m60-office-formats` 288cd76), books targets only, `ctest --preset dev -R
+books`: **32 of 32 passed** — the 26 before M68 plus six new ones
+(`tst_books_orders`, `tst_books_time`, `tst_books_checks`,
+`tst_books_io_orders`, `tst_qindabooks_m68`, `tst_qindabooks_m68_dialogs`);
+`tst_books_company`, `tst_books_io_checks` and `tst_qindabooks_host` gained a
+case. QtTest functions across the 32 binaries, init and cleanup included:
+**290 passed, 0 failed**. `TZ=UTC`, "today" 2026-03-31,
+generated company files only.
+
+- [x] `tst_books_orders` (5 cases) — a purchase order never posts (journal
+      lines unchanged, `txnId` 0), is numbered PO-1001 then PO-1002 (a typed
+      duplicate refused), takes the item's cost and expense account, keeps
+      ship-to, expected date and the line's customer:job; 6 of 10 received
+      on a 170.00 bill (the bill line names the order line; open 150.00 =
+      4 × 25.00 + 4 × 12.50, Partially received); 5 more refused by the
+      receive and by the bill, another vendor's bill refused; Create Bill
+      receives the rest (Closed); voiding that bill reopens it; editing the
+      first bill so the stock line is gone puts its 6 back (open 300.00); a
+      line closed by hand drops out (270.00 → receivable lines 2), the order
+      closes and reopens (4 audit rows); an edit below received or removing
+      a received line refused, a received line keeps its id through an edit
+      that adds a line (total 405.00), a received order cannot be voided, a
+      fresh one can. Open Purchase Orders worked by hand: PO-1001 320.00 /
+      150.00, PO-1002 200.00 / 200.00, the received and the closed order
+      left out, totals 520.00 / 350.00; as of Mar 5 the Mar 10 bill had not
+      come — 320.00 open and the order billed Mar 12 still counts (720.00).
+- [x] `tst_books_time` (6 cases) — durations read `1:30`, `0:20`, `1.5`,
+      `0.25`, `0.33` (19.8 min → 20), `45m`, `2h` and refuse `1:5`, `1:60`,
+      `abc`, `0`, `-1`, `1:30:00`; hours 20 → 0.33, 90 → 1.5, 50 → 0.83;
+      the employees list (a case-insensitive duplicate and an empty name
+      refused; Lee's 90.00 rate bills his hour, Maya's bills the item's
+      120.00; an inactive employee keeps his time and takes no new time;
+      a negative rate refused; 2 audit rows); a time entry needs an employee
+      or a vendor (a customer, nobody, both refused) and billable time a
+      customer:job; billing 1:30 + 0:20 + 2:30 at 120.00 makes a 519.60
+      invoice (1.5 h, 0.33 h, 2.5 h), billed time cannot change or go on
+      another invoice (Duplicate) nor another customer's (Invalid);
+      removing a line un-bills it (480.00), voiding the invoice un-bills
+      the rest, a draft holds its time; the weekly timesheet reads 4 rows
+      (two entries of one row and day never share a cell), writes 1:30 →
+      2:00, adds Thursday, deletes the call, and refuses a whole save that
+      touches a billed cell (nothing written) or another week's entry. Time
+      by Job (Harbor 4:20, Riverbend 0:45, no customer 1:00, total 6:05),
+      Time by Name (Jun 2:30; Maya Harbor 1:50, total 3:35) and Unbilled
+      Time by Job (180.00 + 39.60 = 219.60 for 1:50; 90.00; total 2:35 /
+      309.60) worked by hand.
+- [x] `tst_books_checks` (4 cases) — next number 1001 with no checks, 1043
+      after a hand-written 1042; a check to print posts at once without a
+      number (a typed 999 cleared), a bill payment to print has no
+      reference; a card check, a debit-card expense and a card bill payment
+      to print refused; the queue lists both by date; numbered from 1043:
+      1043 and 1044 on the documents and on the live transactions, the bank
+      balance unchanged, the bill still paid, the first posting voided and
+      replaced; a misprint goes back unnumbered with 2002 recorded as a void
+      zero check (payee, account, the payment it was for), 2002 refused on
+      the reprint, 2003 given; a cancelled run comes back with the next
+      number at its first; a used number refuses the whole run (nothing
+      changes), the wrong account, no checks and number 0 refused, a cleared
+      check and one in a closed period keep their numbers.
+- [x] `tst_books_company` — a version-3 file with a bill in it opens as
+      version 4 with a `.pre-v4.bak` copy, the bill and its line (id 70)
+      intact, `to_print` 0, no ship-to, no links, empty `time_entries` and
+      `employees`, the counter giving PO-1001; integrity clean.
+- [x] `tst_books_reports` — the catalog has 26 reports.
+- [x] `tst_books_io_orders` (3 cases) — the purchase-order form: six columns
+      (item, description, customer, quantity, the item's 0.90 cost, 360.00),
+      one PDF page with PURCHASE ORDER, PO-1001, the vendor and his address,
+      SHIP TO, Expected Mar 16, 2026, the lines, Order total $405.00 and the
+      vendor message, no payment instructions (gallery
+      `books-purchase-order.png` reviewed); QuickBooks `PURCHORDR`: the
+      preview counts 2 orders as documents, maps no "Purchase Orders"
+      account, rolls back; the import posts only the bill (2 journal lines),
+      PO-77 keeps 12 × 25.00 for Bluebird Bakery, the 45.00 freight, the
+      expected date and the three-line ship-to; PO-70 (PAID Y) is closed; a
+      second import skips both; an order without a vendor is refused at line
+      4. A Time by Job of 1:30 + 4:35 writes `6:05` in the CSV and 365
+      minutes as a day fraction under `[h]:mm` in Excel.
+- [x] `tst_books_io_checks` (alignment case) — 0.25 in right, 0.5 in down
+      is 18 pt / 36 pt; the date, payee, figures, memo and a stub line of a
+      check PDF each move by exactly that (Poppler text boxes); −5 mm / −2.5
+      mm reads "5 mm left, 2.5 mm up"; 1.01 in, 0.125 in, 25.5 mm, 0.05 mm
+      and `abc` refused; the store keeps per printer as typed and a zero
+      offset removes the printer; the test page carries the sample check
+      (03/31/2026, **1,234.56, the words), the printer and the offset, its
+      date moved 18 pt (gallery `books-check-alignment.png` reviewed).
+- [x] `tst_qindabooks_m68` (3 cases) — through BooksService: an order saved
+      (PO-1001, $270.00 to receive), listed under `orders` not `purchases`,
+      the vendor row's On order; 6 received → Partially received, $120.00;
+      5 more refused with "at most 4"; Create Bill closes it, its void
+      reopens it; a line and the order closed by hand; the order cannot be
+      voided; PDF written; e-mail to the vendor ("Purchase Order PO-1001
+      from …", no payment instructions); the report's totals 27000 / 10000
+      minor units and its Excel export. Employees (duplicate and 12.345
+      refused, $90.00), `workers()` keys, a time activity and a bad
+      duration, the weekly timesheet to 2:45, three unbilled entries to a
+      $420.00 invoice (Lee at his rate), billed then unbilled by the void,
+      the time reports (Duration columns, "3:45") exported. The check
+      queue: a check (number 77 dropped) and a bill payment queued, 1001 and
+      1002, the `"checks"` print source exports, a misprint recorded void
+      as 1002, 1003 next and 1002 refused, a run taken back; alignment
+      saved, described and refused beyond an inch or without a printer; the
+      test page PDF and the `"alignment"` source.
+- [x] `tst_qindabooks_host` — the 8 new command ids exist with icons; seven
+      workspaces (Time on Ctrl+7); every new command emits its request;
+      Create Bill from Order follows a selected order with something to
+      receive (not a bill, not a closed order) and asks for that order; an
+      order prints through the `"document"` source; a `"checks"` source
+      naming an order is cleared.
+- [x] `tst_qindabooks_menu_export` — File Edit View Sales Expenses **Time**
+      Banking Accounting Reports AI Settings Help; every books command once.
+- [x] `tst_qindabooks_ui` — the ribbon gate (coverage, icons, squeeze) at
+      1320 and 520 px with the Purchases and Time tabs; fixtures
+      `qindabooks_1280/520` regenerated for the reviewed additions (Time
+      rail entry and view, the Purchase orders tab and its Create bill
+      button, the vendor On order column, the named status segments, the
+      ribbon tabs).
+- [x] `tst_qindabooks_m68_dialogs` (3 cases × 1280 and 520 px) — the
+      purchase-order editor (lines scroll sideways at 520), the bill
+      offering the vendor's two open lines, receiving 6 through
+      `ReceiveOrderDialog`, the received line badged PO-1001, Create Bill
+      from the Purchase orders selection; the timesheet saved to 2:15 (the
+      week scrolls sideways at 520), the invoice offering two entries,
+      `BillableTimeDialog` adding them ($270.00) and the save billing them,
+      the Time workspace, the time activity and employee dialogs; Print
+      Checks numbering 1001–1002, the confirmation with one reprint (back in
+      the queue, next 1003), the alignment dialog saving "0.25 in right, 0.1
+      in up". Grabs reviewed at both widths: `qindabooks_po_editor`,
+      `qindabooks_receive`, `qindabooks_bill_from_order`,
+      `qindabooks_timesheet`, `qindabooks_billable_time`, `qindabooks_time`,
+      `qindabooks_time_activity`, `qindabooks_employee`,
+      `qindabooks_print_checks`, `qindabooks_print_checks_confirm`,
+      `qindabooks_check_alignment`, `qindabooks_ribbon_purchases`,
+      `qindabooks_ribbon_time`.
+
+**On the owner's desktop (manual).** Open a copy of a company: create a
+purchase order, print it and e-mail it to a vendor through QindaMail;
+receive part of it on a bill and the rest with Create Bill; void a bill and
+see the order reopen. Enter a week on the timesheet, invoice the billable
+time from a new invoice, void the invoice and see the time unbilled. Save
+two checks with Print later, print them on a real check printer from
+Checks to Print, tick one as misprinted and reprint it; print the alignment
+test page, hold it over the check stock, set the offset and print again.
+Check the Time workspace and the dialogs in the dark and light themes and
+at comfortable density.
+
 ## M67 Show editing gates (D-076)
 
 Qualified on qinda (branch `m67-show-editing`, merged with

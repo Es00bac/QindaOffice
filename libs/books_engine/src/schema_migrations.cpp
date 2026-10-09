@@ -197,6 +197,53 @@ const char *const kVersion3[] = {
     "CREATE INDEX documents_reference ON documents(kind, reference)",
 };
 
+// ---- version 4: purchase orders, time, employees, the check queue (M68, D-077)
+// AGENT-CONTRACT (links, purchase_orders.h / time_tracking.h): a bill line
+// names the purchase-order line it receives (po_line_id) and an invoice line
+// the time entry it bills (time_entry_id). Neither is a foreign key: lines
+// are rewritten (DELETE + INSERT keeping their ids, documents_write.cpp) and
+// the engine keeps the links. Received quantities and billed status are
+// DERIVED from live (non-void) documents, so voiding or editing a bill or
+// invoice puts quantities and time back by itself. ship_to: a purchase
+// order's ship-to address; to_print: a check or bill payment in the print
+// queue (check_queue.h); closed: a purchase-order line closed by hand.
+// AGENT-CONTRACT (employees, with payroll M71): `employees` is the list time
+// is entered for — name, contact fields, active, an optional default hourly
+// BILLING rate (minor units; NULL = the service item's price). It holds no
+// pay rate, tax field or identity number: payroll (M71) extends this table
+// in its own schema version. A time entry names an employee OR a vendor (a
+// contractor), never both, never neither.
+const char *const kVersion4[] = {
+    "ALTER TABLE documents ADD COLUMN ship_to TEXT",
+    "ALTER TABLE documents ADD COLUMN to_print INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE document_lines ADD COLUMN po_line_id INTEGER",
+    "ALTER TABLE document_lines ADD COLUMN time_entry_id INTEGER",
+    "ALTER TABLE document_lines ADD COLUMN closed INTEGER NOT NULL DEFAULT 0",
+    "CREATE INDEX document_lines_po_line ON document_lines(po_line_id)",
+    "CREATE INDEX document_lines_time_entry ON document_lines(time_entry_id)",
+    "CREATE INDEX documents_to_print ON documents(to_print, account_id)",
+    "CREATE TABLE employees ("
+    " id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT, phone TEXT, address TEXT, notes TEXT,"
+    " default_rate INTEGER CHECK (default_rate IS NULL OR default_rate >= 0),"
+    " active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+    "CREATE UNIQUE INDEX employees_name ON employees(name COLLATE NOCASE)",
+    "CREATE TABLE time_entries ("
+    " id INTEGER PRIMARY KEY, date TEXT NOT NULL,"
+    " employee_id INTEGER REFERENCES employees(id), vendor_id INTEGER REFERENCES parties(id),"
+    " customer_id INTEGER REFERENCES parties(id), item_id INTEGER REFERENCES items(id),"
+    " minutes INTEGER NOT NULL CHECK (minutes > 0 AND minutes <= 1440),"
+    " billable INTEGER NOT NULL DEFAULT 0, notes TEXT, class_id INTEGER REFERENCES classes(id),"
+    " created_at TEXT NOT NULL, updated_at TEXT NOT NULL,"
+    " CHECK ((employee_id IS NULL) <> (vendor_id IS NULL)))",
+    "CREATE INDEX time_entries_customer ON time_entries(customer_id, date)",
+    "CREATE INDEX time_entries_employee ON time_entries(employee_id, date)",
+    "CREATE INDEX time_entries_vendor ON time_entries(vendor_id, date)",
+    // The purchase-order counter (company_settings.cpp) for files that
+    // predate it; a new company writes the same keys from its settings.
+    "INSERT OR IGNORE INTO settings(key, value) VALUES('purchase_order_prefix', 'PO-')",
+    "INSERT OR IGNORE INTO settings(key, value) VALUES('next_purchase_order_number', 1001)",
+};
+
 template<std::size_t N>
 bool runAll(const QSqlDatabase &db, const char *const (&statements)[N], QString *error)
 {
@@ -214,6 +261,7 @@ bool step(const QSqlDatabase &db, int toVersion, QString *error)
     case 1: return runAll(db, kVersion1, error);
     case 2: return runAll(db, kVersion2, error);
     case 3: return runAll(db, kVersion3, error);
+    case 4: return runAll(db, kVersion4, error);
     default: break;
     }
     if (error != nullptr) {

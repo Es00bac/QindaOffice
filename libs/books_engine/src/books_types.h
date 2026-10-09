@@ -57,10 +57,12 @@ struct Result {
 // when paid (cash). Stored in company settings as the default.
 enum class Basis { Accrual = 0, Cash = 1 };
 
+// Employees are not parties: they have their own list (employees.h, M68).
 enum class PartyKind { Customer = 1, Vendor = 2 };
 
-// Business documents. Every kind but Estimate and InvoiceTemplate posts one
-// balanced JournalTransaction while it is not a draft and not void.
+// Business documents. Every kind but Estimate, InvoiceTemplate and
+// PurchaseOrder posts one balanced JournalTransaction while it is not a
+// draft and not void.
 enum class DocKind {
     JournalEntry = 1,
     Invoice = 2,
@@ -80,6 +82,7 @@ enum class DocKind {
     SalesTaxPayment = 16,
     InvoiceTemplate = 17, // a recurring template's body; never posts
     OpeningBalance = 18,
+    PurchaseOrder = 19,   // M68 (D-077): a vendor order; never posts
 };
 
 [[nodiscard]] QString docKindName(DocKind kind);
@@ -91,9 +94,12 @@ enum class DocKind {
 
 // Persisted document status. Derived states (partial, paid, overdue) are
 // computed from applications and the due date; see DocumentStatus.
+// Closed: an estimate converted, a purchase order closed by hand (M68).
 enum class DocState { Draft = 0, Open = 1, Void = 2, Closed = 3 };
 
-enum class DocumentStatus { Draft, Open, Partial, Paid, Overdue, Void, Pending, Closed };
+// Derived, never stored. PartiallyReceived (M68): a purchase order some of
+// whose quantities bills have received (purchase_orders.h).
+enum class DocumentStatus { Draft, Open, Partial, Paid, Overdue, Void, Pending, Closed, PartiallyReceived };
 [[nodiscard]] QString documentStatusName(DocumentStatus status);
 
 } // namespace QindaOffice::Books

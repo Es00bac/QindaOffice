@@ -20,6 +20,11 @@
 // entry. A transaction already in the books (same date and the same
 // account/debit/credit/name rows, counted per occurrence as the bank feed
 // does) is skipped, so importing a file twice adds nothing.
+// M68 (D-077): PURCHORDR blocks (QuickBooks' open purchase orders, on its
+// non-posting "Purchase Orders" account) never post: they become purchase
+// orders — vendor, number, expected date, ship-to, lines with item,
+// quantity, rate and customer:job; PAID Y imports one closed — and one
+// already in the books (vendor, date, number, total) is skipped.
 //
 // AGENT-CONTRACT (one batch): the whole import runs in ONE SQL transaction.
 // options.commit == false is a dry run — the very same work, rolled back —

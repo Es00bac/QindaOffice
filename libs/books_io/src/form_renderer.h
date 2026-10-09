@@ -2,8 +2,9 @@
 #pragma once
 
 // Paints a PrintableDocument (invoice, estimate, sales receipt, credit
-// memo, statement) as clean paginated pages: company block and logo, the
-// title in the company's accent colour, bill-to, the facts (number, date,
+// memo, statement, purchase order) as clean paginated pages: company block
+// and logo, the title in the company's accent colour, bill-to (a purchase
+// order's vendor and ship-to), the facts (number, date,
 // terms, due), a highlighted amount, the line table with its header
 // repeated on every page, totals, notes and payment instructions, footer
 // with "Page x of y". White page, black ink, one accent (D-004).
