@@ -16,6 +16,7 @@
 #include "xlsx_read_cells.h"
 #include "xlsx_read_features.h"
 #include "xlsx_carry.h"
+#include "xlsx_read_pivot.h"
 #include "xlsx_read_xml.h"
 #include "xlsx_style.h"
 #include "xlsx_text.h"
@@ -510,6 +511,7 @@ bool readXlsxFile(const QString &path, Workbook *out, QString *error, QStringLis
     // What the save will carry without modelling it (M66, D-075, D-068
     // rule 2), and what it cannot: said in the warnings the app shows.
     QStringList notes;
+    readPivotTables(source, out, &notes); // M74 (D-083): the model's pivots, before the carried copy
     out->source.carried = buildCarriedPackage(source, *out, &notes);
     if (warnings != nullptr) {
         *warnings = notes;

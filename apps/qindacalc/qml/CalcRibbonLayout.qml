@@ -4,7 +4,9 @@ import QindaOffice.Shell
 
 // QindaCalc's ribbon (D-041): File · Home · Insert · Data · Review · Sheet ·
 // View (Review since M66, D-075: notes and protection; Insert's Tables
-// group since M69, D-078: Insert Table, Total Row).
+// group since M69, D-078: Insert Table, Total Row), and since M74 (D-083)
+// Insert ▸ PivotTable with the contextual PivotTable Analyze and Design
+// tabs the "pivot" context shows while the cursor is in a PivotTable.
 // Every string is an ActionEntry id (AGENTS.md rule 5); icons given here
 // only fill in for entries whose menu rows carry none. The slots are the
 // window's font, size, colour and number-format widgets.
@@ -56,6 +58,7 @@ QtObject {
         ] },
         { id: "insert", label: qsTr("Insert"), keyTip: "N", groups: [
             { id: "tables", label: qsTr("Tables"), items: [
+                { action: "calcInsertPivotTableAction", size: "large", iconName: "table-2" },
                 { action: "calcInsertTableAction", size: "large", iconName: "table" },
                 { action: "calcTableTotalRowAction", iconName: "sigma" }] },
             { id: "charts", label: qsTr("Charts"), items: [{ action: "insertChartAction", size: "large" }] },
@@ -111,6 +114,52 @@ QtObject {
             { id: "freeze", label: qsTr("Window"), items: [
                 { action: "calcFreezePanesAction", size: "large", iconName: "snowflake" }] },
             StandardRibbon.assistantGroup([])
-        ])
+        ]),
+        // ---- PivotTables (M74, D-083): Excel's two contextual tabs ----
+        { id: "pivotAnalyze", label: qsTr("PivotTable Analyze"), keyTip: "JT", contextId: "pivot", groups: [
+            { id: "pivotTable", label: qsTr("PivotTable"), items: [
+                { action: "calcPivotOptionsAction", size: "large", label: qsTr("Options") }] },
+            { id: "pivotActiveField", label: qsTr("Active Field"), items: [
+                { action: "calcPivotFieldSettingsAction", label: qsTr("Field Settings") },
+                { action: "calcPivotValueFieldSettingsAction", label: qsTr("Value Field Settings") }] },
+            { id: "pivotGroup", label: qsTr("Group"), items: ["calcPivotGroupAction", "calcPivotUngroupAction"] },
+            { id: "pivotSortFilter", label: qsTr("Sort & Filter"), items: [
+                "calcPivotSortAscendingAction", "calcPivotSortDescendingAction",
+                "calcPivotFilterAction", "calcPivotClearFilterAction"] },
+            { id: "pivotData", label: qsTr("Data"), items: [
+                { id: "pivotRefresh", action: "calcPivotRefreshAction", split: true, size: "large", label: qsTr("Refresh"),
+                  iconName: "refresh-cw", menu: ["calcPivotRefreshAction", "calcPivotRefreshAllAction"] },
+                { action: "calcPivotChangeSourceAction", size: "large", label: qsTr("Change Data Source") }] },
+            { id: "pivotActions", label: qsTr("Actions"), items: [
+                { action: "calcPivotClearAction", label: qsTr("Clear") },
+                { action: "calcPivotMoveAction", label: qsTr("Move PivotTable") }] },
+            { id: "pivotShow", label: qsTr("Show"), items: [
+                { action: "calcPivotFieldListAction", size: "large" }, "calcPivotShowDetailsAction"] }
+        ] },
+        { id: "pivotDesign", label: qsTr("Design"), keyTip: "JY", contextId: "pivot", groups: [
+            { id: "pivotLayout", label: qsTr("Layout"), items: [
+                { id: "pivotSubtotals", label: qsTr("Subtotals"), iconName: "rows-3", size: "large",
+                  menu: ["calcPivotSubtotalsOffAction", "calcPivotSubtotalsBottomAction", "calcPivotSubtotalsTopAction"] },
+                { id: "pivotGrandTotals", label: qsTr("Grand Totals"), iconName: "sigma", size: "large",
+                  menu: ["calcPivotGrandTotalsOffAction", "calcPivotGrandTotalsOnAction", "calcPivotGrandTotalsRowsAction",
+                         "calcPivotGrandTotalsColumnsAction"] },
+                { id: "pivotReportLayout", label: qsTr("Report Layout"), iconName: "layout-list", size: "large",
+                  menu: ["calcPivotLayoutCompactAction", "calcPivotLayoutOutlineAction", "calcPivotLayoutTabularAction", "|",
+                         "calcPivotRepeatLabelsAction", "calcPivotNoRepeatLabelsAction"] },
+                { id: "pivotBlankRows", label: qsTr("Blank Rows"), iconName: "rows-2", size: "large",
+                  menu: ["calcPivotBlankRowsOnAction", "calcPivotBlankRowsOffAction"] }] },
+            { id: "pivotStyleOptions", label: qsTr("Style Options"), items: [
+                "calcPivotRowHeadersAction", "calcPivotColumnHeadersAction",
+                "calcPivotBandedRowsAction", "calcPivotBandedColumnsAction"] },
+            // AGENT-NOTE: QindaTK has no style gallery (D-083's gap list): the
+            // styles are a dropdown of the app-scoped calcPivotStyle_* ids.
+            { id: "pivotStyles", label: qsTr("PivotTable Styles"), items: [
+                { id: "pivotStyleGallery", label: qsTr("Styles"), iconName: "palette", size: "large",
+                  menu: ["calcPivotStyle_PivotStyleLight15", "calcPivotStyle_PivotStyleLight16",
+                         "calcPivotStyle_PivotStyleLight17", "calcPivotStyle_PivotStyleLight18",
+                         "calcPivotStyle_PivotStyleLight19", "calcPivotStyle_PivotStyleLight20",
+                         "calcPivotStyle_PivotStyleLight21", "|", "calcPivotStyle_PivotStyleMedium2",
+                         "calcPivotStyle_PivotStyleMedium9", "|", "calcPivotStyle_None"] }] }
+        ] }
     ]
 }

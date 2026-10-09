@@ -322,6 +322,8 @@ QJsonObject sourceToJson(const CalcEng::WorkbookSource &source)
         {QStringLiteral("carried"), QString::fromLatin1(source.carried.toBase64())},
         {QStringLiteral("codeName"), source.codeName},
         {QStringLiteral("macroEnabled"), source.macroEnabled},
+        // M74 (D-083): the pivot parts the model took over.
+        {QStringLiteral("pivotParts"), QJsonArray::fromStringList(source.pivotParts)},
     };
 }
 
@@ -339,6 +341,9 @@ CalcEng::WorkbookSource sourceFromJson(const QJsonObject &object)
     source.carried = QByteArray::fromBase64(object.value(QStringLiteral("carried")).toString().toLatin1());
     source.codeName = object.value(QStringLiteral("codeName")).toString();
     source.macroEnabled = object.value(QStringLiteral("macroEnabled")).toBool(false);
+    for (const QJsonValue &part : object.value(QStringLiteral("pivotParts")).toArray()) {
+        source.pivotParts.append(part.toString());
+    }
     return source;
 }
 

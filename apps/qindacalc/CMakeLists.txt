@@ -14,6 +14,13 @@ set(qindacalc_qml
     qml/CondFormatDialog.qml
     qml/FilterPopover.qml
     qml/LinkDialog.qml
+    qml/PivotCreateDialog.qml
+    qml/PivotFieldDialog.qml
+    qml/PivotFieldsPane.qml
+    qml/PivotFilterDialog.qml
+    qml/PivotGroupDialog.qml
+    qml/PivotOptionsDialog.qml
+    qml/PivotValueFieldDialog.qml
     qml/ProtectDialog.qml
     qml/UnprotectDialog.qml
     qml/SizeDialog.qml
@@ -42,6 +49,9 @@ qt_add_qml_module(qindacalc_app
         src/calc_host_structure.cpp
         src/calc_host_text.cpp
         src/calc_host_tables.cpp
+        src/calc_host_pivot.cpp
+        src/calc_host_pivot_pane.cpp
+        src/calc_host_pivot_fields.cpp
         src/calc_recovery.cpp src/calc_recovery.h
         src/calc_recovery_rules.cpp src/calc_recovery_rules.h
         src/calc_recovery_features.cpp src/calc_recovery_features.h
@@ -50,6 +60,8 @@ qt_add_qml_module(qindacalc_app
         src/calc_cell_ops.cpp
         src/calc_feature_ops.cpp
         src/calc_table_ops.cpp
+        src/calc_pivot_ops.cpp
+        src/calc_recovery_pivots.cpp src/calc_recovery_pivots.h
     src/calc_structure_ops.cpp
         src/calc_undo.cpp src/calc_undo.h
         src/chart_item.cpp src/chart_item.h
@@ -59,6 +71,7 @@ qt_add_qml_module(qindacalc_app
         src/spreadsheet_item_input.cpp
         src/spreadsheet_item_paint.cpp
         src/spreadsheet_item_outline.cpp
+        src/spreadsheet_item_pivot.cpp
     QML_FILES ${qindacalc_qml}
 )
 target_include_directories(qindacalc_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

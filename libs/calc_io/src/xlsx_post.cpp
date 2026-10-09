@@ -7,6 +7,7 @@
 #include "xlsx_post_sheet.h"
 #include "xlsx_carry.h"
 #include "xlsx_write_charts.h"
+#include "xlsx_write_pivot.h"
 #include "xlsx_write_xml.h"
 #include "xlsx_xml.h"
 
@@ -373,6 +374,11 @@ bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest, QStr
         return false;
     }
 
+    // M74 (D-083): PivotTables written from the model, before the carry
+    // stage copies the source's untouched ones and merges their caches.
+    if (!applyPivotParts(&parts, manifest, error)) {
+        return false;
+    }
     // M66 (D-075, D-068 rule 2): the parts the engine does not model, from
     // the package the workbook came from, wired to the parts written above.
     if (!applyCarry(&parts, manifest, tableSources, &drawingPartCount, error)) {

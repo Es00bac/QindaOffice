@@ -19,6 +19,7 @@
 // Files: spreadsheet_item.cpp (geometry, cursor, scroll, editor contract),
 // spreadsheet_item_paint.cpp, spreadsheet_item_input.cpp.
 
+#include "pivot_style.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -201,6 +202,9 @@ signals:
     // M66: Ctrl+click on a cell with a link; the outline gutter's level
     // buttons and +/- buttons (the host changes the document).
     void linkActivated(int row, int col);
+    // M74: a double click on a PivotTable's output (Excel: Show Details on a
+    // value) — the editor does not open there.
+    void pivotCellActivated(int row, int col);
     void outlineLevelClicked(bool rows, int level);
     void outlineToggled(bool rows, int line, int level);
     void zoomChanged();
@@ -268,6 +272,15 @@ private:
     [[nodiscard]] bool hasLink(const CalcEng::CellAddr &addr) const;
     [[nodiscard]] QString linkTip(const CalcEng::CellAddr &addr) const;
     [[nodiscard]] qint32 visibleStep(qint32 from, int delta, bool rows) const;
+    // spreadsheet_item_pivot.cpp (M74): the PivotTable look of a cell, its
+    // rules, the empty pivot's placeholder; the theme's colours, cached.
+    [[nodiscard]] const QVector<CalcEng::Rgb> &pivotTheme() const;
+    [[nodiscard]] std::optional<CalcEng::PivotCellLook> pivotLookAt(const CalcEng::Sheet &sheet,
+                                                                    const CalcEng::CellAddr &addr) const;
+    void paintPivotRules(QPainter &p, const QRectF &cell, const CalcEng::PivotCellLook &look) const;
+    void paintPivotPlaceholders(QPainter &p);
+    mutable QVector<CalcEng::Rgb> m_pivotTheme;
+    mutable QByteArray m_pivotThemeKey;
     void paintGrid(QPainter &p);
     void setChrome(QColor &slot, const QColor &value);
 

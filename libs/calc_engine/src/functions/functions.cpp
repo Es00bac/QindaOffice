@@ -43,6 +43,7 @@ const QHash<QString, FunctionSpec> &functionRegistry()
         registerStatisticalM69Functions(r);
         registerEngineeringFunctions(r);
         registerDatabaseFunctions(r);
+        registerPivotFunctions(r);
         // Excel's array-typed parameters (FunctionSpec::arrayParams, M69).
         const QList<QPair<const char *, quint64>> arrayParams{
             {"SUMPRODUCT", ~quint64(0)}, {"MMULT", 3}, {"MDETERM", 1}, {"MINVERSE", 1}, {"TRANSPOSE", 1},

@@ -45,11 +45,15 @@ QString firstAttribute(const QByteArray &xml, const QString &element, const QStr
     return value;
 }
 
-// refreshOnLoad="1" (Excel recomputes the cache from the edited data), and
-// a worksheet source that follows its sheet's rename and moved rows.
-QByteArray patchedCache(const Context &ctx, const QByteArray &xml)
+// refreshOnLoad="1" (Excel recomputes the cache from the edited data) —
+// for a cache the model holds, only when its source data changed (M74,
+// D-083: an untouched pivot is written back byte for byte) — and a
+// worksheet source that follows its sheet's rename and moved rows.
+QByteArray patchedCache(const Context &ctx, const QString &part, const QByteArray &xml)
 {
-    QByteArray out = editStartTags(xml, QStringLiteral("pivotCacheDefinition"), [](const QString &tag) {
+    const PatchManifest &manifest = ctx.manifest();
+    const bool refresh = !manifest.untouchedCacheParts.contains(part) || manifest.staleCacheParts.contains(part);
+    QByteArray out = !refresh ? xml : editStartTags(xml, QStringLiteral("pivotCacheDefinition"), [](const QString &tag) {
         return withTagAttribute(tag, QStringLiteral("refreshOnLoad"), QStringLiteral("1"));
     });
     return editStartTags(out, QStringLiteral("worksheetSource"), [&ctx](const QString &tag) {
@@ -62,10 +66,10 @@ QByteArray patchedCache(const Context &ctx, const QByteArray &xml)
             if (dest == nullptr || dest->patch == nullptr) {
                 return tag; // the data sheet is gone: Excel reports it on refresh
             }
-            QString moved = withTagAttribute(tag, QStringLiteral("sheet"), dest->name);
+            QString moved = dest->name == sheet ? tag : withTagAttribute(tag, QStringLiteral("sheet"), dest->name);
             const auto range = rangeFromText(tagAttribute(tag, QStringLiteral("ref")));
             if (range.has_value()) {
-                if (const auto mapped = mapSourceRange(dest->patch->source.steps, *range)) {
+                if (const auto mapped = mapSourceRange(dest->patch->source.steps, *range); mapped && *mapped != *range) {
                     moved = withTagAttribute(moved, QStringLiteral("ref"), rangeText(*mapped));
                 }
             }
@@ -167,7 +171,10 @@ void writeWorkbookElements(Context &ctx, const QHash<QString, QString> &ids)
         }
         const qsizetype calc = workbook.indexOf("<calcPr");
         const qsizetype calcEnd = calc < 0 ? -1 : workbook.indexOf('>', calc);
-        if (!xml.isEmpty() && calcEnd > 0) {
+        const qsizetype written = workbook.indexOf("</pivotCaches>");
+        if (!xml.isEmpty() && written > 0) {
+            workbook.insert(written, xml); // the pivots written from the model have the element (M74)
+        } else if (!xml.isEmpty() && calcEnd > 0) {
             // After <calcPr …/> (oleSize and customWorkbookViews are never written).
             workbook.insert(calcEnd + 1, QByteArrayLiteral("<pivotCaches>") + xml + QByteArrayLiteral("</pivotCaches>"));
         }
@@ -221,6 +228,20 @@ void carryPivotTables(Context &ctx, CarryState &state)
             const QString sourcePivot = ctx.source().targetPart(sourceSheet, rel);
             const QByteArray xml = ctx.source().data(sourcePivot);
             const QString name = firstAttribute(xml, QStringLiteral("pivotTableDefinition"), QStringLiteral("name"));
+            if (ctx.manifest().source.pivotParts.contains(sourcePivot)
+                && !ctx.manifest().modelPivotParts.contains(sourcePivot)) {
+                continue; // deleted in QindaCalc (M74, D-083)
+            }
+            if (const auto replaced = ctx.manifest().replacedPivotParts.constFind(sourcePivot);
+                replaced != ctx.manifest().replacedPivotParts.constEnd()) {
+                // Written from the model (M74, D-083). A slicer that filters
+                // it stays when its cache kept its items and it kept its name.
+                const QString cache = sourceTarget(ctx.source(), sourcePivot, QStringLiteral("pivotCacheDefinition"));
+                if (ctx.manifest().sameItemsCacheParts.contains(cache) && replaced.value() == name) {
+                    state.keptPivots.insert(sheetIdOf(ctx, sourceSheet) + QLatin1Char('|') + name);
+                }
+                continue;
+            }
             const auto location = rangeFromText(firstAttribute(xml, QStringLiteral("location"), QStringLiteral("ref")));
             const auto moved = location ? mapSourceRange(dest.patch->source.steps, *location) : std::nullopt;
             if (!moved) {
@@ -232,13 +253,14 @@ void carryPivotTables(Context &ctx, CarryState &state)
                 continue;
             }
             ctx.replaceCopied(ctx.copyPart(sourcePivot),
-                              editStartTags(xml, QStringLiteral("location"), [&moved](const QString &tag) {
-                                  return withTagAttribute(tag, QStringLiteral("ref"), rangeText(*moved));
-                              }));
+                              *moved == *location ? xml
+                                                  : editStartTags(xml, QStringLiteral("location"), [&moved](const QString &tag) {
+                                                        return withTagAttribute(tag, QStringLiteral("ref"), rangeText(*moved));
+                                                    }));
             state.keptPivots.insert(sheetIdOf(ctx, sourceSheet) + QLatin1Char('|') + name);
             for (const QString &cache : sourceTargets(ctx.source(), sourcePivot, QStringLiteral("pivotCacheDefinition"))) {
                 state.keptCacheParts.insert(cache);
-                ctx.replaceCopied(ctx.copyPart(cache), patchedCache(ctx, ctx.source().data(cache)));
+                ctx.replaceCopied(ctx.copyPart(cache), patchedCache(ctx, cache, ctx.source().data(cache)));
             }
         }
     }

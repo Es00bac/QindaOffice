@@ -42,6 +42,11 @@ struct ChartSpec {
     int anchorCol = 0;
     int widthPx = 480;
     int heightPx = 320;
+    // A PivotChart's PivotTable as Excel names it ("[Book1.xlsx]Pivot!
+    // PivotTable1", c:pivotSource; M74, D-083). Such a chart is shown but
+    // never written from the model: the save carries its anchor and chart
+    // part as read, so Excel still finds a PivotChart (xlsx_read_drawings).
+    QString pivotSource;
 
     bool operator==(const ChartSpec &) const = default;
 };

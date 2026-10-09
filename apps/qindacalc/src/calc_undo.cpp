@@ -2,6 +2,7 @@
 #include "calc_undo.h"
 
 #include "eval.h"
+#include "pivot_edit.h"
 #include "spreadsheet_document.h"
 
 namespace QindaOffice::Apps::QindaCalc {
@@ -45,6 +46,7 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
         ss.protection = sheet.protection();
         ss.source = sheet.source();
         ss.chartSheet = sheet.isChartSheet();
+        ss.pivots = sheet.pivots();
         snap.sheets.append(ss);
     }
     // The style table is indexed by position; copy through the public
@@ -64,6 +66,7 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
     snap.charts = workbook.charts;
     snap.images = workbook.images;
     snap.protection = workbook.protection;
+    snap.pivotCaches = workbook.pivotCaches;
     return snap;
 }
 
@@ -106,6 +109,7 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
         sheet.setProtection(ss.protection);
         sheet.setSource(ss.source);
         sheet.setChartSheet(ss.chartSheet);
+        sheet.setPivots(ss.pivots);
     }
     for (const CalcEng::CellStyle &style : snapshot.styles) {
         fresh.addStyle(style);
@@ -122,6 +126,7 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
     fresh.charts = snapshot.charts;
     fresh.images = snapshot.images;
     fresh.protection = snapshot.protection;
+    fresh.pivotCaches = snapshot.pivotCaches;
 
     // Re-register the dependency index from the restored ASTs and recalc
     // everything once (restores volatile and cycle-detected state).
@@ -147,6 +152,14 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
     // handed alongside them could never change, but they made the dirty set
     // ten times bigger and the sort that orders it far more than that.
     fresh.recalcAll();
+    // A pivot restored from the recovery payload has no layout yet (M74).
+    for (qint32 s = 0; s < fresh.sheetCount(); ++s) {
+        for (qsizetype i = 0; i < fresh.sheetAt(s).pivots().size(); ++i) {
+            if (!fresh.sheetAt(s).pivots().at(i).render) {
+                CalcEng::rebuildPivotRender(fresh, {s, qint32(i)});
+            }
+        }
+    }
     *workbook = std::move(fresh);
 }
 

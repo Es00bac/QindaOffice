@@ -77,10 +77,26 @@ void SpreadsheetDocument::applyInputs(const QList<QPair<CalcEng::CellAddr, QStri
 
 void SpreadsheetDocument::clearCells(const CalcEng::CellRange &range)
 {
-    if (!range.isValid() || refuseCellEdit(range)) {
+    if (!range.isValid()) {
         return;
     }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
+    // A selection holding a whole PivotTable deletes it, Excel's Delete
+    // (M74, D-083); part of one is refused below.
+    bool pivotsGone = false;
+    const QList<CalcEng::PivotTable> pivots = m_workbook.sheetAt(m_activeSheet).pivots();
+    for (qsizetype i = pivots.size() - 1; i >= 0; --i) {
+        const CalcEng::CellRange &extent = pivots.at(i).extent;
+        if (extent.isValid() && range.contains(extent.topLeft) && range.contains(extent.bottomRight)) {
+            pivotsGone = CalcEng::removePivotTable(m_workbook, {m_activeSheet, qint32(i)}) || pivotsGone;
+        }
+    }
+    if (refuseCellEdit(range)) {
+        if (pivotsGone) {
+            restoreSnapshot(&m_workbook, before);
+        }
+        return;
+    }
     CalcEng::Sheet &sheet = m_workbook.sheetAt(m_activeSheet);
     // A whole array formula in the range goes with its block (M69).
     for (const CalcEng::CellAddr &anchor : arrayAnchorsIn(sheet, range)) {
@@ -96,12 +112,12 @@ void SpreadsheetDocument::clearCells(const CalcEng::CellRange &range)
             }
         }
     }
-    if (cleared.isEmpty()) {
+    if (cleared.isEmpty() && !pivotsGone) {
         return;
     }
     m_workbook.recalc(cleared);
     CalcEng::syncTableHeaders(m_workbook, m_activeSheet); // a cleared header is Column<N> (M69)
-    pushUndo(before, tr("Clear cells"));
+    pushUndo(before, pivotsGone ? tr("Delete PivotTable") : tr("Clear cells"));
     setDirty(true);
     emit contentChanged();
 }

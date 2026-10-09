@@ -2,6 +2,7 @@
 #include "calc_recovery.h"
 
 #include "calc_recovery_features.h"
+#include "calc_recovery_pivots.h"
 #include "calc_recovery_rules.h"
 
 #include "eval.h"
@@ -130,6 +131,7 @@ QJsonObject chartToJson(const CalcEng::ChartSpec &chart)
         {QStringLiteral("col"), chart.anchorCol},
         {QStringLiteral("w"), chart.widthPx},
         {QStringLiteral("h"), chart.heightPx},
+        {QStringLiteral("pivotSource"), chart.pivotSource}, // M74: carried, not written
     };
 }
 
@@ -186,6 +188,7 @@ CalcEng::ChartSpec chartFromJson(const QJsonObject &object)
     chart.anchorCol = object.value(QStringLiteral("col")).toInt(0);
     chart.widthPx = object.value(QStringLiteral("w")).toInt(480);
     chart.heightPx = object.value(QStringLiteral("h")).toInt(320);
+    chart.pivotSource = object.value(QStringLiteral("pivotSource")).toString();
     return chart;
 }
 
@@ -268,6 +271,7 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
     root.insert(QStringLiteral("definedNames"), definedNamesToJson(snapshot.definedNames));
     root.insert(QStringLiteral("source"), sourceToJson(snapshot.source));
     root.insert(QStringLiteral("protection"), workbookProtectionToJson(snapshot.protection));
+    root.insert(QStringLiteral("pivotCaches"), pivotCachesToJson(snapshot.pivotCaches)); // M74
 
     QJsonArray charts;
     for (const CalcEng::ChartSpec &chart : snapshot.charts) {
@@ -361,6 +365,7 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
         out.insert(QStringLiteral("outline"), outlineToJson(sheet.outline));
         out.insert(QStringLiteral("protection"), protectionToJson(sheet.protection));
         out.insert(QStringLiteral("sheetSource"), sheetSourceToJson(sheet.source));
+        out.insert(QStringLiteral("pivots"), pivotsToJson(sheet.pivots)); // M74
         sheets.append(out);
     }
     root.insert(QStringLiteral("sheets"), sheets);
@@ -409,6 +414,7 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
     snapshot.definedNames = definedNamesFromJson(root.value(QStringLiteral("definedNames")).toArray());
     snapshot.source = sourceFromJson(root.value(QStringLiteral("source")).toObject());
     snapshot.protection = workbookProtectionFromJson(root.value(QStringLiteral("protection")).toObject());
+    snapshot.pivotCaches = pivotCachesFromJson(root.value(QStringLiteral("pivotCaches")).toArray()); // M74
     for (const QJsonValue &value : root.value(QStringLiteral("charts")).toArray()) {
         snapshot.charts.append(chartFromJson(value.toObject()));
     }
@@ -499,6 +505,7 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
         sheet.outline = outlineFromJson(object.value(QStringLiteral("outline")).toObject());
         sheet.protection = protectionFromJson(object.value(QStringLiteral("protection")).toObject());
         sheet.source = sheetSourceFromJson(object.value(QStringLiteral("sheetSource")).toObject());
+        sheet.pivots = pivotsFromJson(object.value(QStringLiteral("pivots")).toArray()); // absent before M74
         snapshot.sheets.append(sheet);
     }
     snapshot.activeSheet = qBound(0, snapshot.activeSheet, snapshot.sheets.size() - 1);

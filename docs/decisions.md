@@ -5,6 +5,116 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-083: QindaCalc: PivotTables read, made, refreshed and written as Excel's
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart, with real interchange; M74, builds on D-075's
+carry stage and D-078)
+
+**Context.** Since M66 a workbook's PivotTables survived a save only as
+carried parts — `refreshOnLoad` set when their sheets were edited — and
+QindaCalc could not make one, show its fields, refresh it or change it.
+Excel users build summaries with PivotTables daily; a workbook from them
+must open with its pivots working, and a pivot made here must open in
+Excel as a real PivotTable, not as pasted values.
+
+**Decision.**
+
+1. **The model is Excel's** (`calc_engine/pivot.h`). A `PivotCache` per
+   workbook (`Workbook::pivotCaches`: the source — a range, a table or a
+   defined name —, fields with their shared items, the records, groups) and
+   a `PivotTable` per sheet (`Sheet::pivots`: row, column and filter fields,
+   Σ Values as field −2, data fields with function, Show Values As, base
+   field and item — Excel's previous/next codes —, number format; per-field
+   captions, subtotals, sort, filters, layout flags; options and style).
+   What it shows — `PivotResult`, `PivotRender` — is derived, never stored:
+   loads, undo and recovery lay it out again. OOXML's `rowGrandTotals` is
+   the bottom Grand Total *row* and `colGrandTotals` the right *column*
+   (checked by LibreOffice's import); Excel's ribbon "On for Rows Only" is
+   therefore `colGrandTotals`.
+2. **Excel's numbers** (`pivot_compute.cpp`, `pivot_filters.cpp`,
+   `pivot_showas.cpp`). Filter fields, hidden items and label filters drop
+   records first; value and Top 10 filters are evaluated once each, outer
+   row field first, on the totals left, and drop the records of what they
+   remove, so subtotals and grand totals show only what is visible (Excel's
+   default); sorting comes last. The eleven functions give Excel's results
+   on empty and text cells; Show Values As covers % of Grand / Column / Row
+   Total, % Of, % of Parent Row / Column / Total, Difference From,
+   % Difference From, Running Total In, % Running Total In, Rank both ways
+   and Index, with Excel's blanks above the base level, the base item's own
+   cell and `#N/A` for a missing base item.
+3. **Grouping as Excel writes it** (`pivot_group.cpp`, `pivot_remap.cpp`):
+   number ranges (`0-9`, `<0`, `>100`), date parts Seconds … Years (the
+   finest part in place, coarser ones as made fields named `Years`,
+   `Quarters` …), chosen items (`Group1`); a refresh re-applies the groups
+   and moves every setting to the fresh cache by field name and item value,
+   new items joining at the end.
+4. **The output is ordinary cells** (`pivot_layout.cpp`, `pivot_edit.cpp`):
+   compact, outline and tabular forms, repeated labels, subtotals at the top
+   or bottom or off (custom subtotals replace the automatic one), blank
+   rows, grand totals, the empty-cell caption, filter fields above with
+   `(All)` / `(Multiple Items)`, Excel's captions; values written into the
+   sheet, columns widened to fit as Excel's update does. The PivotTable
+   style is painted, not stored (`pivot_style.h`: PivotStyleLight15–21, the
+   Medium 1–7 and 8–14 families after Medium 2 and Medium 9, None, through
+   the workbook's theme) — as Excel draws it. Excel's placeholder covers an
+   empty pivot. A write into the output, or a structural edit that would
+   split it, is refused with Excel's message; GETPIVOTDATA reads the model.
+5. **Every change is one undo step** (`pivot_edit.h`: prepare, then commit).
+   Insert ▸ PivotTable puts it on a new sheet before the active one at A3,
+   or where asked; Refresh, Refresh All, Change Data Source, Clear All, Move
+   PivotTable, Group / Ungroup and Show Details (a value's records on a new
+   sheet, also by double click) are Excel's. Sheet renames, moves and
+   structural edits keep sources and locations right.
+6. **Read only what we reproduce** (`xlsx_read_pivot*.cpp`). A cache and its
+   pivots are modelled when every part reads into the model *and* our
+   layout reproduces each cell Excel saved; a cache Excel marked
+   `refreshOnLoad` is refreshed on open, as Excel does. Otherwise — calculated
+   fields or items, OLAP / Data Model, consolidation or external sources,
+   renamed or collapsed items, date filters, a layout we do not reproduce —
+   the pivot is kept exactly as read, read-only, with a note in the status
+   line, the open warnings and the PivotTable Fields pane, and its parts are
+   carried as before (D-075).
+7. **Write untouched pivots byte for byte, the rest as Excel writes them**
+   (`xlsx_write_pivot*.cpp`, `xlsx_carry_book.cpp`). A cache and the pivots
+   on it travel together: equal to their fingerprints from the open, they
+   are carried verbatim, `refreshOnLoad` added only when the source data no
+   longer matches the cache; anything else writes the group from the model
+   — cache definition with Excel's `sharedItems` attributes, `fieldGroup`,
+   records, the source's cacheId and cache `extLst` (so slicers stay), and
+   the pivot table definition with location, items, row and column items,
+   filter and data fields, `x14` extensions and style — so Excel opens it as
+   it is, with no refresh needed. Deleted pivots leave the package. A
+   PivotChart (`c:pivotSource`) is shown but never written from the model:
+   its anchor and chart part are carried (`ChartSpec::pivotSource`).
+8. **The UI is Excel's** (`calc_host_pivot*.cpp`, `calc_pivot_ops.cpp`,
+   `PivotFieldsPane.qml` and the dialogs): Insert ▸ PivotTable; the
+   PivotTable Fields pane (checkboxes, search, four areas fields are dragged
+   into, between and out of, each entry's menu); Value Field Settings, Field
+   Settings, the item / label / value / Top 10 filter, Grouping, PivotTable
+   Options; the contextual PivotTable Analyze and Design tabs and Data ▸
+   PivotTable — 35 new stable action ids plus ten `calcPivotStyle_<name>` —;
+   the grid's PivotTable context menu. Undo snapshots and the recovery
+   payload carry caches and pivots.
+
+**Consequences.** A workbook's ordinary PivotTables open live and editable
+and save as real PivotTables; one made here opens in Excel without a
+refresh. Limits: the pivots of item 6 stay read-only and carried; a pivot's
+own `formats`, `conditionalFormats` and `chartFormats` are kept while it is
+untouched and left out, with a save warning, once it is written from the
+model (their pivot areas name items a rewrite may have moved); a PivotChart
+is shown (its series read) but carried as Excel wrote it, `c:pivotSource`
+and all — until M74 a save turned it into a plain chart — so its own look
+is not edited here; slicers are carried and stay while the pivots they
+filter keep their names and their cache keeps its items, else they are left
+out with a save warning; slicers and PivotCharts cannot be made here.
+QindaTK has no field-well (drag-and-drop list) control and no style
+gallery: the pane composes Tk.CheckBox / Tk.ListRow / Tk.Box with QtQuick's
+DragHandler and DropArea, and the styles are a ribbon dropdown. Microsoft
+Excel itself is not available here: written pivots are checked against the
+ECMA-376 schemas and LibreOffice's import; the owner's check in Excel is in
+verification.md.
+
 ## D-082: QindaWrite: Word's lists, numbering and styles
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

@@ -58,6 +58,10 @@ class CalcHost : public Quick::DocumentHost {
     Q_PROPERTY(bool chartSheetActive READ chartSheetActive NOTIFY chartSheetChanged)
     Q_PROPERTY(QVariantMap chartSheetData READ chartSheetData NOTIFY chartSheetChanged)
     Q_PROPERTY(QindaOffice::Ai::AssistantController *assistant READ assistant CONSTANT)
+    // M74 (D-083): the cursor is in a PivotTable QindaCalc can change, and
+    // the PivotTable Fields pane's model (calc_host_pivot_pane.cpp).
+    Q_PROPERTY(bool pivotActive READ pivotActive NOTIFY pivotChanged)
+    Q_PROPERTY(QVariantMap pivotPane READ pivotPane NOTIFY pivotChanged)
 public:
     CalcHost();
     ~CalcHost() override;
@@ -164,6 +168,36 @@ public:
     // first line when it has none).
     Q_INVOKABLE void showOutlineLevel(bool rows, int level);
     Q_INVOKABLE void toggleOutlineGroup(bool rows, int line, int level);
+    // ---- PivotTables (calc_host_pivot*.cpp, M74) ----
+    [[nodiscard]] bool pivotActive() const;
+    // {active, readOnly, note, name, fields: [{index, name, checked, kind}],
+    //  filters / columns / rows / values: [{position, field, caption}]}.
+    [[nodiscard]] QVariantMap pivotPane() const;
+    // The pane: the checkbox, a field dragged onto an area, an entry dragged
+    // within or between areas, an entry taken off. Areas: "filters",
+    // "columns", "rows", "values".
+    Q_INVOKABLE void pivotToggleField(int field, bool on);
+    Q_INVOKABLE void pivotAddField(int field, const QString &area, int position);
+    Q_INVOKABLE void pivotMoveField(const QString &fromArea, int fromPosition, const QString &toArea, int toPosition);
+    Q_INVOKABLE void pivotRemoveField(const QString &area, int position);
+    // Insert ▸ PivotTable, Change Data Source, Move PivotTable:
+    // {source, location, newSheet} in, the same out.
+    Q_INVOKABLE QVariantMap pivotCreateState() const;
+    Q_INVOKABLE bool insertPivotTableFrom(const QVariantMap &choice);
+    Q_INVOKABLE bool changePivotSourceTo(const QString &source);
+    Q_INVOKABLE bool movePivotTo(const QString &location);
+    // The dialogs' states and answers (calc_host_pivot_fields.cpp).
+    Q_INVOKABLE QVariantMap pivotValueFieldState(int dataIndex) const;
+    Q_INVOKABLE QStringList pivotBaseItems(int field) const;
+    Q_INVOKABLE void applyValueFieldSettings(int dataIndex, const QVariantMap &settings);
+    Q_INVOKABLE QVariantMap pivotFieldState(int field) const;
+    Q_INVOKABLE void applyFieldSettings(int field, const QVariantMap &settings);
+    Q_INVOKABLE QVariantMap pivotFilterState(int field) const;
+    Q_INVOKABLE void applyPivotFilter(int field, const QVariantMap &filter);
+    Q_INVOKABLE QVariantMap pivotGroupState(int field) const;
+    Q_INVOKABLE void applyPivotGroup(int field, const QVariantMap &group);
+    Q_INVOKABLE QVariantMap pivotOptionsState() const;
+    Q_INVOKABLE void applyPivotOptions(const QVariantMap &options);
     // How a link leaves the app (default QDesktopServices::openUrl, which
     // goes through the desktop portal when sandboxed). Tests record here.
     void setUrlOpener(std::function<bool(const QUrl &)> opener) { m_openUrl = std::move(opener); }
@@ -196,6 +230,15 @@ signals:
     void protectWorkbookRequested();
     void unprotectRequested(bool workbook);
     void assistantToggleRequested(bool visible);
+    // M74: the PivotTable dialogs ("create", "source", "move") and the pane.
+    void pivotChanged();
+    void pivotCreateRequested(const QString &mode);
+    void pivotValueFieldRequested(int dataIndex);
+    void pivotFieldRequested(int field);
+    void pivotFilterRequested(int field);
+    void pivotGroupRequested(int field);
+    void pivotOptionsRequested();
+    void pivotFieldListToggleRequested(bool visible);
 
 protected:
     [[nodiscard]] QString filterString() const override;
@@ -253,6 +296,18 @@ private:
     // True when `input` was an array formula ("{=…}") and has been entered.
     bool commitArrayInput(const CalcEng::CellAddr &addr, const QString &input);
     [[nodiscard]] CalcEng::OutlineAxis groupAxis() const;
+    // calc_host_pivot*.cpp (M74)
+    void createPivotActions();
+    void insertPivotMenus();
+    void syncPivotFromCursor();
+    void wirePivotGrid();
+    [[nodiscard]] CalcEng::PivotRef currentPivot() const;
+    [[nodiscard]] qint32 pivotFieldAtCursor() const;
+    void changeCurrentPivot(const SpreadsheetDocument::PivotChange &change, const QString &undoText);
+    void sortPivot(bool ascending);
+    void groupAtCursor();
+    [[nodiscard]] std::optional<CalcEng::PivotSource> pivotSourceFrom(const QString &text) const;
+    [[nodiscard]] std::optional<QPair<qint32, CalcEng::CellAddr>> pivotPlaceFrom(const QString &text) const;
 
     SpreadsheetDocument *m_document = nullptr;
     QPointer<SpreadsheetItem> m_grid;
@@ -264,6 +319,8 @@ private:
     QString m_pendingTemplate;
     std::function<bool(const QUrl &)> m_openUrl;
     bool m_syncing = false;
+    CalcEng::PivotRef m_lastPivot;          // the pivot the cursor was in (pivotChanged)
+    CalcEng::PivotRef m_readOnlyPivotNoted; // the read-only pivot whose note was shown
 };
 
 } // namespace QindaOffice::Apps::QindaCalc

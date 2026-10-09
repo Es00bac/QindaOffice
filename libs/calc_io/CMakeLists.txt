@@ -14,7 +14,9 @@
 # RelationshipCopier). M69 (D-078): structured references and '@' in
 # Excel's spelling (xlsx_formula_tokens), table parts with calculated
 # columns and totals rows, legacy array formulas, chart sheets carried
-# whole (xlsx_carry_chartsheet). Qt Core+Gui + KArchive.
+# whole (xlsx_carry_chartsheet). M74 (D-083): PivotTables read into the
+# model and written as Excel's parts (xlsx_read_pivot*, xlsx_write_pivot*),
+# untouched ones carried byte for byte. Qt Core+Gui + KArchive.
 add_library(calc_io STATIC
     src/xlsx_bridge.h
     src/xlsx_carry.h
@@ -39,6 +41,8 @@ add_library(calc_io STATIC
     src/xlsx_package.h
     src/xlsx_parts.cpp
     src/xlsx_parts.h
+    src/xlsx_pivot_names.cpp
+    src/xlsx_pivot_names.h
     src/xlsx_post.cpp
     src/xlsx_post_book.cpp
     src/xlsx_post_book.h
@@ -57,6 +61,9 @@ add_library(calc_io STATIC
     src/xlsx_read_features.cpp
     src/xlsx_read_features.h
     src/xlsx_read_parts.cpp
+    src/xlsx_read_pivot.cpp
+    src/xlsx_read_pivot.h
+    src/xlsx_read_pivot_cache.cpp
     src/xlsx_read_xml.cpp
     src/xlsx_read_xml.h
     src/xlsx_style.cpp
@@ -70,6 +77,10 @@ add_library(calc_io STATIC
     src/xlsx_write_charts.h
     src/xlsx_write_features.cpp
     src/xlsx_write_features.h
+    src/xlsx_write_pivot.cpp
+    src/xlsx_write_pivot.h
+    src/xlsx_write_pivot_cache.cpp
+    src/xlsx_write_pivot_table.cpp
     src/xlsx_write_rules.cpp
     src/xlsx_write_rules.h
     src/xlsx_write_xml.cpp

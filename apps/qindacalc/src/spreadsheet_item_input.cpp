@@ -253,7 +253,13 @@ void SpreadsheetItem::mouseDoubleClickEvent(QMouseEvent *event)
         return;
     }
     if (pos.x() >= headerWidth() && pos.y() >= headerHeight()) {
-        setCursorCell(cellAtPos(pos - QPointF(headerWidth(), headerHeight())));
+        const CellAddr at = cellAtPos(pos - QPointF(headerWidth(), headerHeight()));
+        setCursorCell(at);
+        if (m_document != nullptr
+            && CalcEng::pivotAt(*m_document->workbook(), m_document->activeSheet(), at).isValid()) {
+            emit pivotCellActivated(at.row, at.col); // a PivotTable's output is not typed into (M74)
+            return;
+        }
         startEditor();
     }
 }

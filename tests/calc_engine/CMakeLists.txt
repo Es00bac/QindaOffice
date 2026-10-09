@@ -24,3 +24,9 @@ qqo_add_calc_test(tst_calc_features)
 # lifting, implicit intersection, legacy array formulas, relative names.
 qqo_add_calc_test(tst_calc_tables)
 qqo_add_calc_test(tst_calc_arrays)
+# M74 (D-083): PivotTables — layouts, summaries and Show Values As against
+# hand-worked grids (pivot_fixture.h), grouping, sort, filters, refresh,
+# GETPIVOTDATA, structural edits, Show Details and the styles.
+qqo_add_calc_test(tst_calc_pivot)
+qqo_add_calc_test(tst_calc_pivot_values)
+qqo_add_calc_test(tst_calc_pivot_edit)

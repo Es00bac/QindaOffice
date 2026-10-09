@@ -13,11 +13,13 @@
 // spreadsheet (see calc_undo.h for the snapshot design).
 
 #include "document.h"
+#include "pivot_edit.h"
 #include "sheet_rules.h"
 #include "workbook.h"
 
 #include <QUndoStack>
 
+#include <functional>
 #include <optional>
 
 namespace QindaOffice::Calc {
@@ -169,6 +171,34 @@ public:
     bool insertTable(const CalcEng::CellRange &range);
     // The Total Row of the table at `addr` on or off.
     bool setTotalsRow(const CalcEng::CellAddr &addr, bool on);
+    // ---- M74 (D-083): PivotTables, calc_pivot_ops.cpp. One undo step each;
+    // false (with editRefused saying why) when nothing changed. ----
+    // Insert ▸ PivotTable: a pivot over `source`, on a new sheet before the
+    // active one (at A3, Excel's place) or at `at` on `sheet`.
+    CalcEng::PivotRef insertPivotTable(const CalcEng::PivotSource &source, bool newSheet, qint32 sheet,
+                                       const CalcEng::CellAddr &at);
+    // Any change to a pivot's definition — the field list, Field and Value
+    // Field Settings, layout, totals, style, sort and filters — laid out at
+    // once. `replace` answers Excel's "There's already data … replace it?".
+    using PivotChange = std::function<void(CalcEng::PivotTable &, const CalcEng::PivotCache &)>;
+    bool changePivot(const CalcEng::PivotRef &ref, const PivotChange &change, const QString &undoText,
+                     bool replace = false);
+    bool refreshPivot(const CalcEng::PivotRef &ref);
+    bool refreshAllPivots();
+    bool clearPivot(const CalcEng::PivotRef &ref);
+    bool movePivot(const CalcEng::PivotRef &ref, qint32 sheet, const CalcEng::CellAddr &at);
+    bool changePivotSource(const CalcEng::PivotRef &ref, const CalcEng::PivotSource &source);
+    bool groupPivot(const CalcEng::PivotRef &ref, qint32 field, const QList<CalcEng::PivotGroupBy> &parts,
+                    double start, double end, double interval);
+    bool groupPivotItems(const CalcEng::PivotRef &ref, qint32 field, const QList<qint32> &items);
+    bool ungroupPivot(const CalcEng::PivotRef &ref, qint32 field);
+    // Show Details: a new sheet before the active one listing, as a table,
+    // the records behind the cell at `addr` of the pivot.
+    bool showPivotDetails(const CalcEng::PivotRef &ref, const CalcEng::CellAddr &addr);
+    // The guards: a write into a pivot's output, a structural edit through
+    // one (Excel's refusals).
+    bool refusePivotEdit(const CalcEng::CellRange &range);
+    bool refusePivotSplit(bool rows, qint32 at, qint32 count, bool insert);
     // What the last opened file holds that a save cannot keep (calc_io's
     // open warnings), for the window to show once.
     [[nodiscard]] QStringList openWarnings() const { return m_openWarnings; }
@@ -208,6 +238,10 @@ signals:
 
 private:
     void pushUndo(const WorkbookSnapshot &before, const QString &text);
+    // A new sheet before the active one ("Sheet<N>"), active; its index.
+    qint32 insertSheetBeforeActive();
+    // The common tail of the pivot edits: an undo step, or a refusal.
+    bool finishPivotEdit(const WorkbookSnapshot &before, bool done, const QString &undoText, const QString &error);
     // restyleRange's work without its undo step (a link's look joins the
     // link's step).
     void restyleCells(const CalcEng::CellRange &range, const StylePatch &patch);

@@ -348,6 +348,10 @@ CellRange CalcHost::blockAroundSelection() const
 
 void CalcHost::sortSelection(bool ascending)
 {
+    if (currentPivot().isValid()) {
+        sortPivot(ascending); // inside a PivotTable, Excel sorts its field (M74)
+        return;
+    }
     const CellRange block = blockAroundSelection();
     if (block.cellCount() < 2) {
         return;

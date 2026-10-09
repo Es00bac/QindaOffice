@@ -197,6 +197,16 @@ void readChartPart(const QByteArray &xml, ChartSpec *spec)
             continue;
         }
         const QStringView name = reader.name();
+        if (name == QLatin1String("pivotSource") && !inPlotArea) { // a PivotChart (M74)
+            while (reader.readNextStartElement()) {
+                if (reader.name() == QLatin1String("name")) {
+                    spec->pivotSource = reader.readElementText();
+                } else {
+                    reader.skipCurrentElement();
+                }
+            }
+            continue;
+        }
         if (name == QLatin1String("title")) {
             spec->title = readChartTitle(reader);
             continue;
@@ -338,7 +348,13 @@ void readSheetDrawings(const QString &packagePath, Workbook *wb, qint32 sheetInd
         readChartPart(chartXml, &spec);
         if (!spec.series.isEmpty()) {
             wb->charts.append(spec);
-            modelled.append(topIndex);
+            // AGENT-GUARD (M74, D-083): a PivotChart is shown but stays out
+            // of `modelled`, so the save carries its anchor and chart part
+            // (c:pivotSource and all) instead of writing a plain chart; the
+            // writer skips it (xlsx_write.cpp writeCharts).
+            if (spec.pivotSource.isEmpty()) {
+                modelled.append(topIndex);
+            }
         }
     }
     SheetSource source = sheet.source();

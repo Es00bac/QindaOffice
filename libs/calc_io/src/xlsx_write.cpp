@@ -24,6 +24,7 @@
 #include "xlsx_write_book.h"
 #include "xlsx_write_features.h"
 #include "xlsx_write_rules.h"
+#include "xlsx_write_pivot.h"
 #include "xlsx_write_xml.h"
 
 #include "eval.h"
@@ -223,8 +224,10 @@ void writeCharts(QXlsx::Document *doc, const Workbook &wb, PatchManifest *manife
 {
     int qxlsxChartCount = 0;
     for (const ChartSpec &chart : wb.charts) {
-        // A chart sheet's chart travels with its carried part (M69).
-        if (chart.sheet < 0 || chart.sheet >= wb.sheetCount() || wb.sheetAt(chart.sheet).isChartSheet()) {
+        // A chart sheet's chart travels with its carried part (M69), a
+        // PivotChart with its carried anchor (M74, D-083).
+        if (chart.sheet < 0 || chart.sheet >= wb.sheetCount() || wb.sheetAt(chart.sheet).isChartSheet()
+            || !chart.pivotSource.isEmpty()) {
             continue;
         }
         if (manifest != nullptr && !chart.series.isEmpty()) {
@@ -411,6 +414,7 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
             manifest->images.append(patch);
         }
         manifest->definedNames = definedNamesForFile(wb);
+        planPivotParts(wb, manifest); // M74 (D-083)
         manifest->source = wb.source;
         manifest->protection = wb.protection;
     } else {

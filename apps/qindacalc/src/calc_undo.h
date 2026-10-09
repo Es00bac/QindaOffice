@@ -51,6 +51,9 @@ struct SheetSnapshot {
     CalcEng::SheetProtection protection;
     CalcEng::SheetSource source;
     bool chartSheet = false; // M69 (D-078)
+    // M74 (D-083): the sheet's PivotTables — their layouts ride along (shared,
+    // so a snapshot copies pointers), and restore lays out any that lack one.
+    QList<CalcEng::PivotTable> pivots;
 };
 
 struct WorkbookSnapshot {
@@ -64,6 +67,7 @@ struct WorkbookSnapshot {
     QList<CalcEng::ChartSpec> charts;
     QList<CalcEng::ImageSpec> images;
     CalcEng::WorkbookProtection protection; // M66 (D-075)
+    QList<CalcEng::PivotCache> pivotCaches; // M74 (D-083)
     qint32 activeSheet = 0;
 };
 

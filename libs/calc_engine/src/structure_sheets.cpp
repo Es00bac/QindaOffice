@@ -6,6 +6,7 @@
 #include "structure.h"
 
 #include "chart_spec.h"
+#include "pivot_edit.h"
 #include "sheet.h"
 #include "structure_internal.h"
 #include "table_refs.h"
@@ -233,6 +234,7 @@ bool renameSheet(Workbook &book, qint32 index, const QString &newName)
     // not rewrite them turns every cross-sheet formula into #NAME?.
     requalifyWorkbook(book, oldName, newName);
     StructureMath::requalifyLinkLocations(book, oldName, newName);
+    requalifyPivotSources(book, oldName, newName); // M74: range sources follow
     book.reindexAll();
     return true;
 }

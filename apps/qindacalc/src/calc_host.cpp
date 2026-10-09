@@ -53,10 +53,12 @@ CalcHost::CalcHost()
     createTextActions();
     createFeatureActions(); // links, outline, protection (M66)
     createTableActions();   // tables, the chart sheet view (M69)
+    createPivotActions();   // PivotTables (M74)
     createAssistant();
     insertMenus();
     insertFeatureMenus();
     insertTableMenus();
+    insertPivotMenus();
     wireEditCommands();
     // Undo of a sheet insert/delete (or a load) changes the sheet list.
     connect(m_document, &SpreadsheetDocument::structureChanged, this, [this] {
@@ -165,6 +167,7 @@ void CalcHost::wireGrid()
         static_cast<void>(openLinkAt(row, col));
     });
     connect(m_grid, &SpreadsheetItem::outlineLevelClicked, this, &CalcHost::showOutlineLevel);
+    wirePivotGrid(); // M74: a double click on a PivotTable value drills down
     connect(m_grid, &SpreadsheetItem::outlineToggled, this, &CalcHost::toggleOutlineGroup);
 }
 
@@ -178,6 +181,7 @@ void CalcHost::syncFromCursor()
     syncRulesFromCursor();
     syncFeaturesFromCursor();
     syncTablesFromCursor();
+    syncPivotFromCursor();
 }
 
 void CalcHost::commitInput(const CellAddr &addr, const QString &input)

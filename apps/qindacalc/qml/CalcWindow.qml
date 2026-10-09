@@ -10,7 +10,9 @@ import QindaOffice.Calc
 // CalcHost, with the ribbon (CalcRibbonLayout.qml: font, size, borders,
 // colours, alignment, number format, cells, editing, charts, data tools,
 // sheets), the formula bar with its name box, the grid, the sheet tabs, the
-// find/replace bar, the assistant dock and the dialogs the host asks for.
+// find/replace bar, the assistant dock and the dialogs the host asks for —
+// since M74 (D-083) also the PivotTable Fields pane, which shows while the
+// cursor is in a PivotTable and Field List is on, and the pivot dialogs.
 OfficeWindow {
     id: window
 
@@ -23,6 +25,19 @@ OfficeWindow {
         const menus = window.host.menuTree.menus
         for (let i = 0; i < menus.length; ++i) if (menus[i].id === id) return menus[i]
         return null
+    }
+    function panelHidden(panelId) {
+        return dock.hiddenPanels.some(function(e) { return (typeof e === "string" ? e : e.panelId) === panelId })
+    }
+    // The PivotTable Fields pane follows the cursor, as Excel's does: shown
+    // in a PivotTable (a read-only one shows its note) while Field List is
+    // on, hidden elsewhere.
+    function syncPivotPane() {
+        const pane = window.calc.pivotPane
+        const fieldList = window.host.actions.entry("calcPivotFieldListAction")
+        const show = (pane.active === true || pane.readOnly === true) && fieldList !== null && fieldList.checked
+        if (show && window.panelHidden("pivotFields")) dock.showPanel("pivotFields")
+        else if (!show && !window.panelHidden("pivotFields")) dock.hidePanel("pivotFields")
     }
 
     // The ribbon (D-041): CalcRibbonLayout.qml over this window's slots.
@@ -165,7 +180,7 @@ OfficeWindow {
                 Tk.Flex.basis: 0
                 Tk.Flex.minHeight: 0
                 host: window.calc
-                contextMenuNode: window.contextNode
+                contextMenuNode: window.calc.pivotActive ? window.pivotContextNode : window.contextNode
             }
             CalcSheetTabs {
                 host: window.calc
@@ -182,9 +197,22 @@ OfficeWindow {
             minWidth: 240
             Ai.AssistantPanel { objectName: "assistantPanel"; controller: window.calc.assistant }
         }
+        Tk.DockPanel {
+            panelId: "pivotFields"
+            title: qsTr("PivotTable Fields")
+            iconName: "table-2"
+            zone: "right"
+            mode: "hidden"
+            extent: 300
+            minWidth: 240
+            PivotFieldsPane { host: window.calc }
+        }
         onHiddenPanelsChanged: {
             const hidden = dock.hiddenPanels.map(function(e) { return typeof e === "string" ? e : e.panelId })
             window.host.actions.setChecked("aiAssistantAction", !hidden.includes("assistant"))
+            // Closing the pane inside a PivotTable turns Field List off (Excel).
+            if (hidden.includes("pivotFields") && window.calc.pivotPane.active === true)
+                window.host.actions.setChecked("calcPivotFieldListAction", false)
         }
     }
 
@@ -215,6 +243,24 @@ OfficeWindow {
             { kind: "action", id: "calcHideRowsAction" }, { kind: "action", id: "calcUnhideRowsAction" },
             { kind: "separator" },
             { kind: "action", id: "calcCondFormatAction" }, { kind: "action", id: "calcValidationAction" }
+        ]
+    })
+    // Inside a PivotTable the grid's menu is Excel's PivotTable menu.
+    readonly property var pivotContextNode: ({
+        kind: "menu", id: "calcPivotContextMenu", title: "",
+        children: [
+            { kind: "action", id: "editCopyAction" },
+            { kind: "separator" },
+            { kind: "action", id: "calcPivotRefreshAction" },
+            { kind: "separator" },
+            { kind: "action", id: "calcPivotSortAscendingAction" }, { kind: "action", id: "calcPivotSortDescendingAction" },
+            { kind: "action", id: "calcPivotFilterAction" }, { kind: "action", id: "calcPivotClearFilterAction" },
+            { kind: "separator" },
+            { kind: "action", id: "calcPivotGroupAction" }, { kind: "action", id: "calcPivotUngroupAction" },
+            { kind: "separator" },
+            { kind: "action", id: "calcPivotShowDetailsAction" },
+            { kind: "action", id: "calcPivotValueFieldSettingsAction" }, { kind: "action", id: "calcPivotFieldSettingsAction" },
+            { kind: "action", id: "calcPivotOptionsAction" }, { kind: "action", id: "calcPivotFieldListAction" }
         ]
     })
 
@@ -262,6 +308,15 @@ OfficeWindow {
         function onProtectSheetRequested() { protectDialog.workbook = false; protectDialog.open() }
         function onProtectWorkbookRequested() { protectDialog.workbook = true; protectDialog.open() }
         function onUnprotectRequested(workbook) { unprotectDialog.workbook = workbook; unprotectDialog.open() }
+        // M74 (D-083): PivotTables.
+        function onPivotChanged() { window.syncPivotPane() }
+        function onPivotFieldListToggleRequested(visible) { window.syncPivotPane() }
+        function onPivotCreateRequested(mode) { pivotCreate.load(mode); pivotCreate.open() }
+        function onPivotValueFieldRequested(index) { pivotValueField.load(index); pivotValueField.open() }
+        function onPivotFieldRequested(field) { if (field >= 0) { pivotField.load(field); pivotField.open() } }
+        function onPivotFilterRequested(field) { if (field >= 0) { pivotFilter.load(field); pivotFilter.open() } }
+        function onPivotGroupRequested(field) { pivotGroup.load(field); pivotGroup.open() }
+        function onPivotOptionsRequested() { pivotOptions.load(); pivotOptions.open() }
     }
 
     SizeDialog { id: sizeDialog; onValueApplied: function(v) { if (forRows) window.calc.applyRowHeight(v); else window.calc.applyColumnWidth(v) } }
@@ -313,6 +368,12 @@ OfficeWindow {
     ProtectDialog { id: protectDialog; host: window.calc }
     UnprotectDialog { id: unprotectDialog; host: window.calc }
     ChartWindows { host: window.calc; parentWindow: window }
+    PivotCreateDialog { id: pivotCreate; host: window.calc }
+    PivotValueFieldDialog { id: pivotValueField; host: window.calc }
+    PivotFieldDialog { id: pivotField; host: window.calc }
+    PivotFilterDialog { id: pivotFilter; host: window.calc }
+    PivotGroupDialog { id: pivotGroup; host: window.calc }
+    PivotOptionsDialog { id: pivotOptions; host: window.calc }
     CloseConsentDialog {
         id: templateConsent; objectName: "templateConsentDialog"
         property string path: ""

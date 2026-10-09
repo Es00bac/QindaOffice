@@ -21,10 +21,12 @@
 #include "carry_fixtures.h"
 #include "carry_inspect.h"
 #include "m69_fixtures.h"
+#include "pivot_fixtures.h"
 #include "support/soffice_env.h"
 
 #include "hyperlink.h"
 #include "outline.h"
+#include "pivot_edit.h"
 #include "protection.h"
 #include "structure.h"
 #include "workbook.h"
@@ -166,6 +168,7 @@ private slots:
     void initTestCase();
     void linksOutlinesProtectionAndSpills();
     void carriedPivotTableIsImported();
+    void writtenPivotTableIsImported();
     void carriedWorkbookAndSheetPartsReopen();
     void tablesArraysAndChartSheetsReopen();
 
@@ -375,6 +378,53 @@ void CalcIoLibreTest::carriedPivotTableIsImported()
     const OdsSheet &pivot = book.sheets.value(QStringLiteral("Pivot"));
     QVERIFY2(QStringList(pivot.text.values()).contains(QStringLiteral("60")),
              qPrintable(QStringList(pivot.text.values()).join(u',')));
+}
+
+// M74 (D-083): a PivotTable written from the model — Region by Product,
+// Sum of Sales, North unchecked — is a data pilot to LibreOffice, which
+// recomputes it from the definition and the source: its numbers must be
+// the ones QindaCalc shows.
+void CalcIoLibreTest::writtenPivotTableIsImported()
+{
+    Workbook wb;
+    QVERIFY(openFixture(regionsByProductBook(), QStringLiteral("pivot-model-source.xlsx"), &wb));
+    wb.addSheet(QStringLiteral("Report"));
+    QString error;
+    const PivotRef ref = createPivotTable(wb, PivotSource{QStringLiteral("Data"), {{0, 0}, {6, 4}}, QString()}, 2, {2, 0},
+                                          &error);
+    QVERIFY2(ref.isValid(), qPrintable(error));
+    PivotTable pivot = wb.sheetAt(2).pivots().first();
+    const PivotCache &cache = *pivotCacheOf(wb, pivot.cacheId);
+    QVERIFY(pivotPlaceField(pivot, cache, 0, PivotArea::Rows));
+    QVERIFY(pivotPlaceField(pivot, cache, 1, PivotArea::Columns));
+    QVERIFY(pivotPlaceField(pivot, cache, 3, PivotArea::Values));
+    pivot.fields[0].hidden = {2}; // North
+    wb.sheetAt(2).mutablePivots()[0] = pivot;
+    QVERIFY(renderPivotTable(wb, ref, &error));
+    QStringList ours;
+    for (const PivotCell &cell : wb.sheetAt(2).pivots().first().render->cells) {
+        if (cell.kind == PivotCellKind::Data && isNumber(cell.value)) {
+            ours.append(QString::number(std::get<double>(cell.value)));
+        }
+    }
+    std::sort(ours.begin(), ours.end());
+    QCOMPARE(ours, (QStringList{"18", "20", "25", "27", "30", "48", "50", "7", "75"}));
+    const QString xlsx = saveChecked(wb, QStringLiteral("pivot-model.xlsx"));
+    QVERIFY(!xlsx.isEmpty());
+    QString log;
+    const QString fods = convert(xlsx, &log);
+    QVERIFY2(!fods.isEmpty(), qPrintable(log));
+    const OdsBook book = readFlatOds(fods);
+    QCOMPARE(book.pivotSources.size(), 2); // the untouched pivot and the new one
+    QStringList theirs;
+    static const QRegularExpression numberText(QStringLiteral("^-?\\d+(\\.\\d+)?$"));
+    for (const QString &text : book.sheets.value(QStringLiteral("Report")).text) {
+        if (numberText.match(text).hasMatch()) {
+            theirs.append(text);
+        }
+    }
+    std::sort(theirs.begin(), theirs.end());
+    QCOMPARE(theirs, ours);
 }
 
 void CalcIoLibreTest::carriedWorkbookAndSheetPartsReopen()

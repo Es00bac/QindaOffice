@@ -51,6 +51,9 @@ bool SpreadsheetDocument::refuseCellEdit(const CellRange &range)
         emit editRefused(tr("“%1” is a chart sheet: it holds a chart and no cells.").arg(sheet.name()));
         return true;
     }
+    if (refusePivotEdit(range)) { // a PivotTable's output (M74, D-083)
+        return true;
+    }
     // Excel's rule: an array formula changes, or goes, as a whole.
     bool part = false;
     if (range.cellCount() == 1) {
@@ -71,6 +74,9 @@ bool SpreadsheetDocument::refuseCellEdit(const CellRange &range)
 
 bool SpreadsheetDocument::refuseArraySplit(bool rows, qint32 at, qint32 count, bool insert)
 {
+    if (refusePivotSplit(rows, at, count, insert)) { // through a PivotTable (M74)
+        return true;
+    }
     for (const CellRange &block : arrayBlocks(m_workbook.sheetAt(m_activeSheet))) {
         const qint32 lo = rows ? block.topLeft.row : block.topLeft.col;
         const qint32 hi = rows ? block.bottomRight.row : block.bottomRight.col;

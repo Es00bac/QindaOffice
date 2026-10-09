@@ -164,6 +164,44 @@ inline const char kCalcHideFormula[] = "calcHideFormulaAction";
 // M69 (D-078): Excel tables — Insert ▸ Table and the Total Row.
 inline const char kCalcInsertTable[] = "calcInsertTableAction";
 inline const char kCalcTableTotalRow[] = "calcTableTotalRowAction";
+// M74 (D-083): PivotTables — Insert ▸ PivotTable and the contextual
+// PivotTable Analyze and Design tabs (Data ▸ PivotTable in the menus). The
+// styles are app-scoped "calcPivotStyle_<Excel's name>" (and _None).
+inline const char kCalcInsertPivotTable[] = "calcInsertPivotTableAction";
+inline const char kCalcPivotRefresh[] = "calcPivotRefreshAction";
+inline const char kCalcPivotRefreshAll[] = "calcPivotRefreshAllAction";
+inline const char kCalcPivotChangeSource[] = "calcPivotChangeSourceAction";
+inline const char kCalcPivotClear[] = "calcPivotClearAction";
+inline const char kCalcPivotMove[] = "calcPivotMoveAction";
+inline const char kCalcPivotOptions[] = "calcPivotOptionsAction";
+inline const char kCalcPivotFieldList[] = "calcPivotFieldListAction";
+inline const char kCalcPivotFieldSettings[] = "calcPivotFieldSettingsAction";
+inline const char kCalcPivotValueFieldSettings[] = "calcPivotValueFieldSettingsAction";
+inline const char kCalcPivotGroup[] = "calcPivotGroupAction";
+inline const char kCalcPivotUngroup[] = "calcPivotUngroupAction";
+inline const char kCalcPivotSortAscending[] = "calcPivotSortAscendingAction";
+inline const char kCalcPivotSortDescending[] = "calcPivotSortDescendingAction";
+inline const char kCalcPivotFilter[] = "calcPivotFilterAction";
+inline const char kCalcPivotClearFilter[] = "calcPivotClearFilterAction";
+inline const char kCalcPivotShowDetails[] = "calcPivotShowDetailsAction";
+inline const char kCalcPivotLayoutCompact[] = "calcPivotLayoutCompactAction";
+inline const char kCalcPivotLayoutOutline[] = "calcPivotLayoutOutlineAction";
+inline const char kCalcPivotLayoutTabular[] = "calcPivotLayoutTabularAction";
+inline const char kCalcPivotRepeatLabels[] = "calcPivotRepeatLabelsAction";
+inline const char kCalcPivotNoRepeatLabels[] = "calcPivotNoRepeatLabelsAction";
+inline const char kCalcPivotSubtotalsOff[] = "calcPivotSubtotalsOffAction";
+inline const char kCalcPivotSubtotalsBottom[] = "calcPivotSubtotalsBottomAction";
+inline const char kCalcPivotSubtotalsTop[] = "calcPivotSubtotalsTopAction";
+inline const char kCalcPivotGrandTotalsOff[] = "calcPivotGrandTotalsOffAction";
+inline const char kCalcPivotGrandTotalsOn[] = "calcPivotGrandTotalsOnAction";
+inline const char kCalcPivotGrandTotalsRows[] = "calcPivotGrandTotalsRowsAction";
+inline const char kCalcPivotGrandTotalsColumns[] = "calcPivotGrandTotalsColumnsAction";
+inline const char kCalcPivotBlankRowsOn[] = "calcPivotBlankRowsOnAction";
+inline const char kCalcPivotBlankRowsOff[] = "calcPivotBlankRowsOffAction";
+inline const char kCalcPivotRowHeaders[] = "calcPivotRowHeadersAction";
+inline const char kCalcPivotColumnHeaders[] = "calcPivotColumnHeadersAction";
+inline const char kCalcPivotBandedRows[] = "calcPivotBandedRowsAction";
+inline const char kCalcPivotBandedColumns[] = "calcPivotBandedColumnsAction";
 
 // QindaShow commands.
 inline const char kShowFillColor[] = "showFillColorAction";

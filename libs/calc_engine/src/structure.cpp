@@ -2,6 +2,7 @@
 #include "structure.h"
 
 #include "chart_spec.h"
+#include "pivot_edit.h"
 #include "structure_internal.h"
 #include "sheet.h"
 #include "workbook.h"
@@ -393,6 +394,7 @@ void applyStructureEdit(Workbook &book, const StructureEdit &edit)
     rewriteCharts(book, edit);
     rewriteImages(book, edit);
     moveSheetFeatures(book, edit); // links, outline, source journal (M66)
+    movePivotsForEdit(book, edit); // PivotTables and their sources (M74)
     moveSheetContents(book.sheetAt(edit.sheet), edit);
     // Inserted table columns are named and inserted table rows filled with
     // the calculated columns (M69); endBulkLoad then reindexes once.

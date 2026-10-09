@@ -57,3 +57,5 @@ set_tests_properties(tst_calc_io_libre PROPERTIES TIMEOUT 900)
 add_executable(calc_io_survey calc_io_survey.cpp)
 target_link_libraries(calc_io_survey PRIVATE calc_io)
 qqo_set_strict_warnings(calc_io_survey)
+# M74 (D-083): Excel PivotTables into the model and back (pivot_fixtures.h).
+qqo_add_calc_io_test(tst_calc_io_pivot)

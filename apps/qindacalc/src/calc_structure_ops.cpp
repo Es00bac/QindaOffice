@@ -347,6 +347,17 @@ void SpreadsheetDocument::duplicateSheet(qint32 index, const QString &name)
     copy.setValidations(source.validations());
     copy.setAutoFilter(source.autoFilter());
     copy.setComments(source.comments());
+    // Its PivotTables come along on the same caches under names of their own
+    // (Excel's Move or Copy); a read-only one stays with its sheet (M74).
+    for (CalcEng::PivotTable pivot : source.pivots()) {
+        if (pivot.modelled) {
+            pivot.name = CalcEng::nextPivotName(m_workbook);
+            pivot.sourcePart.clear();
+            pivot.readFingerprint.clear();
+            pivot.customFormats = false; // Excel's formats stay with the source pivot
+            copy.mutablePivots().append(pivot);
+        }
+    }
     // A copy keeps its links, outline and protection (Excel's Move or Copy)
     // but is no source sheet: nothing is carried for it (M66, D-075).
     copy.setHyperlinks(source.hyperlinks());

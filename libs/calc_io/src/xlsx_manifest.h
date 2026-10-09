@@ -14,6 +14,7 @@
 
 #include <QByteArray>
 #include <QHash>
+#include <QSet>
 #include <QString>
 
 namespace QindaOffice::Calc::IO {
@@ -131,6 +132,25 @@ struct PatchManifest {
     // Save-time notes for the user: a part the carry stage had to leave
     // behind (a thread whose note was edited, macros left out of an .xlsx).
     QStringList *warnings = nullptr;
+
+    // ---- M74 (D-083): PivotTables (xlsx_write_pivot.h) ----
+    // The pivots and caches written from the model, and what the carry
+    // stage must do with the source's pivot parts: skip the replaced ones,
+    // carry the untouched ones byte for byte (refreshOnLoad only when the
+    // source data changed), keep slicers whose pivot was rewritten over an
+    // unchanged cache.
+    struct PivotPart {
+        QString sheetPart; // the written worksheet part it hangs from
+        PivotTable pivot;  // with its render: rowItems, colItems, location
+    };
+    QList<PivotPart> pivots;
+    QList<PivotCache> pivotCaches;
+    QHash<QString, QString> replacedPivotParts; // source pivot part → the name its replacement has
+    QSet<QString> replacedCacheParts;
+    QSet<QString> sameItemsCacheParts;          // replaced caches whose items did not change
+    QSet<QString> untouchedCacheParts;          // modelled caches carried as read
+    QSet<QString> staleCacheParts;              // … whose source data changed: refreshOnLoad
+    QSet<QString> modelPivotParts;              // source pivot parts a PivotTable still names
 
     // Charts. Grouping-only patches target a chart part QXlsx already wrote
     // (its grouping serialization is commented out upstream); generated

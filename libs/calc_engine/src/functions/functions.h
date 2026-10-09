@@ -100,6 +100,18 @@ public:
         Q_UNUSED(addr);
         return nullptr;
     }
+    // GETPIVOTDATA (M74, D-083): the value the PivotTable covering (sheet,
+    // addr) shows for a data field where each named field shows the named
+    // item; #REF! when nothing answers.
+    [[nodiscard]] virtual Value pivotData(qint32 sheet, const CellAddr &addr, const QString &dataField,
+                                          const QList<QPair<QString, Value>> &pairs) const
+    {
+        Q_UNUSED(sheet);
+        Q_UNUSED(addr);
+        Q_UNUSED(dataField);
+        Q_UNUSED(pairs);
+        return Err::Ref;
+    }
 };
 
 // What a formula does with a range or an array where one value is wanted
@@ -219,5 +231,7 @@ void registerArrayShapeFunctions(QHash<QString, FunctionSpec> &registry);
 void registerStatisticalM69Functions(QHash<QString, FunctionSpec> &registry);
 void registerEngineeringFunctions(QHash<QString, FunctionSpec> &registry);
 void registerDatabaseFunctions(QHash<QString, FunctionSpec> &registry);
+// M74 (D-083): GETPIVOTDATA.
+void registerPivotFunctions(QHash<QString, FunctionSpec> &registry);
 
 } // namespace QindaOffice::Calc

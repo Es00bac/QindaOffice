@@ -5,7 +5,9 @@
 # and RFC 4180 CSV. M69 (D-078): structured references and Excel tables as
 # they are edited (structured_ref, table_refs, table_edit,
 # structure_tables), array constants, lifting and implicit intersection
-# (eval_lift), legacy array formulas (spill.cpp). Qt Core only - never
+# (eval_lift), legacy array formulas (spill.cpp). M74 (D-083): PivotTables
+# (pivot*: caches, grouping, compute, Show Values As, compact / outline /
+# tabular layout, the built-in styles, GETPIVOTDATA). Qt Core only - never
 # links Qt Widgets or the desktop archives (AGENTS.md rules 8/9); every
 # behavior here is testable offscreen.
 add_library(calc_engine STATIC
@@ -63,6 +65,25 @@ add_library(calc_engine STATIC
     src/outline.h
     src/parser.cpp
     src/parser.h
+    src/pivot.h
+    src/pivot_areas.cpp
+    src/pivot_cache.cpp
+    src/pivot_cache.h
+    src/pivot_compute.cpp
+    src/pivot_compute.h
+    src/pivot_edit.cpp
+    src/pivot_edit.h
+    src/pivot_edit_internal.h
+    src/pivot_filters.cpp
+    src/pivot_group.cpp
+    src/pivot_remap.cpp
+    src/pivot_layout.cpp
+    src/pivot_ops.cpp
+    src/pivot_query.cpp
+    src/pivot_showas.cpp
+    src/pivot_structure.cpp
+    src/pivot_style.cpp
+    src/pivot_style.h
     src/protection.cpp
     src/protection.h
     src/sheet.cpp

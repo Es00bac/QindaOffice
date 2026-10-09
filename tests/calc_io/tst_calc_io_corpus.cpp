@@ -7,7 +7,8 @@
 // .xlsm stays macro-enabled — and reads the result again. With
 // QQO_OOXML_SCHEMA_DIR set every written package is validated against the
 // ECMA-376 schemas; only errors the save ADDS count (a carried part keeps
-// whatever its source had).
+// whatever its source had). Since M74 (D-083) PivotTables are counted too:
+// how many, how many QindaCalc models, and whether a round trip kept both.
 //
 // AGENT-GUARD: it runs over the owner's private files, which never leave
 // the laptop. It prints aggregate counts only — never a file name, a sheet
@@ -49,6 +50,8 @@ struct BookStats {
     qint64 tables = 0;
     qint64 comments = 0;
     qint64 carriedParts = 0; // parts of the reduced source copy a save carries from
+    qint64 pivots = 0;          // PivotTables, modelled or kept as read (M74, D-083)
+    qint64 pivotsModelled = 0;  // the ones QindaCalc lays out and edits
 };
 
 qint64 carriedParts(const Workbook &wb)
@@ -76,6 +79,10 @@ BookStats statsOf(const Workbook &wb)
         }
         stats.tables += sheet.tables().size();
         stats.comments += sheet.comments().size();
+        for (const PivotTable &pivot : sheet.pivots()) {
+            ++stats.pivots;
+            stats.pivotsModelled += pivot.modelled ? 1 : 0;
+        }
     }
     stats.charts = wb.charts.size();
     stats.pictures = wb.images.size();
@@ -184,6 +191,7 @@ void CalcIoCorpusTest::roundTripsEveryWorkbook()
     qint64 tablesChanged = 0;
     qint64 commentsChanged = 0;
     qint64 carriedChanged = 0;
+    qint64 pivotsChanged = 0;
     qint64 invalid = 0;
     qint64 slowestMs = 0;
     QMap<QString, int> schemaErrors;
@@ -214,6 +222,8 @@ void CalcIoCorpusTest::roundTripsEveryWorkbook()
         total.tables += before.tables;
         total.comments += before.comments;
         total.carriedParts += before.carriedParts;
+        total.pivots += before.pivots;
+        total.pivotsModelled += before.pivotsModelled;
 
         const bool macros = path.endsWith(QLatin1String(".xlsm"), Qt::CaseInsensitive);
         const QString out = scratch.filePath(QStringLiteral("book%1.%2").arg(i + 1).arg(macros ? "xlsm" : "xlsx"));
@@ -241,6 +251,7 @@ void CalcIoCorpusTest::roundTripsEveryWorkbook()
         tablesChanged += before.tables != after.tables ? 1 : 0;
         commentsChanged += before.comments != after.comments ? 1 : 0;
         carriedChanged += before.carriedParts != after.carriedParts ? 1 : 0;
+        pivotsChanged += before.pivots != after.pivots || before.pivotsModelled != after.pivotsModelled ? 1 : 0;
         const qint64 changed = changedCells(wb, back, &formulaTextsChanged);
         cellsChanged += changed;
         booksWithCellChanges += changed > 0 ? 1 : 0;
@@ -280,6 +291,9 @@ void CalcIoCorpusTest::roundTripsEveryWorkbook()
         .arg(formulaCountChanged).arg(chartsChanged).arg(picturesChanged).arg(tablesChanged).arg(commentsChanged)
         .arg(carriedChanged).arg(cellsChanged).arg(formulaTextsChanged).arg(booksWithCellChanges).arg(invalid)
         .arg(validate ? QString() : QStringLiteral(" (validation off: set QQO_OOXML_SCHEMA_DIR)"));
+    qInfo().noquote() << QStringLiteral("pivots: %1 PivotTables, %2 modelled (the rest kept as read); workbooks whose "
+                                        "PivotTables changed in the round trip %3")
+                             .arg(total.pivots).arg(total.pivotsModelled).arg(pivotsChanged);
     for (auto it = schemaErrors.cbegin(); it != schemaErrors.cend(); ++it) {
         qInfo().noquote() << QStringLiteral("  %1x %2").arg(it.value()).arg(it.key());
     }

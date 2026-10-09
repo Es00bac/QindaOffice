@@ -33,6 +33,119 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M74 Calc PivotTables gates (D-083)
+
+Qualified on qinda (branch `m74-calc-pivots`, merged with
+`m60-office-formats` 8985fc3) with `QQO_OOXML_SCHEMA_DIR=~/scratch/qqo/ecma-xsd`
+and xmllint, as a targeted build (calc_engine, calc_io, office_ooxml,
+QindaCalc and their tests, and the calc_io consumers; qinda's disk is
+shared): **50/50 CTest targets passed, 202.31 s** (`ctest --preset dev -R
+"calc|tst_pptx_charts|tst_books_io_reports|tst_books_io_orders|tst_plan_output|tst_qindabase_interchange"`).
+QtTest counts (init/cleanup included):
+
+- calc_engine — `tst_calc_parser` 57, `_functions` 6, `_recalc` 12,
+  `_numfmt` 7, `_csv` 8, `_structure` 18, `_rules` 13, `_spill` 11,
+  `_features` 10, `_tables` 13, `_arrays` 12, **`_pivot` 25,
+  `_pivot_values` 18, `_pivot_edit` 10**: 220 passed.
+- calc_io — `tst_calc_io` 9, `_styles` 6, `_rules` 7, `_charts` 5, `_tables`
+  4, `_view` 4, `_images` 5, `_excel` 10, `_package` 9, `_links` 4,
+  `_outline` 3, `_protect` 3, `_carry` 7, `_carry_sheet` 6, `_arrays` 5,
+  `_structured` 6, `_chartsheets` 5, `_corpus` 2 (1 skipped without a
+  corpus), **`_libre` 7, `_pivot` 12**: 119 passed.
+- QindaCalc — `tst_calc_window` 12 (1 skipped), `_sample` 3 (8 skipped
+  without `QQO_SAMPLE_XLSX`), `_ui` 16, `_rules_ui` 6, `_menu_export` 3,
+  `_tools` 4, `_agent` 5, `_features_ui` 7, `_tables_ui` 6, **`_pivot_ui`
+  8**, and `calc_agent_process`: 70 passed.
+- Consumers of calc_io — `tst_pptx_charts` 7, `tst_books_io_reports` 11,
+  `tst_books_io_orders` 5, `tst_plan_output` 7, `tst_qindabase_interchange`
+  6: 36 passed.
+
+The gates, per item (every package is built by hand the way Excel 365
+writes it — `tests/calc_io/pivot_fixtures.h` —, the sales records are
+worked by hand in `tests/calc_engine/pivot_fixture.h`, and both the source
+and our saved package validate against the Transitional XSDs with every
+relationship resolving):
+
+- **Engine** (`tst_calc_pivot`, `tst_calc_pivot_values`,
+  `tst_calc_pivot_edit`), each against a hand-worked grid: Excel's
+  placeholder; compact form with its indents, outline, tabular; subtotals
+  at the top, at the bottom, off and custom; blank rows; column fields and
+  both grand totals; Σ Values with two data fields; filter fields above the
+  body; values only; the eleven functions and text fields counted; every
+  Show Values As over the regions and over a cross table, Index, % Of,
+  % of Parent; dates grouped by years, quarters and months, numbers by
+  ranges, chosen items; sorting by label, by value and by hand; label,
+  value, Top 10 and item filters; Refresh reading the source again (new
+  items at the end, settings kept); table sources; GETPIVOTDATA, also after
+  a refresh; structural edits and renames moving pivots and sources; Show
+  Details; Move, Clear, delete, Change Data Source; the four areas of the
+  field list; the styles drawn from their names.
+- **Excel's pivots read and written** (`tst_calc_io_pivot`): five
+  Excel-shaped workbooks (compact Region × Product; tabular with a Date
+  filter and two data fields; dates grouped by Years and months; a table
+  source; a calculated field) open as the model with Excel's own cells;
+  untouched caches and pivots are saved byte-identical, with
+  `refreshOnLoad` added only after their source cells change; edited,
+  refreshed and new pivots with every option are written from the model
+  and read back equal; a pivot's own Excel formats stay while it is
+  untouched and are left out with a save warning once it is rewritten; a
+  PivotChart is read (its series shown) and saved as Excel wrote it,
+  `c:pivotSource` and `c:pivotFmts` kept, once and only once, before and
+  after its pivot changes; the calculated-field pivot stays read-only with
+  its note and its parts carried; slicers stay while the cache keeps its
+  items; a deleted pivot leaves no part, relationship or content type.
+- **LibreOffice imports a written pivot** (`tst_calc_io_libre`
+  `writtenPivotTableIsImported`, headless 25.2 to flat ODS): a pivot made
+  with the engine (Region on Rows with North hidden, Product on Columns,
+  Sum of Sales) and saved comes back as a DataPilot table beside the
+  untouched one, and the numbers LibreOffice computes from our definition
+  are ours.
+- **QindaCalc UI** (`tst_calc_pivot_ui`, the real window): Insert ▸
+  PivotTable through its dialog (the source prefilled, a new sheet before
+  the active one, Excel's placeholder, the contextual tabs and the
+  PivotTable Fields pane shown); fields checked in the pane with the mouse,
+  placed through its drop path, and Qty dragged with the mouse onto Values
+  (Σ Values onto Columns) — one undo step each; Report Layout ▸ Tabular;
+  Value Field Settings ▸ Average; the grid's PivotTable menu; the Filter
+  dialog (an item unchecked, Top 1), Grouping by 10, Ungroup and its undo,
+  the area menu (Remove Field, Move to Column Labels), PivotTable Options
+  (name, grand totals); Refresh after the source changed with GETPIVOTDATA
+  following; a write into the output refused with Excel's message; Show
+  Details on a new sheet; the recovery payload carrying the cache and the
+  pivot; Clear All; Excel's pivot edited in the pane, saved and read back;
+  a calculated-field pivot read-only with its note in the status line and
+  the pane; Insert PivotTable undone back to one sheet.
+- **Ribbon and menus**: the ribbon gate (`tst_calc_ui`: every menu command
+  on the ribbon, every icon known, every item of every tab inside the
+  ribbon at 1280 and 520 px with the contextual PivotTable Analyze and
+  Design tabs forced on) and the menu export (`tst_calc_menu_export`: every
+  exported id resolves, the PivotTable ids and styles among them).
+- **Fixtures** regenerated deliberately (`QQO_UPDATE_FIXTURES=1`): at 1280 and
+  520 the only change is the hidden PivotTable Fields dock panel
+  (`dockPanelContent_pivotFields`: the pane, its list, areas, notice and
+  search). **Grabs** looked at: the empty pivot with its placeholder, the
+  compact Region × Product pivot with the pane at 1280 and 520, the tabular
+  form, Value Field Settings at 1280 and 520, Field Settings at 520, the
+  Filter and Grouping dialogs, the area menu, PivotTable Options, Excel's
+  pivot with two data fields, the read-only note.
+- **Real-workbook gate** (`tst_calc_io_corpus`, which now also counts
+  PivotTables — how many, how many modelled, and workbooks whose pivots a
+  round trip changed): over the 482 Excel-written workbooks vendored with
+  QXlsx (`data03.xlsx` left out, D-078): 482 read, 0 failed, 482 written
+  and re-read, 0 cells or formula texts changed, 271 charts and 48 pictures
+  kept, 0 schema-invalid, slowest round trip 315 ms; they hold no
+  PivotTables. The owner's workbooks are the lead's run on the laptop.
+- Not verified: Microsoft Excel itself (none here).
+- **Desktop check (owner):** in QindaCalc on the desktop, make a table
+  (Ctrl+T) and Insert ▸ PivotTable from it; check fields, drag one into
+  Columns, set Value Field Settings and a Report Layout; save; open the file
+  in Excel: no repair prompt and no refresh needed, the PivotTable shows the
+  same numbers and the same areas in Excel's field list, and Refresh in
+  Excel keeps them. Open one of your workbooks with PivotTables in
+  QindaCalc: the ordinary ones are live (change a source cell, Refresh), a
+  read-only one says why; save and open it in Excel again. Check the pane
+  and the contextual tabs in dark and light themes.
+
 ## M73 Write lists and styles gates (D-082)
 
 After merging (lead): the full suite on qinda 221/221 at f1a2aee; the

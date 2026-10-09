@@ -4,6 +4,7 @@
 #include "cell.h"
 #include "hyperlink.h"
 #include "outline.h"
+#include "pivot.h"
 #include "protection.h"
 #include "sheet_rules.h"
 #include "sheet_source.h"
@@ -165,6 +166,12 @@ public:
     // whose `sheet` is this sheet, and calc_io carries its parts verbatim.
     [[nodiscard]] bool isChartSheet() const { return m_chartSheet; }
     void setChartSheet(bool chartSheet) { m_chartSheet = chartSheet; }
+    // M74 (D-083): the PivotTables that live on the sheet (their output
+    // is in its cells; their caches are Workbook::pivotCaches). Moved by
+    // structural edits (pivot_structure.cpp), carried by undo and recovery.
+    [[nodiscard]] const QList<PivotTable> &pivots() const { return m_pivots; }
+    void setPivots(QList<PivotTable> pivots) { m_pivots = std::move(pivots); }
+    [[nodiscard]] QList<PivotTable> &mutablePivots() { return m_pivots; }
     // Drops a cell's CONTENT, keeping its style (the spill engine removes
     // spilled values from cells the user may have formatted).
     bool dropCellContent(const CellAddr &addr) { return m_cells.remove(addr.key()) > 0; }
@@ -200,6 +207,7 @@ private:
     SheetProtection m_protection;
     SheetSource m_source;
     bool m_chartSheet = false;
+    QList<PivotTable> m_pivots;
 };
 
 } // namespace QindaOffice::Calc

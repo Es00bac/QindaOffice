@@ -54,6 +54,10 @@ struct WorkbookSource {
     QByteArray carried;
     QString codeName;          // <workbookPr codeName>: the VBA project's name for the workbook
     bool macroEnabled = false; // the source had a VBA project (an .xlsm)
+    // M74 (D-083): the pivot table parts of `carried` the model took over
+    // (Sheet::pivots). A save carries one of these only while a PivotTable
+    // still names it — one deleted in QindaCalc stays deleted.
+    QStringList pivotParts;
     bool operator==(const WorkbookSource &) const = default;
 };
 
@@ -224,6 +228,15 @@ public:
     // True when the formula of the cell is hidden by protection.
     [[nodiscard]] bool isFormulaHidden(qint32 sheet, const CellAddr &addr) const;
     WorkbookProtection protection;
+
+    // ---- PivotTables (M74, D-083; pivot_edit.h) ----
+    // EvalHost: GETPIVOTDATA's lookup (pivot_query.cpp).
+    [[nodiscard]] Value pivotData(qint32 sheet, const CellAddr &addr, const QString &dataField,
+                                  const QList<QPair<QString, Value>> &pairs) const override;
+    // The caches the sheets' PivotTables summarize (PivotTable::cacheId is
+    // PivotCache::id). Document state like the charts: undo and recovery
+    // carry it.
+    QList<PivotCache> pivotCaches;
 
     // Floating charts anchored on the sheets (plan section 7.2); exported
     // to xlsx, dropped with a warning on import (QXlsx has no chart read).

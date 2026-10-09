@@ -72,6 +72,17 @@ private slots:
                                "calcUnprotectWorkbookAction", "calcLockCellAction", "calcHideFormulaAction"}) {
             QVERIFY2(ids.contains(QString::fromLatin1(id)), id);
         }
+        // M74 (D-083): Insert ▸ PivotTable and every PivotTable command, the
+        // styles included, reach the panel (Data ▸ PivotTable).
+        for (const char *id : {"calcInsertPivotTableAction", "calcPivotRefreshAction", "calcPivotRefreshAllAction",
+                               "calcPivotChangeSourceAction", "calcPivotFieldListAction", "calcPivotFieldSettingsAction",
+                               "calcPivotValueFieldSettingsAction", "calcPivotOptionsAction", "calcPivotGroupAction",
+                               "calcPivotUngroupAction", "calcPivotShowDetailsAction", "calcPivotLayoutTabularAction",
+                               "calcPivotSubtotalsTopAction", "calcPivotGrandTotalsRowsAction", "calcPivotBlankRowsOnAction",
+                               "calcPivotBandedRowsAction", "calcPivotMoveAction", "calcPivotClearAction",
+                               "calcPivotStyle_PivotStyleLight16", "calcPivotStyle_PivotStyleMedium9", "calcPivotStyle_None"}) {
+            QVERIFY2(ids.contains(QString::fromLatin1(id)), id);
+        }
     }
 };
 

@@ -179,6 +179,12 @@ void SpreadsheetItem::paintGrid(QPainter &p)
             const CondFormat conditional = sheet.condFormats().isEmpty()
                 ? CondFormat{}
                 : wb.condFormatFor(m_document->activeSheet(), addr);
+            // A PivotTable's style (M74): drawn from its name, like a table's.
+            const std::optional<PivotCellLook> pivotLook =
+                sheet.pivots().isEmpty() ? std::nullopt : pivotLookAt(sheet, addr);
+            if (!inSelection && pivotLook && pivotLook->fill) {
+                p.fillRect(cell, QColor(pivotLook->fill->r, pivotLook->fill->g, pivotLook->fill->b));
+            }
             if (!inSelection) {
                 // A structured table's style is the LOWEST layer: direct
                 // cell fills and conditional formats paint over it (Excel's
@@ -241,6 +247,9 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                 if (link) {
                     cellFont.setUnderline(true);
                 }
+                if (pivotLook && pivotLook->bold && (style == nullptr || !style->bold)) {
+                    cellFont.setBold(true);
+                }
                 if (conditional.bold) {
                     cellFont.setBold(*conditional.bold);
                 }
@@ -260,6 +269,8 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                                     (*formatted.colour).b));
                 } else if (style != nullptr && style->fg.has_value()) {
                     p.setPen(QColor((*style->fg).r, (*style->fg).g, (*style->fg).b));
+                } else if (pivotLook && pivotLook->text) {
+                    p.setPen(QColor(pivotLook->text->r, pivotLook->text->g, pivotLook->text->b));
                 } else if (link) {
                     p.setPen(kLinkInk);
                 } else if (const TableSpec *table = sheet.tableCovering(addr);
@@ -286,7 +297,9 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                     flags = (flags & ~int(Qt::AlignVertical_Mask)) | int(Qt::AlignTop)
                         | int(Qt::TextWordWrap);
                 }
-                p.drawText(cell.adjusted(4, 1, -4, -1), flags, formatted.text);
+                // A compact form's label sits one indent per level (M74).
+                const qreal indent = pivotLook ? pivotLook->indent * 12.0 * m_zoom : 0.0;
+                p.drawText(cell.adjusted(4 + indent, 1, -4, -1), flags, formatted.text);
             }
             // A comment marker: the small corner triangle every spreadsheet
             // uses. The text itself is the hover tooltip.
@@ -319,6 +332,9 @@ void SpreadsheetItem::paintGrid(QPainter &p)
             p.setPen(kGridLine);
             p.drawLine(cell.bottomLeft(), cell.bottomRight());
             p.drawLine(cell.topRight(), cell.bottomRight());
+            if (pivotLook) {
+                paintPivotRules(p, cell, *pivotLook);
+            }
             if (style != nullptr && style->borders != 0) {
                 p.setPen(QPen(kInk, 1));
                 if (style->borders & kLeft) {
@@ -337,6 +353,7 @@ void SpreadsheetItem::paintGrid(QPainter &p)
         }
     }
 
+    paintPivotPlaceholders(p); // an empty PivotTable (M74)
     paintImages(p);
 
     paintSpillBorder(p);
