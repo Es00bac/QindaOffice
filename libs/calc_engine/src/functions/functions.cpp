@@ -37,6 +37,7 @@ const QHash<QString, FunctionSpec> &functionRegistry()
         registerLookupMoreFunctions(r);
         registerTextMoreFunctions(r);
         registerDateMoreFunctions(r);
+        registerDynamicArrayFunctions(r);
         return r;
     }();
     return registry;

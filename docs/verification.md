@@ -33,6 +33,105 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M66 Calc gaps gates (D-075)
+
+Qualified on qinda (branch `m66-calc-gaps`, merged with `m60-office-formats`
+6e3368f) with `QQO_OOXML_SCHEMA_DIR=~/scratch/qqo/ecma-xsd` and xmllint, as a
+targeted build (only the targets below; qinda's disk is shared): **43/43
+CTest targets passed, 104.24 s** (`ctest --preset dev -R` over every calc
+target, `tst_ooxml`, the four `tst_docx_*`, and the calc_io consumers
+`tst_books_io_reports`, `tst_plan_output`, `tst_qindabase_service`,
+`tst_qindabase_interchange`). QtTest counts (init/cleanup included):
+
+- calc_engine — `tst_calc_parser` 57, `_functions` 5, `_recalc` 12,
+  `_numfmt` 7, `_csv` 8, `_structure` 18, `_rules` 13, **`_spill` 11**,
+  **`_features` 10**: 141 passed.
+- calc_io — `tst_calc_io` 9, `_styles` 6, `_rules` 7, `_charts` 5, `_tables`
+  4, `_view` 4, `_images` 5, `_excel` 9, `_package` 9, **`_links` 4,
+  `_outline` 3, `_protect` 3, `_carry` 7, `_carry_sheet` 6, `_arrays` 5,
+  `_libre` 5**: 91 passed.
+- QindaCalc — `tst_calc_window` 12 (1 skipped), `_sample` 3 (8 skipped
+  without `QQO_SAMPLE_XLSX`), `_ui` 16, `_rules_ui` 6, `_menu_export` 3,
+  `_tools` 4, `_agent` 5, **`_features_ui` 7**, and `calc_agent_process`:
+  56 passed.
+- `tst_ooxml` 24; `tst_docx_read` 14, `_write` 6, `_restyle` 3, `_corpus` 2
+  (1 skipped without a corpus).
+
+The gates, per item (every package below is built by hand in the test —
+`excel_package.h`, `carry_fixtures.h` — and both the source fixture and our
+saved package validate against the Transitional XSDs; `brokenWiring()`
+finds no relationship id that fails to resolve):
+
+- **Links** (`tst_calc_io_links`): an External URL, `mailto:`, a place
+  (`'Q1 Sales'!B2`) with no relationship, a range link with a `#fragment`,
+  display text and tooltip survive our save and read back equal.
+  `tst_calc_features`: ranges and places follow inserted/deleted rows and
+  columns and a rename; targets and `HYPERLINK()` resolve.
+- **Outlines** (`tst_calc_io_outline`): levels, hidden and collapsed rows and
+  columns, `outlineLevelRow/Col`, `summaryBelow/Right="0"`; engine: groups
+  collapse and expand (inner collapsed groups stay hidden), levels follow
+  structural edits.
+- **Protection** (`tst_calc_io_protect`): Excel's SHA-512 hash attributes
+  verbatim, the permission flags, `lockStructure`, `locked="0"` /
+  `hidden="1"` cell formats; engine: our hash equals Excel's for a known
+  salt (cross-checked by an independent script), the legacy verifier,
+  locked cells under protection.
+- **Carried parts** (`tst_calc_io_carry`, `_carry_sheet`): pivot table +
+  cache + records (`refreshOnLoad="1"`, `<pivotCaches>`), slicers,
+  timelines and a shape with their caches, `extLst` uris and anchors; the
+  pivot's source follows a rename and inserted rows, and goes with a deleted
+  data sheet (warned); query table + connection, external link, data model
+  + custom XML; threaded comment + reply + persons, a form control (shape
+  ids renumbered consistently across control, VML, idmap and drawing),
+  printer settings; `.xlsm` keeps the VBA project, its signature and code
+  names, and an `.xlsx` save leaves it out with a warning.
+- **Dynamic arrays** (`tst_calc_io_arrays`, `tst_calc_spill`): Excel's
+  `cm="1"` + XLDAPR read as dynamic, written back with prefixes and
+  `xl/metadata.xml`; a blocked spill saved as `#SPILL!`; SEQUENCE, FILTER,
+  SORT, SORTBY, UNIQUE, RANDARRAY, dependents of spilled cells, blocking
+  and unblocking, spills moved by structural edits, `A1#`.
+- **LibreOffice re-opens the outputs** (`tst_calc_io_libre`, headless 25.2.7
+  to flat ODS, svp backend, private profile; skips without soffice): links
+  (external and `#Locked.B2`), the collapsed row group, the protected sheet,
+  `cell-protect` none / formula-hidden, every spilled value; the carried
+  pivot table is imported as a data pilot over `'Sales Data'.A3:B6` (the
+  range after the rename and two inserted rows) with its total; the
+  query-table, sheet-parts and macro workbooks re-open with our edit.
+- **QindaCalc UI** (`tst_calc_features_ui`, the real window): Insert ▸ Link
+  writes the link and its look; a plain click selects, Ctrl+click follows
+  through an injected URL opener (nothing is launched); a place switches
+  sheet and cursor; `HYPERLINK()` follows its evaluated target; Remove Link
+  takes the look; `javascript:` is refused with a message; Group, Hide
+  Detail, the gutter's +/− and level-1 buttons, one undo step; column
+  groups; Hide/Unhide Columns and the cursor stepping over them; a locked
+  cell refuses input with a status message, an unlocked one accepts it, a
+  hidden formula shows its value, Bold and Insert Rows are refused, a wrong
+  password keeps the protection; the structure lock refuses a new sheet;
+  spills, `#SPILL!` and undo in the grid.
+- **Fixtures** regenerated deliberately (`QQO_UPDATE_FIXTURES=1`): at 1280 and
+  520 the only change is the Review ribbon tab and the Cells group's Hide &
+  unhide button. **Grabs** looked at: the link and protect dialogs, the
+  collapsed outline with its gutter, spills with their border beside a link
+  and a two-level gutter, and the Review, Data and Insert tabs at 520 px.
+  The ribbon gate (`tst_calc_ui`) and the menu export (every exported id
+  resolves, the Review menu included) are green.
+- Manual cross-checks on qinda (not committed): LibreOffice (UNO) refuses a
+  wrong password and accepts the right one on the SHA-512 sheet hash we
+  wrote, and its own `.xlsx` export keeps that hash verbatim. LibreOffice
+  25.2 imports no workbook structure lock from any `.xlsx` (SHA-512, legacy
+  `workbookPassword` or none), so that flag is checked by our own reader.
+- Not run: the laptop survey of the owner's workbooks (optional; the laptop
+  was under load). Not verified: Microsoft Excel itself (none here).
+- **Desktop check (owner):** save, in QindaCalc, an Excel workbook that has
+  a pivot table with a slicer, links, a grouped outline, a protected sheet
+  and a dynamic-array formula; open it in Excel: the pivot table refreshes
+  without a repair prompt and the slicer filters it, links open (a place
+  jumps), the outline's +/− and level buttons work, the sheet asks for its
+  password and accepts it, the formula spills; an `.xlsm` keeps its macros
+  (QindaCalc never runs them). In QindaCalc on the desktop, Ctrl+click a
+  link opens the browser, and the outline gutter reads in dark and light
+  themes.
+
 ## M65 Diagram and Base gates (D-073, D-074)
 
 Qualified on qinda (branch `m65-visio-base`, merged with `m60-office-formats`

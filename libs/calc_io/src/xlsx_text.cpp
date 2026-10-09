@@ -75,7 +75,8 @@ QString encodeXString(const QString &text)
 Err errorFromFile(const QString &text)
 {
     const QString spelled = text.trimmed();
-    for (const Err err : {Err::Null, Err::Div0, Err::Value, Err::Ref, Err::Name, Err::Num, Err::NA}) {
+    for (const Err err : {Err::Null, Err::Div0, Err::Value, Err::Ref, Err::Name, Err::Num, Err::NA,
+                          Err::Spill, Err::Calc}) {
         if (spelled.compare(errText(err), Qt::CaseInsensitive) == 0) {
             return err;
         }

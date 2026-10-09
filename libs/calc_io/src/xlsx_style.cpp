@@ -307,6 +307,16 @@ QXlsx::Format formatFromStyle(const CellStyle &style)
     if ((style.borders & 8) != 0) {
         format.setBottomBorderStyle(QXlsx::Format::BorderThin);
     }
+    // AGENT-NOTE (M66, D-075): QXlsx neither reads nor writes <protection>,
+    // but these properties enter its format key, so a format that differs
+    // only in protection still gets an xf of its own; the post-pass then
+    // writes the <protection> into exactly that xf (xlsx_post_sheet.cpp).
+    if (!style.locked) {
+        format.setLocked(false);
+    }
+    if (style.hiddenFormula) {
+        format.setHidden(true);
+    }
     return format;
 }
 

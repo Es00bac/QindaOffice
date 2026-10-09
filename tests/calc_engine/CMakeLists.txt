@@ -16,3 +16,7 @@ qqo_add_calc_test(tst_calc_numfmt)
 qqo_add_calc_test(tst_calc_csv)
 qqo_add_calc_test(tst_calc_structure)
 qqo_add_calc_test(tst_calc_rules)
+# M66 (D-075): dynamic arrays spill.
+qqo_add_calc_test(tst_calc_spill)
+# M66 (D-075): links, outlines, protection and the source journal.
+qqo_add_calc_test(tst_calc_features)

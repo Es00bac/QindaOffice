@@ -32,6 +32,13 @@ enum class Err {
     Num,    // invalid numeric value
     NA,     // not available
     Circular,
+    // M66 (D-075): dynamic arrays. #SPILL! — an array result cannot spill
+    // (cells in the way, off the sheet, too large); #CALC! — a calculation
+    // with no answer (FILTER keeping nothing, an empty SEQUENCE).
+    // AGENT-GUARD: append only; recovery payloads and ERROR.TYPE map by
+    // these values' spelling, never their order, but keep the old ones put.
+    Spill,
+    Calc,
 };
 
 // Display/export text for an error value. Err:522 mirrors LibreOffice;

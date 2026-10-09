@@ -13,6 +13,9 @@ set(qindacalc_qml
     qml/CommentDialog.qml
     qml/CondFormatDialog.qml
     qml/FilterPopover.qml
+    qml/LinkDialog.qml
+    qml/ProtectDialog.qml
+    qml/UnprotectDialog.qml
     qml/SizeDialog.qml
     qml/ValidationDialog.qml
 )
@@ -34,13 +37,17 @@ qt_add_qml_module(qindacalc_app
         src/calc_tools.cpp src/calc_tools.h
         src/calc_agent.h src/calc_agent_state.cpp src/calc_agent_actions.cpp
         src/calc_host_format.cpp
+        src/calc_host_features.cpp
         src/calc_host_rules.cpp
         src/calc_host_structure.cpp
         src/calc_host_text.cpp
         src/calc_recovery.cpp src/calc_recovery.h
         src/calc_recovery_rules.cpp src/calc_recovery_rules.h
+        src/calc_recovery_features.cpp src/calc_recovery_features.h
         src/calc_rules_ops.cpp
         src/calc_object_ops.cpp
+        src/calc_cell_ops.cpp
+        src/calc_feature_ops.cpp
     src/calc_structure_ops.cpp
         src/calc_undo.cpp src/calc_undo.h
         src/chart_item.cpp src/chart_item.h
@@ -49,6 +56,7 @@ qt_add_qml_module(qindacalc_app
         src/spreadsheet_item.cpp src/spreadsheet_item.h
         src/spreadsheet_item_input.cpp
         src/spreadsheet_item_paint.cpp
+        src/spreadsheet_item_outline.cpp
     QML_FILES ${qindacalc_qml}
 )
 target_include_directories(qindacalc_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

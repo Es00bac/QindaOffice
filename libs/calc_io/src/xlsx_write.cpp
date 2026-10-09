@@ -22,6 +22,7 @@
 #include "xlsx_style.h"
 #include "xlsx_text.h"
 #include "xlsx_write_book.h"
+#include "xlsx_write_features.h"
 #include "xlsx_write_rules.h"
 #include "xlsx_write_xml.h"
 
@@ -78,9 +79,10 @@ using FormatFor = std::function<QXlsx::Format(qint32)>;
 
 // Every cell of one sheet. `headerText` overrides table header cells (see
 // tableForFile); `patch` collects the cells the post-pass must retype.
-void writeSheetCells(QXlsx::Worksheet *worksheet, const Sheet &sheet, const FormatFor &formatFor,
+void writeSheetCells(QXlsx::Worksheet *worksheet, const Workbook &wb, qint32 sheetIndex, const FormatFor &formatFor,
                      const QHash<quint64, QString> &headerText, PatchManifest::SheetPatch *patch)
 {
+    const Sheet &sheet = wb.sheetAt(sheetIndex);
     for (auto it = sheet.cells().constBegin(); it != sheet.cells().constEnd(); ++it) {
         const quint64 key = it.key();
         const CellAddr addr{qint32(key & 0xffffffffu), qint32(key >> 32)};
@@ -97,7 +99,24 @@ void writeSheetCells(QXlsx::Worksheet *worksheet, const Sheet &sheet, const Form
         // (LibreOffice's default for xlsx) still show correct data.
         if (cell.hasFormula()) {
             const double cached = isNumber(cell.value) ? std::get<double>(cell.value) : 0.0;
-            worksheet->writeFormula(row, col, QXlsx::CellFormula(formulaForFile(cell.formula)), format, cached);
+            // A dynamic-array anchor (M66, D-075): <f t="array" ref="spill">
+            // here, cm="1" from the post-pass; its spilled cells are plain
+            // values below. A blocked spill names the anchor alone.
+            const auto spill = cell.dynamicArray ? wb.spillAt(sheetIndex, addr) : std::nullopt;
+            if (spill.has_value()) {
+                const CellRange ref = spill->blocked ? CellRange{addr, addr} : spill->extent;
+                worksheet->writeFormula(row, col,
+                                        QXlsx::CellFormula(formulaForFile(cell.formula),
+                                                           QXlsx::CellRange(ref.topLeft.row + 1, ref.topLeft.col + 1,
+                                                                            ref.bottomRight.row + 1, ref.bottomRight.col + 1),
+                                                           QXlsx::CellFormula::ArrayType),
+                                        format, cached);
+                if (patch != nullptr) {
+                    patch->arrayRefs.insert(addrText(addr), rangeText(ref));
+                }
+            } else {
+                worksheet->writeFormula(row, col, QXlsx::CellFormula(formulaForFile(cell.formula)), format, cached);
+            }
             if (const auto type = realType(cell.value); type.has_value() && patch != nullptr) {
                 patch->cellTypes.insert(addrText(addr), *type);
             }
@@ -177,13 +196,6 @@ void fillSheetPatch(const Sheet &sheet, qint32 index, const QList<TableSpec> &ta
             + (setup.fitToHeight != 0 ? QByteArrayLiteral(" fitToHeight=\"") + QByteArray::number(setup.fitToHeight) + "\"" : QByteArray())
             + QByteArrayLiteral("/>");
     }
-}
-
-bool patchNeeded(const PatchManifest::SheetPatch &patch)
-{
-    return !patch.cellTypes.isEmpty() || !patch.autoFilterXml.isEmpty() || !patch.commentsPart.isEmpty()
-        || !patch.tables.isEmpty() || patch.freezeRows != 0 || patch.freezeCols != 0
-        || !patch.activeCell.isEmpty() || !patch.pageSetupXml.isEmpty();
 }
 
 // Floating charts (plan section 7.2). Charts with an explicit series list
@@ -314,7 +326,7 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
         // post-pass asserts it before touching anything.
         PatchManifest::SheetPatch patch;
         patch.sheetPart = QStringLiteral("xl/worksheets/sheet%1.xml").arg(s + 1);
-        writeSheetCells(worksheet, sheet, formatFor, headerText, &patch);
+        writeSheetCells(worksheet, wb, s, formatFor, headerText, &patch);
         for (const CellRange &merge : sheet.merges()) {
             doc->mergeCells(QXlsx::CellRange(merge.topLeft.row + 1, merge.topLeft.col + 1,
                                              merge.bottomRight.row + 1, merge.bottomRight.col + 1));
@@ -328,7 +340,10 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
         writeValidations(worksheet, wb, sheet, &lists);
         writeCondFormats(worksheet, sheet);
         fillSheetPatch(sheet, s, tables, &nextVmlBlock, &patch);
-        if (manifest != nullptr && patchNeeded(patch)) {
+        fillSheetFeatures(wb, sheet, &patch); // links, outline, protection, source (M66)
+        if (manifest != nullptr) {
+            // Every sheet: the carry stage and the features need each one.
+            manifest->dynamicArrays = manifest->dynamicArrays || !patch.arrayRefs.isEmpty();
             manifest->sheets.append(patch);
         }
     }
@@ -364,6 +379,7 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
         }
         manifest->definedNames = definedNamesForFile(wb);
         manifest->source = wb.source;
+        manifest->protection = wb.protection;
     } else {
         // No post-pass: the workbook range names go through QXlsx itself.
         const QHash<QString, RangeRef> &names = wb.namedRanges();
@@ -386,9 +402,12 @@ std::unique_ptr<QXlsx::Document> writeXlsx(const Workbook &wb, QString *error)
     return buildXlsx(wb, nullptr, error);
 }
 
-bool writeXlsxFile(const Workbook &wb, const QString &path, QString *error)
+bool writeXlsxFile(const Workbook &wb, const QString &path, QString *error, QStringList *warnings)
 {
     PatchManifest manifest;
+    manifest.macroEnabled = path.endsWith(QLatin1String(".xlsm"), Qt::CaseInsensitive);
+    QStringList notes;
+    manifest.warnings = &notes;
     std::unique_ptr<QXlsx::Document> doc = buildXlsx(wb, &manifest, error);
     if (doc == nullptr) {
         return false;
@@ -406,6 +425,9 @@ bool writeXlsxFile(const Workbook &wb, const QString &path, QString *error)
     // properties ("Qt Xlsx Library", "Microsoft Excel").
     if (!applyPatchManifest(&package, manifest, error)) {
         return false;
+    }
+    if (warnings != nullptr) {
+        *warnings = notes;
     }
     // AGENT-GUARD: one atomic write of the finished bytes. The old save
     // wrote QXlsx's package to `path` and rewrote it in place, so a failing

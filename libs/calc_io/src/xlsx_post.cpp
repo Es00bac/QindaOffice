@@ -4,6 +4,8 @@
 #include "xlsx_post_book.h"
 #include "xlsx_post_cells.h"
 #include "xlsx_post_images.h"
+#include "xlsx_post_sheet.h"
+#include "xlsx_carry.h"
 #include "xlsx_write_charts.h"
 #include "xlsx_write_xml.h"
 #include "xlsx_xml.h"
@@ -117,6 +119,7 @@ bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest, QStr
             }
             return false;
         }
+        openSheetData(&parts[patch.sheetPart]);
         if (!patch.autoFilterXml.isEmpty()) {
             // Schema order: autoFilter follows sheetData (the optional
             // sheetProtection/scenarios between them are things QXlsx never
@@ -129,6 +132,12 @@ bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest, QStr
                 }
                 return false;
             }
+        }
+        // M66 (D-075): cm on dynamic arrays, protection, outline, sheetPr,
+        // hyperlinks — after the autoFilter, so sheetProtection lands
+        // before it, the way the schema orders them.
+        if (!applySheetFeatures(&parts, patch, error)) {
+            return false;
         }
         // Frozen panes and the selection cell live inside <sheetView> —
         // QXlsx writes it self-closed, so expand it.
@@ -212,6 +221,18 @@ bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest, QStr
         }
     }
 
+    // Cell formats whose protection QXlsx could not write (M66).
+    QHash<int, quint8> xfProtection;
+    for (const PatchManifest::SheetPatch &patch : manifest.sheets) {
+        collectXfProtection(parts.value(patch.sheetPart), patch.protectionCells, &xfProtection);
+    }
+    if (!applyXfProtection(&parts[QStringLiteral("xl/styles.xml")], xfProtection)) {
+        if (error != nullptr) {
+            *error = QStringLiteral("post-pass: no <cellXfs> in xl/styles.xml");
+        }
+        return false;
+    }
+
     // Workbook-level parts: defined names, calcPr, properties, theme.
     if (!applyWorkbookPatches(&parts, manifest, error)) {
         return false;
@@ -231,6 +252,7 @@ bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest, QStr
             ++tablePartCount;
         }
     }
+    QList<QPair<QString, QString>> tableSources; // written table part → the source part (carry stage)
     for (const PatchManifest::SheetPatch &patch : manifest.sheets) {
         if (!patch.tables.isEmpty()) {
             // One part per table (ids unique workbook-wide), sheet rels and
@@ -241,6 +263,7 @@ bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest, QStr
             for (const TableSpec &table : patch.tables) {
                 const QString tablePart = QStringLiteral("xl/tables/table%1.xml").arg(++tablePartCount);
                 parts.insert(tablePart, tablePartXml(table, tablePartCount));
+                tableSources.append({tablePart, patch.tableSources.value(rids.size())});
                 appendContentTypeOverride(
                     &parts[QStringLiteral("[Content_Types].xml")], QStringLiteral("/") + tablePart,
                     QStringLiteral("application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"));
@@ -347,6 +370,12 @@ bool applyPatchManifest(QByteArray *package, const PatchManifest &manifest, QStr
         }
     }
     if (!applyImagePatches(&parts, manifest.images, &drawingPartCount, &mediaCount, error)) {
+        return false;
+    }
+
+    // M66 (D-075, D-068 rule 2): the parts the engine does not model, from
+    // the package the workbook came from, wired to the parts written above.
+    if (!applyCarry(&parts, manifest, tableSources, &drawingPartCount, error)) {
         return false;
     }
 

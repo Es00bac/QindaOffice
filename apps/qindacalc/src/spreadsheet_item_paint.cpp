@@ -4,8 +4,8 @@
 // palette roles became the chrome colour properties, the document
 // colours are fixed (D-004: paper stays paper).
 //
-// AGENT-GUARD: the grid is painted inside p.translate(kHeaderWidth,
-// kHeaderHeight), so cellRect() is ALREADY correct in that block. Adding the
+// AGENT-GUARD: the grid is painted inside p.translate(headerWidth(),
+// headerHeight()), so cellRect() is ALREADY correct in that block. Adding the
 // header offset again there draws a full header down and to the right of the
 // cell it belongs to — use cursorItemRect() only OUTSIDE the transform.
 
@@ -31,6 +31,9 @@ const QColor kPaper(Qt::white);
 const QColor kInk(0x20, 0x20, 0x28);
 const QColor kGridLine(0xd8, 0xd8, 0xdc);
 const QColor kCommentMarker(0xc0, 0x39, 0x2b);
+// Excel's hyperlink colour (the Office theme's hlink): document ink, like
+// a conditional format's colour, not chrome (D-004).
+const QColor kLinkInk(0x05, 0x63, 0xc1);
 
 // The stock Excel table styles a real workbook names. headerText contrasts
 // with the header fill; bandFill is the stripe colour. The engine stores
@@ -59,20 +62,26 @@ void SpreadsheetItem::paintHeaderBands(QPainter &p)
 {
     const CellRange selection = selectionRange();
     const QColor selectedHeader = m_selectionColor.lighter(170);
+    // The headers sit inside the outline gutter (M66): left of the row
+    // headers, above the column headers; both are zero wide when the sheet
+    // is not grouped.
+    const qreal left = rowGutterPx();
+    const qreal top = colGutterPx();
 
-    const QRectF corner(0, 0, kHeaderWidth, kHeaderHeight);
+    const QRectF corner(left, top, kHeaderWidth, kHeaderHeight);
     p.fillRect(corner, m_headerColor);
     p.setPen(m_headerLineColor);
     // The corner box selects the whole sheet: the little triangle every
     // spreadsheet uses.
-    const QPolygonF marker({QPointF(kHeaderWidth - 6, 5), QPointF(kHeaderWidth - 6, kHeaderHeight - 5),
-                            QPointF(6, kHeaderHeight - 5)});
+    const QPolygonF marker({QPointF(left + kHeaderWidth - 6, top + 5),
+                            QPointF(left + kHeaderWidth - 6, top + kHeaderHeight - 5),
+                            QPointF(left + 6, top + kHeaderHeight - 5)});
     p.setBrush(m_headerTextColor);
     p.drawPolygon(marker);
     p.setBrush(Qt::NoBrush);
 
     p.save();
-    p.translate(kHeaderWidth, 0);
+    p.translate(headerWidth(), top);
     for (const Band &band : visibleColumnBands()) {
         const QRectF r(band.pos, 0, band.size, kHeaderHeight);
         const bool selected =
@@ -87,7 +96,7 @@ void SpreadsheetItem::paintHeaderBands(QPainter &p)
     p.restore();
 
     p.save();
-    p.translate(0, kHeaderHeight);
+    p.translate(left, headerHeight());
     for (const Band &band : visibleRowBands()) {
         const QRectF r(0, band.pos, kHeaderWidth, band.size);
         const bool selected =
@@ -100,6 +109,7 @@ void SpreadsheetItem::paintHeaderBands(QPainter &p)
         p.drawLine(r.bottomRight(), r.topRight());
     }
     p.restore();
+    paintOutline(p);
 }
 
 void SpreadsheetItem::paintGrid(QPainter &p)
@@ -116,7 +126,7 @@ void SpreadsheetItem::paintGrid(QPainter &p)
     const QColor selectionFill = m_selectionColor.lighter(160);
 
     p.save();
-    p.translate(kHeaderWidth, kHeaderHeight);
+    p.translate(headerWidth(), headerHeight());
     p.setClipRect(QRectF(0, 0, viewportWidth(), viewportHeight()));
 
     // The cell font scales with the view, or zooming would only move the
@@ -221,6 +231,12 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                     cellFont.setUnderline(style->underline);
                     cellFont.setStrikeOut(style->strikeout);
                 }
+                // A link reads as one (M66): underlined, in the link colour
+                // unless the cell has a colour of its own.
+                const bool link = hasLink(addr);
+                if (link) {
+                    cellFont.setUnderline(true);
+                }
                 if (conditional.bold) {
                     cellFont.setBold(*conditional.bold);
                 }
@@ -240,6 +256,8 @@ void SpreadsheetItem::paintGrid(QPainter &p)
                                     (*formatted.colour).b));
                 } else if (style != nullptr && style->fg.has_value()) {
                     p.setPen(QColor((*style->fg).r, (*style->fg).g, (*style->fg).b));
+                } else if (link) {
+                    p.setPen(kLinkInk);
                 } else if (const TableSpec *table = sheet.tableCovering(addr);
                            table != nullptr && table->headerRow
                            && addr.row == table->range.topLeft.row) {
@@ -316,6 +334,8 @@ void SpreadsheetItem::paintGrid(QPainter &p)
     }
 
     paintImages(p);
+
+    paintSpillBorder(p);
 
     // Cursor outline last, in GRID coordinates (see the file comment).
     p.setPen(QPen(m_cursorColor, 2));

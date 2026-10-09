@@ -23,13 +23,19 @@ namespace QindaOffice::Calc::IO {
 // never fatal.
 [[nodiscard]] bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error = nullptr);
 
-// Convenience: read from a file path.
-[[nodiscard]] bool readXlsxFile(const QString &path, Workbook *out, QString *error = nullptr);
+// Convenience: read from a file path. `warnings` (M66, D-075) receives what
+// the file holds that a save cannot keep — the app shows it after opening
+// (honest, D-069); empty when everything travels.
+[[nodiscard]] bool readXlsxFile(const QString &path, Workbook *out, QString *error = nullptr,
+                                QStringList *warnings = nullptr);
 
 // Writes a workbook into a new xlsx document (owned by the caller).
 [[nodiscard]] std::unique_ptr<QXlsx::Document> writeXlsx(const Workbook &wb, QString *error = nullptr);
 
-// Convenience: write to a file path.
-[[nodiscard]] bool writeXlsxFile(const Workbook &wb, const QString &path, QString *error = nullptr);
+// Convenience: write to a file path. A path ending in .xlsm writes a macro-
+// enabled workbook (keeping the source's VBA project, never running it);
+// `warnings` (M66) receives what this save had to leave behind.
+[[nodiscard]] bool writeXlsxFile(const Workbook &wb, const QString &path, QString *error = nullptr,
+                                 QStringList *warnings = nullptr);
 
 } // namespace QindaOffice::Calc::IO

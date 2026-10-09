@@ -2,6 +2,7 @@
 #include "structure.h"
 
 #include "chart_spec.h"
+#include "structure_internal.h"
 #include "sheet.h"
 #include "workbook.h"
 
@@ -11,108 +12,7 @@
 namespace QindaOffice::Calc {
 namespace {
 
-// One axis of a structural edit: `count` slots inserted at `at`, or the
-// `count` slots starting at `at` removed.
-struct Band {
-    qint32 at = 0;
-    qint32 count = 1;
-    bool insert = true;
-};
-
-[[nodiscard]] Band bandOf(const StructureEdit &edit)
-{
-    return {edit.at, edit.count,
-            edit.op == StructureOp::InsertRows || edit.op == StructureOp::InsertColumns};
-}
-
-[[nodiscard]] bool editsRows(const StructureEdit &edit)
-{
-    return edit.op == StructureOp::InsertRows || edit.op == StructureOp::RemoveRows;
-}
-
-// Where a single coordinate lands. Returns -1 when the slot itself is gone.
-[[nodiscard]] qint32 movedIndex(qint32 value, const Band &band)
-{
-    if (band.insert) {
-        return value >= band.at ? value + band.count : value;
-    }
-    if (value >= band.at && value < band.at + band.count) {
-        return -1;
-    }
-    return value >= band.at + band.count ? value - band.count : value;
-}
-
-// Where a span [lo, hi] lands. Returns false when the whole span is gone
-// (the reference becomes #REF!). A span that only overlaps the removed band
-// shrinks; one that straddles an insertion point grows.
-[[nodiscard]] bool movedSpan(qint32 &lo, qint32 &hi, const Band &band)
-{
-    if (band.insert) {
-        if (lo >= band.at) {
-            lo += band.count;
-        }
-        if (hi >= band.at) {
-            hi += band.count;
-        }
-        return true;
-    }
-    const qint32 first = band.at;
-    const qint32 last = band.at + band.count - 1;
-    if (lo >= first && hi <= last) {
-        return false;
-    }
-    const auto clampLow = [&](qint32 v) {
-        if (v > last) {
-            return v - band.count;
-        }
-        return v >= first ? first : v;
-    };
-    const auto clampHigh = [&](qint32 v) {
-        if (v > last) {
-            return v - band.count;
-        }
-        return v >= first ? first - 1 : v;
-    };
-    lo = clampLow(lo);
-    hi = clampHigh(hi);
-    return lo <= hi;
-}
-
-// True when `ref` addresses the sheet the edit happened on. An empty sheet
-// qualifier means "the sheet the formula lives on".
-[[nodiscard]] bool refTargetsEditedSheet(const RangeRef &ref, bool ownerIsEdited,
-                                         const QString &editedSheetName)
-{
-    if (ref.sheet.isEmpty()) {
-        return ownerIsEdited;
-    }
-    // AGENT-GUARD: RangeRef.sheet keeps the file's spelling, quotes
-    // included ('Q1 Sales'); comparing it raw left every reference to a
-    // quoted sheet unmoved by an insert (M61).
-    return unquotedSheetName(ref.sheet).compare(editedSheetName, Qt::CaseInsensitive) == 0;
-}
-
-// Adjusts a reference in place; false means the reference died (#REF!).
-[[nodiscard]] bool adjustRef(RangeRef &ref, const StructureEdit &edit, bool ownerIsEdited,
-                             const QString &editedSheetName)
-{
-    if (!refTargetsEditedSheet(ref, ownerIsEdited, editedSheetName)) {
-        return true;
-    }
-    const Band band = bandOf(edit);
-    if (editsRows(edit)) {
-        // A whole-column reference (A:C) spans every row by definition, so
-        // inserting rows leaves it alone.
-        if (ref.wholeCols) {
-            return true;
-        }
-        return movedSpan(ref.range.topLeft.row, ref.range.bottomRight.row, band);
-    }
-    if (ref.wholeRows) {
-        return true;
-    }
-    return movedSpan(ref.range.topLeft.col, ref.range.bottomRight.col, band);
-}
+using namespace StructureMath;
 
 // Rewrites an AST so its references follow the edit. Dead references become
 // literal #REF! nodes, which is what a spreadsheet must show rather than
@@ -479,6 +379,7 @@ void applyStructureEdit(Workbook &book, const StructureEdit &edit)
     rewriteValidationSources(book, edit);
     rewriteCharts(book, edit);
     rewriteImages(book, edit);
+    moveSheetFeatures(book, edit); // links, outline, source journal (M66)
     moveSheetContents(book.sheetAt(edit.sheet), edit);
     book.reindexAll();
 }

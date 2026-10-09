@@ -18,6 +18,8 @@ QString errText(Err err)
     case Err::Num: return QStringLiteral("#NUM!");
     case Err::NA: return QStringLiteral("#N/A");
     case Err::Circular: return QStringLiteral("Err:522");
+    case Err::Spill: return QStringLiteral("#SPILL!");
+    case Err::Calc: return QStringLiteral("#CALC!");
     }
     return QStringLiteral("#N/A");
 }
@@ -31,6 +33,8 @@ Err errFromExport(const QString &text)
     if (text == QLatin1String("#NAME?")) return Err::Name;
     if (text == QLatin1String("#NUM!")) return Err::Num;
     if (text == QLatin1String("#N/A")) return Err::NA;
+    if (text == QLatin1String("#SPILL!")) return Err::Spill;
+    if (text == QLatin1String("#CALC!")) return Err::Calc;
     return Err::NA;
 }
 

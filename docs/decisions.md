@@ -5,6 +5,118 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-075: QindaCalc: hyperlinks, outlines, protection, carried parts, dynamic arrays
+
+**Date:** 2026-10-08 · **Status:** accepted (M66, the Excel features QindaCalc
+still lost or lacked after M61/D-069; docs/plans/office-parity.md)
+
+**Context.** After M61 an Excel workbook opened with its real values, but a
+save still dropped its links, its row and column grouping and hidden lines,
+its sheet and workbook protection and the cells' locked/hidden flags, and
+every part QindaCalc does not model — pivot tables and their caches,
+slicers, timelines, query tables and connections, external links, the data
+model and custom XML, threaded comments, form controls, printer settings,
+the VBA project (D-068 rule 2 was not met for spreadsheets). FILTER, SORT,
+UNIQUE and SEQUENCE were missing because nothing could spill (D-069's open
+item).
+
+**Decision.**
+
+1. **Links are sheet data** (`hyperlink.h`): a range, an external address
+   (URL, `mailto:`, a file; a `#fragment` stays in it) or a place in the
+   workbook (`'Q1 Sales'!B2`, a defined name), display text and screen tip.
+   Read from `<hyperlinks>` and the sheet's External relationships, written
+   back the way Excel writes them (a place has no relationship). Inserted
+   and deleted rows/columns move link ranges and rewrite places; a sheet
+   rename requalifies them. Insert ▸ Link / Edit Link / Open Link / Remove
+   Link; Insert ▸ Link gives the cell Excel's link look and Remove Link
+   takes exactly that look away. **Ctrl+click** follows a link or a
+   `HYPERLINK()` result: a place moves the cursor (another sheet becomes
+   active); an address goes through the host's URL opener only for
+   http(s), mailto, ftp(s) and existing non-executable local files —
+   anything else (`javascript:`, a program) is refused with a message.
+2. **Outlines** (`outline.h`): every row and column has a level 0–7, a
+   hidden flag and a collapsed flag, the sheet its summary-below/right
+   setting — Excel's own attributes (`<row outlineLevel hidden collapsed>`,
+   `<col>`, `<sheetFormatPr outlineLevelRow/Col>`, `<outlinePr>`), so the
+   model round-trips without interpretation. Hidden lines live there too,
+   grouped or not: one source for the grid, the file and printing. Data ▸
+   Outline ▸ Group / Ungroup / Show Detail / Hide Detail (rows, or columns
+   for a selection made from the column headers); Format ▸ Hide and
+   Unhide; the grid's outline gutter (level buttons, brackets, +/−) drives
+   the same undoable operations; a hidden line has no band, and the cursor
+   steps over it. Inserted lines take the shallower neighbouring level.
+3. **Protection** (`protection.h`). Sheet and workbook protection keep the
+   file's hash verbatim (algorithmName/hashValue/saltValue/spinCount, or
+   the legacy 16-bit verifier). A password set in QindaCalc is hashed as
+   Excel does: SHA-512 over a fresh 16-byte salt and the UTF-16LE password,
+   iterated 100,000 times with the little-endian counter; checking accepts
+   SHA-1/256/384/512, MD5 and the legacy verifier. `CellStyle::locked`
+   (default on) and `hiddenFormula` round-trip as the xf `<protection>`
+   QXlsx cannot write (post-pass). On a protected sheet, edits to locked
+   cells and every action the sheet's flags lock (format, insert/delete
+   rows and columns, sort, links, outline, Lock Cell / Hide Formula) are
+   refused with a status message naming Review ▸ Unprotect Sheet; a hidden
+   formula shows only its value. The workbook's structure lock refuses
+   adding, deleting, renaming, moving, hiding and showing sheets. Review ▸
+   Protect Sheet… / Unprotect Sheet… / Protect Workbook… / Unprotect
+   Workbook… (the dialog says protection is not encryption); Format ▸ Lock
+   Cell / Hide Formula.
+4. **Carried parts** (`xlsx_carry*`, D-068 rule 2). On open the source
+   package is reduced to what QindaCalc does not model and kept in
+   `WorkbookSource::carried` (undo snapshots and recovery carry it); each
+   sheet remembers its source part, code name and the structural edits made
+   since (`SheetSource`, a journal that maps source positions to current
+   ones). On save, after QXlsx and the post-pass, `RelationshipCopier`
+   copies those parts in and wires them back while their sheet exists:
+   pivot tables and caches (`refreshOnLoad="1"`, so Excel recomputes them
+   from the edited data; the cache source follows renames and moved rows
+   and columns), slicers and timelines with their caches, `extLst` entries
+   and drawing anchors, query tables and connections, external links, the
+   data model and custom XML, threaded comments and persons (moved with
+   their cells), form controls (VML shapes renumbered into a fresh block),
+   printer settings, and the sheet extensions that are not positional;
+   sparklines and ignored-error ranges are kept unless rows or columns were
+   inserted or deleted on their sheet. What cannot be carried is dropped
+   with a warning — at open (cell pictures and linked data types, a package
+   signature, chart sheets) or at save (a pivot table whose cells were
+   deleted, a slicer whose PivotTable is gone, …) — and every relationship
+   in the saved package resolves: never a broken package. **`.xlsm`** opens
+   and saves natively, keeps its VBA project (and the project's signature)
+   and code names, and never runs a macro; saving it as `.xlsx` warns that
+   the macros are dropped.
+5. **Dynamic arrays** (`spill.cpp`, `functions/dynamic_array.cpp`): FILTER,
+   SORT, SORTBY, UNIQUE, SEQUENCE, RANDARRAY and the `A1#` spill reference.
+   A dynamic formula's array result spills into real cells that name their
+   anchor; content, a merge or a table in the way gives `#SPILL!` until it
+   is cleared; FILTER with nothing left gives `#CALC!`; a spill is capped at
+   262,144 cells. Every formula typed in QindaCalc is a dynamic-array
+   formula, as in Excel 365; a formula from a file is one only when Excel
+   marked it (`cm` → the XLDAPR cell metadata), so legacy array formulas
+   keep their meaning. Written as Excel writes them: `<f t="array"
+   ref="…" cm="1">` with `_xlfn._xlws.` prefixes, the spilled cells as
+   cached values, and `xl/metadata.xml` with its relationship and content
+   type.
+6. **Not done** (the request's optional item): chart sheets still open as
+   empty sheets and save without their chart (warned at open); structured
+   references (`Table1[Sales]`) still stay unevaluated formulas (D-069).
+
+**Consequences.** A workbook from Excel survives a QindaCalc save with its
+links, outline, protection, pivot tables, slicers, connections, threaded
+comments and macros, and Excel refreshes the pivot tables on open.
+LibreOffice 25.2 re-opens every M66 output, imports the carried pivot table
+over the moved range and accepts the SHA-512 sheet password; it does not
+import a workbook structure lock from any `.xlsx`. Behaviour changes: a
+typed formula whose result is a range now spills (`=A1:A3` fills three
+cells); Insert ▸ Link styles the cell; Ctrl+click follows links; a locked
+cell on a protected sheet refuses edits. `office_ooxml` gains Excel's
+extension prefixes (x15, xr, xr2, xr3, xda, xm, the slicer and timeline
+drawing namespaces). Limits: legacy (Ctrl+Shift+Enter) array formulas keep
+their anchor formula and the other cells' values and save as an ordinary
+formula; array constants (`{1,2;3,4}`) still do not parse and scalar
+functions over a range (`=LEN(A1:A3)`) do not spill yet; protection is not
+encryption.
+
 ## D-074: QindaBase: Excel import, the complete Access import, file fields
 
 **Date:** 2026-10-08 · **Status:** accepted (M65, the Base half of the owner's

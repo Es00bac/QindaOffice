@@ -142,6 +142,25 @@ inline const char kCalcValidation[] = "calcValidationAction";
 inline const char kCalcAutoFilter[] = "calcAutoFilterAction";
 inline const char kCalcComment[] = "calcCommentAction";
 inline const char kCalcDeleteComment[] = "calcDeleteCommentAction";
+// M66 (D-075): links (Insert ▸ Link is the shared kInsertHyperlink),
+// outlines and hidden lines, protection.
+inline const char kCalcEditHyperlink[] = "calcEditHyperlinkAction";
+inline const char kCalcOpenHyperlink[] = "calcOpenHyperlinkAction";
+inline const char kCalcRemoveHyperlink[] = "calcRemoveHyperlinkAction";
+inline const char kCalcGroup[] = "calcGroupAction";
+inline const char kCalcUngroup[] = "calcUngroupAction";
+inline const char kCalcShowDetail[] = "calcShowDetailAction";
+inline const char kCalcHideDetail[] = "calcHideDetailAction";
+inline const char kCalcHideRows[] = "calcHideRowsAction";
+inline const char kCalcUnhideRows[] = "calcUnhideRowsAction";
+inline const char kCalcHideColumns[] = "calcHideColumnsAction";
+inline const char kCalcUnhideColumns[] = "calcUnhideColumnsAction";
+inline const char kCalcProtectSheet[] = "calcProtectSheetAction";
+inline const char kCalcUnprotectSheet[] = "calcUnprotectSheetAction";
+inline const char kCalcProtectWorkbook[] = "calcProtectWorkbookAction";
+inline const char kCalcUnprotectWorkbook[] = "calcUnprotectWorkbookAction";
+inline const char kCalcLockCell[] = "calcLockCellAction";
+inline const char kCalcHideFormula[] = "calcHideFormulaAction";
 
 // QindaShow commands.
 inline const char kShowFillColor[] = "showFillColorAction";

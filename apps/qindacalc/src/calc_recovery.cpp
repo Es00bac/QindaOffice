@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "calc_recovery.h"
 
+#include "calc_recovery_features.h"
 #include "calc_recovery_rules.h"
 
 #include "eval.h"
@@ -66,6 +67,8 @@ QJsonObject styleToJson(const CalcEng::CellStyle &style)
     if (style.alignment != 0) out.insert(QStringLiteral("align"), style.alignment);
     if (style.vAlign != 1) out.insert(QStringLiteral("valign"), style.vAlign);
     if (style.borders != 0) out.insert(QStringLiteral("borders"), style.borders);
+    if (!style.locked) out.insert(QStringLiteral("unlocked"), true);          // M66
+    if (style.hiddenFormula) out.insert(QStringLiteral("hiddenFormula"), true);
     const auto rgb = [](const CalcEng::Rgb &c) {
         return QJsonArray{c.r, c.g, c.b};
     };
@@ -91,6 +94,8 @@ CalcEng::CellStyle styleFromJson(const QJsonObject &object)
     // flip every cell to the top.
     style.vAlign = object.value(QStringLiteral("valign")).toInt(1);
     style.borders = object.value(QStringLiteral("borders")).toInt(0);
+    style.locked = !object.value(QStringLiteral("unlocked")).toBool(false);
+    style.hiddenFormula = object.value(QStringLiteral("hiddenFormula")).toBool(false);
     const auto rgb = [&object](const QString &key) -> std::optional<CalcEng::Rgb> {
         const QJsonArray array = object.value(key).toArray();
         if (array.size() != 3) {
@@ -195,6 +200,9 @@ QJsonObject cellToJson(quint64 key, const CalcEng::Cell &cell)
         // flag are rebuilt by re-parsing, and every value is recomputed by
         // restoreSnapshot()'s recalc.
         out.insert(QStringLiteral("f"), cell.formula);
+        if (cell.dynamicArray) {
+            out.insert(QStringLiteral("da"), true); // spills (M66); its spill is recomputed
+        }
         return out;
     }
     const QJsonObject value = valueToJson(cell.value);
@@ -212,6 +220,7 @@ CalcEng::Cell cellFromJson(const QJsonObject &object)
         CalcEng::ParseResult parsed = CalcEng::parseFormula(cell.formula);
         cell.ast = parsed.root;
         cell.isVolatile = CalcEng::containsVolatileCall(cell.ast);
+        cell.dynamicArray = object.value(QStringLiteral("da")).toBool(false);
         return cell;
     }
     cell.value = valueFromJson(object);
@@ -248,6 +257,7 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
     root.insert(QStringLiteral("names"), names);
     root.insert(QStringLiteral("definedNames"), definedNamesToJson(snapshot.definedNames));
     root.insert(QStringLiteral("source"), sourceToJson(snapshot.source));
+    root.insert(QStringLiteral("protection"), workbookProtectionToJson(snapshot.protection));
 
     QJsonArray charts;
     for (const CalcEng::ChartSpec &chart : snapshot.charts) {
@@ -268,7 +278,9 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
         out.insert(QStringLiteral("name"), sheet.name);
         QJsonArray cells;
         for (auto it = sheet.cells.constBegin(); it != sheet.cells.constEnd(); ++it) {
-            cells.append(cellToJson(it.key(), it.value()));
+            if (!it.value().isSpilled()) { // a spill is the anchor's to recompute
+                cells.append(cellToJson(it.key(), it.value()));
+            }
         }
         out.insert(QStringLiteral("cells"), cells);
         // Style ids live in their own sparse map: restyleRange() styles EMPTY
@@ -331,6 +343,11 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
                        QJsonArray{sheet.pageSetup.orientation, sheet.pageSetup.fitToWidth,
                                   sheet.pageSetup.fitToHeight});
         }
+        // M66 (D-075): links, outline, protection, the source tie.
+        out.insert(QStringLiteral("hyperlinks"), hyperlinksToJson(sheet.hyperlinks));
+        out.insert(QStringLiteral("outline"), outlineToJson(sheet.outline));
+        out.insert(QStringLiteral("protection"), protectionToJson(sheet.protection));
+        out.insert(QStringLiteral("sheetSource"), sheetSourceToJson(sheet.source));
         sheets.append(out);
     }
     root.insert(QStringLiteral("sheets"), sheets);
@@ -378,6 +395,7 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
     // Absent in payloads written before M61; an old one simply has none.
     snapshot.definedNames = definedNamesFromJson(root.value(QStringLiteral("definedNames")).toArray());
     snapshot.source = sourceFromJson(root.value(QStringLiteral("source")).toObject());
+    snapshot.protection = workbookProtectionFromJson(root.value(QStringLiteral("protection")).toObject());
     for (const QJsonValue &value : root.value(QStringLiteral("charts")).toArray()) {
         snapshot.charts.append(chartFromJson(value.toObject()));
     }
@@ -462,6 +480,11 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
             sheet.pageSetup.fitToWidth = pageSetup.at(1).toInt();
             sheet.pageSetup.fitToHeight = pageSetup.at(2).toInt();
         }
+        // Absent before M66: no links, no outline, unprotected, no source.
+        sheet.hyperlinks = hyperlinksFromJson(object.value(QStringLiteral("hyperlinks")).toArray());
+        sheet.outline = outlineFromJson(object.value(QStringLiteral("outline")).toObject());
+        sheet.protection = protectionFromJson(object.value(QStringLiteral("protection")).toObject());
+        sheet.source = sheetSourceFromJson(object.value(QStringLiteral("sheetSource")).toObject());
         snapshot.sheets.append(sheet);
     }
     snapshot.activeSheet = qBound(0, snapshot.activeSheet, snapshot.sheets.size() - 1);

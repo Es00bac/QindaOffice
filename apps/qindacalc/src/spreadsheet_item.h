@@ -66,6 +66,11 @@ class SpreadsheetItem : public QQuickPaintedItem {
     Q_PROPERTY(QColor selectionColor READ selectionColor WRITE setSelectionColor NOTIFY chromeChanged)
     Q_PROPERTY(QColor cursorColor READ cursorColor WRITE setCursorColor NOTIFY chromeChanged)
 public:
+    // What the selection was made of (M66): Data ▸ Group groups the
+    // columns of a selection made from the column headers, else rows.
+    enum SelectionKind { CellSelection, RowSelection, ColumnSelection };
+    Q_ENUM(SelectionKind)
+
     explicit SpreadsheetItem(QQuickItem *parent = nullptr);
 
     void setDocument(SpreadsheetDocument *document);
@@ -83,6 +88,7 @@ public:
     void setCursorCell(const CalcEng::CellAddr &addr, bool extendSelection = false);
     // Normalized anchor..cursor rectangle (selection for commands).
     [[nodiscard]] CalcEng::CellRange selectionRange() const;
+    [[nodiscard]] SelectionKind selectionKind() const { return m_selectionKind; }
     // The populated block of the active sheet, or an invalid range.
     [[nodiscard]] CalcEng::CellRange usedRange() const;
     Q_INVOKABLE void selectUsedRange();
@@ -168,6 +174,14 @@ public:
 
     static constexpr int kHeaderWidth = 52;
     static constexpr int kHeaderHeight = 24;
+    // The outline gutter (M66, D-075): one step per level, beside the row
+    // headers and above the column headers, only when the sheet is grouped.
+    static constexpr int kGutterStep = 14;
+    [[nodiscard]] qreal rowGutterPx() const;
+    [[nodiscard]] qreal colGutterPx() const;
+    // Where the grid starts in item coordinates: the headers plus the gutter.
+    [[nodiscard]] qreal headerWidth() const { return rowGutterPx() + kHeaderWidth; }
+    [[nodiscard]] qreal headerHeight() const { return colGutterPx() + kHeaderHeight; }
 
 signals:
     void cursorChanged();
@@ -184,6 +198,11 @@ signals:
     void rowHeightChanged(int row, qreal px);
     // The autofilter dropdown in a header cell was clicked (item coords).
     void filterButtonClicked(int column, qreal x, qreal y);
+    // M66: Ctrl+click on a cell with a link; the outline gutter's level
+    // buttons and +/- buttons (the host changes the document).
+    void linkActivated(int row, int col);
+    void outlineLevelClicked(bool rows, int level);
+    void outlineToggled(bool rows, int line, int level);
     void zoomChanged();
     void scrollChanged();
     void editingChanged();
@@ -241,6 +260,14 @@ private:
     void emitSelectionChanged();
     void paintHeaderBands(QPainter &p);
     void paintImages(QPainter &p);
+    // spreadsheet_item_outline.cpp (M66): the gutter, the link look and
+    // the spill border, and stepping over hidden rows and columns.
+    void paintOutline(QPainter &p);
+    void paintSpillBorder(QPainter &p);
+    [[nodiscard]] bool outlineClick(const QPointF &pos);
+    [[nodiscard]] bool hasLink(const CalcEng::CellAddr &addr) const;
+    [[nodiscard]] QString linkTip(const CalcEng::CellAddr &addr) const;
+    [[nodiscard]] qint32 visibleStep(qint32 from, int delta, bool rows) const;
     void paintGrid(QPainter &p);
     void setChrome(QColor &slot, const QColor &value);
 
@@ -249,6 +276,7 @@ private:
     // phantom cell otherwise.
     CalcEng::CellAddr m_anchor{0, 0};
     CalcEng::CellAddr m_cursor{0, 0};
+    SelectionKind m_selectionKind = CellSelection;
     qreal m_zoom = 1.0;
     qreal m_scrollX = 0;
     qreal m_scrollY = 0;

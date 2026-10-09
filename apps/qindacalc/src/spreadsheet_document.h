@@ -120,6 +120,41 @@ public:
     }
     [[nodiscard]] qint32 activeSheet() const { return m_activeSheet; }
 
+    // ---- M66 (D-075): calc_feature_ops.cpp. One undo step each. ----
+    // A hyperlink over `range` (an existing one there is replaced). A link
+    // made over an empty cell writes its display text into it, as Excel's
+    // Insert ▸ Link does.
+    void setHyperlink(const CalcEng::CellRange &range, const CalcEng::Hyperlink &link);
+    void removeHyperlinks(const CalcEng::CellRange &range);
+    // Data ▸ Group / Ungroup over [first, last] of an axis.
+    void groupLines(CalcEng::OutlineAxis axis, qint32 first, qint32 last, bool group);
+    // Show Detail / Hide Detail of the group at `index` (a detail line or
+    // the group's summary line); false when there is no group there.
+    bool setDetailShown(CalcEng::OutlineAxis axis, qint32 index, bool shown);
+    // The same for one known group (the outline gutter's +/- buttons).
+    void setGroupShown(CalcEng::OutlineAxis axis, const CalcEng::OutlineGroup &group, bool shown);
+    // The outline's level buttons (1 shows only what no group holds).
+    void showOutlineLevel(CalcEng::OutlineAxis axis, int level);
+    // Format ▸ Hide / Unhide rows or columns.
+    void setLinesHidden(CalcEng::OutlineAxis axis, qint32 first, qint32 last, bool hidden);
+    // Review ▸ Protect Sheet: `options` says what stays allowed; an empty
+    // password protects without one (Excel's hash otherwise, D-075).
+    void protectSheet(const CalcEng::SheetProtection &options, const QString &password);
+    // False, with editRefused, when the password does not match.
+    bool unprotectSheet(const QString &password);
+    // Review ▸ Protect Workbook: locks the sheet structure.
+    void protectWorkbook(const QString &password);
+    bool unprotectWorkbook(const QString &password);
+    // The guards every edit path asks: true — and editRefused emitted —
+    // when the active sheet's protection (or the workbook's structure
+    // lock) forbids the change.
+    bool refuseLockedCells(const CalcEng::CellRange &range);
+    bool refuseOnProtectedSheet(bool actionLocked, const QString &action);
+    bool refuseStructureChange();
+    // What the last opened file holds that a save cannot keep (calc_io's
+    // open warnings), for the window to show once.
+    [[nodiscard]] QStringList openWarnings() const { return m_openWarnings; }
+
     // Undo seam: the command object restores a snapshot through here so
     // dirty/content/structure notifications stay uniform.
     void applySnapshot(const WorkbookSnapshot &snapshot);
@@ -149,15 +184,23 @@ signals:
     // sheet). The window surfaces it; silence here would be data loss the
     // user never heard about.
     void saveWarning(const QString &message);
+    // An edit protection forbids (a locked cell, a locked structure) or a
+    // wrong password. The window says why; nothing changed.
+    void editRefused(const QString &message);
 
 private:
     void pushUndo(const WorkbookSnapshot &before, const QString &text);
+    // restyleRange's work without its undo step (a link's look joins the
+    // link's step).
+    void restyleCells(const CalcEng::CellRange &range, const StylePatch &patch);
 
     CalcEng::Workbook m_workbook;
     // Staging area for the worker-thread load (loadStaged writes it off the
     // GUI thread, adoptStagedLoad moves it in on the GUI thread; the host
     // never starts a second load while one is staged).
     CalcEng::Workbook m_staged;
+    QStringList m_stagedWarnings;
+    QStringList m_openWarnings;
     qint32 m_activeSheet = 0;
     QUndoStack m_undoStack;
 };
@@ -180,6 +223,9 @@ struct StylePatch {
     // Border bit field (bit0 left, bit1 right, bit2 top, bit3 bottom), as
     // CellStyle stores it. Set to 0 to clear every edge.
     std::optional<int> borders;
+    // Cell protection (M66): in force once the sheet is protected.
+    std::optional<bool> locked;
+    std::optional<bool> hiddenFormula;
 };
 
 } // namespace QindaOffice::Apps::QindaCalc

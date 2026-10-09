@@ -43,10 +43,12 @@ private slots:
         for (const Protocol::MenuItem &item : snapshot.tree.items) {
             titles.append(item.text);
         }
+        // Review (M66, D-075): protection; links, outline and hide/unhide
+        // joined Insert, Data and Format.
         QCOMPARE(titles, (QStringList{QStringLiteral("File"), QStringLiteral("Edit"), QStringLiteral("View"),
                                       QStringLiteral("Insert"), QStringLiteral("Format"), QStringLiteral("Data"),
-                                      QStringLiteral("Sheet"), QStringLiteral("AI"), QStringLiteral("Settings"),
-                                      QStringLiteral("Help")}));
+                                      QStringLiteral("Sheet"), QStringLiteral("Review"), QStringLiteral("AI"),
+                                      QStringLiteral("Settings"), QStringLiteral("Help")}));
         QStringList ids;
         for (const Protocol::MenuItem &item : snapshot.tree.items) {
             collectActions(item, ids);
@@ -61,6 +63,15 @@ private slots:
         QVERIFY2(unresolved.isEmpty(), qPrintable(unresolved.join(QLatin1Char(' '))));
         // The generated template ids are in the tree and stable.
         QVERIFY(ids.filter(QStringLiteral("calcTemplate_")).size() >= 1);
+        // Every M66 command is exported for the panel.
+        for (const char *id : {"insertHyperlinkAction", "calcEditHyperlinkAction", "calcOpenHyperlinkAction",
+                               "calcRemoveHyperlinkAction", "calcGroupAction", "calcUngroupAction",
+                               "calcShowDetailAction", "calcHideDetailAction", "calcHideRowsAction",
+                               "calcUnhideRowsAction", "calcHideColumnsAction", "calcUnhideColumnsAction",
+                               "calcProtectSheetAction", "calcUnprotectSheetAction", "calcProtectWorkbookAction",
+                               "calcUnprotectWorkbookAction", "calcLockCellAction", "calcHideFormulaAction"}) {
+            QVERIFY2(ids.contains(QString::fromLatin1(id)), id);
+        }
     }
 };
 

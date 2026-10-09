@@ -15,6 +15,7 @@
 
 #include <QByteArray>
 #include <QHash>
+#include <QSet>
 #include <QStringList>
 
 namespace QindaOffice::Calc::IO {
@@ -34,5 +35,23 @@ struct TypedCell {
 // CellAddr::key(). Cells without a value — styled blanks — are absent.
 [[nodiscard]] QHash<quint64, TypedCell> readTypedCells(const QByteArray &sheetXml,
                                                       const QStringList &sharedStrings);
+
+// The same walk, also reporting what M66 (D-075) needs from the cells:
+// array formulas (<f t="array" ref> with the cell's cm, which names a
+// dynamic array when it points at metadata.xml's XLDAPR block) and the
+// cells whose format (s) is one of `watchedXfs` — the formats with a
+// protection QXlsx cannot read.
+struct CellScan {
+    QHash<quint64, TypedCell> literals;
+    QHash<quint64, int> watchedCells; // cell key → its xf index
+    struct ArrayFormula {
+        CellAddr anchor;
+        CellRange ref;
+        int cm = 0;
+    };
+    QList<ArrayFormula> arrays;
+};
+[[nodiscard]] CellScan scanSheetCells(const QByteArray &sheetXml, const QStringList &sharedStrings,
+                                      const QSet<int> &watchedXfs);
 
 } // namespace QindaOffice::Calc::IO

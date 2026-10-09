@@ -22,6 +22,9 @@ namespace CalcEng = QindaOffice::Calc;
 
 void SpreadsheetDocument::addChart(const CalcEng::ChartSpec &spec)
 {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().objects, tr("insert charts"))) {
+        return;
+    }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     m_workbook.charts.append(spec);
     pushUndo(before, tr("Insert chart"));
@@ -32,6 +35,9 @@ void SpreadsheetDocument::addChart(const CalcEng::ChartSpec &spec)
 
 bool SpreadsheetDocument::addImageFromFile(const QString &path, int row, int col)
 {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().objects, tr("insert pictures"))) {
+        return false;
+    }
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         emit inputRejected({row, col}, tr("Cannot read %1").arg(QFileInfo(path).fileName()));

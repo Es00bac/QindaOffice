@@ -108,7 +108,12 @@ QStringList readSharedStrings(const QByteArray &sstXml)
 
 QHash<quint64, TypedCell> readTypedCells(const QByteArray &sheetXml, const QStringList &sharedStrings)
 {
-    QHash<quint64, TypedCell> out;
+    return scanSheetCells(sheetXml, sharedStrings, {}).literals;
+}
+
+CellScan scanSheetCells(const QByteArray &sheetXml, const QStringList &sharedStrings, const QSet<int> &watchedXfs)
+{
+    CellScan out;
     QXmlStreamReader reader(sheetXml);
     qint32 row = 0; // 1-based; tracked for producers that omit r
     qint32 col = 0;
@@ -132,6 +137,13 @@ QHash<quint64, TypedCell> readTypedCells(const QByteArray &sheetXml, const QStri
             addr = *parsed;
         }
         col = addr.col + 1;
+        if (!watchedXfs.isEmpty() && attributes.hasAttribute(QLatin1String("s"))) {
+            const int xf = attributes.value(QLatin1String("s")).toInt();
+            if (watchedXfs.contains(xf) && addr.isValid()) {
+                out.watchedCells.insert(addr.key(), xf);
+            }
+        }
+        const int cm = attributes.value(QLatin1String("cm")).toInt();
         QString v;
         QString inlineText;
         bool formula = false;
@@ -151,12 +163,19 @@ QHash<quint64, TypedCell> readTypedCells(const QByteArray &sheetXml, const QStri
                 inlineText = richText(reader, QLatin1StringView("is"));
                 valued = true;
             } else {
-                formula = formula || reader.name() == QLatin1String("f");
+                if (reader.name() == QLatin1String("f")) {
+                    formula = true;
+                    const auto f = reader.attributes();
+                    if (f.value(QLatin1String("t")) == QLatin1String("array") && addr.isValid()) {
+                        const auto ref = rangeFromText(f.value(QLatin1String("ref")).toString());
+                        out.arrays.append({addr, ref.value_or(CellRange{addr, addr}), cm});
+                    }
+                }
                 reader.skipCurrentElement();
             }
         }
         if (!formula && valued && addr.isValid()) {
-            out.insert(addr.key(), typedValue(type, v, inlineText, sharedStrings));
+            out.literals.insert(addr.key(), typedValue(type, v, inlineText, sharedStrings));
         }
     }
     return out;

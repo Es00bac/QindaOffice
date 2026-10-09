@@ -43,6 +43,13 @@ struct SheetSnapshot {
     std::optional<CalcEng::CellRange> printTitleRows;
     std::optional<CalcEng::CellRange> printTitleCols;
     CalcEng::Sheet::PageSetup pageSetup;
+    // M66 (D-075): links, outline and hidden lines, protection, and the tie
+    // to the source package (the carry stage maps through its journal, so
+    // an undone insert un-moves the carried parts too).
+    QList<CalcEng::Hyperlink> hyperlinks;
+    CalcEng::SheetOutline outline;
+    CalcEng::SheetProtection protection;
+    CalcEng::SheetSource source;
 };
 
 struct WorkbookSnapshot {
@@ -55,6 +62,7 @@ struct WorkbookSnapshot {
     CalcEng::WorkbookSource source;
     QList<CalcEng::ChartSpec> charts;
     QList<CalcEng::ImageSpec> images;
+    CalcEng::WorkbookProtection protection; // M66 (D-075)
     qint32 activeSheet = 0;
 };
 

@@ -34,6 +34,9 @@ constexpr qint32 kMaxBand = 1024;
 
 void SpreadsheetDocument::insertRows(qint32 at, qint32 count)
 {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().insertRows, tr("insert rows"))) {
+        return;
+    }
     if (at < 0 || count <= 0 || count > kMaxBand) {
         return;
     }
@@ -46,6 +49,9 @@ void SpreadsheetDocument::insertRows(qint32 at, qint32 count)
 
 void SpreadsheetDocument::removeRows(qint32 at, qint32 count)
 {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().deleteRows, tr("delete rows"))) {
+        return;
+    }
     if (at < 0 || count <= 0 || count > kMaxBand) {
         return;
     }
@@ -58,6 +64,9 @@ void SpreadsheetDocument::removeRows(qint32 at, qint32 count)
 
 void SpreadsheetDocument::insertColumns(qint32 at, qint32 count)
 {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().insertColumns, tr("insert columns"))) {
+        return;
+    }
     if (at < 0 || count <= 0 || count > kMaxBand) {
         return;
     }
@@ -71,6 +80,9 @@ void SpreadsheetDocument::insertColumns(qint32 at, qint32 count)
 
 void SpreadsheetDocument::removeColumns(qint32 at, qint32 count)
 {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().deleteColumns, tr("delete columns"))) {
+        return;
+    }
     if (at < 0 || count <= 0 || count > kMaxBand) {
         return;
     }
@@ -85,6 +97,9 @@ void SpreadsheetDocument::removeColumns(qint32 at, qint32 count)
 void SpreadsheetDocument::sortRange(const CellRange &range, qint32 keyColumn, bool ascending,
                                     bool headerRow)
 {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().sort, tr("sort")) || refuseLockedCells(range)) {
+        return;
+    }
     if (!range.isValid()) {
         return;
     }
@@ -97,6 +112,9 @@ void SpreadsheetDocument::sortRange(const CellRange &range, qint32 keyColumn, bo
 
 void SpreadsheetDocument::mergeCells(const CellRange &range)
 {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().formatCells, tr("merge cells"))) {
+        return;
+    }
     if (!range.isValid() || range.cellCount() < 2) {
         return;
     }
@@ -125,6 +143,9 @@ void SpreadsheetDocument::mergeCells(const CellRange &range)
 
 void SpreadsheetDocument::unmergeCells(const CellAddr &anchor)
 {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().formatCells, tr("unmerge cells"))) {
+        return;
+    }
     CalcEng::Sheet &sheet = m_workbook.sheetAt(m_activeSheet);
     const CellRange *covering = sheet.mergeCovering(anchor);
     if (covering == nullptr) {
@@ -140,6 +161,9 @@ void SpreadsheetDocument::unmergeCells(const CellAddr &anchor)
 
 void SpreadsheetDocument::setColumnWidths(const QList<qint32> &columns, qreal px)
 {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().formatColumns, tr("change column widths"))) {
+        return;
+    }
     if (columns.isEmpty() || px <= 0) {
         return;
     }
@@ -155,6 +179,9 @@ void SpreadsheetDocument::setColumnWidths(const QList<qint32> &columns, qreal px
 
 void SpreadsheetDocument::setRowHeights(const QList<qint32> &rows, qreal px)
 {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().formatRows, tr("change row heights"))) {
+        return;
+    }
     if (rows.isEmpty() || px <= 0) {
         return;
     }
@@ -170,6 +197,9 @@ void SpreadsheetDocument::setRowHeights(const QList<qint32> &rows, qreal px)
 
 void SpreadsheetDocument::fillRange(const CellRange &range, bool down)
 {
+    if (refuseLockedCells(range)) {
+        return;
+    }
     if (!range.isValid() || range.cellCount() < 2) {
         return;
     }
@@ -195,7 +225,7 @@ void SpreadsheetDocument::fillRange(const CellRange &range, bool down)
                 const CalcEng::NodePtr shifted = CalcEng::shiftNode(
                     from->ast, target.row - source.row, target.col - source.col);
                 m_workbook.installFormula(m_activeSheet, target, shifted,
-                                          CalcEng::nodeText(shifted));
+                                          CalcEng::nodeText(shifted), from->dynamicArray);
             } else {
                 m_workbook.setCellValue(m_activeSheet, target, from->value);
             }
@@ -209,6 +239,9 @@ void SpreadsheetDocument::fillRange(const CellRange &range, bool down)
 
 void SpreadsheetDocument::removeSheet(qint32 index)
 {
+    if (refuseStructureChange()) {
+        return;
+    }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     if (!CalcEng::removeSheet(m_workbook, index)) {
         return;
@@ -223,6 +256,9 @@ void SpreadsheetDocument::removeSheet(qint32 index)
 
 void SpreadsheetDocument::renameSheet(qint32 index, const QString &name)
 {
+    if (refuseStructureChange()) {
+        return;
+    }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     if (!CalcEng::renameSheet(m_workbook, index, name)) {
         return;
@@ -235,6 +271,9 @@ void SpreadsheetDocument::renameSheet(qint32 index, const QString &name)
 
 void SpreadsheetDocument::moveSheet(qint32 from, qint32 to)
 {
+    if (refuseStructureChange()) {
+        return;
+    }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     if (!CalcEng::moveSheet(m_workbook, from, to)) {
         return;
@@ -248,6 +287,9 @@ void SpreadsheetDocument::moveSheet(qint32 from, qint32 to)
 
 void SpreadsheetDocument::duplicateSheet(qint32 index, const QString &name)
 {
+    if (refuseStructureChange()) {
+        return;
+    }
     if (index < 0 || index >= m_workbook.sheetCount() || name.isEmpty()
         || m_workbook.sheetIndex(name) >= 0) {
         return;
@@ -261,6 +303,11 @@ void SpreadsheetDocument::duplicateSheet(qint32 index, const QString &name)
     copy.setValidations(source.validations());
     copy.setAutoFilter(source.autoFilter());
     copy.setComments(source.comments());
+    // A copy keeps its links, outline and protection (Excel's Move or Copy)
+    // but is no source sheet: nothing is carried for it (M66, D-075).
+    copy.setHyperlinks(source.hyperlinks());
+    copy.setOutline(source.outline());
+    copy.setProtection(source.protection());
     // The copied formulas' unqualified references now mean the NEW sheet,
     // which is what a duplicate should do; the index still has to be rebuilt
     // because a sheet was inserted in the middle of the list.

@@ -152,6 +152,8 @@ void registerInfoFunctions(QHash<QString, FunctionSpec> &r)
                               case Err::Num: return 6.0;
                               case Err::NA: return 7.0;
                               case Err::Circular: return 4.0;
+                              case Err::Spill: return 9.0;  // Excel's ERROR.TYPE codes
+                              case Err::Calc: return 14.0;
                               }
                               return Err::NA;
                           }});

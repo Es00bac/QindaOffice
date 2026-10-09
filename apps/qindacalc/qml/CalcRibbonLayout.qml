@@ -2,7 +2,8 @@
 import QtQuick
 import QindaOffice.Shell
 
-// QindaCalc's ribbon (D-041): File · Home · Insert · Data · Sheet · View.
+// QindaCalc's ribbon (D-041): File · Home · Insert · Data · Review · Sheet ·
+// View (Review since M66, D-075: notes and protection).
 // Every string is an ActionEntry id (AGENTS.md rule 5); icons given here
 // only fill in for entries whose menu rows carry none. The slots are the
 // window's font, size, colour and number-format widgets.
@@ -39,7 +40,9 @@ QtObject {
                 { action: "calcDeleteRowsAction", label: qsTr("Delete rows") },
                 { action: "calcDeleteColumnsAction", label: qsTr("Delete columns") },
                 { id: "cellSize", label: qsTr("Size"), iconName: "move-horizontal",
-                  menu: ["calcRowHeightAction", "calcColumnWidthAction", "calcOptimalWidthAction"] }] },
+                  menu: ["calcRowHeightAction", "calcColumnWidthAction", "calcOptimalWidthAction"] },
+                { id: "cellVisibility", label: qsTr("Hide & unhide"), iconName: "eye-off",
+                  menu: ["calcHideRowsAction", "calcUnhideRowsAction", "calcHideColumnsAction", "calcUnhideColumnsAction"] }] },
             { id: "editing", label: qsTr("Editing"), items: [
                 { action: "calcAutoSumAction", size: "large" },
                 { action: "calcFillDownAction", iconName: "arrow-down-to-line" },
@@ -54,6 +57,9 @@ QtObject {
             { id: "charts", label: qsTr("Charts"), items: [{ action: "insertChartAction", size: "large" }] },
             { id: "illustrations", label: qsTr("Illustrations"), items: [
                 { action: "insertImageAction", size: "large", iconName: "image" }] },
+            { id: "links", label: qsTr("Links"), items: [
+                { action: "insertHyperlinkAction", size: "large" },
+                "calcEditHyperlinkAction", "calcOpenHyperlinkAction", "calcRemoveHyperlinkAction"] },
             { id: "comments", label: qsTr("Comments"), items: [
                 { action: "calcCommentAction", size: "large" },
                 { action: "calcDeleteCommentAction", iconName: "message-square-x" }] },
@@ -68,7 +74,21 @@ QtObject {
                 { action: "calcCondFormatAction", size: "large" }] },
             { id: "fill", label: qsTr("Fill"), items: [
                 { action: "calcFillDownAction", iconName: "arrow-down-to-line" },
-                { action: "calcFillRightAction", iconName: "arrow-right" }] }
+                { action: "calcFillRightAction", iconName: "arrow-right" }] },
+            { id: "outline", label: qsTr("Outline"), items: [
+                { action: "calcGroupAction", size: "large" },
+                { action: "calcUngroupAction", size: "large" },
+                "calcShowDetailAction", "calcHideDetailAction"] }
+        ] },
+        { id: "review", label: qsTr("Review"), keyTip: "R", groups: [
+            { id: "reviewNotes", label: qsTr("Notes"), items: [
+                { action: "calcCommentAction", size: "large" },
+                { action: "calcDeleteCommentAction", iconName: "message-square-x" }] },
+            { id: "protect", label: qsTr("Protect"), items: [
+                { action: "calcProtectSheetAction", size: "large" },
+                { action: "calcProtectWorkbookAction", size: "large" },
+                "calcUnprotectSheetAction", "calcUnprotectWorkbookAction",
+                "calcLockCellAction", "calcHideFormulaAction"] }
         ] },
         { id: "sheet", label: qsTr("Sheet"), keyTip: "S", groups: [
             { id: "sheetManage", label: qsTr("Sheets"), items: [

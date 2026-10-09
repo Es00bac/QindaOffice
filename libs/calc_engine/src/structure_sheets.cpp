@@ -7,6 +7,7 @@
 
 #include "chart_spec.h"
 #include "sheet.h"
+#include "structure_internal.h"
 #include "workbook.h"
 
 #include <algorithm>
@@ -194,6 +195,7 @@ bool renameSheet(Workbook &book, qint32 index, const QString &newName)
     // AGENT-GUARD: references address sheets by NAME, so a rename that does
     // not rewrite them turns every cross-sheet formula into #NAME?.
     requalifyWorkbook(book, oldName, newName);
+    StructureMath::requalifyLinkLocations(book, oldName, newName);
     book.reindexAll();
     return true;
 }

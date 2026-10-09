@@ -51,8 +51,10 @@ CalcHost::CalcHost()
     createStructureActions();
     createRuleActions();
     createTextActions();
+    createFeatureActions(); // links, outline, protection (M66)
     createAssistant();
     insertMenus();
+    insertFeatureMenus();
     wireEditCommands();
     // Undo of a sheet insert/delete (or a load) changes the sheet list.
     connect(m_document, &SpreadsheetDocument::structureChanged, this, [this] {
@@ -67,6 +69,11 @@ CalcHost::CalcHost()
     // A lossy-but-successful save (CSV keeps one sheet) has to be visible.
     connect(m_document, &SpreadsheetDocument::saveWarning, this,
             [this](const QString &text) { showStatusMessage(text, 12000); });
+    // Protection said no (M66): say why, and show what is really there.
+    connect(m_document, &SpreadsheetDocument::editRefused, this, [this](const QString &text) {
+        showStatusMessage(text, 10000);
+        refreshGrid();
+    });
     // A value a validation rule refused must SAY so.
     connect(m_document, &SpreadsheetDocument::inputRejected, this,
             [this](const CellAddr &addr, const QString &reason) {
@@ -151,6 +158,12 @@ void CalcHost::wireGrid()
         emit filterMenuRequested(column, values, allowed, x, y);
     });
     connect(m_grid, &SpreadsheetItem::zoomChanged, this, [this] { updateSelectionStatus(); });
+    // M66 (D-075): Ctrl+click follows a link; the outline gutter's buttons.
+    connect(m_grid, &SpreadsheetItem::linkActivated, this, [this](int row, int col) {
+        static_cast<void>(openLinkAt(row, col));
+    });
+    connect(m_grid, &SpreadsheetItem::outlineLevelClicked, this, &CalcHost::showOutlineLevel);
+    connect(m_grid, &SpreadsheetItem::outlineToggled, this, &CalcHost::toggleOutlineGroup);
 }
 
 void CalcHost::syncFromCursor()
@@ -161,6 +174,7 @@ void CalcHost::syncFromCursor()
     syncFormatFromCursor();
     syncStructureFromCursor();
     syncRulesFromCursor();
+    syncFeaturesFromCursor();
 }
 
 void CalcHost::commitInput(const CellAddr &addr, const QString &input)
@@ -182,6 +196,11 @@ void CalcHost::documentReplaced()
     }
     syncFromCursor();
     updateSelectionStatus();
+    // What the file holds that a save cannot keep, said once (D-069, D-075).
+    const QStringList warnings = m_document->openWarnings();
+    if (!warnings.isEmpty()) {
+        showStatusMessage(warnings.join(QLatin1Char(' ')), 15000);
+    }
 }
 
 // ---- sheets --------------------------------------------------------------------
@@ -511,7 +530,7 @@ QString CalcHost::saveFilterString() const
 {
     // xlsx first: the native format, so Save As defaults to a round-trip
     // that keeps formulas, styles, names and charts.
-    return tr("Excel Workbook (*.xlsx);;OpenDocument Spreadsheet (*.ods);;CSV (*.csv)");
+    return tr("Excel Workbook (*.xlsx);;Excel Macro-Enabled Workbook (*.xlsm);;OpenDocument Spreadsheet (*.ods);;CSV (*.csv)");
 }
 
 } // namespace QindaOffice::Apps::QindaCalc

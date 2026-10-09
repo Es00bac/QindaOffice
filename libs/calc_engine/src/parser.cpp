@@ -168,7 +168,18 @@ struct Parser {
             return Node::makeUnary(Op::Pos, parseUnaryPercent());
         }
         NodePtr node = parsePrimary();
-        while (isOp(QStringLiteral("%"))) {
+        while (isOp(QStringLiteral("%")) || isOp(QStringLiteral("#"))) {
+            if (isOp(QStringLiteral("#"))) {
+                // A1# — the spill range of the dynamic array anchored at A1
+                // (M66, D-075); Excel stores it as _xlfn.ANCHORARRAY(A1).
+                take();
+                if (node->kind != Node::Kind::Ref || !node->ref.isSingleCell()) {
+                    failed = true;
+                    return Node::makeError(Err::Ref);
+                }
+                node = Node::makeCall(QStringLiteral("ANCHORARRAY"), {std::move(node)});
+                continue;
+            }
             take();
             node = Node::makeUnary(Op::Percent, std::move(node));
         }

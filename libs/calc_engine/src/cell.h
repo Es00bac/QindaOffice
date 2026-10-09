@@ -16,8 +16,16 @@ struct Cell {
     Value value;
     qint32 styleId = 0;
     bool isVolatile = false;
+    // Dynamic arrays (M66, D-075; spill.cpp). An anchor's array result
+    // spills into the cells below and to the right; those cells hold the
+    // values and name their anchor. A spilled cell is never user content:
+    // writing into it blocks the anchor (#SPILL!), and the engine drops and
+    // rewrites spilled cells whenever the anchor recalculates.
+    bool dynamicArray = false; // the formula spills (typed in the app, or Excel's cm/XLDAPR)
+    CellAddr spillAnchor;      // set on a spilled cell: the anchor it shows a value of
 
     [[nodiscard]] bool hasFormula() const { return ast != nullptr; }
+    [[nodiscard]] bool isSpilled() const { return spillAnchor.isValid() && !ast; }
 };
 
 // Formatting record. NumberFormat code follows Excel syntax (plan section
@@ -36,6 +44,11 @@ struct CellStyle {
     int vAlign = 1;    // 0 top, 1 center, 2 bottom (center matches legacy painting)
     bool wrap = false;
     int borders = 0;   // bit0 left bit1 right bit2 top bit3 bottom
+    // Cell protection (M66, D-075), in force while the sheet is protected:
+    // a locked cell refuses edits, a hidden one keeps its formula out of
+    // the formula bar. Excel's default is locked, not hidden.
+    bool locked = true;
+    bool hiddenFormula = false;
 };
 
 } // namespace QindaOffice::Calc

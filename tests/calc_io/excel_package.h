@@ -8,6 +8,12 @@
 // functions, scoped defined names, a theme and document properties. The
 // fixtures live in code, so no binary file — and none of the owner's
 // documents — ever enters the repository.
+//
+// M66 (D-075) adds what the Excel features around the cells need: a
+// sheet's own relationships and the elements before <sheetData> (sheetPr,
+// sheetFormatPr, cols), extra parts with their relationships (pivot tables,
+// slicers, the VBA project, …), and workbook-level elements in their schema
+// slots (workbookProtection, externalReferences, pivotCaches, extLst).
 
 #include "ooxml_namespaces.h"
 #include "ooxml_package.h"
@@ -18,11 +24,54 @@
 
 namespace QindaOffice::Test {
 
+// A relationship as the builder takes it: internal targets are PART NAMES
+// ("xl/pivotTables/pivotTable1.xml"), made relative on output; external
+// targets are written verbatim with TargetMode="External".
+struct ExcelRel {
+    QString id;
+    QString type; // the full relationship URI
+    QString target;
+    bool external = false;
+};
+
+// Any further part, with its own relationships.
+struct ExcelPart {
+    QString name;
+    QByteArray data;
+    QString contentType; // empty: declared by extension (xml, rels, images)
+    QList<ExcelRel> rels;
+};
+
+inline QString officeRel(const char *name)
+{
+    return QStringLiteral("http://schemas.openxmlformats.org/officeDocument/2006/relationships/")
+        + QString::fromLatin1(name);
+}
+
+inline QString smlType(const char *name)
+{
+    return QStringLiteral("application/vnd.openxmlformats-officedocument.spreadsheetml.")
+        + QString::fromLatin1(name);
+}
+
 struct ExcelSheet {
+    // The older tests brace-initialise the first four fields; a
+    // constructor keeps that working as the struct grows.
+    ExcelSheet(QString sheetName = {}, QByteArray data = {}, QByteArray after = {}, QString sheetState = {})
+        : name(std::move(sheetName))
+        , sheetData(std::move(data))
+        , afterData(std::move(after))
+        , state(std::move(sheetState))
+    {
+    }
+
     QString name;
     QByteArray sheetData;  // the <row> elements, verbatim
     QByteArray afterData;  // elements after </sheetData> (mergeCells, dataValidations, …)
     QString state;         // "" (visible) or "hidden"
+    QByteArray beforeData; // M66: sheetPr … cols, verbatim, before <sheetData>
+    QList<ExcelRel> rels;  // M66: the sheet part's relationships (fixed ids)
+    QByteArray rootAttributes; // M66: extra declarations on <worksheet> (mc, x14ac, xr, …)
 };
 
 struct ExcelWorkbook {
@@ -32,6 +81,18 @@ struct ExcelWorkbook {
     QByteArray themeXml;             // empty: no theme part
     QByteArray coreXml;              // empty: no docProps/core.xml
     QByteArray stylesXml;            // empty: kDefaultStyles below
+    // M66 (D-075): workbook-level elements in their schema slots, the
+    // workbook part's and the package's extra relationships, extra parts,
+    // and the main part's content type (macro-enabled workbooks differ).
+    QByteArray workbookPr = QByteArrayLiteral("<workbookPr/>");
+    QByteArray beforeBookViews; // workbookProtection
+    QByteArray afterSheets;     // externalReferences (before definedNames)
+    QByteArray afterCalcPr;     // pivotCaches … extLst
+    QByteArray workbookRootAttributes;
+    QList<ExcelRel> workbookRels; // fixed ids, after the generated ones
+    QList<ExcelRel> packageRels;
+    QList<ExcelPart> parts;
+    QString mainContentType; // empty: sheet.main+xml
 
     // Two cell formats, as Excel numbers them: xf 0 is General, xf 1 is the
     // built-in short date (numFmtId 14).
@@ -59,19 +120,26 @@ struct ExcelWorkbook {
         const QString workbookPart = QStringLiteral("xl/workbook.xml");
         PackageWriter writer;
         writer.addRelationship(QString(), QString::fromUtf16(RelType::OfficeDocument), workbookPart);
+        const auto addRels = [&writer](const QString &source, const QList<ExcelRel> &rels) {
+            for (const ExcelRel &r : rels) {
+                writer.addRelationshipWithId(source, r.id, r.type, r.target, r.external);
+            }
+        };
 
         QByteArray sheetsXml;
         for (int i = 0; i < sheets.size(); ++i) {
             const ExcelSheet &sheet = sheets.at(i);
             const QString part = QStringLiteral("xl/worksheets/sheet%1.xml").arg(i + 1);
-            const QString rid = writer.addRelationship(workbookPart, rel + QStringLiteral("worksheet"), part);
+            const QString rid = QStringLiteral("rIdSheet%1").arg(i + 1);
+            writer.addRelationshipWithId(workbookPart, rid, rel + QStringLiteral("worksheet"), part);
+            addRels(part, sheet.rels);
             writer.addPart(part,
                            QByteArrayLiteral("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
                                              "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
-                                             "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
-                                             "<sheetData>")
-                               + sheet.sheetData + QByteArrayLiteral("</sheetData>") + sheet.afterData
-                               + QByteArrayLiteral("</worksheet>"),
+                                             "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"")
+                               + sheet.rootAttributes + QByteArrayLiteral(">") + sheet.beforeData
+                               + QByteArrayLiteral("<sheetData>") + sheet.sheetData + QByteArrayLiteral("</sheetData>")
+                               + sheet.afterData + QByteArrayLiteral("</worksheet>"),
                            ct + QStringLiteral("worksheet+xml"));
             sheetsXml += QByteArrayLiteral("<sheet name=\"") + sheet.name.toUtf8().replace('&', "&amp;")
                 + QByteArrayLiteral("\" sheetId=\"") + QByteArray::number(i + 1) + '"'
@@ -80,7 +148,8 @@ struct ExcelWorkbook {
         }
         writer.addPart(QStringLiteral("xl/styles.xml"), stylesXml.isEmpty() ? defaultStyles() : stylesXml,
                        ct + QStringLiteral("styles+xml"));
-        writer.addRelationship(workbookPart, rel + QStringLiteral("styles"), QStringLiteral("xl/styles.xml"));
+        writer.addRelationshipWithId(workbookPart, QStringLiteral("rIdStyles"), rel + QStringLiteral("styles"),
+                                     QStringLiteral("xl/styles.xml"));
         if (!sharedStrings.isEmpty()) {
             QByteArray sst = QByteArrayLiteral("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
                                                "<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" count=\"")
@@ -91,12 +160,13 @@ struct ExcelWorkbook {
             }
             sst += QByteArrayLiteral("</sst>");
             writer.addPart(QStringLiteral("xl/sharedStrings.xml"), sst, ct + QStringLiteral("sharedStrings+xml"));
-            writer.addRelationship(workbookPart, rel + QStringLiteral("sharedStrings"),
-                                   QStringLiteral("xl/sharedStrings.xml"));
+            writer.addRelationshipWithId(workbookPart, QStringLiteral("rIdStrings"), rel + QStringLiteral("sharedStrings"),
+                                         QStringLiteral("xl/sharedStrings.xml"));
         }
         if (!themeXml.isEmpty()) {
             writer.addPart(QStringLiteral("xl/theme/theme1.xml"), themeXml, QString::fromUtf16(ContentType::Theme));
-            writer.addRelationship(workbookPart, QString::fromUtf16(RelType::Theme), QStringLiteral("xl/theme/theme1.xml"));
+            writer.addRelationshipWithId(workbookPart, QStringLiteral("rIdTheme"), QString::fromUtf16(RelType::Theme),
+                                         QStringLiteral("xl/theme/theme1.xml"));
         }
         if (!coreXml.isEmpty()) {
             writer.addPart(QStringLiteral("docProps/core.xml"), coreXml,
@@ -104,17 +174,25 @@ struct ExcelWorkbook {
             writer.addRelationship(QString(), QString::fromUtf16(RelType::CoreProperties),
                                    QStringLiteral("docProps/core.xml"));
         }
+        addRels(workbookPart, workbookRels);
+        addRels(QString(), packageRels);
+        for (const ExcelPart &extra : parts) {
+            writer.addPart(extra.name, extra.data, extra.contentType);
+            addRels(extra.name, extra.rels);
+        }
         writer.addPart(workbookPart,
                        QByteArrayLiteral("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
                                          "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
-                                         "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
-                                         "<workbookPr/><bookViews><workbookView/></bookViews><sheets>")
-                           + sheetsXml + QByteArrayLiteral("</sheets>")
+                                         "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"")
+                           + workbookRootAttributes + QByteArrayLiteral(">") + workbookPr + beforeBookViews
+                           + QByteArrayLiteral("<bookViews><workbookView/></bookViews><sheets>")
+                           + sheetsXml + QByteArrayLiteral("</sheets>") + afterSheets
                            + (definedNames.isEmpty() ? QByteArray()
                                                      : QByteArrayLiteral("<definedNames>") + definedNames
                                                            + QByteArrayLiteral("</definedNames>"))
-                           + QByteArrayLiteral("<calcPr calcId=\"191029\"/></workbook>"),
-                       ct + QStringLiteral("sheet.main+xml"));
+                           + QByteArrayLiteral("<calcPr calcId=\"191029\"/>") + afterCalcPr
+                           + QByteArrayLiteral("</workbook>"),
+                       mainContentType.isEmpty() ? ct + QStringLiteral("sheet.main+xml") : mainContentType);
         return writer.toZip();
     }
 };

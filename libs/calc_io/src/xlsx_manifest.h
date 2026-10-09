@@ -45,6 +45,42 @@ struct PatchManifest {
         qint32 freezeCols = 0;
         QString activeCell;      // A1 text; empty = none
         QByteArray pageSetupXml; // "<pageSetup .../>", or empty
+
+        // ---- M66 (D-075): xlsx_post_sheet.cpp writes these ----
+        QString name;            // the sheet's name (the carry stage maps sources by it)
+        SheetSource source;      // the source part and its structural journal (carry stage)
+        // <sheetPr>: the VBA code name and where outline summaries sit.
+        bool summaryBelow = true;
+        bool summaryRight = true;
+        // Rows with outline state (level, hidden, collapsed), patched onto
+        // QXlsx's <row> elements (rows it did not write are added).
+        QMap<qint32, LineOutline> rowOutline;
+        // A <cols> replacing QXlsx's when columns are hidden or grouped.
+        QByteArray colsXml;
+        quint8 outlineLevelRow = 0;
+        quint8 outlineLevelCol = 0;
+        QByteArray sheetProtectionXml; // "<sheetProtection …/>", or empty
+        // Hyperlinks: the ref, the external target (written to the sheet's
+        // rels, TargetMode External) or the in-workbook location.
+        struct Link {
+            QString ref;
+            QString target;
+            QString location;
+            QString display;
+            QString tooltip;
+        };
+        QList<Link> hyperlinks;
+        // Dynamic-array anchors: A1 → the spill ref its <f t="array"> got.
+        // The post-pass gives each cm="1" (the XLDAPR block of metadata.xml).
+        QHash<QString, QString> arrayRefs;
+        // One cell per cell format whose protection is not Excel's default
+        // (locked, not hidden): A1 → bit 1 unlocked, bit 2 formula hidden.
+        // QXlsx writes no <protection>; the post-pass adds it to the xf
+        // those cells use.
+        QHash<QString, quint8> protectionCells;
+        // Table parts in this sheet's order → the source table part each
+        // came from (empty: a new table), for query tables.
+        QStringList tableSources;
     };
     QList<SheetPatch> sheets;
 
@@ -62,8 +98,20 @@ struct PatchManifest {
     QList<DefinedNameEntry> definedNames;
 
     // The source package's theme and document properties (D-069): written
-    // over QXlsx's fixed theme and "Qt Xlsx Library" properties.
+    // over QXlsx's fixed theme and "Qt Xlsx Library" properties. Since M66
+    // also the carried package (xlsx_carry_write.cpp copies from it).
     WorkbookSource source;
+
+    // ---- M66 (D-075) ----
+    WorkbookProtection protection; // <workbookProtection>, written when set
+    bool dynamicArrays = false;    // some cell spills: xl/metadata.xml with XLDAPR
+    // The file is a macro-enabled workbook (.xlsm): the main part's content
+    // type says so and the source's VBA project is carried. For .xlsx the
+    // project stays behind (Excel refuses an .xlsx that holds one).
+    bool macroEnabled = false;
+    // Save-time notes for the user: a part the carry stage had to leave
+    // behind (a thread whose note was edited, macros left out of an .xlsx).
+    QStringList *warnings = nullptr;
 
     // Charts. Grouping-only patches target a chart part QXlsx already wrote
     // (its grouping serialization is commented out upstream); generated

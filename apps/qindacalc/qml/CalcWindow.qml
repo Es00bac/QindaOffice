@@ -199,6 +199,12 @@ OfficeWindow {
             { kind: "separator" },
             { kind: "action", id: "calcCommentAction" }, { kind: "action", id: "calcDeleteCommentAction" },
             { kind: "separator" },
+            { kind: "action", id: "insertHyperlinkAction" }, { kind: "action", id: "calcOpenHyperlinkAction" },
+            { kind: "action", id: "calcRemoveHyperlinkAction" },
+            { kind: "separator" },
+            { kind: "action", id: "calcGroupAction" }, { kind: "action", id: "calcUngroupAction" },
+            { kind: "action", id: "calcHideRowsAction" }, { kind: "action", id: "calcUnhideRowsAction" },
+            { kind: "separator" },
             { kind: "action", id: "calcCondFormatAction" }, { kind: "action", id: "calcValidationAction" }
         ]
     })
@@ -242,6 +248,11 @@ OfficeWindow {
         function onChartDialogRequested(initialRange) { chartDialog.rangeText = initialRange; chartDialog.open() }
         function onTemplateConsentRequested(path) { templateConsent.path = path; templateConsent.open() }
         function onUnhideSheetRequested(hiddenNames) { unhideSheet.hiddenNames = hiddenNames; unhideSheet.open() }
+        // M66 (D-075): links and protection.
+        function onLinkDialogRequested() { linkDialog.load(); linkDialog.open() }
+        function onProtectSheetRequested() { protectDialog.workbook = false; protectDialog.open() }
+        function onProtectWorkbookRequested() { protectDialog.workbook = true; protectDialog.open() }
+        function onUnprotectRequested(workbook) { unprotectDialog.workbook = workbook; unprotectDialog.open() }
     }
 
     SizeDialog { id: sizeDialog; onValueApplied: function(v) { if (forRows) window.calc.applyRowHeight(v); else window.calc.applyColumnWidth(v) } }
@@ -289,6 +300,9 @@ OfficeWindow {
     CommentDialog { id: commentDialog; onCommentApplied: function(text) { window.calc.setCommentText(text) } }
     FilterPopover { id: filterPopover; onFilterApplied: function(column, kept) { window.calc.applyFilterValues(column, kept) } }
     ChartDialog { id: chartDialog; host: window.calc }
+    LinkDialog { id: linkDialog; host: window.calc }
+    ProtectDialog { id: protectDialog; host: window.calc }
+    UnprotectDialog { id: unprotectDialog; host: window.calc }
     ChartWindows { host: window.calc; parentWindow: window }
     CloseConsentDialog {
         id: templateConsent; objectName: "templateConsentDialog"

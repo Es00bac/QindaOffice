@@ -2,7 +2,11 @@
 #pragma once
 
 #include "cell.h"
+#include "hyperlink.h"
+#include "outline.h"
+#include "protection.h"
 #include "sheet_rules.h"
+#include "sheet_source.h"
 
 #include <QSet>
 
@@ -131,6 +135,35 @@ public:
     [[nodiscard]] const PageSetup &pageSetup() const { return m_pageSetup; }
     void setPageSetup(const PageSetup &setup) { m_pageSetup = setup; }
 
+    // --- M66 (D-075): hyperlinks, outlines and hidden lines, protection,
+    // and the sheet's tie to its source package. Range-addressed state
+    // like the rules above: structure.cpp moves it, undo and recovery
+    // carry it.
+    [[nodiscard]] const QList<Hyperlink> &hyperlinks() const { return m_hyperlinks; }
+    void setHyperlinks(QList<Hyperlink> links) { m_hyperlinks = std::move(links); }
+    // The link covering `addr` (the last one added wins an overlap, as in
+    // Excel), or nullptr.
+    [[nodiscard]] const Hyperlink *hyperlinkAt(const CellAddr &addr) const;
+    [[nodiscard]] const SheetOutline &outline() const { return m_outline; }
+    void setOutline(SheetOutline outline) { m_outline = std::move(outline); }
+    [[nodiscard]] bool isRowHidden(qint32 row) const { return m_outline.isHidden(OutlineAxis::Rows, row); }
+    [[nodiscard]] bool isColumnHidden(qint32 col) const { return m_outline.isHidden(OutlineAxis::Columns, col); }
+    [[nodiscard]] const SheetProtection &protection() const { return m_protection; }
+    void setProtection(SheetProtection protection) { m_protection = std::move(protection); }
+    [[nodiscard]] const SheetSource &source() const { return m_source; }
+    void setSource(SheetSource source) { m_source = std::move(source); }
+    // Records a structural edit for the carry stage (sheet_source.h); a
+    // sheet that did not come from a package has nothing to map.
+    void recordStructureStep(const SourceStep &step)
+    {
+        if (!m_source.part.isEmpty()) {
+            m_source.steps.append(step);
+        }
+    }
+    // Drops a cell's CONTENT, keeping its style (the spill engine removes
+    // spilled values from cells the user may have formatted).
+    bool dropCellContent(const CellAddr &addr) { return m_cells.remove(addr.key()) > 0; }
+
     [[nodiscard]] qint32 styleIdAt(const CellAddr &addr) const;
     void setStyleIdAt(const CellAddr &addr, qint32 id);
     // The full sparse style map (undo snapshots must cover styles set on
@@ -157,6 +190,10 @@ private:
     std::optional<CellRange> m_printTitleRows;
     std::optional<CellRange> m_printTitleCols;
     PageSetup m_pageSetup;
+    QList<Hyperlink> m_hyperlinks;
+    SheetOutline m_outline;
+    SheetProtection m_protection;
+    SheetSource m_source;
 };
 
 } // namespace QindaOffice::Calc

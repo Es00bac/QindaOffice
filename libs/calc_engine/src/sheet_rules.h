@@ -162,6 +162,10 @@ struct TableSpec {
     bool rowStripes = true;
     bool colStripes = false;
     QStringList columnNames;
+    // M66 (D-075): the table part it was read from; a query table (Power
+    // Query output) hangs from that part and is carried with the table.
+    // Empty for a table made here.
+    QString sourcePart;
     bool operator==(const TableSpec &) const = default;
 };
 

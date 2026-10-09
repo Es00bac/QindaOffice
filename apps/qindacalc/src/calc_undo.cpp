@@ -40,6 +40,10 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
         ss.printTitleRows = sheet.printTitleRows();
         ss.printTitleCols = sheet.printTitleCols();
         ss.pageSetup = sheet.pageSetup();
+        ss.hyperlinks = sheet.hyperlinks();
+        ss.outline = sheet.outline();
+        ss.protection = sheet.protection();
+        ss.source = sheet.source();
         snap.sheets.append(ss);
     }
     // The style table is indexed by position; copy through the public
@@ -58,6 +62,7 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
     snap.source = workbook.source;
     snap.charts = workbook.charts;
     snap.images = workbook.images;
+    snap.protection = workbook.protection;
     return snap;
 }
 
@@ -95,6 +100,10 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
         sheet.setPrintArea(ss.printArea);
         sheet.setPrintTitles(ss.printTitleRows, ss.printTitleCols);
         sheet.setPageSetup(ss.pageSetup);
+        sheet.setHyperlinks(ss.hyperlinks);
+        sheet.setOutline(ss.outline);
+        sheet.setProtection(ss.protection);
+        sheet.setSource(ss.source);
     }
     for (const CalcEng::CellStyle &style : snapshot.styles) {
         fresh.addStyle(style);
@@ -110,6 +119,7 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
     fresh.source = snapshot.source;
     fresh.charts = snapshot.charts;
     fresh.images = snapshot.images;
+    fresh.protection = snapshot.protection;
 
     // Re-register the dependency index from the restored ASTs and recalc
     // everything once (restores volatile and cycle-detected state).

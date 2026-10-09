@@ -87,12 +87,13 @@ void SpreadsheetItem::setCursorCell(const CellAddr &addr, bool extendSelection)
     m_cursor = next;
     if (!extendSelection) {
         m_anchor = next;
+        m_selectionKind = CellSelection;
     }
     // Scroll into view. The frozen band is painted over the scrolling one,
     // so "visible" starts after it.
     const QRectF rect = cursorItemRect();
-    const qreal leftEdge = kHeaderWidth + frozenWidthPx();
-    const qreal topEdge = kHeaderHeight + frozenHeightPx();
+    const qreal leftEdge = headerWidth() + frozenWidthPx();
+    const qreal topEdge = headerHeight() + frozenHeightPx();
     qreal sx = m_scrollX;
     qreal sy = m_scrollY;
     if (m_cursor.col >= frozen().col) {
@@ -150,6 +151,7 @@ void SpreadsheetItem::selectColumn(int col, bool extendSelection)
     const qint32 lastRow = used.isValid() ? used.bottomRight.row : 0;
     m_anchor = extendSelection ? CellAddr{0, m_anchor.col} : CellAddr{0, qint32(col)};
     setCursorCell(CellAddr{lastRow, qint32(col)}, true);
+    m_selectionKind = ColumnSelection;
 }
 
 void SpreadsheetItem::selectRow(int row, bool extendSelection)
@@ -158,6 +160,7 @@ void SpreadsheetItem::selectRow(int row, bool extendSelection)
     const qint32 lastCol = used.isValid() ? used.bottomRight.col : 0;
     m_anchor = extendSelection ? CellAddr{m_anchor.row, 0} : CellAddr{qint32(row), 0};
     setCursorCell(CellAddr{qint32(row), lastCol}, true);
+    m_selectionKind = RowSelection;
 }
 
 void SpreadsheetItem::selectUsedRange()
@@ -175,12 +178,12 @@ void SpreadsheetItem::selectUsedRange()
 
 qreal SpreadsheetItem::viewportWidth() const
 {
-    return qMax<qreal>(0, width() - kHeaderWidth);
+    return qMax<qreal>(0, width() - headerWidth());
 }
 
 qreal SpreadsheetItem::viewportHeight() const
 {
-    return qMax<qreal>(0, height() - kHeaderHeight);
+    return qMax<qreal>(0, height() - headerHeight());
 }
 
 qreal SpreadsheetItem::frozenHeightPx() const
@@ -209,15 +212,23 @@ QFont SpreadsheetItem::scaledFont() const
     return scaled;
 }
 
+// A hidden row or column (Format ▸ Hide, a collapsed group — M66) is
+// zero-sized, so it has no band and nothing paints or hits it.
 qreal SpreadsheetItem::colWidthPx(qint32 col) const
 {
     const Sheet *sheet = activeSheet();
+    if (sheet != nullptr && sheet->isColumnHidden(col)) {
+        return 0.0;
+    }
     return (sheet != nullptr ? sheet->columnWidth(col) : 96.0) * m_zoom;
 }
 
 qreal SpreadsheetItem::rowHeightPx(qint32 row) const
 {
     const Sheet *sheet = activeSheet();
+    if (sheet != nullptr && sheet->isRowHidden(row)) {
+        return 0.0;
+    }
     return (sheet != nullptr ? sheet->rowHeight(row) : kDefaultRowPx) * m_zoom;
 }
 
@@ -260,7 +271,9 @@ QVector<SpreadsheetItem::Band> SpreadsheetItem::visibleRowBands() const
             continue;
         }
         const qreal h = rowHeightPx(r);
-        bands.append({r, y, h});
+        if (h > 0) {
+            bands.append({r, y, h});
+        }
         y += h;
     }
     const qreal split = y;
@@ -289,7 +302,9 @@ QVector<SpreadsheetItem::Band> SpreadsheetItem::visibleColumnBands() const
     qreal x = 0;
     for (qint32 c = 0; c < frozen().col && x < viewportW; ++c) {
         const qreal w = colWidthPx(c);
-        bands.append({c, x, w});
+        if (w > 0) {
+            bands.append({c, x, w});
+        }
         x += w;
     }
     const qreal split = x;
@@ -302,7 +317,9 @@ QVector<SpreadsheetItem::Band> SpreadsheetItem::visibleColumnBands() const
     qreal pos = left - m_scrollX;
     while (pos < viewportW && col < Sheet::kMaxCols) {
         const qreal w = colWidthPx(col);
-        bands.append({col, pos, w});
+        if (w > 0) {
+            bands.append({col, pos, w});
+        }
         pos += w;
         ++col;
     }
@@ -317,7 +334,7 @@ QRectF SpreadsheetItem::cellRect(const CellAddr &addr) const
 
 QRectF SpreadsheetItem::cursorItemRect() const
 {
-    return cellRect(m_cursor).translated(kHeaderWidth, kHeaderHeight);
+    return cellRect(m_cursor).translated(headerWidth(), headerHeight());
 }
 
 CellAddr SpreadsheetItem::cellAtPos(const QPointF &pos) const

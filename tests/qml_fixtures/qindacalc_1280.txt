@@ -95,6 +95,7 @@ QQuickRootItem#CalcWindow
           QQuickTabButton#ribbonTab_file
           QQuickTabButton#ribbonTab_home
           QQuickTabButton#ribbonTab_insert
+          QQuickTabButton#ribbonTab_review
           QQuickTabButton#ribbonTab_sheet
           QQuickTabButton#ribbonTab_view
         QQuickItem#ribbonGroupViewport
@@ -167,6 +168,12 @@ QQuickRootItem#CalcWindow
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_cellSize
                 RibbonButton#ribbonAction_cellSize
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_cellVisibility
+                RibbonButton#ribbonAction_cellVisibility
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground

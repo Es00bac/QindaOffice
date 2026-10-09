@@ -22,8 +22,11 @@
 #include "spreadsheet_item.h"
 
 #include <QPointer>
+#include <QUrl>
 #include <QVariantList>
 #include <QtQml/qqmlregistration.h>
+
+#include <functional>
 
 namespace QindaOffice::Ai {
 class ModelCatalog;
@@ -132,6 +135,30 @@ public:
 
     [[nodiscard]] Ai::AssistantController *assistant() const { return m_assistant; }
 
+    // ---- links, outline, protection (calc_host_features.cpp, M66) ----
+    // The Link dialog's state for the cursor: {address, location, display,
+    // tooltip, hasLink, sheets: [visible sheet names]}.
+    Q_INVOKABLE QVariantMap linkAtCursor() const;
+    // {address, location, display, tooltip}: a link over the selection.
+    Q_INVOKABLE void applyLink(const QVariantMap &link);
+    // Follows the link at a cell — its hyperlink, or a HYPERLINK() formula's
+    // — inside the workbook (the cursor moves there) or out of it (through
+    // the URL opener). False when there is nothing to follow.
+    Q_INVOKABLE bool openLinkAt(int row, int col);
+    // {password, formatCells, …: true = allowed}: Review ▸ Protect Sheet.
+    Q_INVOKABLE void protectSheetWith(const QVariantMap &options);
+    Q_INVOKABLE bool unprotectSheetWith(const QString &password);
+    Q_INVOKABLE void protectWorkbookWith(const QString &password);
+    Q_INVOKABLE bool unprotectWorkbookWith(const QString &password);
+    // The outline gutter: a level button, and the +/- button of the group
+    // at `level` whose button sits on `line` (its summary line, or its
+    // first line when it has none).
+    Q_INVOKABLE void showOutlineLevel(bool rows, int level);
+    Q_INVOKABLE void toggleOutlineGroup(bool rows, int line, int level);
+    // How a link leaves the app (default QDesktopServices::openUrl, which
+    // goes through the desktop portal when sandboxed). Tests record here.
+    void setUrlOpener(std::function<bool(const QUrl &)> opener) { m_openUrl = std::move(opener); }
+
 signals:
     void sheetsChanged();
     void cursorChanged();
@@ -152,6 +179,12 @@ signals:
     void imageDialogRequested();
     void templateConsentRequested(const QString &path);
     void findRequested(bool replace);
+    // M66: the Link dialog, and the protection dialogs (`needsPassword`
+    // false: unprotect at once, nothing to ask).
+    void linkDialogRequested();
+    void protectSheetRequested();
+    void protectWorkbookRequested();
+    void unprotectRequested(bool workbook);
     void assistantToggleRequested(bool visible);
 
 protected:
@@ -199,6 +232,11 @@ private:
     void loadTemplate(const QString &path);
     // calc_host_ai.cpp
     void createAssistant();
+    // calc_host_features.cpp
+    void createFeatureActions();
+    void insertFeatureMenus();
+    void syncFeaturesFromCursor();
+    [[nodiscard]] CalcEng::OutlineAxis groupAxis() const;
 
     SpreadsheetDocument *m_document = nullptr;
     QPointer<SpreadsheetItem> m_grid;
@@ -208,6 +246,7 @@ private:
     std::unique_ptr<Ai::EditApplier> m_aiApplier;
     std::unique_ptr<Ai::DocumentTools> m_aiTools; // D-058, calc_tools.h
     QString m_pendingTemplate;
+    std::function<bool(const QUrl &)> m_openUrl;
     bool m_syncing = false;
 };
 

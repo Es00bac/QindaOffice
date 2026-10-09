@@ -263,20 +263,42 @@ void readSheetDrawings(const QString &packagePath, Workbook *wb, qint32 sheetInd
         readRels(zip, relsPathFor(drawingPart));
     const Sheet &sheet = wb->sheetAt(sheetIndex);
 
+    // AGENT-NOTE (M66, D-075): only TOP-LEVEL anchors become charts and
+    // pictures; an mc:AlternateContent (a slicer, a form control, a chart
+    // only newer Excel draws, with its fallback picture) is carried whole
+    // by the save (xlsx_carry_drawing.cpp), so nothing inside one is taken
+    // in — its fallback picture would otherwise come back as a duplicate.
+    // The positions of the objects taken in are recorded for the carry.
+    QList<qint32> modelled;
+    int depth = 0;
+    int topIndex = -1;
     QXmlStreamReader reader(drawingXml);
     while (!reader.atEnd()) {
         const auto token = reader.readNext();
+        if (token == QXmlStreamReader::EndElement) {
+            --depth;
+            continue;
+        }
         if (token != QXmlStreamReader::StartElement) {
             continue;
         }
+        ++depth;
+        if (depth == 2) {
+            ++topIndex;
+        }
         const QStringView name = reader.name();
-        if (name != QLatin1String("twoCellAnchor") && name != QLatin1String("oneCellAnchor")) {
+        if (depth != 2 || (name != QLatin1String("twoCellAnchor") && name != QLatin1String("oneCellAnchor"))) {
+            if (depth == 2) {
+                reader.skipCurrentElement(); // AlternateContent, absoluteAnchor: carried
+                --depth;
+            }
             continue;
         }
         const QLatin1String kind = name == QLatin1String("twoCellAnchor")
             ? QLatin1String("twoCellAnchor")
             : QLatin1String("oneCellAnchor");
         const Anchor anchor = readAnchor(reader, kind);
+        --depth; // readAnchor consumed the anchor's end tag
         QSize size = anchorSize(anchor, sheet);
         if (!anchor.picRid.isEmpty()) {
             const QString mediaPart =
@@ -297,6 +319,7 @@ void readSheetDrawings(const QString &packagePath, Workbook *wb, qint32 sheetInd
             image.widthPx = size.width();
             image.heightPx = size.height();
             wb->images.append(image);
+            modelled.append(topIndex);
             continue;
         }
         const QString chartPart = resolveTarget(drawingDir, drawingRels.value(anchor.chartRid).second);
@@ -315,8 +338,12 @@ void readSheetDrawings(const QString &packagePath, Workbook *wb, qint32 sheetInd
         readChartPart(chartXml, &spec);
         if (!spec.series.isEmpty()) {
             wb->charts.append(spec);
+            modelled.append(topIndex);
         }
     }
+    SheetSource source = sheet.source();
+    source.modelledObjects = modelled;
+    wb->sheetAt(sheetIndex).setSource(source);
 }
 
 } // namespace QindaOffice::Calc::IO

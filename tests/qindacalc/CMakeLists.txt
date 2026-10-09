@@ -2,14 +2,15 @@
 # QindaCalc's gates over the QtQuick app: the document and host
 # (tst_calc_window), the grid, strips, clipboard, find/replace and
 # structural commands through the real window (tst_calc_ui), the rule
-# commands (tst_calc_rules_ui) and the panel export through the desktop's
+# commands (tst_calc_rules_ui), links / outlines / protection / spills
+# (tst_calc_features_ui, M66) and the panel export through the desktop's
 # validator (tst_calc_menu_export). Every test links the app's static QML
 # module, so a source added to apps/qindacalc/CMakeLists.txt is in every test.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(POPPLER_QT6 REQUIRED poppler-qt6)
 
 foreach(name IN ITEMS tst_calc_window tst_calc_sample tst_calc_ui tst_calc_rules_ui
-                      tst_calc_menu_export tst_calc_tools tst_calc_agent)
+                      tst_calc_menu_export tst_calc_tools tst_calc_agent tst_calc_features_ui)
     add_executable(${name} ${name}.cpp calc_test_support.h)
     target_link_libraries(${name} PRIVATE qindacalc_app qindacalc_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)

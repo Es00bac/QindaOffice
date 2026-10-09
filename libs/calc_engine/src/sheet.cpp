@@ -188,6 +188,16 @@ const CellComment *Sheet::commentAt(const CellAddr &addr) const
     return it != m_comments.constEnd() ? &it.value() : nullptr;
 }
 
+const Hyperlink *Sheet::hyperlinkAt(const CellAddr &addr) const
+{
+    for (auto it = m_hyperlinks.crbegin(); it != m_hyperlinks.crend(); ++it) {
+        if (it->range.contains(addr)) {
+            return &*it;
+        }
+    }
+    return nullptr;
+}
+
 const TableSpec *Sheet::tableCovering(const CellAddr &addr) const
 {
     for (const TableSpec &table : m_tables) {

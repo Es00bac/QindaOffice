@@ -3,6 +3,14 @@
 
 namespace QindaOffice::Calc {
 
+namespace {
+// A spill writes cells its anchor's readers do not depend on through the
+// anchor, so recalc runs follow-up passes from the cells a pass spilled
+// into or cleared (M66, D-075). Real chains settle in two or three; the
+// bound only stops a pathological ping-pong between spills.
+constexpr int kMaxSpillRounds = 16;
+} // namespace
+
 Workbook::Workbook()
 {
     // Style id 0 is the implicit default style so user styles start at 1;
@@ -94,6 +102,10 @@ bool Workbook::removeName(const QString &name)
 
 void Workbook::reindexAll()
 {
+    // Cells moved (an insert, a sort, a sheet removed): spilled values sit
+    // where their anchors used to be. Drop them all; the recalculation
+    // below spills every anchor afresh.
+    resetSpills();
     m_dependencies.clear();
     QSet<CellKey> all;
     for (qint32 s = 0; s < qint32(m_sheets.size()); ++s) {
@@ -184,13 +196,18 @@ bool Workbook::setCellInput(qint32 sheet, const CellAddr &addr, const QString &i
     const Value literal = parseLiteral(input, &isFormula, &ast, &formulaText);
     Cell &cell = sheetAt(sheet).ensureCell(addr);
     if (isFormula && ast) {
-        installFormula(sheet, addr, ast, formulaText);
+        // Every typed formula is a dynamic-array formula, as in Excel 365:
+        // an array result spills (M66, D-075).
+        installFormula(sheet, addr, ast, formulaText, true);
         return true;
     }
-    // Literal: drop any formula state and dependency edges.
+    // Literal: drop any formula state and dependency edges. Typing into a
+    // spilled cell makes it the user's (its anchor then shows #SPILL!).
     cell.formula.clear();
     cell.ast.reset();
     cell.isVolatile = false;
+    cell.dynamicArray = false;
+    claimCell(cell);
     cell.value = literal;
     m_dependencies.updateCell(CellKey(sheet, addr.row, addr.col), {});
     if (!m_bulkLoading) {
@@ -205,6 +222,8 @@ void Workbook::setCellValue(qint32 sheet, const CellAddr &addr, const Value &val
     cell.formula.clear();
     cell.ast.reset();
     cell.isVolatile = false;
+    cell.dynamicArray = false;
+    claimCell(cell);
     cell.value = value;
     m_dependencies.updateCell(CellKey(sheet, addr.row, addr.col), {});
     if (!m_bulkLoading) {
@@ -215,10 +234,18 @@ void Workbook::setCellValue(qint32 sheet, const CellAddr &addr, const Value &val
 void Workbook::installFormula(qint32 sheet, const CellAddr &addr, const NodePtr &ast,
                               const QString &formula)
 {
+    installFormula(sheet, addr, ast, formula, false);
+}
+
+void Workbook::installFormula(qint32 sheet, const CellAddr &addr, const NodePtr &ast,
+                              const QString &formula, bool dynamicArray)
+{
     Cell &cell = sheetAt(sheet).ensureCell(addr);
     cell.formula = formula;
     cell.ast = ast;
     cell.isVolatile = containsVolatileCall(ast);
+    cell.dynamicArray = dynamicArray;
+    claimCell(cell);
     const CellKey key(sheet, addr.row, addr.col);
     EvalContext ctx{this, sheet, addr};
     // AGENT-GUARD: addVolatile must come after updateCell — updateCell calls
@@ -251,30 +278,22 @@ void Workbook::recalc(const QSet<CellKey> &edited)
 {
     // Values the data bars measure against are moving; drop their extents.
     m_dataBarExtents.clear();
-    QSet<CellKey> dirty = m_dependencies.dependentsOf(edited);
-    dirty |= m_dependencies.volatileCells();
-    dirty |= edited;
-    QSet<CellKey> cycles;
-    const QVector<CellKey> order = topoOrder(dirty, m_dependencies, &cycles);
-    for (const CellKey &key : order) {
-        Sheet &sheet = sheetAt(key.sheet());
-        Cell *cell = sheet.cellAt({key.row(), key.col()});
-        if (cell == nullptr || !cell->ast) {
-            continue;
-        }
-        EvalContext ctx{this, key.sheet(), {key.row(), key.col()}};
-        cell->value = evalNode(cell->ast, ctx);
-    }
-    for (const CellKey &key : cycles) {
-        Cell *cell = sheetAt(key.sheet()).cellAt({key.row(), key.col()});
-        if (cell != nullptr) {
-            cell->value = Err::Circular;
-        }
+    QSet<CellKey> spillChanged;
+    recalcPass(edited, true, &spillChanged);
+    // AGENT-NOTE (M66, D-075): a formula reading a spilled cell depends on
+    // that cell, not on the anchor that writes it, so the topological
+    // order cannot put it after the anchor. The cells a pass spilled into
+    // or cleared seed the next pass until nothing changes (spill.cpp).
+    for (int round = 0; round < kMaxSpillRounds && !spillChanged.isEmpty(); ++round) {
+        QSet<CellKey> next;
+        recalcPass(spillChanged, false, &next);
+        spillChanged = std::move(next);
     }
 }
 
 void Workbook::recalcAll()
 {
+    resetSpills(); // every anchor is recalculated below and spills afresh
     QSet<CellKey> all;
     for (qint32 s = 0; s < qint32(m_sheets.size()); ++s) {
         const Sheet &sheet = *m_sheets.at(size_t(s));
@@ -370,6 +389,24 @@ std::optional<RangeRef> Workbook::namedRange(const QString &name) const
         return it.value();
     }
     return std::nullopt;
+}
+
+bool Workbook::isCellLocked(qint32 sheet, const CellAddr &addr) const
+{
+    if (sheet < 0 || sheet >= qint32(m_sheets.size()) || !m_sheets.at(size_t(sheet))->protection().enabled) {
+        return false;
+    }
+    const CellStyle *cellStyle = style(m_sheets.at(size_t(sheet))->styleIdAt(addr));
+    return cellStyle == nullptr || cellStyle->locked;
+}
+
+bool Workbook::isFormulaHidden(qint32 sheet, const CellAddr &addr) const
+{
+    if (sheet < 0 || sheet >= qint32(m_sheets.size()) || !m_sheets.at(size_t(sheet))->protection().enabled) {
+        return false;
+    }
+    const CellStyle *cellStyle = style(m_sheets.at(size_t(sheet))->styleIdAt(addr));
+    return cellStyle != nullptr && cellStyle->hiddenFormula;
 }
 
 Value Workbook::cellValue(qint32 sheet, qint32 row, qint32 col) const

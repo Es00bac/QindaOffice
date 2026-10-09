@@ -7,6 +7,6 @@ Exec=qindacalc %F
 Icon=org.qindaqt.QindaCalc
 Terminal=false
 Categories=Qt;Office;Spreadsheet;
-MimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.oasis.opendocument.spreadsheet;application/vnd.ms-excel;text/csv;
+MimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.ms-excel.sheet.macroEnabled.12;application/vnd.oasis.opendocument.spreadsheet;application/vnd.ms-excel;text/csv;
 StartupNotify=true
 StartupWMClass=qindacalc

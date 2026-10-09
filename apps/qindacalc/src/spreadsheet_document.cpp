@@ -36,6 +36,7 @@ SpreadsheetDocument::SpreadsheetDocument()
 bool SpreadsheetDocument::loadCanRunOnWorker(const QString &path) const
 {
     return path.endsWith(QLatin1String(".xlsx"), Qt::CaseInsensitive)
+        || path.endsWith(QLatin1String(".xlsm"), Qt::CaseInsensitive)
         || path.endsWith(QLatin1String(".csv"), Qt::CaseInsensitive)
         || path.endsWith(QLatin1String(".tsv"), Qt::CaseInsensitive);
 }
@@ -50,8 +51,11 @@ bool SpreadsheetDocument::loadStaged(const QString &path, QString *error)
     // line is unaffected.
     CalcEng::Workbook fresh;
     bool ok = false;
-    if (path.endsWith(QLatin1String(".xlsx"), Qt::CaseInsensitive)) {
-        ok = CalcEng::IO::readXlsxFile(path, &fresh, error);
+    m_stagedWarnings.clear();
+    // .xlsm is the same package with a VBA project (kept, never run: D-075).
+    if (path.endsWith(QLatin1String(".xlsx"), Qt::CaseInsensitive)
+        || path.endsWith(QLatin1String(".xlsm"), Qt::CaseInsensitive)) {
+        ok = CalcEng::IO::readXlsxFile(path, &fresh, error, &m_stagedWarnings);
     } else {
         QFile file(path);
         if (!file.open(QIODevice::ReadOnly)) {
@@ -79,6 +83,7 @@ bool SpreadsheetDocument::loadStaged(const QString &path, QString *error)
 void SpreadsheetDocument::adoptStagedLoad(const QString &path)
 {
     m_workbook = std::move(m_staged);
+    m_openWarnings = m_stagedWarnings; // what this file holds that a save cannot keep
     // The file's active tab wins (default 0); clamp against a workbook
     // whose sheet list differs from what the tab index assumed.
     m_activeSheet = qBound(qint32(0), m_workbook.activeTab(), m_workbook.sheetCount() - 1);
@@ -98,7 +103,7 @@ bool SpreadsheetDocument::load(const QString &path, QString *error)
             return false;
         }
     } else {
-        // Foreign spreadsheet formats (ods, xls, xlsm...) come in through the
+        // Foreign spreadsheet formats (ods, xls, ...) come in through the
         // headless LibreOffice bridge, converted to xlsx first. The .desktop
         // file has always declared these types, so refusing them here meant
         // double-clicking an .ods in the file manager launched QindaCalc just
@@ -110,7 +115,7 @@ bool SpreadsheetDocument::load(const QString &path, QString *error)
         if (converted.isEmpty()) {
             return false;
         }
-        const bool ok = CalcEng::IO::readXlsxFile(converted, &fresh, error);
+        const bool ok = CalcEng::IO::readXlsxFile(converted, &fresh, error, &m_stagedWarnings);
         QFile::remove(converted);
         if (!ok) {
             return false;
@@ -124,8 +129,15 @@ bool SpreadsheetDocument::load(const QString &path, QString *error)
 bool SpreadsheetDocument::save(const QString &path, QString *error)
 {
     bool ok = false;
-    if (path.endsWith(QLatin1String(".xlsx"), Qt::CaseInsensitive)) {
-        ok = CalcEng::IO::writeXlsxFile(m_workbook, path, error);
+    if (path.endsWith(QLatin1String(".xlsx"), Qt::CaseInsensitive)
+        || path.endsWith(QLatin1String(".xlsm"), Qt::CaseInsensitive)) {
+        // What this save could not carry (a thread whose note was edited,
+        // macros in an .xlsx) is said, never silent (D-069, D-075).
+        QStringList warnings;
+        ok = CalcEng::IO::writeXlsxFile(m_workbook, path, error, &warnings);
+        if (ok && !warnings.isEmpty()) {
+            emit saveWarning(warnings.join(QLatin1Char(' ')));
+        }
     } else if (path.endsWith(QLatin1String(".csv"), Qt::CaseInsensitive)) {
         if (m_workbook.sheetCount() > 1) {
             // Fail honestly: CSV is one sheet. The save still succeeds (the
@@ -223,6 +235,7 @@ QStringList SpreadsheetDocument::mimeTypes() const
     // list (shell rule 2): the desktop only offers this app for types it can
     // actually open. ods/xls go through the LibreOffice bridge.
     return {QStringLiteral("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            QStringLiteral("application/vnd.ms-excel.sheet.macroEnabled.12"),
             QStringLiteral("application/vnd.oasis.opendocument.spreadsheet"),
             QStringLiteral("application/vnd.ms-excel"),
             QStringLiteral("text/csv")};
@@ -276,165 +289,11 @@ bool SpreadsheetDocument::loadRecovery(const QByteArray &snapshot, QString *erro
     return true;
 }
 
-void SpreadsheetDocument::applyInput(const CalcEng::CellAddr &addr, const QString &input)
-{
-    // AGENT-GUARD: validation is enforced HERE, on the one path every UI
-    // edit takes (in-cell editor, formula bar, paste of a single cell, AI
-    // apply). Checking it in the view would leave the other paths open.
-    if (const CalcEng::ValidationRule *rule =
-            m_workbook.sheetAt(m_activeSheet).validationAt(addr);
-        rule != nullptr && !CalcEng::validationAccepts(*rule, input)) {
-        emit inputRejected(addr, CalcEng::validationDescription(*rule));
-        return;
-    }
-    const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
-    m_workbook.setCellInput(m_activeSheet, addr, input);
-    pushUndo(before, tr("Set cell"));
-    setDirty(true);
-    emit contentChanged();
-}
-
-void SpreadsheetDocument::applyInputs(const QList<QPair<CalcEng::CellAddr, QString>> &edits,
-                                     const QString &undoText)
-{
-    if (edits.isEmpty()) {
-        return;
-    }
-    const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
-    for (const auto &[addr, input] : edits) {
-        m_workbook.setCellInput(m_activeSheet, addr, input);
-    }
-    pushUndo(before, undoText);
-    setDirty(true);
-    emit contentChanged();
-}
-
-void SpreadsheetDocument::clearCells(const CalcEng::CellRange &range)
-{
-    if (!range.isValid()) {
-        return;
-    }
-    const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
-    CalcEng::Sheet &sheet = m_workbook.sheetAt(m_activeSheet);
-    QSet<CalcEng::CellKey> cleared;
-    for (qint32 row = range.topLeft.row; row <= range.bottomRight.row; ++row) {
-        for (qint32 col = range.topLeft.col; col <= range.bottomRight.col; ++col) {
-            if (sheet.clearCell({row, col})) {
-                const CalcEng::CellKey key(m_activeSheet, row, col);
-                m_workbook.dependencies().updateCell(key, {});
-                cleared.insert(key);
-            }
-        }
-    }
-    if (cleared.isEmpty()) {
-        return;
-    }
-    m_workbook.recalc(cleared);
-    pushUndo(before, tr("Clear cells"));
-    setDirty(true);
-    emit contentChanged();
-}
-
-void SpreadsheetDocument::pasteCells(const CalcEng::CellAddr &at, const QStringList &rows)
-{
-    if (rows.isEmpty() || !at.isValid()) {
-        return;
-    }
-    const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
-    CalcEng::Sheet &sheet = m_workbook.sheetAt(m_activeSheet);
-    QSet<CalcEng::CellKey> cleared;
-    qint32 row = at.row;
-    for (const QString &line : rows) {
-        qint32 col = at.col;
-        const QStringList cells = line.split(QLatin1Char('\t'));
-        for (const QString &input : cells) {
-            if (!input.isEmpty()) {
-                // setCellInput parses formulas ('=' prefix), numbers,
-                // booleans and dates, falling back to text.
-                m_workbook.setCellInput(m_activeSheet, {row, col}, input);
-            } else if (sheet.clearCell({row, col})) {
-                // An empty source cell clears the target (Excel semantics):
-                // paste over existing data must be idempotent with the copy.
-                const CalcEng::CellKey key(m_activeSheet, row, col);
-                m_workbook.dependencies().updateCell(key, {});
-                cleared.insert(key);
-            }
-            ++col;
-        }
-        ++row;
-    }
-    if (!cleared.isEmpty()) {
-        m_workbook.recalc(cleared);
-    }
-    pushUndo(before, tr("Paste"));
-    setDirty(true);
-    emit contentChanged();
-}
-
-void SpreadsheetDocument::restyleRange(const CalcEng::CellRange &range,
-                                       const StylePatch &patch, const QString &undoText)
-{
-    if (!range.isValid()) {
-        return;
-    }
-    const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
-    CalcEng::Sheet &sheet = m_workbook.sheetAt(m_activeSheet);
-    for (qint32 row = range.topLeft.row; row <= range.bottomRight.row; ++row) {
-        for (qint32 col = range.topLeft.col; col <= range.bottomRight.col; ++col) {
-            const CalcEng::CellAddr addr{row, col};
-            const qint32 oldId = sheet.styleIdAt(addr);
-            const CalcEng::CellStyle *old = oldId != 0 ? m_workbook.style(oldId) : nullptr;
-            CalcEng::CellStyle style = old != nullptr ? *old : CalcEng::CellStyle{};
-            if (patch.bold) {
-                style.bold = *patch.bold;
-            }
-            if (patch.italic) {
-                style.italic = *patch.italic;
-            }
-            if (patch.underline) {
-                style.underline = *patch.underline;
-            }
-            if (patch.strikeout) {
-                style.strikeout = *patch.strikeout;
-            }
-            if (patch.alignment) {
-                style.alignment = *patch.alignment;
-            }
-            if (patch.vAlign) {
-                style.vAlign = *patch.vAlign;
-            }
-            if (patch.numberFormat) {
-                style.numberFormat = *patch.numberFormat;
-            }
-            if (patch.fontFamily) {
-                style.fontFamily = *patch.fontFamily;
-            }
-            if (patch.fontSize) {
-                style.fontSize = *patch.fontSize;
-            }
-            if (patch.fg) {
-                style.fg = *patch.fg;
-            }
-            if (patch.bg) {
-                style.bg = *patch.bg;
-            }
-            if (patch.wrap) {
-                style.wrap = *patch.wrap;
-            }
-            if (patch.borders) {
-                style.borders = *patch.borders;
-            }
-            const qint32 id = m_workbook.addStyle(style);
-            sheet.setStyleIdAt(addr, id);
-        }
-    }
-    pushUndo(before, undoText);
-    setDirty(true);
-    emit contentChanged();
-}
-
 void SpreadsheetDocument::insertSheet(const QString &name)
 {
+    if (refuseStructureChange()) {
+        return;
+    }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     m_workbook.addSheet(name);
     m_activeSheet = m_workbook.sheetCount() - 1;
@@ -490,6 +349,10 @@ QString SpreadsheetDocument::inputTextAt(const CalcEng::CellAddr &addr) const
     const CalcEng::Cell *cell = m_workbook.sheetAt(m_activeSheet).cellAt(addr);
     if (cell == nullptr) {
         return QString();
+    }
+    // A hidden formula on a protected sheet shows its value only (M66).
+    if (cell->hasFormula() && m_workbook.isFormulaHidden(m_activeSheet, addr)) {
+        return CalcEng::toText(cell->value);
     }
     return cell->hasFormula() ? QStringLiteral("=") + cell->formula
                               : CalcEng::toText(cell->value);

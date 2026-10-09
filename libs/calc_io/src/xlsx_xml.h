@@ -20,6 +20,16 @@ namespace QindaOffice::Calc::IO {
 [[nodiscard]] QString appendRelationship(QByteArray *relsXml, const QString &type,
                                          const QString &target);
 
+// The same for an external target (a hyperlink's URL, an external
+// workbook): TargetMode="External", the target escaped as an attribute
+// value (URLs carry '&'). M66, D-075.
+[[nodiscard]] QString appendExternalRelationship(QByteArray *relsXml, const QString &type,
+                                                 const QString &target);
+
+// `text` escaped for an XML attribute value (& < > " and control
+// characters XML 1.0 cannot carry dropped).
+[[nodiscard]] QByteArray xmlAttribute(const QString &text);
+
 // Adds a <Override PartName ContentType> to [Content_Types].xml. No-op when
 // the override already exists.
 void appendContentTypeOverride(QByteArray *contentTypesXml, const QString &partName,

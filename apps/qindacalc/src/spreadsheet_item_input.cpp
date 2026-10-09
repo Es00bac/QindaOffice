@@ -106,44 +106,50 @@ void SpreadsheetItem::mousePressEvent(QMouseEvent *event)
     forceActiveFocus(Qt::MouseFocusReason);
     const QPointF pos = event->position();
     const bool extend = (event->modifiers() & Qt::ShiftModifier) != 0;
-    const bool inColumnHeader = pos.y() < kHeaderHeight && pos.x() >= kHeaderWidth;
-    const bool inRowHeader = pos.x() < kHeaderWidth && pos.y() >= kHeaderHeight;
+    const bool inColumnHeader = pos.y() >= colGutterPx() && pos.y() < headerHeight() && pos.x() >= headerWidth();
+    const bool inRowHeader = pos.x() >= rowGutterPx() && pos.x() < headerWidth() && pos.y() >= headerHeight();
     const Sheet *sheet = activeSheet();
     event->accept();
     if (sheet == nullptr) {
         return;
     }
-    if (pos.x() < kHeaderWidth && pos.y() < kHeaderHeight) {
+    // The outline gutter (M66): level buttons and +/- buttons.
+    if (pos.x() < rowGutterPx() || pos.y() < colGutterPx()) {
+        cancelEditor();
+        static_cast<void>(outlineClick(pos));
+        return;
+    }
+    if (pos.x() < headerWidth() && pos.y() < headerHeight()) {
         cancelEditor();
         selectUsedRange(); // the corner box selects the sheet
         return;
     }
     if (inColumnHeader) {
         cancelEditor();
-        const qint32 boundary = columnBoundaryAt(pos.x() - kHeaderWidth);
+        const qint32 boundary = columnBoundaryAt(pos.x() - headerWidth());
         if (boundary >= 0 && event->button() == Qt::LeftButton) {
             m_resizeColumn = boundary;
             m_resizeOriginal = sheet->columnWidth(boundary);
             m_resizeOrigin = pos.x();
             return;
         }
-        selectColumn(cellAtPos({pos.x() - kHeaderWidth, 0}).col, extend);
+        selectColumn(cellAtPos({pos.x() - headerWidth(), 0}).col, extend);
         return;
     }
     if (inRowHeader) {
         cancelEditor();
-        const qint32 boundary = rowBoundaryAt(pos.y() - kHeaderHeight);
+        const qint32 boundary = rowBoundaryAt(pos.y() - headerHeight());
         if (boundary >= 0 && event->button() == Qt::LeftButton) {
             m_resizeRow = boundary;
             m_resizeOriginal = sheet->rowHeight(boundary);
             m_resizeOrigin = pos.y();
             return;
         }
-        selectRow(cellAtPos({0, pos.y() - kHeaderHeight}).row, extend);
+        selectRow(cellAtPos({0, pos.y() - headerHeight()}).row, extend);
         return;
     }
     cancelEditor();
-    const QPointF gridPos = pos - QPointF(kHeaderWidth, kHeaderHeight);
+    const QPointF gridPos = pos - QPointF(headerWidth(), headerHeight());
     // The filter dropdown sits inside a header cell: test it before the
     // cell under it takes the click.
     if (event->button() == Qt::LeftButton) {
@@ -154,6 +160,12 @@ void SpreadsheetItem::mousePressEvent(QMouseEvent *event)
         }
     }
     const CellAddr hit = cellAtPos(gridPos);
+    // Ctrl+click follows a link (M66); a plain click selects, as always.
+    if (event->button() == Qt::LeftButton && (event->modifiers() & Qt::ControlModifier) != 0 && hasLink(hit)) {
+        setCursorCell(hit, false);
+        emit linkActivated(int(hit.row), int(hit.col));
+        return;
+    }
     if (event->button() == Qt::RightButton) {
         // A right-click inside the current selection keeps it: acting on a
         // multi-cell selection is the whole point of the context menu.
@@ -194,8 +206,8 @@ void SpreadsheetItem::mouseMoveEvent(QMouseEvent *event)
         update();
         return;
     }
-    if ((event->buttons() & Qt::LeftButton) && pos.x() >= kHeaderWidth && pos.y() >= kHeaderHeight) {
-        setCursorCell(cellAtPos(pos - QPointF(kHeaderWidth, kHeaderHeight)), true);
+    if ((event->buttons() & Qt::LeftButton) && pos.x() >= headerWidth() && pos.y() >= headerHeight()) {
+        setCursorCell(cellAtPos(pos - QPointF(headerWidth(), headerHeight())), true);
     }
 }
 
@@ -233,15 +245,15 @@ void SpreadsheetItem::mouseDoubleClickEvent(QMouseEvent *event)
 {
     const QPointF pos = event->position();
     event->accept();
-    if (pos.y() < kHeaderHeight && pos.x() >= kHeaderWidth) {
-        const qint32 boundary = columnBoundaryAt(pos.x() - kHeaderWidth);
+    if (pos.y() < headerHeight() && pos.x() >= headerWidth()) {
+        const qint32 boundary = columnBoundaryAt(pos.x() - headerWidth());
         if (boundary >= 0) {
             emit columnWidthChanged(boundary, autofitColumnWidth(boundary));
         }
         return;
     }
-    if (pos.x() >= kHeaderWidth && pos.y() >= kHeaderHeight) {
-        setCursorCell(cellAtPos(pos - QPointF(kHeaderWidth, kHeaderHeight)));
+    if (pos.x() >= headerWidth() && pos.y() >= headerHeight()) {
+        setCursorCell(cellAtPos(pos - QPointF(headerWidth(), headerHeight())));
         startEditor();
     }
 }
@@ -250,22 +262,24 @@ void SpreadsheetItem::hoverMoveEvent(QHoverEvent *event)
 {
     const QPointF pos = event->position();
     // Resize affordance: the pointer says where the grab band is.
-    if (pos.y() < kHeaderHeight && pos.x() >= kHeaderWidth) {
-        setCursor(QCursor(columnBoundaryAt(pos.x() - kHeaderWidth) >= 0 ? Qt::SplitHCursor : Qt::ArrowCursor));
-    } else if (pos.x() < kHeaderWidth && pos.y() >= kHeaderHeight) {
-        setCursor(QCursor(rowBoundaryAt(pos.y() - kHeaderHeight) >= 0 ? Qt::SplitVCursor : Qt::ArrowCursor));
+    if (pos.y() < headerHeight() && pos.x() >= headerWidth()) {
+        setCursor(QCursor(columnBoundaryAt(pos.x() - headerWidth()) >= 0 ? Qt::SplitHCursor : Qt::ArrowCursor));
+    } else if (pos.x() < headerWidth() && pos.y() >= headerHeight()) {
+        setCursor(QCursor(rowBoundaryAt(pos.y() - headerHeight()) >= 0 ? Qt::SplitVCursor : Qt::ArrowCursor));
     } else {
         setCursor(QCursor(Qt::ArrowCursor));
     }
     // Cell comments as a hover tooltip (the QML shows a Tk.ToolTip).
     QString comment;
     const Sheet *sheet = activeSheet();
-    if (sheet != nullptr && pos.x() >= kHeaderWidth && pos.y() >= kHeaderHeight) {
-        const CellAddr addr = cellAtPos(pos - QPointF(kHeaderWidth, kHeaderHeight));
+    if (sheet != nullptr && pos.x() >= headerWidth() && pos.y() >= headerHeight()) {
+        const CellAddr addr = cellAtPos(pos - QPointF(headerWidth(), headerHeight()));
         if (const CellComment *found = sheet->commentAt(addr)) {
             comment = found->author.isEmpty()
                 ? found->text
                 : QStringLiteral("%1:\n%2").arg(found->author, found->text);
+        } else {
+            comment = linkTip(addr); // where a link goes (M66)
         }
     }
     if (comment != m_hoverComment || (!comment.isEmpty() && pos != m_hoverPoint)) {
@@ -328,21 +342,22 @@ void SpreadsheetItem::keyPressEvent(QKeyEvent *event)
     const CellRange used = usedRange();
     event->accept();
     switch (event->key()) {
+    // Arrows step over hidden rows and columns, as in Excel (M66).
     case Qt::Key_Left:
     case Qt::Key_Backtab:
-        setCursorCell(CellAddr{m_cursor.row, m_cursor.col - 1}, extend);
+        setCursorCell(CellAddr{m_cursor.row, visibleStep(m_cursor.col, -1, false)}, extend);
         return;
     case Qt::Key_Right:
     case Qt::Key_Tab:
-        setCursorCell(CellAddr{m_cursor.row, m_cursor.col + 1}, extend);
+        setCursorCell(CellAddr{m_cursor.row, visibleStep(m_cursor.col, 1, false)}, extend);
         return;
     case Qt::Key_Up:
-        setCursorCell(CellAddr{m_cursor.row - 1, m_cursor.col}, extend);
+        setCursorCell(CellAddr{visibleStep(m_cursor.row, -1, true), m_cursor.col}, extend);
         return;
     case Qt::Key_Down:
     case Qt::Key_Return:
     case Qt::Key_Enter:
-        setCursorCell(CellAddr{m_cursor.row + 1, m_cursor.col}, extend);
+        setCursorCell(CellAddr{visibleStep(m_cursor.row, 1, true), m_cursor.col}, extend);
         return;
     case Qt::Key_PageDown:
         setCursorCell(CellAddr{m_cursor.row + 20, m_cursor.col}, extend);

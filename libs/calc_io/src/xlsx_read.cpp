@@ -14,6 +14,8 @@
 #include "xlsx_package.h"
 #include "xlsx_parts.h"
 #include "xlsx_read_cells.h"
+#include "xlsx_read_features.h"
+#include "xlsx_carry.h"
 #include "xlsx_read_xml.h"
 #include "xlsx_style.h"
 #include "xlsx_text.h"
@@ -194,9 +196,21 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
     std::optional<QXlsx::ZipReader> package;
     QVector<QString> sheetParts;
     QStringList sharedStrings;
+    // M66 (D-075): cell-format protection (QXlsx reads none) and which cm
+    // values name a dynamic array.
+    QVector<quint8> xfProtection;
+    QSet<int> watchedXfs;
+    QSet<int> dynamicCms;
     if (!packagePath.isEmpty()) {
         package.emplace(packagePath);
         sheetParts = sheetPartMap(*package);
+        xfProtection = readXfProtection(*package);
+        for (int xf = 0; xf < xfProtection.size(); ++xf) {
+            if (xfProtection.at(xf) != 0) {
+                watchedXfs.insert(xf);
+            }
+        }
+        dynamicCms = readDynamicArrayCms(*package);
         QString sstPart = QStringLiteral("xl/sharedStrings.xml");
         for (const auto &[type, target] : readRels(*package, QStringLiteral("xl/_rels/workbook.xml.rels"))) {
             if (type.endsWith(QLatin1String("/sharedStrings"))) {
@@ -232,9 +246,10 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
             continue;
         }
         auto *worksheet = static_cast<QXlsx::Worksheet *>(abstract);
-        const QHash<quint64, TypedCell> typed = package.has_value() && !sheetParts.value(sheetIndex).isEmpty()
-            ? readTypedCells(package->fileData(sheetParts.value(sheetIndex)), sharedStrings)
-            : QHash<quint64, TypedCell>();
+        const CellScan scan = package.has_value() && !sheetParts.value(sheetIndex).isEmpty()
+            ? scanSheetCells(package->fileData(sheetParts.value(sheetIndex)), sharedStrings, watchedXfs)
+            : CellScan();
+        const QHash<quint64, TypedCell> &typed = scan.literals;
         QElapsedTimer sheetTimer;
         sheetTimer.start();
 
@@ -324,10 +339,16 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
                     out->setCellValue(sheetIndex, addr, value);
                 }
                 const QXlsx::Format format = cell->format();
-                if (!format.isEmpty()) {
-                    const QByteArray key = format.formatKey();
+                // A format's protection is not in QXlsx's key: it joins it.
+                const auto watched = scan.watchedCells.constFind(addr.key());
+                const quint8 protection = watched != scan.watchedCells.constEnd() ? xfProtection.value(watched.value()) : 0;
+                if (!format.isEmpty() || protection != 0) {
+                    const QByteArray key = format.formatKey() + QByteArrayLiteral("|p") + QByteArray::number(protection);
                     if (!styleIds.contains(key)) {
-                        styleIds.insert(key, out->addStyle(styleFromFormat(format, palette)));
+                        CellStyle style = styleFromFormat(format, palette);
+                        style.locked = (protection & 1) == 0;
+                        style.hiddenFormula = (protection & 2) != 0;
+                        styleIds.insert(key, out->addStyle(style));
                     }
                     sheet.setStyleIdAt(addr, styleIds.value(key));
                 }
@@ -354,6 +375,10 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
         if (!packagePath.isEmpty()) {
             readSheetExtras(packagePath, sheetIndex, palette, &sheet);
             readSheetDrawings(packagePath, out, sheetIndex);
+            if (!sheetParts.value(sheetIndex).isEmpty()) {
+                readSheetFeatures(*package, sheetParts.value(sheetIndex), &sheet); // M66
+            }
+            markDynamicArrays(out, sheetIndex, scan, dynamicCms);
         }
         if (qEnvironmentVariableIsSet("QQO_XLSX_TRACE")) {
             qInfo("xlsx: sheet %d (%s) %lld ms, %lld cells", sheetIndex,
@@ -412,7 +437,7 @@ bool readXlsx(QXlsx::Document &doc, Workbook *out, QString *error)
     return readXlsxImpl(doc, out, ThemePalette::officeDefault(), QString(), error);
 }
 
-bool readXlsxFile(const QString &path, Workbook *out, QString *error)
+bool readXlsxFile(const QString &path, Workbook *out, QString *error, QStringList *warnings)
 {
     // AGENT-GUARD: QXlsx cannot follow absolute part names in the package
     // relationships (a common shape from other producers); such a workbook
@@ -442,7 +467,18 @@ bool readXlsxFile(const QString &path, Workbook *out, QString *error)
     readDefinedNames(zip.fileData(QStringLiteral("xl/workbook.xml")), out);
     // The theme and properties ride with the workbook to its next save.
     out->source = readWorkbookSource(zip);
-    return readXlsxImpl(doc, out, paletteForPackage(source), source, error);
+    readWorkbookFeatures(zip, out); // structure lock, code name, VBA (M66)
+    if (!readXlsxImpl(doc, out, paletteForPackage(source), source, error)) {
+        return false;
+    }
+    // What the save will carry without modelling it (M66, D-075, D-068
+    // rule 2), and what it cannot: said in the warnings the app shows.
+    QStringList notes;
+    out->source.carried = buildCarriedPackage(source, *out, &notes);
+    if (warnings != nullptr) {
+        *warnings = notes;
+    }
+    return true;
 }
 
 } // namespace QindaOffice::Calc::IO

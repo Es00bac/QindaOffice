@@ -285,11 +285,13 @@ QList<TableSpec> readTables(QXlsx::ZipReader &zip, const QString &sheetPart)
         if (!it.value().first.endsWith(QLatin1String("/table"))) {
             continue;
         }
-        const QByteArray xml = zip.fileData(resolveTarget(ownerDir, it.value().second));
+        const QString part = resolveTarget(ownerDir, it.value().second);
+        const QByteArray xml = zip.fileData(part);
         if (xml.isEmpty()) {
             continue;
         }
-        const TableSpec table = readTablePart(xml);
+        TableSpec table = readTablePart(xml);
+        table.sourcePart = part; // query tables travel with it (M66)
         if (!table.name.isEmpty() && table.range.isValid()) {
             out.append(table);
         }

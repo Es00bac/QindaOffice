@@ -18,6 +18,9 @@ namespace QindaOffice::Apps::QindaCalc {
 
 void SpreadsheetDocument::setCondFormats(const QList<CalcEng::CondFormatRule> &rules)
 {
+    if (refuseOnProtectedSheet(true, tr("change conditional formatting"))) {
+        return;
+    }
     CalcEng::Sheet &sheet = m_workbook.sheetAt(m_activeSheet);
     if (sheet.condFormats() == rules) {
         return;
@@ -31,6 +34,9 @@ void SpreadsheetDocument::setCondFormats(const QList<CalcEng::CondFormatRule> &r
 
 void SpreadsheetDocument::setValidations(const QList<CalcEng::ValidationRule> &rules)
 {
+    if (refuseOnProtectedSheet(true, tr("change data validation"))) {
+        return;
+    }
     CalcEng::Sheet &sheet = m_workbook.sheetAt(m_activeSheet);
     if (sheet.validations() == rules) {
         return;
@@ -44,6 +50,9 @@ void SpreadsheetDocument::setValidations(const QList<CalcEng::ValidationRule> &r
 
 void SpreadsheetDocument::setAutoFilter(const CalcEng::AutoFilter &filter)
 {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().autoFilter, tr("filter"))) {
+        return;
+    }
     CalcEng::Sheet &sheet = m_workbook.sheetAt(m_activeSheet);
     if (sheet.autoFilter() == filter) {
         return;
@@ -70,6 +79,9 @@ void SpreadsheetDocument::setFreeze(qint32 rows, qint32 cols)
 
 void SpreadsheetDocument::setSheetHidden(qint32 index, bool hidden)
 {
+    if (refuseStructureChange()) {
+        return;
+    }
     if (index < 0 || index >= m_workbook.sheetCount()) {
         return;
     }
@@ -107,6 +119,9 @@ void SpreadsheetDocument::setSheetHidden(qint32 index, bool hidden)
 void SpreadsheetDocument::setComment(const CalcEng::CellAddr &addr,
                                      const CalcEng::CellComment &comment)
 {
+    if (refuseOnProtectedSheet(m_workbook.sheetAt(m_activeSheet).protection().objects, tr("edit notes"))) {
+        return;
+    }
     CalcEng::Sheet &sheet = m_workbook.sheetAt(m_activeSheet);
     const CalcEng::CellComment *existing = sheet.commentAt(addr);
     if ((existing == nullptr && comment.text.isEmpty())

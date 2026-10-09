@@ -16,10 +16,13 @@ add_library(calc_engine STATIC
     src/eval_array.cpp
     src/eval_array.h
     src/formula_print.cpp
+    src/hyperlink.cpp
+    src/hyperlink.h
     src/image_spec.cpp
     src/image_spec.h
     src/functions/date.cpp
     src/functions/date_more.cpp
+    src/functions/dynamic_array.cpp
     src/functions/financial.cpp
     src/functions/financial_more.cpp
     src/functions/functions.cpp
@@ -42,15 +45,24 @@ add_library(calc_engine STATIC
     src/lexer.h
     src/number_format.cpp
     src/number_format.h
+    src/outline.cpp
+    src/outline.h
     src/parser.cpp
     src/parser.h
+    src/protection.cpp
+    src/protection.h
     src/sheet.cpp
     src/sheet.h
     src/sheet_rules.cpp
     src/sheet_rules.h
     src/sheet_rules_eval.cpp
+    src/sheet_source.cpp
+    src/sheet_source.h
+    src/spill.cpp
     src/structure.cpp
     src/structure.h
+    src/structure_features.cpp
+    src/structure_internal.h
     src/structure_sheets.cpp
     src/value.cpp
     src/value.h

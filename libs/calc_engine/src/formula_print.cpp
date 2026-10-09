@@ -157,6 +157,11 @@ QString nodeText(const NodePtr &node)
             + wrapped(node->right, rightParens);
     }
     case Node::Kind::Call: {
+        // ANCHORARRAY(A1) is the A1# spill reference (M66, D-075).
+        if (node->text.compare(QLatin1String("ANCHORARRAY"), Qt::CaseInsensitive) == 0 && node->args.size() == 1
+            && node->args.first() && node->args.first()->kind == Node::Kind::Ref) {
+            return nodeText(node->args.first()) + QLatin1Char('#');
+        }
         QString out = node->text + QStringLiteral("(");
         for (int i = 0; i < node->args.size(); ++i) {
             if (i > 0) {

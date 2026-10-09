@@ -43,6 +43,17 @@ struct WorkbookSource {
     QString description;
     QString category;
     QDateTime created;
+    // M66 (D-075): the parts a save carries without modelling them — pivot
+    // tables and caches, slicers, timelines, query tables, connections,
+    // external links, the data model, custom XML, threaded comments,
+    // controls, printer settings, unmodelled drawing objects and the VBA
+    // project — as a reduced copy of the source package (an OPC zip; cell
+    // data stripped). calc_io builds it on read and copies from it on
+    // save (xlsx_carry*); each sheet's SheetSource says which source sheet
+    // it is. Empty: nothing to carry.
+    QByteArray carried;
+    QString codeName;          // <workbookPr codeName>: the VBA project's name for the workbook
+    bool macroEnabled = false; // the source had a VBA project (an .xlsm)
     bool operator==(const WorkbookSource &) const = default;
 };
 
@@ -93,6 +104,11 @@ public:
     // arrive shifted from the master). Takes the canonical text for storage.
     void installFormula(qint32 sheet, const CellAddr &addr, const NodePtr &ast,
                         const QString &formula);
+    // The same, saying whether the formula spills its array results (a
+    // dynamic-array formula, M66/D-075). setCellInput installs every typed
+    // formula this way, as Excel 365 does; a file says per cell (cm).
+    void installFormula(qint32 sheet, const CellAddr &addr, const NodePtr &ast,
+                        const QString &formula, bool dynamicArray);
     // Installs a pre-parsed literal (number/text/bool/error) without parsing.
     void setCellValue(qint32 sheet, const CellAddr &addr, const Value &value);
 
@@ -157,6 +173,29 @@ public:
 
     [[nodiscard]] DependencyGraph &dependencies() { return m_dependencies; }
 
+    // ---- dynamic arrays (M66, D-075; spill.cpp) ----
+    // The spill of an anchor whose last result was an array: the cells it
+    // covers (or tried to, when blocked — then the anchor shows #SPILL!).
+    // A one-cell array is a one-cell extent. Derived state: every
+    // recalculation keeps it current; it is never saved or snapshotted.
+    struct SpillState {
+        CellRange extent;
+        bool blocked = false;
+    };
+    [[nodiscard]] std::optional<SpillState> spillAt(qint32 sheet, const CellAddr &anchor) const;
+    // The anchor whose spill covers `addr` (the anchor itself included), or
+    // an invalid address.
+    [[nodiscard]] CellAddr spillAnchorOf(qint32 sheet, const CellAddr &addr) const;
+    // EvalHost: A1# (ANCHORARRAY) — the unblocked spill of an anchor.
+    [[nodiscard]] std::optional<CellRange> spillExtent(qint32 sheet, const CellAddr &anchor) const override;
+
+    // ---- protection (M66, D-075) ----
+    // True when the sheet is protected and the cell's format is locked.
+    [[nodiscard]] bool isCellLocked(qint32 sheet, const CellAddr &addr) const;
+    // True when the formula of the cell is hidden by protection.
+    [[nodiscard]] bool isFormulaHidden(qint32 sheet, const CellAddr &addr) const;
+    WorkbookProtection protection;
+
     // Floating charts anchored on the sheets (plan section 7.2); exported
     // to xlsx, dropped with a warning on import (QXlsx has no chart read).
     QList<ChartSpec> charts;
@@ -170,6 +209,17 @@ public:
 private:
     static Value parseLiteral(const QString &input, bool *isFormula, NodePtr *ast,
                               QString *formulaText);
+    // spill.cpp: one recalculation pass over `edited`; the cells a spill
+    // wrote or cleared land in `spillChanged` for the next pass.
+    void recalcPass(const QSet<CellKey> &edited, bool withVolatile, QSet<CellKey> *spillChanged);
+    void applySpill(qint32 sheet, const CellAddr &anchor, const Arg &result, QSet<CellKey> *changed);
+    void dropSpill(const CellKey &anchor, QSet<CellKey> *changed);
+    // Removes every spilled cell and forgets every spill (the next full
+    // recalculation rebuilds them) — after edits that move cells.
+    void resetSpills();
+    [[nodiscard]] QSet<CellKey> anchorsCovering(const QSet<CellKey> &edited) const;
+    // Clears the spill-owner mark of a cell about to hold user content.
+    static void claimCell(Cell &cell) { cell.spillAnchor = CellAddr{}; }
 
     std::vector<std::unique_ptr<Sheet>> m_sheets;
     QHash<QString, qint32> m_sheetIndex;
@@ -184,6 +234,7 @@ private:
     // Data-bar min/max per rule (keyed by rule content), cleared on every
     // recalculation. Mutable: condFormatFor is a const evaluation.
     mutable QHash<quint64, QPair<double, double>> m_dataBarExtents;
+    QHash<CellKey, SpillState> m_spills; // anchor → its spill (see spillAt)
 };
 
 } // namespace QindaOffice::Calc

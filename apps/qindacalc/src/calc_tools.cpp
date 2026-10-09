@@ -173,6 +173,10 @@ Ai::EditOutcome CalcTools::apply(const QJsonArray &edits)
                        rule != nullptr && !validationAccepts(*rule, input)) {
                 outcome.errors.append(addrText(address) + QStringLiteral(": ")
                                       + validationDescription(*rule));
+            } else if (m_document->workbook()->isCellLocked(m_document->activeSheet(), address)) {
+                // Protection binds the assistants like the keyboard (M66).
+                outcome.errors.append(addrText(address) + QStringLiteral(": ")
+                                      + QObject::tr("the cell is locked (the sheet is protected)"));
             } else {
                 continue;
             }

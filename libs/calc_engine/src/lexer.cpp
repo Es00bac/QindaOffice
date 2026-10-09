@@ -174,6 +174,7 @@ QVector<Token> lexFormula(const QString &input)
                 {QStringLiteral("#VALUE!"), nullptr}, {QStringLiteral("#REF!"), nullptr},
                 {QStringLiteral("#NAME?"), nullptr}, {QStringLiteral("#NUM!"), nullptr},
                 {QStringLiteral("#N/A"), nullptr},
+                {QStringLiteral("#SPILL!"), nullptr}, {QStringLiteral("#CALC!"), nullptr},
             };
             bool matched = false;
             for (auto it = kErrors.begin(); it != kErrors.end(); ++it) {

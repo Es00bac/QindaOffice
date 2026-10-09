@@ -63,6 +63,18 @@ constexpr std::array kPrefixes{
     PrefixRow{u"http://schemas.microsoft.com/office/powerpoint/2010/main", "p14"},
     PrefixRow{u"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main", "x14"},
     PrefixRow{u"http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac", "x14ac"},
+    // Excel's own prefixes for the extension vocabularies carried by
+    // QindaCalc (M66, D-075): slicers, timelines, revisions, dynamic arrays.
+    PrefixRow{u"http://schemas.microsoft.com/office/spreadsheetml/2010/11/main", "x15"},
+    PrefixRow{u"http://schemas.microsoft.com/office/spreadsheetml/2010/11/ac", "x15ac"},
+    PrefixRow{u"http://schemas.microsoft.com/office/spreadsheetml/2014/revision", "xr"},
+    PrefixRow{u"http://schemas.microsoft.com/office/spreadsheetml/2015/revision2", "xr2"},
+    PrefixRow{u"http://schemas.microsoft.com/office/spreadsheetml/2016/revision3", "xr3"},
+    PrefixRow{u"http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray", "xda"},
+    PrefixRow{u"http://schemas.microsoft.com/office/excel/2006/main", "xm"},
+    PrefixRow{u"http://schemas.microsoft.com/office/drawing/2010/slicer", "sle"},
+    PrefixRow{u"http://schemas.microsoft.com/office/drawing/2012/slicer", "sle15"},
+    PrefixRow{u"http://schemas.microsoft.com/office/drawing/2012/timeslicer", "tsle"},
     PrefixRow{u"urn:schemas-microsoft-com:office:excel", "x"},
     PrefixRow{u"urn:schemas-microsoft-com:office:powerpoint", "pvml"},
 };

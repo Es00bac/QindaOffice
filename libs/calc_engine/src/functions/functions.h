@@ -64,6 +64,15 @@ public:
         Q_UNUSED(sheet);
         return {};
     }
+    // The spill of the dynamic-array anchor at (sheet, anchor), for the
+    // A1# spill reference (ANCHORARRAY, M66/D-075); nullopt when the cell
+    // spills nothing (or is blocked).
+    [[nodiscard]] virtual std::optional<CellRange> spillExtent(qint32 sheet, const CellAddr &anchor) const
+    {
+        Q_UNUSED(sheet);
+        Q_UNUSED(anchor);
+        return std::nullopt;
+    }
     // The text of the formula in a cell, without '='; empty for a value or
     // an empty cell (ISFORMULA, FORMULATEXT — M61).
     [[nodiscard]] virtual QString cellFormula(qint32 sheet, qint32 row, qint32 col) const
@@ -155,5 +164,8 @@ void registerMathMoreFunctions(QHash<QString, FunctionSpec> &registry);
 void registerLookupMoreFunctions(QHash<QString, FunctionSpec> &registry);
 void registerTextMoreFunctions(QHash<QString, FunctionSpec> &registry);
 void registerDateMoreFunctions(QHash<QString, FunctionSpec> &registry);
+// M66 (D-075): the dynamic-array functions — FILTER, SORT, SORTBY, UNIQUE,
+// SEQUENCE, RANDARRAY — and ANCHORARRAY behind the A1# spill reference.
+void registerDynamicArrayFunctions(QHash<QString, FunctionSpec> &registry);
 
 } // namespace QindaOffice::Calc

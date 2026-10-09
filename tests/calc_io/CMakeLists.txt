@@ -27,6 +27,21 @@ qqo_add_calc_io_test(tst_calc_io_images Qt6::Gui)
 # (theme/properties, scoped names, quoting, tables, long lists, VML, drawings).
 qqo_add_calc_io_test(tst_calc_io_excel)
 qqo_add_calc_io_test(tst_calc_io_package Qt6::Gui)
+# M66 (D-075): hyperlinks, outlines, protection, the parts carried from the
+# source package (carry_fixtures.h builds pivot tables, slicers, query
+# tables, threaded comments, controls and a VBA project by hand), and
+# dynamic arrays with their cell metadata.
+qqo_add_calc_io_test(tst_calc_io_links)
+qqo_add_calc_io_test(tst_calc_io_outline)
+qqo_add_calc_io_test(tst_calc_io_protect)
+qqo_add_calc_io_test(tst_calc_io_carry)
+qqo_add_calc_io_test(tst_calc_io_carry_sheet)
+qqo_add_calc_io_test(tst_calc_io_arrays)
+# The second reader: LibreOffice re-opens the M66 outputs (converted to flat
+# ODS headless, svp, private profile) and keeps links, outlines,
+# protection, spills and the carried pivot table. Skips without soffice.
+qqo_add_calc_io_test(tst_calc_io_libre)
+set_tests_properties(tst_calc_io_libre PROPERTIES TIMEOUT 900)
 
 # Not a test: the M61 measurement tool (see calc_io_survey.cpp) — prints
 # aggregate counts for a list of real workbooks, never their content.

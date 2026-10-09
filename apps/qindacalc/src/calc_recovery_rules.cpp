@@ -235,6 +235,7 @@ QJsonArray tablesToJson(const QList<CalcEng::TableSpec> &tables)
             {QStringLiteral("rowStripes"), table.rowStripes},
             {QStringLiteral("colStripes"), table.colStripes},
             {QStringLiteral("columns"), QJsonArray::fromStringList(table.columnNames)},
+            {QStringLiteral("sourcePart"), table.sourcePart}, // M66: its query table travels
         });
     }
     return array;
@@ -253,6 +254,7 @@ QList<CalcEng::TableSpec> tablesFromJson(const QJsonArray &array)
         table.styleName = item.value(QStringLiteral("style")).toString();
         table.rowStripes = item.value(QStringLiteral("rowStripes")).toBool(true);
         table.colStripes = item.value(QStringLiteral("colStripes")).toBool(false);
+        table.sourcePart = item.value(QStringLiteral("sourcePart")).toString();
         for (const QJsonValue &column : item.value(QStringLiteral("columns")).toArray()) {
             table.columnNames.append(column.toString());
         }
@@ -307,6 +309,11 @@ QJsonObject sourceToJson(const CalcEng::WorkbookSource &source)
         {QStringLiteral("description"), source.description},
         {QStringLiteral("category"), source.category},
         {QStringLiteral("created"), source.created.toString(Qt::ISODate)},
+        // M66 (D-075): the parts a save carries, so a recovered workbook
+        // still saves its pivot tables, slicers, controls and macros.
+        {QStringLiteral("carried"), QString::fromLatin1(source.carried.toBase64())},
+        {QStringLiteral("codeName"), source.codeName},
+        {QStringLiteral("macroEnabled"), source.macroEnabled},
     };
 }
 
@@ -321,6 +328,9 @@ CalcEng::WorkbookSource sourceFromJson(const QJsonObject &object)
     source.description = object.value(QStringLiteral("description")).toString();
     source.category = object.value(QStringLiteral("category")).toString();
     source.created = QDateTime::fromString(object.value(QStringLiteral("created")).toString(), Qt::ISODate);
+    source.carried = QByteArray::fromBase64(object.value(QStringLiteral("carried")).toString().toLatin1());
+    source.codeName = object.value(QStringLiteral("codeName")).toString();
+    source.macroEnabled = object.value(QStringLiteral("macroEnabled")).toBool(false);
     return source;
 }
 
