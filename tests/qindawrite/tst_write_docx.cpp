@@ -277,9 +277,15 @@ void WriteDocxTest::pageCountsAgreeWithWord()
     int failed = 0;
     qint64 wordPages = 0;
     qint64 writePages = 0;
+    // QQO_WRITE_PAGES_DETAIL=<file>: "list-line word write" per document, for
+    // a local analysis (line numbers of the list only; no names, no content).
+    QFile detail(qEnvironmentVariable("QQO_WRITE_PAGES_DETAIL"));
+    const bool detailed = !detail.fileName().isEmpty() && detail.open(QIODevice::WriteOnly | QIODevice::Text);
+    int line = 0;
     static const QRegularExpression kPages(QStringLiteral("<Pages>(\\d+)</Pages>"));
     static const QRegularExpression kWord(QStringLiteral("<Application>Microsoft Office Word</Application>"));
     for (const QString &path : QString::fromUtf8(file.readAll()).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+        ++line;
         const auto package = Ooxml::Package::load(path);
         if (!package) {
             ++failed;
@@ -297,6 +303,9 @@ void WriteDocxTest::pageCountsAgreeWithWord()
         }
         const int word = pages.captured(1).toInt();
         const int ours = doc.textDocument()->pageCount();
+        if (detailed) {
+            detail.write(QStringLiteral("%1 %2 %3\n").arg(line).arg(word).arg(ours).toUtf8());
+        }
         ++measured;
         wordPages += word;
         writePages += ours;
