@@ -5,11 +5,12 @@ import QindaTK as Tk
 import QindaOffice.Books.App
 
 // Estimated taxes ▸ Record payment (M71, D-081): a federal (Form 1040-ES)
-// or Colorado (DR 0104EP) estimated-tax payment the owner made through
-// EFTPS, IRS Direct Pay or Colorado's Revenue Online. The tax is the
-// owner's, not the business's, so it posts as an owner's draw marked as
-// that year's installment (OwnerPay, owner_pay.h); the planner counts it
-// against the installments. QindaBooks never pays the IRS or Colorado.
+// estimated-tax payment a sole proprietor or partner made through EFTPS or
+// IRS Direct Pay — or, for a business that chose Colorado, a Colorado
+// (DR 0104EP) one. The tax is the owner's, not the business's, so it
+// posts as an owner's draw marked as that year's installment (OwnerPay,
+// owner_pay.h); the planner counts it against the installments.
+// QindaBooks never pays an agency.
 Tk.Dialog {
     id: dialog
 
@@ -20,12 +21,13 @@ Tk.Dialog {
     property string problem: ""
     // Two columns of fields, one when the window is narrow.
     readonly property string fieldColumns: width < Tk.Theme.size.dialogWidth * 1.5 ? "1fr" : "1fr 1fr"
-    readonly property var jurisdictions: [{ text: qsTr("Federal (Form 1040-ES)"), value: "federal" },
-                                          { text: qsTr("Colorado (DR 0104EP)"), value: "colorado" }]
+    // Colorado's only for a business that chose Colorado.
+    readonly property var jurisdictions: [{ text: qsTr("Federal (Form 1040-ES)"), value: "federal" }].concat(
+        payroll !== null && payroll.colorado ? [{ text: qsTr("Colorado (DR 0104EP)"), value: "colorado" }] : [])
 
     objectName: "estimatedPaymentDialog"
     title: qsTr("Record an estimated tax payment")
-    subtitle: qsTr("Paid through EFTPS, IRS Direct Pay or Revenue Online; recorded here as an owner's draw")
+    subtitle: qsTr("Paid through EFTPS, IRS Direct Pay or the state's system; recorded here as an owner's draw")
     dialogWidth: Tk.Theme.size.dialogWidth * 1.5
     primaryText: qsTr("Record payment")
     secondaryText: qsTr("Cancel")
@@ -39,7 +41,7 @@ Tk.Dialog {
         for (let i = 0; i < accounts.length; ++i) if (Number(accounts[i].id) === Number(setup.payrollBankAccountId || 0)) bank = i
         bankBox.currentIndex = bank
         ownerBox.currentIndex = owners.length > 1 ? 1 : 0
-        whereBox.currentIndex = jurisdiction === "colorado" ? 1 : 0
+        whereBox.currentIndex = jurisdiction === "colorado" && jurisdictions.length > 1 ? 1 : 0
         installmentBox.currentIndex = Math.max(0, Math.min(3, Number(installment || 1) - 1))
         yearField.text = String(year || books.today.substring(0, 4))
         amountField.text = String(amountPlain || "")
@@ -88,7 +90,7 @@ Tk.Dialog {
             }
             Tk.PropertyRow {
                 label: qsTr("Confirmation")
-                Tk.TextField { id: referenceField; objectName: "estimatedPaymentReference"; small: true; mono: true; placeholderText: qsTr("EFTPS or Revenue Online number") }
+                Tk.TextField { id: referenceField; objectName: "estimatedPaymentReference"; small: true; mono: true; placeholderText: qsTr("The payment's confirmation number") }
             }
         }
     }

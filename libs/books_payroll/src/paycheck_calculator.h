@@ -36,8 +36,15 @@
 // AGENT-CONTRACT (books_engine payroll ledger): every amount here is what
 // the paycheck records and posts; netPay = gross − pre-tax deductions −
 // employee taxes − after-tax deductions, never negative (refused instead).
+//
+// AGENT-NOTE (D-081 amendment): federal taxes are always computed;
+// Colorado's — wage withholding, UI, FAMLI, the city taxes — only for an
+// employer that chose Colorado (`EmployerSettings::colorado`, the one state
+// with built-in tables). Any other state's or city's payroll taxes are the
+// company's own payroll tax items (custom_items.h), computed as entered.
 
 #include "colorado_payroll.h"
+#include "custom_items.h"
 #include "federal_withholding.h"
 #include "payroll_tables.h"
 
@@ -48,11 +55,12 @@ namespace QindaOffice::Books::Payroll {
 
 // The employer's own values (company settings, not tables).
 struct EmployerSettings {
+    bool colorado = false;               // Colorado's built-in taxes apply (the employer chose them)
     std::optional<UiRate> uiRate;        // the rate CDLE assigned, part by part; none = the introductory rate
     Decimal famliEmployeeShare = Decimal(5, 1); // of the premium withheld from wages
     Decimal famliEmployerShare = Decimal(5, 1); // of the premium the company pays
     bool roundFederalWithholding = false; // Pub 15-T allows whole dollars when used consistently
-    QString futaState = QStringLiteral("CO");
+    QString futaState;                   // two letters: the state unemployment tax is paid to (FUTA credit reduction)
 };
 
 struct EmployeeTaxSetup {
@@ -102,6 +110,7 @@ struct PayInput {
     Money afterTax = usd(0);          // deductions after taxes
     YearToDate ytd;
     EmployerToDate employerToDate;
+    QList<CustomItemInput> custom;    // the company's own payroll tax items (custom_items.h)
 };
 
 struct PaycheckTaxes {
@@ -131,6 +140,10 @@ struct PaycheckTaxes {
     Money coloradoUi = usd(0);
     Money famliEmployer = usd(0);
     Money optEmployer = usd(0);
+    // The company's own payroll tax items, and their totals by side.
+    QList<CustomItemResult> custom;
+    Money customEmployee = usd(0);
+    Money customEmployer = usd(0);
     // Deductions and the check.
     Money preTaxDeductions = usd(0);
     Money afterTaxDeductions = usd(0);

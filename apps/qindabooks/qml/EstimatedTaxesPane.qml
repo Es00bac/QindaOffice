@@ -4,14 +4,14 @@ import QtQuick
 import QindaTK as Tk
 import QindaOffice.Books.App
 
-// Payroll ▸ Estimated taxes (M71, D-081): the planner for a Schedule C or
-// partnership owner — this year's profit from the books, the federal
-// (Form 1040-ES) and Colorado (DR 0104EP) tax on it with self-employment
-// tax, the required annual payment (the safe harbor), the four
-// installments with what was paid and what is still owed, and the
-// worksheets line by line. The owner pays through EFTPS, IRS Direct Pay
-// or Revenue Online and records the payment here. An S corporation owner
-// gets the reason instead (PayrollService::estimate).
+// Payroll ▸ Estimated taxes (M71, D-081): the planner for a sole
+// proprietor or partner — this year's profit from the books, the federal
+// (Form 1040-ES) tax on it with self-employment tax, and Colorado's
+// (DR 0104EP) for a business that chose Colorado, the required annual
+// payment (the safe harbor), the four installments with what was paid and
+// what is still owed, and the worksheets line by line. Payments made
+// through EFTPS, IRS Direct Pay or the state's system are recorded here. A
+// corporation or nonprofit gets the reason instead (PayrollService::estimate).
 Tk.Scroll {
     id: pane
 
@@ -76,7 +76,7 @@ Tk.Scroll {
             gap: Tk.Theme.space.sm
             align: Tk.Flex.Center
             Tk.Heading { level: 3; text: pane.ready ? qsTr("%1 estimated taxes").arg(pane.plan.year) : qsTr("Estimated taxes"); Tk.Flex.grow: 1 }
-            Tk.Button { objectName: "estimateProfile"; variant: "outline"; iconName: "user-round"; text: qsTr("Your tax picture…"); onClicked: pane.profileRequested() }
+            Tk.Button { objectName: "estimateProfile"; variant: "outline"; iconName: "user-round"; text: qsTr("Owner's tax picture…"); onClicked: pane.profileRequested() }
             Tk.Button {
                 objectName: "estimateRecord"; variant: "accent"; iconName: "landmark"; text: qsTr("Record a payment…")
                 enabled: pane.ready
@@ -92,10 +92,10 @@ Tk.Scroll {
             KpiCard {
                 Tk.Flex.grow: 1
                 objectName: "estimateYear"; label: qsTr("For the year"); value: String(pane.plan.annualProfitText || ""); iconName: "calendar-clock"
-                caption: pane.plan.annualized ? qsTr("projected from the profit so far") : qsTr("your figure")
+                caption: pane.plan.annualized ? qsTr("projected from the profit so far") : qsTr("the figure entered")
             }
             KpiCard { Tk.Flex.grow: 1; objectName: "estimateFederalTax"; label: qsTr("Federal tax"); value: pane.ready ? String(pane.plan.federal.totalTaxText) : ""; caption: qsTr("self-employment %1").arg(pane.plan.seTaxText || ""); iconName: "landmark" }
-            KpiCard { Tk.Flex.grow: 1; objectName: "estimateColoradoTax"; label: qsTr("Colorado tax"); value: String(pane.plan.coloradoTaxText || ""); caption: qsTr("income tax"); iconName: "map-pin" }
+            KpiCard { visible: pane.plan.colorado !== undefined && pane.plan.colorado !== null; Tk.Flex.grow: 1; objectName: "estimateColoradoTax"; label: qsTr("Colorado tax"); value: String(pane.plan.coloradoTaxText || ""); caption: qsTr("income tax"); iconName: "map-pin" }
             KpiCard {
                 Tk.Flex.grow: 1
                 objectName: "estimateSetAside"; label: qsTr("Set aside"); value: pane.ready ? qsTr("%1%").arg(pane.plan.setAsidePercent) : ""; iconName: "piggy-bank"; tone: "good"
@@ -103,7 +103,11 @@ Tk.Scroll {
             }
         }
         Repeater {
-            model: pane.ready ? [{ key: "federal", title: qsTr("Federal — Form 1040-ES") }, { key: "colorado", title: qsTr("Colorado — DR 0104EP") }] : []
+            // Colorado's plan only when the service gives one (a business
+            // that chose Colorado).
+            model: !pane.ready ? []
+                 : [{ key: "federal", title: qsTr("Federal — Form 1040-ES") }].concat(
+                       pane.plan.colorado ? [{ key: "colorado", title: qsTr("Colorado — DR 0104EP") }] : [])
             delegate: Tk.Flex {
                 id: section
                 required property var modelData

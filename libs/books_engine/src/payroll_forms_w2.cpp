@@ -53,7 +53,10 @@ W2Boxes boxesFor(const QList<PaycheckRecord> &list)
     return b;
 }
 
-void addBoxes(FormTable &f, const W2Boxes &b, const QString &stateId)
+// Boxes 15–17 carry Colorado's figures, for a business that chose
+// Colorado; another state's are the company's own payroll tax items, not
+// on this worksheet (`stateId` empty = no state boxes).
+void addBoxes(FormTable &f, const W2Boxes &b, const std::optional<QString> &stateId)
 {
     f.line(QStringLiteral("1"), QStringLiteral("Wages, tips, other compensation"), b.wages);
     f.line(QStringLiteral("2"), QStringLiteral("Federal income tax withheld"), b.federalTax);
@@ -75,11 +78,23 @@ void addBoxes(FormTable &f, const W2Boxes &b, const QString &stateId)
     if (b.opt.isPositive()) {
         f.line(QStringLiteral("14a"), QStringLiteral("Other: local Occupational Privilege Tax"), b.opt);
     }
+    if (!stateId) {
+        return;
+    }
     f.text(QStringLiteral("15"), QStringLiteral("State · Employer's state ID number"),
-           QStringLiteral("CO · ") + (stateId.isEmpty() ? QStringLiteral("(enter the Colorado account number)") : stateId));
+           QStringLiteral("CO · ") + (stateId->isEmpty() ? QStringLiteral("(enter the Colorado account number)") : *stateId));
     f.line(QStringLiteral("16"), QStringLiteral("State wages, tips, etc."), b.stateWages);
     f.line(QStringLiteral("17"), QStringLiteral("State income tax"), b.stateTax);
 }
+
+std::optional<QString> coloradoStateId(CompanyFile &file)
+{
+    const PayrollSetup s = PayrollRecords(file).setup();
+    return s.colorado ? std::optional<QString>(s.coloradoAccount) : std::nullopt;
+}
+
+const QString kOtherStates = QStringLiteral("State boxes 15–17 are filled for Colorado only. Another state's wages and "
+                                            "user-entered withholding are in the Employee Earnings Summary.");
 
 QString employerBlock(CompanyFile &file)
 {
@@ -101,7 +116,7 @@ ReportTable PayrollReports::formW2(int year, qint64 employeeId, bool revealIds) 
     const QString title = employeeId != 0 ? QStringLiteral("Form W-2 worksheet: %1").arg(records.employee(employeeId).fullName())
                                           : QStringLiteral("Form W-2 worksheets");
     FormTable f(m_file, QStringLiteral("form_w2"), title, QStringLiteral("Wage and Tax Statement %1").arg(year));
-    const QString stateId = records.setup().coloradoAccount;
+    const std::optional<QString> stateId = coloradoStateId(m_file);
     if (employeeId != 0 && !byEmployee.contains(employeeId)) {
         byEmployee.insert(employeeId, {});
     }
@@ -125,6 +140,9 @@ ReportTable PayrollReports::formW2(int year, qint64 employeeId, bool revealIds) 
     }
     f.note(QStringLiteral("Box 12 code DD (health coverage) is optional for employers filing fewer than 250 W-2s and "
                           "is not shown."));
+    if (!stateId) {
+        f.note(kOtherStates);
+    }
     return f.table();
 }
 
@@ -142,11 +160,16 @@ ReportTable PayrollReports::formW3(int year, bool revealIds) const
     f.text(QStringLiteral("e"), QStringLiteral("Employer identification number (EIN)"), einText(m_file, revealIds));
     f.text(QStringLiteral("f–g"), QStringLiteral("Employer's name and address"), employerBlock(m_file));
     const W2Boxes b = boxesFor(list);
-    addBoxes(f, b, PayrollRecords(m_file).setup().coloradoAccount);
+    const std::optional<QString> stateId = coloradoStateId(m_file);
+    addBoxes(f, b, stateId);
     f.line(QStringLiteral("12a"), QStringLiteral("Deferred compensation (codes D and S)"), b.code401k + b.codeSimple);
     f.note(QStringLiteral("File Copy A of each W-2 with the W-3 through the SSA's Business Services Online by February 1, "
-                          "%1 (January 31 is a Sunday); Colorado W-2s through Revenue Online with the DR 1093.")
-               .arg(year + 1));
+                          "%1 (January 31 is a Sunday)%2.")
+               .arg(year + 1)
+               .arg(stateId ? QStringLiteral("; Colorado W-2s through Revenue Online with the DR 1093") : QString()));
+    if (!stateId) {
+        f.note(kOtherStates);
+    }
     return f.table();
 }
 

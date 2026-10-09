@@ -6,6 +6,7 @@
 #include "accounts.h"
 #include "company_file.h"
 #include "documents.h"
+#include "payroll_items.h"
 #include "payroll_ledger.h"
 #include "payroll_records.h"
 #include "sql_util.h"
@@ -45,7 +46,17 @@ QList<Share> sharesOf(const PaycheckRecord &r)
     if (!r.optCity.isEmpty()) {
         out << Share{QStringLiteral("opt:") + r.optCity, PayrollRole::LocalOpt, t.optEmployee + t.optEmployer};
     }
+    // The company's own payroll tax items: one group each, its own account.
+    for (const CustomItemResult &c : t.custom) {
+        out << Share{QStringLiteral("custom:%1").arg(c.id), QStringLiteral("custom:%1").arg(c.id), c.amount};
+    }
     return out;
+}
+
+// The payroll tax item a "custom:<id>" group key names.
+qint64 customId(const QString &tax)
+{
+    return tax.startsWith(QLatin1String("custom:")) ? tax.mid(7).toLongLong() : 0;
 }
 
 QDate lastDay(int year, int month)
@@ -67,10 +78,16 @@ DuePeriod optPeriod(const QDate &payDate, const QString &filing, const Occupatio
     return p;
 }
 
-DuePeriod periodFor(const QString &tax, const QDate &payDate, const PayrollSetup &setup, const PayrollTables &tables)
+DuePeriod periodFor(const QString &tax, const QDate &payDate, const PayrollSetup &setup, const PayrollTables &tables,
+                    const QMap<qint64, PayrollItem> &items)
 {
     const BusinessCalendar federal(tables.federalHolidays());
     const BusinessCalendar colorado(tables.coloradoHolidays());
+    if (const qint64 id = customId(tax); id != 0 && items.contains(id)) {
+        // An agency QindaBooks knows nothing about: business days by the
+        // federal calendar.
+        return PayrollItems::periodFor(items.value(id), payDate, federal);
+    }
     if (tax == QLatin1String("federal941")) {
         return federalDepositPeriod(payDate, setup.depositSchedule, federal);
     }
@@ -130,6 +147,15 @@ QString PayrollLiabilities::groupLabel(const QString &tax)
     return tax;
 }
 
+QString PayrollLiabilities::labelOf(const QString &tax) const
+{
+    if (const qint64 id = customId(tax); id != 0) {
+        const std::optional<PayrollItem> item = PayrollItems(m_file).item(id);
+        return item ? item->name : tax;
+    }
+    return groupLabel(tax);
+}
+
 QString PayrollLiabilities::groupAgency(const QString &tax)
 {
     if (tax == QLatin1String("federal941") || tax == QLatin1String("futa")) return QStringLiteral("IRS — EFTPS");
@@ -143,6 +169,10 @@ QString PayrollLiabilities::groupAgency(const QString &tax)
 QList<LiabilityDue> PayrollLiabilities::liabilities(const QDate &from, const QDate &to, bool openOnly) const
 {
     const PayrollSetup setup = PayrollRecords(m_file).setup();
+    QMap<qint64, PayrollItem> items;
+    for (const PayrollItem &item : PayrollItems(m_file).items(true)) {
+        items.insert(item.id, item);
+    }
     const QString cur = m_file.currency();
     QMap<QString, LiabilityDue> rows;
     QMap<QString, QList<std::pair<QDate, Money>>> federalByDay; // the $100,000 rule
@@ -155,16 +185,19 @@ QList<LiabilityDue> PayrollLiabilities::liabilities(const QDate &from, const QDa
             if (!s.amount.isPositive()) {
                 continue;
             }
-            const DuePeriod p = periodFor(s.tax, r.payDate, setup, *tables);
+            const DuePeriod p = periodFor(s.tax, r.payDate, setup, *tables, items);
             const QString key = rowKey(s.tax, p.start, p.end);
             LiabilityDue &row = rows[key];
+            const qint64 custom = customId(s.tax);
             if (row.tax.isEmpty()) {
-                row = LiabilityDue{s.tax, groupLabel(s.tax), groupAgency(s.tax), p.start, p.end, p.due, p.label,
-                                   Money(0, cur), Money(0, cur), Money(0, cur), {}, {}};
+                row = LiabilityDue{s.tax, custom != 0 ? items.value(custom).name : groupLabel(s.tax),
+                                   custom != 0 ? items.value(custom).agency : groupAgency(s.tax), p.start, p.end, p.due,
+                                   p.label, Money(0, cur), Money(0, cur), Money(0, cur), {}, {}};
             }
             auto part = std::find_if(row.parts.begin(), row.parts.end(), [&](const LiabilityPart &x) { return x.role == s.role; });
             if (part == row.parts.end()) {
-                row.parts << LiabilityPart{s.role, setup.account(s.role), Money(0, cur), Money(0, cur), Money(0, cur)};
+                row.parts << LiabilityPart{s.role, custom != 0 ? items.value(custom).accountId : setup.account(s.role),
+                                           Money(0, cur), Money(0, cur), Money(0, cur)};
                 part = row.parts.end() - 1;
             }
             part->accrued += s.amount;
@@ -232,7 +265,7 @@ QList<LiabilityDue> PayrollLiabilities::liabilities(const QDate &from, const QDa
                 if (running >= tables->deposits().nextDayThreshold) {
                     row.due = qMin(row.due, nextDayDepositDue(day, federal));
                     row.notes << QStringLiteral("%1 or more accumulated on %2: deposit by the next business day, and "
-                                                "you are a semiweekly depositor from now on.")
+                                                "the business is a semiweekly depositor from then on.")
                                      .arg(usdText(tables->deposits().nextDayThreshold), Sql::isoDate(day));
                     break;
                 }
@@ -240,7 +273,7 @@ QList<LiabilityDue> PayrollLiabilities::liabilities(const QDate &from, const QDa
             const int q = quarterOf(row.start);
             if (row.notes.isEmpty()
                 && quarterTotals.value(quarterLabel(row.start.year(), q)) < tables->deposits().quarterlyDeMinimis) {
-                row.notes << QStringLiteral("The quarter's total is under %1: you may pay it with Form 941 (due %2) "
+                row.notes << QStringLiteral("The quarter's total is under %1: it may be paid with Form 941 (due %2) "
                                             "instead of depositing.")
                                  .arg(usdText(tables->deposits().quarterlyDeMinimis),
                                       Sql::isoDate(quarterlyReturnPeriod(row.start.year(), q, federal).due));

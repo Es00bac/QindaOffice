@@ -15,6 +15,11 @@ void noteUnconfirmed(const PayrollTables &tables, const QString &path, QStringLi
     }
 }
 
+// Colorado's wage withholding, UI, FAMLI and city tax onto `out` (the
+// coloradoWages and uiWages it already holds); defined below.
+void computeColorado(const PayrollTables &tables, const EmployerSettings &employer, const EmployeeTaxSetup &employee,
+                     const PayInput &pay, PaycheckTaxes *out);
+
 } // namespace
 
 Decimal futaNetRate(const PayrollTables &tables, const QString &state)
@@ -63,12 +68,12 @@ PaycheckTaxes computePaycheck(const PayrollTables &tables, const EmployerSetting
     const Money supplementalAfterPreTax = pay.supplemental - nonNegative(r.preTaxDeductions - pay.regular);
     const Money ficaBase = r.gross - pay.section125; // 401(k) stays in it
     r.federalWages = regularAfterPreTax + supplementalAfterPreTax + pay.shareholderHealth;
-    r.coloradoWages = employee.coloradoWithholding ? r.federalWages : usd(0);
+    r.coloradoWages = employer.colorado && employee.coloradoWithholding ? r.federalWages : usd(0);
     const FicaTables &fica = tables.fica();
     r.socialSecurityWages = wagesUnderBase(ficaBase, pay.ytd.socialSecurityWages, fica.socialSecurityWageBase);
     r.medicareWages = ficaBase;
     r.futaWages = wagesUnderBase(ficaBase, pay.ytd.futaWages, tables.futa().wageBase);
-    r.uiWages = wagesUnderBase(ficaBase, pay.ytd.uiWages, tables.colorado().uiWageBase);
+    r.uiWages = employer.colorado ? wagesUnderBase(ficaBase, pay.ytd.uiWages, tables.colorado().uiWageBase) : usd(0);
 
     // ---- federal income tax: Worksheet 1A on the regular wages, the flat
     // rate on a bonus ----
@@ -111,7 +116,41 @@ PaycheckTaxes computePaycheck(const PayrollTables &tables, const EmployerSetting
                          - e2d.yearFuta);
     noteUnconfirmed(tables, QStringLiteral("federal.futa.creditReduction"), &r.notes);
 
-    // ---- Colorado ----
+    // ---- Colorado, for an employer that chose it ----
+    if (employer.colorado) {
+        computeColorado(tables, employer, employee, pay, &r);
+    }
+
+    // ---- the company's own payroll tax items ----
+    for (const CustomItemInput &item : pay.custom) {
+        const CustomItemResult c = computeCustomItem(item, ficaBase, r.federalWages);
+        (c.side == CustomItem::Side::Employee ? r.customEmployee : r.customEmployer) += c.amount;
+        r.custom << c;
+    }
+
+    // ---- the check ----
+    r.employeeTaxes = r.federalIncomeTax + r.socialSecurity + r.medicare + r.additionalMedicare + r.coloradoIncomeTax
+        + r.famliEmployee + r.optEmployee + r.customEmployee;
+    r.employerTaxes = r.socialSecurityEmployer + r.medicareEmployer + r.futa + r.coloradoUi + r.famliEmployer
+        + r.optEmployer + r.customEmployer;
+    r.netPay = r.gross - r.preTaxDeductions - r.employeeTaxes - r.afterTaxDeductions;
+    if (r.netPay.isNegative()) {
+        r.error = QStringLiteral("Taxes and deductions (%1) are more than the gross pay (%2).")
+                      .arg(usdText(r.preTaxDeductions + r.employeeTaxes + r.afterTaxDeductions),
+                           usdText(r.gross));
+        return r;
+    }
+    r.ok = true;
+    return r;
+}
+
+namespace {
+
+void computeColorado(const PayrollTables &tables, const EmployerSettings &employer, const EmployeeTaxSetup &employee,
+                     const PayInput &pay, PaycheckTaxes *out)
+{
+    PaycheckTaxes &r = *out;
+    const EmployerToDate &e2d = pay.employerToDate;
     if (employee.coloradoWithholding) {
         const ColoradoWithholdingResult co = coloradoWithholding(tables, r.coloradoWages, pay.frequency, employee.w4,
                                                                  employee.dr0004, employee.w4OnFile);
@@ -153,21 +192,8 @@ PaycheckTaxes computePaycheck(const PayrollTables &tables, const EmployerSetting
             r.notes << QStringLiteral("No Occupational Privilege Tax is listed for \"%1\".").arg(employee.optCity);
         }
     }
-
-    // ---- the check ----
-    r.employeeTaxes = r.federalIncomeTax + r.socialSecurity + r.medicare + r.additionalMedicare + r.coloradoIncomeTax
-        + r.famliEmployee + r.optEmployee;
-    r.employerTaxes = r.socialSecurityEmployer + r.medicareEmployer + r.futa + r.coloradoUi + r.famliEmployer
-        + r.optEmployer;
-    r.netPay = r.gross - r.preTaxDeductions - r.employeeTaxes - r.afterTaxDeductions;
-    if (r.netPay.isNegative()) {
-        r.error = QStringLiteral("Taxes and deductions (%1) are more than the gross pay (%2).")
-                      .arg(usdText(r.preTaxDeductions + r.employeeTaxes + r.afterTaxDeductions),
-                           usdText(r.gross));
-        return r;
-    }
-    r.ok = true;
-    return r;
 }
+
+} // namespace
 
 } // namespace QindaOffice::Books::Payroll

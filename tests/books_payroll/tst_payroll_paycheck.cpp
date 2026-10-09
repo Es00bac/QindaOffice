@@ -33,7 +33,7 @@ PayInput pay(const char *regular, PayFrequency frequency = PayFrequency::Biweekl
 class TstPayrollPaycheck : public QObject {
     Q_OBJECT
     PayrollTables t;
-    EmployerSettings employer;   // introductory UI rate, FAMLI 50/50
+    EmployerSettings employer;   // Colorado: introductory UI rate, FAMLI 50/50
     EmployeeTaxSetup single;     // 2026 W-4 single, no DR 0004, Colorado
 
 private slots:
@@ -43,6 +43,8 @@ private slots:
         const std::optional<PayrollTables> tables = PayrollTables::forYear(2026, &error);
         QVERIFY2(tables.has_value(), qPrintable(error));
         t = *tables;
+        employer.colorado = true;
+        employer.futaState = QStringLiteral("CO");
     }
 
     // Biweekly $3,000, working in Denver:
@@ -224,6 +226,67 @@ private slots:
         // 2,469.14 = 37.78 + 4.20 + 33.33 = 75.31 overall.
         QCOMPARE(a.medicareEmployer + b.medicareEmployer, m("35.81"));
         QCOMPARE(a.coloradoUi + b.coloradoUi, m("75.31"));
+    }
+
+    // An employer outside Colorado: the same $3,000 check has no Colorado
+    // tax, UI, FAMLI or city tax — federal only: 3,000 − 320.38 − 186.00 −
+    // 43.50 = 2,450.12 net; employer 186.00 + 43.50 + 18.00 = 247.50.
+    void outsideColorado()
+    {
+        EmployerSettings elsewhere = employer;
+        elsewhere.colorado = false;
+        elsewhere.futaState = QStringLiteral("TX");
+        EmployeeTaxSetup denver = single;
+        denver.optCity = QStringLiteral("denver");
+        const PaycheckTaxes r = computePaycheck(t, elsewhere, denver, pay("3000"));
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QCOMPARE(r.coloradoWages, m("0"));
+        QCOMPARE(r.uiWages, m("0"));
+        QCOMPARE(r.coloradoIncomeTax, m("0"));
+        QCOMPARE(r.coloradoUi, m("0"));
+        QCOMPARE(r.famliEmployee + r.famliEmployer, m("0"));
+        QCOMPARE(r.optEmployee + r.optEmployer, m("0"));
+        QVERIFY(r.coloradoWorksheet.isEmpty());
+        QCOMPARE(r.netPay, m("2450.12"));
+        QCOMPARE(r.employerTaxes, m("247.50"));
+        QVERIFY(!r.notes.join(QLatin1Char(' ')).contains(QStringLiteral("Colorado")));
+    }
+
+    // The company's own items join the check (outside Colorado): an
+    // employer unemployment tax 2.7 % up to $10,000 with $9,000 taxed → 27.00;
+    // an employee disability tax 1 % up to $5,000 with $4,000 taxed → 10.00;
+    // user-entered state withholding 4 % of the $3,000 + $5.00 → 125.00.
+    // Net 2,450.12 − 10.00 − 125.00 = 2,315.12; employer 247.50 + 27.00 =
+    // 274.50.
+    void customItemsJoinTheCheck()
+    {
+        EmployerSettings elsewhere = employer;
+        elsewhere.colorado = false;
+        PayInput p = pay("3000");
+        CustomItemInput ui;
+        ui.item = CustomItem{1, QStringLiteral("Example state unemployment"), CustomItem::Side::Employer,
+                             CustomItem::Kind::Tax, *Decimal::parse(QStringLiteral("0.027")), m("10000"), std::nullopt};
+        ui.ytdWages = m("9000");
+        CustomItemInput sdi;
+        sdi.item = CustomItem{2, QStringLiteral("Example state disability"), CustomItem::Side::Employee,
+                              CustomItem::Kind::Tax, *Decimal::parse(QStringLiteral("0.01")), m("5000"), std::nullopt};
+        sdi.ytdWages = m("4000");
+        CustomItemInput sit;
+        sit.item = CustomItem{3, QStringLiteral("Example state income tax"), CustomItem::Side::Employee,
+                              CustomItem::Kind::Withholding, Decimal(), std::nullopt, std::nullopt};
+        sit.employeeRate = *Decimal::parse(QStringLiteral("0.04"));
+        sit.employeeExtra = m("5");
+        p.custom = {ui, sdi, sit};
+        const PaycheckTaxes r = computePaycheck(t, elsewhere, single, p);
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QCOMPARE(r.custom.size(), 3);
+        QCOMPARE(r.custom.at(0).amount, m("27"));
+        QCOMPARE(r.custom.at(1).amount, m("10"));
+        QCOMPARE(r.custom.at(2).amount, m("125"));
+        QCOMPARE(r.customEmployee, m("135"));
+        QCOMPARE(r.customEmployer, m("27"));
+        QCOMPARE(r.netPay, m("2315.12"));
+        QCOMPARE(r.employerTaxes, m("274.50"));
     }
 
     // Pub 15-T lets an employer round withholding to the dollar when done

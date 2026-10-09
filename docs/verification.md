@@ -164,23 +164,25 @@ save — its numbering as it was.
 
 ## M71 payroll gates (D-081)
 
-Qualified on qinda (branch `m71-payroll`, merged with `m60-office-formats`
-296bd4a), books and payroll targets only (qinda's disk is shared),
-`ctest --preset dev -R "books|payroll"`: **44 of 44 passed** — the 32
-before M71 plus twelve new ones (six `tst_payroll_*`, `tst_books_payroll`,
-`tst_books_owner_pay`, `tst_books_payroll_forms`, `tst_books_io_payroll`,
-`tst_qindabooks_payroll`, `tst_qindabooks_payroll_ui`); `tst_books_company`
-(the M68 migration now reaches version 5), `tst_books_reports` (39 reports),
-`tst_qindabooks_host` (the eighth workspace and the payroll commands),
+Qualified on qinda (branch `m71b-general-books` over `m60-office-formats`
+f1a2aee — M71 with its M71b amendment: business types, Colorado as a
+choice, payroll tax items), books and payroll targets only (qinda's disk is
+shared), `ctest --preset dev -R "books|payroll"`: **46 of 46 passed** — the 32
+before M71 plus fourteen new ones (seven `tst_payroll_*`,
+`tst_books_payroll`, `tst_books_payroll_items`, `tst_books_owner_pay`,
+`tst_books_payroll_forms`, `tst_books_io_payroll`, `tst_qindabooks_payroll`,
+`tst_qindabooks_payroll_ui`); `tst_books_company` (the M68 migration now
+reaches version 5), `tst_books_reports` (39 reports), `tst_qindabooks_host`
+(the eighth workspace and the twelve payroll commands),
 `tst_qindabooks_menu_export` (the Payroll menu) and the QindaBooks fixtures
-changed for it. QtTest
-functions (init/cleanup and data rows included): **402 passed, 0 failed, 0
-skipped** — `books_payroll` 63 (tables 10, federal 10, colorado 11,
-paycheck 12, estimates 11, calendar 9); `books_engine` 129 (payroll 13,
-owner pay 7, forms 9); `books_io` 93 (payroll 6); `books_connect` 21;
-QindaBooks 96 (payroll 8, payroll UI 6). `TZ=UTC`, generated company
-files only, identity numbers made up (EIN 00-0000000, SSN 900-00-0001) and
-compared without being printed.
+changed for it. QtTest functions (init/cleanup and data rows included):
+**430 passed, 0 failed, 0 skipped** — `books_payroll` 75 (tables 10, federal 10,
+colorado 11, paycheck 14, estimates 12, calendar 9, custom 9);
+`books_engine` 140 (payroll 13, payroll items 8, owner pay 9, forms 10);
+`books_io` 94 (payroll 7); `books_connect` 21; QindaBooks 100 (payroll
+10, payroll UI 8). `TZ=UTC`, generated company files only, every
+business, person and item made up, identity numbers made up (EIN
+00-0000000, SSN 900-00-0001) and compared without being printed.
 
 - [x] `tst_payroll_tables` — the 2026 file loads with 29 sources and four
       unconfirmed values; every Publication 15-T base is recomputed from the
@@ -208,14 +210,25 @@ compared without being printed.
       shareholder's health premium, a bonus at 22 %, employer shares on
       running totals (76.55 then 76.53), whole-dollar rounding, refusals
       (another year, negatives, deductions above pay, the deferral limit
-      note "$24,500.00").
+      note "$24,500.00"); the same check for a business outside Colorado —
+      none of Colorado's taxes or notes, net 2,450.12, employer 247.50 —
+      and with three made-up items of its own (27.00 over a wage base,
+      10.00, 4 % + $5.00 = 125.00; net 2,315.12, employer 274.50).
+- [x] `tst_payroll_custom` — a business's own payroll tax items, by hand:
+      2.7 % of $3,000 = 81.00 on gross less Section 125; a $10,000 wage base
+      crossed mid-check (27.00, then nothing); an annual limit cutting 30.00
+      to the 5.00 left; user-entered withholding on the income tax wages
+      (4 % of $2,700 + $5.00 = 113.00; the extra alone 5.00); an exempt
+      employee with the worksheet saying why; half-up cents (4.17, 0.01);
+      the stored keys.
 - [x] `tst_payroll_estimates` — Pub 505's safe-harbor example ($46,839.10,
       "110 % of 2025 tax") and amended installments ($2,175 / $1,025); a
       $80,000 Schedule C: SE 11,303.64, QBI 11,649.64, taxable income
       46,598.54, total 16,647.46, required 14,982.71 in 3,745.68 ×3 +
       3,745.67, Colorado 2,050 → 1,435 in 359/359/359/358, set-aside 24 %;
-      the prior-year harbor; zero and negative profit; annualizing; wages
-      sharing the social security base; the $400 and QBI floors; 2027
+      outside Colorado federal only (16,647.46, set-aside 21 %, no Colorado
+      note); the prior-year harbor; zero and negative profit; annualizing;
+      wages sharing the social security base; the $400 and QBI floors; 2027
       refused.
 - [x] `tst_payroll_calendar` — Pub 15's semiweekly example, a holiday adding
       a day, a period split at the quarter, monthly, next-day, 941 dates
@@ -230,12 +243,38 @@ compared without being printed.
       to Form 940, a cent of rounding to Payroll Taxes, a partial payment,
       more than owed refused, a void putting the balance back; the SSN never
       in the audit; reports add up; a version-4 file migrates (`.pre-v5.bak`)
-      with its employee intact; an owner of a Schedule C or partnership LLC
-      refused a paycheck, "not sure" allowed.
+      with its employee intact; a sole proprietor or partner refused a
+      paycheck, "not sure" allowed.
+- [x] `tst_books_payroll_items` — **custom items end to end**: a business
+      outside Colorado (Form 940 state TX) with three made-up items — an
+      employer unemployment tax (2.7 % up to a $10,000 wage base), an
+      employee disability tax (1 % up to a $5,000 wage base) and state
+      withholding whose 4 % + $5.00 the employee carries. Bad items refused
+      (the same name in other case, no rate, 150 %, a zero wage base, an
+      account that is not a liability); each item gets its own account
+      under Payroll Liabilities and none of Colorado's is made. Two $3,000
+      checks: the disability **crosses its wage base** (30.00, then 20.00),
+      unemployment 81.00 and 81.00, withholding 125.00 each; net 2,295.12;
+      the accounts owe 50.00, 162.00 and 250.00. **In the liabilities**:
+      each item owed to its agency on its own schedule (monthly due the 20th:
+      Nov 20; quarterly: Feb 1, 2027; monthly, last day: Nov 30), a payment
+      clearing one, the Payroll Summary's rows for them, no Colorado or OPT
+      line.
+      **On the stub**: the employee's items with the year to date
+      (disability 50.00), the employer's after them, no Colorado line. **The
+      round trip**: the company file closed and opened again keeps the
+      items (2.7 %, $10,000, the agency), the employee's 4 % + $5.00 and
+      what each check took (three `paycheck_items`, net 2,295.12). What a
+      check took never changes (triggers); a used item's account cannot
+      move; an inactive item stops applying.
 - [x] `tst_books_owner_pay` — a draw by queued check and by transfer
       (−3,500.00 to Owner Draws), estimated payments as draws ("Federal
       estimated tax 2026, payment 3 of 4"), the set-aside transfer, an
       S corporation refused a draw and paying (and voiding) a distribution,
+      a C corporation's dividend from retained earnings (2,500.00) and the
+      draw, distribution, set-aside and estimated payment it may not
+      record, an S corporation refused a dividend, a nonprofit
+      refused every owner payment ("no owners"), "not sure" allowed each,
       a Schedule C owner refused a distribution.
 - [x] `tst_books_payroll_forms` — Form 941 over three checks: line 2
       9,000.00, 3 961.14, 5a 1,116.00, 5c 261.00, 6 and 12 2,338.14, line 7
@@ -243,14 +282,18 @@ compared without being printed.
       cents (line 7 −0.01, line 12 equal to the books); Schedule B; Form 940
       (3 9,000, 5 2,000, 7 7,000, 8 42.00 = the books); W-2 and W-3 masked
       and, for filing, in full; DR 1094 / DR 1093 369.00; the UI report
-      (months "101", premium 274.50 = the books) and FAMLI 39.60; a year
-      without tables says so.
+      (months "101", premium 274.50 = the books) and FAMLI 39.60; outside
+      Colorado, Form 940 line 1a the business's state ("TX"), a W-2 without
+      the Colorado boxes saying so, a state name refused; a year without
+      tables says so.
 - [x] `tst_books_io_payroll` — the paycheck on voucher stock: payee and
       address, `**2,308.17`, "Two thousand three hundred eight and 17/100",
       the stub lines this check and year to date on both stubs, the SSN
-      masked; the Form 941 PDF; signature PINs (check digit); EFW2 refused
-      with the made-up numbers, and written unvalidated with every field at
-      its Publication 42-007 position.
+      masked; a business's own item on the printed stub (30.00 this check
+      and year to date; the Colorado lines 0.00 this check); the Form 941
+      PDF; signature PINs (check digit); EFW2 refused with the made-up
+      numbers, and written unvalidated with every field at its Publication
+      42-007 position.
 - [x] `tst_qindabooks_payroll` — `PayrollService`: setup (the EIN in full
       only for the edit field, CDLE's three UI parts, refusals), employees on
       M68's list with a masked SSN, Run Payroll's draft, preview ($2,308.17,
@@ -260,39 +303,57 @@ compared without being printed.
       number; the Schedule C planner (16,647.46, 3,745.68, Colorado 2,050,
       24 %), a draw with its $240.00 set-aside, a queued draw check, the
       installment paid, Colorado's due Apr 15 in `upcoming(30)` and one
-      reminder; S corporation refusals.
+      reminder; S corporation refusals; each business type's owner pay (a
+      C corporation's dividend, a nonprofit's "no owners", a partner's
+      draw); a business outside Colorado with its own items (2.7 % over
+      $10,000; an employee's 4 % + $5.00; the preview's Other taxes
+      $125.00, net $2,325.12, employer $328.50; the stub and employer lines;
+      $81.00 owed to the agency, due Apr 30; no Colorado form offered).
 - [x] `tst_qindabooks_payroll_ui` (1280 and 520 px) — the setup dialog, the
       employee editor, Run Payroll's three steps, the paycheck (8 stub lines,
       the Pub 15-T worksheet, queued for Checks to Print), Pay Payroll
       Liabilities (federal first, due Apr 15), Form 941 under Reports, Pay
       Owner turned into a distribution, the tax picture, the planner (4
       installments), an estimated payment, a draw with its set-aside moved,
-      the Overview and Owner pay tabs, the Payroll ribbon tab.
+      the Overview and Owner pay tabs, the Payroll ribbon tab; a partnership
+      outside Colorado: the setup with its state and no Colorado section,
+      Payroll Tax Items (an employer item over a wage base and a withholding
+      item), the employee editor's user-entered 4 % + $5.00, the preview's
+      Other taxes ($125.00, net $2,325.12).
 - [x] Fixtures — `qindabooks_1280.txt` and `qindabooks_520.txt` regenerated
-      with `QQO_UPDATE_FIXTURES=1`: only additions (the Payroll rail entry,
-      the hidden Payroll workspace, the hidden narrow report picker).
+      with `QQO_UPDATE_FIXTURES=1` and compared: byte-identical to M71's,
+      which added the Payroll rail entry, the hidden Payroll workspace and
+      the hidden narrow report picker (the new dialogs are popups and the
+      Payroll ribbon tab is not the one showing).
 - [x] Ribbon gate (`tst_qindabooks_ui`) green at 1320 and 520 px with the
-      Payroll tab; menu export (`tst_qindabooks_menu_export`) validates the
-      tree with the Payroll menu and fires every exported command.
-- [x] Grabs reviewed (`QQO_GRAB_DIR`, 1280 and 520): setup, employee
-      editor and list, Run Payroll (grid, preview, done), the paycheck and
-      the voucher stub PDF, Pay Payroll Liabilities, Form 941, Pay Owner
-      (distribution and draw with set-aside), the tax picture, Estimated
-      taxes, an estimated payment, Overview, Owner pay, the Payroll ribbon
-      tab. At 520 px the dialogs drop to one column, wide tables scroll
-      sideways, the Payroll sections and the reports come from a list.
+      Payroll tab and its two new commands; menu export
+      (`tst_qindabooks_menu_export`) validates the tree with the twelve-item
+      Payroll menu and fires every exported command.
+- [x] Grabs reviewed (`QQO_GRAB_DIR`, 1280 and 520): setup (Colorado and
+      another state), Payroll Tax Items, the employee editor (with
+      user-entered withholding) and list, Run Payroll (grid, preview with
+      Other taxes, done), the paycheck and the voucher stub PDF, Pay Payroll
+      Liabilities, Form 941, Pay Owner (distribution and draw with
+      set-aside), the tax picture, Estimated taxes, an estimated payment,
+      Overview, Owner pay, the Payroll ribbon tab. At 520 px the dialogs
+      drop to one column, wide tables scroll sideways, the Payroll sections
+      and the reports come from a list.
 
-**The owner's desktop check** (not done here — nothing is launched into the
-live session): open a *new* test company (never a real one), set up as
-"Not sure", then S corporation; add an employee with a made-up SSN; Run
-Payroll with Print later, print the paycheck on plain paper from Checks to
-Print and hold it against voucher stock; Pay Payroll Liabilities; open
-Payroll Tax Forms and export Form 941 as PDF and Excel; switch to Schedule
-C, enter your tax picture, record a draw and its set-aside; check the panel
-menu (Payroll), the Payroll ribbon tab in dark and light themes, and the
-window at 520 px. Before the first real payroll: confirm the LLC's tax
-classification and have a tax professional review the first payroll and
-the first estimate.
+**On the desktop** (not done here — nothing is launched into the live
+session): open a *new* test company with made-up details, set it up as
+"Not sure", then as each business type in turn — S corporation, C
+corporation, partnership, sole proprietorship, nonprofit — and check what
+Pay Owner offers; add an employee with a made-up SSN; Run Payroll with
+Print later, print the paycheck on plain paper from Checks to Print and
+hold it against voucher stock; Pay Payroll Liabilities; open Payroll Tax
+Forms and export Form 941 as PDF and Excel; switch Colorado off, name
+another state, add a payroll tax item and an employee's user-entered
+withholding, and run a paycheck; for a sole proprietorship, enter a tax
+picture, record a draw and its set-aside; check the panel menu (Payroll),
+the Payroll ribbon tab in dark and light themes, and the window at 520 px.
+QindaBooks prepares the numbers; a business should confirm how the IRS
+taxes it and have a tax professional review its first payroll and its first
+estimate.
 
 ## M69 Calc gates (D-078)
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Owner draws, estimated-tax payments, set-asides and shareholder
-// distributions (owner_pay.h).
+// Owner draws, estimated-tax payments, set-asides, shareholder
+// distributions and dividends (owner_pay.h).
 #include "owner_pay.h"
 
 #include "accounts.h"
@@ -21,7 +21,7 @@ using namespace Payroll;
 namespace {
 
 const QStringList kKindKeys{QStringLiteral("draw"), QStringLiteral("federalEstimate"), QStringLiteral("coloradoEstimate"),
-                            QStringLiteral("setAside"), QStringLiteral("distribution")};
+                            QStringLiteral("setAside"), QStringLiteral("distribution"), QStringLiteral("dividend")};
 
 QString defaultMemo(const OwnerPaymentRequest &r, const QString &owner)
 {
@@ -30,6 +30,8 @@ QString defaultMemo(const OwnerPaymentRequest &r, const QString &owner)
         return QStringLiteral("Owner draw: %1").arg(owner);
     case OwnerPaymentKind::Distribution:
         return QStringLiteral("Shareholder distribution: %1").arg(owner);
+    case OwnerPaymentKind::Dividend:
+        return QStringLiteral("Dividend: %1").arg(owner);
     case OwnerPaymentKind::FederalEstimate:
         return QStringLiteral("Federal estimated tax %1, payment %2 of 4 (Form 1040-ES)").arg(r.taxYear).arg(r.installment);
     case OwnerPaymentKind::ColoradoEstimate:
@@ -41,6 +43,54 @@ QString defaultMemo(const OwnerPaymentRequest &r, const QString &owner)
 }
 
 } // namespace
+
+bool ownerPaymentAllowed(EntityTax entity, OwnerPaymentKind kind, QString *why)
+{
+    const auto refuse = [why](const QString &reason) {
+        if (why != nullptr) {
+            *why = reason;
+        }
+        return false;
+    };
+    if (entity == EntityTax::Unsure) {
+        return true;
+    }
+    if (entity == EntityTax::Nonprofit) {
+        return refuse(QStringLiteral("a nonprofit has no owners to pay; the people who work for it are paid through payroll"));
+    }
+    switch (kind) {
+    case OwnerPaymentKind::Draw:
+    case OwnerPaymentKind::FederalEstimate:
+    case OwnerPaymentKind::ColoradoEstimate:
+    case OwnerPaymentKind::SetAside:
+        if (entity == EntityTax::SCorporation) {
+            return refuse(QStringLiteral("an S corporation pays its owners wages through payroll and shareholder "
+                                         "distributions, not owner's draws"));
+        }
+        if (entity == EntityTax::CCorporation) {
+            return refuse(QStringLiteral("a C corporation pays its owners wages through payroll and dividends, not "
+                                         "owner's draws"));
+        }
+        return true;
+    case OwnerPaymentKind::Distribution:
+        if (entity == EntityTax::SCorporation) {
+            return true;
+        }
+        return refuse(entity == EntityTax::CCorporation
+                          ? QStringLiteral("a C corporation pays dividends, not shareholder distributions")
+                          : QStringLiteral("only an S corporation pays shareholder distributions; a sole proprietor or "
+                                           "partner takes owner's draws"));
+    case OwnerPaymentKind::Dividend:
+        if (entity == EntityTax::CCorporation) {
+            return true;
+        }
+        return refuse(entity == EntityTax::SCorporation
+                          ? QStringLiteral("an S corporation pays shareholder distributions, not dividends")
+                          : QStringLiteral("only a C corporation pays dividends; a sole proprietor or partner takes "
+                                           "owner's draws"));
+    }
+    return true;
+}
 
 QString ownerPaymentKindKey(OwnerPaymentKind kind)
 {
@@ -64,16 +114,13 @@ Result OwnerPay::record(const OwnerPaymentRequest &request, const PostOptions &o
     PayrollSetup setup = records.setup();
     const bool estimate = request.kind == OwnerPaymentKind::FederalEstimate
         || request.kind == OwnerPaymentKind::ColoradoEstimate;
-    if (request.kind == OwnerPaymentKind::Draw && setup.entity == EntityTax::SCorporation) {
-        return Result::failure(ErrorCode::Invalid, QStringLiteral("an S corporation pays its owner wages through payroll "
-                                                                  "and shareholder distributions, not draws"));
+    // What the business type allows (owner_pay.h AGENT-NOTE).
+    if (QString why; !ownerPaymentAllowed(setup.entity, request.kind, &why)) {
+        return Result::failure(ErrorCode::Invalid, why);
     }
-    // Shareholder distributions are an S corporation's; a Schedule C or
-    // partnership owner's money out is a draw ("not sure" keeps both).
-    if (request.kind == OwnerPaymentKind::Distribution
-        && (setup.entity == EntityTax::ScheduleC || setup.entity == EntityTax::Partnership)) {
-        return Result::failure(ErrorCode::Invalid, QStringLiteral("only an S corporation pays shareholder distributions; "
-                                                                  "a Schedule C or partnership owner takes draws"));
+    if (request.kind == OwnerPaymentKind::ColoradoEstimate && !setup.colorado) {
+        return Result::failure(ErrorCode::Invalid, QStringLiteral("Colorado's built-in tables are not chosen for this "
+                                                                  "business (Payroll Setup)"));
     }
     if (!request.amount.isPositive() || !request.date.isValid()) {
         return Result::failure(ErrorCode::Invalid, QStringLiteral("a payment needs a date and an amount above zero"));
@@ -92,11 +139,20 @@ Result OwnerPay::record(const OwnerPaymentRequest &request, const PostOptions &o
     }
     const QString equityRole = request.kind == OwnerPaymentKind::Distribution ? PayrollRole::Distributions
                                                                              : PayrollRole::OwnerDraws;
-    if (request.kind != OwnerPaymentKind::SetAside && !ChartOfAccounts(m_file).account(setup.account(equityRole))) {
+    if (request.kind != OwnerPaymentKind::SetAside && request.kind != OwnerPaymentKind::Dividend
+        && !ChartOfAccounts(m_file).account(setup.account(equityRole))) {
         if (const Result made = records.ensurePayrollAccounts(); !made.ok) {
             return made;
         }
         setup = records.setup();
+    }
+    // A dividend is a C corporation's profit paid out: it comes out of
+    // Retained Earnings.
+    const qint64 equityId = request.kind == OwnerPaymentKind::Dividend
+        ? ChartOfAccounts(m_file).idForRole(SystemRole::RetainedEarnings)
+        : setup.account(equityRole);
+    if (request.kind != OwnerPaymentKind::SetAside && equityId == 0) {
+        return Result::failure(ErrorCode::UnknownAccount, QStringLiteral("the equity account for it is missing"));
     }
     const qint64 bankId = request.bankAccountId != 0 ? request.bankAccountId : setup.payrollBankAccountId;
     const std::optional<Account> bank = ChartOfAccounts(m_file).account(bankId);
@@ -125,14 +181,14 @@ Result OwnerPay::record(const OwnerPaymentRequest &request, const PostOptions &o
         doc.memo = memo;
         doc.message = check ? memo : QString(); // the memo printed on the check
         DocumentLine line;
-        line.accountId = setup.account(equityRole);
+        line.accountId = equityId;
         line.description = memo;
         line.amount = request.amount;
         line.taxableFromItem = false;
         doc.lines << line;
         made = Purchases(m_file).createExpense(doc, options);
     } else {
-        made = Banking(m_file).transfer(bankId, setup.account(equityRole), request.amount, request.date, memo, options,
+        made = Banking(m_file).transfer(bankId, equityId, request.amount, request.date, memo, options,
                                         request.reference);
     }
     if (!made.ok) {

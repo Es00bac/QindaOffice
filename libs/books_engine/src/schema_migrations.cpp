@@ -254,8 +254,10 @@ const char *const kVersion4[] = {
 // new one (replaces_doc_id). Year-to-date wages and every liability are
 // DERIVED from documents that are not void, so a void restores them.
 // `owner_payments` marks which ordinary documents (checks, transfers,
-// expenses) are owner draws, estimated-tax payments, set-asides or
-// shareholder distributions.
+// expenses) are owner draws, estimated-tax payments, set-asides,
+// shareholder distributions or dividends. `payroll_items` are a company's
+// own payroll taxes for any state or locality without built-in tables;
+// `paycheck_items` is what each paycheck took for them (D-081 amendment).
 const char *const kVersion5[] = {
     "CREATE TABLE employee_payroll ("
     " employee_id INTEGER PRIMARY KEY REFERENCES employees(id),"
@@ -266,7 +268,7 @@ const char *const kVersion5[] = {
     " w4 TEXT NOT NULL DEFAULT '{}', w4_on_file INTEGER NOT NULL DEFAULT 1,"
     " dr0004 TEXT NOT NULL DEFAULT '{}', co_withholding INTEGER NOT NULL DEFAULT 1, opt_city TEXT,"
     " owner_employee INTEGER NOT NULL DEFAULT 0, shareholder_2pct INTEGER NOT NULL DEFAULT 0,"
-    " deductions TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL)",
+    " deductions TEXT NOT NULL DEFAULT '{}', custom TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL)",
     "CREATE TABLE paychecks ("
     " doc_id INTEGER PRIMARY KEY REFERENCES documents(id),"
     " employee_id INTEGER NOT NULL REFERENCES employees(id),"
@@ -300,6 +302,25 @@ const char *const kVersion5[] = {
     " doc_id INTEGER PRIMARY KEY REFERENCES documents(id), kind TEXT NOT NULL,"
     " owner_id INTEGER REFERENCES parties(id), tax_year INTEGER, quarter INTEGER)",
     "CREATE INDEX owner_payments_kind ON owner_payments(kind, tax_year)",
+    // A company's own payroll tax items (payroll_items.h) and what each
+    // paycheck took — immutable like `paychecks`.
+    "CREATE TABLE payroll_items ("
+    " id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE,"
+    " side TEXT NOT NULL CHECK (side IN ('employee', 'employer')),"
+    " kind TEXT NOT NULL DEFAULT 'tax' CHECK (kind IN ('tax', 'withholding')),"
+    " rate TEXT NOT NULL DEFAULT '0', wage_base INTEGER, annual_limit INTEGER,"
+    " account_id INTEGER NOT NULL REFERENCES accounts(id), agency TEXT NOT NULL DEFAULT '',"
+    " frequency TEXT NOT NULL DEFAULT 'quarterly' CHECK (frequency IN ('monthly', 'quarterly', 'annually')),"
+    " due_day INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL)",
+    "CREATE TABLE paycheck_items ("
+    " doc_id INTEGER NOT NULL REFERENCES paychecks(doc_id), item_id INTEGER NOT NULL REFERENCES payroll_items(id),"
+    " name TEXT NOT NULL, side TEXT NOT NULL, kind TEXT NOT NULL,"
+    " wages INTEGER NOT NULL, amount INTEGER NOT NULL, PRIMARY KEY (doc_id, item_id))",
+    "CREATE INDEX paycheck_items_item ON paycheck_items(item_id)",
+    "CREATE TRIGGER paycheck_items_never_change BEFORE UPDATE ON paycheck_items"
+    " BEGIN SELECT RAISE(ABORT, 'a paycheck never changes: void it and write a new one'); END",
+    "CREATE TRIGGER paycheck_items_kept BEFORE DELETE ON paycheck_items"
+    " BEGIN SELECT RAISE(ABORT, 'a paycheck is never deleted: void it'); END",
 };
 
 template<std::size_t N>

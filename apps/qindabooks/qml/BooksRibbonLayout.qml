@@ -58,9 +58,10 @@ QtObject {
         ] },
         { id: "payroll", label: qsTr("Payroll"), keyTip: "Y", groups: [
             { id: "payrollSetup", label: qsTr("Setup"), items: [
-                { action: "booksPayrollSetupAction", size: "large", label: qsTr("Payroll Setup") }] },
+                { action: "booksPayrollSetupAction", size: "large", label: qsTr("Payroll Setup") }, "booksPayrollItemsAction"] },
             { id: "ownerPay", label: qsTr("Owner pay"), items: [
-                { action: "booksPayOwnerAction", size: "large" }, "booksEstimatedTaxesAction", "booksDistributionAction"] },
+                { action: "booksPayOwnerAction", size: "large" }, "booksEstimatedTaxesAction", "booksDistributionAction",
+                "booksDividendAction"] },
             { id: "payrollRun", label: qsTr("Payroll"), items: [
                 { action: "booksRunPayrollAction", size: "large" }, "booksPayrollEmployeesAction", "booksPayLiabilitiesAction"] },
             { id: "payrollForms", label: qsTr("Tax forms"), items: [

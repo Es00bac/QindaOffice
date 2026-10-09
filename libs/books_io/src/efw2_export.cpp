@@ -141,7 +141,7 @@ Efw2File buildEfw2(CompanyFile &file, int year, const Efw2Options &options)
             return fail(QStringLiteral("Enter the company's EIN in Payroll Setup (SSA rejects the one on file)."));
         }
         if (setup.bsoUserId.trimmed().size() != 8) {
-            return fail(QStringLiteral("Enter your 8-character SSA Business Services Online user ID in Payroll Setup."));
+            return fail(QStringLiteral("Enter the business's 8-character SSA Business Services Online user ID in Payroll Setup."));
         }
         if (setup.w2ContactName.trimmed().isEmpty() || setup.w2ContactEmail.trimmed().isEmpty()
             || digits(setup.w2ContactPhone).isEmpty()) {

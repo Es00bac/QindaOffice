@@ -156,9 +156,12 @@ Tk.Dialog {
                 Tk.TableColumn { key: "fitText"; title: qsTr("Federal"); flex: 1; minWidth: Tk.Theme.size.tableColumn; align: Qt.AlignRight; mono: true },
                 Tk.TableColumn { key: "ssText"; title: qsTr("Soc. sec."); flex: 1; minWidth: Tk.Theme.size.tableColumn; align: Qt.AlignRight; mono: true },
                 Tk.TableColumn { key: "medicareText"; title: qsTr("Medicare"); flex: 1; minWidth: Tk.Theme.size.tableColumn; align: Qt.AlignRight; mono: true },
-                Tk.TableColumn { key: "coloradoText"; title: qsTr("Colorado"); flex: 1; minWidth: Tk.Theme.size.tableColumn; align: Qt.AlignRight; mono: true },
-                Tk.TableColumn { key: "famliText"; title: qsTr("FAMLI"); flex: 0.8; minWidth: Tk.Theme.size.tableColumn * 0.8; align: Qt.AlignRight; mono: true },
-                Tk.TableColumn { key: "optText"; title: qsTr("OPT"); flex: 0.7; minWidth: Tk.Theme.size.tableColumn * 0.7; align: Qt.AlignRight; mono: true },
+                // Colorado's columns only for a business that chose it; the
+                // company's own withheld items together as "Other".
+                Tk.TableColumn { key: "coloradoText"; title: qsTr("Colorado"); visible: dialog.preview.colorado === true; flex: 1; minWidth: Tk.Theme.size.tableColumn; align: Qt.AlignRight; mono: true },
+                Tk.TableColumn { key: "famliText"; title: qsTr("FAMLI"); visible: dialog.preview.colorado === true; flex: 0.8; minWidth: Tk.Theme.size.tableColumn * 0.8; align: Qt.AlignRight; mono: true },
+                Tk.TableColumn { key: "optText"; title: qsTr("OPT"); visible: dialog.preview.colorado === true; flex: 0.7; minWidth: Tk.Theme.size.tableColumn * 0.7; align: Qt.AlignRight; mono: true },
+                Tk.TableColumn { key: "otherText"; title: qsTr("Other taxes"); visible: dialog.preview.hasCustom === true; flex: 1; minWidth: Tk.Theme.size.tableColumn; align: Qt.AlignRight; mono: true },
                 Tk.TableColumn { key: "deductionsText"; title: qsTr("Deductions"); flex: 1; minWidth: Tk.Theme.size.tableColumn; align: Qt.AlignRight; mono: true },
                 Tk.TableColumn { key: "netText"; title: qsTr("Net pay"); flex: 1; minWidth: Tk.Theme.size.tableColumn; align: Qt.AlignRight; mono: true },
                 Tk.TableColumn { key: "employerText"; title: qsTr("Employer"); flex: 1; minWidth: Tk.Theme.size.tableColumn; align: Qt.AlignRight; mono: true }

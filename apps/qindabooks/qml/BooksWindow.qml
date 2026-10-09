@@ -132,7 +132,8 @@ OfficeWindow {
     TimesheetDialog { id: timesheet; books: window.books }
     EmployeeDialog { id: employeeDialog; books: window.books }
     // M71 (D-081): owner pay and payroll, opened from the Payroll menu.
-    PayrollSetupDialog { id: payrollSetup; books: window.books; payroll: window.payroll }
+    PayrollSetupDialog { id: payrollSetup; books: window.books; host: window.booksHost; payroll: window.payroll }
+    PayrollItemsDialog { id: payrollItems; books: window.books; payroll: window.payroll }
     PayOwnerDialog { id: payOwner; books: window.books; payroll: window.payroll }
     RunPayrollDialog { id: runPayroll; books: window.books; host: window.booksHost; payroll: window.payroll }
     PayLiabilitiesDialog { id: payLiabilities; books: window.books; payroll: window.payroll }
@@ -173,6 +174,7 @@ OfficeWindow {
         function onTimesheetRequested() { timesheet.openDialog("", window.books.today) }
         function onEmployeeDialogRequested(id) { employeeDialog.openFor(id) }
         function onPayrollSetupRequested() { payrollSetup.openDialog() }
+        function onPayrollItemsRequested() { payrollItems.openDialog() }
         function onPayOwnerRequested(kind) { payOwner.openFor(kind) }
         function onEstimatedTaxesRequested() { payrollView.showTab(2) }
         function onPayrollEmployeesRequested() { payrollView.showTab(3) }

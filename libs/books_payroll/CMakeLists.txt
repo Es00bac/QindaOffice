@@ -2,10 +2,11 @@
 
 # books_payroll (M71, D-081): QindaBooks' payroll and estimated-tax
 # arithmetic — federal withholding by IRS Publication 15-T, social security,
-# Medicare and FUTA, Colorado withholding by DR 1098, Colorado UI, FAMLI and
-# local Occupational Privilege Taxes, the Form 1040-ES / DR 0104EP planner
-# for a Schedule C or partnership owner, and the deposit and filing
-# calendar. Pure computation: Qt Core and books_money only — no database,
+# Medicare and FUTA, Colorado (the first state with built-in tables)
+# withholding by DR 1098, UI, FAMLI and local Occupational Privilege Taxes,
+# a company's own payroll tax items for any other state or locality, the
+# Form 1040-ES / DR 0104EP planner for a sole proprietor or partner, and the
+# deposit and filing calendar. Pure computation: Qt Core and books_money only — no database,
 # no Gui (the company file side is books_engine's payroll module).
 #
 # AGENT-CONTRACT (data): every rate and limit comes from the per-year data
@@ -18,6 +19,8 @@ add_library(books_payroll STATIC
     ${BOOKS_PAYROLL_RESOURCES}
     src/colorado_payroll.cpp
     src/colorado_payroll.h
+    src/custom_items.cpp
+    src/custom_items.h
     src/estimated_tax.cpp
     src/estimated_tax.h
     src/federal_withholding.cpp

@@ -146,8 +146,9 @@ signals:
     void timesheetRequested();
     void employeeDialogRequested(qint64 id);
     // M71 (D-081): the Payroll menu. Each opens its dialog or workspace
-    // section (qml/Payroll*.qml); kind "draw" | "distribution".
+    // section (qml/Payroll*.qml); kind "draw" | "distribution" | "dividend".
     void payrollSetupRequested();
+    void payrollItemsRequested();
     void payOwnerRequested(const QString &kind);
     void estimatedTaxesRequested();
     void payrollEmployeesRequested();

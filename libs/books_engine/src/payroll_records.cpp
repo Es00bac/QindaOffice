@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Payroll setup and employee payroll records (payroll_records.h).
 #include "payroll_records.h"
+#include "payroll_records_p.h"
 
 #include "accounts.h"
 #include "company_file.h"
@@ -15,125 +16,9 @@
 namespace QindaOffice::Books {
 
 using namespace Payroll;
+using namespace PayrollRecordsJson;
 
 namespace {
-
-QString compact(const QJsonObject &o)
-{
-    return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
-}
-
-QString moneyText(const Money &m)
-{
-    return m.toPlainString();
-}
-
-Money moneyFrom(const QJsonValue &v, const QString &currency)
-{
-    return Money::parse(v.toString(), currency).value_or(Money(0, currency));
-}
-
-Decimal decimalFrom(const QVariant &v)
-{
-    return Decimal::parse(v.toString()).value_or(Decimal());
-}
-
-QJsonObject w4Json(const W4Certificate &w)
-{
-    return {{QStringLiteral("form"), w.form == W4Certificate::Form::Before2020 ? 2019 : 2020},
-            {QStringLiteral("status"), w4StatusKey(w.status)},
-            {QStringLiteral("step2"), w.step2Checked},
-            {QStringLiteral("step3"), moneyText(w.step3Credits)},
-            {QStringLiteral("step4a"), moneyText(w.step4aOtherIncome)},
-            {QStringLiteral("step4b"), moneyText(w.step4bDeductions)},
-            {QStringLiteral("step4c"), moneyText(w.step4cExtra)},
-            {QStringLiteral("legacyStatus"), w4LegacyStatusKey(w.legacyStatus)},
-            {QStringLiteral("allowances"), w.allowances},
-            {QStringLiteral("legacyExtra"), moneyText(w.legacyExtra)},
-            {QStringLiteral("exempt"), w.exempt}};
-}
-
-W4Certificate w4From(const QJsonObject &o, const QString &cur)
-{
-    W4Certificate w;
-    w.form = o.value(QStringLiteral("form")).toInt(2020) == 2019 ? W4Certificate::Form::Before2020
-                                                                  : W4Certificate::Form::From2020;
-    w.status = w4StatusFromKey(o.value(QStringLiteral("status")).toString()).value_or(W4Status::SingleOrMarriedSeparately);
-    w.step2Checked = o.value(QStringLiteral("step2")).toBool();
-    w.step3Credits = moneyFrom(o.value(QStringLiteral("step3")), cur);
-    w.step4aOtherIncome = moneyFrom(o.value(QStringLiteral("step4a")), cur);
-    w.step4bDeductions = moneyFrom(o.value(QStringLiteral("step4b")), cur);
-    w.step4cExtra = moneyFrom(o.value(QStringLiteral("step4c")), cur);
-    w.legacyStatus = w4LegacyStatusFromKey(o.value(QStringLiteral("legacyStatus")).toString()).value_or(W4LegacyStatus::Single);
-    w.allowances = o.value(QStringLiteral("allowances")).toInt();
-    w.legacyExtra = moneyFrom(o.value(QStringLiteral("legacyExtra")), cur);
-    w.exempt = o.value(QStringLiteral("exempt")).toBool();
-    return w;
-}
-
-QJsonObject dr0004Json(const ColoradoCertificate &c)
-{
-    return {{QStringLiteral("filed"), c.filed},
-            {QStringLiteral("allowance"), c.annualAllowance ? QJsonValue(moneyText(*c.annualAllowance)) : QJsonValue()},
-            {QStringLiteral("extra"), moneyText(c.additionalPerPeriod)}};
-}
-
-ColoradoCertificate dr0004From(const QJsonObject &o, const QString &cur)
-{
-    ColoradoCertificate c;
-    c.filed = o.value(QStringLiteral("filed")).toBool();
-    if (o.value(QStringLiteral("allowance")).isString()) {
-        c.annualAllowance = moneyFrom(o.value(QStringLiteral("allowance")), cur);
-    }
-    c.additionalPerPeriod = moneyFrom(o.value(QStringLiteral("extra")), cur);
-    return c;
-}
-
-const QStringList kRetirementKeys{QStringLiteral("none"), QStringLiteral("401k"), QStringLiteral("simple")};
-
-QJsonObject deductionsJson(const PayDeductions &d)
-{
-    return {{QStringLiteral("section125"), moneyText(d.section125)},
-            {QStringLiteral("retirement"), kRetirementKeys.value(int(d.retirement))},
-            {QStringLiteral("retirementAmount"), moneyText(d.retirementAmount)},
-            {QStringLiteral("retirementPercent"), d.retirementPercent.toString()},
-            {QStringLiteral("shareholderHealth"), moneyText(d.shareholderHealth)},
-            {QStringLiteral("afterTax"), moneyText(d.afterTax)},
-            {QStringLiteral("afterTaxLabel"), d.afterTaxLabel}};
-}
-
-PayDeductions deductionsFrom(const QJsonObject &o, const QString &cur)
-{
-    PayDeductions d;
-    d.section125 = moneyFrom(o.value(QStringLiteral("section125")), cur);
-    d.retirement = PayDeductions::Retirement(qMax(0, int(kRetirementKeys.indexOf(o.value(QStringLiteral("retirement")).toString()))));
-    d.retirementAmount = moneyFrom(o.value(QStringLiteral("retirementAmount")), cur);
-    d.retirementPercent = Decimal::parse(o.value(QStringLiteral("retirementPercent")).toString()).value_or(Decimal());
-    d.shareholderHealth = moneyFrom(o.value(QStringLiteral("shareholderHealth")), cur);
-    d.afterTax = moneyFrom(o.value(QStringLiteral("afterTax")), cur);
-    d.afterTaxLabel = o.value(QStringLiteral("afterTaxLabel")).toString();
-    return d;
-}
-
-QJsonObject objectFrom(const QVariant &text)
-{
-    return QJsonDocument::fromJson(text.toString().toUtf8()).object();
-}
-
-// The audit view of an employee's payroll: everything but the SSN's digits.
-QString employeeAuditJson(const EmployeePayroll &e)
-{
-    QJsonObject o{{QStringLiteral("name"), e.fullName()},
-                  {QStringLiteral("ssn"), e.ssn.isEmpty() ? QStringLiteral("none") : maskedSsn(e.ssn)},
-                  {QStringLiteral("payType"), e.payType == EmployeePayroll::PayType::Hourly ? QStringLiteral("hourly")
-                                                                                             : QStringLiteral("salary")},
-                  {QStringLiteral("payRate"), e.payRate.toString()},
-                  {QStringLiteral("frequency"), payFrequencyKey(e.frequency)},
-                  {QStringLiteral("w4"), w4Json(e.w4)},
-                  {QStringLiteral("dr0004"), dr0004Json(e.dr0004)},
-                  {QStringLiteral("deductions"), deductionsJson(e.deductions)}};
-    return compact(o);
-}
 
 const QString kSettingsPrefix = QStringLiteral("payroll_");
 
@@ -146,13 +31,16 @@ QString entityTaxKey(EntityTax tax)
     case EntityTax::ScheduleC: return QStringLiteral("scheduleC");
     case EntityTax::SCorporation: return QStringLiteral("sCorporation");
     case EntityTax::Partnership: return QStringLiteral("partnership");
+    case EntityTax::CCorporation: return QStringLiteral("cCorporation");
+    case EntityTax::Nonprofit: return QStringLiteral("nonprofit");
     }
     return {};
 }
 
 std::optional<EntityTax> entityTaxFromKey(const QString &key)
 {
-    for (const EntityTax t : {EntityTax::Unsure, EntityTax::ScheduleC, EntityTax::SCorporation, EntityTax::Partnership}) {
+    for (const EntityTax t : {EntityTax::Unsure, EntityTax::ScheduleC, EntityTax::SCorporation, EntityTax::Partnership,
+                              EntityTax::CCorporation, EntityTax::Nonprofit}) {
         if (entityTaxKey(t) == key) {
             return t;
         }
@@ -174,10 +62,10 @@ QList<PayrollAccountSpec> payrollAccountRoles()
             {PayrollRole::SocialSecurity, QStringLiteral("Social Security"), liability, liabilities},
             {PayrollRole::Medicare, QStringLiteral("Medicare"), liability, liabilities},
             {PayrollRole::Futa, QStringLiteral("Federal Unemployment (FUTA)"), liability, liabilities},
-            {PayrollRole::ColoradoWithholding, QStringLiteral("Colorado Withholding"), liability, liabilities},
-            {PayrollRole::ColoradoUi, QStringLiteral("Colorado Unemployment (UI)"), liability, liabilities},
-            {PayrollRole::Famli, QStringLiteral("Colorado FAMLI"), liability, liabilities},
-            {PayrollRole::LocalOpt, QStringLiteral("Local Occupational Privilege Tax"), liability, liabilities},
+            {PayrollRole::ColoradoWithholding, QStringLiteral("Colorado Withholding"), liability, liabilities, true},
+            {PayrollRole::ColoradoUi, QStringLiteral("Colorado Unemployment (UI)"), liability, liabilities, true},
+            {PayrollRole::Famli, QStringLiteral("Colorado FAMLI"), liability, liabilities, true},
+            {PayrollRole::LocalOpt, QStringLiteral("Local Occupational Privilege Tax"), liability, liabilities, true},
             {PayrollRole::Section125, QStringLiteral("Health Insurance Deductions"), liability, liabilities},
             {PayrollRole::Retirement, QStringLiteral("Retirement Plan Deductions"), liability, liabilities},
             {PayrollRole::AfterTax, QStringLiteral("Other Payroll Deductions"), liability, liabilities},
@@ -242,6 +130,8 @@ PayrollSetup PayrollRecords::setup() const
     s.entity = EntityTax(v.value(QStringLiteral("entity")).toInt());
     s.configured = v.value(QStringLiteral("configured")) == QLatin1String("1");
     s.ein = v.value(QStringLiteral("ein"));
+    s.colorado = v.value(QStringLiteral("colorado")) == QLatin1String("1");
+    s.stateCode = v.value(QStringLiteral("state"));
     s.coloradoAccount = v.value(QStringLiteral("co_account"));
     s.uiAccount = v.value(QStringLiteral("ui_account"));
     s.famliAccount = v.value(QStringLiteral("famli_account"));
@@ -280,6 +170,10 @@ Result PayrollRecords::saveSetup(const PayrollSetup &setup)
     if (!setup.ein.isEmpty() && normalizedTaxId(setup.ein, 9).isEmpty()) {
         return Result::failure(ErrorCode::Invalid, QStringLiteral("an EIN has nine digits (00-0000000)"));
     }
+    const QString state = setup.stateCode.trimmed().toUpper();
+    if (!state.isEmpty() && (state.size() != 2 || !state.at(0).isLetter() || !state.at(1).isLetter())) {
+        return Result::failure(ErrorCode::Invalid, QStringLiteral("a state is its two-letter code (TX, NY, …)"));
+    }
     if (setup.famliEmployeeShare.isNegative() || setup.famliEmployerShare.isNegative()
         || Decimal::compare(setup.famliEmployeeShare, Decimal(5, 1)) > 0) {
         return Result::failure(ErrorCode::Invalid, QStringLiteral("an employee pays at most half of the FAMLI premium"));
@@ -299,6 +193,8 @@ Result PayrollRecords::saveSetup(const PayrollSetup &setup)
         {QStringLiteral("entity"), QString::number(int(setup.entity))},
         {QStringLiteral("configured"), QStringLiteral("1")},
         {QStringLiteral("ein"), normalizedTaxId(setup.ein, 9)},
+        {QStringLiteral("colorado"), setup.colorado ? QStringLiteral("1") : QStringLiteral("0")},
+        {QStringLiteral("state"), state},
         {QStringLiteral("co_account"), setup.coloradoAccount.trimmed()},
         {QStringLiteral("ui_account"), setup.uiAccount.trimmed()},
         {QStringLiteral("famli_account"), setup.famliAccount.trimmed()},
@@ -334,6 +230,8 @@ Result PayrollRecords::saveSetup(const PayrollSetup &setup)
     const auto auditJson = [](const PayrollSetup &s) {
         return compact({{QStringLiteral("entity"), entityTaxKey(s.entity)},
                         {QStringLiteral("ein"), s.ein.isEmpty() ? QStringLiteral("none") : maskedEin(s.ein)},
+                        {QStringLiteral("colorado"), s.colorado},
+                        {QStringLiteral("state"), s.stateCode},
                         {QStringLiteral("depositSchedule"), depositScheduleKey(s.depositSchedule)},
                         {QStringLiteral("coloradoFrequency"), coloradoFrequencyKey(s.coloradoFrequency)},
                         {QStringLiteral("smallEmployer"), s.smallEmployer},
@@ -366,6 +264,9 @@ Result PayrollRecords::ensurePayrollAccounts()
         return r.ok ? r.id : 0;
     };
     for (const PayrollAccountSpec &spec : payrollAccountRoles()) {
+        if (spec.colorado && !s.colorado) {
+            continue; // a business outside Colorado gets none of its accounts
+        }
         const std::optional<Account> current = chart.account(s.account(spec.role));
         if (current && current->active) {
             continue;
@@ -404,7 +305,7 @@ EmployeePayroll PayrollRecords::employee(qint64 employeeId) const
     if (!Sql::run(q, QStringLiteral("SELECT first_name, middle_initial, last_name, suffix, ssn, street, city, state, zip,"
                                     " hire_date, release_date, pay_type, pay_rate, pay_frequency, default_hours, w4,"
                                     " w4_on_file, dr0004, co_withholding, opt_city, owner_employee, shareholder_2pct,"
-                                    " deductions FROM employee_payroll WHERE employee_id = ?"),
+                                    " deductions, custom FROM employee_payroll WHERE employee_id = ?"),
                   {employeeId})
         || !q.next()) {
         if (const std::optional<Employee> plain = Employees(m_file).employee(employeeId)) {
@@ -438,6 +339,7 @@ EmployeePayroll PayrollRecords::employee(qint64 employeeId) const
     e.ownerEmployee = q.value(20).toBool();
     e.shareholder2Percent = q.value(21).toBool();
     e.deductions = deductionsFrom(objectFrom(q.value(22)), cur);
+    customFrom(objectFrom(q.value(23)), cur, &e);
     return e;
 }
 
@@ -479,6 +381,12 @@ Result PayrollRecords::saveEmployee(const EmployeePayroll &record)
     if (w.allowances < 0 || (record.dr0004.annualAllowance && record.dr0004.annualAllowance->isNegative())) {
         return Result::failure(ErrorCode::Invalid, QStringLiteral("allowances are not negative"));
     }
+    for (const EmployeePayroll::CustomWithholding &c : record.withholding) {
+        if (c.percent.isNegative() || Decimal::compare(c.percent, Decimal(1, 0)) > 0 || c.extra.isNegative()) {
+            return Result::failure(ErrorCode::Invalid, QStringLiteral("a withholding percentage is 0% to 100% and its "
+                                                                      "extra amount is not negative"));
+        }
+    }
     const EmployeePayroll before = employee(record.employeeId);
     SqlTransaction txn(m_file);
     QString error;
@@ -487,7 +395,8 @@ Result PayrollRecords::saveEmployee(const EmployeePayroll &record)
         QStringLiteral("INSERT OR REPLACE INTO employee_payroll(employee_id, first_name, middle_initial, last_name, suffix,"
                        " ssn, street, city, state, zip, hire_date, release_date, pay_type, pay_rate, pay_frequency,"
                        " default_hours, w4, w4_on_file, dr0004, co_withholding, opt_city, owner_employee,"
-                       " shareholder_2pct, deductions, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"),
+                       " shareholder_2pct, deductions, custom, updated_at)"
+                       " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"),
         {record.employeeId, record.firstName.trimmed(), record.middleInitial.trimmed(), record.lastName.trimmed(),
          record.suffix.trimmed(), normalizedTaxId(record.ssn, 9), record.street.trimmed(), record.city.trimmed(),
          record.state.trimmed().toUpper(), record.zip.trimmed(), Sql::isoDate(record.hireDate),
@@ -495,7 +404,7 @@ Result PayrollRecords::saveEmployee(const EmployeePayroll &record)
          payFrequencyKey(record.frequency), record.defaultHours.toString(), compact(w4Json(record.w4)),
          record.w4OnFile ? 1 : 0, compact(dr0004Json(record.dr0004)), record.coloradoWithholding ? 1 : 0,
          record.optCity, record.ownerEmployee ? 1 : 0, record.shareholder2Percent ? 1 : 0,
-         compact(deductionsJson(record.deductions)), CompanyFile::nowStamp()},
+         compact(deductionsJson(record.deductions)), compact(customJson(record)), CompanyFile::nowStamp()},
         &error);
     if (!ok) {
         return Result::failure(ErrorCode::Storage, error);

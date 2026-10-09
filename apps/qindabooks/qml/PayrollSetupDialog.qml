@@ -4,17 +4,20 @@ import QtQuick
 import QindaTK as Tk
 import QindaOffice.Books.App
 
-// Payroll ▸ Set Up Owner Pay & Payroll… (M71, D-081): how the IRS taxes
-// the LLC — which decides how the owner is paid — the company's tax
-// account numbers, and the employer's own payroll values (deposit
-// schedule, Colorado filing frequency, the UI rate CDLE assigned, the
-// FAMLI shares, the city's head tax). "Not sure" explains how to tell and
-// keeps both ways open. The one statement about the tables and review
-// lives here (and in docs/payroll-tax-tables.md), nowhere else.
+// Payroll ▸ Set Up Owner Pay & Payroll… (M71, D-081): how the business is
+// taxed — which decides how its owners are paid — its tax account numbers,
+// where it pays payroll taxes, and the employer's own payroll values.
+// Federal taxes are built in; Colorado is the first state with built-in
+// tables (its section shows only when chosen); any other state's or city's
+// payroll taxes are payroll tax items the business defines. "Not sure"
+// explains how to tell and keeps every way of paying owners open. The one
+// statement about the tables and review lives here (and in
+// docs/payroll-tax-tables.md), nowhere else.
 Tk.Dialog {
     id: dialog
 
     property BooksService books: null
+    property BooksHost host: null
     property PayrollService payroll: null
     property var record: ({})
     property var info: ({})
@@ -24,12 +27,28 @@ Tk.Dialog {
     readonly property var asideAccounts: [{ id: 0, name: qsTr("None (no transfer)") }].concat(accounts)
     property string entity: "unsure"
     property string problem: ""
-    readonly property var entities: [{ text: qsTr("Schedule C"), value: "scheduleC" }, { text: qsTr("S corporation"), value: "sCorporation" },
-                                     { text: qsTr("Partnership"), value: "partnership" }, { text: qsTr("Not sure"), value: "unsure" }]
+    readonly property bool draws: entity === "scheduleC" || entity === "partnership" || entity === "unsure"
+    // A business outside Colorado sees none of Colorado's open questions.
+    readonly property var unconfirmed: (info.unconfirmed || []).filter(function(u) {
+        return coloradoOn.checked || String(u.path).indexOf("colorado.") !== 0 })
+    readonly property var entities: [
+        { text: qsTr("Sole proprietorship or single-member LLC (Schedule C)"), value: "scheduleC" },
+        { text: qsTr("Partnership or multi-member LLC"), value: "partnership" },
+        { text: qsTr("S corporation"), value: "sCorporation" },
+        { text: qsTr("C corporation"), value: "cCorporation" },
+        { text: qsTr("Nonprofit"), value: "nonprofit" },
+        { text: qsTr("Not sure"), value: "unsure" }]
+    readonly property var help: ({
+        scheduleC: qsTr("A sole proprietorship, or a single-member LLC that never elected otherwise, reports its profit on the owner's Schedule C. The owner is not the business's employee: the business pays its owner with owner's draws, and the owner pays estimated tax on the profit — the planner under Payroll ▸ Estimated taxes helps."),
+        partnership: qsTr("A partnership, or an LLC with two or more members and no election, files Form 1065. Partners are not employees: each takes owner's draws and pays estimated tax on their share of the profit."),
+        sCorporation: qsTr("The IRS accepted the business's S corporation election (Form 2553) — the CP261 notice says so. An owner who works in it is paid a reasonable salary through payroll, with withholding and payroll taxes, and profit beyond it as shareholder distributions. What is reasonable is the business's and its accountant's call; QindaBooks records it."),
+        cCorporation: qsTr("A corporation that files Form 1120. Owners who work in it are paid a salary through payroll; profit paid to its shareholders is a dividend, recorded against retained earnings. It takes no owner's draws."),
+        nonprofit: qsTr("A tax-exempt organization that files Form 990. It has no owners to pay: everyone who works for it is paid through payroll."),
+        unsure: qsTr("How to tell: an IRS CP261 notice means an S corporation election (Form 2553) was accepted. Without an election, a single-member LLC reports on Schedule C and a multi-member LLC files as a partnership; a corporation files Form 1120, a nonprofit Form 990. Until the type is set, QindaBooks keeps owner's draws, distributions, dividends and payroll open.") })
 
     objectName: "payrollSetupDialog"
     title: qsTr("Owner pay and payroll")
-    subtitle: qsTr("How your LLC is taxed decides how you pay yourself")
+    subtitle: qsTr("How the business is taxed decides how its owners are paid")
     dialogWidth: Tk.Theme.size.dialogWidth * 2
     primaryText: qsTr("Save")
     secondaryText: qsTr("Cancel")
@@ -42,6 +61,7 @@ Tk.Dialog {
         entity = String(record.entity || "unsure")
         einField.text = String(record.ein || ""); canField.text = String(record.coloradoAccount || "")
         uiAccountField.text = String(record.uiAccount || ""); famliAccountField.text = String(record.famliAccount || "")
+        coloradoOn.checked = record.colorado === true; stateField.text = String(record.stateCode || "")
         depositBox.currentIndex = record.depositSchedule === "semiweekly" ? 1 : 0
         frequencyBox.currentIndex = Math.max(0, ["quarterly", "monthly", "weekly"].indexOf(String(record.coloradoFrequency || "quarterly")))
         uiRateField.text = String(record.uiRate || ""); heavy.checked = record.uiHeavyConstruction === true
@@ -60,7 +80,8 @@ Tk.Dialog {
     }
     function collect() {
         const cities = info.cities || []
-        return { entity: entity, ein: einField.text, coloradoAccount: canField.text, uiAccount: uiAccountField.text,
+        return { entity: entity, ein: einField.text, colorado: coloradoOn.checked, stateCode: coloradoOn.checked ? "" : stateField.text,
+                 coloradoAccount: canField.text, uiAccount: uiAccountField.text,
                  famliAccount: famliAccountField.text, depositSchedule: depositBox.currentIndex === 1 ? "semiweekly" : "monthly",
                  coloradoFrequency: ["quarterly", "monthly", "weekly"][Math.max(0, frequencyBox.currentIndex)],
                  uiRate: uiRateField.text, uiHeavyConstruction: heavy.checked, smallEmployer: small.checked,
@@ -89,49 +110,65 @@ Tk.Dialog {
             variant: dialog.info.ok === false ? "danger" : "info"
             title: dialog.info.ok === false ? qsTr("No tax tables for this year") : qsTr("Computed from the official %1 tables").arg(dialog.info.year || "")
             text: dialog.info.ok === false ? String(dialog.info.error || "")
-                : qsTr("QindaBooks computes paychecks and estimated taxes from the official %1 IRS and Colorado tables listed under Sources, with their dates. Confirm how the IRS taxes your LLC, and have a tax professional review your first payroll or estimate. QindaBooks prepares the numbers and the forms; you file and pay through EFTPS, Revenue Online, MyUI Employer+ and My FAMLI+ Employer.").arg(dialog.info.year || "")
+                : qsTr("QindaBooks computes paychecks and estimated taxes from the official %1 federal tables — and Colorado's, the first state with built-in tables — listed under Sources with their dates. Another state's or city's payroll taxes are payroll tax items the business defines. Confirm how the IRS taxes the business, and have a tax professional review its first payroll and its first estimate. QindaBooks prepares the numbers and the forms; filing and paying happen through the agencies' own systems (EFTPS for federal deposits).").arg(dialog.info.year || "")
         }
-        Tk.SectionHeader { title: qsTr("How does the IRS tax your LLC?") }
-        Tk.Segmented {
+        Tk.SectionHeader { title: qsTr("How is the business taxed?") }
+        Tk.ComboBox {
             objectName: "payrollEntity"
+            textRole: "text"
             model: dialog.entities
-            currentIndex: dialog.entities.map(function(e) { return e.value }).indexOf(dialog.entity)
+            currentIndex: Math.max(0, dialog.entities.map(function(e) { return e.value }).indexOf(dialog.entity))
             onActivated: function(index) { dialog.entity = dialog.entities[index].value }
         }
-        Tk.Caption {
-            objectName: "payrollEntityHelp"
-            wrapMode: Text.Wrap
-            text: dialog.entity === "scheduleC"
-                  ? qsTr("A single-member LLC that never elected otherwise is \"disregarded\": its profit goes on Schedule C of your Form 1040. You are not an employee — you pay yourself with owner draws, and you pay federal and Colorado estimated taxes four times a year on the profit (income tax and self-employment tax).")
-                  : dialog.entity === "sCorporation"
-                  ? qsTr("You filed Form 2553 and the IRS accepted it (the CP261 letter says so). You must pay yourself a reasonable salary through payroll — with withholding, social security, Medicare and unemployment taxes — before taking the rest as shareholder distributions. What is reasonable is your and your accountant's call; QindaBooks records the salary and the distributions.")
-                  : dialog.entity === "partnership"
-                  ? qsTr("An LLC with two or more members and no election files Form 1065. Partners are not employees: each takes draws and pays estimated taxes on their share of the profit.")
-                  : qsTr("How to tell: look for the IRS CP261 notice — it accepts an S corporation election (Form 2553). Without one, a single-member LLC reports on Schedule C and a multi-member LLC files as a partnership. Until you know, QindaBooks keeps both ways open: owner draws with estimated taxes, and payroll.")
-        }
-        Tk.SectionHeader { title: qsTr("Account numbers") }
+        Tk.Caption { objectName: "payrollEntityHelp"; wrapMode: Text.Wrap; text: String(dialog.help[dialog.entity] || "") }
+        Tk.SectionHeader { title: qsTr("Where the business pays payroll taxes") }
         Tk.Grid {
             columns: dialog.fieldColumns
             columnGap: Tk.Theme.space.lg
             rowGap: Tk.Theme.space.sm
             Tk.PropertyRow { label: qsTr("EIN"); Tk.TextField { id: einField; objectName: "payrollEin"; small: true; mono: true; placeholderText: "12-3456789" } }
-            Tk.PropertyRow { label: qsTr("Colorado CAN"); hint: qsTr("Colorado withholding account number."); Tk.TextField { id: canField; objectName: "payrollCan"; small: true; mono: true } }
-            Tk.PropertyRow { label: qsTr("UI account"); Tk.TextField { id: uiAccountField; objectName: "payrollUiAccount"; small: true; mono: true } }
-            Tk.PropertyRow { label: qsTr("FAMLI account"); Tk.TextField { id: famliAccountField; objectName: "payrollFamliAccount"; small: true; mono: true } }
+            Tk.PropertyRow {
+                label: qsTr("Colorado"); hint: qsTr("The first state with built-in tables: withholding, UI, FAMLI, city taxes and DR 0104EP estimates.")
+                Tk.Switch { id: coloradoOn; objectName: "payrollColoradoOn"; small: true }
+            }
+            Tk.PropertyRow {
+                visible: !coloradoOn.checked; label: qsTr("State"); hint: qsTr("Where state unemployment tax is paid (Form 940 line 1a), as its two letters.")
+                Tk.TextField { id: stateField; objectName: "payrollStateCode"; small: true; mono: true; placeholderText: "TX" }
+            }
+            Tk.PropertyRow {
+                label: qsTr("Other taxes"); hint: qsTr("Any other state's or city's payroll taxes and state withholding: a name, a rate, a wage base, the agency.")
+                Tk.Button { objectName: "payrollItemsButton"; small: true; variant: "outline"; iconName: "list-plus"; text: qsTr("Payroll tax items…")
+                            onClicked: if (dialog.host !== null) dialog.host.actions.trigger("booksPayrollItemsAction") }
+            }
         }
         Tk.SectionHeader { title: qsTr("Payroll") }
         Tk.Caption {
             wrapMode: Text.Wrap
-            text: qsTr("Only for a business with employees — or an S corporation paying its owner a salary. Any LLC with employees runs payroll; the owner of a Schedule C or partnership LLC is never one of them.")
+            text: qsTr("For a business with employees, a corporation's officers included. A sole proprietor or a partner is never the business's own employee.")
         }
         Tk.Grid {
             columns: dialog.fieldColumns
             columnGap: Tk.Theme.space.lg
             rowGap: Tk.Theme.space.sm
             Tk.PropertyRow {
-                label: qsTr("Federal deposits"); hint: qsTr("New employers deposit monthly; the IRS tells you if you become semiweekly.")
+                label: qsTr("Federal deposits"); hint: qsTr("New employers deposit monthly; the IRS says when a business becomes semiweekly.")
                 Tk.ComboBox { id: depositBox; objectName: "payrollDeposit"; small: true; model: [qsTr("Monthly"), qsTr("Semiweekly")] }
             }
+            Tk.PropertyRow {
+                label: qsTr("Whole dollars"); hint: qsTr("Round federal withholding to the dollar; Publication 15-T allows it when always done.")
+                Tk.Switch { id: roundFederal; objectName: "payrollRoundFederal"; small: true }
+            }
+            Tk.PropertyRow { label: qsTr("Payroll bank"); Tk.ComboBox { id: bankBox; objectName: "payrollBank"; small: true; textRole: "name"; model: dialog.accounts } }
+        }
+        Tk.SectionHeader { visible: coloradoOn.checked; title: qsTr("Colorado") }
+        Tk.Grid {
+            visible: coloradoOn.checked
+            columns: dialog.fieldColumns
+            columnGap: Tk.Theme.space.lg
+            rowGap: Tk.Theme.space.sm
+            Tk.PropertyRow { label: qsTr("Colorado CAN"); hint: qsTr("Colorado withholding account number."); Tk.TextField { id: canField; objectName: "payrollCan"; small: true; mono: true } }
+            Tk.PropertyRow { label: qsTr("UI account"); Tk.TextField { id: uiAccountField; objectName: "payrollUiAccount"; small: true; mono: true } }
+            Tk.PropertyRow { label: qsTr("FAMLI account"); Tk.TextField { id: famliAccountField; objectName: "payrollFamliAccount"; small: true; mono: true } }
             Tk.PropertyRow {
                 label: qsTr("Colorado returns")
                 hint: qsTr("Quarterly under %1 of withholding a year, monthly to %2, weekly above.").arg(dialog.info.coloradoMonthlyFrom || "").arg(dialog.info.coloradoWeeklyAbove || "")
@@ -155,14 +192,10 @@ Tk.Dialog {
                 Tk.ComboBox { id: cityBox; objectName: "payrollCity"; small: true; textRole: "city"; model: dialog.info.cities || [] }
             }
             Tk.PropertyRow { label: qsTr("OPT returns"); Tk.ComboBox { id: optFilingBox; objectName: "payrollOptFiling"; small: true; model: [qsTr("Quarterly"), qsTr("Monthly")] } }
-            Tk.PropertyRow {
-                label: qsTr("Whole dollars"); hint: qsTr("Round federal withholding to the dollar; Publication 15-T allows it when you always do it.")
-                Tk.Switch { id: roundFederal; objectName: "payrollRoundFederal"; small: true }
-            }
-            Tk.PropertyRow { label: qsTr("Payroll bank"); Tk.ComboBox { id: bankBox; objectName: "payrollBank"; small: true; textRole: "name"; model: dialog.accounts } }
         }
-        Tk.SectionHeader { title: qsTr("Owner pay") }
+        Tk.SectionHeader { visible: dialog.draws; title: qsTr("Owner's draws") }
         Tk.PropertyRow {
+            visible: dialog.draws
             label: qsTr("Tax savings"); hint: qsTr("Where the share of each draw set aside for taxes goes (a savings account).")
             Tk.ComboBox { id: asideBox; objectName: "payrollAside"; small: true; textRole: "name"; model: dialog.asideAccounts }
         }
@@ -188,10 +221,10 @@ Tk.Dialog {
         }
         Tk.Notice {
             objectName: "payrollUnconfirmed"
-            visible: (dialog.info.unconfirmed || []).length > 0
+            visible: dialog.unconfirmed.length > 0
             variant: "warning"
             title: qsTr("Values needing confirmation")
-            text: (dialog.info.unconfirmed || []).map(function(u) { return u.label + ": " + u.note }).join("\n")
+            text: dialog.unconfirmed.map(function(u) { return u.label + ": " + u.note }).join("\n")
         }
     }
 }

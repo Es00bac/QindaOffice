@@ -71,6 +71,9 @@ public:
         QString definition;
     };
     [[nodiscard]] static QList<Entry> catalog();
+    // The Colorado worksheets (DR 1094, DR 1093, UI and FAMLI wage
+    // reports): listed only for a business that chose Colorado.
+    [[nodiscard]] static bool isColoradoForm(const QString &id);
     [[nodiscard]] std::optional<ReportTable> build(const QString &id, const QDate &from, const QDate &to,
                                                    bool revealIds = false) const;
 

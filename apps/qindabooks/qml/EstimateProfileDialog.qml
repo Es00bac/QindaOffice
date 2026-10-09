@@ -4,10 +4,12 @@ import QtQuick
 import QindaTK as Tk
 import QindaOffice.Books.App
 
-// Estimated taxes ▸ Your tax picture (M71, D-081): what the books cannot
-// know — filing status, the owner's share of the profit, income and
+// Estimated taxes ▸ the owner's tax picture (M71, D-081): what the books
+// cannot know about the return of the sole proprietor or partner the
+// planner is for — filing status, their share of the profit, income and
 // withholding from elsewhere, deductions, credits and last year's tax for
-// the safe harbor. Saved with the company (PayrollService::
+// the safe harbor (Colorado's fields only for a business that chose
+// Colorado). Saved with the company (PayrollService::
 // saveEstimateProfile); every amount is typed text the service validates.
 // Empty means none, except "This year's profit": empty projects the
 // books' profit so far over the whole year.
@@ -29,8 +31,8 @@ Tk.Dialog {
                                       "priorYearColoradoTax"]
 
     objectName: "estimateProfileDialog"
-    title: qsTr("Your tax picture")
-    subtitle: qsTr("What the books cannot know, for the estimated-tax planner")
+    title: qsTr("Owner's tax picture")
+    subtitle: qsTr("What the books cannot know about the owner's return, for the estimated-tax planner")
     dialogWidth: Tk.Theme.size.dialogWidth * 1.8
     primaryText: qsTr("Save")
     secondaryText: qsTr("Cancel")
@@ -80,7 +82,7 @@ Tk.Dialog {
                 Tk.ComboBox { id: statusBox; objectName: "estimateStatus"; small: true; textRole: "label"; model: dialog.statuses }
             }
             Tk.PropertyRow {
-                label: qsTr("Profit share"); hint: qsTr("Your share of the profit: 100% for a single-member LLC, your partnership share otherwise.")
+                label: qsTr("Profit share"); hint: qsTr("The owner's share of the profit: 100% for a sole proprietor, the partnership share for a partner.")
                 Tk.TextField { id: share; objectName: "estimateShare"; small: true; mono: true }
             }
             Tk.PropertyRow {
@@ -111,7 +113,7 @@ Tk.Dialog {
             }
             Tk.PropertyRow { label: qsTr("Credits"); hint: qsTr("Child tax credit and other credits."); Amount { id: credits; objectName: "estimateCredits" } }
             Tk.PropertyRow { label: qsTr("Federal tax withheld"); hint: qsTr("Expected for the year, from wages elsewhere."); Amount { id: federalHeld; objectName: "estimateFederalHeld" } }
-            Tk.PropertyRow { label: qsTr("Colorado withheld"); hint: qsTr("Expected for the year, from wages elsewhere."); Amount { id: coloradoHeld; objectName: "estimateColoradoHeld" } }
+            Tk.PropertyRow { visible: dialog.payroll !== null && dialog.payroll.colorado; label: qsTr("Colorado withheld"); hint: qsTr("Expected for the year, from wages elsewhere."); Amount { id: coloradoHeld; objectName: "estimateColoradoHeld" } }
         }
         Tk.SectionHeader { title: qsTr("Last year (the safe harbor)") }
         Tk.Grid {
@@ -119,7 +121,7 @@ Tk.Dialog {
             columnGap: Tk.Theme.space.lg
             rowGap: Tk.Theme.space.sm
             Tk.PropertyRow {
-                label: qsTr("Prior federal tax"); hint: qsTr("Last year's Form 1040 line 24; empty if you filed no return.")
+                label: qsTr("Prior federal tax"); hint: qsTr("Last year's Form 1040 line 24; empty if the owner filed none.")
                 Amount { id: priorTax; objectName: "estimatePriorTax"; placeholderText: "" }
             }
             Tk.PropertyRow {
@@ -127,6 +129,7 @@ Tk.Dialog {
                 Amount { id: priorAgi; objectName: "estimatePriorAgi"; placeholderText: "" }
             }
             Tk.PropertyRow {
+                visible: dialog.payroll !== null && dialog.payroll.colorado
                 label: qsTr("Prior Colorado tax"); hint: qsTr("Last year's DR 0104 net tax.")
                 Amount { id: priorColorado; objectName: "estimatePriorColorado"; placeholderText: "" }
             }

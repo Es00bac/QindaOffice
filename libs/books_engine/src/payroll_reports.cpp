@@ -7,6 +7,7 @@
 #include "company_file.h"
 #include "payroll_ledger.h"
 #include "payroll_liabilities.h"
+#include "payroll_records.h"
 #include "reports_util.h"
 
 #include <QMap>
@@ -32,10 +33,38 @@ struct Item {
     RowKind kind = RowKind::Account;
 };
 
-QList<Item> summaryItems()
+// The company's own payroll tax items the paychecks took, on one side:
+// an item each (key "custom:<id>").
+QList<Item> customItems(const QList<PaycheckRecord> &checks, CustomItem::Side side)
+{
+    QMap<QString, qint64> found; // name → id, in name order
+    for (const PaycheckRecord &r : checks) {
+        for (const CustomItemResult &c : r.taxes.custom) {
+            if (c.side == side) {
+                found.insert(c.name, c.id);
+            }
+        }
+    }
+    QList<Item> out;
+    for (auto it = found.cbegin(); it != found.cend(); ++it) {
+        const qint64 id = it.value();
+        out << Item{QStringLiteral("custom:%1").arg(id), it.key(), [id](const PaycheckRecord &r) {
+                        Money sum = usd(0);
+                        for (const CustomItemResult &c : r.taxes.custom) {
+                            if (c.id == id) {
+                                sum += c.amount;
+                            }
+                        }
+                        return sum;
+                    }};
+    }
+    return out;
+}
+
+QList<Item> summaryItems(const QList<PaycheckRecord> &checks = {})
 {
     using R = const PaycheckRecord &;
-    return {
+    QList<Item> items{
         {QStringLiteral("section:wages"), QStringLiteral("Wages"), {}, RowKind::Section},
         {QStringLiteral("regular"), QStringLiteral("Regular pay"), [](R r) { return r.regular; }},
         {QStringLiteral("bonus"), QStringLiteral("Bonus (supplemental)"), [](R r) { return r.supplemental; }},
@@ -69,6 +98,20 @@ QList<Item> summaryItems()
         {QStringLiteral("shareholderHealth"), QStringLiteral("2% shareholder health insurance (W-2 box 1, not paid by check)"),
          [](R r) { return r.shareholderHealth; }},
     };
+    // The company's own items after the built-in ones on their side.
+    const auto insertAfter = [&items](const QString &key, const QList<Item> &more) {
+        for (qsizetype i = 0; i < items.size(); ++i) {
+            if (items.at(i).key == key) {
+                for (qsizetype j = 0; j < more.size(); ++j) {
+                    items.insert(i + 1 + j, more.at(j));
+                }
+                return;
+            }
+        }
+    };
+    insertAfter(QStringLiteral("optEe"), customItems(checks, CustomItem::Side::Employee));
+    insertAfter(QStringLiteral("optEr"), customItems(checks, CustomItem::Side::Employer));
+    return items;
 }
 
 } // namespace
@@ -112,6 +155,12 @@ QList<PayrollReports::Entry> PayrollReports::catalog()
     };
 }
 
+bool PayrollReports::isColoradoForm(const QString &id)
+{
+    return id == QLatin1String("dr_1094") || id == QLatin1String("dr_1093") || id == QLatin1String("ui_wage_report")
+        || id == QLatin1String("famli_wage_report");
+}
+
 std::optional<ReportTable> PayrollReports::build(const QString &id, const QDate &from, const QDate &to,
                                                  bool revealIds) const
 {
@@ -146,7 +195,7 @@ ReportTable PayrollReports::payrollSummary(const QDate &from, const QDate &to) c
         t.columns << ReportColumn{QStringLiteral("employee:%1").arg(it.value()), it.key(), ColumnType::Money};
     }
     t.columns << ReportColumn{QStringLiteral("total"), QStringLiteral("Total"), ColumnType::Money};
-    for (const Item &item : summaryItems()) {
+    for (const Item &item : summaryItems(checks)) {
         if (!item.amount) {
             t.rows << sectionRow(item.key, item.label, int(t.columns.size()));
             continue;
@@ -230,12 +279,18 @@ ReportTable PayrollReports::employeeEarnings(const QDate &from, const QDate &to)
 {
     ReportTable t = makeTable(m_file, QStringLiteral("employee_earnings"), QStringLiteral("Employee Earnings Summary"),
                               periodText(from, to));
-    const QList<Item> items = summaryItems();
-    const QStringList keys{QStringLiteral("total:gross"), QStringLiteral("section125"), QStringLiteral("retirement"),
-                           QStringLiteral("fit"), QStringLiteral("ss"), QStringLiteral("medicare"),
-                           QStringLiteral("addlMedicare"), QStringLiteral("coWh"), QStringLiteral("famliEe"),
-                           QStringLiteral("optEe"), QStringLiteral("afterTax"), QStringLiteral("total:net"),
-                           QStringLiteral("total:employer")};
+    const QList<PaycheckRecord> checks = PayrollLedger(m_file).paychecks(from, to);
+    const QList<Item> items = summaryItems(checks);
+    QStringList keys{QStringLiteral("total:gross"), QStringLiteral("section125"), QStringLiteral("retirement"),
+                     QStringLiteral("fit"), QStringLiteral("ss"), QStringLiteral("medicare"),
+                     QStringLiteral("addlMedicare")};
+    if (PayrollRecords(m_file).setup().colorado) {
+        keys << QStringLiteral("coWh") << QStringLiteral("famliEe") << QStringLiteral("optEe");
+    }
+    for (const Item &item : customItems(checks, CustomItem::Side::Employee)) {
+        keys << item.key; // the company's own withheld items
+    }
+    keys << QStringLiteral("afterTax") << QStringLiteral("total:net") << QStringLiteral("total:employer");
     t.columns = {{QStringLiteral("label"), QStringLiteral("Employee"), ColumnType::Text}};
     QList<Item> chosen;
     for (const QString &key : keys) {
@@ -247,7 +302,7 @@ ReportTable PayrollReports::employeeEarnings(const QDate &from, const QDate &to)
         }
     }
     QMap<QString, QList<PaycheckRecord>> byEmployee;
-    for (const PaycheckRecord &r : PayrollLedger(m_file).paychecks(from, to)) {
+    for (const PaycheckRecord &r : checks) {
         byEmployee[r.employeeName] << r;
     }
     QList<qint64> totals(chosen.size(), 0);

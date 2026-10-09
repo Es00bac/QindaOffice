@@ -106,10 +106,19 @@ QVariantMap PayrollService::estimate() const
         return Format::failure(error);
     }
     const PayrollSetup setup = PayrollRecords(*c).setup();
-    if (setup.entity == EntityTax::SCorporation) {
-        return Format::failure(tr("The planner is for a Schedule C or partnership owner, whose income tax and "
-                                  "self-employment tax are due on the profit. An S corporation's owner is paid wages "
-                                  "with withholding; ask your tax professional about estimates on the K-1 income."));
+    // The planner is for an owner taxed on the business's profit: a sole
+    // proprietor or a partner (owner_pay.h ownerPaymentAllowed).
+    if (!ownerPaymentAllowed(setup.entity, OwnerPaymentKind::FederalEstimate)) {
+        return Format::failure(
+            setup.entity == EntityTax::Nonprofit
+                ? tr("A nonprofit has no owners taxed on its profit, so it has no owner estimates to plan.")
+            : setup.entity == EntityTax::CCorporation
+                ? tr("The planner is for a sole proprietor or partner, taxed on the business's profit. A C corporation "
+                     "pays its own income tax (Form 1120-W estimates, not planned here); its owners are paid wages "
+                     "and dividends.")
+                : tr("The planner is for a sole proprietor or partner, taxed on the business's profit. An "
+                     "S corporation's owners are paid wages with withholding; a tax professional can say what their "
+                     "K-1 income needs."));
     }
     const MoneyFormat money = m_books->moneyFormat();
     const QVariantMap p = estimateProfile();
@@ -132,6 +141,7 @@ QVariantMap PayrollService::estimate() const
     }
     const Decimal share = Decimal::parse(shareText).value_or(Decimal(1, 0));
     EstimatedTaxInput in;
+    in.colorado = setup.colorado;
     in.status = filingStatusFromKey(p.value(QStringLiteral("filingStatus")).toString()).value_or(FilingStatus::Single);
     in.asOf = today;
     in.yearToDateProfit = money.money(net).multiplied(share);
@@ -190,7 +200,7 @@ QVariantMap PayrollService::estimate() const
     QStringList notes = r.notes;
     notes.prepend(tr("Profit from the books, %1 basis, January 1 to %2%3.")
                       .arg(basis == Basis::Cash ? tr("cash") : tr("accrual"), Format::isoDate(today),
-                           share == Decimal(1, 0) ? QString() : tr(" × your %1 share").arg(share.toPercentString())));
+                           share == Decimal(1, 0) ? QString() : tr(" × the owner's %1 share").arg(share.toPercentString())));
     return {{QStringLiteral("ok"), true},
             {QStringLiteral("year"), tables->year()},
             {QStringLiteral("asOf"), Format::isoDate(today)},
@@ -204,7 +214,8 @@ QVariantMap PayrollService::estimate() const
             {QStringLiteral("coloradoTaxText"), money.text(r.coloradoTax.minor())},
             {QStringLiteral("seWorksheet"), lines(r.seWorksheet)},
             {QStringLiteral("federal"), plan(r.federal)},
-            {QStringLiteral("colorado"), plan(r.colorado)},
+            // Colorado's plan only for a business that chose Colorado.
+            {QStringLiteral("colorado"), setup.colorado ? QVariant(plan(r.colorado)) : QVariant()},
             {QStringLiteral("setAsidePercent"), r.setAsidePercent},
             {QStringLiteral("businessTaxText"), money.text(r.businessTax.minor())},
             {QStringLiteral("notes"), notes}};
@@ -234,8 +245,10 @@ QVariantMap PayrollService::payOwner(const QVariantMap &map)
         return Format::failure(error);
     }
     OwnerPaymentRequest r;
-    r.kind = map.value(QStringLiteral("kind")).toString() == QLatin1String("distribution") ? OwnerPaymentKind::Distribution
-                                                                                           : OwnerPaymentKind::Draw;
+    const QString kind = map.value(QStringLiteral("kind")).toString();
+    r.kind = kind == QLatin1String("distribution") ? OwnerPaymentKind::Distribution
+           : kind == QLatin1String("dividend")     ? OwnerPaymentKind::Dividend
+                                                   : OwnerPaymentKind::Draw;
     r.ownerId = Format::id(map.value(QStringLiteral("ownerId")));
     r.bankAccountId = Format::id(map.value(QStringLiteral("bankAccountId")));
     r.amount = money.money(*amount);
@@ -310,8 +323,8 @@ QVariantList PayrollService::ownerPayments(int year) const
         return out;
     }
     const MoneyFormat money = m_books->moneyFormat();
-    static const QStringList labels{tr("Owner draw"), tr("Federal estimated tax"), tr("Colorado estimated tax"),
-                                    tr("Tax set-aside"), tr("Shareholder distribution")};
+    static const QStringList labels{tr("Owner's draw"), tr("Federal estimated tax"), tr("Colorado estimated tax"),
+                                    tr("Tax set-aside"), tr("Shareholder distribution"), tr("Dividend")};
     for (const OwnerPaymentRecord &r : OwnerPay(*c).payments(QDate(year, 1, 1), QDate(year + 1, 1, 31), {}, true)) {
         out << QVariantMap{{QStringLiteral("id"), r.docId},
                            {QStringLiteral("kind"), ownerPaymentKindKey(r.kind)},
@@ -344,7 +357,7 @@ QVariantList PayrollService::upcoming(int days) const
     const MoneyFormat money = m_books->moneyFormat();
     QList<std::pair<QDate, QVariantMap>> items;
     const PayrollSetup setup = PayrollRecords(*c).setup();
-    if (setup.configured && setup.entity != EntityTax::SCorporation) {
+    if (setup.configured && ownerPaymentAllowed(setup.entity, OwnerPaymentKind::FederalEstimate)) {
         const QVariantMap e = estimate();
         for (const char *key : {"federal", "colorado"}) {
             const QVariantMap plan = e.value(QString::fromLatin1(key)).toMap();

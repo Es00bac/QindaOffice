@@ -10,8 +10,10 @@
 //   Cr Payroll Liabilities: Federal Withholding, Social Security
 //      (employee + employer), Medicare (both + Additional), FUTA,
 //      Colorado Withholding, Colorado UI, Colorado FAMLI (both shares),
-//      Local OPT (both), Health Insurance / Retirement Plan / Other
-//      deductions                                   what is owed to others
+//      Local OPT (both) — Colorado's only for a business that chose
+//      Colorado — each of the company's own payroll tax items (its own
+//      account, payroll_items.h), Health Insurance / Retirement Plan /
+//      Other deductions                             what is owed to others
 //   Cr the bank account                              net pay
 //
 // AGENT-GUARD (numbers): every amount comes from books_payroll's

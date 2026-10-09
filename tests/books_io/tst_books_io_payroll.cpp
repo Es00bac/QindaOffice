@@ -10,6 +10,7 @@
 #include "check_print.h"
 #include "efw2_export.h"
 #include "employees.h"
+#include "payroll_items.h"
 #include "payroll_ledger.h"
 #include "payroll_records.h"
 #include "payroll_reports.h"
@@ -46,6 +47,7 @@ struct PayrollFile {
         setup.ein = QStringLiteral("00-0000000");
         setup.payrollBankAccountId = bank;
         setup.optCity = QStringLiteral("denver");
+        setup.colorado = true;
         setup.bsoUserId = QStringLiteral("QBOOKS01");
         setup.w2ContactName = QStringLiteral("Jane Doe");
         setup.w2ContactPhone = QStringLiteral("(303) 555-0100");
@@ -59,6 +61,7 @@ struct PayrollFile {
         p.ssn = QStringLiteral("900-00-0001");
         p.street = QStringLiteral("1 Elm Street");
         p.city = QStringLiteral("Denver");
+        p.state = QStringLiteral("CO");
         p.zip = QStringLiteral("80202");
         p.payRate = Decimal(78000, 0);
         p.ownerEmployee = true;
@@ -121,6 +124,56 @@ private slots:
             doc->page(0)->renderToImage(110, 110).save(qEnvironmentVariable("QQO_GRAB_DIR")
                                                        + QStringLiteral("/qindabooks_paycheck_stub.png"));
         }
+    }
+
+    // Outside Colorado, with the company's own employee item: the stub
+    // prints it (1 % of 3,000 = 30.00, the year 30.00); no Colorado tax is
+    // taken from this check.
+    void customItemOnTheStub()
+    {
+        PayrollFile c;
+        PayrollRecords records(*c.file);
+        PayrollSetup s = records.setup();
+        s.colorado = false;
+        s.stateCode = QStringLiteral("TX");
+        s.optCity.clear();
+        QVERIFY(records.saveSetup(s).ok);
+        PayrollItem sdi;
+        sdi.name = QStringLiteral("Example state disability");
+        sdi.side = Payroll::CustomItem::Side::Employee;
+        sdi.rate = *Decimal::parse(QStringLiteral("0.01"));
+        sdi.agency = QStringLiteral("Example disability fund");
+        QVERIFY(PayrollItems(*c.file).saveItem(sdi).ok);
+        PaycheckRequest r;
+        r.employeeId = c.jane;
+        r.payDate = QDate(2026, 10, 23);
+        r.periodStart = QDate(2026, 10, 10);
+        r.periodEnd = QDate(2026, 10, 23);
+        r.checkNumber = QStringLiteral("2002");
+        const qint64 doc = PayrollLedger(*c.file).createPaycheck(r).id;
+        QVERIFY(doc != 0);
+        PrintableCheck check;
+        QVERIFY(buildPrintableCheck(*c.file, doc, &check));
+        bool found = false;
+        for (const PayStubLine &l : check.payStub->taxes) {
+            if (l.label == QStringLiteral("Example state disability")) {
+                found = true;
+                QCOMPARE(l.current, QStringLiteral("30.00"));
+                QCOMPARE(l.yearToDate, QStringLiteral("30.00"));
+            }
+            // The year's first check was Colorado's: its line keeps the
+            // year to date, this check takes none.
+            if (l.label.startsWith(QStringLiteral("Colorado")) || l.label == QStringLiteral("Local OPT")) {
+                QCOMPARE(l.current, QStringLiteral("0.00"));
+            }
+        }
+        QVERIFY(found);
+        QString why;
+        const QString pdf = c.dir.filePath(QStringLiteral("custom.pdf"));
+        QVERIFY2(CheckRenderer::writeChecksPdf(*c.file, {doc}, pdf, &why), qPrintable(why));
+        const QString text = pdfPages(pdf).first();
+        QVERIFY(text.contains(QStringLiteral("Example state disability")));
+        QVERIFY(text.contains(QStringLiteral("30.00")));
     }
 
     void form941PrintsAsAReport()

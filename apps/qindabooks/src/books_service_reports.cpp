@@ -7,6 +7,7 @@
 #include "accounts.h"
 #include "company_file.h"
 #include "documents.h"
+#include "payroll_records.h"
 #include "payroll_reports.h"
 #include "reconciliation.h"
 #include "report_output.h"
@@ -76,7 +77,12 @@ Comparison comparisonFrom(const QString &key)
 QVariantList BooksService::reportCatalog() const
 {
     QVariantList out;
+    // A business outside Colorado sees none of Colorado's forms (D-081).
+    const bool colorado = file() != nullptr && PayrollRecords(*file()).setup().colorado;
     for (const Reports::Catalog &r : Reports::catalog()) {
+        if (!colorado && PayrollReports::isColoradoForm(r.id)) {
+            continue;
+        }
         out << QVariantMap{{QStringLiteral("id"), r.id},
                            {QStringLiteral("title"), r.title},
                            {QStringLiteral("group"), r.group},

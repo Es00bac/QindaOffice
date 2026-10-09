@@ -168,7 +168,7 @@ EstimatePlan federalPlan(const PayrollTables &tables, const EstimatedTaxInput &i
     if (!line14a.isPositive()) {
         plan.reason = QStringLiteral("Withholding already covers the required annual payment.");
     } else if (line14b < t.minimumBalanceDue) {
-        plan.reason = QStringLiteral("You expect to owe less than %1 after withholding.").arg(usdText(t.minimumBalanceDue));
+        plan.reason = QStringLiteral("The owner expects to owe less than %1 after withholding.").arg(usdText(t.minimumBalanceDue));
     } else {
         plan.paymentsRequired = true;
         plan.estimatedPaymentsNeeded = line14a;
@@ -209,7 +209,7 @@ EstimatePlan coloradoPlan(const PayrollTables &tables, const EstimatedTaxInput &
                                 plan.requiredAnnualPayment);
     const Money needed = plan.requiredAnnualPayment - plan.withholding;
     if (owed <= c.estimatedMinimumBalanceDue) {
-        plan.reason = QStringLiteral("Colorado requires estimated payments only when you expect to owe more than %1 "
+        plan.reason = QStringLiteral("Colorado requires estimated payments only when the owner expects to owe more than %1 "
                                      "after withholding.")
                           .arg(usdText(c.estimatedMinimumBalanceDue));
     } else if (!needed.isPositive()) {
@@ -349,23 +349,34 @@ EstimatedTaxResult planEstimatedTax(const PayrollTables &tables, const Estimated
     r.incomeTax = fed.incomeTax;
     r.federal = federalPlan(tables, input, fed);
     schedule(r.federal, tables.estimatedTax().dueDates, input.payments, EstimatedPayment::Jurisdiction::Federal, input.asOf);
-    // Colorado starts from federal taxable income (DR 0104 line 1).
-    r.coloradoTaxableIncome = fed.taxable;
-    r.coloradoTax = coloradoTaxOn(tables, fed.taxable);
-    r.colorado = coloradoPlan(tables, input, r.coloradoTax);
-    schedule(r.colorado, tables.colorado().estimatedDueDates, input.payments, EstimatedPayment::Jurisdiction::Colorado,
-             input.asOf);
+    // Colorado starts from federal taxable income (DR 0104 line 1) — only
+    // for a business that chose Colorado's built-in tables.
+    const auto stateTax = [&](const Money &taxable) {
+        return input.colorado ? coloradoTaxOn(tables, taxable) : usd(0);
+    };
+    if (input.colorado) {
+        r.coloradoTaxableIncome = fed.taxable;
+        r.coloradoTax = stateTax(fed.taxable);
+        r.colorado = coloradoPlan(tables, input, r.coloradoTax);
+        schedule(r.colorado, tables.colorado().estimatedDueDates, input.payments,
+                 EstimatedPayment::Jurisdiction::Colorado, input.asOf);
+    } else {
+        r.colorado.reason = QStringLiteral("Colorado's built-in tables are not chosen for this business.");
+    }
     // The share of the profit to set aside: the tax with the business
     // less the tax without it.
     QStringList ignored;
     const FederalTax without = federalTax(tables, input, usd(0), &ignored);
-    r.businessTax = nonNegative((fed.total + r.coloradoTax) - (without.total + coloradoTaxOn(tables, without.taxable)));
+    r.businessTax = nonNegative((fed.total + r.coloradoTax) - (without.total + stateTax(without.taxable)));
     if (r.annualProfit.isPositive()) {
         r.setAsidePercent = int(*scaleExact(r.businessTax.minor(), 100, r.annualProfit.minor(), RoundingMode::AwayFromZero));
     }
-    for (const UnconfirmedValue &u : tables.unconfirmedUnder(QStringLiteral("estimatedTax"))
-             + tables.unconfirmedUnder(QStringLiteral("colorado.incomeTaxRate"))
-             + tables.unconfirmedUnder(QStringLiteral("colorado.estimated"))) {
+    QList<UnconfirmedValue> used = tables.unconfirmedUnder(QStringLiteral("estimatedTax"));
+    if (input.colorado) {
+        used += tables.unconfirmedUnder(QStringLiteral("colorado.incomeTaxRate"))
+            + tables.unconfirmedUnder(QStringLiteral("colorado.estimated"));
+    }
+    for (const UnconfirmedValue &u : std::as_const(used)) {
         r.notes << QStringLiteral("Needs confirmation: %1 — %2").arg(u.label, u.note);
     }
     r.ok = true;

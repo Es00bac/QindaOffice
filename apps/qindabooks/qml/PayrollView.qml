@@ -5,12 +5,14 @@ import QtQuick.Dialogs as Dialogs
 import QindaTK as Tk
 import QindaOffice.Books.App
 
-// Payroll (M71, D-081): how the owner is paid and, with employees, the
-// payroll — one workspace in tabs. Overview: how this LLC pays its owner,
-// what falls due in the next weeks, and the copies saved for filing (W-2s
-// and wage reports with full identity numbers, the SSA's EFW2 file).
-// Owner pay: draws or distributions and tax set-asides. Estimated taxes:
-// the planner. Employees, Paychecks, Liabilities: the payroll itself. The
+// Payroll (M71, D-081): how the business pays its owners and, with
+// employees, the payroll — one workspace in tabs. Overview: how owners are
+// paid for the business's type, what falls due in the next weeks, and the
+// copies saved for filing (W-2s and, for a business that chose Colorado,
+// its wage reports, with full identity numbers; the SSA's EFW2 file).
+// Owner pay: draws, distributions or dividends and tax set-asides.
+// Estimated taxes: the planner for a sole proprietor or partner.
+// Employees, Paychecks, Liabilities: the payroll itself. The
 // Payroll menu's dialogs (setup, Pay Owner, Run Payroll, Pay Liabilities)
 // live in BooksWindow; the ones opened from a row live here.
 Tk.Box {
@@ -29,8 +31,15 @@ Tk.Box {
     readonly property bool narrow: width < Tk.Theme.size.panelMinWidth * 3
     readonly property var tabNames: [qsTr("Overview"), qsTr("Owner pay"), qsTr("Estimated taxes"), qsTr("Employees"),
                                      qsTr("Paychecks"), qsTr("Liabilities")]
-    readonly property var entityLabels: ({ scheduleC: qsTr("Schedule C"), sCorporation: qsTr("S corporation"),
-                                           partnership: qsTr("Partnership"), unsure: qsTr("Tax type not confirmed") })
+    readonly property bool colorado: payroll !== null && payroll.colorado
+    readonly property var entityLabels: ({ scheduleC: qsTr("Sole proprietorship"), sCorporation: qsTr("S corporation"),
+                                           partnership: qsTr("Partnership"), cCorporation: qsTr("C corporation"),
+                                           nonprofit: qsTr("Nonprofit"), unsure: qsTr("Business type not set") })
+    // How owners are paid, by type: the command, and its button's words.
+    readonly property string ownerCommand: entity === "sCorporation" ? "booksDistributionAction"
+                                         : entity === "cCorporation" ? "booksDividendAction" : "booksPayOwnerAction"
+    readonly property string ownerText: entity === "sCorporation" ? qsTr("Distribution…")
+                                      : entity === "cCorporation" ? qsTr("Dividend…") : qsTr("Pay owner…")
 
     color: Tk.Theme.color.surface
     padding: 0
@@ -75,9 +84,9 @@ Tk.Box {
             Tk.Spacer { }
             Tk.Button { objectName: "payrollSetup"; variant: view.configured ? "outline" : "accent"; iconName: "settings-2"; text: qsTr("Set up…")
                         onClicked: view.host.actions.trigger("booksPayrollSetupAction") }
-            Tk.Button { objectName: "payrollPayOwner"; variant: "outline"; iconName: "hand-coins"
-                        text: view.entity === "sCorporation" ? qsTr("Distribution…") : qsTr("Pay owner…")
-                        onClicked: view.host.actions.trigger(view.entity === "sCorporation" ? "booksDistributionAction" : "booksPayOwnerAction") }
+            Tk.Button { objectName: "payrollPayOwner"; visible: view.entity !== "nonprofit"; variant: "outline"; iconName: "hand-coins"
+                        text: view.ownerText
+                        onClicked: view.host.actions.trigger(view.ownerCommand) }
             Tk.Button { objectName: "payrollRun"; variant: view.configured ? "accent" : "outline"; iconName: "receipt"; text: qsTr("Run payroll…")
                         onClicked: view.host.actions.trigger("booksRunPayrollAction") }
         }
@@ -112,8 +121,8 @@ Tk.Box {
                     objectName: "payrollNotSetUp"
                     visible: !view.configured
                     variant: "warning"
-                    title: qsTr("Set up owner pay first")
-                    text: qsTr("Tell QindaBooks how the IRS taxes your LLC — Schedule C, S corporation or partnership — and it sets up the accounts, the owner's pay and, with employees, payroll.")
+                    title: qsTr("Set up owner pay and payroll first")
+                    text: qsTr("Tell QindaBooks how the business is taxed — sole proprietorship, partnership, S corporation, C corporation or nonprofit — and where it pays payroll taxes; it sets up the accounts, how owners are paid and, with employees, payroll.")
                     actions: Tk.Button { small: true; variant: "accent"; text: qsTr("Set up…"); onClicked: view.host.actions.trigger("booksPayrollSetupAction") }
                 }
                 Tk.Card {
@@ -121,16 +130,20 @@ Tk.Box {
                     Tk.Flex {
                         direction: Tk.Flex.Column
                         gap: Tk.Theme.space.xs
-                        Tk.Overline { title: qsTr("How you are paid") }
+                        Tk.Overline { title: qsTr("How the business pays its owners") }
                         Tk.Label {
                             wrapMode: Text.Wrap
                             text: view.entity === "sCorporation"
-                                  ? qsTr("You are the corporation's employee: pay yourself a reasonable salary with Run Payroll — withholding and payroll taxes included — and take the rest of the profit as shareholder distributions.")
+                                  ? qsTr("An owner who works in the business is its employee: a reasonable salary through Run Payroll, withholding and payroll taxes included, and the rest of the profit as shareholder distributions.")
+                                  : view.entity === "cCorporation"
+                                  ? qsTr("Owners who work in the business are paid a salary through Run Payroll; profit paid to shareholders is a dividend, from retained earnings.")
+                                  : view.entity === "nonprofit"
+                                  ? qsTr("A nonprofit has no owners to pay: the people who work for it are paid through Run Payroll.")
                                   : view.entity === "scheduleC"
-                                  ? qsTr("You take owner draws. The profit is taxed on your own Form 1040 (Schedule C and Schedule SE): pay federal and Colorado estimated taxes four times a year, and set part of each draw aside for them.")
+                                  ? qsTr("The owner takes owner's draws. The profit is taxed on the owner's own return (Schedule C and Schedule SE): estimated taxes four times a year — the planner under Estimated taxes — and part of each draw set aside for them.")
                                   : view.entity === "partnership"
-                                  ? qsTr("Each partner takes draws and pays federal and Colorado estimated taxes on their share of the profit (Schedule K-1).")
-                                  : qsTr("Until you confirm how the IRS taxes your LLC, both ways stay open: owner draws with estimated taxes, and payroll. The CP261 notice is the sign of an S corporation election.")
+                                  ? qsTr("Each partner takes owner's draws and pays estimated taxes on their share of the profit (Schedule K-1).")
+                                  : qsTr("Until the business type is set, every way stays open: owner's draws with estimated taxes, distributions, dividends and payroll. An IRS CP261 notice is the sign of an S corporation election.")
                         }
                     }
                 }
@@ -149,7 +162,9 @@ Tk.Box {
                 Tk.SectionHeader { title: qsTr("Copies for filing") }
                 Tk.Caption {
                     wrapMode: Text.Wrap
-                    text: qsTr("Every form is a report under Reports ▸ Payroll tax forms, with identity numbers masked. These copies show them in full, for filing — keep them private. QindaBooks does not e-file or pay: upload the W-2 file to the SSA's Business Services Online and enter the wage reports in MyUI Employer+ and My FAMLI+ Employer.")
+                    text: view.colorado
+                          ? qsTr("Every form is a report under Reports ▸ Payroll tax forms, with identity numbers masked. These copies show them in full, for filing — keep them private. QindaBooks does not e-file or pay: upload the W-2 file to the SSA's Business Services Online and enter the wage reports in MyUI Employer+ and My FAMLI+ Employer.")
+                          : qsTr("Every form is a report under Reports ▸ Payroll tax forms, with identity numbers masked. These copies show them in full, for filing — keep them private. QindaBooks does not e-file or pay: upload the W-2 file to the SSA's Business Services Online; another state's returns use the payroll reports.")
                 }
                 Tk.Flex {
                     direction: Tk.Flex.Row
@@ -160,8 +175,8 @@ Tk.Box {
                     Tk.TextField { id: filingDate; objectName: "payrollFilingDate"; small: true; mono: true; implicitWidth: Tk.Theme.size.fieldWidth }
                     Tk.Button { objectName: "payrollFileW2"; small: true; variant: "outline"; iconName: "file-check"; text: qsTr("W-2s…"); onClicked: view.saveForFiling("form_w2") }
                     Tk.Button { objectName: "payrollFileW3"; small: true; variant: "outline"; iconName: "file-check"; text: qsTr("W-3…"); onClicked: view.saveForFiling("form_w3") }
-                    Tk.Button { objectName: "payrollFileUi"; small: true; variant: "outline"; iconName: "file-check"; text: qsTr("UI wage report…"); onClicked: view.saveForFiling("ui_wage_report") }
-                    Tk.Button { objectName: "payrollFileFamli"; small: true; variant: "outline"; iconName: "file-check"; text: qsTr("FAMLI wage report…"); onClicked: view.saveForFiling("famli_wage_report") }
+                    Tk.Button { objectName: "payrollFileUi"; visible: view.colorado; small: true; variant: "outline"; iconName: "file-check"; text: qsTr("UI wage report…"); onClicked: view.saveForFiling("ui_wage_report") }
+                    Tk.Button { objectName: "payrollFileFamli"; visible: view.colorado; small: true; variant: "outline"; iconName: "file-check"; text: qsTr("FAMLI wage report…"); onClicked: view.saveForFiling("famli_wage_report") }
                     Tk.Button { objectName: "payrollFileEfw2"; small: true; variant: "outline"; iconName: "file-down"; text: qsTr("W-2 file (EFW2)…"); onClicked: view.saveForFiling("efw2") }
                 }
                 Tk.Notice { id: filingResult; objectName: "payrollFilingResult"; visible: false; dismissible: true; onDismissed: visible = false }
@@ -180,8 +195,13 @@ Tk.Box {
                 wrap: Tk.Flex.Wrap
                 align: Tk.Flex.Center
                 gap: Tk.Theme.space.sm
-                Tk.Caption { text: qsTr("Money paid to the owners in %1: draws, distributions, estimated taxes and set-asides. None of it is an expense.").arg(view.year); wrapMode: Text.Wrap; Tk.Flex.grow: 1; Tk.Flex.basis: 0 }
-                Tk.Button { objectName: "ownerSetAside"; small: true; variant: "outline"; iconName: "piggy-bank"; text: qsTr("Set aside…"); onClicked: setAsidePrompt.open() }
+                Tk.Caption {
+                    text: view.entity === "nonprofit" ? qsTr("A nonprofit has no owners to pay.")
+                        : qsTr("Money paid to the owners in %1: draws, distributions, dividends, estimated taxes and set-asides. None of it is an expense.").arg(view.year)
+                    wrapMode: Text.Wrap; Tk.Flex.grow: 1; Tk.Flex.basis: 0
+                }
+                Tk.Button { objectName: "ownerSetAside"; visible: ["scheduleC", "partnership", "unsure"].indexOf(view.entity) >= 0
+                            small: true; variant: "outline"; iconName: "piggy-bank"; text: qsTr("Set aside…"); onClicked: setAsidePrompt.open() }
                 Tk.Button { objectName: "ownerVoid"; small: true; variant: "ghost"; iconName: "circle-x"; text: qsTr("Void…"); enabled: view.ownerPick >= 0 && view.ownerRows[view.ownerPick] && !view.ownerRows[view.ownerPick].voided
                             onClicked: { voidPrompt.text = ""; voidPrompt.open() } }
             }

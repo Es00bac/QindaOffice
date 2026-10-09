@@ -69,14 +69,21 @@ add_library(books_engine STATIC
     src/payroll_forms_federal.cpp
     src/payroll_forms_p.h
     src/payroll_forms_w2.cpp
+    src/payroll_items.cpp
+    src/payroll_items.h
     src/payroll_ledger.cpp
     src/payroll_ledger.h
+    src/payroll_ledger_totals.cpp
     src/payroll_liabilities.cpp
     src/payroll_liabilities.h
     src/payroll_records.cpp
     src/payroll_records.h
+    src/payroll_records_json.cpp
+    src/payroll_records_p.h
     src/payroll_reports.cpp
     src/payroll_reports.h
+    src/payroll_stub.cpp
+    src/payroll_stub.h
     src/purchase_orders.cpp
     src/purchase_orders.h
     src/purchases.cpp

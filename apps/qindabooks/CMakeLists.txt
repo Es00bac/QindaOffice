@@ -59,6 +59,7 @@ set(qindabooks_qml
     qml/EstimatedTaxesPane.qml
     qml/WorksheetLines.qml
     qml/PayrollSetupDialog.qml
+    qml/PayrollItemsDialog.qml
     qml/PayOwnerDialog.qml
     qml/EstimateProfileDialog.qml
     qml/EstimatedPaymentDialog.qml
@@ -105,6 +106,7 @@ qt_add_qml_module(qindabooks_app
         src/books_service_tax.cpp
         src/books_service_time.cpp
         src/payroll_service.cpp src/payroll_service.h
+        src/payroll_service_items.cpp
         src/payroll_service_owner.cpp
         src/payroll_service_pay.cpp
     QML_FILES ${qindabooks_qml}

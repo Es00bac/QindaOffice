@@ -67,10 +67,12 @@ own: copy it and you have copied the books.
 | `payment_links` (v3) | online payment links made for invoices (amount, currency, URL, Stripe id) |
 | `employees` (v4) | the people time is entered for: name, email, phone, address, notes, an optional default hourly **billing** rate, active — nothing else (payroll's half is `employee_payroll`, v5) |
 | `time_entries` (v4) | date, an employee **or** a vendor (exactly one, a CHECK), customer:job, service item, whole minutes (1 … 1440), billable, notes, class |
-| `employee_payroll` (v5) | the payroll half of an `employees` row: legal name, SSN, address, hire and release dates, pay type, rate and schedule, usual hours, the W-4 and DR 0004 (JSON), Colorado withholding on/off, OPT city, owner-employee and > 2 % shareholder flags, deductions (JSON) |
+| `employee_payroll` (v5) | the payroll half of an `employees` row: legal name, SSN, address, hire and release dates, pay type, rate and schedule, usual hours, the W-4 and DR 0004 (JSON), Colorado withholding on/off, OPT city, officer and > 2 % shareholder flags, deductions (JSON), the payroll tax items the employee is not subject to and their user-entered withholding (`custom`, JSON) |
 | `paychecks` (v5) | one per paycheck document (immutable, triggers): employee, pay date and period, hours, every earning, deduction, wage base, tax and the net as computed, the document it replaces, the worksheets and notes (JSON) |
 | `payroll_payments` (v5) | a liability payment's agency group and period (and its rounding adjustment) |
-| `owner_payments` (v5) | what an owner payment was: draw, federal or Colorado estimate (tax year, installment), set-aside, distribution |
+| `owner_payments` (v5) | what an owner payment was: draw, federal or Colorado estimate (tax year, installment), set-aside, distribution, dividend |
+| `payroll_items` (v5) | a business's own payroll tax items: name, side, kind (percentage or withholding), rate, wage base, annual limit, liability account, agency, frequency, due day, active |
+| `paycheck_items` (v5) | what each paycheck took for each item (wages, amount; immutable, triggers) |
 
 `journal_lines` duplicates the transaction's date, kind and void flag so
 every report aggregates one indexed table.
@@ -287,15 +289,26 @@ description, quantity, rate, amount and a customer:job.
 
 ## Owner pay, estimated taxes and payroll (M71, D-081)
 
+QindaBooks is a general accounting app: payroll and owner pay work for any
+business, by how it is taxed and where it pays payroll taxes. Federal taxes
+are built in. **Colorado is the first state with built-in tables**
+(wage withholding, UI, FAMLI, city occupational privilege taxes, DR 0104EP
+estimates, its forms) and applies only to a business that chooses it. Any
+other state's or city's payroll taxes are **payroll tax items** the business
+defines, computed exactly as entered (below). QindaBooks has no other
+state's formulas and files or pays nothing.
+
 The computation is `books_payroll` (namespace `Books::Payroll`, pure
 functions over the year's tables); the records, postings and forms are in
 `books_engine` — `PayrollRecords` (`payroll_records.h`: setup, employees,
-the payroll accounts), `PayrollLedger` (`payroll_ledger.h`: paychecks),
-`PayrollLiabilities` (`payroll_liabilities.h`), `OwnerPay` (`owner_pay.h`)
-and `PayrollReports` (`payroll_reports.h`); the paycheck's voucher stub and
-the SSA file are in `books_io` (`pay_stub.cpp`, `efw2_export.h`). Every
-rate, base and due-date rule and where it came from:
-[payroll-tax-tables.md](payroll-tax-tables.md).
+the payroll accounts), `PayrollItems` (`payroll_items.h`: the business's
+own payroll tax items), `PayrollLedger` (`payroll_ledger.h`: paychecks),
+`PayrollLiabilities` (`payroll_liabilities.h`), `OwnerPay`
+(`owner_pay.h`), `PayrollReports` (`payroll_reports.h`) and
+`payStubLines` (`payroll_stub.h`: the stub's lines for paper and screen);
+the paycheck's voucher stub and the SSA file are in `books_io`
+(`pay_stub.cpp`, `efw2_export.h`). Every built-in rate, base and due-date
+rule and where it came from: [payroll-tax-tables.md](payroll-tax-tables.md).
 
 | `books_payroll` file | What it computes |
 | --- | --- |
@@ -303,51 +316,100 @@ rate, base and due-date rule and where it came from:
 | `payroll_types.h` | pay frequencies (periods a year), W-4 and filing statuses, rate schedules, worksheet lines, `usdText` |
 | `federal_withholding.h` | Publication 15-T Worksheet 1A for a 2020-or-later or an earlier Form W-4; supplemental wages |
 | `colorado_payroll.h` | DR 1098 withholding, UI part by part, the FAMLI premium and its shares, the city occupational privilege taxes |
-| `paycheck_calculator.h` | `computePaycheck` — one check from gross pay, deductions, the employee's year to date and the employer's running totals: every wage base, tax, deduction, the net and the worksheets |
-| `estimated_tax.h` | `planEstimatedTax` (Form 1040-ES worksheet, Schedule SE, Form 8959, simplified Form 8995, the safe harbors; DR 0104EP), `scheduleInstallments`, `annualizeProfit`, `setAsideFor` |
+| `custom_items.h` | `computeCustomItem` — a business's own item: a flat percentage of wages up to its wage base, an annual limit, or the employee's user-entered withholding percentage and extra amount |
+| `paycheck_calculator.h` | `computePaycheck` — one check from gross pay, deductions, the employee's year to date and the employer's running totals: every wage base, tax (Colorado's only when chosen, the business's own items), deduction, the net and the worksheets |
+| `estimated_tax.h` | `planEstimatedTax` (Form 1040-ES worksheet, Schedule SE, Form 8959, simplified Form 8995, the safe harbors; DR 0104EP when Colorado is chosen), `scheduleInstallments`, `annualizeProfit`, `setAsideFor` |
 | `payroll_calendar.h` | business days, federal deposit periods (monthly, semiweekly, next-day), return due dates, Colorado filing periods |
 
-### How the owner is paid
+### How owners are paid
 
-*Payroll ▸ Set Up Owner Pay & Payroll…* asks how the IRS taxes the LLC —
-Schedule C, S corporation, partnership or **not sure** (which explains the
-CP261 notice and keeps both ways open) — and takes the EIN, the Colorado
-account numbers, the deposit schedule, the Colorado filing frequency, the
-UI rate CDLE assigned (by its parts), the FAMLI shares, the city, the
-payroll bank account and a tax savings account. Saving creates the payroll
-accounts once (by name, reusing a template's "Payroll Liabilities" and
-"Owner Draws"): Payroll Expenses with Wages, Officer Wages and Payroll
-Taxes; Payroll Liabilities with Federal Withholding, Social Security,
-Medicare, Federal Unemployment (FUTA), Colorado Withholding, Colorado
-Unemployment (UI), Colorado FAMLI, Local Occupational Privilege Tax and the
-three deduction accounts; equity Owner Draws and Shareholder Distributions.
+*Payroll ▸ Set Up Owner Pay & Payroll…* asks how the business is taxed —
+a sole proprietorship or single-member LLC (Schedule C), a partnership or
+multi-member LLC, an S corporation, a C corporation, a nonprofit, or
+**not sure** (which explains the CP261 notice and keeps every way open) —
+and where it pays payroll taxes: Colorado (its account numbers, filing
+frequency, the UI rate CDLE assigned by its parts, the FAMLI shares, the
+city), or another state named by its two letters (Form 940 line 1a) with
+its taxes as payroll tax items. It also takes the EIN, the deposit
+schedule, the payroll bank account and, for owner's draws, a tax savings
+account. Saving creates the payroll accounts once (by name, reusing a
+template's "Payroll Liabilities" and "Owner Draws"): Payroll Expenses with
+Wages, Officer Wages and Payroll Taxes; Payroll Liabilities with Federal
+Withholding, Social Security, Medicare, Federal Unemployment (FUTA), the
+three deduction accounts and — for a business that chose Colorado —
+Colorado Withholding, Colorado Unemployment (UI), Colorado FAMLI and Local
+Occupational Privilege Tax; equity Owner Draws and Shareholder
+Distributions.
 
-- **Owner draws** (Schedule C, partnership, not sure): *Pay Owner…* — Dr
-  Owner Draws, Cr the bank, by check (numbered, or queued for *Checks to
-  Print* and its confirm step) or by transfer. Refused for an S corporation.
-- **Shareholder distributions** (S corporation, not sure): *Shareholder
-  Distribution…* — Dr Shareholder Distributions. Refused for a Schedule C or
-  partnership owner. Pay Owner asked of an S corporation becomes a
-  distribution, and says why.
-- **Estimated taxes** (*Estimated Taxes*, the planner): this year's profit
-  from the Profit and Loss (January 1 to today, the company's basis) times
-  the owner's share — projected over the year, or the owner's own figure —
-  and "your tax picture" (filing status, income and withholding elsewhere,
-  adjustments, deductions, credits, last year's tax and AGI), saved with
-  the company. It shows the federal and Colorado tax, the required annual
-  payment and the reason, the four installments with what was paid and
-  what is owed (Upcoming, Paid, Paid late, Overdue, Not required) and every
-  worksheet line. A payment made through EFTPS, Direct Pay or Revenue
-  Online is recorded as an owner's draw (Dr Owner Draws) marked with its
-  tax year and installment — the tax is the owner's, not the business's.
-  The planner refuses an S corporation, saying why.
+How owners are paid follows the type (`ownerPaymentAllowed`, owner_pay.h):
+
+| Business | Owners are paid | Refused |
+| --- | --- | --- |
+| Sole proprietorship / single-member LLC (Schedule C) | owner's draws; estimated payments as draws; set-asides | a paycheck, distributions, dividends |
+| Partnership / multi-member LLC | owner's draws (each partner); estimated payments as draws; set-asides | a paycheck, distributions, dividends |
+| S corporation | salary through payroll (Officer Wages) and shareholder distributions | draws, dividends |
+| C corporation | salary through payroll and dividends (Dr Retained Earnings) | draws, distributions |
+| Nonprofit | no owners: its people are paid through payroll | every owner payment |
+| Not sure | every way stays open | — |
+
+- **Owner's draws**: *Pay Owner…* — Dr Owner Draws, Cr the bank, by check
+  (numbered, or queued for *Checks to Print* and its confirm step) or by
+  transfer.
+- **Shareholder distributions**: *Shareholder Distribution…* — Dr
+  Shareholder Distributions. **Dividends**: *Pay Dividend…* — Dr Retained
+  Earnings. Pay Owner asked of a business that pays its owners another way
+  becomes that way, and says why.
+- **Estimated taxes** (*Estimated Taxes*, the planner for a sole proprietor
+  or partner): this year's profit from the Profit and Loss (January 1 to
+  today, the company's basis) times the owner's share — projected over the
+  year, or a figure entered for it — and the owner's tax picture (filing
+  status, income and withholding elsewhere, adjustments, deductions,
+  credits, last year's tax and AGI), saved with the company. It shows the
+  federal tax — and Colorado's for a business that chose Colorado — the
+  required annual payment and the reason, the four installments with what
+  was paid and what is owed (Upcoming, Paid, Paid late, Overdue, Not
+  required) and every worksheet line. A payment made through EFTPS, Direct
+  Pay or the state's system is recorded as an owner's draw (Dr Owner Draws)
+  marked with its tax year and installment — the tax is the owner's, not
+  the business's. A corporation or nonprofit gets the reason instead.
 - **Set aside**: after a draw, the share of it the planner's tax takes
-  (the year's federal and Colorado tax with the profit, less without,
-  over the profit, rounded up to a whole percent), moved to the tax savings
-  account on request (a transfer).
+  (the year's tax with the profit, less without, over the profit, rounded
+  up to a whole percent), moved to the tax savings account on request (a
+  transfer).
 - **Reminders**: when a company opens, one notification lists the
   estimated installments and payroll liabilities due in the next 14 days
   (once per window session); the Overview lists the next 45.
+
+### Payroll tax items (any other state or locality)
+
+*Payroll ▸ Payroll Tax Items…* (`PayrollItemsDialog.qml`) lists and edits
+the business's own items (`payroll_items`):
+
+- **A percentage item**: a name, the employee's side (withheld) or the
+  employer's (an expense, Dr Payroll Taxes), a flat percentage, an optional
+  wage base (wages taxed per employee per calendar year) and annual limit
+  (the most it takes per employee per year). It is on gross pay less
+  Section 125 deductions — 401(k) deferrals stay in, as for FUTA.
+- **A withholding item** (state income tax withholding where no built-in
+  table exists): always the employee's; each employee carries a flat
+  percentage of their income tax wages and/or a fixed extra amount per
+  paycheck, entered in the employee's payroll and labelled user-entered.
+- **Where it is owed**: its own liability account (created under Payroll
+  Liabilities, named after the item, when none is chosen; it cannot move
+  once a paycheck used the item), the agency, and when it is due — monthly,
+  quarterly or annually, on a day of the following month (the last day when
+  none is given), moved to a business day.
+- An employee can be marked not subject to an item; an inactive item stops
+  applying to new paychecks. What each paycheck took is kept with it
+  (`paycheck_items`, immutable), so a void or an adjustment restores the
+  year to date and the liabilities exactly like the built-in taxes.
+
+The items appear on the paycheck (each with its worksheet, as entered), in
+Run Payroll's preview ("Other taxes"), on the stub with the year to date,
+in Pay Payroll Liabilities and the Overview's coming-due list, and in the
+Payroll Summary, Payroll Liability Balances and Employee Earnings Summary.
+The built-in forms stay federal and Colorado: a W-2 fills its state boxes
+for Colorado only and says so.
 
 ### Payroll
 
@@ -362,10 +424,11 @@ three deduction accounts; equity Owner Draws and Shareholder Distributions.
   confirmation), then all paychecks in one transaction. "Print later" queues
   them for *Checks to Print*; they print on voucher stock with the pay stub
   (this check and the year to date) on both stubs.
-- **Posting**: Dr Wages (Officer Wages for an owner-employee) the gross,
-  Dr Payroll Taxes the employer's taxes; Cr each liability account the
-  tax withheld or owed and each deduction; Cr the bank the net. An owner
-  of a Schedule C or partnership LLC is refused (owners take draws).
+- **Posting**: Dr Wages (Officer Wages for an officer) the gross, Dr
+  Payroll Taxes the employer's taxes; Cr each liability account the tax
+  withheld or owed (a payroll tax item: its own account) and each
+  deduction; Cr the bank the net. A sole proprietor or partner marked as an
+  officer is refused (owners of those take draws).
 - **Year to date** is the sum of the employee's live paychecks earlier in
   the calendar year; the employer's quarter and year totals are the sum of
   every live paycheck (D-081 decision 3).
@@ -377,26 +440,27 @@ three deduction accounts; equity Owner Draws and Shareholder Distributions.
   date — federal income tax, social security and Medicare together (Form
   941 deposits, monthly or semiweekly, the $100,000 next-day rule, the
   $2,500 quarter), FUTA (deposited over $500, else carried; the rest with
-  Form 940), Colorado withholding (quarterly, monthly or weekly), UI, FAMLI
-  and the city tax by quarter, deductions as billed. Recording a payment
-  (with the agency's confirmation number) clears the accounts; up to a
-  dollar of rounding posts to Payroll Taxes; more than owed is refused.
+  Form 940), for a business that chose Colorado its withholding
+  (quarterly, monthly or weekly), UI, FAMLI and the city tax by quarter,
+  each payroll tax item by its own schedule, deductions as billed.
+  Recording a payment (with the agency's confirmation number) clears the
+  accounts; up to a dollar of rounding posts to Payroll Taxes; more than
+  owed is refused.
 - **Reports** (group "Payroll"): Payroll Summary, Payroll Liability
   Balances, Employee Earnings Summary, Paycheck History. **Form
   worksheets** (group "Payroll tax forms", every line of the form): Form 941
   and Schedule B for the quarter of the period's end, Form 940, W-2 for
-  each employee and W-3 for the year, DR 1094 for the period, DR 1093, the
-  Colorado UI and FAMLI wage reports for the quarter. *Payroll Tax Forms…*
-  opens Form 941 — the quarter being filed in the month after a quarter,
-  else the current one. Each prints, saves as PDF, CSV or Excel like any
-  report.
-- **Copies for filing** (the Overview): the W-2s, W-3 and the two wage
-  reports as PDF with identity numbers in full, and the SSA's EFW2 W-2 file
-  (*Export W-2 File (EFW2)…*), validated first (an EIN or SSN the SSA
-  rejects, the BSO user ID, the contact, the signature PIN's check digit).
-  QindaBooks files and pays nothing: the Overview, the setup and Pay
-  Payroll Liabilities name EFTPS, the SSA's Business Services Online,
-  Revenue Online, MyUI Employer+ and My FAMLI+ Employer.
+  each employee and W-3 for the year; for a business that chose Colorado,
+  DR 1094 for the period, DR 1093, and the UI and FAMLI wage reports for
+  the quarter (listed only for it). *Payroll Tax Forms…* opens Form 941 —
+  the quarter being filed in the month after a quarter, else the current
+  one. Each prints, saves as PDF, CSV or Excel like any report.
+- **Copies for filing** (the Overview): the W-2s, W-3 and — with Colorado —
+  the two wage reports as PDF with identity numbers in full, and the SSA's
+  EFW2 W-2 file (*Export W-2 File (EFW2)…*), validated first (an EIN or SSN
+  the SSA rejects, the BSO user ID, the contact, the signature PIN's check
+  digit). QindaBooks files and pays nothing: the Overview, the setup and Pay
+  Payroll Liabilities say where each return is filed and each deposit paid.
 - **Identity numbers** (D-081 decision 7): masked (`•••-••-1234`,
   `••-•••1234`) everywhere but the edit fields and the copies for filing;
   the audit log records an employee's change without the SSN.
@@ -862,10 +926,12 @@ BooksHost adds `booksSyncBankAction` ("Sync Mercury & Stripe", F5,
 
 ## Out of scope — plainly
 
-Payroll outside federal and Colorado taxes (other states and cities),
-e-filing and e-payment of payroll taxes and returns, direct-deposit (NACHA)
-files, Colorado's own electronic W-2 file, the annualized installment
-method and the QBI deduction above the threshold (D-081); inventory
+Built-in payroll tables for any state but Colorado (another state's or
+city's payroll taxes are payroll tax items the business enters, computed
+as entered), e-filing and e-payment of payroll taxes and returns,
+direct-deposit (NACHA) files, Colorado's own electronic W-2 file, the
+annualized installment method and the QBI deduction above the threshold
+(D-081); inventory
 quantities and COGS from stock; job costing (a bill line's customer:job is
 kept, not posted), billing rate levels and billable expenses; multi-currency and
 currency revaluation (one company, one currency); online bank-feed
@@ -932,7 +998,7 @@ company file.
 | QuickBooks (M63) | `previewIif(url, options)` (the whole import, rolled back) and `importIif(url, options)` (backup copy, then one batch); options `{accountMap: {name: accountId}, autoApply, skipRefused}`; answer `{ok, committed, error, backupPath, posted, postedText, lists[{key, label, added, existing, skipped}], transactions[{type, count, documents, journal, duplicates, refused}], refused[{firstLine, lastLine, type, reason}], unmapped[{name, lines, linesText}], notes[]}` |
 | Purchase orders (M68) | `saveDocument`/`document` with kind `purchaseOrder` (`dueDate` = expected, `shipTo`, `notes` = vendor message, lines with `customerId`, `closed`; `document()` adds each line's `received`/`remaining` and `closedByHand`; the balance is what is left to receive); `documents({kind: "orders", status: open \| partiallyReceived \| closed})`; `orderLines(orderId)`, `openOrderLines(vendorId)` (`[{lineId, orderNumber, itemName, description, customerName, ordered, received, remaining, rateText, remainingText, closed}]`), `receiveOrderLines([{lineId, quantity}])` → `{ok, error, lines}` (bill-editor lines with `poLineId` and `orderNumber`), `billFromOrder(orderId)` → `{ok, draft}`, `setOrderClosed`, `setOrderLineClosed`; vendor rows of `parties("vendor")` add `openOrders`, `toReceive(Text)`; `exportDocumentPdf`/`emailDocument` take an order |
 | Employees and time (M68) | `employees(includeInactive)`, `employee(id)`, `saveEmployee({id?, name, email, phone, address, notes, rate (text, "" = none), active})`, `setEmployeeActive`; `workers()` → `[{key ("employee:<id>" \| "vendor:<id>"), name, kindLabel}]`; `timeEntries({worker, customerId, from, to, status: all \| unbilled \| billed \| notBillable})`, `timeEntry(id)` (`{id, date, worker, workerName, customerId, customerName, itemId, itemName, minutes, duration, billable, status, statusLabel, notes, invoiceId, invoiceNumber}`), `saveTimeEntry({id?, date, worker, customerId, itemId, duration (text), billable, notes})`, `deleteTimeEntry`; `timesheet(worker, dateIso)` → `{weekStart, days[7], rows[{customerId, itemId, billable, notes, cells[7]{entryId, duration, billed}, totalText}], dayTotals[7], totalText}` and `saveTimesheet({worker, weekStart, rows})`; `unbilledTime(customerId)`, `timeInvoiceLines(customerId, entryIds)` → `{ok, lines}` (invoice-editor lines with `timeEntryId`) |
-| Payroll (M71) | `BooksHost.payroll` (`PayrollService`, `payroll_service.h`): properties `entity`, `configured`, `tablesYear`; `setup()` / `saveSetup(map)` (`uiRate` as "1.53%, 0.17%, 1.35%", shares as "50%"; creates the accounts), `tablesInfo()` (`{year, ok, error, sources, unconfirmed, cities, introductoryRateText}`), `owners()`, `saveOwner({id?, name, address})`; `employees()` (every M68 employee: `hasPayroll`, `payText`, `ssnMasked`, …), `employee(id)` (the editor's map — the one place the SSN leaves in full), `saveEmployee(map)` (id 0 adds the M68 employee too); `payrollDraft(payDate)`, `previewPayroll(run)`, `runPayroll(run)` → `{ok, ids}`, `paychecks(from, to)`, `paycheck(id)` (stub lines, employer taxes, both worksheets, notes), `voidPaycheck(id, reason)`, `adjustPaycheck(id, {hours, pay, bonus, payDate, reason})`; `liabilities(from, to, openOnly)`, `payLiability({tax, start, end, bankAccountId, date, amount ("" = the balance), reference})`, `liabilityPayments(year)`, `voidLiabilityPayment`; `exportEfw2(year, url)`, `exportFormForFiling(id, toIso, url)` (W-2, W-3, UI and FAMLI wage reports, numbers in full); `payOwner({kind: draw \| distribution, ownerId, bankAccountId, amount, date, method: check \| transfer, checkNumber, toPrint, memo})` → `{ok, id, setAsidePercent, setAside, setAsideText}`, `recordSetAside`, `recordEstimatedPayment({jurisdiction, taxYear, installment, amount, date, bankAccountId, ownerId, reference})`, `ownerPayments(year)`, `voidOwnerPayment`; `estimateProfile()` / `saveEstimateProfile(map)`, `estimate()` (the plan), `setAsideFor(amount)`, `upcoming(days)`; `changed()` |
+| Payroll (M71) | `BooksHost.payroll` (`PayrollService`, `payroll_service.h`): properties `entity` (`scheduleC` \| `partnership` \| `sCorporation` \| `cCorporation` \| `nonprofit` \| `unsure`), `configured`, `colorado`, `tablesYear`; `setup()` / `saveSetup(map)` (`colorado`, `stateCode`; `uiRate` as "1.53%, 0.17%, 1.35%", shares as "50%"; creates the accounts), `tablesInfo()` (`{year, ok, error, sources, unconfirmed[{path, label, note}], cities, introductoryRateText, …}`), `payrollItems()`, `savePayrollItem({id?, name, side, kind, rate, wageBase, annualLimit, accountId, agency, frequency, dueDay, active})`, `setPayrollItemActive(id, on)`, `owners()`, `saveOwner({id?, name, address})`; `employees()` (every M68 employee: `hasPayroll`, `payText`, `ssnMasked`, …), `employee(id)` (the editor's map — the one place the SSN leaves in full — with `customItems[{id, name, kind, subject, percent, extra}]`), `saveEmployee(map)` (id 0 adds the M68 employee too); `payrollDraft(payDate)`, `previewPayroll(run)`, `runPayroll(run)` → `{ok, ids}`, `paychecks(from, to)`, `paycheck(id)` (stub lines, employer taxes, the worksheets — `customWorksheets` for the business's own items — notes), `voidPaycheck(id, reason)`, `adjustPaycheck(id, {hours, pay, bonus, payDate, reason})`; `liabilities(from, to, openOnly)`, `payLiability({tax, start, end, bankAccountId, date, amount ("" = the balance), reference})`, `liabilityPayments(year)`, `voidLiabilityPayment`; `exportEfw2(year, url)`, `exportFormForFiling(id, toIso, url)` (W-2, W-3, UI and FAMLI wage reports, numbers in full); `payOwner({kind: draw \| distribution \| dividend, ownerId, bankAccountId, amount, date, method: check \| transfer, checkNumber, toPrint, memo})` → `{ok, id, setAsidePercent, setAside, setAsideText}`, `recordSetAside`, `recordEstimatedPayment({jurisdiction, taxYear, installment, amount, date, bankAccountId, ownerId, reference})`, `ownerPayments(year)`, `voidOwnerPayment`; `estimateProfile()` / `saveEstimateProfile(map)`, `estimate()` (the plan), `setAsideFor(amount)`, `upcoming(days)`; `changed()` |
 | Check queue and alignment (M68) | `saveDocument` of a check with `toPrint: true`, `payBills({…, toPrint: true})`; `checkQueue(bankAccountId)`, `nextCheckNumber(bankAccountId)`, `setToPrint(id, on)`, `assignCheckNumbers(bankAccountId, ids, firstNumber)` → `{ok, checks[{id, number, payeeName, amountText}]}`, `confirmCheckPrint(misprintedIds)`, `takeBackChecks(bankAccountId, ids)`; `checkPrinters()` (this computer's printers and those with a stored alignment), `checkAlignment(printer)` → `{printer, x, y, unit, description}`, `saveCheckAlignment({printer, x, y, unit: in \| mm})`, `exportAlignmentTestPdf(printer, url)` |
 | Housekeeping | `backupNow()` (timestamped copies in `$XDG_DATA_HOME/qindaoffice/books/backups`, newest 20 kept), `backupTo(url)`, `exportIif`, `exportJournalCsv`, `exportListCsv(kind, url)`, `importListCsv(kind, url)` → `{ok, error, kind, added, skipped, errors[]}` (M63: `kind` is `customers`, `vendors`, `items` or `accounts`; the singular party kinds and obvious synonyms are accepted; refused rows come back as `row N: …` even when others were added) |
 
@@ -998,9 +1064,12 @@ page — both shifted by the alignment of the printer the job goes to; a
 
 **Reached since M71** (D-081). A **Payroll** menu: *Set Up Owner Pay &
 Payroll…* (`booksPayrollSetupAction`, `payrollSetupRequested()`,
-`PayrollSetupDialog.qml`), *Pay Owner…* and *Shareholder Distribution…*
-(`booksPayOwnerAction`, `booksDistributionAction`,
-`payOwnerRequested("draw" | "distribution")`, `PayOwnerDialog.qml`),
+`PayrollSetupDialog.qml`), *Payroll Tax Items…* (`booksPayrollItemsAction`,
+`payrollItemsRequested()`, `PayrollItemsDialog.qml`, M71b), *Pay Owner…*,
+*Shareholder Distribution…* and *Pay Dividend…* (`booksPayOwnerAction`,
+`booksDistributionAction`, `booksDividendAction` (M71b),
+`payOwnerRequested("draw" | "distribution" | "dividend")`,
+`PayOwnerDialog.qml`),
 *Estimated Taxes* (`booksEstimatedTaxesAction`, opens the workspace's
 planner: `EstimatedTaxesPane.qml`, `EstimateProfileDialog.qml`,
 `EstimatedPaymentDialog.qml`), *Employee Payroll…*
@@ -1011,12 +1080,12 @@ planner: `EstimatedTaxesPane.qml`, `EstimateProfileDialog.qml`,
 Forms…* (`booksPayrollFormsAction`, Reports with Form 941) and *Export W-2
 File (EFW2)…* (`booksExportEfw2Action`). The **Payroll** workspace
 (`booksViewPayrollAction`, Ctrl+8, view key `"payroll"`, `PayrollView.qml`):
-Overview (how the owner is paid, what falls due, copies for filing), Owner
+Overview (how the business pays its owners, what falls due, copies for filing), Owner
 pay, Estimated taxes, Employees and Paychecks (`PayrollPeoplePane.qml`,
 `PaycheckDialog.qml` with the stub and `WorksheetLines.qml`), Liabilities
 (`PayrollLiabilitiesPane.qml`); a narrow window picks the section from a
-list. On the ribbon: a **Payroll** tab (Setup, Owner pay, Payroll, Tax
-forms) and the workspace in View. A paycheck opened from a register opens
+list. On the ribbon: a **Payroll** tab (Setup with Payroll Tax Items, Owner
+pay with Pay Dividend, Payroll, Tax forms) and the workspace in View. A paycheck opened from a register opens
 `PaycheckDialog`, never the document editor (which refuses the kind).
 
 **E-mailing an invoice.** `emailDocument(id)` writes the form's PDF to
@@ -1053,9 +1122,10 @@ alignment case of `tst_books_io_checks`; `tst_qindabooks_m68` and
 [verification](verification.md#m68-books-gates-d-077).
 M71 (D-081): `tests/books_payroll/` (`tst_payroll_tables`,
 `tst_payroll_federal`, `tst_payroll_colorado`, `tst_payroll_paycheck`,
-`tst_payroll_estimates`, `tst_payroll_calendar` — the publications'
-examples and hand-worked cases with their derivations), `tst_books_payroll`,
-`tst_books_owner_pay`, `tst_books_payroll_forms` and the v4 → v5 migration;
+`tst_payroll_estimates`, `tst_payroll_calendar`, `tst_payroll_custom` — the
+publications' examples and hand-worked cases with their derivations),
+`tst_books_payroll`, `tst_books_owner_pay`, `tst_books_payroll_forms`,
+`tst_books_payroll_items` and the v4 → v5 migration;
 `tst_books_io_payroll` (the paycheck voucher, the 941 PDF, EFW2);
 `tst_qindabooks_payroll` and `tst_qindabooks_payroll_ui` — see
 [verification](verification.md#m71-payroll-gates-d-081).

@@ -223,6 +223,8 @@ private slots:
             {QStringLiteral("booksPayrollSetupAction"), SIGNAL(payrollSetupRequested())},
             {QStringLiteral("booksPayOwnerAction"), SIGNAL(payOwnerRequested(QString))},
             {QStringLiteral("booksDistributionAction"), SIGNAL(payOwnerRequested(QString))},
+            {QStringLiteral("booksDividendAction"), SIGNAL(payOwnerRequested(QString))},
+            {QStringLiteral("booksPayrollItemsAction"), SIGNAL(payrollItemsRequested())},
             {QStringLiteral("booksEstimatedTaxesAction"), SIGNAL(estimatedTaxesRequested())},
             {QStringLiteral("booksPayrollEmployeesAction"), SIGNAL(payrollEmployeesRequested())},
             {QStringLiteral("booksRunPayrollAction"), SIGNAL(runPayrollRequested())},
@@ -239,13 +241,15 @@ private slots:
         host.setSelectedDocumentId(42);
         host.actions()->trigger(QStringLiteral("booksVoidAction"));
         QCOMPARE(voided.last().at(0).toLongLong(), 42);
-        // M71: Pay Owner and Shareholder Distribution share a dialog; the
+        // M71: Pay Owner, Shareholder Distribution and Pay Dividend share a dialog; the
         // planner and the employee list open the Payroll workspace.
         QSignalSpy owner(&host, &BooksHost::payOwnerRequested);
         host.actions()->trigger(QStringLiteral("booksPayOwnerAction"));
         host.actions()->trigger(QStringLiteral("booksDistributionAction"));
+        host.actions()->trigger(QStringLiteral("booksDividendAction"));
         QCOMPARE(owner.at(0).at(0).toString(), QStringLiteral("draw"));
         QCOMPARE(owner.at(1).at(0).toString(), QStringLiteral("distribution"));
+        QCOMPARE(owner.at(2).at(0).toString(), QStringLiteral("dividend"));
         host.actions()->trigger(QStringLiteral("booksEstimatedTaxesAction"));
         QCOMPARE(host.currentView(), QStringLiteral("payroll"));
     }

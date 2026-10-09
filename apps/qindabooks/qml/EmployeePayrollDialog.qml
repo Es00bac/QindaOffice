@@ -6,9 +6,11 @@ import QindaOffice.Books.App
 
 // Payroll ▸ Employees ▸ an employee (M71, D-081): the payroll half of an
 // M68 employee — legal name and SSN for the W-2, address, pay, the
-// federal Form W-4 (2020 or later, or 2019 and earlier), Colorado's
-// DR 0004, the city head tax and the deductions. Saving a new person adds
-// them to the Employees list (Time uses the same list) in one step.
+// federal Form W-4 (2020 or later, or 2019 and earlier), for a business
+// that chose Colorado its DR 0004 and city tax, the company's own payroll
+// tax items that apply (with the user-entered state withholding where no
+// built-in table exists) and the deductions. Saving a new person adds them
+// to the Employees list (Time uses the same list) in one step.
 //
 // AGENT-GUARD (identity numbers): the SSN field is the one place the
 // whole number shows; everywhere else it is masked (•••-••-1234).
@@ -18,7 +20,9 @@ Tk.Dialog {
     property PayrollService payroll: null
     property var record: ({})
     property var info: ({})
+    property var customItems: []           // record.customItems, edited in place
     property string problem: ""
+    readonly property bool colorado: payroll !== null && payroll.colorado
     readonly property bool hourly: payTypeBox.currentIndex === 1
     readonly property bool modern: w4FormBox.currentIndex === 0
     readonly property var statuses: [{ key: "singleOrMarriedSeparately", label: qsTr("Single or married filing separately") },
@@ -45,7 +49,7 @@ Tk.Dialog {
         const r = record
         first.text = String(r.firstName || ""); middle.text = String(r.middleInitial || ""); last.text = String(r.lastName || "")
         suffix.text = String(r.suffix || ""); ssn.text = String(r.ssn || "")
-        street.text = String(r.street || ""); city.text = String(r.city || ""); state.text = String(r.state || "CO"); zip.text = String(r.zip || "")
+        street.text = String(r.street || ""); city.text = String(r.city || ""); state.text = String(r.state || ""); zip.text = String(r.zip || "")
         hired.text = String(r.hireDate || ""); released.text = String(r.releaseDate || "")
         payTypeBox.currentIndex = r.payType === "hourly" ? 1 : 0
         rate.text = String(r.payRate || ""); hours.text = String(r.defaultHours || "")
@@ -62,6 +66,7 @@ Tk.Dialog {
         section125.text = String(r.section125 || ""); retirementBox.currentIndex = keyIndex(retirementKinds, r.retirementKind || "none")
         retirementAmount.text = String(r.retirementAmount || ""); retirementPercent.text = String(r.retirementPercent || "")
         health.text = String(r.shareholderHealth || ""); afterTax.text = String(r.afterTax || ""); afterTaxLabel.text = String(r.afterTaxLabel || "")
+        customItems = (r.customItems || []).map(function(c) { return Object.assign({}, c) })
         problem = ""
         open()
         first.forceActiveFocus()
@@ -80,8 +85,9 @@ Tk.Dialog {
                  optCity: cities[Math.max(0, cityBox.currentIndex)].key, section125: section125.text,
                  retirementKind: retirementKinds[retirementBox.currentIndex].key, retirementAmount: retirementAmount.text,
                  retirementPercent: retirementPercent.text, shareholderHealth: health.text, afterTax: afterTax.text,
-                 afterTaxLabel: afterTaxLabel.text }
+                 afterTaxLabel: afterTaxLabel.text, customItems: customItems }
     }
+    function editItem(index, key, value) { customItems[index][key] = value }
     // The save step; the tests fill the fields and call it directly.
     function save() {
         const r = payroll.saveEmployee(collect())
@@ -137,7 +143,7 @@ Tk.Dialog {
             }
             Tk.PropertyRow { visible: dialog.hourly; label: qsTr("Usual hours"); hint: qsTr("Each pay period; Run Payroll starts from them."); Amount { id: hours; objectName: "payrollHours" } }
             Tk.PropertyRow {
-                label: qsTr("Owner (officer)"); hint: qsTr("An S corporation owner on salary: wages post to Officer Wages.")
+                label: qsTr("Officer"); hint: qsTr("A corporation's officer, or an S corporation's owner on salary: wages post to Officer Wages. Never a sole proprietor or partner.")
                 Tk.Switch { id: owner; objectName: "payrollOwnerEmployee"; small: true }
             }
             Tk.PropertyRow {
@@ -173,8 +179,9 @@ Tk.Dialog {
             Tk.PropertyRow { visible: !dialog.modern; label: qsTr("Extra"); hint: qsTr("Additional withholding each paycheck."); Amount { id: legacyExtra; objectName: "payrollLegacyExtra" } }
             Tk.PropertyRow { label: qsTr("Exempt"); hint: qsTr("Claimed exemption: no federal income tax withheld."); Tk.Switch { id: exempt; objectName: "payrollExempt"; small: true } }
         }
-        Tk.SectionHeader { title: qsTr("Colorado DR 0004 and city tax") }
+        Tk.SectionHeader { visible: dialog.colorado; title: qsTr("Colorado DR 0004 and city tax") }
         Pair {
+            visible: dialog.colorado
             columns: dialog.fieldColumns
             Tk.PropertyRow {
                 label: qsTr("Colorado tax"); hint: qsTr("Withhold Colorado income tax; off for a nonresident working outside Colorado.")
@@ -189,6 +196,45 @@ Tk.Dialog {
             Tk.PropertyRow {
                 label: qsTr("City tax (OPT)")
                 Tk.ComboBox { id: cityBox; objectName: "payrollOptCity"; small: true; textRole: "city"; model: dialog.cities }
+            }
+        }
+        Tk.SectionHeader { title: qsTr("Other state and local taxes (user-entered)") }
+        Tk.Caption {
+            objectName: "payrollCustomHelp"
+            wrapMode: Text.Wrap
+            text: dialog.customItems.length === 0
+                  ? qsTr("Another state's or city's payroll taxes are payroll tax items (Payroll ▸ Payroll Tax Items…); they show here once defined.")
+                  : qsTr("As entered for this business: QindaBooks has no built-in table for these. A withholding item takes exactly the percentage and extra amount entered here.")
+        }
+        Repeater {
+            model: dialog.customItems
+            delegate: Tk.Flex {
+                id: itemRow
+                required property var modelData
+                required property int index
+                objectName: "payrollCustomItem_" + index
+                direction: Tk.Flex.Column
+                gap: Tk.Theme.space.xs
+                Tk.Label { text: String(itemRow.modelData.name) + " — " + String(itemRow.modelData.kindLabel); wrapMode: Text.Wrap }
+                Pair {
+                    columns: dialog.fieldColumns
+                    Tk.PropertyRow {
+                        label: qsTr("Subject to it")
+                        Tk.Switch { objectName: "payrollCustomSubject_" + itemRow.index; small: true
+                                    checked: itemRow.modelData.subject !== false
+                                    onToggled: dialog.editItem(itemRow.index, "subject", checked) }
+                    }
+                    Tk.PropertyRow {
+                        visible: itemRow.modelData.kind === "withholding"; label: qsTr("Percent"); hint: qsTr("User-entered, of the wages subject to income tax.")
+                        Amount { objectName: "payrollCustomPercent_" + itemRow.index; text: String(itemRow.modelData.percent || ""); placeholderText: "0%"
+                                 onTextEdited: dialog.editItem(itemRow.index, "percent", text) }
+                    }
+                    Tk.PropertyRow {
+                        visible: itemRow.modelData.kind === "withholding"; label: qsTr("Extra"); hint: qsTr("User-entered, a fixed amount each paycheck.")
+                        Amount { objectName: "payrollCustomExtra_" + itemRow.index; text: String(itemRow.modelData.extra || ""); placeholderText: "0.00"
+                                 onTextEdited: dialog.editItem(itemRow.index, "extra", text) }
+                    }
+                }
             }
         }
         Tk.SectionHeader { title: qsTr("Deductions each paycheck") }

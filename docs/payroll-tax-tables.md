@@ -2,7 +2,12 @@
 # Payroll and estimated-tax tables (tax year 2026)
 
 QindaBooks computes paychecks, payroll liabilities and estimated taxes from
-the official tables below (M71, [D-081](decisions.md#d-081-qindabooks-owner-pay-estimated-taxes-and-payroll-federal--colorado)).
+the official tables below (M71, [D-081](decisions.md#d-081-qindabooks-owner-pay-estimated-taxes-and-payroll-federal--colorado)):
+the federal ones for every business, and Colorado's — the first state with
+built-in tables — for a business that chooses Colorado in its payroll
+setup. Any other state's or city's payroll taxes are payroll tax items a
+business enters itself ([books.md](books.md#payroll-tax-items-any-other-state-or-locality)):
+QindaBooks computes them as entered and sources nothing for them.
 They ship as one data file per tax year,
 `libs/books_payroll/resources/tables/payroll_2026.json` (schema 1), read by
 `PayrollTables` (`payroll_tables.h`). **No rate or amount is written in
@@ -12,14 +17,15 @@ code**; a year without a file is refused in plain words ("QindaBooks has no
 Every value was read from the source named beside it on **2026-10-08**.
 Values an official source could not confirm are listed under
 [Needs confirmation](#needs-confirmation); the data file lists them under
-`unconfirmed`; the app lists them in *Set Up Owner Pay & Payroll* and adds
-a "Needs confirmation: …" note to every paycheck or estimate that used one. Employer-specific values — the UI rate CDLE assigns, the
-FAMLI shares, the deposit schedule, the city — are company settings, not
-tables.
+`unconfirmed`; the app lists them in *Set Up Owner Pay & Payroll* (Colorado's
+only for a business that chose Colorado) and adds a "Needs confirmation: …"
+note to every paycheck or estimate that used one. Employer-specific values
+— the UI rate CDLE assigns, the FAMLI shares, the deposit schedule, the
+city — are company settings, not tables.
 
-QindaBooks computes from these official tables. Confirm how the IRS taxes
-your LLC, and have a tax professional review your first payroll or your
-first estimate.
+QindaBooks computes from these official tables. A business should confirm
+how the IRS taxes it, and have a tax professional review its first payroll
+and its first estimate.
 
 ## Sources
 
@@ -131,6 +137,10 @@ paycheck where that choice changed the premium (one with a Section 125
 deduction) as needing confirmation.
 
 ## Colorado
+
+The first state with built-in tables, applied only for a business that
+chose Colorado (`PayrollSetup.colorado`). Its withholding, UI, FAMLI, city
+taxes, DR 0104EP estimates and forms do not appear for any other business.
 
 | Value | 2026 | Source |
 | --- | --- | --- |

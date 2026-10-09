@@ -245,7 +245,7 @@ ReportTable PayrollReports::form941(int year, int quarter) const
                               "the quarter left a rounding difference; Form 941 line 7 may carry it.")
                    .arg(usdText(total - l12)));
     }
-    f.note(QStringLiteral("QindaBooks prepares the numbers; file Form 941 and pay through EFTPS yourself."));
+    f.note(QStringLiteral("QindaBooks prepares the numbers; the business files Form 941 and pays through EFTPS."));
     return f.table();
 }
 
@@ -308,8 +308,11 @@ ReportTable PayrollReports::form940(int year) const
     const QList<PaycheckRecord> list = checks(m_file, QDate(year, 1, 1), QDate(year, 12, 31));
     f.text(QStringLiteral("EIN"), QStringLiteral("Employer identification number"), einText(m_file, false));
     f.section(QStringLiteral("Part 1: Tell us about your return"));
-    f.text(QStringLiteral("1a"), QStringLiteral("State where you paid state unemployment tax"), QStringLiteral("CO"));
-    const bool reduced = t->futa().creditReduction.contains(QStringLiteral("CO"));
+    const PayrollSetup setup = PayrollRecords(m_file).setup();
+    const QString state = setup.colorado ? QStringLiteral("CO") : setup.stateCode;
+    f.text(QStringLiteral("1a"), QStringLiteral("State where you paid state unemployment tax"),
+           state.isEmpty() ? QStringLiteral("(enter the state in Payroll Setup)") : state);
+    const bool reduced = !state.isEmpty() && t->futa().creditReduction.contains(state);
     f.text(QStringLiteral("2"), QStringLiteral("Wages paid in a credit reduction state"), reduced ? QStringLiteral("☒") : QStringLiteral("☐"));
     f.section(QStringLiteral("Part 2: Determine your FUTA tax before adjustments"));
     Money payments = usd(0);
@@ -340,7 +343,7 @@ ReportTable PayrollReports::form940(int year) const
     f.section(QStringLiteral("Part 3: Determine your adjustments"));
     f.line(QStringLiteral("9"), QStringLiteral("All taxable FUTA wages excluded from state unemployment tax"), usd(0));
     f.line(QStringLiteral("10"), QStringLiteral("Some wages excluded, or state unemployment tax paid late"), usd(0));
-    const Money l11 = reduced ? percentOf(l7, t->futa().creditReduction.value(QStringLiteral("CO"))) : usd(0);
+    const Money l11 = reduced ? percentOf(l7, t->futa().creditReduction.value(state)) : usd(0);
     f.line(QStringLiteral("11"), QStringLiteral("Credit reduction (Schedule A)"), l11);
     f.section(QStringLiteral("Part 4: Determine your FUTA tax and balance due or overpayment"));
     const Money l12 = l8 + l11;
@@ -363,7 +366,7 @@ ReportTable PayrollReports::form940(int year) const
                                          .arg(usdText(t->futa().depositThreshold)),
                QString());
     }
-    f.note(QStringLiteral("QindaBooks prepares the numbers; file Form 940 and pay through EFTPS yourself."));
+    f.note(QStringLiteral("QindaBooks prepares the numbers; the business files Form 940 and pays through EFTPS."));
     return f.table();
 }
 

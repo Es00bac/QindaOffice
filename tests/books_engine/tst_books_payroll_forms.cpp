@@ -179,6 +179,31 @@ private slots:
         QVERIFY2(famli.text(key, QStringLiteral("ssn")) == QStringLiteral("900-00-0001"), "the FAMLI report for filing shows the SSN");
     }
 
+    // A business outside Colorado: Form 940 line 1a is its own state, the
+    // W-2 has no state boxes (another state's items are not on the form)
+    // and says so.
+    void outsideColoradoForms()
+    {
+        PayrollCompany c;
+        PayrollSetup s = PayrollRecords(c.f()).setup();
+        s.colorado = false;
+        s.stateCode = QStringLiteral("tx");
+        s.optCity.clear();
+        QVERIFY(PayrollRecords(c.f()).saveSetup(s).ok);
+        QCOMPARE(PayrollRecords(c.f()).setup().stateCode, QStringLiteral("TX"));
+        c.pay(QDate(2026, 10, 9));
+        PayrollReports reports(c.f());
+        QCOMPARE(value(reports.form940(2026), QStringLiteral("1a")), QStringLiteral("TX"));
+        const ReportTable w2 = reports.formW2(2026, c.jane);
+        QVERIFY(w2.row(QStringLiteral("line:15")) == nullptr);
+        QVERIFY(w2.notes.join(QLatin1Char(' ')).contains(QStringLiteral("Colorado only")));
+        QCOMPARE(amount(w2, QStringLiteral("1")), 300000);
+        s.stateCode = QStringLiteral("Texas");
+        QCOMPARE(PayrollRecords(c.f()).saveSetup(s).code, ErrorCode::Invalid);
+        QVERIFY(PayrollReports::isColoradoForm(QStringLiteral("dr_1094")));
+        QVERIFY(!PayrollReports::isColoradoForm(QStringLiteral("form_941")));
+    }
+
     void yearWithoutTablesSaysSo()
     {
         PayrollCompany c;

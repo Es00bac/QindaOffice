@@ -9,10 +9,12 @@
 #include "company_file.h"
 #include "documents.h"
 #include "efw2_export.h"
+#include "payroll_items.h"
 #include "payroll_ledger.h"
 #include "payroll_liabilities.h"
 #include "payroll_records.h"
 #include "payroll_reports.h"
+#include "payroll_stub.h"
 #include "report_output.h"
 
 #include <QJsonArray>
@@ -173,6 +175,8 @@ QVariantMap PayrollService::previewPayroll(const QVariantMap &run) const
                             {QStringLiteral("coloradoText"), text(t.coloradoIncomeTax)},
                             {QStringLiteral("famliText"), text(t.famliEmployee)},
                             {QStringLiteral("optText"), text(t.optEmployee)},
+                            // The company's own withheld items, together.
+                            {QStringLiteral("otherText"), text(t.customEmployee)},
                             {QStringLiteral("deductionsText"), text(t.preTaxDeductions + t.afterTaxDeductions)},
                             {QStringLiteral("net"), t.netPay.minor()},
                             {QStringLiteral("netText"), text(t.netPay)},
@@ -190,6 +194,10 @@ QVariantMap PayrollService::previewPayroll(const QVariantMap &run) const
     }
     return {{QStringLiteral("ok"), allOk && !rows.isEmpty()},
             {QStringLiteral("error"), rows.isEmpty() ? tr("Nobody is set up for payroll yet.") : QString()},
+            // The preview shows Colorado's columns and the company's own
+            // items only when they apply.
+            {QStringLiteral("colorado"), PayrollRecords(*c).setup().colorado},
+            {QStringLiteral("hasCustom"), !PayrollItems(*c).items().isEmpty()},
             {QStringLiteral("rows"), rows},
             {QStringLiteral("totals"), QVariantMap{{QStringLiteral("grossText"), money.text(totals[0])},
                                                    {QStringLiteral("withheldText"), money.text(totals[1])},
@@ -256,39 +264,23 @@ QVariantMap PayrollService::paycheck(qint64 id) const
         return {};
     }
     const MoneyFormat money = m_books->moneyFormat();
-    const PayrollYearToDate y = PayrollLedger(*c).yearToDate(r->employeeId, r->payDate, r->docId);
     const PaycheckTaxes &t = r->taxes;
-    // AGENT-CONTRACT (with books_io pay_stub.cpp fillPayStub): the same
-    // lines as the printed stub — gross, the taxes every check has, net,
-    // and a deduction or tax only when this check or the year has one.
+    // AGENT-CONTRACT (payroll_stub.h): the printed stub's lines, and the
+    // employer's taxes after them.
     QVariantList stub;
-    const auto line = [&](QVariantList &into, const QString &label, const Money &now, const Money &before, bool always) {
-        if (always || !now.isZero() || !before.isZero()) {
-            into << QVariantMap{{QStringLiteral("label"), label}, {QStringLiteral("currentText"), money.text(now.minor())},
-                                {QStringLiteral("ytdText"), money.text((now + before).minor())}};
-        }
-    };
-    const QString afterTaxLabel = PayrollRecords(*c).employee(r->employeeId).deductions.afterTaxLabel;
-    line(stub, tr("Gross pay"), t.gross, y.gross, true);
-    line(stub, tr("Health insurance (before tax)"), r->section125, y.section125, false);
-    line(stub, tr("Retirement plan (before tax)"), r->retirement, y.retirement, false);
-    line(stub, tr("Federal income tax"), t.federalIncomeTax, y.federalIncomeTax, true);
-    line(stub, tr("Social security"), t.socialSecurity, y.socialSecurity, true);
-    line(stub, tr("Medicare"), t.medicare, y.medicare, true);
-    line(stub, tr("Additional Medicare"), t.additionalMedicare, y.additionalMedicare, false);
-    line(stub, tr("Colorado income tax"), t.coloradoIncomeTax, y.coloradoIncomeTax, true);
-    line(stub, tr("Colorado FAMLI"), t.famliEmployee, y.famliEmployee, true);
-    line(stub, tr("Local OPT"), t.optEmployee, y.optEmployee, false);
-    line(stub, afterTaxLabel.isEmpty() ? tr("Deduction after tax") : afterTaxLabel, r->afterTax, y.afterTax, false);
-    line(stub, tr("Net pay"), t.netPay, y.net, true);
     QVariantList employer;
-    const Money none(0, money.currency);
-    line(employer, tr("Social security"), t.socialSecurityEmployer, none, true);
-    line(employer, tr("Medicare"), t.medicareEmployer, none, true);
-    line(employer, tr("Federal unemployment (FUTA)"), t.futa, none, true);
-    line(employer, tr("Colorado unemployment (UI)"), t.coloradoUi, none, true);
-    line(employer, tr("Colorado FAMLI"), t.famliEmployer, none, false);
-    line(employer, tr("Local OPT"), t.optEmployer, none, false);
+    for (const StubLine &l : payStubLines(*c, *r)) {
+        (l.section == StubLine::Section::Employer ? employer : stub)
+            << QVariantMap{{QStringLiteral("label"), l.label}, {QStringLiteral("currentText"), money.text(l.current.minor())},
+                           {QStringLiteral("ytdText"), money.text(l.yearToDate.minor())}};
+    }
+    // The worksheets of the company's own payroll tax items.
+    QVariantList customSheets;
+    for (const QJsonValue &v : r->details.value(QStringLiteral("custom")).toArray()) {
+        const QJsonObject o = v.toObject();
+        customSheets << QVariantMap{{QStringLiteral("name"), o.value(QStringLiteral("name")).toString()},
+                                    {QStringLiteral("lines"), worksheet(o.value(QStringLiteral("worksheet")).toArray())}};
+    }
     QVariantList notes;
     for (const QJsonValue &n : r->details.value(QStringLiteral("notes")).toArray()) {
         notes << n.toString();
@@ -312,6 +304,7 @@ QVariantMap PayrollService::paycheck(qint64 id) const
             {QStringLiteral("employer"), employer},
             {QStringLiteral("federalWorksheet"), worksheet(r->details.value(QStringLiteral("federal")).toArray())},
             {QStringLiteral("coloradoWorksheet"), worksheet(r->details.value(QStringLiteral("colorado")).toArray())},
+            {QStringLiteral("customWorksheets"), customSheets},
             {QStringLiteral("notes"), notes}};
 }
 
@@ -413,7 +406,7 @@ QVariantList PayrollService::liabilityPayments(int year) const
     const MoneyFormat money = m_books->moneyFormat();
     for (const LiabilityPaymentRecord &p : PayrollLiabilities(*c).payments(QDate(year, 1, 1), QDate(year + 1, 3, 31), true)) {
         out << QVariantMap{{QStringLiteral("id"), p.docId},
-                           {QStringLiteral("label"), PayrollLiabilities::groupLabel(p.tax)},
+                           {QStringLiteral("label"), PayrollLiabilities(*c).labelOf(p.tax)},
                            {QStringLiteral("period"), Format::isoDate(p.start) + QStringLiteral(" – ") + Format::isoDate(p.end)},
                            {QStringLiteral("date"), Format::isoDate(p.date)},
                            {QStringLiteral("amountText"), money.text(p.amount.minor())},

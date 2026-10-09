@@ -27,6 +27,7 @@ struct PayrollCompany : TestCompany {
         s.ein = QStringLiteral("00-0000000");
         s.payrollBankAccountId = bank;
         s.optCity = QStringLiteral("denver");
+        s.colorado = true; // the test company pays Colorado's taxes
         records.saveSetup(s);
         records.ensurePayrollAccounts();
         Employee e;
@@ -38,6 +39,7 @@ struct PayrollCompany : TestCompany {
         p.ssn = QStringLiteral("900-00-0001");
         p.street = QStringLiteral("1 Elm Street");
         p.city = QStringLiteral("Denver");
+        p.state = QStringLiteral("CO");
         p.zip = QStringLiteral("80202");
         p.payRate = Decimal(78000, 0);
         p.frequency = Payroll::PayFrequency::Biweekly;

@@ -2,11 +2,13 @@
 #pragma once
 
 // Payroll records in the company file (M71, D-081; docs/books.md
-// "Payroll"): the company's payroll setup — how the IRS taxes the LLC, its
-// tax account numbers, deposit schedule, UI rate, FAMLI shares, city — and
-// each employee's payroll half (identity, address, Form W-4, DR 0004, pay,
-// deductions). The arithmetic lives in books_payroll; this module only
-// stores and validates.
+// "Payroll"): the company's payroll setup — how the business is taxed (it
+// decides how its owners are paid), its tax account numbers, the deposit
+// schedule, and for a business that chose Colorado (the first state with
+// built-in tables) the UI rate, FAMLI shares and city — and each
+// employee's payroll half (identity, address, Form W-4, DR 0004, pay,
+// deductions, the company's own payroll tax items that apply). The
+// arithmetic lives in books_payroll; this module only stores and validates.
 //
 // AGENT-CONTRACT (with M68's employees.h): payroll EXTENDS the `employees`
 // list in its own table `employee_payroll` (schema v5) keyed by the
@@ -31,6 +33,7 @@
 #include <QDate>
 #include <QList>
 #include <QMap>
+#include <QSet>
 #include <QString>
 
 #include <optional>
@@ -39,8 +42,14 @@ namespace QindaOffice::Books {
 
 class CompanyFile;
 
-// How the IRS taxes the LLC (Form 8832 / Form 2553): it decides owner pay.
-enum class EntityTax { Unsure = 0, ScheduleC = 1, SCorporation = 2, Partnership = 3 };
+// How the IRS taxes the business; it decides how owners are paid:
+//  ScheduleC   — a sole proprietorship or single-member LLC: owner's draws;
+//  Partnership — a partnership or multi-member LLC (Form 1065): draws;
+//  SCorporation — Form 2553 accepted (CP261): salary + distributions;
+//  CCorporation — Form 1120: salary + dividends (to retained earnings);
+//  Nonprofit   — Form 990: no owners, payroll only;
+//  Unsure      — every way stays open until the type is set.
+enum class EntityTax { Unsure = 0, ScheduleC = 1, SCorporation = 2, Partnership = 3, CCorporation = 4, Nonprofit = 5 };
 [[nodiscard]] QString entityTaxKey(EntityTax tax);
 [[nodiscard]] std::optional<EntityTax> entityTaxFromKey(const QString &key);
 
@@ -69,6 +78,7 @@ struct PayrollAccountSpec {
     QString name;    // what QindaBooks names it when it creates it
     int type = 0;    // AccountType value
     QString parent;  // the role or chart name it sits under ("" = top level)
+    bool colorado = false; // created only for a business that chose Colorado
 };
 // Every role, in chart order: the expense accounts, the liability
 // sub-accounts under "Payroll Liabilities", the two equity accounts.
@@ -78,6 +88,11 @@ struct PayrollSetup {
     EntityTax entity = EntityTax::Unsure;
     bool configured = false;           // the setup was saved once
     QString ein;                       // nine digits, stored plainly here only
+    // Colorado is the one state with built-in tables (withholding, UI,
+    // FAMLI, city taxes, DR 0104EP estimates); a business elsewhere sees
+    // none of it and defines its state's taxes as payroll tax items.
+    bool colorado = false;
+    QString stateCode;                 // two letters: where state unemployment tax is paid (Form 940 line 1a) when not Colorado
     QString coloradoAccount;           // Colorado withholding account number (CAN)
     QString uiAccount;                 // CDLE employer account number
     QString famliAccount;              // My FAMLI+ employer account
@@ -129,7 +144,7 @@ struct EmployeePayroll {
     QString ssn;                       // nine digits; masked everywhere but the editor and the W-2
     QString street;
     QString city;
-    QString state = QStringLiteral("CO");
+    QString state;
     QString zip;
     QDate hireDate;
     QDate releaseDate;
@@ -143,9 +158,18 @@ struct EmployeePayroll {
     Payroll::ColoradoCertificate dr0004;
     bool coloradoWithholding = true;   // Colorado resident or works in Colorado
     QString optCity;                   // "" = the company's city; "none" = none
-    bool ownerEmployee = false;        // an owner on the payroll (officer wages)
+    bool ownerEmployee = false;        // an officer or owner-employee (officer wages); never a sole proprietor or partner
     bool shareholder2Percent = false;  // > 2 % S-corp shareholder (health premiums in box 1 only)
     PayDeductions deductions;
+    // The company's payroll tax items (payroll_items.h): those this employee
+    // is not subject to, and per withholding item the user-entered flat
+    // percentage and/or extra amount per paycheck.
+    struct CustomWithholding {
+        Decimal percent;
+        Money extra;
+    };
+    QSet<qint64> exemptItems;
+    QMap<qint64, CustomWithholding> withholding;
     bool exists = false;               // a row is stored
 
     [[nodiscard]] QString fullName() const;

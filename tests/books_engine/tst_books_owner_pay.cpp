@@ -32,6 +32,7 @@ struct OwnerCompany : TestCompany {
         setup.entity = entity;
         setup.payrollBankAccountId = bank;
         setup.setAsideAccountId = savings;
+        setup.colorado = true; // Colorado estimates below
         records.saveSetup(setup);
         records.ensurePayrollAccounts();
         Party p;
@@ -83,8 +84,9 @@ private slots:
         QVERIFY(c.f().integrityProblems().isEmpty());
     }
 
-    // Estimated taxes are the owner's personal taxes: an electronic payment
-    // debiting Owner Draws, with the tax, year and installment in the memo.
+    // Estimated taxes are owed on the owner's return, not by the business:
+    // an electronic payment debiting Owner Draws, with the tax, year and
+    // installment in the memo.
     void estimatedPaymentsPostAsDraws()
     {
         OwnerCompany c;
@@ -137,6 +139,49 @@ private slots:
         QCOMPARE(ChartOfAccounts(c.f()).balance(distributions).minor(), 0);
         QVERIFY(pay.payments().isEmpty());
         QCOMPARE(pay.payments({}, {}, {}, true).size(), 1);
+    }
+
+    // A C corporation pays dividends from retained earnings — no draws, no
+    // distributions, no estimated payments recorded as draws.
+    void cCorporationDividends()
+    {
+        OwnerCompany c(EntityTax::CCorporation);
+        OwnerPay pay(c.f());
+        const Result dividend = pay.record(c.request(OwnerPaymentKind::Dividend, 250000, QDate(2026, 10, 1)));
+        QVERIFY2(dividend.ok, qPrintable(dividend.error));
+        const qint64 retained = ChartOfAccounts(c.f()).idForRole(SystemRole::RetainedEarnings);
+        QVERIFY(retained != 0);
+        QCOMPARE(ChartOfAccounts(c.f()).balance(retained).minor(), -250000);
+        QCOMPARE(ChartOfAccounts(c.f()).balance(c.bank).minor(), -250000);
+        QCOMPARE(pay.payments().first().kind, OwnerPaymentKind::Dividend);
+        for (const OwnerPaymentKind refused : {OwnerPaymentKind::Draw, OwnerPaymentKind::Distribution,
+                                               OwnerPaymentKind::SetAside}) {
+            QCOMPARE(pay.record(c.request(refused, 100, QDate(2026, 10, 1))).code, ErrorCode::Invalid);
+        }
+        OwnerPaymentRequest estimate = c.request(OwnerPaymentKind::FederalEstimate, 100, QDate(2026, 10, 1));
+        estimate.taxYear = 2026;
+        estimate.installment = 3;
+        QCOMPARE(pay.record(estimate).code, ErrorCode::Invalid);
+        // An S corporation pays distributions, not dividends.
+        OwnerCompany s(EntityTax::SCorporation);
+        QCOMPARE(OwnerPay(s.f()).record(s.request(OwnerPaymentKind::Dividend, 100, QDate(2026, 10, 1))).code,
+                 ErrorCode::Invalid);
+    }
+
+    // A nonprofit has no owners to pay; "not sure" leaves every way open.
+    void nonprofitAndUnsure()
+    {
+        OwnerCompany n(EntityTax::Nonprofit);
+        QString why;
+        for (const OwnerPaymentKind kind : {OwnerPaymentKind::Draw, OwnerPaymentKind::Distribution, OwnerPaymentKind::Dividend}) {
+            QCOMPARE(OwnerPay(n.f()).record(n.request(kind, 100, QDate(2026, 10, 1))).code, ErrorCode::Invalid);
+            QVERIFY(!ownerPaymentAllowed(EntityTax::Nonprofit, kind, &why));
+            QVERIFY(why.contains(QStringLiteral("no owners")));
+            QVERIFY(ownerPaymentAllowed(EntityTax::Unsure, kind));
+        }
+        OwnerCompany u(EntityTax::Unsure);
+        QVERIFY(OwnerPay(u.f()).record(u.request(OwnerPaymentKind::Dividend, 100, QDate(2026, 10, 1))).ok);
+        QVERIFY(OwnerPay(u.f()).record(u.request(OwnerPaymentKind::Draw, 100, QDate(2026, 10, 1))).ok);
     }
 
     void refusals()

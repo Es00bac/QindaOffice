@@ -289,7 +289,7 @@ private slots:
         const qint64 plain = Employees(c.f()).create(other).id;
         QVERIFY(!ledger.preview(c.request(QDate(2026, 10, 9), plain), &error).taxes.ok);
         QVERIFY(error.contains(QStringLiteral("payroll first")));
-        // An owner of a Schedule C or partnership LLC is paid by draw only;
+        // A sole proprietor or a partner is paid by draw only;
         // "not sure" keeps both ways open.
         PayrollRecords records(c.f());
         for (const EntityTax entity : {EntityTax::ScheduleC, EntityTax::Partnership}) {
@@ -298,7 +298,7 @@ private slots:
             QVERIFY(records.saveSetup(s).ok);
             error.clear();
             QVERIFY(!ledger.preview(c.request(QDate(2026, 10, 9)), &error).taxes.ok);
-            QVERIFY2(error.contains(QStringLiteral("owner draw")), qPrintable(error));
+            QVERIFY2(error.contains(QStringLiteral("owner's draw")), qPrintable(error));
         }
         PayrollSetup s = records.setup();
         s.entity = EntityTax::Unsure;

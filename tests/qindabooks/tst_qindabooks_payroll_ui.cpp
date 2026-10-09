@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// M71 (D-081) through the real window at 1280 and 520 px: Set Up Owner
-// Pay & Payroll (an S corporation), the employee payroll editor, Run
-// Payroll's three steps, the paycheck with its stub and worksheet, Pay
-// Payroll Liabilities, the Form 941 worksheet under Reports, Pay Owner
-// turning into a distribution for an S corporation, then — as a
-// Schedule C owner — the Estimated taxes planner, a draw with its tax
-// set-aside, and the Overview's coming-due list. Each command opens its
+// M71 (D-081) through the real window at 1280 and 520 px, over made-up
+// companies: Set Up Owner Pay & Payroll (an S corporation paying
+// Colorado's taxes), the employee payroll editor, Run Payroll's three
+// steps, the paycheck with its stub and worksheet, Pay Payroll
+// Liabilities, the Form 941 worksheet under Reports, Pay Owner turning
+// into a distribution for an S corporation; a sole proprietorship's
+// Estimated taxes planner, a draw with its tax set-aside, and the
+// Overview's coming-due list; and a partnership outside Colorado with its
+// own payroll tax items (the items dialog, an employee's user-entered
+// state withholding, the preview's "Other taxes"). Each command opens its
 // dialog; the dialog drives PayrollService. With QQO_GRAB_DIR every
 // screen is saved for review. Identity numbers are made up and never
 // printed by a failure.
@@ -70,6 +73,22 @@ void type(WindowScene &scene, const char *name, const QString &text)
     field->setProperty("text", text);
 }
 
+// A dialog scrolls its body (Tk.Scroll over a Flickable): bring `item`
+// into view for the grab, a quarter of the way down the viewport.
+void scrollIntoView(QQuickItem *item)
+{
+    for (QQuickItem *p = item != nullptr ? item->parentItem() : nullptr; p != nullptr; p = p->parentItem()) {
+        if (!p->inherits("QQuickFlickable")) {
+            continue;
+        }
+        auto *content = p->property("contentItem").value<QQuickItem *>();
+        const qreal top = item->mapToItem(content, QPointF(0, 0)).y();
+        const qreal maxY = qMax(0.0, p->property("contentHeight").toReal() - p->height());
+        p->setProperty("contentY", qBound(0.0, top - p->height() / 4, maxY));
+        return;
+    }
+}
+
 } // namespace
 
 class QindaBooksPayrollUiTest final : public QObject {
@@ -85,11 +104,12 @@ private slots:
         QVERIFY(QTest::qWaitForWindowExposed(scene.window));
         PayrollService *payroll = scene.host.payroll();
 
-        // Setup: how the IRS taxes the LLC, the EIN, the city.
+        // Setup: how the business is taxed, the EIN, the city.
         QObject *setup = scene.openThrough(str("booksPayrollSetupAction"), str("payrollSetupDialog"));
         QVERIFY(setup != nullptr);
         QVERIFY(scene.item(str("payrollTablesNotice"))->isVisible());
         setup->setProperty("entity", str("sCorporation"));
+        scene.item(str("payrollColoradoOn"))->setProperty("checked", true);
         type(scene, "payrollEin", str("00-0000000"));
         const QVariantList cities = setup->property("info").toMap().value(str("cities")).toList();
         int denver = -1;
@@ -225,6 +245,7 @@ private slots:
         PayrollService *payroll = scene.host.payroll();
         const qint64 savings = scene.account(str("1010"));
         QVERIFY(succeeded(payroll->saveSetup({{str("entity"), str("scheduleC")}, {str("setAsideAccountId"), savings},
+                                              {str("colorado"), true},
                                               {str("payrollBankAccountId"), scene.account(str("1000"))}})));
         QVERIFY(succeeded(payroll->saveOwner({{str("name"), str("Pat Owner")}, {str("address"), str("9 Aspen Court\nGolden, CO 80401")}})));
 
@@ -287,6 +308,88 @@ private slots:
         QTRY_COMPARE(scene.item(str("ownerPayments"))->property("count").toInt(), 3); // estimate, draw, set-aside
         QTest::qWait(150);
         saveGrab(scene.window, str("qindabooks_owner_pay_%1").arg(width));
+    }
+
+    void otherStateItems_data() { addWidths(); }
+    void otherStateItems()
+    {
+        QFETCH(int, width);
+        WindowScene scene(sizeFor(width));
+        QVERIFY2(scene.window != nullptr, qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        PayrollService *payroll = scene.host.payroll();
+        QVERIFY(succeeded(payroll->saveSetup({{str("entity"), str("partnership")}, {str("colorado"), false},
+                                              {str("stateCode"), str("TX")},
+                                              {str("payrollBankAccountId"), scene.account(str("1000"))}})));
+        // The setup for a business outside Colorado: its state, no Colorado section.
+        QObject *setup = scene.openThrough(str("booksPayrollSetupAction"), str("payrollSetupDialog"));
+        QVERIFY(setup != nullptr);
+        QVERIFY(scene.item(str("payrollStateCode"))->isVisible());
+        QVERIFY(!scene.item(str("payrollCan"))->isVisible());
+        QTest::qWait(200);
+        saveGrab(scene.window, str("qindabooks_payroll_setup_other_%1").arg(width));
+        closePopup(setup);
+
+        // The business's own payroll tax items.
+        QObject *items = scene.openThrough(str("booksPayrollItemsAction"), str("payrollItemsDialog"));
+        QVERIFY(items != nullptr);
+        type(scene, "payrollItemName", str("Example state unemployment"));
+        scene.item(str("payrollItemSide"))->setProperty("currentIndex", 1); // the employer
+        type(scene, "payrollItemRate", str("2.7%"));
+        type(scene, "payrollItemWageBase", str("10000"));
+        type(scene, "payrollItemAgency", str("Example workforce agency"));
+        QVariant saved = WindowScene::call(items, "save");
+        QVERIFY2(succeeded(saved), qPrintable(errorOf(saved)));
+        WindowScene::call(items, "pick", -1);
+        type(scene, "payrollItemName", str("Example state income tax"));
+        scene.item(str("payrollItemKind"))->setProperty("currentIndex", 1); // withholding, per employee
+        type(scene, "payrollItemAgency", str("Example revenue department"));
+        saved = WindowScene::call(items, "save");
+        QVERIFY2(succeeded(saved), qPrintable(errorOf(saved)));
+        QCOMPARE(payroll->payrollItems().size(), 2);
+        QTest::qWait(200);
+        saveGrab(scene.window, str("qindabooks_payroll_items_%1").arg(width));
+        closePopup(items);
+
+        // An employee carries the user-entered withholding: 4 % + $5.00.
+        QObject *editor = scene.object(str("employeePayrollDialog"));
+        WindowScene::call(editor, "openFor", 0);
+        QTRY_VERIFY(editor->property("opened").toBool());
+        type(scene, "payrollFirstName", str("Sam"));
+        type(scene, "payrollLastName", str("Lee"));
+        type(scene, "payrollRate", str("78000"));
+        const QVariantList custom = editor->property("customItems").toList();
+        QCOMPARE(custom.size(), 2);
+        int sit = -1;
+        for (int i = 0; i < custom.size(); ++i) {
+            sit = custom.at(i).toMap().value(str("kind")).toString() == str("withholding") ? i : sit;
+        }
+        QVERIFY(sit >= 0);
+        WindowScene::call(editor, "editItem", sit, str("percent"), str("4%"));
+        WindowScene::call(editor, "editItem", sit, str("extra"), str("5.00"));
+        QTRY_VERIFY(scene.item(str("payrollCustomPercent_%1").arg(sit)) != nullptr);
+        // editItem is what typing calls; show the same text in the fields.
+        scene.item(str("payrollCustomPercent_%1").arg(sit))->setProperty("text", str("4%"));
+        scene.item(str("payrollCustomExtra_%1").arg(sit))->setProperty("text", str("5.00"));
+        scrollIntoView(scene.item(str("payrollCustomItem_%1").arg(sit)));
+        QTest::qWait(200);
+        saveGrab(scene.window, str("qindabooks_payroll_employee_items_%1").arg(width));
+        const QVariant employee = WindowScene::call(editor, "save");
+        QVERIFY2(succeeded(employee), qPrintable(errorOf(employee)));
+        closePopup(editor);
+
+        // The preview: no Colorado columns, the business's own taxes as
+        // "Other taxes": 4 % × 3,000 + 5 = 125.00; net 2,325.12.
+        QObject *run = scene.openThrough(str("booksRunPayrollAction"), str("runPayrollDialog"));
+        QVERIFY(run != nullptr);
+        const QVariant preview = WindowScene::call(run, "previewRun");
+        QVERIFY2(succeeded(preview), qPrintable(errorOf(preview)));
+        const QVariantMap row = mapOf(preview).value(str("rows")).toList().first().toMap();
+        QCOMPARE(row.value(str("otherText")).toString(), str("$125.00"));
+        QCOMPARE(row.value(str("netText")).toString(), str("$2,325.12"));
+        QTest::qWait(200);
+        saveGrab(scene.window, str("qindabooks_run_payroll_items_%1").arg(width));
+        closePopup(run);
     }
 };
 

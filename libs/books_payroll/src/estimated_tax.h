@@ -2,11 +2,12 @@
 #pragma once
 
 // The estimated-tax planner for an owner taxed on the business's profit —
-// a single-member LLC on Schedule C, or a partner (M71, D-081): federal
-// self-employment and income tax by the Form 1040-ES (2026) worksheets,
-// Colorado income tax by DR 0104EP, the required annual payment (the
-// safe harbors), each quarter's amount and due date, what remains, and a
-// suggested share of each owner draw to set aside.
+// a sole proprietor or single-member LLC owner (Schedule C), or a partner
+// (M71, D-081): federal self-employment and income tax by the Form 1040-ES
+// (2026) worksheets, Colorado income tax by DR 0104EP when the business
+// chose Colorado's built-in tables, the required annual payment (the safe
+// harbors), each quarter's amount and due date, what remains, and a
+// suggested share of each owner's draw to set aside.
 //
 // What is modelled (docs/payroll-tax-tables.md "Estimated tax"):
 //  * 1040-ES Self-Employment Tax and Deduction Worksheet: 92.35 % of the
@@ -48,6 +49,7 @@ struct EstimatedPayment {
 };
 
 struct EstimatedTaxInput {
+    bool colorado = true;                // plan Colorado's estimates too (the business chose Colorado)
     FilingStatus status = FilingStatus::Single;
     QDate asOf;                          // "today": annualizing and quarter status
     Money yearToDateProfit = usd(0);     // the business's net profit, Jan 1 through asOf

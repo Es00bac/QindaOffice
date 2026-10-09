@@ -7,6 +7,7 @@
 #include "paint_util.h"
 #include "payroll_ledger.h"
 #include "payroll_records.h"
+#include "payroll_stub.h"
 #include "printable_document.h"
 
 #include <QFontMetricsF>
@@ -66,36 +67,17 @@ bool fillPayStub(CompanyFile &file, const BusinessDocument &doc, PrintableCheck 
     if (c->memo.isEmpty()) {
         c->memo = s.period.isEmpty() ? QStringLiteral("Payroll") : QStringLiteral("Pay period ") + s.period;
     }
-    // The year to date through this check: the paychecks before it, plus it.
-    const PayrollYearToDate y = PayrollLedger(file).yearToDate(r->employeeId, r->payDate, r->docId);
-    const Payroll::PaycheckTaxes &t = r->taxes;
-    const auto line = [&](const QString &label, const Money &now, const Money &before) {
-        return PayStubLine{label, money(now, locale), money(now + before, locale)};
-    };
-    s.earnings << line(QStringLiteral("Gross pay"), t.gross, y.gross);
-    if (!(r->section125 + y.section125).isZero()) {
-        s.earnings << line(QStringLiteral("Health insurance (before tax)"), r->section125, y.section125);
+    // AGENT-CONTRACT (payroll_stub.h): the same lines the app shows.
+    for (const StubLine &l : payStubLines(file, *r)) {
+        const PayStubLine line{l.label, money(l.current, locale), money(l.yearToDate, locale)};
+        switch (l.section) {
+        case StubLine::Section::Earnings: s.earnings << line; break;
+        case StubLine::Section::Taxes: s.taxes << line; break;
+        case StubLine::Section::AfterTax: s.after << line; break;
+        case StubLine::Section::Net: s.net = line; break;
+        case StubLine::Section::Employer: break; // not on the employee's stub
+        }
     }
-    if (!(r->retirement + y.retirement).isZero()) {
-        s.earnings << line(QStringLiteral("Retirement plan (before tax)"), r->retirement, y.retirement);
-    }
-    s.taxes << line(QStringLiteral("Federal income tax"), t.federalIncomeTax, y.federalIncomeTax)
-            << line(QStringLiteral("Social security"), t.socialSecurity, y.socialSecurity)
-            << line(QStringLiteral("Medicare"), t.medicare, y.medicare);
-    if (!(t.additionalMedicare + y.additionalMedicare).isZero()) {
-        s.taxes << line(QStringLiteral("Additional Medicare"), t.additionalMedicare, y.additionalMedicare);
-    }
-    s.taxes << line(QStringLiteral("Colorado income tax"), t.coloradoIncomeTax, y.coloradoIncomeTax)
-            << line(QStringLiteral("Colorado FAMLI"), t.famliEmployee, y.famliEmployee);
-    if (!(t.optEmployee + y.optEmployee).isZero()) {
-        s.taxes << line(QStringLiteral("Local OPT"), t.optEmployee, y.optEmployee);
-    }
-    if (!(r->afterTax + y.afterTax).isZero()) {
-        const QString label = e.deductions.afterTaxLabel.isEmpty() ? QStringLiteral("Deduction after tax")
-                                                                   : e.deductions.afterTaxLabel;
-        s.after << line(label, r->afterTax, y.afterTax);
-    }
-    s.net = line(QStringLiteral("Net pay"), t.netPay, y.net);
     if (r->shareholderHealth.isPositive()) {
         s.notes << QStringLiteral("Health insurance paid for you: %1 (W-2 box 1)").arg(r->shareholderHealth.format(locale));
     }

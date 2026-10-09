@@ -1,18 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// M71 (D-081): PayrollService's QML API over a real company file. An
-// S corporation: setup with the account numbers (EIN shown in full only in
-// the edit field), an owner-employee added to the M68 Employees list with a
-// masked SSN everywhere but the editor, Run Payroll's draft, preview and
-// posting ($3,000.00 biweekly in Denver → net $2,308.17, the same check
-// tst_books_payroll posts), the paycheck's stub, adjusting and voiding it,
-// the federal deposit falling due and being paid, the payroll reports in
-// the catalog and filing exports that refuse made-up numbers without
-// echoing them. A Schedule C owner: the planner from a projected $80,000
-// profit (the figures tst_payroll_estimates derives), a draw with its
-// set-aside, an estimated payment closing installment 1, a draw check in
-// the M68 queue, due-date reminders posted once, and the S corporation
-// refusals. Identity numbers are made up (EIN 00-0000000, SSN 900-00-0001)
-// and never compared with QCOMPARE, so no failure prints one.
+// M71 (D-081): PayrollService's QML API over made-up company files. An
+// S corporation paying Colorado's taxes: setup with the account numbers
+// (EIN shown in full only in the edit field), an officer added to the M68
+// Employees list with a masked SSN everywhere but the editor, Run Payroll's
+// draft, preview and posting ($3,000.00 biweekly in Denver → net
+// $2,308.17, the same check tst_books_payroll posts), the paycheck's stub,
+// adjusting and voiding it, the federal deposit falling due and being
+// paid, the payroll reports in the catalog and filing exports that refuse
+// made-up numbers without echoing them. A sole proprietorship: the planner
+// from a projected $80,000 profit (the figures tst_payroll_estimates
+// derives), a draw with its set-aside, an estimated payment closing
+// installment 1, a draw check in the M68 queue, due-date reminders posted
+// once. Every business type's owner-pay rules, and a business outside
+// Colorado with its own payroll tax items (D-081 amendment). Identity
+// numbers are made up (EIN 00-0000000, SSN 900-00-0001) and never compared
+// with QCOMPARE, so no failure prints one.
 
 #include "books_app_test_support.h"
 
@@ -42,14 +44,18 @@ struct PayrollCompany : Company {
     qint64 bank = 0;
     qint64 jane = 0;
 
-    explicit PayrollCompany(const QString &entity = str("sCorporation"))
+    // A made-up company; `colorado` chooses Colorado's built-in taxes.
+    explicit PayrollCompany(const QString &entity = str("sCorporation"), bool colorado = true)
     {
         bank = service.bankAccounts().value(0).toMap().value(str("id")).toLongLong();
         const QVariantMap setup = payroll.saveSetup({{str("entity"), entity}, {str("ein"), str("00-0000000")},
-                                                     {str("optCity"), str("denver")}, {str("payrollBankAccountId"), bank}});
+                                                     {str("colorado"), colorado},
+                                                     {str("stateCode"), colorado ? QString() : str("TX")},
+                                                     {str("optCity"), colorado ? str("denver") : QString()},
+                                                     {str("payrollBankAccountId"), bank}});
         QVERIFY2(ok(setup), qPrintable(errorOf(setup)));
     }
-    // Jane Doe, $78,000 a year paid biweekly, the owner on salary.
+    // Jane Doe, $78,000 a year paid biweekly, an officer on salary.
     void addJane()
     {
         const QVariantMap saved = payroll.saveEmployee(
@@ -315,12 +321,117 @@ private slots:
         QVERIFY(!distribution.contains(str("setAside"))); // a distribution suggests no set-aside
         QVERIFY(ok(c.payroll.voidOwnerPayment(idOf(distribution), str("Wrong amount"))));
         QVERIFY(find(c.payroll.ownerPayments(2026), str("id"), idOf(distribution)).value(str("voided")).toBool());
-        // An owner of a Schedule C LLC is not paid by paycheck.
+        // A sole proprietor is not paid by paycheck.
         c.addJane();
         QVERIFY(ok(c.payroll.saveSetup({{str("entity"), str("scheduleC")}})));
         const QVariantMap preview = c.payroll.previewPayroll(c.run(str("2026-03-27")));
         QVERIFY(!preview.value(str("ok")).toBool());
-        QVERIFY(preview.value(str("rows")).toList().first().toMap().value(str("error")).toString().contains(str("owner draw")));
+        QVERIFY(preview.value(str("rows")).toList().first().toMap().value(str("error")).toString().contains(str("owner's draw")));
+    }
+
+    // Each business type pays its owners its own way (owner_pay.h).
+    void businessTypesDecideOwnerPay()
+    {
+        const auto pay = [](PayrollCompany &c, qint64 owner, const char *kind) {
+            return c.payroll.payOwner({{str("kind"), str(kind)}, {str("ownerId"), owner}, {str("bankAccountId"), c.bank},
+                                       {str("amount"), str("100.00")}, {str("date"), str("2026-03-31")},
+                                       {str("method"), str("transfer")}});
+        };
+        PayrollCompany corp(str("cCorporation"));
+        const qint64 holder = idOf(corp.payroll.saveOwner({{str("name"), str("Shareholder One")}}));
+        QVERIFY(ok(pay(corp, holder, "dividend")));
+        QVERIFY(!ok(pay(corp, holder, "draw")));
+        QVERIFY(!ok(pay(corp, holder, "distribution")));
+        QVERIFY(errorOf(corp.payroll.estimate()).contains(str("C corporation")));
+        QCOMPARE(corp.payroll.ownerPayments(2026).first().toMap().value(str("kindLabel")).toString(), str("Dividend"));
+        PayrollCompany nonprofit(str("nonprofit"));
+        const qint64 nobody = idOf(nonprofit.payroll.saveOwner({{str("name"), str("Board Member")}}));
+        for (const char *kind : {"draw", "distribution", "dividend"}) {
+            QVERIFY(errorOf(pay(nonprofit, nobody, kind)).contains(str("no owners")));
+        }
+        QVERIFY(errorOf(nonprofit.payroll.estimate()).contains(str("nonprofit")));
+        PayrollCompany partnership(str("partnership"));
+        const qint64 partner = idOf(partnership.payroll.saveOwner({{str("name"), str("Partner A")}}));
+        QVERIFY(ok(pay(partnership, partner, "draw")));
+        QVERIFY(!ok(pay(partnership, partner, "dividend")));
+        QCOMPARE(partnership.payroll.entity(), str("partnership"));
+    }
+
+    // A business outside Colorado with its own items: an employer
+    // unemployment tax 2.7 % up to $10,000 and state income tax withholding
+    // at the employee's 4 % + $5.00. The $3,000 check: no Colorado tax;
+    // withholding 4 % × 3,000 + 5 = 125.00 ("Other taxes"); net 3,000 −
+    // 320.38 − 186.00 − 43.50 − 125.00 = 2,325.12; employer 186.00 + 43.50
+    // + 18.00 + 81.00 = 328.50.
+    void payrollTaxItemsForAnotherState()
+    {
+        PayrollCompany c(str("sCorporation"), false);
+        QVERIFY(!c.payroll.colorado());
+        const QVariantMap ui = c.payroll.savePayrollItem({{str("name"), str("Example state unemployment")},
+                                                          {str("side"), str("employer")}, {str("kind"), str("tax")},
+                                                          {str("rate"), str("2.7%")}, {str("wageBase"), str("10000")},
+                                                          {str("agency"), str("Example workforce agency")},
+                                                          {str("frequency"), str("quarterly")}});
+        QVERIFY2(ok(ui), qPrintable(errorOf(ui)));
+        const QVariantMap sit = c.payroll.savePayrollItem({{str("name"), str("Example state income tax")},
+                                                           {str("kind"), str("withholding")},
+                                                           {str("agency"), str("Example revenue department")},
+                                                           {str("frequency"), str("monthly")}});
+        QVERIFY2(ok(sit), qPrintable(errorOf(sit)));
+        QVERIFY(!ok(c.payroll.savePayrollItem({{str("name"), str("Bad")}, {str("rate"), str("lots")}})));
+        const QVariantList items = c.payroll.payrollItems();
+        QCOMPARE(items.size(), 2);
+        QCOMPARE(find(items, str("id"), idOf(ui)).value(str("rate")).toString(), str("2.7%"));
+        QCOMPARE(find(items, str("id"), idOf(ui)).value(str("wageBase")).toString(), str("10000.00"));
+        QCOMPARE(find(items, str("id"), idOf(ui)).value(str("wageBaseText")).toString(), str("$10,000.00"));
+        c.addJane();
+        QVariantMap jane = c.payroll.employee(c.jane);
+        QVariantList rows = jane.value(str("customItems")).toList();
+        QCOMPARE(rows.size(), 2);
+        for (QVariant &v : rows) {
+            QVariantMap row = v.toMap();
+            if (row.value(str("id")).toLongLong() == idOf(sit)) {
+                row.insert(str("percent"), str("4%"));
+                row.insert(str("extra"), str("5.00"));
+            }
+            v = row;
+        }
+        jane.insert(str("customItems"), rows);
+        jane.insert(str("id"), c.jane);
+        QVERIFY2(ok(c.payroll.saveEmployee(jane)), qPrintable(errorOf(c.payroll.saveEmployee(jane))));
+        const QVariantMap stored = find(c.payroll.employee(c.jane).value(str("customItems")).toList(), str("id"), idOf(sit));
+        QCOMPARE(stored.value(str("percent")).toString(), str("4%"));
+        QCOMPARE(stored.value(str("extra")).toString(), str("5.00"));
+        const QVariantMap preview = c.payroll.previewPayroll(c.run(str("2026-03-27")));
+        QVERIFY2(preview.value(str("ok")).toBool(), qPrintable(errorOf(preview)));
+        QVERIFY(!preview.value(str("colorado")).toBool());
+        QVERIFY(preview.value(str("hasCustom")).toBool());
+        const QVariantMap row = preview.value(str("rows")).toList().first().toMap();
+        QCOMPARE(row.value(str("coloradoText")).toString(), str("$0.00"));
+        QCOMPARE(row.value(str("otherText")).toString(), str("$125.00"));
+        QCOMPARE(row.value(str("netText")).toString(), str("$2,325.12"));
+        QCOMPARE(row.value(str("employerText")).toString(), str("$328.50"));
+        const QVariantMap ran = c.payroll.runPayroll(c.run(str("2026-03-27")));
+        QVERIFY2(ok(ran), qPrintable(errorOf(ran)));
+        const QVariantMap check = c.payroll.paycheck(ran.value(str("ids")).toList().first().toLongLong());
+        QCOMPARE(find(check.value(str("stub")).toList(), str("label"), str("Example state income tax"))
+                     .value(str("currentText")).toString(), str("$125.00"));
+        QVERIFY(find(check.value(str("stub")).toList(), str("label"), str("Colorado income tax")).isEmpty());
+        QCOMPARE(find(check.value(str("employer")).toList(), str("label"), str("Example state unemployment"))
+                     .value(str("currentText")).toString(), str("$81.00"));
+        QCOMPARE(check.value(str("customWorksheets")).toList().size(), 2);
+        const QVariantMap owed = find(c.payroll.liabilities(QString(), QString(), true), str("label"),
+                                      str("Example state unemployment"));
+        QCOMPARE(owed.value(str("agency")).toString(), str("Example workforce agency"));
+        QCOMPARE(owed.value(str("balanceText")).toString(), str("$81.00"));
+        QCOMPARE(owed.value(str("due")).toString(), str("2026-04-30"));
+        // Colorado's forms are not offered to this business.
+        const QVariantList catalog = c.service.reportCatalog();
+        QVERIFY(find(catalog, str("id"), str("dr_1094")).isEmpty());
+        QVERIFY(find(catalog, str("id"), str("famli_wage_report")).isEmpty());
+        QVERIFY(!find(catalog, str("id"), str("form_941")).isEmpty());
+        QVERIFY(ok(c.payroll.setPayrollItemActive(idOf(ui), false)));
+        QVERIFY(!find(c.payroll.payrollItems(), str("id"), idOf(ui)).value(str("active")).toBool());
     }
 };
 

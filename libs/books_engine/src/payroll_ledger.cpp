@@ -6,6 +6,7 @@
 #include "company_file.h"
 #include "documents.h"
 #include "employees.h"
+#include "payroll_items.h"
 #include "sql_util.h"
 
 #include <QJsonArray>
@@ -112,90 +113,6 @@ std::optional<PayrollTables> PayrollLedger::tables(int year, QString *error)
     return PayrollTables::forYear(year, error);
 }
 
-PayrollYearToDate PayrollLedger::yearToDate(qint64 employeeId, const QDate &payDate, qint64 beforeDocId) const
-{
-    PayrollYearToDate y;
-    const QString cur = m_file.currency();
-    const QString live = QStringLiteral(" FROM paychecks p JOIN documents d ON d.id = p.doc_id WHERE d.state <> %1"
-                                        " AND p.employee_id = ? AND p.tax_year = ? AND (p.pay_date < ? OR (p.pay_date = ?"
-                                        " AND (? = 0 OR p.doc_id < ?)))")
-                             .arg(int(DocState::Void));
-    const QString day = Sql::isoDate(payDate);
-    QSqlQuery q(m_file.database());
-    if (Sql::run(q,
-                 QStringLiteral("SELECT SUM(ss_wages), SUM(medicare_wages), SUM(futa_wages), SUM(ui_wages),"
-                                " SUM(famli_wages), SUM(supplemental), SUM(retirement), SUM(gross), SUM(federal_wages),"
-                                " SUM(fit), SUM(ss), SUM(medicare), SUM(addl_medicare), SUM(co_wh), SUM(famli_ee),"
-                                " SUM(opt_ee), SUM(section125), SUM(after_tax), SUM(net)")
-                     + live,
-                 {employeeId, payDate.year(), day, day, beforeDocId, beforeDocId})
-        && q.next()) {
-        const auto money = [&](int i) { return Money(q.value(i).toLongLong(), cur); };
-        y.ytd.socialSecurityWages = money(0);
-        y.ytd.medicareWages = money(1);
-        y.ytd.futaWages = money(2);
-        y.ytd.uiWages = money(3);
-        y.ytd.famliWages = money(4);
-        y.ytd.supplemental = money(5);
-        y.ytd.retirement = money(6);
-        y.gross = money(7);
-        y.federalWages = money(8);
-        y.federalIncomeTax = money(9);
-        y.socialSecurity = money(10);
-        y.medicare = money(11);
-        y.additionalMedicare = money(12);
-        y.coloradoIncomeTax = money(13);
-        y.famliEmployee = money(14);
-        y.optEmployee = money(15);
-        y.section125 = money(16);
-        y.retirement = money(6);
-        y.afterTax = money(17);
-        y.net = money(18);
-    }
-    q.finish();
-    // The calendar month so far, for the local OPT.
-    const QString monthStart = Sql::isoDate(QDate(payDate.year(), payDate.month(), 1));
-    if (Sql::run(q,
-                 QStringLiteral("SELECT SUM(gross), MAX(opt_ee + opt_er)") + live + QStringLiteral(" AND p.pay_date >= ?"),
-                 {employeeId, payDate.year(), day, day, beforeDocId, beforeDocId, monthStart})
-        && q.next()) {
-        y.ytd.monthWages = Money(q.value(0).toLongLong(), cur);
-        y.ytd.optChargedThisMonth = q.value(1).toLongLong() > 0;
-    }
-    return y;
-}
-
-EmployerToDate PayrollLedger::employerToDate(const QDate &payDate, qint64 beforeDocId) const
-{
-    EmployerToDate e;
-    const QString cur = m_file.currency();
-    const QString day = Sql::isoDate(payDate);
-    const QString live = QStringLiteral(" FROM paychecks p JOIN documents d ON d.id = p.doc_id WHERE d.state <> %1"
-                                        " AND p.pay_date >= ? AND (p.pay_date < ? OR (p.pay_date = ? AND (? = 0 OR p.doc_id < ?)))")
-                             .arg(int(DocState::Void));
-    QSqlQuery q(m_file.database());
-    const QDate quarter(payDate.year(), (quarterOf(payDate) - 1) * 3 + 1, 1);
-    if (Sql::run(q, QStringLiteral("SELECT SUM(ss_wages), SUM(ss_er), SUM(medicare_wages), SUM(medicare_er), SUM(ui_wages),"
-                                   " SUM(co_ui)") + live,
-                 {Sql::isoDate(quarter), day, day, beforeDocId, beforeDocId})
-        && q.next()) {
-        e.quarterSocialSecurityWages = Money(q.value(0).toLongLong(), cur);
-        e.quarterSocialSecurityEmployer = Money(q.value(1).toLongLong(), cur);
-        e.quarterMedicareWages = Money(q.value(2).toLongLong(), cur);
-        e.quarterMedicareEmployer = Money(q.value(3).toLongLong(), cur);
-        e.quarterUiWages = Money(q.value(4).toLongLong(), cur);
-        e.quarterUi = Money(q.value(5).toLongLong(), cur);
-    }
-    q.finish();
-    if (Sql::run(q, QStringLiteral("SELECT SUM(futa_wages), SUM(futa)") + live,
-                 {Sql::isoDate(QDate(payDate.year(), 1, 1)), day, day, beforeDocId, beforeDocId})
-        && q.next()) {
-        e.yearFutaWages = Money(q.value(0).toLongLong(), cur);
-        e.yearFuta = Money(q.value(1).toLongLong(), cur);
-    }
-    return e;
-}
-
 PaycheckRecord PayrollLedger::compute(const PaycheckRequest &request, qint64 beforeDocId, QString *error) const
 {
     const auto failed = [error](const QString &why) {
@@ -223,12 +140,12 @@ PaycheckRecord PayrollLedger::compute(const PaycheckRequest &request, qint64 bef
     const PayrollSetup setup = records.setup();
     // AGENT-GUARD (D-081): a sole proprietor or a partner is not the
     // business's employee (Pub 15 section 2, "Sole proprietor" and
-    // "Partners"; Rev. Rul. 69-184): their pay is an owner draw. Only an
-    // S corporation — or an owner still "not sure" — pays an owner wages.
+    // "Partners"; Rev. Rul. 69-184): their pay is an owner's draw. A
+    // corporation's officers (and a type still "not sure") are paid wages.
     if (e.ownerEmployee && (setup.entity == EntityTax::ScheduleC || setup.entity == EntityTax::Partnership)) {
-        return failed(QStringLiteral("%1 owns this %2 LLC, so is not its employee: pay an owner with an owner draw "
+        return failed(QStringLiteral("%1 is an owner of this %2, not its employee: pay an owner with an owner's draw "
                                      "(Payroll ▸ Pay Owner), not a paycheck.")
-                          .arg(e.fullName(), setup.entity == EntityTax::ScheduleC ? QStringLiteral("Schedule C")
+                          .arg(e.fullName(), setup.entity == EntityTax::ScheduleC ? QStringLiteral("sole proprietorship")
                                                                                  : QStringLiteral("partnership")));
     }
     PaycheckRecord r;
@@ -253,7 +170,8 @@ PaycheckRecord PayrollLedger::compute(const PaycheckRequest &request, qint64 bef
     }
     r.shareholderHealth = e.shareholder2Percent ? d.shareholderHealth : m_file.money(0);
     r.afterTax = d.afterTax;
-    r.optCity = e.optCity == QLatin1String("none") ? QString() : (e.optCity.isEmpty() ? setup.optCity : e.optCity);
+    r.optCity = !setup.colorado || e.optCity == QLatin1String("none") ? QString()
+                                                                      : (e.optCity.isEmpty() ? setup.optCity : e.optCity);
 
     PayInput in;
     in.payDate = request.payDate;
@@ -267,7 +185,10 @@ PaycheckRecord PayrollLedger::compute(const PaycheckRequest &request, qint64 bef
     in.afterTax = r.afterTax;
     in.ytd = yearToDate(e.employeeId, request.payDate, beforeDocId).ytd;
     in.employerToDate = employerToDate(request.payDate, beforeDocId);
+    in.custom = PayrollItems(m_file).inputsFor(e, request.payDate, beforeDocId);
     EmployerSettings employer;
+    employer.colorado = setup.colorado;
+    employer.futaState = setup.colorado ? QStringLiteral("CO") : setup.stateCode;
     if (!setup.uiRate.isEmpty()) {
         employer.uiRate = setup.uiRate;
     } else if (setup.uiHeavyConstruction) {
@@ -289,8 +210,14 @@ PaycheckRecord PayrollLedger::compute(const PaycheckRequest &request, qint64 bef
     if (!r.taxes.gross.isPositive()) {
         return failed(QStringLiteral("A paycheck needs gross pay above zero."));
     }
+    QJsonArray custom;
+    for (const CustomItemResult &c : r.taxes.custom) {
+        custom.append(QJsonObject{{QStringLiteral("id"), qint64(c.id)}, {QStringLiteral("name"), c.name},
+                                  {QStringLiteral("worksheet"), worksheetJson(c.worksheet)}});
+    }
     r.details = QJsonObject{{QStringLiteral("federal"), worksheetJson(r.taxes.federalWorksheet)},
                             {QStringLiteral("colorado"), worksheetJson(r.taxes.coloradoWorksheet)},
+                            {QStringLiteral("custom"), custom},
                             {QStringLiteral("notes"), QJsonArray::fromStringList(r.taxes.notes)},
                             {QStringLiteral("employee"), r.employeeName}};
     if (error != nullptr) {
@@ -309,7 +236,7 @@ Result PayrollLedger::post(PaycheckRecord &r, const PaycheckRequest &request, co
     PayrollRecords records(m_file);
     PayrollSetup setup = records.setup();
     for (const PayrollAccountSpec &spec : payrollAccountRoles()) {
-        if (!ChartOfAccounts(m_file).account(setup.account(spec.role))) {
+        if ((!spec.colorado || setup.colorado) && !ChartOfAccounts(m_file).account(setup.account(spec.role))) {
             if (const Result made = records.ensurePayrollAccounts(); !made.ok) {
                 return made;
             }
@@ -382,6 +309,19 @@ Result PayrollLedger::post(PaycheckRecord &r, const PaycheckRequest &request, co
     add(PayrollRole::Section125, 0, r.section125.minor());
     add(PayrollRole::Retirement, 0, r.retirement.minor());
     add(PayrollRole::AfterTax, 0, r.afterTax.minor());
+    PayrollItems items(m_file);
+    for (const CustomItemResult &c : t.custom) {
+        if (c.amount.isPositive()) {
+            const std::optional<PayrollItem> item = items.item(c.id);
+            if (!item) {
+                return Result::failure(ErrorCode::NotFound, QStringLiteral("no payroll tax item %1").arg(c.name));
+            }
+            lines << PostingLine{item->accountId, 0, c.amount.minor(), 0, 0, 0, 0, 0, memo};
+        }
+    }
+    if (const Result stored = items.recordPaycheck(doc.id, t.custom); !stored.ok) {
+        return stored;
+    }
     if (t.netPay.isPositive()) {
         lines << PostingLine{r.bankAccountId, 0, t.netPay.minor(), 0, 0, 0, 0, 0, memo};
     }
@@ -485,7 +425,9 @@ std::optional<PaycheckRecord> PayrollLedger::paycheck(qint64 docId) const
     if (rows.isEmpty()) {
         return std::nullopt;
     }
-    PaycheckRecord r = rows.first();
+    QList<PaycheckRecord> one{rows.first()};
+    PayrollItems(m_file).attach(&one);
+    PaycheckRecord r = one.first();
     r.employeeName = PayrollRecords(m_file).employee(r.employeeId).fullName();
     return r;
 }
@@ -507,6 +449,7 @@ QList<PaycheckRecord> PayrollLedger::paychecks(const QDate &from, const QDate &t
             out << readRecord(q, m_file.currency());
         }
     }
+    PayrollItems(m_file).attach(&out);
     PayrollRecords records(m_file);
     QHash<qint64, QString> names;
     for (PaycheckRecord &r : out) {

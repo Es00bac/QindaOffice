@@ -137,7 +137,22 @@ Tk.Dialog {
         }
         Tk.SectionHeader { id: federalHeader; objectName: "paycheckFederalHeader"; title: qsTr("Federal withholding — Publication 15-T Worksheet 1A"); collapsible: true; collapsed: true }
         WorksheetLines { objectName: "paycheckFederalWorksheet"; visible: !federalHeader.collapsed; lines: dialog.check.federalWorksheet || [] }
-        Tk.SectionHeader { id: coloradoHeader; objectName: "paycheckColoradoHeader"; title: qsTr("Colorado withholding — DR 1098"); collapsible: true; collapsed: true }
-        WorksheetLines { objectName: "paycheckColoradoWorksheet"; visible: !coloradoHeader.collapsed; lines: dialog.check.coloradoWorksheet || [] }
+        Tk.SectionHeader { id: coloradoHeader; objectName: "paycheckColoradoHeader"; visible: (dialog.check.coloradoWorksheet || []).length > 0
+                           title: qsTr("Colorado withholding — DR 1098"); collapsible: true; collapsed: true }
+        WorksheetLines { objectName: "paycheckColoradoWorksheet"; visible: coloradoHeader.visible && !coloradoHeader.collapsed; lines: dialog.check.coloradoWorksheet || [] }
+        // The company's own payroll tax items, each as entered.
+        Repeater {
+            model: dialog.check.customWorksheets || []
+            delegate: Tk.Flex {
+                id: sheet
+                required property var modelData
+                required property int index
+                direction: Tk.Flex.Column
+                gap: Tk.Theme.space.xs
+                Tk.SectionHeader { id: sheetHeader; objectName: "paycheckCustomHeader_" + sheet.index; title: qsTr("%1 — as entered for the business").arg(sheet.modelData.name)
+                                   collapsible: true; collapsed: true }
+                WorksheetLines { visible: !sheetHeader.collapsed; lines: sheet.modelData.lines || [] }
+            }
+        }
     }
 }

@@ -10,9 +10,12 @@
 // balance back.
 //
 // Groups: "federal941" (withheld income tax, social security and Medicare —
-// one EFTPS deposit), "futa", "coWithholding" (DR 1094), "coUi", "coFamli",
-// "opt:<city>", and the deductions "section125", "retirement", "afterTax"
-// (paid as the insurer or plan bills: no due date).
+// one EFTPS deposit), "futa", for a business that chose Colorado
+// "coWithholding" (DR 1094), "coUi", "coFamli" and "opt:<city>", each of
+// the company's own payroll tax items "custom:<id>" (its name, agency and
+// due schedule, payroll_items.h), and the deductions "section125",
+// "retirement", "afterTax" (paid as the insurer or plan bills: no due
+// date).
 //
 // AGENT-NOTE (rounding): a payment may differ from the balance by up to
 // $1.00 — the agency's own form computes on the period's totals (Form 941
@@ -95,9 +98,12 @@ public:
     Result voidPayment(qint64 docId, const QString &reason, const PostOptions &options = {});
     [[nodiscard]] QList<LiabilityPaymentRecord> payments(const QDate &from = {}, const QDate &to = {},
                                                          bool includeVoid = false) const;
-    // The plain names of a group (label, agency).
+    // The plain names of a built-in group (label, agency).
     [[nodiscard]] static QString groupLabel(const QString &tax);
     [[nodiscard]] static QString groupAgency(const QString &tax);
+    // Any group's label, the company's own payroll tax items ("custom:<id>",
+    // payroll_items.h) included.
+    [[nodiscard]] QString labelOf(const QString &tax) const;
 
 private:
     CompanyFile &m_file;

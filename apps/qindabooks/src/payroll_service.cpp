@@ -74,6 +74,11 @@ bool PayrollService::configured() const
     return file() != nullptr && PayrollRecords(*file()).setup().configured;
 }
 
+bool PayrollService::colorado() const
+{
+    return file() != nullptr && PayrollRecords(*file()).setup().colorado;
+}
+
 int PayrollService::tablesYear() const
 {
     const int year = m_books->todayDate().year();
@@ -94,6 +99,8 @@ QVariantMap PayrollService::setup() const
             {QStringLiteral("configured"), s.configured},
             {QStringLiteral("ein"), s.ein.isEmpty() ? QString() : s.ein.left(2) + QLatin1Char('-') + s.ein.mid(2)},
             {QStringLiteral("einMasked"), maskedEin(s.ein)},
+            {QStringLiteral("colorado"), s.colorado},
+            {QStringLiteral("stateCode"), s.stateCode},
             {QStringLiteral("coloradoAccount"), s.coloradoAccount},
             {QStringLiteral("uiAccount"), s.uiAccount},
             {QStringLiteral("famliAccount"), s.famliAccount},
@@ -137,7 +144,11 @@ QVariantMap PayrollService::saveSetup(const QVariantMap &map)
         }
         s.ein = normalizedTaxId(text("ein"), 9);
     }
-    for (const auto &[key, field] : {std::pair{"coloradoAccount", &s.coloradoAccount}, std::pair{"uiAccount", &s.uiAccount},
+    if (has("colorado")) {
+        s.colorado = map.value(QStringLiteral("colorado")).toBool();
+    }
+    for (const auto &[key, field] : {std::pair{"stateCode", &s.stateCode},
+                                     std::pair{"coloradoAccount", &s.coloradoAccount}, std::pair{"uiAccount", &s.uiAccount},
                                      std::pair{"famliAccount", &s.famliAccount}, std::pair{"optCity", &s.optCity},
                                      std::pair{"optFiling", &s.optFiling}, std::pair{"bsoUserId", &s.bsoUserId},
                                      std::pair{"w2ContactName", &s.w2ContactName},
@@ -212,7 +223,8 @@ QVariantMap PayrollService::tablesInfo() const
     }
     QVariantList unconfirmed;
     for (const UnconfirmedValue &u : t->unconfirmed()) {
-        unconfirmed << QVariantMap{{QStringLiteral("label"), u.label}, {QStringLiteral("note"), u.note}};
+        unconfirmed << QVariantMap{{QStringLiteral("path"), u.path}, {QStringLiteral("label"), u.label},
+                                   {QStringLiteral("note"), u.note}};
     }
     QVariantList cities{QVariantMap{{QStringLiteral("key"), QString()}, {QStringLiteral("city"), tr("None")}}};
     for (const OccupationalPrivilegeTax &o : t->colorado().opt) {
@@ -360,7 +372,8 @@ QVariantMap PayrollService::employee(qint64 id) const
             {QStringLiteral("retirementPercent"), d.retirementPercent.isZero() ? QString() : d.retirementPercent.toPercentString()},
             {QStringLiteral("shareholderHealth"), moneyText(d.shareholderHealth)},
             {QStringLiteral("afterTax"), moneyText(d.afterTax)},
-            {QStringLiteral("afterTaxLabel"), d.afterTaxLabel}};
+            {QStringLiteral("afterTaxLabel"), d.afterTaxLabel},
+            {QStringLiteral("customItems"), customItemsFor(e)}};
 }
 
 QVariantMap PayrollService::saveEmployee(const QVariantMap &map)
@@ -399,7 +412,7 @@ QVariantMap PayrollService::saveEmployee(const QVariantMap &map)
     }
     e.street = text("street");
     e.city = text("city");
-    e.state = text("state").isEmpty() ? QStringLiteral("CO") : text("state");
+    e.state = text("state");
     e.zip = text("zip");
     e.hireDate = Format::date(map.value(QStringLiteral("hireDate")));
     e.releaseDate = Format::date(map.value(QStringLiteral("releaseDate")));
@@ -437,6 +450,9 @@ QVariantMap PayrollService::saveEmployee(const QVariantMap &map)
     d.shareholderHealth = amount("shareholderHealth");
     d.afterTax = amount("afterTax");
     d.afterTaxLabel = text("afterTaxLabel");
+    if (map.contains(QStringLiteral("customItems")) && problem.isEmpty()) {
+        applyCustomItems(map.value(QStringLiteral("customItems")).toList(), &e, &problem);
+    }
     if (!problem.isEmpty()) {
         return Format::failure(problem);
     }

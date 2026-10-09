@@ -20,9 +20,10 @@
 // They never go to notify(), a toast or an error text.
 //
 // Files: payroll_service.cpp (setup, owners, employees),
-// payroll_service_pay.cpp (Run Payroll, paychecks, liabilities, filing
-// exports), payroll_service_owner.cpp (owner pay, estimated taxes, due-date
-// reminders).
+// payroll_service_items.cpp (the company's own payroll tax items, and each
+// employee's settings for them), payroll_service_pay.cpp (Run Payroll,
+// paychecks, liabilities, filing exports), payroll_service_owner.cpp (owner
+// pay, estimated taxes, due-date reminders).
 
 #include <QObject>
 #include <QSet>
@@ -33,6 +34,7 @@
 
 namespace QindaOffice::Books {
 class CompanyFile;
+struct EmployeePayroll;
 struct PaycheckRequest;
 }
 
@@ -44,9 +46,13 @@ class PayrollService : public QObject {
     Q_OBJECT
     QML_ELEMENT
     QML_UNCREATABLE("The window's BooksHost owns its PayrollService.")
-    // "unsure" | "scheduleC" | "sCorporation" | "partnership"
+    // How the business is taxed: "unsure" | "scheduleC" (a sole
+    // proprietorship or single-member LLC) | "partnership" | "sCorporation"
+    // | "cCorporation" | "nonprofit".
     Q_PROPERTY(QString entity READ entity NOTIFY changed)
     Q_PROPERTY(bool configured READ configured NOTIFY changed)
+    // Colorado's built-in tables apply (the business chose Colorado).
+    Q_PROPERTY(bool colorado READ colorado NOTIFY changed)
     // The tables' year for today ("" when the year has none).
     Q_PROPERTY(int tablesYear READ tablesYear NOTIFY changed)
 public:
@@ -54,15 +60,17 @@ public:
 
     [[nodiscard]] QString entity() const;
     [[nodiscard]] bool configured() const;
+    [[nodiscard]] bool colorado() const;
     [[nodiscard]] int tablesYear() const;
 
     // ---- setup, owners, employees (payroll_service.cpp) ----
-    // {entity, configured, ein, einMasked, coloradoAccount, uiAccount,
-    //  famliAccount, depositSchedule, coloradoFrequency, uiRateParts[{name,
-    //  rate}], uiRateText, uiHeavyConstruction, smallEmployer,
-    //  famliEmployeeShare, famliEmployerShare (percent text), optCity,
-    //  optFiling, roundFederalWithholding, payrollBankAccountId,
-    //  setAsideAccountId, bsoUserId, w2ContactName/Phone/Email, signaturePin}
+    // {entity, configured, ein, einMasked, colorado, stateCode,
+    //  coloradoAccount, uiAccount, famliAccount, depositSchedule,
+    //  coloradoFrequency, uiRateParts[{name, rate}], uiRateText,
+    //  uiHeavyConstruction, smallEmployer, famliEmployeeShare,
+    //  famliEmployerShare (percent text), optCity, optFiling,
+    //  roundFederalWithholding, payrollBankAccountId, setAsideAccountId,
+    //  bsoUserId, w2ContactName/Phone/Email, signaturePin}
     Q_INVOKABLE QVariantMap setup() const;
     // The same keys; `uiRate` as "1.53%, 0.17%, 1.35%" (empty = the
     // introductory rate). Creates the payroll accounts.
@@ -77,10 +85,24 @@ public:
     // [{id, name, hasPayroll, payTypeText, payText, frequencyText,
     //   ssnMasked, ownerEmployee, released}] — every M68 employee.
     Q_INVOKABLE QVariantList employees() const;
-    // The editor's map (the one place an SSN leaves in full).
+    // The editor's map (the one place an SSN leaves in full), with
+    // customItems[{id, name, kind, kindLabel, subject, percent, extra}] for
+    // the company's active payroll tax items.
     Q_INVOKABLE QVariantMap employee(qint64 id) const;
     // id 0 creates the M68 employee first; returns {ok, id, error}.
+    // customItems as employee() gives them (percent "4%" and extra as text).
     Q_INVOKABLE QVariantMap saveEmployee(const QVariantMap &map);
+
+    // ---- the company's own payroll tax items (payroll_service_items.cpp) ----
+    // [{id, name, side, sideLabel, kind, kindLabel, rate ("2.7%"), wageBase,
+    //  wageBaseText ("$10,000.00"), annualLimit (text, "" = none),
+    //  accountId, accountName, agency, frequency, frequencyLabel, dueDay,
+    //  active}], inactive ones included.
+    Q_INVOKABLE QVariantList payrollItems() const;
+    // The same keys (id 0 = new; accountId 0 = create the account) →
+    // {ok, id, error}.
+    Q_INVOKABLE QVariantMap savePayrollItem(const QVariantMap &map);
+    Q_INVOKABLE QVariantMap setPayrollItemActive(qint64 id, bool active);
 
     // ---- Run Payroll, paychecks, liabilities (payroll_service_pay.cpp) ----
     // {payDate, periodStart, periodEnd, bankAccountId, rows[{employeeId,
@@ -113,9 +135,11 @@ public:
     Q_INVOKABLE QVariantMap exportFormForFiling(const QString &id, const QString &toIso, const QUrl &fileUrl);
 
     // ---- owner pay, estimated taxes, reminders (payroll_service_owner.cpp) ----
-    // {kind "draw" | "distribution", ownerId, bankAccountId, amount, date,
-    //  method "check" | "transfer", checkNumber, toPrint, memo} →
-    //  {ok, id, error, setAsidePercent, setAside, setAsideText}
+    // {kind "draw" | "distribution" | "dividend", ownerId, bankAccountId,
+    //  amount, date, method "check" | "transfer", checkNumber, toPrint,
+    //  memo} → {ok, id, error, setAsidePercent, setAside, setAsideText}
+    //  (the set-aside for a draw); refused when the business type does not
+    //  pay its owners that way.
     Q_INVOKABLE QVariantMap payOwner(const QVariantMap &map);
     // {amount, date, bankAccountId, toAccountId}
     Q_INVOKABLE QVariantMap recordSetAside(const QVariantMap &map);
@@ -153,6 +177,9 @@ private:
     [[nodiscard]] ::QindaOffice::Books::CompanyFile *file() const;
     bool requestFrom(const QVariantMap &row, const QVariantMap &run, ::QindaOffice::Books::PaycheckRequest *request,
                      QString *error) const;
+    // The employee map's customItems, and reading them back (payroll_service_items.cpp).
+    [[nodiscard]] QVariantList customItemsFor(const ::QindaOffice::Books::EmployeePayroll &employee) const;
+    bool applyCustomItems(const QVariantList &rows, ::QindaOffice::Books::EmployeePayroll *employee, QString *error) const;
     BooksService *m_books;
     QSet<QString> m_reminded;
 };

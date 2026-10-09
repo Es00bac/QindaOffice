@@ -4,21 +4,23 @@ import QtQuick
 import QindaTK as Tk
 import QindaOffice.Books.App
 
-// Payroll ▸ Pay Owner… / Shareholder Distribution… (M71, D-081): money an
-// owner takes out of the business — a Schedule C or partnership owner's
-// draw, an S corporation's shareholder distribution — by check (numbered
-// now, or queued for Checks to Print and its confirm step, M68) or by
-// transfer. It is equity, never an expense. After a draw the dialog shows
-// the share to set aside for taxes (the planner's rate on this year's
-// profit, PayrollService::setAsideFor) and moves it to the tax savings
-// account on request. An S corporation owner's wages are paychecks (Run
-// Payroll), never this dialog.
+// Payroll ▸ Pay Owner… / Shareholder Distribution… / Pay Dividend… (M71,
+// D-081): money a business pays its owners, the way its type allows — a
+// sole proprietor's or partner's draw, an S corporation's shareholder
+// distribution, a C corporation's dividend (from retained earnings); a
+// nonprofit has no owners to pay — by check (numbered now, or queued for
+// Checks to Print and its confirm step, M68) or by transfer. It is equity,
+// never an expense. After a draw the dialog shows the share to set aside
+// for taxes (the planner's rate on this year's profit,
+// PayrollService::setAsideFor) and moves it to the tax savings account on
+// request. A corporation's owners' wages are paychecks (Run Payroll),
+// never this dialog.
 Tk.Dialog {
     id: dialog
 
     property BooksService books: null
     property PayrollService payroll: null
-    property string kind: "draw"               // "draw" | "distribution"
+    property string kind: "draw"               // "draw" | "distribution" | "dividend"; "" = none (a nonprofit)
     property string requested: "draw"
     property var owners: []
     property var accounts: []
@@ -39,22 +41,30 @@ Tk.Dialog {
     readonly property bool offersSetAside: saved !== null && kind === "draw" && Number(saved.setAside || 0) > 0 && !moved
 
     objectName: "payOwnerDialog"
-    title: kind === "distribution" ? qsTr("Shareholder distribution") : qsTr("Pay owner")
-    subtitle: kind === "distribution" ? qsTr("Profit paid out to the shareholders, after the owner's reasonable salary")
-                                      : qsTr("An owner's draw: money out of the business, not an expense")
+    title: kind === "distribution" ? qsTr("Shareholder distribution") : kind === "dividend" ? qsTr("Pay a dividend") : qsTr("Pay owner")
+    subtitle: kind === "distribution" ? qsTr("Profit paid out to the shareholders, after the owners' reasonable salaries")
+            : kind === "dividend" ? qsTr("A C corporation's profit paid to its shareholders, from retained earnings")
+            : kind === "draw" ? qsTr("An owner's draw: money out of the business, not an expense")
+            : qsTr("A nonprofit has no owners to pay")
     dialogWidth: Tk.Theme.size.dialogWidth * 1.6
     primaryText: saved !== null ? qsTr("Done") : qsTr("Record")
     secondaryText: saved !== null ? "" : qsTr("Cancel")
     tertiaryText: offersSetAside && asideName.length > 0 ? qsTr("Move %1 to %2").arg(saved.setAsideText).arg(asideName) : ""
-    primaryEnabled: saved !== null || accounts.length > 0
+    primaryEnabled: saved !== null || (accounts.length > 0 && kind.length > 0)
 
-    // A draw asked of an S corporation becomes a distribution (and the
-    // reverse for a Schedule C or partnership owner), saying so.
+    // What each business type pays its owners (owner_pay.h).
+    function allowedFor(entity) {
+        return entity === "scheduleC" || entity === "partnership" ? ["draw"]
+             : entity === "sCorporation" ? ["distribution"]
+             : entity === "cCorporation" ? ["dividend"]
+             : entity === "nonprofit" ? [] : ["draw", "distribution", "dividend"]
+    }
+    // A kind the business type does not pay becomes the one it does,
+    // saying so.
     function openFor(asked) {
-        requested = asked === "distribution" ? "distribution" : "draw"
-        const entity = payroll.entity
-        kind = requested === "draw" && entity === "sCorporation" ? "distribution"
-             : requested === "distribution" && (entity === "scheduleC" || entity === "partnership") ? "draw" : requested
+        requested = asked === "distribution" || asked === "dividend" ? asked : "draw"
+        const allowed = allowedFor(payroll.entity)
+        kind = allowed.indexOf(requested) >= 0 ? requested : (allowed.length > 0 ? allowed[0] : "")
         owners = payroll.owners()
         accounts = books.bankAccounts()
         setupRecord = payroll.setup()
@@ -106,16 +116,23 @@ Tk.Dialog {
             objectName: "payOwnerSwitched"
             visible: dialog.kind !== dialog.requested
             variant: "info"
-            title: dialog.kind === "distribution" ? qsTr("An S corporation pays distributions") : qsTr("Owners of this LLC take draws")
+            title: dialog.kind === "distribution" ? qsTr("An S corporation pays distributions")
+                 : dialog.kind === "dividend" ? qsTr("A C corporation pays dividends")
+                 : dialog.kind === "draw" ? qsTr("This business's owners take draws") : qsTr("No owners to pay")
             text: dialog.kind === "distribution"
-                  ? qsTr("Your LLC is taxed as an S corporation: you are paid a salary through Run Payroll, and profit beyond it as shareholder distributions. This records a distribution.")
-                  : qsTr("A Schedule C or partnership owner is not paid wages or distributions: money out of the business is an owner's draw. This records a draw.")
+                  ? qsTr("The business is taxed as an S corporation: its owners are paid a salary through Run Payroll, and profit beyond it as shareholder distributions. This records a distribution.")
+                  : dialog.kind === "dividend"
+                  ? qsTr("The business is a C corporation: its owners are paid a salary through Run Payroll, and profit paid to shareholders is a dividend from retained earnings. This records a dividend.")
+                  : dialog.kind === "draw"
+                  ? qsTr("A sole proprietor or partner is not paid wages, distributions or dividends: money out of the business is an owner's draw. This records a draw.")
+                  : qsTr("The business is a nonprofit: it has no owners, and the people who work for it are paid through Run Payroll.")
         }
         Tk.Notice {
             objectName: "payOwnerSaved"
             visible: dialog.saved !== null
             variant: "success"
-            title: dialog.kind === "distribution" ? qsTr("Distribution recorded") : qsTr("Draw recorded")
+            title: dialog.kind === "distribution" ? qsTr("Distribution recorded") : dialog.kind === "dividend" ? qsTr("Dividend recorded")
+                 : qsTr("Draw recorded")
             text: dialog.byCheck && printLater.checked ? qsTr("The check waits in Checks to Print (Purchases).") : qsTr("It is in the register.")
         }
         Tk.Notice {
@@ -124,13 +141,13 @@ Tk.Dialog {
             variant: dialog.moved ? "success" : "warning"
             title: dialog.moved ? qsTr("Set aside") : qsTr("Set aside %1 for taxes").arg(dialog.saved !== null ? dialog.saved.setAsideText : "")
             text: dialog.moved ? qsTr("Moved to %1.").arg(dialog.asideName)
-                : qsTr("At this year's profit, federal and Colorado income tax and self-employment tax take about %1% of what the business makes. %2")
+                : qsTr("At this year's profit, the owner's income tax and self-employment tax take about %1% of what the business makes. %2")
                       .arg(dialog.saved !== null ? dialog.saved.setAsidePercent : 0)
                       .arg(dialog.asideName.length > 0 ? qsTr("Move it to %1 so the estimated payments are there when they fall due.").arg(dialog.asideName)
                                                        : qsTr("Choose a tax savings account in Set Up Owner Pay & Payroll to move it there."))
         }
         Tk.Grid {
-            visible: dialog.saved === null
+            visible: dialog.saved === null && dialog.kind.length > 0
             columns: dialog.fieldColumns
             columnGap: Tk.Theme.space.lg
             rowGap: Tk.Theme.space.sm
@@ -168,7 +185,8 @@ Tk.Dialog {
                 visible: dialog.byCheck && !printLater.checked; label: qsTr("Check number")
                 Tk.TextField { id: numberField; objectName: "payOwnerNumber"; small: true; mono: true }
             }
-            Tk.PropertyRow { label: qsTr("Memo"); Tk.TextField { id: memoField; objectName: "payOwnerMemo"; small: true; placeholderText: dialog.kind === "distribution" ? qsTr("Shareholder distribution") : qsTr("Owner draw") } }
+            Tk.PropertyRow { label: qsTr("Memo"); Tk.TextField { id: memoField; objectName: "payOwnerMemo"; small: true; placeholderText: dialog.kind === "distribution" ? qsTr("Shareholder distribution") : dialog.kind === "dividend" ? qsTr("Dividend")
+                                                           : qsTr("Owner's draw") } }
         }
         Tk.Caption {
             objectName: "payOwnerHint"

@@ -111,19 +111,19 @@ the same).
 
 ## D-081: QindaBooks: owner pay, estimated taxes and payroll (federal + Colorado)
 
-**Date:** 2026-10-08 · **Status:** accepted (owner request 2026-10-08:
-"getting the numbers right is the whole point"; M71; supersedes the
-"Payroll" item of the out-of-scope list in [books.md](books.md#out-of-scope--plainly)
-and in D-077)
+**Date:** 2026-10-08, amended 2026-10-09 · **Status:** accepted (QuickBooks
+parity: owner pay, estimated taxes and payroll; M71, amended by M71b;
+supersedes the "Payroll" item of the out-of-scope list in
+[books.md](books.md#out-of-scope--plainly) and in D-077)
 
-**Context.** The owner's LLC is in Colorado, and how the IRS taxes it is
-not settled: a single-member LLC that never elected otherwise is
-disregarded (Schedule C), one whose Form 2553 was accepted (the CP261
-notice) is an S corporation, and a multi-member LLC is a partnership. Each
-pays the owner differently — owner draws with quarterly estimated taxes, or
-a reasonable salary through payroll with the rest as distributions — and
-QuickBooks offers both. QindaBooks had no payroll; M68 left a minimal
-employees list for payroll to extend.
+**Context.** A small business pays its owners according to how the IRS
+taxes it: a sole proprietorship or single-member LLC that never elected
+otherwise reports on Schedule C, a business whose Form 2553 was accepted
+(the CP261 notice) is an S corporation, a multi-member LLC is a
+partnership. Each pays its owners differently — owner's draws with
+quarterly estimated taxes, or a reasonable salary through payroll with the
+rest as distributions — and QuickBooks offers both. QindaBooks had no
+payroll; M68 left a minimal employees list for payroll to extend.
 
 **Decision.**
 
@@ -167,8 +167,8 @@ employees list for payroll to extend.
    account on request; such an owner is never paid by paycheck and takes no
    shareholder distribution. An S corporation pays its owner-employee
    **wages** (Officer Wages) through payroll and the rest as **shareholder
-   distributions**, never draws; what salary is reasonable is the owner's
-   and the accountant's call — QindaBooks records it, it does not compute
+   distributions**, never draws; what salary is reasonable is the business's
+   and its accountant's call — QindaBooks records it, it does not compute
    it. "Not sure" keeps both ways open, and the setup explains how to tell.
 5. **Payroll extends M68's employees.** `employee_payroll` (one row per
    `employees.id`): legal name and SSN, address, dates, pay type, rate and
@@ -210,13 +210,59 @@ employees list for payroll to extend.
 eighth workspace (Payroll, Ctrl+8) and thirteen new reports (39 in the
 catalog); paychecks print on voucher checks with the pay stub. The setup
 screen and [payroll-tax-tables.md](payroll-tax-tables.md) say once that the
-numbers come from the official tables, with their dates, and that the owner
-should confirm the LLC's tax type and have a tax professional review the
-first payroll or estimate. Not done: other states and cities, e-filing and
+numbers come from the official tables, with their dates, and that a
+business should confirm how the IRS taxes it and have a tax professional
+review its first payroll and its first estimate. Not done: e-filing and
 e-payment, direct-deposit files, Colorado's own electronic W-2 file, the
 annualized installment method, the QBI deduction above the threshold (Form
 8995-A), nonresident-alien withholding, Forms 943/944, and any judgement of
 reasonable compensation.
+
+**Amended 2026-10-09 (M71b): a general accounting app.** QindaBooks is for
+any business, so payroll and owner pay no longer assume one state or one
+kind of business:
+
+1. **Business types.** `EntityTax` adds *cCorporation* and *nonprofit* to
+   *scheduleC* (a sole proprietorship or single-member LLC),
+   *partnership* (or multi-member LLC), *sCorporation* and *unsure*; the
+   setup addresses "the business" and explains each. How owners are paid
+   follows the type (`ownerPaymentAllowed`): owner's draws — with the
+   estimated-tax planner, estimated payments recorded as draws and the
+   set-aside — for a sole proprietorship or partnership; salary through
+   payroll plus shareholder distributions for an S corporation; salary
+   plus **dividends** (a new owner payment kind, debiting retained
+   earnings) for a C corporation; no owner pay for a nonprofit, whose
+   people are paid through payroll. "Not sure" leaves every way open. A
+   sole proprietor or partner is still never paid by paycheck.
+2. **Colorado is a choice.** Federal taxes are built in for every business;
+   Colorado — the first state with built-in tables (wage withholding, UI,
+   FAMLI, city taxes, DR 0104EP estimates, the DR 1094/DR 1093/UI/FAMLI
+   worksheets) — applies only when the business chooses it
+   (`PayrollSetup.colorado`). A business elsewhere sees none of Colorado's
+   accounts, paycheck lines, liabilities, forms or open questions, and
+   names its state for Form 940 line 1a.
+3. **Payroll tax items for any other state or locality.** A business defines
+   its own items (`payroll_items`): a name, the employee's or the
+   employer's side, a flat percentage, an optional wage base and annual
+   limit per employee per year, a liability account (created under Payroll
+   Liabilities when none is chosen), the agency and a due schedule
+   (monthly, quarterly or annually; a due day in the following month). For
+   state income tax withholding where no built-in table exists, an item of
+   kind *withholding* takes the flat percentage and/or fixed extra amount
+   per paycheck each employee carries — labelled user-entered everywhere.
+   Paychecks compute them as entered (books_payroll `computeCustomItem`) and
+   keep what each took (`paycheck_items`, immutable); liabilities, Pay
+   Payroll Liabilities, the pay stub (one shared `payStubLines` for paper
+   and screen) and the payroll reports include them. The built-in forms
+   stay federal and Colorado. No other state's formulas are built in, and
+   nothing is e-filed.
+4. **Schema version 5** (not yet released) gains `payroll_items`,
+   `paycheck_items` and `employee_payroll.custom`; the version-4 migration
+   is unchanged in kind.
+5. **Two commands** join the Payroll menu (twelve now) and its ribbon tab:
+   *Payroll Tax Items…* (`booksPayrollItemsAction`) and *Pay Dividend…*
+   (`booksDividendAction`). No command id is renamed or reused.
+
 ## D-078: QindaCalc: structured references, chart sheets, array formulas
 
 **Date:** 2026-10-09 · **Status:** accepted (M69; the owner's workbooks use

@@ -128,6 +128,26 @@ private slots:
         QCOMPARE(setAsideFor(m("2500"), r.setAsidePercent), m("600"));
     }
 
+    // The same $80,000 owner of a business outside Colorado: no Colorado
+    // plan; the set-aside is the federal tax alone, 16,647.46 ÷ 80,000 =
+    // 20.81 % → 21 %.
+    void outsideColoradoFederalOnly()
+    {
+        EstimatedTaxInput in;
+        in.colorado = false;
+        in.asOf = QDate(2026, 10, 8);
+        in.projectedProfit = m("80000");
+        const EstimatedTaxResult r = planEstimatedTax(t, in);
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QCOMPARE(r.federal.totalTax, m("16647.46"));
+        QCOMPARE(r.coloradoTax, m("0"));
+        QVERIFY(!r.colorado.paymentsRequired);
+        QVERIFY(r.colorado.installments.isEmpty());
+        QCOMPARE(r.businessTax, m("16647.46"));
+        QCOMPARE(r.setAsidePercent, 21);
+        QVERIFY(!r.notes.join(QLatin1Char(' ')).contains(QStringLiteral("Colorado")));
+    }
+
     // The same owner with last year's returns: federal 2025 tax $10,000
     // (AGI $60,000) → 12b = 10,000 < 12a → four of $2,500; two paid.
     // Colorado 2025 net tax $1,200 → 100 % = $1,200 < $1,435 → $300 each.

@@ -92,6 +92,10 @@ constexpr Command kCommands[] = {
     {"booksPayOwnerAction", QT_TRANSLATE_NOOP("BooksHost", "Pay &Owner…"), "", "hand-coins"},
     {"booksEstimatedTaxesAction", QT_TRANSLATE_NOOP("BooksHost", "Estimated &Taxes"), "", "calculator"},
     {"booksDistributionAction", QT_TRANSLATE_NOOP("BooksHost", "Shareholder &Distribution…"), "", "banknote"},
+    // D-081 amendment: a C corporation's dividends, and the company's own
+    // payroll tax items for any state or locality without built-in tables.
+    {"booksDividendAction", QT_TRANSLATE_NOOP("BooksHost", "Pay Di&vidend…"), "", "coins"},
+    {"booksPayrollItemsAction", QT_TRANSLATE_NOOP("BooksHost", "Payroll Tax &Items…"), "", "list-plus"},
     {"booksPayrollEmployeesAction", QT_TRANSLATE_NOOP("BooksHost", "&Employee Payroll…"), "", "users"},
     {"booksRunPayrollAction", QT_TRANSLATE_NOOP("BooksHost", "&Run Payroll…"), "", "receipt"},
     {"booksPayLiabilitiesAction", QT_TRANSLATE_NOOP("BooksHost", "Pay Payroll &Liabilities…"), "", "landmark"},
@@ -171,6 +175,8 @@ void BooksHost::createActions()
     on("booksPayrollSetupAction", [this] { emit payrollSetupRequested(); });
     on("booksPayOwnerAction", [this] { emit payOwnerRequested(QStringLiteral("draw")); });
     on("booksDistributionAction", [this] { emit payOwnerRequested(QStringLiteral("distribution")); });
+    on("booksDividendAction", [this] { emit payOwnerRequested(QStringLiteral("dividend")); });
+    on("booksPayrollItemsAction", [this] { emit payrollItemsRequested(); });
     on("booksEstimatedTaxesAction", [this] {
         setCurrentView(QStringLiteral("payroll"));
         emit estimatedTaxesRequested();
@@ -286,9 +292,10 @@ void BooksHost::insertMenus()
                                                       MenuNode::separator(), a("booksNewEmployeeAction")}));
     // M71 (D-081): owner pay and payroll — QuickBooks' Employees ▸ Payroll.
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("booksPayrollMenu"), tr("Pa&yroll"),
-                                                     {a("booksPayrollSetupAction"), MenuNode::separator(),
-                                                      a("booksPayOwnerAction"), a("booksEstimatedTaxesAction"),
-                                                      a("booksDistributionAction"), MenuNode::separator(),
+                                                     {a("booksPayrollSetupAction"), a("booksPayrollItemsAction"),
+                                                      MenuNode::separator(), a("booksPayOwnerAction"),
+                                                      a("booksEstimatedTaxesAction"), a("booksDistributionAction"),
+                                                      a("booksDividendAction"), MenuNode::separator(),
                                                       a("booksPayrollEmployeesAction"), a("booksRunPayrollAction"),
                                                       a("booksPayLiabilitiesAction"), MenuNode::separator(),
                                                       a("booksPayrollFormsAction"), a("booksExportEfw2Action")}));
