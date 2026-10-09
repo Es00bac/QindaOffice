@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# QindaBase (M49, D-049): the suite's database — one .qbase SQLite file per
-# window over base_engine. The C++ side is the document adapter, the host
+# QindaBase (M49, D-049; M80, D-089): the suite's database — one .qbase
+# SQLite file per window over base_engine. The C++ side is the document adapter, the host
 # (commands, menus, print source) and BaseService (the QML API); the QML
 # module is the window, the navigation pane and the views and designers,
 # built on QindaTK's EditableGrid, FormDesigner, ReportDesigner,
@@ -24,9 +24,25 @@ set(qindabase_qml
     qml/TableDesignView.qml
     qml/FieldProperties.qml
     qml/QueryDesignView.qml
+    qml/QueryDesignHeader.qml
+    qml/QueryTablesPane.qml
+    qml/QueryGrid.qml
     qml/QueryGridColumn.qml
+    qml/QuerySqlPane.qml
+    qml/QueryParametersDialog.qml
+    qml/MacroDesignView.qml
+    qml/MacroActionRow.qml
+    qml/MacroRunner.qml
     qml/FormView.qml
+    qml/FormLookups.qml
+    qml/FormControls.qml
+    qml/FormControlDialog.qml
     qml/ReportView.qml
+    qml/ReportHeaderBar.qml
+    qml/ReportGroupsPanel.qml
+    qml/ReportTotalsEditor.qml
+    qml/LabelPages.qml
+    qml/LabelWizardDialog.qml
     qml/RelationshipsView.qml
     qml/SqlView.qml
     qml/PlanDialog.qml
@@ -58,15 +74,20 @@ qt_add_qml_module(qindabase_app
         src/base_host_actions.cpp
         src/base_service.cpp src/base_service.h
         src/base_service_files.cpp
+        src/base_service_form_controls.cpp
         src/base_service_forms.cpp
         src/base_service_import.cpp
         src/base_service_io.cpp
+        src/base_service_macros.cpp
         src/base_service_queries.cpp
+        src/base_service_query_tools.cpp
+        src/base_service_report_output.cpp
         src/base_service_reports.cpp
         src/base_service_tables.cpp
         src/base_xlsx_export.cpp src/base_xlsx_export.h
         src/base_xlsx_import.cpp src/base_xlsx_import.h
         src/design_files.h
+        src/label_sheet.cpp src/label_sheet.h
         src/datasheet_edit.cpp
         src/datasheet_model.cpp src/datasheet_model.h
         src/datasheet_source.cpp src/datasheet_source.h

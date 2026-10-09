@@ -5,6 +5,145 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-089: QindaBase: Access's queries, forms and reports
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart, with nothing missing "that somebody would need";
+M80, builds on D-049 and D-074; the survey and ranked list are in
+[office-parity.md](plans/office-parity.md#qindabase-against-microsoft-access-survey-of-2026-10-09-m80))
+
+**Context.** QindaBase had Access's tables, relationships, select / update /
+delete / append queries, single-record forms, grouped reports and the Access
+import, but not the everyday parts an Access user reaches for next: field
+and record validation rules, input masks, crosstab and make-table queries,
+declared parameters, an SQL view in Access's own dialect, combo boxes for
+lookups, subforms, command buttons, macros, reports with more than one group
+level, mailing labels — and its report totals were double-precision sums in
+QindaTK. Writing `.accdb` is not possible with open-source tools.
+
+**Decision.**
+
+1. **Rules are the database's, not the window's** (`base_rules.h`). A
+   field's Validation Rule is Access criteria with the field as its implicit
+   left side ("> 0", "Between 1 And 5", "<= Date()"), compiled by the query
+   compiler (literals converted by the field, quoted); the record's rule is
+   an expression over the record's fields ("[ends] >= [starts]"). Both are
+   enforced by SQLite triggers QindaBase derives from the design (`BEFORE
+   INSERT` / `BEFORE UPDATE OF` the field, `RAISE(ABORT, <validation
+   text>)`) — triggers, not CHECK constraints, because a rule may call
+   Date() — so every writer of the file meets them. A Null passes, as in
+   Access. The triggers (named `qbv:<table>:<field>:i|u`) are listed apart
+   from the table's own triggers and recreated by every plan that rebuilds
+   or renames the table; a plan adding or changing a rule is refused while
+   records break it, with the count (`SchemaPlan::refusals`); Table Design ▸
+   Test Validation Rules counts the saved table's records against every
+   rule. Rules, texts and masks live in three new `qb_fields` columns an
+   older file gains by `ALTER TABLE … ADD COLUMN` in its first such plan; the
+   row with an empty field name holds the record rule.
+2. **Input masks shape what people type** (`base_input_mask.h`): Access's
+   three-section syntax (the mask; `0` stores the literals; the
+   placeholder), its slot characters, `>`/`<`, `!`, `\x`, "text" and
+   Password, with the Input Mask Wizard's presets. They apply where people
+   type — datasheet cells, forms, paste — never to imports or action
+   queries, and accept the text with or without its literals; a value
+   stored without them is shown through the mask.
+3. **New query kinds.** A crosstab (`base_query_crosstab.cpp`) is plain
+   SQLite: one column per heading value, each `CASE WHEN max(heading = v)
+   THEN total(CASE WHEN heading = v THEN value END) END` (an empty cell
+   stays empty, Count too); headings are the distinct values of the rows
+   the criteria (and the parameter values) select, or the fixed Column
+   Headings. A make-table query (`base_query_maketable.cpp`) is a schema
+   plan — previewed, backed up when it replaces a table, one undo step —
+   whose new table takes the query's output types, so money stays
+   Currency; it may not replace a table it reads or one on the one side of
+   a relationship. Query Parameters declares prompts with their types,
+   asked first and in order (a declared type is never re-derived). Top n
+   percent and Unique Values join the header.
+4. **The SQL view speaks Access SQL both ways** (`base_access_sql.h`). A
+   design prints as the statement Access shows (PARAMETERS, TRANSFORM …
+   PIVOT … IN, SELECT … INTO, INSERT INTO … SELECT, UPDATE … SET, DELETE,
+   TOP n PERCENT, bracketed names); edited text parses back into the grid
+   when the grid can hold it — WHERE and HAVING split into per-column
+   criteria rows (a row ANDs its cells, rows are ORed), sorts onto their
+   columns or hidden ones. What the grid cannot hold (UNION, subqueries,
+   joins over several fields, INSERT … VALUES, an OR inside an AND) is
+   refused with the reason, and Keep as SQLite SQL stores the text as a
+   hand-written query. Text is never evaluated in the parser; the compiler
+   quotes every literal as before.
+5. **Macros without VBA** (`base_macro.h`): a macro is a saved object (kind
+   `macro`) of Access's everyday actions — OpenForm (with a where condition
+   and add mode), OpenReport (preview or print), OpenQuery, OpenTable,
+   ApplyFilter, ShowAllRecords, GoToRecord, SaveRecord, Requery,
+   FindRecord, CloseWindow, MessageBox, RunMacro, StopMacro. The engine
+   checks a macro against the database (objects exist, where conditions
+   compile); the window runs it (`MacroRunner.qml`) through its own
+   commands, so an action query still shows its count first and a report
+   still asks for its parameters; a failing step stops the macro and says
+   which. Where conditions are Access expressions compiled with the table's
+   fields; an unknown `[name]` is an error, never a prompt. RunSQL, SetValue
+   and the VBA bridge actions are left out on purpose: data changes go
+   through saved queries, which preview and undo.
+6. **Forms: lookups, subforms and buttons beside QindaTK's FormDesigner**
+   (`base_form_controls.h`). The toolkit designer draws text fields and
+   check boxes only, so lookup fields leave its mirror and show above it as
+   combo boxes (or list boxes) of the related records — a choice on a saved
+   record is one undo step, on a new one it is saved with the record; saved
+   designs drop those fields when they open. A subform is one relationship
+   whose parent is the form's table, shown under the record as an editable
+   datasheet (`DatasheetModel::openLinked`: the link column hidden and set
+   on new records). A command button runs a named macro or one embedded
+   action. Controls are kept in the form's definition and saved as one undo
+   step.
+7. **Reports are evaluated by the engine** (`base_report.h`). The engine
+   reads the report's records once (a table, or a saved select or crosstab
+   query with its parameters), then filters, sorts and groups them and
+   totals every group with exact money — currency sums and extremes in
+   integer minor units, averages rounded half away from zero — into bands
+   mapped one for one onto QindaTK's `LocalReport::Band`s and laid out by
+   the toolkit's own `documentJson`, so pages, page bands, preview, print
+   and PDF are unchanged while every printed total is the engine's (QindaTK
+   asks hosts needing exact money for their own backend). Group, Sort and
+   Total edits the design document directly: three group levels (the
+   toolkit design's limit) with their totals, four sort keys, the report's
+   totals — one design step each. The report's paper and orientation are
+   set before printing starts (the first page used to come out on the
+   printer's default paper).
+8. **Mailing labels** (`base_labels.h`, `label_sheet.h`): a label report is
+   a report object with `"type": "labels"`: the source, an Avery product
+   (21 US Letter and A4 sheets with Word's published geometry), lines as
+   Access expressions (the Label Wizard writes them as `{field}` prototype
+   lines), sort, labels already used and copies. Empty lines close up.
+   One painter draws the sheets for the window, the printer and PDF, in
+   full-page mode from the paper's edge.
+9. **Access interchange is export plus import.** `.accdb` cannot be written
+   with open-source tools (mdb-tools reads only; Jackcess needs Java), so
+   records go to Access as Excel, CSV and — new — Access's own XML
+   (`base_xml_export.h`: the `<dataroot>` data file and its schema with
+   Access's `od:` annotations — jet types, required fields, AutoNumber, the
+   primary key and indexes), which Access's External Data ▸ XML File
+   imports with structure; Access databases come in through the mdb-tools
+   import (D-074).
+10. **Commands** (rule 5): fifteen new ids — `baseNewMacroAction`,
+    `baseLabelsWizardAction`, `baseExportXmlAction`,
+    `baseDesignTestRulesAction`, `baseQueryParametersAction`,
+    `baseQueryTypeCrosstabAction`, `baseQueryTypeMakeTableAction`,
+    `baseFormAddSubformAction`, `baseFormAddButtonAction`,
+    `baseReportGroupSortAction` and five Macro Design commands
+    (`baseMacroRunAction`, `baseMacroAddActionAction`,
+    `baseMacroDeleteActionAction`, `baseMacroMoveUpAction`,
+    `baseMacroMoveDownAction`), each in the menu tree and on the ribbon,
+    with a contextual Macro Design tab.
+
+**Consequences.** A `.qbase` holds Access's rules for every SQLite tool that
+opens it; the triggers are part of the file. Report totals are exact to the
+cent for any amount; the ReportDesigner and the snapshot still feed the
+design, the engine the pages. Forms show lookups above the toolkit
+designer's own header (its title and mode buttons), because the designer
+cannot host other controls — a QindaTK gap (combo, list, subform, button and
+tab-page controls in `FormDesigner`), as are group intervals and more than
+three group levels in the report design. Macros have no conditions, events
+or data macros yet; the ranked list in office-parity.md orders what is left.
+
 ## D-087: QindaCalc: what-if, data tools, sheet printing, kept rules
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

@@ -30,6 +30,7 @@ OfficeWindow {
     property alias reportView: reportView_
     property alias relationshipsView: relationshipsView_
     property alias sqlView: sqlView_
+    property alias macroDesignView: macroDesignView_
     property alias navigation: navigation_
     readonly property bool narrow: width < Tk.Theme.size.panelMinWidth * 3
 
@@ -79,6 +80,7 @@ OfficeWindow {
                 ReportView { id: reportView_; anchors.fill: parent; window: window; visible: window.hasDatabase && window.view === "report" }
                 RelationshipsView { id: relationshipsView_; anchors.fill: parent; window: window; visible: window.hasDatabase && window.view === "relationships" }
                 SqlView { id: sqlView_; anchors.fill: parent; window: window; visible: window.hasDatabase && window.view === "sql" }
+                MacroDesignView { id: macroDesignView_; anchors.fill: parent; window: window; visible: window.hasDatabase && window.view === "macroDesign" }
                 Tk.Toast {
                     id: toast
                     objectName: "baseToast"
@@ -103,6 +105,8 @@ OfficeWindow {
     AccessImportDialog { id: accessImportDialog_; window: window }
     FormWizardDialog { id: formWizard_; window: window }
     ReportWizardDialog { id: reportWizard_; window: window }
+    LabelWizardDialog { id: labelWizard_; window: window }
+    FormControlDialog { id: formControlDialog_; window: window }
     property alias planDialog: planDialog_
     property alias relationshipDialog: relationshipDialog_
     property alias parametersDialog: parametersDialog_
@@ -110,6 +114,8 @@ OfficeWindow {
     property alias accessImportDialog: accessImportDialog_
     property alias formWizard: formWizard_
     property alias reportWizard: reportWizard_
+    property alias labelWizard: labelWizard_
+    property alias formControlDialog: formControlDialog_
     property alias promptDialog: promptDialog_
     property alias confirmDialog: confirmDialog_
     property alias exportDialog: exportDialog_
@@ -136,10 +142,12 @@ OfficeWindow {
         id: confirmDialog_
         objectName: "baseConfirm"
         property var callback: null
-        onAccepted: { const f = callback; callback = null; if (f) f("primary") }
-        onTertiary: { const f = callback; callback = null; if (f) f("tertiary") }
-        onRejected: callback = null
-        function ask(title, text, variant, primary, done, tertiary) {
+        property var cancelled: null // M80: what a macro does when its MessageBox is dismissed
+        onAccepted: { const f = callback; callback = null; cancelled = null; if (f) f("primary") }
+        onTertiary: { const f = callback; callback = null; cancelled = null; if (f) f("tertiary") }
+        onRejected: { const f = cancelled; callback = null; cancelled = null; if (f) f() }
+        function ask(title, text, variant, primary, done, tertiary, onCancel) {
+            confirmDialog_.cancelled = onCancel || null
             confirmDialog_.title = title
             confirmDialog_.text = text
             confirmDialog_.variant = variant || "question"

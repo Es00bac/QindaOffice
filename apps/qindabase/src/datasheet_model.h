@@ -79,6 +79,11 @@ public:
     [[nodiscard]] QString pendingMessage() const { return m_pendingMessage; }
 
     Q_INVOKABLE bool openTable(const QString &name);
+    // M80 (a form's subform, base_form_controls.h): the records of `table`
+    // whose `linkField` equals `linkValue`, the link column hidden and set on
+    // every new record. An invalid `linkValue` (the form's new record) shows
+    // no records and takes none.
+    Q_INVOKABLE bool openLinked(const QString &table, const QString &linkField, const QVariant &linkValue);
     // A select's result (the service compiles and parameterises it).
     bool showQuery(const QString &name, const QString &sql, const QList<QindaOffice::Base::QueryParameter> &declared,
                    const QVariantMap &parameters, const QList<QindaOffice::Base::OutputColumn> &hints);
@@ -90,6 +95,9 @@ public:
     // conjunction "and" | "or".
     Q_INVOKABLE bool setFilters(const QVariantList &clauses, const QString &conjunction = QStringLiteral("and"));
     Q_INVOKABLE void clearFilters();
+    // M80 (a macro's ApplyFilter): only the records meeting an Access where
+    // condition over the table ("[city] = \"Portland\""); {ok, error}.
+    Q_INVOKABLE QVariantMap applyWhere(const QString &condition);
     // function: sum | average | count | min | max | "" (none)
     Q_INVOKABLE void setTotal(const QString &field, const QString &function);
     Q_INVOKABLE QString columnLabel(const QString &columnId) const;
@@ -164,6 +172,10 @@ private:
     QVariantMap m_totalFunctions; // field → function
     QVariantMap m_totals;
     QVariantMap m_pending;        // field → value typed into the new-record row
+    QString m_condition;          // M80: applyWhere's compiled SQL; its text is m_conditionText
+    QString m_conditionText;
+    QString m_linkField;          // M80: a subform's link (openLinked); "" otherwise
+    QVariant m_linkValue;
     QString m_error;
     QString m_pendingMessage;
     // The last select shown (a query result reruns it on refresh).

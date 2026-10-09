@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The five starter templates, as data: tables (with relationships and
-// lookups), saved queries, forms and reports.
+// lookups), saved queries, forms and reports — and (M80, D-089) in Donors &
+// Donations, Access's newer parts at work: a validation rule, an input
+// mask, a crosstab query, a macro, a form with a subform and a button, and
+// mailing labels.
 #include "base_templates.h"
 
 #include "base_objects.h"
@@ -162,8 +165,51 @@ QueryJoin join(const char *left, const char *leftField, const char *right, const
 struct Template {
     TemplateInfo info;
     QList<TableDef> tables;
-    QList<std::pair<QString, QVariantMap>> queries, forms, reports;
+    QList<std::pair<QString, QVariantMap>> queries, forms, reports, macros;
 };
+
+// M80: the Donors & Donations template's newer Access parts.
+void addAccessParts(Template &donors)
+{
+    TableDef &people = donors.tables[0];
+    people.fields[people.fieldIndex(s("phone"))].inputMask = s("!(999) 000-0000;0;_");
+    TableDef &gifts = donors.tables[2];
+    FieldDef &amount = gifts.fields[gifts.fieldIndex(s("amount"))];
+    amount.validationRule = s("> 0");
+    amount.validationText = s("A donation is more than nothing.");
+    QueryColumn method = col("donations", "method");
+    method.crosstab = s("row");
+    QueryColumn year;
+    year.expression = s("Year([given])");
+    year.crosstab = s("column");
+    QueryColumn total = col("donations", "amount", 0, "", TotalKind::Sum);
+    total.crosstab = s("value");
+    QueryDesign crosstab;
+    crosstab.kind = QueryKind::Crosstab;
+    crosstab.tables = {{s("donations"), QString()}};
+    crosstab.columns = {method, year, total};
+    QVariantMap byYear = crosstab.toMap();
+    byYear.insert(s("description"), s("Gifts by method, one column per year"));
+    donors.queries.append({s("Donations by Method and Year"), byYear});
+    const QVariantMap openEntry{{s("action"), s("openForm")},
+                                {s("arguments"), QVariantMap{{s("form"), s("Donation Entry")}, {s("dataMode"), s("add")}}}};
+    donors.macros = {{s("New Donation"),
+                      {{s("version"), 1}, {s("description"), s("Opens Donation Entry on a new record")},
+                       {s("actions"), QVariantList{openEntry}}}}};
+    QVariantMap &donor = donors.forms[0].second;
+    donor.insert(s("controls"),
+                 QVariantList{QVariantMap{{s("kind"), s("subform")}, {s("id"), s("subform1")}, {s("caption"), s("Donations")},
+                                          {s("table"), s("donations")}, {s("linkChild"), s("donor_id")}, {s("linkParent"), s("id")}},
+                              QVariantMap{{s("kind"), s("button")}, {s("id"), s("button1")}, {s("caption"), s("New donation")},
+                                          {s("macro"), s("New Donation")}, {s("actions"), QVariantList()}}});
+    donors.reports.append({s("Donor Mailing Labels"),
+                           {{s("version"), 1}, {s("type"), s("labels")}, {s("title"), s("Donor Mailing Labels")},
+                            {s("source"), QVariantMap{{s("kind"), s("table")}, {s("name"), s("donors")}}},
+                            {s("product"), s("Avery US Letter|5160")},
+                            {s("lines"), QStringList{s("[name]"), s("[address]"), s("[city]")}},
+                            {s("sort"), QVariantList{QVariantMap{{s("field"), s("name")}, {s("descending"), false}}}},
+                            {s("skip"), 0}, {s("copies"), 1}, {s("fontSize"), 10}}});
+}
 
 QList<Template> all()
 {
@@ -232,6 +278,7 @@ QList<Template> all()
     donors.reports = {{s("Donations by Donor"),
                        report("query", "Donation Details", "Donations by donor",
                               {{"given", "Date"}, {"amount", "Amount"}, {"method", "Method"}}, "Donor", "amount")}};
+    addAccessParts(donors);
     out.append(donors);
 
     Template volunteers;
@@ -356,6 +403,7 @@ Result applyTemplate(BaseFile &file, const QString &id)
             }
         };
         save(QStringLiteral("query"), t.queries);
+        save(QStringLiteral("macro"), t.macros);
         save(QStringLiteral("form"), t.forms);
         save(QStringLiteral("report"), t.reports);
         if (r.ok) {

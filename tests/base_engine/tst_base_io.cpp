@@ -6,6 +6,8 @@
 
 #include "base_access.h"
 #include "base_csv.h"
+#include "base_form_controls.h"
+#include "base_macro.h"
 #include "base_objects.h"
 #include "base_query.h"
 #include "base_records.h"
@@ -149,6 +151,14 @@ private slots:
                     QVERIFY(db.file->tableExists(source.value(str("name")).toString()));
                 }
             }
+            // M80: the template's macros and form controls are ready to run.
+            for (const SavedObject &m : ObjectStore::list(*db.file, str("macro"))) {
+                QVERIFY2(checkMacro(*db.file, Macro::fromMap(m.definition), m.name).isEmpty(), qPrintable(m.name));
+            }
+            for (const SavedObject &f : ObjectStore::list(*db.file, str("form"))) {
+                const QString table = f.definition.value(str("source")).toMap().value(str("name")).toString();
+                QVERIFY2(checkFormControls(*db.file, table, formControls(f.definition)).isEmpty(), qPrintable(f.name));
+            }
             QVERIFY(db.file->integrityProblems(true).isEmpty());
         }
         Db db;
@@ -167,8 +177,9 @@ private slots:
         Connection c;
         QVERIFY(c.open(scratch, false, true, nullptr));
         QCOMPARE(c.scalar(str("SELECT count(*) FROM donations")).toInt(), 0);
-        QCOMPARE(c.scalar(str("SELECT type FROM pragma_table_info('donations') WHERE name='donor_id'")).toString(),
-                 str("TEXT")); // a lookup shows names
+        // M80 (D-089 §4): a lookup is a combo or list box beside the toolkit's
+        // designer, so the mirror leaves it out.
+        QCOMPARE(c.scalar(str("SELECT count(*) FROM pragma_table_info('donations') WHERE name='donor_id'")).toInt(), 0);
         QCOMPARE(c.scalar(str("SELECT type FROM pragma_table_info('donations') WHERE name='amount'")).toString(),
                  str("CURRENCY"));
         QCOMPARE(c.scalar(str("SELECT \"notnull\" FROM pragma_table_info('donations') WHERE name='amount'")).toInt(), 1);

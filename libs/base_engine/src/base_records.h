@@ -38,6 +38,9 @@ struct RowQuery {
     QList<FilterClause> filters;
     bool matchAny = false; // filters joined with OR instead of AND
     int limit = 100000;
+    // M80: an ApplyFilter condition, ANDed with the filters. SQL from
+    // compileWhere (base_macro.h) only — never text a user typed.
+    QString condition;
 };
 
 struct ColumnInfo {
@@ -49,8 +52,17 @@ struct ColumnInfo {
     bool readOnly = false; // AutoNumber, Other
     QString defaultValue;
     LookupDef lookup;
+    // M80 (D-089): typed text goes through the mask (resolveInput) before it
+    // is parsed; the rule is enforced by the database (base_rules.h) and is
+    // here only so editors can say what it is.
+    QString inputMask;
+    QString validationRule;
+    QString validationText;
     [[nodiscard]] QString label() const { return caption.isEmpty() ? name : caption; }
     [[nodiscard]] QVariantMap toMap() const;
+    // A stored value as the datasheet shows it: displayText, through the
+    // input mask for text ("3035551234" → "(303) 555-1234").
+    [[nodiscard]] QString display(const QVariant &stored, const CurrencyFormat &currency) const;
 };
 
 struct RowSet {
@@ -86,9 +98,11 @@ public:
     // Aggregates over the filtered rows: sum | average | count | min | max.
     // Returns the storage value (currency sums stay integer minor units;
     // averages are doubles) and `display` text.
+    // `condition`: RowQuery::condition (M80), ANDed with the filters.
     [[nodiscard]] static QVariant total(const BaseFile &file, const QString &table, const QString &field,
                                         const QString &function, const QList<FilterClause> &filters,
-                                        QString *display, QString *error = nullptr, bool matchAny = false);
+                                        QString *display, QString *error = nullptr, bool matchAny = false,
+                                        const QString &condition = {});
 
     // Lookup choices: value → display text (at most `limit`, sorted by display).
     [[nodiscard]] static QList<QPair<QVariant, QString>> lookupChoices(const BaseFile &file, const LookupDef &lookup,

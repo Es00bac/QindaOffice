@@ -112,6 +112,21 @@ Item {
         grid.setCurrent(hit.row, hit.column, false)
         grid.ensureCurrentVisible()
     }
+    // M80 (a macro's GoToRecord and FindRecord).
+    function goToRecord(which) {
+        if (sheet === null) return
+        if (which === "new") { newRecord(); return }
+        const last = Math.max(0, sheet.recordCount - 1)
+        const row = which === "first" ? 0 : which === "last" ? last
+                  : which === "next" ? Math.min(last, grid.activeRow + 1) : Math.max(0, grid.activeRow - 1)
+        grid.setCurrent(row, Math.max(0, grid.activeColumn), false)
+        grid.ensureCurrentVisible()
+    }
+    function findText(text) {
+        findVisible = true
+        findField.text = text
+        findNext(true)
+    }
 
     Tk.Flex {
         anchors.fill: parent

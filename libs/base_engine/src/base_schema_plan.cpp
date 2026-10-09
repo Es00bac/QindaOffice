@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Table designs: validation and schema plans (create, alter/rebuild, drop,
 // relationships). See base_schema.h for how a change is planned.
+#include "base_rules.h"
 #include "base_schema_p.h"
 
 #include <QSet>
@@ -93,15 +94,21 @@ bool lossy(FieldType from, FieldType to)
 
 QString metaInsert(const QString &table, const FieldDef &f)
 {
+    const auto text = [](const QString &value) {
+        return value.trimmed().isEmpty() ? QStringLiteral("NULL") : quoteLiteral(value.trimmed());
+    };
     return QStringLiteral("INSERT OR REPLACE INTO qb_fields(table_name, field_name, type, caption, description, "
-                          "lookup_table, lookup_field, lookup_display) VALUES(%1, %2, %3, %4, %5, %6, %7, %8)")
+                          "lookup_table, lookup_field, lookup_display, validation_rule, validation_text, input_mask) "
+                          "VALUES(%1, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11)")
         .arg(quoteLiteral(table), quoteLiteral(f.name), quoteLiteral(typeId(f.type)),
              f.caption.isEmpty() ? QStringLiteral("NULL") : quoteLiteral(f.caption),
              f.description.isEmpty() ? QStringLiteral("NULL") : quoteLiteral(f.description),
              f.lookup.isSet() ? quoteLiteral(f.lookup.table) : QStringLiteral("NULL"),
              f.lookup.isSet() ? quoteLiteral(f.lookup.valueField) : QStringLiteral("NULL"),
              f.lookup.isSet() && !f.lookup.displayField.isEmpty() ? quoteLiteral(f.lookup.displayField)
-                                                                  : QStringLiteral("NULL"));
+                                                                  : QStringLiteral("NULL"),
+             text(f.validationRule))
+        .arg(text(f.validationText), text(f.inputMask));
 }
 
 void appendFieldIndexes(QStringList *out, const TableDef &table, const QString &name)
@@ -350,14 +357,23 @@ SchemaPlan planCreateTable(const BaseFile &file, const TableDef &input)
         plan.error = error;
         return plan;
     }
+    if (QString e = validateRules(table, file.currency()); !e.isEmpty()) {
+        plan.error = e;
+        return plan;
+    }
     plan.statements.append(create);
     appendFieldIndexes(&plan.statements, table, table.name);
     if (file.hasSystemTables()) {
+        plan.statements.append(systemColumnStatements(file));
         for (const FieldDef &f : table.fields) {
             plan.statements.append(metaInsert(table.name, f));
         }
+        if (const QString own = metaTableInsert(table); !own.isEmpty()) {
+            plan.statements.append(own);
+        }
     }
     plan.notes.append(QStringLiteral("Creates %1 with %2 field(s).").arg(table.name).arg(table.fields.size()));
+    appendRuleStatements(&plan, file, TableDef(), table, false);
     return plan;
 }
 

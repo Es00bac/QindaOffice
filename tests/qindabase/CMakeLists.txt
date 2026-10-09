@@ -4,9 +4,11 @@
 # source (tst_qindabase_host), the panel export through the desktop's own
 # validator (tst_qindabase_menu_export), the real window
 # (tst_qindabase_ui) and Excel/Access/file-field interchange through the
-# service (tst_qindabase_interchange, M65). Every test links the app's static QML module.
+# service (tst_qindabase_interchange, M65); M80 (D-089) through the service
+# (tst_qindabase_m80) and the real window (tst_qindabase_ui_m80). Every test
+# links the app's static QML module.
 foreach(name IN ITEMS tst_qindabase_service tst_qindabase_interchange tst_qindabase_host tst_qindabase_menu_export
-                      tst_qindabase_ui)
+                      tst_qindabase_ui tst_qindabase_m80 tst_qindabase_ui_m80)
     add_executable(${name} ${name}.cpp base_app_test_support.h)
     target_link_libraries(${name} PRIVATE qindabase_app qindabase_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)

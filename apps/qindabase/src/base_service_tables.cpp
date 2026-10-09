@@ -19,9 +19,12 @@ QVariantMap failed(const QString &error)
 
 bool needsMetadata(const Engine::TableDef &table)
 {
-    return std::any_of(table.fields.cbegin(), table.fields.cend(), [](const Engine::FieldDef &f) {
-        return !f.caption.isEmpty() || !f.description.isEmpty() || f.lookup.isSet();
-    });
+    // M80: rules and masks live in qb_fields too (base_rules.h).
+    return !table.validationRule.isEmpty() || !table.validationText.isEmpty()
+           || std::any_of(table.fields.cbegin(), table.fields.cend(), [](const Engine::FieldDef &f) {
+                  return !f.caption.isEmpty() || !f.description.isEmpty() || f.lookup.isSet()
+                         || !f.validationRule.isEmpty() || !f.validationText.isEmpty() || !f.inputMask.isEmpty();
+              });
 }
 
 // The SQL people read: the schema statements, with QindaBase's own
@@ -33,7 +36,8 @@ QString readableSql(const Engine::SchemaPlan &plan)
     int bookkeeping = 0;
     for (const QString &statement : plan.statements) {
         if (statement.startsWith(QLatin1String("DELETE FROM qb_")) || statement.startsWith(QLatin1String("INSERT OR REPLACE INTO qb_"))
-            || statement.startsWith(QLatin1String("UPDATE qb_")) || statement.startsWith(QLatin1String("PRAGMA "))) {
+            || statement.startsWith(QLatin1String("UPDATE qb_")) || statement.startsWith(QLatin1String("PRAGMA "))
+            || statement.startsWith(QLatin1String("ALTER TABLE qb_"))) {
             ++bookkeeping;
         } else {
             shown.append(statement + QLatin1Char(';'));

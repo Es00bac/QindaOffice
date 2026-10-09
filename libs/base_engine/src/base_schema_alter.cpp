@@ -2,6 +2,7 @@
 // planAlterTable: renames first (plain ALTER, which rewrites references),
 // then either simple ADD COLUMN / CREATE INDEX steps or the 12-step table
 // rebuild. See base_schema.h.
+#include "base_rules.h"
 #include "base_schema_p.h"
 
 #include <QSet>
@@ -78,6 +79,10 @@ SchemaPlan planAlterTable(const BaseFile &file, const TableDef &before, const Ta
         return plan;
     }
     const CurrencyFormat currency = file.currency();
+    if (QString e = validateRules(after, currency); !e.isEmpty()) {
+        plan.error = e;
+        return plan;
+    }
     const Connection &db = file.db();
 
     // Which old field each new one comes from.
@@ -292,12 +297,17 @@ SchemaPlan planAlterTable(const BaseFile &file, const TableDef &before, const Ta
         plan.notes.append(QStringLiteral("Rebuilds %1 and copies its records.").arg(after.name));
     }
     if (file.hasSystemTables()) {
+        plan.statements.append(systemColumnStatements(file));
         plan.statements.append(QStringLiteral("DELETE FROM qb_fields WHERE table_name IN (%1, %2)")
                                    .arg(quoteLiteral(before.name), quoteLiteral(after.name)));
         for (const FieldDef &f : after.fields) {
             plan.statements.append(metaInsert(after.name, f));
         }
+        if (const QString own = metaTableInsert(after); !own.isEmpty()) {
+            plan.statements.append(own);
+        }
     }
+    appendRuleStatements(&plan, file, before, after, rebuild);
     if (plan.statements.isEmpty()) {
         plan.notes.append(QStringLiteral("Nothing to change."));
     }

@@ -98,7 +98,15 @@ QVariantMap BaseService::openForm(const QString &name)
     const QString designPath = scratchPath(QStringLiteral("form-%1.qtkdata").arg(++serial));
     QString error;
     QString notice;
-    const QVariantMap saved = o->definition.value(s("design")).toMap();
+    // M80: lookups are combo or list boxes beside the designer, not in it.
+    QStringList lookups;
+    for (const Engine::ColumnInfo &c : Engine::Records::columns(*f, table)) {
+        if (c.lookup.isSet() && !c.lookup.displayField.isEmpty()) {
+            lookups.append(c.name);
+        }
+    }
+    const QVariantMap stored = o->definition.value(s("design")).toMap();
+    const QVariantMap saved = stored.isEmpty() ? stored : designWithoutFields(stored, lookups);
     if (saved.isEmpty() || !writeDesignFile(designPath, saved, &provider, &error)) {
         if (!saved.isEmpty()) {
             notice = tr("The form's layout no longer matched the table (%1); it was rebuilt.").arg(error);
@@ -110,8 +118,8 @@ QVariantMap BaseService::openForm(const QString &name)
         const QHash<QString, Engine::FieldType> types = Engine::fieldTypes(*f, table);
         for (const QVariant &v : specFields) {
             const QString field = v.toMap().value(s("name")).toString();
-            if (types.value(field) != Engine::FieldType::File) { // not in the mirror (base_snapshot.h)
-                names.append(field);
+            if (types.value(field) != Engine::FieldType::File && !lookups.contains(field, Qt::CaseInsensitive)) {
+                names.append(field); // files and lookups are not in the mirror (base_snapshot.h)
             }
         }
         if (!doc.bindTable(&provider, table, names)) {
@@ -122,6 +130,9 @@ QVariantMap BaseService::openForm(const QString &name)
         for (const QVariant &v : specFields) {
             const QVariantMap m = v.toMap();
             const QString field = m.value(s("name")).toString();
+            if (!names.contains(field)) {
+                continue; // a file or a lookup: shown beside the designer
+            }
             QString label = m.value(s("label")).toString();
             for (const Engine::ColumnInfo &c : columns) {
                 if (label.isEmpty() && c.name == field) {
@@ -156,10 +167,19 @@ QVariantMap BaseService::saveFormDesign(const QString &name, const QVariantMap &
     QVariantMap def = o->definition;
     const QVariantMap form = design.value(s("form")).toMap();
     QVariantList fields;
+    QStringList designed;
     for (const QVariant &v : form.value(s("fields")).toList()) {
         const QVariantMap m = v.toMap();
+        designed.append(m.value(s("fieldName")).toString());
         fields.append(QVariantMap{{s("name"), m.value(s("fieldName"))}, {s("label"), m.value(s("label"))},
                                   {s("hidden"), m.value(s("hidden"), false)}});
+    }
+    // M80: the fields the designer does not hold (lookups shown as combo or
+    // list boxes) keep their entries, with their control and order.
+    for (const QVariant &v : def.value(s("fields")).toList()) {
+        if (!designed.contains(v.toMap().value(s("name")).toString())) {
+            fields.append(v);
+        }
     }
     def.insert(s("design"), design);
     def.insert(s("title"), form.value(s("title")));
@@ -194,6 +214,7 @@ QVariantMap BaseService::formRecord(const QString &table, qint64 rowid) const
     }
     const QList<Engine::ColumnInfo> columns = Engine::Records::columns(*f, table);
     QVariantMap record;
+    QVariantMap lookups;
     if (rowid > 0) {
         const std::optional<QVariantList> values = Engine::Records::readRow(*f, table, rowid, columns);
         if (!values) {
@@ -207,24 +228,26 @@ QVariantMap BaseService::formRecord(const QString &table, qint64 rowid) const
             }
             const QVariant v = values->at(i);
             QVariant shown = v;
+            if (c.lookup.isSet() && !c.lookup.displayField.isEmpty()) {
+                lookups.insert(c.name, v); // M80: a combo or list box picks the stored key
+                continue;
+            }
             if (!v.isValid()) {
                 shown = QVariant();
-            } else if (c.lookup.isSet() && !c.lookup.displayField.isEmpty()) {
-                shown = v.toString();
-                for (const auto &[value, text] : Engine::Records::lookupChoices(*f, c.lookup)) {
-                    if (value.toString() == v.toString()) {
-                        shown = text;
-                    }
-                }
             } else if (c.type == Engine::FieldType::YesNo) {
                 shown = v.toLongLong() != 0;
             } else if (c.type == Engine::FieldType::Currency) {
                 shown = Engine::editText(c.type, v, currency);
+            } else if (!c.inputMask.isEmpty()) {
+                shown = c.display(v, currency); // M80: text through its input mask
             }
             record.insert(c.name, shown);
         }
     }
-    return {{s("ok"), true}, {s("recordId"), rowid > 0 ? QString::number(rowid) : QString()}, {s("record"), record}};
+    return {{s("ok"), true},
+            {s("recordId"), rowid > 0 ? QString::number(rowid) : QString()},
+            {s("record"), record},
+            {s("lookups"), lookups}};
 }
 
 QVariantMap BaseService::saveFormRecord(const QString &table, qint64 rowid, const QVariantMap &changes)

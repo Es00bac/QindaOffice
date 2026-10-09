@@ -4,9 +4,10 @@ import QindaOffice.Shell
 
 // QindaBase's ribbon (D-041, D-049): File · Home (views, clipboard,
 // records, sort & filter, find, file field) · Create · External Data · Database Tools ·
-// View, plus the contextual Table Design, Query Design and Form & Report
-// Design tabs the host offers while a designer is open (BaseHost
-// ribbonContexts). Every string is an ActionEntry id BaseHost registers.
+// View, plus the contextual Table Design, Query Design, Form & Report
+// Design and (M80) Macro Design tabs the host offers while a designer is
+// open (BaseHost ribbonContexts). Every string is an ActionEntry id
+// BaseHost registers.
 QtObject {
     readonly property var tabs: [
         StandardRibbon.fileTab([
@@ -44,13 +45,14 @@ QtObject {
             { id: "forms", label: qsTr("Forms"), items: [
                 { action: "baseNewFormAction", size: "large" }, "baseFormWizardAction"] },
             { id: "reports", label: qsTr("Reports"), items: [
-                { action: "baseNewReportAction", size: "large" }, "baseReportWizardAction"] }
+                { action: "baseNewReportAction", size: "large" }, "baseReportWizardAction", "baseLabelsWizardAction"] },
+            { id: "macros", label: qsTr("Macros"), items: [{ action: "baseNewMacroAction", size: "large" }] }
         ] },
         { id: "external", label: qsTr("External Data"), keyTip: "X", groups: [
             { id: "import", label: qsTr("Import"), items: [
                 { action: "baseImportCsvAction", size: "large" }, "baseImportExcelAction", "baseImportAccessAction"] },
             { id: "export", label: qsTr("Export"), items: [
-                { action: "baseExportCsvAction", size: "large" }, "baseExportXlsxAction"] }
+                { action: "baseExportCsvAction", size: "large" }, "baseExportXlsxAction", "baseExportXmlAction"] }
         ] },
         { id: "tools", label: qsTr("Database Tools"), keyTip: "Y", groups: [
             { id: "relationships", label: qsTr("Relationships"), items: [
@@ -69,25 +71,36 @@ QtObject {
                 "baseDesignDeleteFieldAction", "baseDesignMoveUpAction", "baseDesignMoveDownAction",
                 "baseDesignPrimaryKeyAction"] },
             { id: "designChanges", label: qsTr("Changes"), items: [
-                { action: "baseDesignApplyAction", size: "large" }, "baseDesignDiscardAction"] }
+                { action: "baseDesignApplyAction", size: "large" }, "baseDesignDiscardAction"] },
+            { id: "designValidation", label: qsTr("Validation"), items: [
+                { action: "baseDesignTestRulesAction", size: "large" }] }
         ] },
         { id: "queryDesign", label: qsTr("Query Design"), contextId: "queryDesign", keyTip: "Q", groups: [
             { id: "results", label: qsTr("Results"), items: [{ action: "baseQueryRunAction", size: "large" }] },
             { id: "queryType", label: qsTr("Query type"), items: [
                 { action: "baseQueryTypeSelectAction", size: "large" },
-                "baseQueryTypeUpdateAction", "baseQueryTypeDeleteAction", "baseQueryTypeAppendAction"] },
+                "baseQueryTypeMakeTableAction", "baseQueryTypeAppendAction", "baseQueryTypeUpdateAction",
+                "baseQueryTypeCrosstabAction", "baseQueryTypeDeleteAction"] },
             { id: "querySetup", label: qsTr("Setup"), items: [
                 { action: "baseQueryAddTableAction", size: "large" },
-                "baseQueryTotalsAction", "baseQueryClearAction"] }
+                "baseQueryTotalsAction", "baseQueryParametersAction", "baseQueryClearAction"] }
         ] },
         { id: "formDesign", label: qsTr("Form & Report"), contextId: "formDesign", keyTip: "D", groups: [
             { id: "formRecords", label: qsTr("Records"), items: [
                 { action: "baseNewRecordAction", size: "large" }, "baseSaveRecordAction", "baseDeleteRecordAction"] },
             { id: "layout", label: qsTr("Layout"), items: [
-                { action: "baseFormPreviewAction", size: "large" }, "baseReportRefreshAction"] },
+                { action: "baseFormPreviewAction", size: "large" }, "baseReportRefreshAction", "baseReportGroupSortAction"] },
+            { id: "controls", label: qsTr("Controls"), items: [
+                { action: "baseFormAddSubformAction", size: "large" }, "baseFormAddButtonAction"] },
             { id: "output", label: qsTr("Output"), items: [
                 { action: "filePrintAction", size: "large" },
                 { action: "filePrintPreviewAction", iconName: "eye" }, "baseExportPdfAction"] }
+        ] },
+        { id: "macroDesign", label: qsTr("Macro Design"), contextId: "macroDesign", keyTip: "M", groups: [
+            { id: "macroTools", label: qsTr("Tools"), items: [{ action: "baseMacroRunAction", size: "large" }] },
+            { id: "macroActions", label: qsTr("Actions"), items: [
+                { action: "baseMacroAddActionAction", size: "large" },
+                "baseMacroDeleteActionAction", "baseMacroMoveUpAction", "baseMacroMoveDownAction"] }
         ] }
     ]
 }

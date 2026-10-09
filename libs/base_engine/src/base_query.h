@@ -29,7 +29,10 @@
 
 namespace QindaOffice::Base {
 
-enum class QueryKind { Select, Update, Delete, Append, Sql };
+// M80 (D-089): Crosstab (Access's TRANSFORM … PIVOT) and MakeTable
+// (SELECT … INTO). Ids: select | update | delete | append | sql |
+// crosstab | makeTable.
+enum class QueryKind { Select, Update, Delete, Append, Sql, Crosstab, MakeTable };
 // groupBy | sum | average | count | min | max | where | expression
 enum class TotalKind { GroupBy, Sum, Average, Count, Min, Max, Where, Expression };
 
@@ -64,6 +67,17 @@ struct QueryColumn {
     QStringList orCriteria;
     QString updateTo;   // update queries
     QString appendTo;   // append queries: the target field
+    QString crosstab;   // crosstab queries: "row" | "column" | "value" | "" (a Where column)
+};
+
+struct QueryParameter {
+    QString name;   // the SQL parameter name without its ':' prefix
+    QString prompt; // what the user is asked
+    FieldType type = FieldType::Text;
+    // M80: declared in Query Parameters (Access's PARAMETERS clause): asked
+    // first, in this order, and its type is never re-derived from a field.
+    bool declared = false;
+    [[nodiscard]] QVariantMap toMap() const;
 };
 
 struct QueryDesign {
@@ -74,19 +88,16 @@ struct QueryDesign {
     bool totals = false;
     bool distinct = false;
     int top = 0;
+    bool topPercent = false; // M80: Top Values "25%"
     QString appendTable;
+    QString makeTable;           // M80: the new table of a make-table query
+    QStringList columnHeadings;  // M80: a crosstab's fixed column headings, in order
+    QList<QueryParameter> parameters; // M80: declared parameters (prompt, type)
     QString sql; // hand-written SQL (kind Sql)
     QVariantMap extra; // members this version does not know, kept on save
 
     [[nodiscard]] QVariantMap toMap() const;
     static QueryDesign fromMap(const QVariantMap &map);
-};
-
-struct QueryParameter {
-    QString name;   // the SQL parameter name without its ':' prefix
-    QString prompt; // what the user is asked
-    FieldType type = FieldType::Text;
-    [[nodiscard]] QVariantMap toMap() const;
 };
 
 struct OutputColumn {
@@ -104,9 +115,18 @@ struct CompiledQuery {
     bool action = false; // changes data
     QList<QueryParameter> parameters;
     QList<OutputColumn> columns; // select queries
+    QString makeTable;           // a make-table query: `sql` is its SELECT
+    bool crosstab = false;       // `sql` pivots the headings below
+    QStringList headings;        // a crosstab's column headings as shown
 };
 
 [[nodiscard]] CompiledQuery compileQuery(const BaseFile &file, const QueryDesign &design);
+// A crosstab's column headings are the distinct values its rows hold, so
+// they depend on the parameters: with `parameters` (name → user text) the
+// headings are those of exactly the rows that will run; without, those of
+// every row the criteria allow (parameters ignored), for previews.
+[[nodiscard]] CompiledQuery compileQuery(const BaseFile &file, const QueryDesign &design,
+                                         const QVariantMap &parameters);
 
 struct QueryResult {
     bool ok = false;
@@ -137,5 +157,17 @@ Result previewAction(BaseFile &file, const QString &sql, const QList<QueryParame
                      const QVariantMap &parameters, qint64 *affected);
 Result runAction(BaseFile &file, const QString &sql, const QList<QueryParameter> &declared, const QVariantMap &parameters,
                  qint64 confirmedCount, Change *change, qint64 *affected);
+
+// ---- make-table queries (M80, base_query_maketable.cpp) ----
+// How many records the make-table query's SELECT returns now.
+[[nodiscard]] qint64 countRows(const BaseFile &file, const CompiledQuery &compiled, const QVariantMap &parameters,
+                               QString *error);
+// The schema plan that (re)creates `compiled.makeTable` with the SELECT's
+// records and types: replacing an existing table drops it first (a backup is
+// taken), and is refused while a relationship or the query itself uses it.
+// Parameter values are written into the plan as quoted literals. `rows`
+// receives the record count the plan copies.
+[[nodiscard]] SchemaPlan planMakeTable(const BaseFile &file, const CompiledQuery &compiled,
+                                       const QVariantMap &parameters, qint64 *rows);
 
 } // namespace QindaOffice::Base

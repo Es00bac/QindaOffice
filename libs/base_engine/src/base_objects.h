@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// Saved objects (M49, D-049 §1): queries, forms and reports stored as JSON
-// in qb_objects. Every save, rename and delete is a captured Change (one
+// Saved objects (M49, D-049 §1): queries, forms, reports and (M80) macros
+// stored as JSON in qb_objects. Every save, rename and delete is a captured Change (one
 // undo step). Definitions are whole maps: unknown members a newer version
 // wrote survive a load–modify–save round trip because callers merge into
 // the loaded map instead of rebuilding it.
@@ -10,13 +10,18 @@
 // AGENT-CONTRACT (definition shapes, read by the app and the templates):
 //  query  QueryDesign::toMap() + {"description"}
 //  form   {"version":1, "source":{"kind":"table","name":…}, "title":…,
-//          "fields":[{"name","label","hidden"}], "design": <QindaTK
-//          local-data-design map, once the designer has saved it>}
+//          "fields":[{"name","label","hidden","control"}], "design":
+//          <QindaTK local-data-design map, once the designer has saved
+//          it>, "controls":[…] (M80: subforms and command buttons,
+//          base_form_controls.h)}
 //  report {"version":1, "source":{"kind":"table"|"query","name":…},
 //          "title":…, "columns":[{"field","label"}], "groups":[{"field",
 //          "label","pageBreakBefore","totals":[{"field","function"}]}],
-//          "totals":[…], "detail":bool, "footer":…, "orientation":…,
-//          "design": <QindaTK design map, once saved>}
+//          "totals":[…], "sort":[…], "detail":bool, "footer":…,
+//          "orientation":…, "design": <QindaTK design map, once saved>}
+//          — or (M80) a label report: "type":"labels" (base_labels.h)
+//  macro  (M80) {"version":1, "description":…, "actions":[{"action",
+//          "arguments"}]} (base_macro.h)
 
 #include "base_file.h"
 
@@ -28,7 +33,7 @@ namespace QindaOffice::Base {
 
 struct SavedObject {
     qint64 id = 0;
-    QString kind; // query | form | report
+    QString kind; // query | form | report | macro
     QString name;
     QVariantMap definition;
     QString description;

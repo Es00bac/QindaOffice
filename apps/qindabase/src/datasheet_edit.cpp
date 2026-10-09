@@ -80,7 +80,8 @@ bool DatasheetModel::commit(const QVariantList &changes, QString *error)
         // A new record is saved as soon as its required fields are in.
         QStringList missing;
         for (const Engine::ColumnInfo &c : std::as_const(m_columns)) {
-            if (c.required && !c.readOnly && c.defaultValue.isEmpty() && !m_pending.contains(c.name)) {
+            const bool linked = !m_linkField.isEmpty() && c.name.compare(m_linkField, Qt::CaseInsensitive) == 0;
+            if (c.required && !c.readOnly && c.defaultValue.isEmpty() && !m_pending.contains(c.name) && !linked) {
                 missing.append(c.label());
             }
         }
@@ -109,8 +110,12 @@ QVariantMap DatasheetModel::savePendingRecord()
     }
     qint64 rowid = 0;
     Engine::Change change;
+    QVariantMap values = m_pending;
+    if (!m_linkField.isEmpty()) {
+        values.insert(m_linkField, m_linkValue); // a subform's record belongs to its parent
+    }
     m_selfEdit = true;
-    const Engine::Result r = Engine::Records::insertRecord(*f, m_name, m_pending, &rowid, &change);
+    const Engine::Result r = Engine::Records::insertRecord(*f, m_name, values, &rowid, &change);
     m_selfEdit = false;
     if (!r.ok) {
         setPending(r.error);

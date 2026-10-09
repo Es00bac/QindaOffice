@@ -4,6 +4,7 @@
 #include "datasheet_model.h"
 
 #include "base_document.h"
+#include "base_macro.h"
 #include "datasheet_source.h"
 #include "pivot_source.h"
 
@@ -128,7 +129,27 @@ QVariantList DatasheetModel::filters() const
         out.append(QVariantMap{{QStringLiteral("field"), f.field}, {QStringLiteral("op"), f.op},
                                {QStringLiteral("value"), f.value}});
     }
+    if (!m_condition.isEmpty()) {
+        out.append(QVariantMap{{QStringLiteral("field"), QString()}, {QStringLiteral("op"), QStringLiteral("where")},
+                               {QStringLiteral("value"), m_conditionText}});
+    }
     return out;
+}
+
+QVariantMap DatasheetModel::applyWhere(const QString &condition)
+{
+    if (file() == nullptr || m_kind != QLatin1String("table")) {
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), tr("Open a table to filter its records.")}};
+    }
+    const Engine::CompiledWhere where = Engine::compileWhere(*file(), m_name, condition);
+    if (!where.ok()) {
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), where.error}};
+    }
+    m_condition = condition.trimmed().isEmpty() ? QString() : where.sql;
+    m_conditionText = condition.trimmed();
+    reload(true);
+    emit queryChanged();
+    return {{QStringLiteral("ok"), m_error.isEmpty()}, {QStringLiteral("error"), m_error}};
 }
 
 QVariantList DatasheetModel::sort() const
@@ -148,6 +169,10 @@ bool DatasheetModel::openTable(const QString &name)
     }
     m_kind = QStringLiteral("table");
     m_name = name;
+    m_linkField.clear();
+    m_linkValue = QVariant();
+    m_condition.clear();
+    m_conditionText.clear();
     m_sort.clear();
     m_filters.clear();
     m_matchAny = false;
@@ -156,6 +181,17 @@ bool DatasheetModel::openTable(const QString &name)
     setPending(QString());
     reload(false);
     emit queryChanged();
+    return m_error.isEmpty();
+}
+
+bool DatasheetModel::openLinked(const QString &table, const QString &linkField, const QVariant &linkValue)
+{
+    if (!openTable(table)) {
+        return false;
+    }
+    m_linkField = linkField;
+    m_linkValue = linkValue.isNull() ? QVariant() : linkValue;
+    reload(false);
     return m_error.isEmpty();
 }
 
@@ -180,6 +216,8 @@ void DatasheetModel::close()
 {
     m_kind.clear();
     m_name.clear();
+    m_linkField.clear();
+    m_linkValue = QVariant();
     m_columns.clear();
     m_lookups.clear();
     m_rowids.clear();
@@ -222,7 +260,20 @@ void DatasheetModel::reload(bool keepPosition)
         query.sort = m_sort;
         query.filters = m_filters;
         query.matchAny = m_matchAny;
-        const Engine::RowSet set = Engine::Records::read(*f, m_name, query);
+        query.condition = m_condition;
+        if (!m_linkField.isEmpty()) {
+            // A subform: its parent's records only; other filters narrow them.
+            query.matchAny = false;
+            query.filters.append({m_linkField, m_linkValue.isValid() ? QStringLiteral("eq") : QStringLiteral("isNull"),
+                                  m_linkValue.toString()});
+        }
+        Engine::RowSet set = Engine::Records::read(*f, m_name, query);
+        if (!m_linkField.isEmpty() && !m_linkValue.isValid()) {
+            set.rowids.clear(); // the parent is a new record: nothing to show or add yet
+            set.values.clear();
+            set.totalRows = 0;
+            set.editable = false;
+        }
         if (!set.error.isEmpty()) {
             setError(set.error);
             if (set.columns.isEmpty()) {
@@ -319,7 +370,9 @@ void DatasheetModel::rebuildGrid()
     m_grid->setReadOnly(false); // identity changes are refused while read-only
     QStringList columnIds;
     for (const Engine::ColumnInfo &c : std::as_const(m_columns)) {
-        columnIds.append(c.name);
+        if (m_linkField.isEmpty() || c.name.compare(m_linkField, Qt::CaseInsensitive) != 0) {
+            columnIds.append(c.name); // a subform hides its link
+        }
     }
     QStringList rowIds;
     rowIds.reserve(m_rowids.size() + 1);
@@ -335,8 +388,10 @@ void DatasheetModel::rebuildGrid()
     m_grid->setColumnIds(columnIds);
     m_grid->setRowIds(rowIds);
     for (int i = 0; i < m_columns.size(); ++i) {
-        m_grid->requestColumnResize(m_columns.at(i).name,
-                                    columnWidth(m_columns.at(i).type, !m_lookups.value(i).isEmpty()));
+        if (columnIds.contains(m_columns.at(i).name)) {
+            m_grid->requestColumnResize(m_columns.at(i).name,
+                                        columnWidth(m_columns.at(i).type, !m_lookups.value(i).isEmpty()));
+        }
     }
     m_grid->notifySourceChanged(0, int(rowIds.size()), 0, int(columnIds.size()));
     m_grid->setReadOnly(!m_editable);
@@ -370,7 +425,7 @@ QString DatasheetModel::display(int row, int column) const
         return lookup.value(valueKey(v), v.toString());
     }
     const Engine::CurrencyFormat currency = file() != nullptr ? file()->currency() : Engine::CurrencyFormat{};
-    return Engine::displayText(m_columns.at(column).type, v, currency);
+    return m_columns.at(column).display(v, currency); // M80: text through its input mask
 }
 
 QString DatasheetModel::edit(int row, int column) const
@@ -455,6 +510,8 @@ bool DatasheetModel::setFilters(const QVariantList &clauses, const QString &conj
 void DatasheetModel::clearFilters()
 {
     m_filters.clear();
+    m_condition.clear();
+    m_conditionText.clear();
     m_matchAny = false;
     m_sort.clear();
     reload(true);

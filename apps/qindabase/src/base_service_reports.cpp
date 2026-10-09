@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // BaseService: reports — a spec saved as an object, a snapshot of its
 // source (table or saved select query, parameters asked first) and a
-// QindaTK design file the report designer and LocalReportDocumentModel use.
+// QindaTK design file the report designer edits; the pages themselves are
+// evaluated by the engine (base_service_report_output.cpp, M80).
 #include "base_document.h"
 #include "base_objects.h"
+#include "base_labels.h"
 #include "base_records.h"
+#include "base_report.h"
 #include "base_service.h"
 #include "base_snapshot.h"
 #include "design_files.h"
@@ -15,8 +18,6 @@
 
 #include <QLocale>
 #include <QSet>
-
-#include <cmath>
 
 namespace QindaOffice::Apps::Base {
 
@@ -32,24 +33,6 @@ QVariantMap failed(const QString &error)
 QString s(const char *text)
 {
     return QString::fromLatin1(text);
-}
-
-QString valueKey(const QVariant &v)
-{
-    return v.metaType().id() == QMetaType::Double && std::floor(v.toDouble()) == v.toDouble()
-               ? QString::number(qint64(v.toDouble()))
-               : v.toString();
-}
-
-QHash<QString, QString> lookupMap(const Engine::BaseFile &file, const Engine::LookupDef &lookup)
-{
-    QHash<QString, QString> out;
-    if (lookup.isSet() && !lookup.displayField.isEmpty()) {
-        for (const auto &[value, text] : Engine::Records::lookupChoices(file, lookup)) {
-            out.insert(valueKey(value), text);
-        }
-    }
-    return out;
 }
 
 } // namespace
@@ -132,6 +115,12 @@ QVariantList BaseService::reportParameters(const QString &name) const
     if (!o) {
         return out;
     }
+    if (o->definition.value(s("type")).toString() == QLatin1String("labels")) {
+        for (const Engine::QueryParameter &p : Engine::labelParameters(*f, Engine::LabelSpec::fromMap(o->definition))) {
+            out.append(p.toMap()); // M80: a label report asks what its query asks
+        }
+        return out;
+    }
     const QVariantMap source = o->definition.value(s("source")).toMap();
     if (source.value(s("kind")).toString() != QLatin1String("query")) {
         return out;
@@ -161,52 +150,26 @@ QVariantMap BaseService::openReport(const QString &name, const QVariantMap &para
     const QVariantMap source = def.value(s("source")).toMap();
     const QString kind = source.value(s("kind")).toString();
     const QString sourceName = source.value(s("name")).toString();
-    QList<Engine::SnapshotColumn> columns;
-    QList<QVariantList> rows;
-    if (kind == QLatin1String("table")) {
-        Engine::RowQuery query;
-        query.limit = Engine::kSnapshotRowLimit + 1;
-        const Engine::RowSet set = Engine::Records::read(*f, sourceName, query);
-        if (!set.error.isEmpty()) {
-            return failed(set.error);
-        }
-        for (const Engine::ColumnInfo &c : set.columns) {
-            columns.append({c.name, c.type, lookupMap(*f, c.lookup)});
-        }
-        rows = set.values;
-    } else {
-        const std::optional<Engine::SavedObject> q = Engine::ObjectStore::load(*f, s("query"), sourceName);
-        if (!q) {
-            return failed(tr("The report's query %1 no longer exists.").arg(sourceName));
-        }
-        const Engine::CompiledQuery c = Engine::compileQuery(*f, Engine::QueryDesign::fromMap(q->definition));
-        if (!c.ok || c.action) {
-            return failed(c.ok ? tr("A report needs a select query.") : c.error);
-        }
-        const Engine::QueryResult result =
-            Engine::runSelect(*f, c.sql, c.parameters, parameters, Engine::kSnapshotRowLimit + 1, c.columns);
-        if (!result.ok) {
-            return failed(result.error);
-        }
-        for (const Engine::OutputColumn &col : result.columns) {
-            Engine::LookupDef lookup;
-            if (!col.sourceTable.isEmpty()) {
-                for (const Engine::ColumnInfo &ci : Engine::Records::columns(*f, col.sourceTable)) {
-                    if (ci.name == col.sourceField) {
-                        lookup = ci.lookup;
-                    }
-                }
-            }
-            columns.append({col.name, col.type, lookupMap(*f, lookup)});
-        }
-        rows = result.rows;
+    // M80: the engine reads the records once (base_report.h); they feed the
+    // pages buildReport lays out and the snapshot the designer reads.
+    QString error;
+    const std::optional<Engine::ReportSource> read =
+        Engine::readReportSource(*f, kind, sourceName, parameters, &error, Engine::kSnapshotRowLimit);
+    if (!read) {
+        return failed(error);
     }
+    m_reportSource = std::make_shared<Engine::ReportSource>(*read);
+    QList<Engine::SnapshotColumn> columns;
+    for (const Engine::ReportColumn &c : read->columns) {
+        columns.append({c.name, c.type, c.lookup});
+    }
+    const QList<QVariantList> &rows = read->rows;
     const QString snapshot = scratchPath(s("reports.sqlite"));
-    bool truncated = false;
-    const Engine::Result written = Engine::writeSnapshot(snapshot, sourceName, columns, rows, f->currency(), &truncated);
+    const Engine::Result written = Engine::writeSnapshot(snapshot, sourceName, columns, rows, f->currency());
     if (!written.ok) {
         return failed(written.error);
     }
+    const bool truncated = read->truncated;
     if (dataOnly) {
         return {{s("ok"), true}, {s("snapshotPath"), snapshot}, {s("truncated"), truncated},
                 {s("rowCount"), qMin(rows.size(), qsizetype(Engine::kSnapshotRowLimit))}};
@@ -301,6 +264,13 @@ QVariantMap BaseService::openReport(const QString &name, const QVariantMap &para
     for (const QVariant &t : totals) {
         bound.append(t.toMap().value(s("field")).toString());
     }
+    // M80: the wizard's sort order after the groups (QindaTK query.sort).
+    QVariantList sort;
+    for (const QVariant &v : def.value(s("sort")).toList()) {
+        const QVariantMap m = v.toMap();
+        bound.append(m.value(s("field")).toString());
+        sort.append(QVariantMap{{s("field"), m.value(s("field"))}, {s("ascending"), !m.value(s("descending")).toBool()}});
+    }
     bound.removeDuplicates();
     bound.removeAll(QString());
     if (!doc.bindTable(&provider, sourceName, bound)) {
@@ -323,6 +293,11 @@ QVariantMap BaseService::openReport(const QString &name, const QVariantMap &para
     }
     if (!totals.isEmpty()) {
         reportMap.insert(s("totals"), totals);
+    }
+    if (!sort.isEmpty()) {
+        QVariantMap query = reportMap.value(s("query")).toMap();
+        query.insert(s("sort"), sort);
+        reportMap.insert(s("query"), query);
     }
     design.insert(s("report"), reportMap);
     if (!writeDesignFile(designPath, design, &provider, &problem)) {

@@ -282,6 +282,13 @@ Result BaseFile::runPlan(const SchemaPlan &plan, bool commit, QStringList *warni
             warnings->append(check.second.arg(count));
         }
     }
+    for (const auto &refusal : plan.refusals) {
+        QString problem;
+        const qint64 count = m_db.scalar(refusal.first, {}, &problem).toLongLong();
+        if (!problem.isEmpty() || count > 0) {
+            return abort(problem.isEmpty() ? refusal.second.arg(count) : problem);
+        }
+    }
     if (!commit) {
         m_db.exec(QStringLiteral("ROLLBACK"));
         restorePragmas();

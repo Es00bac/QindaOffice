@@ -4,7 +4,8 @@ import QtQuick
 import QindaTK as Tk
 
 // The table designer: the field grid (key, name, type, description), the
-// selected field's properties and relationship, and — always visible — the
+// selected field's properties and relationship, the table's own
+// properties (M80: the record's validation rule), and — always visible — the
 // change it amounts to: what it does, what it risks, and the exact SQL,
 // previewed against the real data before anything runs. Apply runs it as
 // ONE undoable step (a backup first when it drops or narrows data).
@@ -88,6 +89,11 @@ Item {
             if (rel !== null) d.relationships.push(rel)
         })
     }
+    // M80: the table's own properties (its record validation rule and text).
+    function setTableProperty(key, value) {
+        if ((design[key] || "") === value) return
+        edit(function(d) { d[key] = value })
+    }
     function relationFor(name) {
         return (design.relationships || []).find(function(r) { return r.childField === name }) || null
     }
@@ -99,7 +105,8 @@ Item {
                 while (d.fields.some(function(f) { return f.name === qsTr("Field%1").arg(n) })) ++n
                 d.fields.push({ name: qsTr("Field%1").arg(n), originalName: "", type: "text", primaryKey: false, required: false,
                                 defaultValue: "", unique: false, indexed: false, caption: "", description: "",
-                                lookupTable: "", lookupField: "", lookupDisplay: "" })
+                                lookupTable: "", lookupField: "", lookupDisplay: "",
+                                validationRule: "", validationText: "", inputMask: "" })
             })
             current = design.fields.length - 1
             break
@@ -129,9 +136,20 @@ Item {
             break
         case "baseDesignApplyAction": apply(); break
         case "baseDesignDiscardAction": discard(); break
+        case "baseDesignTestRulesAction": testRules(); break
         }
     }
     function discard() { load(JSON.parse(original)) }
+    // Test Validation Rules (M80): the saved table's records against its rules.
+    function testRules() {
+        if (dirty) {
+            window.notify(qsTr("Apply the design first"), qsTr("Rules are tested against the records of the saved table."), "info")
+            return
+        }
+        const r = base.testValidationRules(design.name)
+        if (!r.ok) { window.notify(qsTr("Rules not tested"), r.error, "danger"); return }
+        window.confirmDialog.ask(qsTr("Test validation rules"), r.lines.join("\n"), r.broken > 0 ? "warning" : "info", qsTr("OK"), null)
+    }
     // Apply through the plan dialog (the ribbon's Apply).
     function apply() {
         const p = base.planTableDesign(design)
@@ -311,6 +329,34 @@ Item {
                             relationship: view.relationFor(view.field.name || "")
                             onEdited: function(key, value) { view.setField(key, value) }
                             onRelationEdited: function(rel) { view.setRelation(rel) }
+                        }
+                    }
+                    Tk.Card {
+                        objectName: "tableProperties"
+                        Tk.Flex {
+                            direction: Tk.Flex.Column
+                            gap: Tk.Theme.space.xs
+                            Tk.SectionHeader { title: qsTr("Table properties") }
+                            Tk.PropertyRow {
+                                label: qsTr("Validation rule")
+                                hint: qsTr("Compares the fields of a record: [ends] >= [starts]")
+                                Tk.TextField {
+                                    objectName: "tableValidationRule"
+                                    text: view.design.validationRule || ""
+                                    mono: true
+                                    placeholderText: "[ends] >= [starts]"
+                                    onEditingFinished: view.setTableProperty("validationRule", text)
+                                }
+                            }
+                            Tk.PropertyRow {
+                                label: qsTr("Validation text")
+                                hint: qsTr("The message shown when a record breaks the rule")
+                                Tk.TextField {
+                                    objectName: "tableValidationText"
+                                    text: view.design.validationText || ""
+                                    onEditingFinished: view.setTableProperty("validationText", text)
+                                }
+                            }
                         }
                     }
                 }

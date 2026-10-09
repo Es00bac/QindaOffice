@@ -33,6 +33,162 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M80 Base gates (D-089)
+
+Qualified on qinda (branch `m80-base-access`, merged with
+`m60-office-formats` e9d4852) as a targeted build — base_engine, the
+QindaBase app and their tests only (qinda's disk is shared; configured
+without debug info, every step at the lowest CPU and I/O priority): **18/18
+CTest targets passed, 86.7 s** (`ctest --preset dev -R "base"`). QtTest
+counts (functions incl. init/cleanup), none skipped; **new** binaries in
+bold:
+
+- base_engine — `tst_base_types` 6, `tst_base_file` 12, `tst_base_schema`
+  11, `tst_base_records` 9, `tst_base_query` 9, `tst_base_io` 7,
+  `tst_base_access` 7, **`tst_base_rules` 10, `tst_base_query_m80` 7,
+  `tst_base_access_sql` 6, `tst_base_macro_report` 10**.
+- QindaBase — `tst_qindabase_service` 9, `tst_qindabase_interchange` 6,
+  `tst_qindabase_host` 7, `tst_qindabase_menu_export` 4,
+  `tst_qindabase_ui` 13, **`tst_qindabase_m80` 9, `tst_qindabase_ui_m80`
+  9**: 151 QtTest functions in all (94 base_engine, 57 QindaBase), 0
+  failed.
+
+The fixtures are hand-built (the engine tests' gifts, bookings, contacts
+and donors tables) and the seeded Donors & Donations starter (40 donors,
+120 donations); no owner database was opened. Existing expectations changed
+by design: a form's mirror leaves lookup fields out (they are combo boxes
+now — `tst_base_io`, `tst_qindabase_service`), and a report's print source
+is the engine-built document (`tst_qindabase_host`).
+
+**Rules and masks by hand** (automated: `tst_base_rules`): `> 0` on money
+refuses 0 with its validation text and lets 0.01 and an empty amount
+through; `<= Date()` refuses a date ten days ahead naming the rule;
+`Between 1 And 5` refuses 9; a direct `INSERT` from another SQLite writer is
+refused too; the record rule `[ends] >= [starts]` refuses an end before the
+start on insert and update; a field rule naming another field, asking for
+`[Ask me]` or totalling is refused at design time; adding `> 0` while two
+records hold −100 and −1 is refused with "2 record(s) break the validation
+rule of amount (> 0)" and accepted once they are fixed; the rules survive a
+rebuild (a retyped field) and a table rename, and removing one is undone
+with the design; an M65 file without the three `qb_fields` columns reads
+and gains them. Masks: `(999) 000-0000` takes `3035551234`, `(303)
+555-1234`, `303 555 1234` and `303.555.1234` alike and refuses too short,
+too long and a letter; `!` right-fills `555-1234`; `00000-9999` keeps
+`97201` and `972011234`; `>L<??????` makes `Grace`; `>L0L 0L0` makes
+`K1A0B1`; `;0` stores `(503) 555-0142`; Password shows asterisks.
+
+**Queries by hand** (automated: `tst_base_query_m80`, `tst_base_access_sql`):
+the donors-by-year crosstab is Ada {2025: empty, 2026: 35.00}, Alan {—,
+1.00}, Grace {50.00, 123.45} in minor units, with a row summary of 173.45
+for Grace, Count leaving empty cells empty, fixed headings 2026 and 2024 in
+that order, criteria on the heading before the pivot, and headings following
+`[From]` (2025 and 2026 without a value, 2026 with 1/1/2026); the make-table
+query copies 3 gifts of at least 25.00 (198.45 in all) into a table typed
+Text / Currency / Date, is undone and redone as one step, replaces its table
+after a backup (1 gift of at least 100.00) and refuses to replace a table
+it reads, a system table or one with dependants; declared parameters come
+first and keep their types; Top 40 % of 5 is 2, 50 % is 3. Access SQL:
+exact texts for a join with criteria and sort, a totals query with HAVING
+and a PARAMETERS / TOP PERCENT query; select (Or rows), totals (WHERE and
+HAVING), crosstab with fixed headings, update, delete, append, make-table
+and a DISTINCT parameter query print and parse back to the same SQL or the
+same records; hand-written `SELECT *` with Like and DESC, PARAMETERS,
+TRANSFORM, a LEFT JOIN written right-first, an OR across fields and an
+UPDATE become designs that run; UNION, a two-field join, INSERT … VALUES,
+two statements, a missing table, an Or inside an And and DROP are refused
+with reasons.
+
+**Macros, form controls, reports, labels, XML** (automated:
+`tst_base_macro_report`): a macro opening Donor where `[city] = "Portland"`
+passes; a bad where condition, a wrong choice, a missing report, an empty
+required argument and an unknown action give five numbered problems; a
+macro is kept with unknown members and may not run itself; where conditions
+`[name] Like "A*"` → {1, 3}, `[email] Is Null Or [name] = "Alan"` → {2, 3},
+`[amount] > 20` on money → {1, 3} (20 = 2000 minor units), a quote-laden
+value matches nothing, an unknown field, a total and a missing table are
+refused; subform choices come from relationships, and a duplicate id, a
+missing form, a missing macro and a wrong link field are four problems. The
+two-level report (donor, then method; newest first) over six gifts:
+group headers in order, Card 30.30, Check 0.01, Ada 30.31 with an average
+of 10.10 (3031 / 3 rounded), three values and the latest date, Cash "—"
+(only an empty amount), Grace's average 100.00, the report total 163.64 and
+the lowest 0.01, page breaks only on the outer level, a summary with the
+case-blind `card` filter totalling 130.30, a sum over text refused; the
+toolkit's report map reads into the spec (columns, labels, groups, sort,
+filter, A4 landscape, the page footer off), and a parameter query's source
+asks for its prompts. Labels: 5160 has 30 to a sheet, two labels skipped
+put the first at (409.5, 36) pt and the next at (13.5, 108), the 31st on
+sheet 2, three copies of five make 15; two contacts sorted Z → A give
+Grace's four lines and Ada's three (her empty second street closed up), a
+lookup line prints the donor's name, an unknown field is refused. XML: two
+records with `first_x0020_gift`, money as 25.00 and 1.99, 1/0, escaped text,
+base64 bytes, a Null left out; the schema has currency, AutoNumber, a 64-bit
+number as double and the primary key, and both files parse.
+
+**Through the service and the window** (automated: `tst_qindabase_m80`,
+`tst_qindabase_ui_m80`): Totals by Donor's Access SQL round-trips; the
+starter's crosstab shows four methods and Check's 2026 cell to the cent; a
+make-table query's plan counts the gifts of at least 500.00 and its run is
+one undo step; Test Validation Rules finds the record another tool wrote
+around a dropped trigger; the datasheet refuses 0.00 with the rule's text
+and stores `(503) 555-0142` through the mask; macros save, undo and refuse
+a loop; ApplyFilter narrows a datasheet to Salem's donors and clears; the
+Donation Entry lookups are combo boxes, a list box and a button save as one
+undo step and a subform to a missing table is refused; a subform's
+datasheet shows donor 1's gifts without its link column and adds one; the
+engine-built report has 120 records, one group per donor and the exact sum
+in its footer; the labels make 2 sheets (30 + 10) sorted by name on
+612 × 792 pt paper; the Label Wizard previews 6 labels; a query-sourced
+label report asks for its 2 parameters; the XML export holds 40 records. In
+the window at 1280 and 520 px: the crosstab grid, the Access SQL view
+(edited text back into the grid, UNION refused with Keep as SQLite SQL, run
+as SQLite), Query Parameters, a make-table plan applied; validation and mask
+fields with Test Validation Rules and a record rule's trigger in the plan;
+the Macro Design tab, adding and deleting actions, Open on a macro landing
+on Donation Entry's new record; the Donor form's subform and button, the
+lookup combo saved at once, the button's macro, Add Button; Group, Sort and
+Total with a second level and the PDF; the label sheets and their PDF, the
+Label Wizard making a new label report. Every QindaBase command's icon and
+the icons the new views name exist in QindaTK.
+
+**UI gates**: the structural fixtures `qindabase_{1280,520}.txt` were
+regenerated deliberately (`QQO_UPDATE_FIXTURES=1`; the diff is the Macros
+section with New Donation, the crosstab query and the label report in the
+navigation pane, the macro designer, the validation and mask fields, the
+table properties card, the query header and SQL pane as their own types,
+the form filter chip, lookups and controls, the Group, Sort and Total
+panel, the label pages and the record bar's field info); the ribbon gate
+(every menu command on the ribbon, every layout icon real, every tab —
+Table Design, Query Design, Form & Report and Macro Design forced on —
+inside the ribbon at 1280 and 520 px) and the panel export's validator pass
+with the 15 new commands (71 `base…Action` ids, each in the tree once).
+Grabs looked at (`QQO_GRAB_DIR`): `qindabase_crosstab_{1280,520}`,
+`qindabase_accesssql_{1280,520}`, `qindabase_sqlrefused_1280`,
+`qindabase_queryparameters_1280`, `qindabase_maketable_1280`,
+`qindabase_validation_{1280,520}`, `qindabase_macro_{1280,520}`,
+`qindabase_formcontrols_{1280,520}`, `qindabase_formlookups_{1280,520}`,
+`qindabase_formbuttondialog_1280`, `qindabase_reportgroups_{1280,520}`,
+`qindabase_reportgroups2_1280`, `qindabase_labels_{1280,520}`,
+`qindabase_labelwizard_1280`, and the PDFs `qindabase_report.pdf` (16
+Letter pages, two group levels, "Page n of N") and `qindabase_labels.pdf`
+(two 5160 sheets). Known noise: QindaTK's FormDesigner logs a binding loop
+on its Redo button's `enabled` when a window switches from one form's
+design document to another's (15 lines in `tst_qindabase_ui_m80`); the
+forms work.
+
+**On the desktop (manual, the owner):** create a database from Donors &
+Donations; in Table Design give a field a validation rule and an input mask
+and type a bad value and a phone number in the datasheet; open Donations by
+Method and Year, then its SQL view, and run it; make a crosstab and a
+make-table query of your own (undo the table); open the Donor form — the
+Donations subform, the combo boxes on Donation Entry, the New donation
+button; run the New Donation macro from the navigation pane; open
+Donations by Donor, add a group level in Group, Sort and Total, export the
+PDF; print Donor Mailing Labels on a sheet of Avery 5160 (or plain paper
+held against one) and check the alignment; Export as XML a table and import
+it in Microsoft Access (External Data ▸ XML File) — the types, the key and
+the records come across.
+
 ## M78 Calc gates (D-087)
 
 After merging (lead): the full suite on qinda 267/267 at 3e00dd4; the

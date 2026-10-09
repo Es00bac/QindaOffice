@@ -75,11 +75,43 @@ bool renameIn(QVariantMap &def, const QString &kind, const QString &from, const 
             }
         }
         def.insert(QStringLiteral("tables"), tables);
-        if (same(def.value(QStringLiteral("appendTable")))) {
-            def.insert(QStringLiteral("appendTable"), to);
-            changed = true;
+        // M80: an append query's target and a make-table query's new table.
+        for (const QString &key : {QStringLiteral("appendTable"), QStringLiteral("makeTable")}) {
+            if (same(def.value(key))) {
+                def.insert(key, to);
+                changed = true;
+            }
         }
         return changed;
+    }
+    if (kind == QLatin1String("macro")) {
+        // M80: OpenTable names its table.
+        QVariantList actions = def.value(QStringLiteral("actions")).toList();
+        for (QVariant &a : actions) {
+            QVariantMap step = a.toMap();
+            QVariantMap arguments = step.value(QStringLiteral("arguments")).toMap();
+            if (same(arguments.value(QStringLiteral("table")))) {
+                arguments.insert(QStringLiteral("table"), to);
+                step.insert(QStringLiteral("arguments"), arguments);
+                a = step;
+                changed = true;
+            }
+        }
+        def.insert(QStringLiteral("actions"), actions);
+        return changed;
+    }
+    // M80: a form's subforms name their table.
+    QVariantList controls = def.value(QStringLiteral("controls")).toList();
+    for (QVariant &c : controls) {
+        QVariantMap control = c.toMap();
+        if (same(control.value(QStringLiteral("table")))) {
+            control.insert(QStringLiteral("table"), to);
+            c = control;
+            changed = true;
+        }
+    }
+    if (!controls.isEmpty()) {
+        def.insert(QStringLiteral("controls"), controls);
     }
     QVariantMap source = def.value(QStringLiteral("source")).toMap();
     if (source.value(QStringLiteral("kind")).toString() == QLatin1String("table") && same(source.value(QStringLiteral("name")))) {
@@ -106,7 +138,8 @@ QVariantMap SavedObject::toMap() const
 
 bool ObjectStore::validKind(const QString &kind)
 {
-    return kind == QLatin1String("query") || kind == QLatin1String("form") || kind == QLatin1String("report");
+    return kind == QLatin1String("query") || kind == QLatin1String("form") || kind == QLatin1String("report")
+           || kind == QLatin1String("macro"); // M80 (D-089, base_macro.h)
 }
 
 QList<SavedObject> ObjectStore::list(const BaseFile &file, const QString &kind)

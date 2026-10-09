@@ -4,10 +4,12 @@ import QtQuick
 import QindaTK as Tk
 
 // The property sheet of one field in the table designer: caption, rules
-// (required, default, unique, indexed), a lookup to another table, and the
-// relationship the field belongs to (the parent table, and what happens to
-// this record when its parent is deleted or renumbered). Edits go back to
-// the designer as `edited(key, value)` / `relationEdited(relationship)`.
+// (required, default, unique, indexed), validation (M80: Access's
+// Validation Rule and Validation Text, and its Input Mask with the
+// wizard's presets), a lookup to another table, and the relationship the
+// field belongs to (the parent table, and what happens to this record when
+// its parent is deleted or renumbered). Edits go back to the designer as
+// `edited(key, value)` / `relationEdited(relationship)`.
 Tk.Flex {
     id: sheet
 
@@ -16,6 +18,11 @@ Tk.Flex {
     property var relationship: null   // this field's relationship, or null
     property string tableName: ""
     readonly property var tables: base !== null ? base.tableNames : []
+    // Masks shape what is typed, so a field that takes no typing — or takes
+    // a related record's name — has none (base_rules.h validateRules).
+    readonly property bool maskable: ["text", "longText", "integer", "number", "currency", "date", "dateTime"]
+                                         .indexOf(field.type) >= 0 && !field.lookupTable
+    readonly property bool ruled: field.type !== "autoNumber" && field.type !== "file"
     readonly property var refActions: [
         { id: "noAction", label: qsTr("Refuse while related records exist") },
         { id: "cascade", label: qsTr("Delete the related records too") },
@@ -94,6 +101,57 @@ Tk.Flex {
         }
     }
 
+    Tk.SectionHeader { title: qsTr("Validation") }
+    Tk.PropertyRow {
+        label: qsTr("Validation rule")
+        hint: qsTr("Criteria every value must meet: > 0, Between 1 And 5, Like \"*@*.*\", <= Date()")
+        Tk.TextField {
+            objectName: "fieldValidationRule"
+            text: sheet.field.validationRule || ""
+            enabled: sheet.ruled
+            mono: true
+            placeholderText: "> 0"
+            onEditingFinished: if (text !== (sheet.field.validationRule || "")) sheet.edited("validationRule", text)
+        }
+    }
+    Tk.PropertyRow {
+        label: qsTr("Validation text")
+        hint: qsTr("The message shown when a value breaks the rule")
+        Tk.TextField {
+            objectName: "fieldValidationText"
+            text: sheet.field.validationText || ""
+            enabled: sheet.ruled
+            onEditingFinished: if (text !== (sheet.field.validationText || "")) sheet.edited("validationText", text)
+        }
+    }
+    Tk.PropertyRow {
+        visible: sheet.maskable
+        label: qsTr("Input mask")
+        hint: qsTr("0 digit · 9 optional digit · L letter · ? optional letter · A letter or digit · > upper case · ;0 keeps the literals")
+        Tk.Flex {
+            direction: Tk.Flex.Row
+            align: Tk.Flex.Center
+            gap: Tk.Theme.space.xs
+            Tk.TextField {
+                objectName: "fieldInputMask"
+                text: sheet.field.inputMask || ""
+                mono: true
+                placeholderText: "(999) 000-0000"
+                Tk.Flex.grow: 1
+                Tk.Flex.basis: 0
+                onEditingFinished: if (text !== (sheet.field.inputMask || "")) sheet.edited("inputMask", text)
+            }
+            Tk.IconButton {
+                id: presetButton
+                objectName: "fieldInputMaskPresets"
+                iconName: "wand-sparkles"
+                small: true
+                tooltip: qsTr("Input Mask Wizard: phone number, ZIP code, date…")
+                onClicked: presetMenu.popup(presetButton, 0, presetButton.height)
+            }
+        }
+    }
+
     Tk.SectionHeader { title: qsTr("Relationship") }
     Tk.PropertyRow {
         label: qsTr("Related table")
@@ -164,5 +222,19 @@ Tk.Flex {
             currentIndex: Math.max(0, model.indexOf(sheet.field.lookupDisplay || ""))
             onActivated: function(index) { sheet.edited("lookupDisplay", model[index]) }
         }
+    }
+
+    Tk.Menu {
+        id: presetMenu
+        Repeater {
+            model: sheet.base !== null ? sheet.base.inputMaskPresets : []
+            delegate: Tk.MenuItem {
+                required property var modelData
+                text: modelData.label + " · " + modelData.sample
+                onTriggered: sheet.edited("inputMask", modelData.mask)
+            }
+        }
+        Tk.MenuSeparator { }
+        Tk.MenuItem { text: qsTr("No input mask"); onTriggered: sheet.edited("inputMask", "") }
     }
 }

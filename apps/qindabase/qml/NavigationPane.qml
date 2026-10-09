@@ -3,8 +3,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QindaTK as Tk
 
-// The navigation pane: every table, query, form and report of the
-// database, grouped by kind, with search. Click selects (the ribbon's
+// The navigation pane: every table, query, form, report and (M80) macro of
+// the database, grouped by kind, with search. Click selects (the ribbon's
 // Open/Design/Rename/Delete act on the selection), double-click opens,
 // F2 renames in place, the context menu offers the rest.
 Item {
@@ -17,7 +17,8 @@ Item {
     property var collapsed: ({})
     readonly property var kinds: [
         { kind: "table", title: qsTr("Tables") }, { kind: "query", title: qsTr("Queries") },
-        { kind: "form", title: qsTr("Forms") }, { kind: "report", title: qsTr("Reports") }]
+        { kind: "form", title: qsTr("Forms") }, { kind: "report", title: qsTr("Reports") },
+        { kind: "macro", title: qsTr("Macros") }]
 
     function objectsOf(kind) {
         const all = base !== null ? base.objects : []
@@ -149,7 +150,11 @@ Item {
 
     Tk.Menu {
         id: objectMenu
-        Tk.MenuItem { text: qsTr("Open"); iconName: "external-link"; onTriggered: pane.window.trigger("baseOpenObjectAction") }
+        Tk.MenuItem {
+            text: pane.host.selectedKind === "macro" ? qsTr("Run") : qsTr("Open")
+            iconName: pane.host.selectedKind === "macro" ? "play" : "external-link"
+            onTriggered: pane.window.trigger("baseOpenObjectAction")
+        }
         Tk.MenuItem { text: qsTr("Design View"); iconName: "square-pen"; onTriggered: pane.window.trigger("baseViewDesignAction") }
         Tk.MenuSeparator { }
         Tk.MenuItem {
@@ -177,6 +182,8 @@ Item {
         Tk.MenuItem { text: qsTr("Query Design"); iconName: "funnel"; onTriggered: pane.window.trigger("baseQueryDesignAction") }
         Tk.MenuItem { text: qsTr("Form Wizard…"); iconName: "wand-sparkles"; onTriggered: pane.window.trigger("baseFormWizardAction") }
         Tk.MenuItem { text: qsTr("Report Wizard…"); iconName: "wand"; onTriggered: pane.window.trigger("baseReportWizardAction") }
+        Tk.MenuItem { text: qsTr("Labels…"); iconName: "tag"; onTriggered: pane.window.trigger("baseLabelsWizardAction") }
+        Tk.MenuItem { text: qsTr("Macro"); iconName: "workflow"; onTriggered: pane.window.trigger("baseNewMacroAction") }
         Tk.MenuSeparator { }
         Tk.MenuItem { text: qsTr("Import Text or CSV…"); iconName: "file-input"; onTriggered: pane.window.trigger("baseImportCsvAction") }
     }

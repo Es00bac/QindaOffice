@@ -19,5 +19,9 @@ namespace QindaOffice::Apps::Base {
 // `error` when the design no longer fits or the file cannot be written.
 bool writeDesignFile(const QString &path, const QVariantMap &design, QindaTK::LocalDatabaseProvider *provider,
                      QString *error);
+// M80: `design` without `fields` in its binding and form layout — a form
+// saved before its lookups left the designer's mirror (base_snapshot.h)
+// still opens with its labels and order (base_service_form_controls.cpp).
+[[nodiscard]] QVariantMap designWithoutFields(const QVariantMap &design, const QStringList &fields);
 
 } // namespace QindaOffice::Apps::Base

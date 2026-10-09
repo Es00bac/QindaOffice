@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// BaseService: CSV/XLSX export, compact & repair, integrity, backups.
+// BaseService: CSV, XLSX and (M80) Access XML export, compact & repair,
+// integrity, backups.
 // Importing is base_service_import.cpp; file fields base_service_files.cpp.
 #include "base_csv.h"
 #include "base_document.h"
 #include "base_objects.h"
+#include "base_schema.h"
 #include "base_service.h"
 #include "base_xlsx_export.h"
+#include "base_xml_export.h"
 
+#include <QDir>
 #include <QFileInfo>
 #include <QUndoStack>
 
@@ -62,6 +66,19 @@ QVariantMap BaseService::exportObject(const QString &kind, const QString &name, 
     Engine::Result r;
     if (format == QLatin1String("xlsx")) {
         r = writeXlsx(path, name, columns, rows, f->currency());
+    } else if (format == QLatin1String("xml")) {
+        // M80 (D-089 §8): Access's XML pair — the data file and its schema
+        // beside it, named alike (base_xml_export.h).
+        const QFileInfo target(path);
+        const QString schemaName = target.completeBaseName() + QStringLiteral(".xsd");
+        const std::optional<Engine::TableDef> design =
+            kind == QLatin1String("table") ? Engine::readTable(*f, name) : std::nullopt;
+        const Engine::AccessXml xml =
+            Engine::accessXml(name, columns, rows, f->currency(), design ? &*design : nullptr, schemaName);
+        r = Engine::writeFileAtomically(path, xml.data);
+        if (r.ok) {
+            r = Engine::writeFileAtomically(target.dir().filePath(schemaName), xml.schema);
+        }
     } else {
         r = Engine::writeFileAtomically(path, Engine::csvBytes(header, textRows));
     }

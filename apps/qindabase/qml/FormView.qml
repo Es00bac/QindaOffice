@@ -11,7 +11,10 @@ import QindaTK as Tk
 // designer shows the engine's refusals as its validation messages. File
 // fields (M65) are not in the designer's mirror: each shows as a
 // FileFieldPanel under the form, and the File commands act on the one
-// last used (the first by default).
+// last used (the first by default). M80 (D-089 §4): lookup fields are
+// combo or list boxes above the designer (FormLookups.qml), command buttons
+// and subforms sit under the record (FormControls.qml), and a macro's
+// ApplyFilter narrows the records the navigator walks.
 Item {
     id: view
 
@@ -31,6 +34,12 @@ Item {
     property var fileFields: []      // the table's file fields [{name, caption}]
     property string fileField: ""    // the one the File commands act on
     property var fileHas: ({})       // file field → holds a file (the panels report it)
+    property var lookups: []         // M80: [{name, label, control, hidden, required, related}]
+    property var lookupChoices: ({}) // field → [{value, text}]
+    property var lookupValues: ({})  // the record's stored keys
+    property var pendingLookups: ({})// a new record's choices, saved with it
+    property var controls: []        // M80: subforms and buttons (base_form_controls.h)
+    property string filter: ""       // M80: ApplyFilter's where condition
     readonly property var fileTarget: fileField.length === 0 || position < 0 ? ({})
         : { table: table, rowid: Number(rowIds[position]), field: fileField, hasFile: fileHas[fileField] === true }
     onFileTargetChanged: if (window !== null && visible) window.baseHost.fileTarget = fileTarget
@@ -50,9 +59,79 @@ Item {
         fileFields = base.tableFields(table).filter(function(f) { return f.type === "file" })
         fileField = fileFields.length > 0 ? fileFields[0].name : ""
         designer.mode = mode === "design" ? "design" : "edit"
+        filter = ""
+        loadControls()
         reloadRows(0)
         syncHost()
         return true
+    }
+    function loadControls() {
+        const c = base.formControls(formName)
+        lookups = c.ok ? c.lookups : []
+        controls = c.ok ? c.controls : []
+        const choices = ({})
+        for (const l of lookups) choices[l.name] = base.lookupChoices(table, l.name)
+        lookupChoices = choices
+    }
+    function saveControls(nextControls, nextLookups) {
+        const r = base.saveFormControls(formName, nextControls, nextLookups)
+        if (!r.ok) { window.notify(qsTr("Form not changed"), r.error, "danger"); return false }
+        loadControls()
+        goTo(position)
+        return true
+    }
+    function addControl(control) { return saveControls(controls.concat([control]), lookups) }
+    function removeControl(id) { return saveControls(controls.filter(function(c) { return c.id !== id }), lookups) }
+    function setLookupControl(name, control, hidden) {
+        saveControls(controls, lookups.map(function(l) {
+            return l.name === name ? Object.assign({}, l, { control: control, hidden: hidden }) : l
+        }))
+    }
+    function lookupValue(name) { return position < 0 ? pendingLookups[name] : lookupValues[name] }
+    function setLookup(name, value) {
+        if (designing) return
+        if (position < 0) {
+            const next = Object.assign({}, pendingLookups)
+            next[name] = value
+            pendingLookups = next
+            return
+        }
+        const changes = ({})
+        changes[name] = value === null || value === undefined ? "" : value
+        const r = base.saveFormRecord(table, Number(rowIds[position]), changes)
+        if (!r.ok) { window.notify(qsTr("Not saved"), r.error, "warning"); return }
+        goTo(position)
+    }
+    function runButton(control) {
+        if (control.macro) window.commands.macroRunner.runNamed(control.macro)
+        else window.commands.macroRunner.run(control.actions || [], control.caption)
+    }
+    // A macro's ApplyFilter / ShowAllRecords: {ok, error}.
+    function applyFilter(where) {
+        if (where.trim().length === 0) { filter = ""; reloadRows(0); return { ok: true } }
+        const r = base.whereRowIds(table, where)
+        if (!r.ok) return r
+        filter = where
+        rowIds = r.rowIds
+        goTo(rowIds.length > 0 ? 0 : -1)
+        return { ok: true }
+    }
+    function goToRecord(which) {
+        if (designing) return
+        const last = rowIds.length - 1
+        if (which === "new") newRecord()
+        else if (which === "first") goTo(rowIds.length ? 0 : -1)
+        else if (which === "last") goTo(last)
+        else if (which === "next") goTo(Math.min(last, position + 1))
+        else goTo(Math.max(0, position - 1))
+    }
+    function openSubforms(record) {
+        const subforms = controls.filter(function(c) { return c.kind === "subform" })
+        for (let i = 0; i < subforms.length; ++i) {
+            const link = subforms[i].linkParent
+            const key = position < 0 ? null : (record[link] !== undefined ? record[link] : lookupValues[link])
+            base.subformSheet(i).openLinked(subforms[i].table, subforms[i].linkChild, key === undefined ? null : key)
+        }
     }
     function closeSession() {
         if (session !== null) manager.closeDocument(session.documentId, Tk.DocumentManager.Discard)
@@ -70,7 +149,8 @@ Item {
     onVisibleChanged: if (visible) { syncHost(); if (table.length) reloadRows(position); window.baseHost.fileTarget = fileTarget }
 
     function reloadRows(at) {
-        rowIds = base.formRowIds(table)
+        const filtered = filter.length > 0 ? base.whereRowIds(table, filter) : null
+        rowIds = filtered !== null && filtered.ok ? filtered.rowIds : base.formRowIds(table)
         goTo(rowIds.length === 0 ? -1 : Math.max(0, Math.min(at, rowIds.length - 1)))
     }
     function goTo(index) {
@@ -78,10 +158,23 @@ Item {
         const r = base.formRecord(table, index >= 0 ? Number(rowIds[index]) : 0)
         designer.recordId = r.recordId || ""
         designer.record = r.record || ({})
+        lookupValues = r.lookups || ({})
+        pendingLookups = ({})
+        openSubforms(r.record || ({}))
     }
     function newRecord() { if (!designing) goTo(-1) }
-    function refresh() { reloadRows(position) }
-    function saveRecord() { if (designer.mode === "edit") designer.requestRecordSave() }
+    function refresh() { loadControls(); reloadRows(position) }
+    function saveRecord() {
+        if (designer.mode !== "edit") return
+        const requested = designer.requestRecordSave()
+        // Only the lookups were chosen: the designer has nothing to send.
+        if (!requested && position < 0 && designer.requestState === "idle" && Object.keys(pendingLookups).length > 0) {
+            const r = base.saveFormRecord(table, 0, pendingLookups)
+            if (!r.ok) { window.notify(qsTr("Record not saved"), r.error, "warning"); return }
+            rowIds = base.formRowIds(table)
+            goTo(Math.max(0, rowIds.map(Number).indexOf(Number(r.rowid))))
+        }
+    }
     function deleteRecord() {
         if (position < 0) { goTo(rowIds.length ? 0 : -1); return }
         window.confirmDialog.ask(qsTr("Delete this record?"), qsTr("Undo brings it back."), "danger", qsTr("Delete"), function() {
@@ -135,6 +228,15 @@ Item {
                     variant: "warning"
                     text: qsTr("layout not saved")
                 }
+                Tk.Chip {
+                    objectName: "formFilter"
+                    visible: view.filter.length > 0
+                    small: true
+                    iconName: "funnel"
+                    text: qsTr("Filtered: %1").arg(view.filter)
+                    tooltip: qsTr("Show all records")
+                    onClicked: view.applyFilter("")
+                }
             }
         }
         Tk.Notice { visible: view.notice.length > 0; variant: "warning"; text: view.notice; dismissible: true; onDismissed: view.notice = "" }
@@ -151,25 +253,50 @@ Item {
                 Tk.Card {
                     width: Math.min(body.width - Tk.Theme.space.lg * 2, Tk.Theme.size.fieldWidth * 4)
                     padding: Tk.Theme.space.lg
-                    Tk.FormDesigner {
-                        id: designer
-                        objectName: "baseFormDesigner"
-                        provider: mirror
-                        designDocument: view.designDocument
-                        tableName: view.table
-                        tooltip: view.title
-                        onRecordSaveRequested: function(requestId, tableName, recordId, changes) {
-                            const r = view.base.saveFormRecord(tableName, Number(recordId) || 0, changes)
-                            designer.acknowledge(requestId, r.ok ? "accepted" : "rejected", r.ok ? qsTr("Saved") : r.error)
-                            if (r.ok) {
-                                view.rowIds = view.base.formRowIds(view.table)
-                                view.goTo(Math.max(0, view.rowIds.map(Number).indexOf(Number(r.rowid))))
+                    Tk.Flex {
+                        direction: Tk.Flex.Column
+                        gap: Tk.Theme.space.md
+                        FormLookups {
+                            objectName: "formLookups"
+                            visible: view.lookups.length > 0
+                            view: view
+                        }
+                        Tk.FormDesigner {
+                            id: designer
+                            objectName: "baseFormDesigner"
+                            provider: mirror
+                            designDocument: view.designDocument
+                            tableName: view.table
+                            tooltip: view.title
+                            onRecordSaveRequested: function(requestId, tableName, recordId, changes) {
+                                // A new record takes its lookup choices along.
+                                const all = Object.assign({}, recordId ? ({}) : view.pendingLookups, changes)
+                                const r = view.base.saveFormRecord(tableName, Number(recordId) || 0, all)
+                                designer.acknowledge(requestId, r.ok ? "accepted" : "rejected", r.ok ? qsTr("Saved") : r.error)
+                                if (r.ok) {
+                                    view.rowIds = view.base.formRowIds(view.table)
+                                    view.goTo(Math.max(0, view.rowIds.map(Number).indexOf(Number(r.rowid))))
+                                }
+                            }
+                            onDesignSaveRequested: function(requestId, design) {
+                                const ok = view.save()
+                                designer.acknowledge(requestId, ok ? "accepted" : "rejected", ok ? qsTr("Layout saved") : qsTr("Not saved"))
                             }
                         }
-                        onDesignSaveRequested: function(requestId, design) {
-                            const ok = view.save()
-                            designer.acknowledge(requestId, ok ? "accepted" : "rejected", ok ? qsTr("Layout saved") : qsTr("Not saved"))
-                        }
+                    }
+                }
+                // A plain Item gives the controls the card's width (Tk.Flex
+                // sizes its children by their implicit size).
+                Item {
+                    objectName: "formControlsHost"
+                    visible: view.controls.length > 0
+                    implicitWidth: Math.min(body.width - Tk.Theme.space.lg * 2, Tk.Theme.size.fieldWidth * 4)
+                    implicitHeight: formControls.implicitHeight
+                    FormControls {
+                        id: formControls
+                        objectName: "formControls"
+                        width: parent.width
+                        view: view
                     }
                 }
                 Tk.Flex {

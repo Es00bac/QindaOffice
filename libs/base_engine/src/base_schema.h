@@ -50,6 +50,12 @@ struct FieldDef {
     QString caption;
     QString description;
     LookupDef lookup;
+    // M80 (D-089, base_rules.h, base_input_mask.h): Access's Validation
+    // Rule (criteria text, "> 0"), Validation Text (the message) and Input
+    // Mask, kept in qb_fields.
+    QString validationRule;
+    QString validationText;
+    QString inputMask;
 
     [[nodiscard]] QVariantMap toMap() const;
     static FieldDef fromMap(const QVariantMap &map);
@@ -79,6 +85,11 @@ struct TableDef {
     bool autoIncrement = false;
     bool withoutRowid = false;
     bool complexKeys = false;          // a multi-column foreign key QindaBase cannot redesign
+    // M80: the table's record rule ("[ends] >= [starts]") and its message,
+    // and the names of the triggers that enforce the rules now (base_rules.h).
+    QString validationRule;
+    QString validationText;
+    QStringList ruleTriggers;
 
     [[nodiscard]] int fieldIndex(const QString &name) const;
     [[nodiscard]] const FieldDef *field(const QString &name) const;

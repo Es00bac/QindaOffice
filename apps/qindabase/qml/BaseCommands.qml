@@ -15,6 +15,8 @@ QtObject {
     property var window: null
     readonly property var host: window !== null ? window.baseHost : null
     readonly property var base: window !== null ? window.base : null
+    // M80: runs macros and form buttons through the commands below.
+    property MacroRunner macroRunner: MacroRunner { window: commands.window }
 
     // The designer shown now (it has save(), discard(), undo(), redo()).
     function activeDesigner() {
@@ -23,6 +25,7 @@ QtObject {
         case "queryDesign": return window.queryDesignView
         case "form": return window.formView
         case "report": return window.reportView
+        case "macroDesign": return window.macroDesignView
         }
         return null
     }
@@ -33,10 +36,12 @@ QtObject {
         host.currentName = name || ""
         host.currentView = view
         // A designer brings its contextual tab forward; leaving it returns Home.
-        const context = ({ tableDesign: "tableDesign", queryDesign: "queryDesign", form: "formDesign", report: "formDesign" })[view]
+        const context = ({ tableDesign: "tableDesign", queryDesign: "queryDesign", form: "formDesign", report: "formDesign",
+                           macroDesign: "macroDesign" })[view]
         if (window.ribbon !== null) {
             if (context) window.ribbon.currentTabId = context
-            else if (["tableDesign", "queryDesign", "formDesign"].indexOf(window.ribbon.currentTabId) >= 0) window.ribbon.currentTabId = "home"
+            else if (["tableDesign", "queryDesign", "formDesign", "macroDesign"].indexOf(window.ribbon.currentTabId) >= 0)
+                window.ribbon.currentTabId = "home"
         }
     }
 
@@ -64,9 +69,9 @@ QtObject {
             } else if (kind === "form") {
                 if (window.formView.open(name, "edit")) show("form", kind, name)
             } else if (kind === "report") {
-                withParameters(base.reportParameters(name), function(values) {
-                    if (window.reportView.open(name, values, false)) show("report", kind, name)
-                })
+                openReportFor(name, "preview", null, null)
+            } else if (kind === "macro") {
+                macroRunner.runNamed(name) // M80: Open on a macro runs it, as in Access
             }
         })
     }
@@ -85,12 +90,71 @@ QtObject {
                 if (window.formView.open(name, "design")) show("form", kind, name)
                 host.designHistory = true
             } else if (kind === "report") {
+                if (base.reportInfo(name).type === "labels") { openReportFor(name, "preview", null, null); return }
                 withParameters(base.reportParameters(name), function(values) {
                     if (window.reportView.open(name, values, true)) show("report", kind, name)
                     host.designHistory = true
                 })
+            } else if (kind === "macro") {
+                window.macroDesignView.load(base.macroDesign(name))
+                show("macroDesign", kind, name)
+                host.designHistory = true
             }
         })
+    }
+
+    // ---- M80: what macros and form buttons do (MacroRunner.qml) ----
+    // Each calls done() when it has done its part, or failed(problem).
+    function openFormFor(name, where, dataMode, done, failed) {
+        leave(function() {
+            if (!window.formView.open(name, "edit")) { if (failed) failed(qsTr("The form %1 did not open.").arg(name)); return }
+            show("form", "form", name)
+            if (where.length > 0) {
+                const r = window.formView.applyFilter(where)
+                if (!r.ok) { if (failed) failed(r.error); return }
+            }
+            if (dataMode === "add") window.formView.newRecord()
+            if (done) done()
+        })
+    }
+    function openReportFor(name, view, done, failed) {
+        leave(function() {
+            const labels = base.reportInfo(name).type === "labels"
+            withParameters(base.reportParameters(name), function(values) {
+                const shown = labels ? window.reportView.openLabels(name, values) : window.reportView.open(name, values, false)
+                if (!shown) { if (failed) failed(qsTr("The report %1 did not open.").arg(name)); return }
+                show("report", "report", name)
+                if (view === "print") window.trigger("filePrintAction")
+                if (done) done()
+            })
+        })
+    }
+    function openTableFor(name, done, failed) {
+        leave(function() {
+            if (!base.datasheet.openTable(name)) { if (failed) failed(base.datasheet.error); return }
+            show("datasheet", "table", name)
+            if (done) done()
+        })
+    }
+    function applyFilter(where) {
+        if (host.currentView === "form") return window.formView.applyFilter(where)
+        if (host.currentView === "datasheet" && base.datasheet.sourceKind === "table") {
+            if (where.length === 0) { base.datasheet.clearFilters(); return { ok: true } }
+            return base.datasheet.applyWhere(where)
+        }
+        return { ok: false, error: qsTr("Open a form or a table first; the filter applies to it.") }
+    }
+    function goToRecord(which) {
+        if (host.currentView === "form") window.formView.goToRecord(which)
+        else if (host.currentView === "datasheet") window.datasheetView.goToRecord(which)
+    }
+    function findRecord(text) {
+        if (host.currentView !== "datasheet") return { ok: false, error: qsTr("FindRecord searches an open table or query.") }
+        window.datasheetView.findText(text)
+        return { ok: true }
+    }
+    function closeObject(done) {
+        leave(function() { show("start", "", ""); if (done) done() })
     }
 
     // Asks for parameter values first when there are any.
@@ -100,26 +164,46 @@ QtObject {
     }
 
     // A saved query (design empty) or a designer's draft (name may be "").
-    function runQuery(name, design, values) {
+    // `done`/`failed` (M80, a macro's OpenQuery) follow it to its end.
+    function runQuery(name, design, values, done, failed) {
         const result = base.runQuery(name, design, values)
         if (result.needsParameters) {
-            withParameters(result.parameters, function(v) { runQuery(name, design, v) })
+            withParameters(result.parameters, function(v) { runQuery(name, design, v, done, failed) })
             return
         }
-        if (!result.ok) { window.notify(qsTr("The query did not run"), result.error, "danger"); return }
+        if (!result.ok) {
+            window.notify(qsTr("The query did not run"), result.error, "danger")
+            if (failed) failed(result.error)
+            return
+        }
         if (!result.action) {
             show("datasheet", "query", name)
+            if (done) done()
             return
         }
         const source = Object.keys(design).length ? design : base.queryDesign(name)
+        if (result.makeTable) {
+            // M80: a make-table query shows its plan; Apply is one undo step.
+            window.planDialog.show(result.plan, function() {
+                const made = base.runMakeTable(source, values)
+                if (!made.ok) { window.notify(qsTr("No table made"), made.error, "danger"); if (failed) failed(made.error); return }
+                if (done) done()
+            })
+            return
+        }
         const verb = ({ UPDATE: qsTr("change"), DELETE: qsTr("delete"), INSERT: qsTr("add") })[result.keyword] || qsTr("change")
         window.confirmDialog.ask(qsTr("Run %1?").arg(name || qsTr("this action query")),
                                  qsTr("This query will %1 %n record(s). Undo can reverse it afterwards.", "", result.affected).arg(verb),
                                  result.keyword === "DELETE" ? "danger" : "warning",
                                  qsTr("Run"), function() {
-            const done = base.runAction(source, values, result.affected)
-            if (!done.ok) window.notify(qsTr("Nothing was changed"), done.error, "danger")
-            else window.datasheetView.refresh()
+            const ran = base.runAction(source, values, result.affected)
+            if (!ran.ok) {
+                window.notify(qsTr("Nothing was changed"), ran.error, "danger")
+                if (failed) failed(ran.error)
+                return
+            }
+            window.datasheetView.refresh()
+            if (done) done()
         })
     }
 
@@ -155,8 +239,9 @@ QtObject {
         const kind = host.currentView === "datasheet" ? base.datasheet.sourceKind : host.selectedKind
         const name = host.currentView === "datasheet" ? base.datasheet.sourceName : host.selectedName
         if (!name) return
-        const filters = format === "xlsx" ? [qsTr("Excel workbook (*.xlsx)")] : [qsTr("CSV (*.csv)")]
-        window.exportDialog.ask(filters, name + (format === "xlsx" ? ".xlsx" : ".csv"), function(url) {
+        const filters = format === "xlsx" ? [qsTr("Excel workbook (*.xlsx)")]
+                      : format === "xml" ? [qsTr("XML data for Access (*.xml)")] : [qsTr("CSV (*.csv)")]
+        window.exportDialog.ask(filters, name + "." + format, function(url) {
             const r = base.exportObject(kind, name, url, format)
             if (!r.ok) window.notify(qsTr("Not exported"), r.error, "danger")
         })
@@ -279,6 +364,18 @@ QtObject {
             break
         case "baseExportCsvAction": exportData("csv"); break
         case "baseExportXlsxAction": exportData("xlsx"); break
+        case "baseExportXmlAction": exportData("xml"); break
+        case "baseNewMacroAction":
+            leave(function() {
+                window.macroDesignView.load(base.newMacroDesign())
+                show("macroDesign", "macro", "")
+                host.designHistory = true
+            })
+            break
+        case "baseLabelsWizardAction": window.labelWizard.openFor(sel.kind, sel.name); break
+        case "baseFormAddSubformAction": window.formControlDialog.openFor("subform", window.formView); break
+        case "baseFormAddButtonAction": window.formControlDialog.openFor("button", window.formView); break
+        case "baseReportGroupSortAction": window.reportView.toggleGroupSort(); break
         case "baseExportPdfAction":
             window.exportDialog.ask([qsTr("PDF (*.pdf)")], (host.currentName || qsTr("Report")) + ".pdf", function(url) {
                 const r = host.exportReportPdf(url)
@@ -310,6 +407,7 @@ QtObject {
         default:
             if (id.indexOf("baseDesign") === 0) window.tableDesignView.command(id)
             else if (id.indexOf("baseQuery") === 0) window.queryDesignView.command(id)
+            else if (id.indexOf("baseMacro") === 0) window.macroDesignView.command(id)
             else if (id === "baseFormPreviewAction") window.formView.togglePreview()
             else if (id === "baseReportRefreshAction") window.reportView.rebuild()
         }

@@ -4,9 +4,13 @@ import QtQuick
 import QindaTK as Tk
 
 // One column of the query design grid, top to bottom: field (or an
-// expression), output name, total, sort, show, criteria, or — and "Update
-// to" / "Append to" for action queries. Rows line up with the grid's label
-// column through the shared `rowHeight`.
+// expression), output name, total, crosstab role (M80), sort, show,
+// criteria, or — and "Update to" / "Append to" for action queries. Rows
+// line up with the grid's label column (QueryDesignView.rowLabels) through
+// the shared `rowHeight`; the two must show the same rows.
+//
+// AGENT-GUARD: a row's visibility here and its label in rowLabels use the
+// same conditions; one without the other shifts every row below it.
 Tk.Box {
     id: column
 
@@ -21,6 +25,9 @@ Tk.Box {
     readonly property bool expression: (spec.expression || "").length > 0
     readonly property string fieldKey: spec.field ? ((spec.table ? spec.table + "." : "") + spec.field) : ""
     readonly property var totalIds: ["groupBy", "sum", "average", "count", "min", "max", "where", "expression"]
+    readonly property var crosstabIds: ["row", "column", "value", ""]
+    readonly property bool selectLike: kind === "select" || kind === "makeTable"
+    readonly property bool crosstab: kind === "crosstab"
     signal edited(var patch)
     signal removed()
 
@@ -72,7 +79,8 @@ Tk.Box {
             onEditingFinished: if (text !== (column.spec.alias || "")) column.edited({ alias: text })
         }
         Tk.ComboBox {
-            visible: column.totals && column.kind === "select"
+            objectName: "queryTotal_" + column.columnIndex
+            visible: (column.totals && column.selectLike) || column.crosstab
             Tk.Flex.basis: column.rowHeight
             Tk.Flex.shrink: 0
             small: true
@@ -82,7 +90,18 @@ Tk.Box {
             onActivated: function(i) { column.edited({ total: column.totalIds[i] }) }
         }
         Tk.ComboBox {
-            visible: column.kind === "select"
+            objectName: "queryCrosstab_" + column.columnIndex
+            visible: column.crosstab
+            Tk.Flex.basis: column.rowHeight
+            Tk.Flex.shrink: 0
+            small: true
+            model: [qsTr("Row Heading"), qsTr("Column Heading"), qsTr("Value"), qsTr("(not shown)")]
+            currentIndex: Math.max(0, column.crosstabIds.indexOf(column.spec.crosstab || ""))
+            tooltip: qsTr("Crosstab: down the side, across the top, or the totals in the cells")
+            onActivated: function(i) { column.edited({ crosstab: column.crosstabIds[i] }) }
+        }
+        Tk.ComboBox {
+            visible: column.selectLike || column.crosstab
             Tk.Flex.basis: column.rowHeight
             Tk.Flex.shrink: 0
             small: true
@@ -92,7 +111,7 @@ Tk.Box {
             onActivated: function(i) { column.edited({ sort: i === 1 ? 1 : i === 2 ? -1 : 0 }) }
         }
         Item {
-            visible: column.kind === "select"
+            visible: column.selectLike
             Tk.Flex.basis: column.rowHeight
             Tk.Flex.shrink: 0
             width: parent.width

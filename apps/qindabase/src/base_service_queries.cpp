@@ -86,7 +86,12 @@ QVariantMap BaseService::compileQuery(const QVariantMap &design) const
             {QStringLiteral("error"), c.error},
             {QStringLiteral("sql"), c.sql},
             {QStringLiteral("action"), c.action},
-            {QStringLiteral("parameters"), parameterList(c.parameters)}};
+            {QStringLiteral("parameters"), parameterList(c.parameters)},
+            // M80: a crosstab's headings (every row's, before parameters)
+            // and a make-table query's new table.
+            {QStringLiteral("crosstab"), c.crosstab},
+            {QStringLiteral("headings"), c.headings},
+            {QStringLiteral("makeTable"), c.makeTable}};
 }
 
 QVariantMap BaseService::saveQuery(const QString &name, const QVariantMap &design)
@@ -147,6 +152,24 @@ QVariantMap BaseService::runQuery(const QString &name, const QVariantMap &design
         return {{QStringLiteral("ok"), false},
                 {QStringLiteral("needsParameters"), true},
                 {QStringLiteral("parameters"), parameterList(c.parameters)}};
+    }
+    if (!c.makeTable.isEmpty()) {
+        // M80: a make-table query is a schema step, shown as its plan first.
+        return makeTablePlan(Engine::QueryDesign::fromMap(source), parameters);
+    }
+    if (c.crosstab && !parameters.isEmpty()) {
+        // M80: a crosstab's columns are the headings of the rows these
+        // values select, so it compiles again with them.
+        const Engine::CompiledQuery bound = Engine::compileQuery(*f, Engine::QueryDesign::fromMap(source), parameters);
+        if (!bound.ok) {
+            return failed(bound.error);
+        }
+        if (!m_datasheet->showQuery(name.isEmpty() ? tr("Query") : name, bound.sql, bound.parameters, parameters,
+                                    bound.columns)) {
+            return failed(m_datasheet->error());
+        }
+        return {{QStringLiteral("ok"), true}, {QStringLiteral("action"), false},
+                {QStringLiteral("rows"), m_datasheet->recordCount()}, {QStringLiteral("sql"), bound.sql}};
     }
     if (c.action) {
         qint64 affected = 0;

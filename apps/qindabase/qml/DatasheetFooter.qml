@@ -119,9 +119,14 @@ Tk.Flex {
                 Tk.Flex.basis: 0
             }
             Tk.Caption {
-                visible: footer.grid !== null && footer.grid.activeColumnId.length > 0 && footer.sheet !== null
-                text: footer.sheet !== null && footer.grid.activeColumnId.length > 0
-                      ? (footer.sheet.columns.find(function(c) { return c.name === footer.grid.activeColumnId }) || { typeLabel: "" }).typeLabel : ""
+                // The field's type, and (M80) the shape its input mask asks
+                // for and the rule it must meet.
+                readonly property var column: footer.sheet !== null && footer.grid !== null && footer.grid.activeColumnId.length > 0
+                    ? (footer.sheet.columns.find(function(c) { return c.name === footer.grid.activeColumnId }) || ({})) : ({})
+                objectName: "datasheetFieldInfo"
+                visible: !!column.typeLabel
+                text: [column.typeLabel || "", column.maskHint || "", column.validationRule ? qsTr("rule %1").arg(column.validationRule) : ""]
+                      .filter(function(part) { return part.length > 0 }).join(" · ")
                 Tk.Flex.shrink: 0
             }
         }

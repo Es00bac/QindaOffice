@@ -65,7 +65,8 @@ locally, contents never copied anywhere):
   D-088; the survey below.)*
 - **QindaBase**: SQLite `.qbase`; Access import via mdb-tools (tables
   only); no attachment/picture fields; no Excel import. *(M65: closed —
-  D-074.)*
+  D-074. M80: Access's queries, forms and reports — D-089; the survey
+  below.)*
 - **QindaBooks**: no QuickBooks migration (IIF/QBO/Excel import); File ▸
   Import Lists silently fails (`"customer"` vs `customers`); company logo,
   statements, recurring-invoice setup, budgets and sales-tax payments are in
@@ -140,6 +141,60 @@ and cost resources keep their amounts both ways.
     and cash-flow reports.
 12. `.mpp` reading (only through Java's MPXJ, see above).
 
+## QindaBase against Microsoft Access (survey of 2026-10-09, M80)
+
+Measured against Access's everyday features area by area: what QindaBase
+had before M80, what M80 closed (D-089), and what is still missing. The
+ranked list at the end is the order the remaining gaps should be closed in.
+
+| Area | Before M80 | M80 closed | Still missing |
+| --- | --- | --- | --- |
+| Tables: types | AutoNumber, Short and Long Text, Whole and Decimal number, Currency (exact minor units), Yes/No, Date, Date & Time, File (one file or picture, M65) | — | Hyperlink, Large Number, Date/Time Extended, rich-text Long Text, field sizes (Byte, Integer, Single), the Format property, attachments holding several files, multi-valued fields |
+| Tables: validation | Required, indexed / unique, typed input with the field named | **Validation Rule and Validation Text** per field and per record, enforced by triggers for every SQLite writer, refused while records break them; **Test Validation Rules** | Allow Zero Length; rules that look into other tables (DLookup) |
+| Tables: input masks | — | **Input Mask** in Access's syntax (three sections, `!`, `>`/`<`, `\x`, `"text"`, Password) with the wizard's presets, where people type; shown back through the mask | the wizard's Edit List (presets of one's own) |
+| Tables: lookups | a lookup to another table's field (names shown and accepted) | lookups as **combo or list boxes** on forms | Value List lookups; several display columns; Limit To List off |
+| Tables: calculated fields, indexes | single-field indexes; multi-field indexes kept from imports | — | the Calculated type; the Indexes dialog (multi-field, Ignore Nulls) |
+| Relationships, integrity | the Relationships window; enforced keys with cascade delete, set null or refuse, cascade updates | — | the relationship report; a join type stored with a relationship |
+| Queries: select, joins, totals | the grid with inner / left / right joins, totals (Group By … Where, Expression), criteria and Or rows, expressions, sorting, Top n | **Top n percent** and **Unique Values** in the header | Unique Records as its own switch; self-joins in the grid; subqueries in criteria |
+| Queries: crosstab | — | **Crosstab** (Row Headings, a Column Heading, a Value; row summaries, fixed Column Headings, criteria before the pivot, parameters) | the Crosstab Query Wizard |
+| Queries: parameters | `[prompts]`, typed by the field they meet | **Query Parameters** (declared prompts, types and order) | — |
+| Queries: action | update, delete, append — counted first, one undo step | **Make-table** (its plan shown, a backup when it replaces a table, one undo step) | appending fixed values (`INSERT … VALUES`) from the grid |
+| Queries: SQL view | the compiled SQLite text; hand-written SQLite queries | **Access SQL both ways** (PARAMETERS, TRANSFORM … PIVOT, SELECT … INTO, INSERT INTO … SELECT, UPDATE, DELETE, TOP … PERCENT); what the grid cannot hold is said and can be kept as SQLite SQL | union, pass-through and data-definition queries as kinds of their own |
+| Queries: wizards | — | — | Find Duplicates, Find Unmatched |
+| Forms: fields and records | single-record forms on QindaTK's FormDesigner (labels, order, shown), navigation, the form wizard, file fields beside | lookups as **combo or list boxes** | the Format property, tab order, conditional formatting, the layout itself (columns, sizes), continuous and split forms |
+| Forms: subforms | — | **Subforms** from a relationship (an editable datasheet; new records join the parent) | nested subforms; links over several fields |
+| Forms: buttons, events, tab controls | — | **Command buttons** (On Click) running a macro or one action | form and control events (On Current, Before / After Update, On Open), tab controls, calculated text boxes |
+| Macros | — | **Macros without VBA**: OpenForm (where, add), OpenReport (preview, print), OpenQuery, OpenTable, ApplyFilter, ShowAllRecords, GoToRecord, SaveRecord, Requery, FindRecord, CloseWindow, MessageBox, RunMacro, StopMacro; checked before they run | If / Else, submacros, TempVars, error handling, data macros (table events), AutoExec, SetValue and RunSQL |
+| Reports: grouping and totals | one group level with a total in QindaTK's designer; double-precision totals | **Group, Sort and Total**: three levels with their totals, four sort keys, the report's totals; **every total computed by the engine, exact to the cent** | more than three levels (the toolkit design's limit), grouping on intervals (month, quarter, first letter), Keep Together, running sums, percentages of the total |
+| Reports: headers, footers, preview, PDF | report and page headers and footers with page numbers, preview, print, PDF | the report's own paper and orientation from the first printed page | per-group header text, fields in the page bands, subreports |
+| Reports: labels | — | **Mailing labels** on 21 Avery US Letter and A4 sheets (the Label Wizard: prototype lines, sort, labels already used, copies, text size); preview, print and PDF from one painter | custom label sizes; a font per line |
+| Import, export | CSV and Excel (typed) both ways; the Access import with design, relationships and select queries (M65) | **XML export in Access's ExportXML shape** (the data and its annotated schema, which Access imports with structure) | XML import; linked tables (ODBC); HTML and Word-merge export; saved import/export specifications |
+| Compact & Repair | Compact and Repair (`VACUUM` and an integrity check), backups, the integrity check when a file opens | — | — |
+
+**Writing `.accdb`: not feasible, said plainly.** No open-source library
+writes Access's ACE files: mdb-tools reads `.mdb` and `.accdb` but writes
+nothing, and Jackcess (which can write) is Java — the route D-074 already
+kept out. So records go to Access as Excel, CSV and, since M80, Access's own
+XML (External Data ▸ XML File in Access imports the structure with the
+data), and Access databases come in through the mdb-tools import.
+
+**Ranked: what is left after M80.**
+
+1. Form and control events, and conditions in macros (If, On Current,
+   Before Update) — forms that react without a button.
+2. Tab controls, calculated controls and the form's own layout (sizes,
+   columns) — needs those controls in QindaTK's FormDesigner.
+3. Calculated fields and Value List lookups in tables.
+4. Find Duplicates and Find Unmatched; union queries as a kind of their own.
+5. Report grouping on intervals (month, quarter, first letter), more than
+   three levels (QindaTK's report design), running sums and percentages.
+6. Data macros (table events) and AutoExec.
+7. XML import and linked tables.
+8. The Indexes dialog, Allow Zero Length, the Hyperlink and Large Number
+   types.
+9. Attachments with several files; multi-valued fields.
+10. `.accdb` writing (not feasible; see above).
+
 ## Milestones
 
 | Milestone | Scope | Gate |
@@ -164,6 +219,7 @@ and cost resources keep their amounts both ways.
 | **M77** Word mailings, envelopes and labels, endnotes and floating pictures in QindaWrite — **done 2026-10-09 (D-086)**; open: the owner's check in Word, the corpus and page-count runs (lead), Ask / Fill-in / Set Bookmark rules, merge fields in headers, HTML e-mail, a float centred with text on both sides or fixed on the page with text flowing around it | Mailings: Start Mail Merge (letters, e-mail, envelopes, labels, directory, normal) ✔; Select Recipients (Type a New List as CSV, CSV / text, an Excel sheet through calc_io, QindaMail People) and Edit Recipient List (include, sort, filter, duplicates, find) ✔; Address Block, Greeting Line, Insert Merge Field, Rules (IF, SKIPIF, NEXT, NEXTIF, MERGEREC, MERGESEQ), Match Fields, Highlight, Update Labels ✔; Preview Results, Check for Errors ✔; Finish & Merge to a new document, printer, PDF and QindaMail drafts ✔; `w:mailMerge` kept as read or written as Word writes a text data source ✔; envelopes (sizes, own section) and Avery labels (fixed-layout table) ✔; endnotes (insert, edit, undo, i ii iii, options, convert, drawn at the end, `endnotes.xml` byte for byte while untouched) ✔; floating pictures (seven wraps, position, move with text / fix, drag; `wp:anchor` byte for byte while untouched) ✔ | office_docx tests over hand-built packages (merge settings written and schema-valid, fields and rules round trip, the merge with SKIPIF and labels, envelope and label documents, endnotes untouched byte for byte, every wrap written and read back); LibreOffice renders a merged letter, a label sheet and anchored pictures; through the real window a merge from CSV and from a workbook previewed and finished, SKIPIF, e-mail hand-off, People, envelopes and labels, endnote insert / edit / undo, wrap and position with undo; ribbon squeeze, menu export, fixtures, grabs at 1280 and 520 px — met on qinda ([verification.md](../verification.md#m77-write-mailings-gates-d-086)) |
 | **M78** Calc what-if, data tools, sheet printing, kept rules — **done 2026-10-09 (D-087)**; open: the owner's check in Excel, Solver, Split and Custom Views, dragging breaks in Page Break Preview, header and footer pictures drawn, comments printed, theme colours for rules written here, kept rules' formulas through structural edits | conditional formats: every kind Excel writes modelled (cellIs, text, blanks, errors, Top 10, averages, duplicates, dates, formulas, colour scales, 2007/2010 data bars, icon sets incl. x14) over the whole sqref, the rest kept byte for byte with their dxfs and listed read-only ✔; validations: every type, operator and alert, x14 ✔; New / Edit Formatting Rule, the Rules Manager, the gallery commands, Clear Rules, bars and icons drawn ✔; Page Setup (paper, orientation, Adjust to / Fit to, margins, centring, headers and footers with Excel's codes, first / odd / even, print areas and titles, gridlines, headings, page order), breaks, Page Break Preview, Print / Preview / Export PDF following it, read and written as Excel's parts ✔; Goal Seek, Scenario Manager with its summary, one- and two-variable data tables (`<scenarios>`, `t="dataTable"`) ✔; Text to Columns, Flash Fill (Ctrl+E), Remove Duplicates, Consolidate, Circle Invalid Data, Freeze Top Row / First Column ✔ | engine tests (Goal Seek linear, nonlinear and without a solution; scenarios; data tables recalculated; Text to Columns, Remove Duplicates, Flash Fill; every rule kind; pagination); calc_io tests over hand-built Excel packages (kept rules byte-identical incl. x14, print settings, scenarios and data tables round-tripped and schema-valid; LibreOffice printing titles and Fit to to PDF); the real window (every dialog, PDF export with page setup); ribbon squeeze, menu export, fixtures, grabs at 1280 and 520 px; the QXlsx corpus — met on qinda ([verification.md](../verification.md#m78-calc-gates-d-087)) |
 | **M79** QindaPlan: Project's scheduling, tracking and views — **done 2026-10-09 (D-088)**; open: the ranked list above (task types first), the owner's check in Project | deadlines in the critical path, critical slack limit, multiple critical paths ✔; Leveling Delay as Project's (relative, edays) with the pre-leveled dates, leveling order / within slack / clear first / range, priority 1000, Level Selection, Clear Leveling of the selection ✔; Baseline … Baseline 10 for tasks, assignments and the summary, set and cleared for the project or the selection ✔; Tracking Gantt, Leveling Gantt, Network Diagram, Task Usage ✔; Work, Baseline and Delay tables; Update Tasks, Mark on Track ✔; eleven filters and five sorts across every task view and the printout ✔; Cost and Work Overview ✔; the Gantt printed in each style with slack bars, deadlines and a matching legend, and the Network Diagram printed ✔; Project's recurring calendar exceptions and alternative work weeks scheduled ✔; cost resources ✔; MSPDI carries all of it, unchanged baselines byte for byte ✔ | plan_engine tests with hand-worked schedules (link types with lag, deadlines, slack limit, multiple paths, leveling delays and options, filters, layout, usage, reports, baselines) and a Project-shaped MSPDI fixture (read, written, re-read equal, unchanged elements kept, the schema's sequences checked structurally — no MSPDI XSD in Portage); plan_output pages; the app through the host and the real window (views, dialogs, grabs at 1280 and 520 px), ribbon squeeze, menu export, fixtures — met on qinda ([verification.md](../verification.md#m79-plan-gates-d-088)) |
+| **M80** QindaBase: Access's queries, forms and reports — **done 2026-10-09 (D-089)**; open: the ranked list above (form events and macro conditions first), the owner's check in Access with an XML export | validation rules and texts per field and record, enforced by triggers, refused while records break them, Test Validation Rules ✔; input masks with the wizard's presets ✔; crosstab and make-table queries, declared parameters, Top n percent, Unique Values ✔; the SQL view in Access SQL both ways, Keep as SQLite SQL ✔; macros (fourteen actions) with the Macro Design tab, run from the navigation pane and form buttons ✔; lookups as combo and list boxes, subforms, command buttons ✔; reports evaluated by the engine with exact totals, Group, Sort and Total (three levels, four sort keys), the report's paper from the first page ✔; mailing labels on Avery sheets with the Label Wizard ✔; XML export for Access ✔; fifteen new commands on the menus and the ribbon ✔ | base_engine tests against hand-worked results (rules, masks, crosstab, make-table with undo, declared parameters, Top percent, Access SQL round trips and refusals, macros, where conditions, form controls, two-level report totals in cents, label placement, XML); the service over the seeded starter; the real window at 1280 and 520 px with grabs and PDFs; ribbon squeeze, menu export, icons, fixtures — met on qinda ([verification.md](../verification.md#m80-base-gates-d-089)) |
 
 Every milestone follows AGENTS.md: ≤ 500 lines per file, tests headless,
 docs in the same commit, a `docs/decisions.md` entry, fixtures and grabs

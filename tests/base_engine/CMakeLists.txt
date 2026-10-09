@@ -19,3 +19,9 @@ qqo_add_base_test(tst_base_records)
 qqo_add_base_test(tst_base_query)
 qqo_add_base_test(tst_base_io)
 qqo_add_base_test(tst_base_access)
+# M80 (D-089): rules and masks, the new query kinds, the Access SQL view,
+# macros, reports, labels and XML.
+qqo_add_base_test(tst_base_rules)
+qqo_add_base_test(tst_base_query_m80)
+qqo_add_base_test(tst_base_access_sql)
+qqo_add_base_test(tst_base_macro_report)

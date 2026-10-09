@@ -10,7 +10,7 @@
 #include "standard_actions.h"
 
 #include <qindatk/local_database_provider.h>
-#include <qindatk/local_report_document_model.h>
+#include <qindatk/rich_text_document.h>
 
 #include <QFile>
 #include <QSignalSpy>
@@ -166,15 +166,16 @@ private slots:
         seedDonors(*host.base()->file());
         const QVariantMap opened = host.base()->openReport(str("Donations by Donor"), {});
         QVERIFY(ok(opened));
-        QindaTK::LocalDatabaseProvider snapshot;
-        QVERIFY(snapshot.open(opened.value(str("snapshotPath")).toString()));
-        QindaTK::LocalReportDocumentModel output;
+        // M80: the engine evaluates the report; QindaTK lays out its pages.
+        QindaTK::RichTextDocument pages;
         const QVariantMap report{{str("tableName"), opened.value(str("table"))},
                                  {str("headerText"), str("Donations")},
                                  {str("groups"), QVariantList{QVariantMap{{str("field"), str("Donor")}}}}};
-        QVERIFY2(output.build(&snapshot, report).value(str("ok")).toBool(), qPrintable(output.errorText()));
+        const QVariantMap built = host.base()->buildReport(&pages, report);
+        QVERIFY2(ok(built), qPrintable(built.value(str("error")).toString()));
+        QCOMPARE(built.value(str("rowCount")).toInt(), 120);
         host.setCurrentView(str("report"));
-        host.setReportOutput(&output);
+        host.setReportOutput(&pages);
         QVERIFY(host.printable());
         QVERIFY(host.action(str("filePrintAction"))->isEnabled());
         QVERIFY(host.action(str("baseExportPdfAction"))->isEnabled());

@@ -90,6 +90,21 @@ constexpr Command kCommands[] = {
     // Form and report design (contextual)
     {"baseFormPreviewAction", QT_TRANSLATE_NOOP("BaseHost", "Pre&view Layout"), "", "eye"},
     {"baseReportRefreshAction", QT_TRANSLATE_NOOP("BaseHost", "Refresh Re&port"), "", "refresh-ccw"},
+    // M80 (D-089): Access's macros, labels, XML, validation, query
+    // parameters and form controls.
+    {"baseNewMacroAction", QT_TRANSLATE_NOOP("BaseHost", "&Macro"), "", "workflow"},
+    {"baseLabelsWizardAction", QT_TRANSLATE_NOOP("BaseHost", "&Labels…"), "", "tag"},
+    {"baseExportXmlAction", QT_TRANSLATE_NOOP("BaseHost", "Export as X&ML…"), "", "file-type"},
+    {"baseDesignTestRulesAction", QT_TRANSLATE_NOOP("BaseHost", "&Test Validation Rules"), "", "list-checks"},
+    {"baseQueryParametersAction", QT_TRANSLATE_NOOP("BaseHost", "&Parameters…"), "", "circle-question-mark"},
+    {"baseFormAddSubformAction", QT_TRANSLATE_NOOP("BaseHost", "Add &Subform…"), "", "layers"},
+    {"baseFormAddButtonAction", QT_TRANSLATE_NOOP("BaseHost", "Add &Button…"), "", "mouse-pointer-2"},
+    // Macro design (contextual, M80)
+    {"baseMacroRunAction", QT_TRANSLATE_NOOP("BaseHost", "&Run Macro"), "", "play"},
+    {"baseMacroAddActionAction", QT_TRANSLATE_NOOP("BaseHost", "&Add Action"), "", "list-plus"},
+    {"baseMacroDeleteActionAction", QT_TRANSLATE_NOOP("BaseHost", "&Delete Action"), "", "list-minus"},
+    {"baseMacroMoveUpAction", QT_TRANSLATE_NOOP("BaseHost", "Move Action &Up"), "", "arrow-up"},
+    {"baseMacroMoveDownAction", QT_TRANSLATE_NOOP("BaseHost", "Move Action Do&wn"), "", "arrow-down"},
 };
 
 // Toggles.
@@ -98,6 +113,7 @@ constexpr Command kToggles[] = {
     {"baseFilterAction", QT_TRANSLATE_NOOP("BaseHost", "&Filter Bar"), "Ctrl+Shift+L", "sliders-horizontal"},
     {"baseQueryTotalsAction", QT_TRANSLATE_NOOP("BaseHost", "&Totals"), "", "sigma"},
     {"baseShowNavigationAction", QT_TRANSLATE_NOOP("BaseHost", "&Navigation Pane"), "F11", "panel-left"},
+    {"baseReportGroupSortAction", QT_TRANSLATE_NOOP("BaseHost", "&Group, Sort and Total"), "", "list-tree"}, // M80
 };
 
 // The query type, a radio group mirrored from the designer's design.
@@ -106,6 +122,8 @@ constexpr Command kQueryTypes[] = {
     {"baseQueryTypeUpdateAction", QT_TRANSLATE_NOOP("BaseHost", "&Update Query"), "", "pencil"},
     {"baseQueryTypeDeleteAction", QT_TRANSLATE_NOOP("BaseHost", "&Delete Query"), "", "trash"},
     {"baseQueryTypeAppendAction", QT_TRANSLATE_NOOP("BaseHost", "&Append Query"), "", "copy-plus"},
+    {"baseQueryTypeCrosstabAction", QT_TRANSLATE_NOOP("BaseHost", "&Crosstab Query"), "", "grid-3x3"},     // M80
+    {"baseQueryTypeMakeTableAction", QT_TRANSLATE_NOOP("BaseHost", "&Make Table Query"), "", "layout-grid"}, // M80
 };
 
 QString id(const char *raw)
@@ -203,23 +221,32 @@ void BaseHost::insertMenus()
                                                       MenuNode::separator(), a("baseQueryDesignAction"),
                                                       MenuNode::separator(), a("baseNewFormAction"),
                                                       a("baseFormWizardAction"), MenuNode::separator(),
-                                                      a("baseNewReportAction"), a("baseReportWizardAction")}));
+                                                      a("baseNewReportAction"), a("baseReportWizardAction"),
+                                                      a("baseLabelsWizardAction"), MenuNode::separator(),
+                                                      a("baseNewMacroAction")}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("baseExternalMenu"), tr("E&xternal Data"),
                                                      {a("baseImportCsvAction"), a("baseImportExcelAction"),
                                                       a("baseImportAccessAction"),
                                                       MenuNode::separator(), a("baseExportCsvAction"),
-                                                      a("baseExportXlsxAction"), a("baseExportPdfAction")}));
+                                                      a("baseExportXlsxAction"), a("baseExportXmlAction"),
+                                                      a("baseExportPdfAction")}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("baseDesignMenu"), tr("&Design"),
                                                      {a("baseDesignAddFieldAction"), a("baseDesignDeleteFieldAction"),
                                                       a("baseDesignMoveUpAction"), a("baseDesignMoveDownAction"),
-                                                      a("baseDesignPrimaryKeyAction"), a("baseDesignApplyAction"),
-                                                      a("baseDesignDiscardAction"), MenuNode::separator(),
-                                                      a("baseQueryRunAction"), a("baseQueryAddTableAction"),
-                                                      a("baseQueryTotalsAction"), a("baseQueryTypeSelectAction"),
+                                                      a("baseDesignPrimaryKeyAction"), a("baseDesignTestRulesAction"),
+                                                      a("baseDesignApplyAction"), a("baseDesignDiscardAction"),
+                                                      MenuNode::separator(), a("baseQueryRunAction"),
+                                                      a("baseQueryAddTableAction"), a("baseQueryTotalsAction"),
+                                                      a("baseQueryParametersAction"), a("baseQueryTypeSelectAction"),
                                                       a("baseQueryTypeUpdateAction"), a("baseQueryTypeDeleteAction"),
-                                                      a("baseQueryTypeAppendAction"), a("baseQueryClearAction"),
+                                                      a("baseQueryTypeAppendAction"), a("baseQueryTypeCrosstabAction"),
+                                                      a("baseQueryTypeMakeTableAction"), a("baseQueryClearAction"),
                                                       MenuNode::separator(), a("baseFormPreviewAction"),
-                                                      a("baseReportRefreshAction")}));
+                                                      a("baseFormAddSubformAction"), a("baseFormAddButtonAction"),
+                                                      a("baseReportRefreshAction"), a("baseReportGroupSortAction"),
+                                                      MenuNode::separator(), a("baseMacroRunAction"),
+                                                      a("baseMacroAddActionAction"), a("baseMacroDeleteActionAction"),
+                                                      a("baseMacroMoveUpAction"), a("baseMacroMoveDownAction")}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("baseToolsMenu"), tr("Database &Tools"),
                                                      {a("baseRelationshipsAction"), a("baseSqlConsoleAction"),
                                                       MenuNode::separator(), a("baseCompactRepairAction"),
@@ -272,20 +299,28 @@ void BaseHost::syncEnablement()
     actions()->setEnabled(id("baseExportPdfAction"), printable());
     for (const char *raw : {"baseNewTableAction", "baseTableDesignAction", "baseQueryDesignAction", "baseFormWizardAction",
                             "baseReportWizardAction", "baseImportCsvAction", "baseImportExcelAction",
-                            "baseImportAccessAction",
-                            "baseCompactRepairAction", "baseDatabasePropertiesAction"}) {
+                            "baseImportAccessAction", "baseCompactRepairAction", "baseDatabasePropertiesAction",
+                            "baseNewMacroAction", "baseLabelsWizardAction"}) {
         actions()->setEnabled(id(raw), writable);
     }
+    actions()->setEnabled(id("baseExportXmlAction"), datasheet || dataObject);
     const bool tableDesign = db && m_view == QLatin1String("tableDesign");
     for (const char *raw : {"baseDesignAddFieldAction", "baseDesignDeleteFieldAction", "baseDesignMoveUpAction",
                             "baseDesignMoveDownAction", "baseDesignPrimaryKeyAction", "baseDesignApplyAction",
                             "baseDesignDiscardAction"}) {
         actions()->setEnabled(id(raw), tableDesign && writable);
     }
+    actions()->setEnabled(id("baseDesignTestRulesAction"), tableDesign && !m_name.isEmpty());
     const bool queryDesign = db && m_view == QLatin1String("queryDesign");
     for (const char *raw : {"baseQueryRunAction", "baseQueryAddTableAction", "baseQueryClearAction",
-                            "baseQueryTotalsAction"}) {
+                            "baseQueryTotalsAction", "baseQueryParametersAction"}) {
         actions()->setEnabled(id(raw), queryDesign);
+    }
+    const bool macroDesign = db && m_view == QLatin1String("macroDesign");
+    actions()->setEnabled(id("baseMacroRunAction"), macroDesign);
+    for (const char *raw : {"baseMacroAddActionAction", "baseMacroDeleteActionAction", "baseMacroMoveUpAction",
+                            "baseMacroMoveDownAction"}) {
+        actions()->setEnabled(id(raw), macroDesign && writable);
     }
     for (const Command &c : kQueryTypes) {
         actions()->setEnabled(id(c.id), queryDesign && writable);
@@ -298,7 +333,9 @@ void BaseHost::syncEnablement()
     actions()->setEnabled(id("baseFileInsertAction"), fileField);
     actions()->setEnabled({id("baseFileSaveAction"), id("baseFileRemoveAction")}, hasFile);
     actions()->setEnabled(id("baseFormPreviewAction"), form);
+    actions()->setEnabled({id("baseFormAddSubformAction"), id("baseFormAddButtonAction")}, form && writable);
     actions()->setEnabled(id("baseReportRefreshAction"), db && m_view == QLatin1String("report"));
+    actions()->setEnabled(id("baseReportGroupSortAction"), db && m_view == QLatin1String("report") && !m_report.isNull());
     // Undo/redo: the designer's history while one is active, else the database's.
     QUndoStack *stack = m_document->undoStack();
     actions()->setEnabled(id(ActionId::kEditUndo), m_designHistory ? m_designCanUndo : stack->canUndo());

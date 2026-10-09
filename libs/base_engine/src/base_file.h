@@ -62,6 +62,9 @@ struct SchemaPlan {
     // Checks run after the statements inside the transaction: a count query
     // and the warning shown when it is non-zero ("%1" = the count).
     QList<QPair<QString, QString>> checks;
+    // M80: checks that REFUSE the change when their count is not zero
+    // (a new validation rule existing records break; base_rules.h).
+    QList<QPair<QString, QString>> refusals;
     QString error;            // planning refused (validation)
     [[nodiscard]] bool ok() const { return error.isEmpty(); }
     [[nodiscard]] QString sqlText() const;

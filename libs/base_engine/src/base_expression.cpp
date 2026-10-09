@@ -68,7 +68,7 @@ public:
     // Converts a literal (or types a parameter) for a value of `type`.
     QString adopt(Value &v, std::optional<FieldType> type)
     {
-        if (v.parameter >= 0 && type && m_ctx.parameters != nullptr) {
+        if (v.parameter >= 0 && type && m_ctx.parameters != nullptr && !m_ctx.parameters->at(v.parameter).declared) {
             (*m_ctx.parameters)[v.parameter].type = *type;
         }
         if (!v.literal || !type || v.literalKind == Token::End) {
@@ -325,15 +325,7 @@ private:
                 return v;
             }
         }
-        QString name = prompt.toLower();
-        name.replace(QRegularExpression(QStringLiteral("[^a-z0-9]+")), QStringLiteral("_"));
-        name = QStringLiteral("p_") + name.left(40);
-        QString unique = name;
-        for (int k = 2; std::any_of(m_ctx.parameters->cbegin(), m_ctx.parameters->cend(),
-                                    [&](const QueryParameter &p) { return p.name == unique; });
-             ++k) {
-            unique = name + QString::number(k);
-        }
+        const QString unique = parameterNameFor(prompt, *m_ctx.parameters);
         m_ctx.parameters->append({unique, prompt, FieldType::Text});
         Value v{QLatin1Char(':') + unique, std::nullopt};
         v.parameter = int(m_ctx.parameters->size()) - 1;
@@ -462,6 +454,19 @@ Compiled finish(Parser &parser, const Value &value)
 }
 
 } // namespace
+
+QString parameterNameFor(const QString &prompt, const QList<QueryParameter> &existing)
+{
+    QString name = prompt.toLower();
+    name.replace(QRegularExpression(QStringLiteral("[^a-z0-9]+")), QStringLiteral("_"));
+    name = QStringLiteral("p_") + name.left(40);
+    QString unique = name;
+    for (int k = 2; std::any_of(existing.cbegin(), existing.cend(), [&](const QueryParameter &p) { return p.name == unique; });
+         ++k) {
+        unique = name + QString::number(k);
+    }
+    return unique;
+}
 
 Compiled expression(const QString &text, const Context &context)
 {

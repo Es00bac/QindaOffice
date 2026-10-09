@@ -14,9 +14,10 @@
 //    the id. The host never opens UI itself.
 //  * `currentView` names what the main area shows: "start" | "datasheet" |
 //    "tableDesign" | "queryDesign" | "form" | "report" | "relationships" |
-//    "sql"; `currentKind`/`currentName` name the object. The QML sets them;
-//    the host derives enablement and the contextual ribbon tabs
-//    ("tableDesign", "queryDesign", "formDesign") from them.
+//    "sql" | "macroDesign" (M80); `currentKind`/`currentName` name the
+//    object. The QML sets them; the host derives enablement and the
+//    contextual ribbon tabs ("tableDesign", "queryDesign", "formDesign",
+//    "macroDesign") from them.
 //  * `selectedKind`/`selectedName` are the navigation pane's selection
 //    (Open, Design, Rename, Delete and the Create commands act on it).
 //  * `designDirty`: the open designer has unsaved edits. It makes the
@@ -36,12 +37,13 @@
 #include <QtQml/qqmlregistration.h>
 
 namespace QindaTK {
-class LocalReportDocumentModel;
+class RichTextDocument;
 }
 
 namespace QindaOffice::Apps::Base {
 
 class BaseDocument;
+class LabelSheet;
 
 // AGENT-NOTE: not `final` — QML_ELEMENT derives a creation helper from it.
 class BaseHost : public Quick::DocumentHost {
@@ -91,10 +93,12 @@ public:
     void setFileTarget(const QVariantMap &target);
     [[nodiscard]] bool navigationVisible() const { return m_navigationVisible; }
     [[nodiscard]] qreal zoom() const { return m_zoom; }
-    [[nodiscard]] bool printable() const { return !m_report.isNull(); }
+    [[nodiscard]] bool printable() const { return !m_report.isNull() || !m_labels.isNull(); }
 
-    // The report QML shows now (null: nothing to print).
-    Q_INVOKABLE void setReportOutput(QObject *model);
+    // What the report view shows now (null: nothing to print): the pages of
+    // a report (a QindaTK RichTextDocument, M80: built by the engine,
+    // BaseService::buildReport) or a label sheet (label_sheet.h).
+    Q_INVOKABLE void setReportOutput(QObject *output);
     Q_INVOKABLE void copyToClipboard(const QString &text);
     [[nodiscard]] Q_INVOKABLE QString clipboardText() const;
     // Export PDF… of the report shown (the same pages Print renders).
@@ -118,6 +122,10 @@ protected:
     [[nodiscard]] QString saveFilterString() const override;
     void documentReplaced() override;
     [[nodiscard]] Quick::PrintRenderCallback printRenderCallback() const override;
+    // Labels print on their sheet's paper, edge to edge (label_sheet.h); a
+    // report on its own paper and orientation (M80).
+    [[nodiscard]] std::optional<QPageLayout> printPageLayout() const override;
+    [[nodiscard]] bool printPrefersLandscape() const override;
 
 private:
     // base_host_actions.cpp
@@ -128,7 +136,8 @@ private:
 
     BaseDocument *m_document = nullptr;
     BaseService *m_service = nullptr;
-    QPointer<QindaTK::LocalReportDocumentModel> m_report;
+    QPointer<QindaTK::RichTextDocument> m_report;
+    QPointer<LabelSheet> m_labels;
     QString m_view = QStringLiteral("start");
     QString m_kind;
     QString m_name;

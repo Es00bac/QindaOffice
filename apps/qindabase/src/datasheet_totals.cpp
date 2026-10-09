@@ -67,7 +67,7 @@ void DatasheetModel::recomputeTotals()
         QString text;
         if (m_kind == QLatin1String("table")) {
             QString error;
-            (void)Engine::Records::total(*f, m_name, it.key(), fn, m_filters, &text, &error, m_matchAny);
+            (void)Engine::Records::total(*f, m_name, it.key(), fn, m_filters, &text, &error, m_matchAny, m_condition);
         } else {
             // Query results total in memory: integers (money) exactly.
             qint64 isum = 0;

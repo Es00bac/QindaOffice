@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Table designs: maps for QML, and reading a table back from SQLite
 // introspection (table_xinfo, index_list, foreign_key_list) plus qb_fields.
-#include "base_schema.h"
+#include "base_rules.h"
+#include "base_schema_p.h"
 
 #include <QRegularExpression>
 
@@ -83,7 +84,10 @@ QVariantMap FieldDef::toMap() const
             {s("description"), description},
             {s("lookupTable"), lookup.table},
             {s("lookupField"), lookup.valueField},
-            {s("lookupDisplay"), lookup.displayField}};
+            {s("lookupDisplay"), lookup.displayField},
+            {s("validationRule"), validationRule},
+            {s("validationText"), validationText},
+            {s("inputMask"), inputMask}};
 }
 
 FieldDef FieldDef::fromMap(const QVariantMap &map)
@@ -103,6 +107,9 @@ FieldDef FieldDef::fromMap(const QVariantMap &map)
     f.lookup.table = map.value(s("lookupTable")).toString();
     f.lookup.valueField = map.value(s("lookupField")).toString();
     f.lookup.displayField = map.value(s("lookupDisplay")).toString();
+    f.validationRule = map.value(s("validationRule")).toString().trimmed();
+    f.validationText = map.value(s("validationText")).toString().trimmed();
+    f.inputMask = map.value(s("inputMask")).toString().trimmed();
     return f;
 }
 
@@ -187,7 +194,10 @@ QVariantMap TableDef::toMap() const
             {s("withoutRowid"), withoutRowid},
             {s("complexKeys"), complexKeys},
             {s("otherIndexSql"), otherIndexSql},
-            {s("triggerSql"), triggerSql}};
+            {s("triggerSql"), triggerSql},
+            {s("validationRule"), validationRule},
+            {s("validationText"), validationText},
+            {s("ruleTriggers"), ruleTriggers}};
 }
 
 TableDef TableDef::fromMap(const QVariantMap &map)
@@ -206,6 +216,9 @@ TableDef TableDef::fromMap(const QVariantMap &map)
     t.complexKeys = map.value(s("complexKeys")).toBool();
     t.otherIndexSql = map.value(s("otherIndexSql")).toStringList();
     t.triggerSql = map.value(s("triggerSql")).toStringList();
+    t.validationRule = map.value(s("validationRule")).toString().trimmed();
+    t.validationText = map.value(s("validationText")).toString().trimmed();
+    t.ruleTriggers = map.value(s("ruleTriggers")).toStringList();
     return t;
 }
 
@@ -262,15 +275,25 @@ std::optional<TableDef> readTable(const BaseFile &file, const QString &name, QSt
     table.withoutRowid = sql.contains(QLatin1String("WITHOUT ROWID"));
     const CurrencyFormat currency = file.currency();
 
-    // Metadata QindaBase keeps for the columns (captions, lookups, type ids).
+    // Metadata QindaBase keeps for the columns (captions, lookups, type ids;
+    // M80: rules and masks — columns an older file may not have yet, read
+    // as NULL; the row with an empty field_name holds the table's own rule).
     QHash<QString, QVariantList> meta;
     if (file.hasSystemTables()) {
-        for (const QVariantList &row :
-             db.rows(QStringLiteral("SELECT field_name, type, caption, description, lookup_table, lookup_field, "
-                                    "lookup_display FROM qb_fields WHERE table_name=?"),
-                     {table.name})) {
+        const QStringList have = detail::systemFieldColumns(file);
+        QStringList select{s("field_name"), s("type"), s("caption"), s("description"), s("lookup_table"),
+                           s("lookup_field"), s("lookup_display")};
+        for (const char *extra : {"validation_rule", "validation_text", "input_mask"}) {
+            select.append(have.contains(s(extra)) ? s(extra) : s("NULL"));
+        }
+        for (const QVariantList &row : db.rows(
+                 QStringLiteral("SELECT %1 FROM qb_fields WHERE table_name=?").arg(select.join(QStringLiteral(", "))),
+                 {table.name})) {
             meta.insert(row.value(0).toString().toLower(), row);
         }
+        const QVariantList own = meta.value(QString());
+        table.validationRule = own.value(7).toString();
+        table.validationText = own.value(8).toString();
     }
     const QList<QVariantList> columns = db.rows(QStringLiteral("SELECT name, type, \"notnull\", dflt_value, pk, hidden "
                                                                "FROM pragma_table_xinfo(?) ORDER BY cid"),
@@ -303,6 +326,9 @@ std::optional<TableDef> readTable(const BaseFile &file, const QString &name, QSt
             f.lookup.table = m.value(4).toString();
             f.lookup.valueField = m.value(5).toString();
             f.lookup.displayField = m.value(6).toString();
+            f.validationRule = m.value(7).toString();
+            f.validationText = m.value(8).toString();
+            f.inputMask = m.value(9).toString();
         }
         f.defaultValue = defaultToEditText(c.value(3).toString(), f.type, currency);
         table.fields.append(f);
@@ -363,9 +389,15 @@ std::optional<TableDef> readTable(const BaseFile &file, const QString &name, QSt
         r.onDelete = actionFromSql(k.value(6).toString());
         table.relationships.append(r);
     }
-    for (const QVariantList &t :
-         db.rows(QStringLiteral("SELECT sql FROM sqlite_schema WHERE type='trigger' AND tbl_name=?"), {table.name})) {
-        table.triggerSql.append(t.value(0).toString());
+    // The triggers QindaBase makes for validation rules are derived from the
+    // design (base_rules.h); every other trigger is kept verbatim.
+    for (const QVariantList &t : db.rows(
+             QStringLiteral("SELECT name, sql FROM sqlite_schema WHERE type='trigger' AND tbl_name=?"), {table.name})) {
+        if (isRuleTrigger(t.value(0).toString())) {
+            table.ruleTriggers.append(t.value(0).toString());
+        } else {
+            table.triggerSql.append(t.value(1).toString());
+        }
     }
     return table;
 }

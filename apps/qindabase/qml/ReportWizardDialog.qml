@@ -3,10 +3,12 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QindaTK as Tk
 
-// The report wizard: a table or saved query, the columns to print, an
-// optional grouping with a total (sum, average, count, minimum, maximum of
-// a number or money field), a title and the paper orientation. The report
-// opens in Preview; Design refines it with QindaTK's ReportDesigner.
+// The report wizard: a table or saved query, the columns to print, up to
+// two grouping levels (M80; a third is added in Group, Sort and Total) with
+// a total (sum, average, count, minimum, maximum of a number or money
+// field) in every group footer and the report's, a sort order, a title and
+// the paper orientation. The report opens in Preview; Design refines it
+// with QindaTK's ReportDesigner and Group, Sort and Total.
 Tk.Dialog {
     id: dialog
 
@@ -17,6 +19,9 @@ Tk.Dialog {
     property var fields: []
     property var chosen: []
     property string groupField: ""
+    property string groupField2: ""   // M80: a second level
+    property string sortField: ""     // M80: the order inside the groups
+    property bool sortDescending: false
     property string totalField: ""
     property string totalFunction: "sum"
     property bool landscape: false
@@ -49,6 +54,8 @@ Tk.Dialog {
         fields = base.sourceFields(kind, name)
         chosen = fields.filter(function(f) { return f.type !== "autoNumber" }).slice(0, 6).map(function(f) { return f.name })
         groupField = ""
+        groupField2 = ""
+        sortField = ""
         totalField = ""
         titleField.text = name.charAt(0).toUpperCase() + name.slice(1)
         nameField.text = qsTr("%1 Report").arg(name.charAt(0).toUpperCase() + name.slice(1))
@@ -61,9 +68,12 @@ Tk.Dialog {
         const spec = {
             source: { kind: sourceKind, name: sourceName },
             title: titleField.text.trim(),
-            columns: chosen.filter(function(n) { return n !== groupField }).map(function(n) { return { field: n, label: "" } }),
-            groups: groupField ? [{ field: groupField, label: "", pageBreakBefore: false, totals: totals }] : [],
+            columns: chosen.filter(function(n) { return n !== groupField && n !== groupField2 })
+                           .map(function(n) { return { field: n, label: "" } }),
+            groups: [groupField, groupField2].filter(function(g, i, all) { return g && all.indexOf(g) === i })
+                        .map(function(g) { return { field: g, label: "", pageBreakBefore: false, totals: totals } }),
             totals: totals,
+            sort: sortField ? [{ field: sortField, descending: sortDescending }] : [],
             detail: true,
             orientation: landscape ? "landscape" : "portrait"
         }
@@ -112,6 +122,36 @@ Tk.Dialog {
                 model: [qsTr("(no grouping)")].concat(dialog.fields.map(function(f) { return f.name }))
                 currentIndex: Math.max(0, model.indexOf(dialog.groupField))
                 onActivated: function(i) { dialog.groupField = i === 0 ? "" : model[i] }
+            }
+        }
+        Tk.PropertyRow {
+            visible: dialog.groupField.length > 0
+            label: qsTr("Then by")
+            Tk.ComboBox {
+                objectName: "reportWizardGroup2"
+                small: true
+                model: [qsTr("(no second level)")].concat(dialog.fields.map(function(f) { return f.name })
+                                                               .filter(function(n) { return n !== dialog.groupField }))
+                currentIndex: Math.max(0, model.indexOf(dialog.groupField2))
+                onActivated: function(i) { dialog.groupField2 = i === 0 ? "" : model[i] }
+            }
+        }
+        Tk.PropertyRow {
+            label: qsTr("Sort by")
+            Tk.Flex {
+                direction: Tk.Flex.Row
+                gap: Tk.Theme.space.sm
+                align: Tk.Flex.Center
+                Tk.ComboBox {
+                    objectName: "reportWizardSort"
+                    small: true
+                    model: [qsTr("(as stored)")].concat(dialog.fields.map(function(f) { return f.name }))
+                    currentIndex: Math.max(0, model.indexOf(dialog.sortField))
+                    Tk.Flex.grow: 1
+                    Tk.Flex.basis: 0
+                    onActivated: function(i) { dialog.sortField = i === 0 ? "" : model[i] }
+                }
+                Tk.CheckBox { text: qsTr("Z → A"); checked: dialog.sortDescending; onToggled: dialog.sortDescending = checked }
             }
         }
         Tk.PropertyRow {

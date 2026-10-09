@@ -40,5 +40,8 @@ struct Compiled {
                                 const Context &context);
 // A literal-or-expression for an update query's "Update to" cell.
 [[nodiscard]] Compiled valueFor(const QString &text, FieldType targetType, const Context &context);
+// The SQL parameter name for a prompt ("Start date" → "p_start_date"),
+// unique among `existing`.
+[[nodiscard]] QString parameterNameFor(const QString &prompt, const QList<QueryParameter> &existing);
 
 } // namespace QindaOffice::Base::Expr

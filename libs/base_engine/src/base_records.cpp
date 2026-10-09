@@ -4,6 +4,7 @@
 #include "base_records.h"
 
 #include "base_file_field.h"
+#include "base_input_mask.h"
 
 #include <QRegularExpression>
 
@@ -64,7 +65,22 @@ QVariantMap ColumnInfo::toMap() const
             {QStringLiteral("numeric"), isNumeric(type)},
             {QStringLiteral("lookupTable"), lookup.table},
             {QStringLiteral("lookupField"), lookup.valueField},
-            {QStringLiteral("lookupDisplay"), lookup.displayField}};
+            {QStringLiteral("lookupDisplay"), lookup.displayField},
+            {QStringLiteral("inputMask"), inputMask},
+            {QStringLiteral("maskHint"), inputMask.isEmpty() ? QString()
+                                                             : maskHint(InputMask::parse(inputMask).value_or(InputMask()))},
+            {QStringLiteral("validationRule"), validationRule},
+            {QStringLiteral("validationText"), validationText}};
+}
+
+QString ColumnInfo::display(const QVariant &stored, const CurrencyFormat &currency) const
+{
+    const QString text = displayText(type, stored, currency);
+    if (inputMask.isEmpty() || (type != FieldType::Text && type != FieldType::LongText)) {
+        return text;
+    }
+    const std::optional<InputMask> mask = InputMask::parse(inputMask);
+    return mask ? maskedDisplay(*mask, text) : text;
 }
 
 int RowSet::columnIndex(const QString &name) const
@@ -94,6 +110,9 @@ QList<ColumnInfo> Records::columns(const BaseFile &file, const QString &table)
         c.readOnly = !isTypable(f.type) || def->withoutRowid; // a file changes through setFile
         c.defaultValue = f.defaultValue;
         c.lookup = f.lookup;
+        c.inputMask = f.inputMask;
+        c.validationRule = f.validationRule;
+        c.validationText = f.validationText;
         if (!c.lookup.isSet()) {
             // A relationship without an explicit lookup still looks up its
             // parent: the parent's first text field is the display.
@@ -190,10 +209,14 @@ RowSet Records::read(const BaseFile &file, const QString &table, const RowQuery 
     set.editable = def && !def->withoutRowid && !file.readOnly();
     QVariantList bindings;
     QString error;
-    const QString where = whereClause(set.columns, query.filters, file.currency(), &bindings, &error, query.matchAny);
+    QString where = whereClause(set.columns, query.filters, file.currency(), &bindings, &error, query.matchAny);
     if (!error.isEmpty()) {
         set.error = error;
         return set;
+    }
+    if (!query.condition.isEmpty()) {
+        where = where.isEmpty() ? QStringLiteral(" WHERE (%1)").arg(query.condition)
+                                : QStringLiteral(" WHERE (%1) AND (%2)").arg(where.mid(7), query.condition);
     }
     QStringList names;
     for (const ColumnInfo &c : set.columns) {
@@ -258,7 +281,8 @@ std::optional<QVariantList> Records::readRow(const BaseFile &file, const QString
 }
 
 QVariant Records::total(const BaseFile &file, const QString &table, const QString &field, const QString &function,
-                        const QList<FilterClause> &filters, QString *display, QString *error, bool matchAny)
+                        const QList<FilterClause> &filters, QString *display, QString *error, bool matchAny,
+                        const QString &condition)
 {
     const QList<ColumnInfo> cols = columns(file, table);
     const auto column = std::find_if(cols.cbegin(), cols.cend(), [&](const ColumnInfo &c) { return c.name == field; });
@@ -283,7 +307,11 @@ QVariant Records::total(const BaseFile &file, const QString &table, const QStrin
     QVariantList bindings;
     QString problem;
     const CurrencyFormat currency = file.currency();
-    const QString where = whereClause(cols, filters, currency, &bindings, &problem, matchAny);
+    QString where = whereClause(cols, filters, currency, &bindings, &problem, matchAny);
+    if (!condition.isEmpty()) {
+        where = where.isEmpty() ? QStringLiteral(" WHERE (%1)").arg(condition)
+                                : QStringLiteral(" WHERE (%1) AND (%2)").arg(where.mid(7), condition);
+    }
     // AGENT-NOTE: sum() over integer storage (currency minor units, whole
     // numbers) is exact 64-bit arithmetic in SQLite; only average divides.
     const QVariant value = file.db().scalar(
@@ -330,6 +358,16 @@ QList<QPair<QVariant, QString>> Records::lookupChoices(const BaseFile &file, con
 Parsed Records::resolveInput(const BaseFile &file, const ColumnInfo &column, const QVariant &input)
 {
     const CurrencyFormat currency = file.currency();
+    // Typed text is shaped by the field's input mask first (base_input_mask.h).
+    if (!column.inputMask.isEmpty() && !column.lookup.isSet() && input.typeId() == QMetaType::QString) {
+        if (const std::optional<InputMask> mask = InputMask::parse(column.inputMask)) {
+            const MaskResult shaped = applyInputMask(*mask, input.toString());
+            if (!shaped.ok) {
+                return Parsed{false, {}, shaped.error};
+            }
+            return parseValue(column.type, shaped.text, currency);
+        }
+    }
     Parsed parsed = parseValue(column.type, input, currency);
     if (parsed.ok || !column.lookup.isSet() || column.lookup.displayField.isEmpty()) {
         return parsed;

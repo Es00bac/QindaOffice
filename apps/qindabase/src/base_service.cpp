@@ -4,8 +4,10 @@
 
 #include "base_document.h"
 #include "base_objects.h"
+#include "base_report.h"
 #include "base_schema.h"
 #include "base_templates.h"
+#include "label_sheet.h"
 
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -39,6 +41,9 @@ QString iconFor(const QString &kind)
     if (kind == QLatin1String("form")) {
         return QStringLiteral("layout-template");
     }
+    if (kind == QLatin1String("macro")) {
+        return QStringLiteral("workflow"); // M80
+    }
     return QStringLiteral("scroll-text");
 }
 
@@ -48,6 +53,7 @@ BaseService::BaseService(BaseDocument *document, QObject *parent)
     : QObject(parent)
     , m_document(document)
     , m_datasheet(new DatasheetModel(this))
+    , m_labels(new LabelSheet(this))
 {
     m_datasheet->setDocument(document);
     connect(document, &BaseDocument::fileReplaced, this, [this] {
@@ -130,11 +136,20 @@ QVariantList BaseService::objects() const
                                {QStringLiteral("description"), tr("%n record(s)", nullptr, int(rows))},
                                {QStringLiteral("iconName"), iconFor(QStringLiteral("table"))}});
     }
-    for (const QString &kind : {QStringLiteral("query"), QStringLiteral("form"), QStringLiteral("report")}) {
+    for (const QString &kind : {QStringLiteral("query"), QStringLiteral("form"), QStringLiteral("report"),
+                                QStringLiteral("macro")}) {
         for (const Engine::SavedObject &o : Engine::ObjectStore::list(*f, kind)) {
             QString description = o.definition.value(QStringLiteral("description")).toString();
             if (description.isEmpty() && kind != QLatin1String("query")) {
                 description = o.definition.value(QStringLiteral("source")).toMap().value(QStringLiteral("name")).toString();
+            }
+            const bool labels = o.definition.value(QStringLiteral("type")).toString() == QLatin1String("labels");
+            if (labels) {
+                description = tr("labels · %1").arg(description); // M80: a label report
+            }
+            if (kind == QLatin1String("macro") && description.isEmpty()) {
+                description = tr("%n action(s)", nullptr,
+                                 int(o.definition.value(QStringLiteral("actions")).toList().size()));
             }
             if (kind == QLatin1String("query")) {
                 const QString type = o.definition.value(QStringLiteral("kind")).toString();
@@ -145,7 +160,7 @@ QVariantList BaseService::objects() const
             out.append(QVariantMap{{QStringLiteral("kind"), kind},
                                    {QStringLiteral("name"), o.name},
                                    {QStringLiteral("description"), description},
-                                   {QStringLiteral("iconName"), iconFor(kind)}});
+                                   {QStringLiteral("iconName"), labels ? QStringLiteral("tag") : iconFor(kind)}});
         }
     }
     return out;

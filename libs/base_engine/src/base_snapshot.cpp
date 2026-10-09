@@ -112,11 +112,12 @@ Result writeFormMirror(const BaseFile &file, const QString &path, const QString 
     QStringList defs;
     for (const ColumnInfo &c : columns) {
         if (c.type == FieldType::File) {
-            continue; // the form shows files beside the designer (FormFilesPanel.qml), not in it
+            continue; // the form shows files beside the designer (FileFieldPanel.qml), not in it
         }
-        QString declared = c.lookup.isSet() && !c.lookup.displayField.isEmpty() ? QStringLiteral("TEXT")
-                                                                                   : declaredType(c.type);
-        QString sql = quoteIdentifier(c.name) + QLatin1Char(' ') + declared;
+        if (c.lookup.isSet() && !c.lookup.displayField.isEmpty()) {
+            continue; // M80: a lookup is a combo or list box beside the designer (FormLookups.qml)
+        }
+        QString sql = quoteIdentifier(c.name) + QLatin1Char(' ') + declaredType(c.type);
         if (c.primaryKey && def->primaryKey().size() == 1) {
             sql += QStringLiteral(" PRIMARY KEY");
         } else if (c.required) {

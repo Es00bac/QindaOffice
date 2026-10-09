@@ -4,8 +4,8 @@
 #include "base_host.h"
 
 #include "base_document.h"
+#include "label_sheet.h"
 
-#include <qindatk/local_report_document_model.h>
 #include <qindatk/print_output.h>
 #include <qindatk/rich_text_document.h>
 #include <qindatk/rich_text_layout.h>
@@ -81,6 +81,8 @@ void BaseHost::setCurrentView(const QString &view)
         contexts.append(QStringLiteral("queryDesign"));
     } else if (view == QLatin1String("form") || view == QLatin1String("report")) {
         contexts.append(QStringLiteral("formDesign"));
+    } else if (view == QLatin1String("macroDesign")) {
+        contexts.append(QStringLiteral("macroDesign")); // M80
     }
     setRibbonContexts(contexts);
     if (view != QLatin1String("report")) {
@@ -174,13 +176,15 @@ void BaseHost::setDesignCanRedo(bool can)
     }
 }
 
-void BaseHost::setReportOutput(QObject *model)
+void BaseHost::setReportOutput(QObject *output)
 {
-    auto *report = qobject_cast<QindaTK::LocalReportDocumentModel *>(model);
-    if (m_report == report) {
+    auto *report = qobject_cast<QindaTK::RichTextDocument *>(output);
+    auto *labels = qobject_cast<LabelSheet *>(output);
+    if (m_report == report && m_labels == labels) {
         return;
     }
     m_report = report;
+    m_labels = labels;
     emit printSourceChanged();
     syncEnablement();
 }
@@ -200,7 +204,7 @@ QString BaseHost::clipboardText() const
 
 QVariantMap BaseHost::exportReportPdf(const QUrl &url)
 {
-    if (m_report.isNull() || m_report->document() == nullptr) {
+    if (!printable()) {
         return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), tr("Open a report to export it.")}};
     }
     const QString path = url.isLocalFile() ? url.toLocalFile() : url.toString();
@@ -210,15 +214,59 @@ QVariantMap BaseHost::exportReportPdf(const QUrl &url)
     return {{QStringLiteral("ok"), true}, {QStringLiteral("path"), path}};
 }
 
+std::optional<QPageLayout> BaseHost::printPageLayout() const
+{
+    if (!m_labels.isNull()) {
+        return m_labels->pageLayout();
+    }
+    if (!m_report.isNull()) {
+        // AGENT-NOTE (M80): the paper must be set before the painter starts
+        // (print_service.h); a size set inside the render reached only the
+        // second page, so a Letter report's first page came out A4.
+        const QindaTK::RichText::PageSetup page = m_report->pageSetupValue();
+        const QSizeF portrait(qMin(page.widthPt, page.heightPt), qMax(page.widthPt, page.heightPt));
+        QPageLayout layout(QPageSize(portrait, QPageSize::Point),
+                           printPrefersLandscape() ? QPageLayout::Landscape : QPageLayout::Portrait, QMarginsF(0, 0, 0, 0));
+        layout.setMode(QPageLayout::FullPageMode);
+        return layout;
+    }
+    return std::nullopt;
+}
+
+bool BaseHost::printPrefersLandscape() const
+{
+    if (m_report.isNull()) {
+        return false;
+    }
+    const QindaTK::RichText::PageSetup page = m_report->pageSetupValue();
+    return page.widthPt > page.heightPt;
+}
+
 Quick::PrintRenderCallback BaseHost::printRenderCallback() const
 {
-    if (m_report.isNull() || m_report->document() == nullptr) {
+    if (!m_labels.isNull()) {
+        // M80: labels print through the painter the window shows them with,
+        // at the printer's resolution, from the paper's corner.
+        QPointer<LabelSheet> sheet = m_labels;
+        return [sheet](QPrinter *printer, QPainter *painter) {
+            if (sheet.isNull()) {
+                return;
+            }
+            for (int page = 0; page < sheet->pageCount(); ++page) {
+                if (page > 0) {
+                    printer->newPage();
+                }
+                sheet->paintPage(painter, page, qreal(printer->resolution()) / 72.0);
+            }
+        };
+    }
+    if (m_report.isNull()) {
         return {};
     }
     // AGENT-NOTE (one output description, QindaTK D-130): the report prints
     // through QindaTK's own sheet painter — the same pages its preview and
     // exportPdf show — scaled from its 1/96-inch units to the printer's.
-    QPointer<QindaTK::RichTextDocument> document = m_report->document();
+    QPointer<QindaTK::RichTextDocument> document = m_report;
     return [document](QPrinter *printer, QPainter *painter) {
         if (document.isNull()) {
             return;

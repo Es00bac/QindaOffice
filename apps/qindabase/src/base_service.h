@@ -23,8 +23,13 @@
 //
 // Files: base_service.cpp (file, navigation, objects, settings),
 // base_service_tables.cpp (table design, relationships, SQL console),
-// base_service_queries.cpp (queries), base_service_forms.cpp (forms and
-// reports), base_service_import.cpp (CSV, Excel and Access import),
+// base_service_queries.cpp (queries), base_service_query_tools.cpp (M80:
+// the Access SQL view, make-table runs, rule tests), base_service_forms.cpp
+// (forms), base_service_form_controls.cpp (M80: lookups as combo and list
+// boxes, subforms, buttons), base_service_macros.cpp (M80: macros and where
+// conditions), base_service_reports.cpp (reports),
+// base_service_report_output.cpp (M80: reports evaluated by the engine,
+// mailing labels), base_service_import.cpp (CSV, Excel and Access import),
 // base_service_io.cpp (export, maintenance), base_service_files.cpp (file
 // fields).
 
@@ -37,18 +42,24 @@
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 
+#include <memory>
+
 namespace QindaOffice::Base {
 struct CsvTable;
+struct QueryDesign;
+struct ReportSource;
 }
 
 namespace QindaOffice::Apps::Base {
 
 class BaseDocument;
+class LabelSheet;
 
 class BaseService : public QObject {
     Q_OBJECT
     QML_ELEMENT
     QML_UNCREATABLE("Owned by BaseHost.")
+    Q_MOC_INCLUDE("label_sheet.h")
     Q_PROPERTY(bool hasDatabase READ hasDatabase NOTIFY fileChanged)
     Q_PROPERTY(QString databaseName READ databaseName NOTIFY fileChanged)
     Q_PROPERTY(QString workingPath READ workingPath NOTIFY fileChanged)
@@ -58,9 +69,21 @@ class BaseService : public QObject {
     Q_PROPERTY(QVariantList objects READ objects NOTIFY objectsChanged)
     Q_PROPERTY(QStringList tableNames READ tableNames NOTIFY objectsChanged)
     Q_PROPERTY(QStringList queryNames READ queryNames NOTIFY objectsChanged)
+    // M80: the objects macro arguments and form buttons pick from.
+    Q_PROPERTY(QStringList formNames READ formNames NOTIFY objectsChanged)
+    Q_PROPERTY(QStringList reportNames READ reportNames NOTIFY objectsChanged)
+    Q_PROPERTY(QStringList macroNames READ macroNames NOTIFY objectsChanged)
     Q_PROPERTY(QindaOffice::Apps::Base::DatasheetModel *datasheet READ datasheet CONSTANT)
     Q_PROPERTY(QVariantList templates READ templates CONSTANT)
     Q_PROPERTY(QVariantList fieldTypes READ fieldTypes CONSTANT)
+    // M80 catalogs: Access's input mask presets, macro actions, label
+    // products and the types Query Parameters declares.
+    Q_PROPERTY(QVariantList inputMaskPresets READ inputMaskPresets CONSTANT)
+    Q_PROPERTY(QVariantList macroActions READ macroActions CONSTANT)
+    Q_PROPERTY(QVariantList labelProducts READ labelProducts CONSTANT)
+    Q_PROPERTY(QVariantList parameterTypes READ parameterTypes CONSTANT)
+    // M80: the label sheet a label report shows and prints (label_sheet.h).
+    Q_PROPERTY(QindaOffice::Apps::Base::LabelSheet *labels READ labels CONSTANT)
 public:
     explicit BaseService(BaseDocument *document, QObject *parent = nullptr);
     ~BaseService() override;
@@ -74,9 +97,17 @@ public:
     [[nodiscard]] QVariantList objects() const;
     [[nodiscard]] QStringList tableNames() const;
     [[nodiscard]] QStringList queryNames() const;
+    [[nodiscard]] QStringList formNames() const;
+    [[nodiscard]] QStringList reportNames() const;
+    [[nodiscard]] QStringList macroNames() const;
     [[nodiscard]] DatasheetModel *datasheet() const { return m_datasheet; }
     [[nodiscard]] QVariantList templates() const;
     [[nodiscard]] QVariantList fieldTypes() const;
+    [[nodiscard]] QVariantList inputMaskPresets() const;
+    [[nodiscard]] QVariantList macroActions() const;
+    [[nodiscard]] QVariantList labelProducts() const;
+    [[nodiscard]] QVariantList parameterTypes() const;
+    [[nodiscard]] LabelSheet *labels() const { return m_labels; }
     [[nodiscard]] QindaOffice::Base::BaseFile *file() const;
 
     // ---- database ----
@@ -103,6 +134,9 @@ public:
     // Database Tools ▸ SQL: schema statements go through a previewed plan.
     Q_INVOKABLE QVariantMap planSql(const QStringList &statements);
     Q_INVOKABLE QVariantMap applySql(const QStringList &statements);
+    // M80: Table Design ▸ Test Validation Rules — the saved table's records
+    // against its field and record rules: {ok, lines, broken}.
+    Q_INVOKABLE QVariantMap testValidationRules(const QString &table) const;
 
     // ---- queries (base_service_queries.cpp) ----
     Q_INVOKABLE QVariantMap queryDesign(const QString &name) const;
@@ -117,6 +151,23 @@ public:
     // Database Tools ▸ SQL: a select's first rows as display text
     // {ok, columns, rows, truncated} — or {needsParameters, parameters}.
     Q_INVOKABLE QVariantMap previewSql(const QString &sql, const QVariantMap &parameters, int limit = 500) const;
+    // M80 (base_service_query_tools.cpp): the SQL view in Access SQL —
+    // {ok, sql} for a design, {ok, design} (or {ok:false, error}) for text.
+    Q_INVOKABLE QVariantMap accessSql(const QVariantMap &design) const;
+    Q_INVOKABLE QVariantMap parseAccessSql(const QString &sql) const;
+    // A make-table query's plan (runQuery returns it to be confirmed), run
+    // as one undoable schema step: {ok, rows, name, backupPath}.
+    Q_INVOKABLE QVariantMap runMakeTable(const QVariantMap &design, const QVariantMap &parameters);
+
+    // ---- macros (M80, base_service_macros.cpp, base_macro.h) ----
+    Q_INVOKABLE QVariantMap macroDesign(const QString &name) const;
+    Q_INVOKABLE QVariantMap newMacroDesign() const;
+    // {ok, problems} — what keeps the macro from running.
+    Q_INVOKABLE QVariantMap checkMacro(const QVariantMap &macro, const QString &name = {}) const;
+    Q_INVOKABLE QVariantMap saveMacro(const QString &name, const QVariantMap &macro);
+    // The rowids of `table` meeting an Access where condition (OpenForm,
+    // ApplyFilter): {ok, rowIds} or {ok:false, error}.
+    Q_INVOKABLE QVariantMap whereRowIds(const QString &table, const QString &condition) const;
 
     // ---- forms and reports (base_service_forms.cpp) ----
     Q_INVOKABLE QVariantMap createForm(const QString &name, const QString &table, const QString &title,
@@ -133,6 +184,32 @@ public:
     Q_INVOKABLE QVariantMap openReport(const QString &name, const QVariantMap &parameters, bool dataOnly = false);
     Q_INVOKABLE QVariantMap saveReportDesign(const QString &name, const QVariantMap &design);
     Q_INVOKABLE QVariantList sourceFields(const QString &kind, const QString &name) const;
+
+    // ---- M80 form controls (base_service_form_controls.cpp) ----
+    // {ok, table, controls, lookups:[{name, label, control, hidden}],
+    // subformChoices, buttonChoices}
+    Q_INVOKABLE QVariantMap formControls(const QString &form) const;
+    // Saves the form's subforms and buttons and its lookups' controls
+    // (combo or list, shown) as one undo step, after checking them.
+    Q_INVOKABLE QVariantMap saveFormControls(const QString &form, const QVariantList &controls,
+                                             const QVariantList &lookups);
+    // A lookup field's choices [{value, text}] (the related records).
+    Q_INVOKABLE QVariantList lookupChoices(const QString &table, const QString &field) const;
+    // The datasheet a form's subform `index` (0..3) shows (owned here).
+    Q_INVOKABLE QindaOffice::Apps::Base::DatasheetModel *subformSheet(int index);
+
+    // ---- M80 report output (base_service_report_output.cpp) ----
+    // Evaluates the report map (QindaTK's design report) over the records
+    // openReport read and lays it out into `document` (a QindaTK
+    // RichTextDocument): {ok, rowCount, groupCount, bands} or {ok:false, error}.
+    Q_INVOKABLE QVariantMap buildReport(QObject *document, const QVariantMap &report);
+    // Mailing labels (base_labels.h): a label report from the Label Wizard,
+    // its first labels for the wizard's preview, and the sheet it prints.
+    Q_INVOKABLE QVariantMap createLabels(const QString &name, const QVariantMap &spec);
+    Q_INVOKABLE QVariantMap previewLabels(const QVariantMap &spec) const;
+    Q_INVOKABLE QVariantMap openLabels(const QString &name, const QVariantMap &parameters);
+    // A report object's own shape: {ok, type: "report" | "labels", source}.
+    Q_INVOKABLE QVariantMap reportInfo(const QString &name) const;
 
     // ---- import (base_service_import.cpp) ----
     // A proposal is {ok, plan, header, preview (first rows), rowCount} plus
@@ -183,11 +260,18 @@ signals:
 
 private:
     void bindFile();
+    // M80: a make-table query's plan for runQuery to show (query tools).
+    [[nodiscard]] QVariantMap makeTablePlan(const QindaOffice::Base::QueryDesign &design, const QVariantMap &parameters);
     QVariantMap importTable(const QindaOffice::Base::CsvTable &table, const QVariantMap &plan, const QString &source);
     [[nodiscard]] QVariantMap needsSystemTables() const;
 
     QPointer<BaseDocument> m_document;
     DatasheetModel *m_datasheet = nullptr;
+    QList<DatasheetModel *> m_subforms;  // M80: subformSheet(), created on demand
+    LabelSheet *m_labels = nullptr;      // M80
+    // M80: the records the open report reads (openReport), so a design edit
+    // re-evaluates without asking for the parameters again.
+    std::shared_ptr<QindaOffice::Base::ReportSource> m_reportSource;
     QTemporaryDir m_scratch;
 };
 

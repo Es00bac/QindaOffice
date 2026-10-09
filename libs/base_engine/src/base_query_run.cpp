@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Running queries: inspecting hand-written SQL, selects with typed output
 // columns, and action queries that only run with a confirmed count.
-#include "base_query.h"
+#include "base_query_p.h"
 
 #include <QHash>
 
@@ -25,8 +25,10 @@ QString bareName(const QString &raw, int index)
     return name.isEmpty() || name.at(0).isDigit() ? QStringLiteral("param%1").arg(index) : name;
 }
 
-Result bindParameters(const BaseFile &file, Statement &statement, const QList<QueryParameter> &declared,
-                      const QVariantMap &values)
+} // namespace
+
+Result detail::bindParameters(const BaseFile &file, Statement &statement, const QList<QueryParameter> &declared,
+                              const QVariantMap &values)
 {
     const CurrencyFormat currency = file.currency();
     for (int i = 1; i <= statement.parameterCount(); ++i) {
@@ -53,6 +55,8 @@ Result bindParameters(const BaseFile &file, Statement &statement, const QList<Qu
     }
     return Result::success();
 }
+
+namespace {
 
 Statement prepareOne(const BaseFile &file, const QString &sql, QString *error)
 {
@@ -122,7 +126,7 @@ QueryResult runSelect(const BaseFile &file, const QString &sql, const QList<Quer
         result.error = QStringLiteral("This query changes data; run it as an action query.");
         return result;
     }
-    const Result bound = bindParameters(file, statement, declared, parameters);
+    const Result bound = detail::bindParameters(file, statement, declared, parameters);
     if (!bound.ok) {
         result.error = bound.error;
         return result;
@@ -203,7 +207,7 @@ Result previewAction(BaseFile &file, const QString &sql, const QList<QueryParame
     if (statement.isReadOnly()) {
         return Result::failure(QStringLiteral("This query does not change data."));
     }
-    const Result bound = bindParameters(file, statement, declared, parameters);
+    const Result bound = detail::bindParameters(file, statement, declared, parameters);
     if (!bound.ok) {
         return bound;
     }
@@ -233,7 +237,7 @@ Result runAction(BaseFile &file, const QString &sql, const QList<QueryParameter>
     if (!statement.isValid()) {
         return Result::failure(error);
     }
-    const Result bound = bindParameters(file, statement, declared, parameters);
+    const Result bound = detail::bindParameters(file, statement, declared, parameters);
     if (!bound.ok) {
         return bound;
     }
