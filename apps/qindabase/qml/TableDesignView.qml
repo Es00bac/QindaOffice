@@ -9,7 +9,9 @@ import QindaTK as Tk
 // change it amounts to: what it does, what it risks, and the exact SQL,
 // previewed against the real data before anything runs. Apply runs it as
 // ONE undoable step (a backup first when it drops or narrows data).
-// Designer edits have their own undo while the view is open.
+// Designer edits have their own undo while the view is open. M86 (D-094):
+// the Indexes dialog (IndexesDialog.qml), the table's data macros and link
+// (TableProperties.qml).
 Item {
     id: view
 
@@ -77,6 +79,8 @@ Item {
             const f = d.fields[i]
             if (key === "name") {
                 for (const r of d.relationships) if (r.childField === f.name) r.childField = value
+                // M86: the Indexes dialog's indexes follow a renamed field.
+                for (const index of d.indexes || []) for (const part of index.fields) if (part.field === f.name) part.field = value
             }
             f[key] = value
             if (key === "type" && value === "autoNumber") { f.primaryKey = true; f.required = false }
@@ -106,7 +110,8 @@ Item {
                 d.fields.push({ name: qsTr("Field%1").arg(n), originalName: "", type: "text", primaryKey: false, required: false,
                                 defaultValue: "", unique: false, indexed: false, caption: "", description: "",
                                 lookupTable: "", lookupField: "", lookupDisplay: "",
-                                validationRule: "", validationText: "", inputMask: "" })
+                                validationRule: "", validationText: "", inputMask: "",
+                                expression: "", resultType: "", lookupValues: [], limitToList: false, allowZeroLength: true })
             })
             current = design.fields.length - 1
             break
@@ -116,6 +121,8 @@ Item {
             edit(function(d) {
                 d.fields.splice(view.current, 1)
                 d.relationships = d.relationships.filter(function(r) { return r.childField !== gone })
+                for (const index of d.indexes || []) index.fields = index.fields.filter(function(p) { return p.field !== gone })
+                d.indexes = (d.indexes || []).filter(function(i) { return i.fields.length > 0 })
             })
             current = Math.min(current, design.fields.length - 1)
             break
@@ -137,6 +144,7 @@ Item {
         case "baseDesignApplyAction": apply(); break
         case "baseDesignDiscardAction": discard(); break
         case "baseDesignTestRulesAction": testRules(); break
+        case "baseDesignIndexesAction": indexesDialog.openFor(view); break // M86
         }
     }
     function discard() { load(JSON.parse(original)) }
@@ -176,6 +184,8 @@ Item {
         window.baseHost.selectedName = r.name
         return true
     }
+
+    IndexesDialog { id: indexesDialog; objectName: "indexesDialog" }
 
     Timer {
         id: replan
@@ -331,34 +341,7 @@ Item {
                             onRelationEdited: function(rel) { view.setRelation(rel) }
                         }
                     }
-                    Tk.Card {
-                        objectName: "tableProperties"
-                        Tk.Flex {
-                            direction: Tk.Flex.Column
-                            gap: Tk.Theme.space.xs
-                            Tk.SectionHeader { title: qsTr("Table properties") }
-                            Tk.PropertyRow {
-                                label: qsTr("Validation rule")
-                                hint: qsTr("Compares the fields of a record: [ends] >= [starts]")
-                                Tk.TextField {
-                                    objectName: "tableValidationRule"
-                                    text: view.design.validationRule || ""
-                                    mono: true
-                                    placeholderText: "[ends] >= [starts]"
-                                    onEditingFinished: view.setTableProperty("validationRule", text)
-                                }
-                            }
-                            Tk.PropertyRow {
-                                label: qsTr("Validation text")
-                                hint: qsTr("The message shown when a record breaks the rule")
-                                Tk.TextField {
-                                    objectName: "tableValidationText"
-                                    text: view.design.validationText || ""
-                                    onEditingFinished: view.setTableProperty("validationText", text)
-                                }
-                            }
-                        }
-                    }
+                    TableProperties { view: view }
                 }
                 Tk.Card {
                     objectName: "designChanges"

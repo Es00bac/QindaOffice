@@ -8,7 +8,9 @@ import QindaOffice.Base.App
 // is always asked about first).
 //
 // AGENT-CONTRACT (with base_host_actions.cpp): every id the host emits is
-// handled in `handle`; an id added there must be added here.
+// handled in `handle`; an id added there must be added here. M86's ids
+// (base_host_actions_access.cpp) go to AccessToolsCommands.qml, except
+// Indexes and the Union query type, which their designers answer.
 QtObject {
     id: commands
 
@@ -31,6 +33,11 @@ QtObject {
     }
 
     function show(view, kind, name) {
+        // AGENT-NOTE: read before the view changes — the ribbon hides a
+        // contextual tab as soon as its context goes and selects its first
+        // tab (File) on its own, so "was a designer's tab" is known only now.
+        const leaving = window.ribbon !== null
+                        && ["tableDesign", "queryDesign", "formDesign", "macroDesign"].indexOf(window.ribbon.currentTabId) >= 0
         host.designHistory = false
         host.currentKind = kind || ""
         host.currentName = name || ""
@@ -40,8 +47,7 @@ QtObject {
                            macroDesign: "macroDesign" })[view]
         if (window.ribbon !== null) {
             if (context) window.ribbon.currentTabId = context
-            else if (["tableDesign", "queryDesign", "formDesign", "macroDesign"].indexOf(window.ribbon.currentTabId) >= 0)
-                window.ribbon.currentTabId = "home"
+            else if (leaving) window.ribbon.currentTabId = "home"
         }
     }
 
@@ -405,7 +411,8 @@ QtObject {
         case "baseDatabasePropertiesAction": window.trigger("settingsPreferencesAction"); break
         case "baseShowNavigationAction": break // the host toggles the pane itself
         default:
-            if (id.indexOf("baseDesign") === 0) window.tableDesignView.command(id)
+            if (window.accessCommands.handles(id)) window.accessCommands.handle(id) // M86
+            else if (id.indexOf("baseDesign") === 0) window.tableDesignView.command(id)
             else if (id.indexOf("baseQuery") === 0) window.queryDesignView.command(id)
             else if (id.indexOf("baseMacro") === 0) window.macroDesignView.command(id)
             else if (id === "baseFormPreviewAction") window.formView.togglePreview()

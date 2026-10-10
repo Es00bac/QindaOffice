@@ -164,16 +164,37 @@ Result BaseFile::applyChange(const Change &change, bool undo)
         bytes = QByteArray(static_cast<const char *>(inverted), size);
         sqlite3_free(inverted);
     }
+    // AGENT-GUARD (M86, base_data_macro.h): SQLite fires triggers while a
+    // changeset is applied, and the changeset already holds what a data
+    // macro did — so the replay runs with the qb_meta row "qb.quiet", which
+    // every data macro and link guard stands aside for. The row lives only
+    // inside this savepoint. foreign_keys must be switched before it opens
+    // (the pragma is a no-op inside a transaction).
     m_db.exec(QStringLiteral("PRAGMA foreign_keys=OFF"));
+    const bool quiet = hasSystemTables();
+    m_db.exec(QStringLiteral("SAVEPOINT qb_replay"));
+    if (quiet) {
+        m_db.exec(QStringLiteral("INSERT OR REPLACE INTO qb_meta(key, value) VALUES('qb.quiet', '1')"));
+    }
     int conflict = 0;
     const int rc = sqlite3changeset_apply(m_db.handle(), int(bytes.size()), bytes.data(), nullptr, abortOnConflict,
                                           &conflict);
+    const QString applyError = m_db.lastError();
+    if (rc == SQLITE_OK) {
+        if (quiet) {
+            m_db.exec(QStringLiteral("DELETE FROM qb_meta WHERE key = 'qb.quiet'"));
+        }
+        m_db.exec(QStringLiteral("RELEASE qb_replay"));
+    } else {
+        m_db.exec(QStringLiteral("ROLLBACK TO qb_replay"));
+        m_db.exec(QStringLiteral("RELEASE qb_replay"));
+    }
     m_db.exec(QStringLiteral("PRAGMA foreign_keys=ON"));
     if (rc != SQLITE_OK) {
         return Result::failure(conflict != 0 ? QStringLiteral("The records changed since \"%1\"; it can no longer be %2.")
                                                    .arg(change.label, undo ? QStringLiteral("undone")
                                                                            : QStringLiteral("redone"))
-                                             : m_db.lastError());
+                                             : applyError);
     }
     announce(bytes);
     return Result::success();

@@ -35,6 +35,7 @@ qreal columnWidth(Engine::FieldType type, bool lookup)
     case Engine::FieldType::AutoNumber: return 64;
     case Engine::FieldType::YesNo: return 100;
     case Engine::FieldType::Integer: return 96;
+    case Engine::FieldType::LargeNumber: return 140; // M86
     case Engine::FieldType::Number:
     case Engine::FieldType::Currency:
     case Engine::FieldType::Date: return 110;
@@ -113,7 +114,7 @@ QVariantList DatasheetModel::columns() const
         m.insert(QStringLiteral("id"), m_columns.at(i).name);
         m.insert(QStringLiteral("filterType"), lookup                                    ? QStringLiteral("integer")
                                                : t == Engine::FieldType::YesNo           ? QStringLiteral("boolean")
-                                               : t == Engine::FieldType::Integer || t == Engine::FieldType::AutoNumber
+                                               : Engine::isWholeNumber(t)
                                                    ? QStringLiteral("integer")
                                                : Engine::isNumeric(t) ? QStringLiteral("number")
                                                                       : QStringLiteral("text"));

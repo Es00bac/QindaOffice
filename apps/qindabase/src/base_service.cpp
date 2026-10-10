@@ -3,6 +3,7 @@
 #include "base_service.h"
 
 #include "base_document.h"
+#include "base_links.h"
 #include "base_objects.h"
 #include "base_report.h"
 #include "base_schema.h"
@@ -61,6 +62,7 @@ BaseService::BaseService(BaseDocument *document, QObject *parent)
         emit fileChanged();
         emit objectsChanged();
     });
+    connect(document, &BaseDocument::opened, this, &BaseService::databaseOpened);
     connect(m_datasheet, &DatasheetModel::messageRequested, this, &BaseService::notify);
     bindFile();
 }
@@ -76,6 +78,7 @@ void BaseService::bindFile()
     connect(f, &Engine::BaseFile::schemaChanged, this, &BaseService::objectsChanged);
     connect(f, &Engine::BaseFile::objectsChanged, this, &BaseService::objectsChanged);
     connect(f, &Engine::BaseFile::dataChanged, this, &BaseService::recordsChanged);
+    refreshLinksAtOpen(); // M86 (base_links.h): a linked table follows its source from the start
 }
 
 Engine::BaseFile *BaseService::file() const
@@ -128,13 +131,22 @@ QVariantList BaseService::objects() const
     if (f == nullptr) {
         return out;
     }
+    // M86: a linked table shows a link icon and where it comes from.
+    QHash<QString, QString> links;
+    for (const auto &[table, link] : Engine::linkedTables(*f)) {
+        links.insert(table.toLower(), link.description());
+    }
     for (const QString &table : f->tableNames()) {
         const qint64 rows = f->db().scalar(QStringLiteral("SELECT count(*) FROM %1").arg(Engine::quoteIdentifier(table)))
                                 .toLongLong();
+        const QString link = links.value(table.toLower());
         out.append(QVariantMap{{QStringLiteral("kind"), QStringLiteral("table")},
                                {QStringLiteral("name"), table},
-                               {QStringLiteral("description"), tr("%n record(s)", nullptr, int(rows))},
-                               {QStringLiteral("iconName"), iconFor(QStringLiteral("table"))}});
+                               {QStringLiteral("description"), link.isEmpty() ? tr("%n record(s)", nullptr, int(rows))
+                                                                              : tr("linked · %1").arg(link)},
+                               {QStringLiteral("iconName"), link.isEmpty() ? iconFor(QStringLiteral("table"))
+                                                                           : QStringLiteral("link")},
+                               {QStringLiteral("linked"), !link.isEmpty()}});
     }
     for (const QString &kind : {QStringLiteral("query"), QStringLiteral("form"), QStringLiteral("report"),
                                 QStringLiteral("macro")}) {
@@ -200,6 +212,8 @@ QVariantList BaseService::fieldTypes() const
     for (const Engine::FieldType t : Engine::designableTypes()) {
         out.append(QVariantMap{{QStringLiteral("id"), Engine::typeId(t)}, {QStringLiteral("label"), Engine::typeLabel(t)}});
     }
+    // M86: a calculated field picks its result type in its properties.
+    out.append(QVariantMap{{QStringLiteral("id"), QStringLiteral("calculated")}, {QStringLiteral("label"), tr("Calculated")}});
     return out;
 }
 

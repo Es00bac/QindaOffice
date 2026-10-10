@@ -203,6 +203,35 @@ data), and Access databases come in through the mdb-tools import.
 9. Attachments with several files; multi-valued fields.
 10. `.accdb` writing (not feasible; see above).
 
+**M86 closed items 3–8** (D-094): calculated fields and Value List lookups
+with Limit To List; the Simple, Crosstab, Find Duplicates and Find
+Unmatched wizards and union queries (with subqueries in criteria); report
+grouping on intervals, ten levels, running sums, Keep Together and Force
+New Page; data macros (the five table events) and AutoExec; XML import and
+linked tables (read-only copies kept in step); the Indexes dialog, Allow
+Zero Length, the Hyperlink and Large Number types.
+
+**Ranked: what is left after M86.**
+
+1. Form and control events, and conditions in macros (If, On Current,
+   Before Update) — forms that react without a button.
+2. Tab controls, calculated controls and the form's own layout (sizes,
+   columns) — QindaTK's FormDesigner (its own milestone adds the controls).
+3. Reports: percentages of the total, per-group header text, fields in
+   the page bands, subreports; more than three levels in QindaTK's report
+   designer (the engine and the pages hold ten; the toolkit's design three).
+4. A drop-down for value lists in datasheet cells (QindaTK's EditableGrid
+   has none), several display columns, Limit To List off for table lookups.
+5. Linked tables that edit their source (Access edits linked tables;
+   QindaBase keeps read-only copies), ODBC sources.
+6. Macro If / Else, submacros, TempVars, error handling, SetValue and
+   RunSQL; named data macros and their record actions (LookupRecord,
+   CreateRecord, ForEachRecord).
+7. Attachments with several files; multi-valued fields.
+8. The Format property, field sizes (Byte, Integer, Single), Date/Time
+   Extended, rich-text Long Text.
+9. `.accdb` writing (not feasible; see above).
+
 ## Milestones
 
 | Milestone | Scope | Gate |
@@ -232,6 +261,7 @@ data), and Access databases come in through the mdb-tools import.
 | **M82** Calc and Show everyday polish — **done 2026-10-09 (D-091)**; open: the owner's check in Excel and PowerPoint, editing in the second window, Arrange All (the desktop arranges windows), a combo's secondary axis drawn as its own, multi-level categories edited in Edit Data, a view's printer-settings part | Calc: Excel's text overflow on screen and paper (left, right, centred; stopped by values, formulas and merges; wrapped, Fill, numbers and merged text never spill; `####`) ✔; View ▸ Split, four panes with draggable bars ✔; View ▸ New Window, a view-only second window on any sheet ✔; View ▸ Custom Views (zoom, panes, hidden rows and columns, filter, print settings) read and written as Excel's `customWorkbookViews` / `customSheetViews` / `Z_…wvu` names ✔; Show: New Slide, Layout, Reset Slide, Duplicate Slide and Reuse Slides (keep or take formatting) on the deck's own layouts with a thumbnail gallery and PowerPoint's placeholder prompts ✔; Browse for Themes with a template's masters and layouts, Apply to All or to the selected slides ✔; combo charts edited in every plot, multi-level categories kept, kind changes keeping per-point colours and data labels ✔ | engine, calc_io and show_model tests over hand-built Excel- and PowerPoint-shaped packages (schema-valid, read back equal, untouched parts byte for byte); LibreOffice renders a deck built from layouts and reused slides and an edited combo chart; the real windows — overflow checked on grabs and in the exported PDF, split panes, the second window, Custom Views through their dialogs, the layout gallery, Reuse Slides, a combo's Edit Data; ribbon squeeze, menu export, fixtures, grabs at 1280 and 520 px — met on qinda ([verification.md](../verification.md#m82-polish-gates-d-091)) |
 | **M83** QindaPlan: task types, custom fields, actuals, splits, recurring tasks — **done 2026-10-09 (D-092)**; open: the ranked list above (groups and highlight filters first), the owner's check in Project | task types (Fixed Units / Duration / Work) with Project's recalculation table and effort-driven assignment changes, Work typed on a task or an assignment ✔; the 120 task custom fields with new names, lookup tables and formulas, as columns, typed, filtered and sorted ✔; elapsed durations and lags ✔; Split Task and Remove Splits ✔; recurring tasks as Project's recurring summaries ✔; Act. Work and Act. Cost typed, progress lines, Reschedule Uncompleted Work ✔; the Excel/CSV task import with a column map ✔; recurring calendar exceptions and work weeks made here ✔; MSPDI carries all of it — custom fields byte for byte while unchanged, splits as timephased data ✔ | plan_engine tests worked by hand (each task type's table, effort driving, splits, elapsed time, rescheduling, the progress line, actuals, recurrences, calendars, formulas, filters, the import) and a Project-shaped MSPDI fixture (read, scheduled as Project did, written, re-read equal, unknown elements and unchanged definitions byte for byte, the schema's sequences checked structurally — no MSPDI XSD in Portage); the xlsx import round trip and the printed split gaps and progress line; the app through the host and the real window (dialogs, grabs at 1280 and 520 px), ribbon squeeze, menu export, fixtures — met on qinda ([verification.md](../verification.md#m83-plan-gates-d-092)) |
 | **M84** QindaNote: OneNote's everyday note-taking — **done 2026-10-09 (D-093, [qindanote.md](../qindanote.md))**; open: the owner's check on the desktop (typing, tags, search, import of real Word files), page versions, floating pictures inside formatted text, page colour in Word, the QindaTK gaps in D-093 | formatted typing in text blocks (QindaTK rich text: run formats, Title, Heading 1–6, Quote, Code, lists with Tab, links, tables in a block, sanitised paste, undo per edit) ✔; the page format versioned, old pages unchanged ✔; formatting in print, PDF, Word and Markdown ✔; OneNote's tags, custom tags, Find Tags and its summary page ✔; Search Notebooks (Ctrl+E) across open and recent notebooks ✔; import of Word (page per Heading 1), Markdown and HTML, `.one` refused with the way round ✔; page templates, page colour, rule lines, subpages, Link to File ✔ | `tst_note_rich`, `tst_note_export`, `tst_note_tags`, `tst_note_search`, `tst_note_import`; the Note UI fixtures, grabs at 1280/520, ribbon squeeze and menu-export gates |
+| **M86** QindaBase: Access's next tools outside the form designer — **done 2026-10-09 (D-094)**; open: the ranked list above (form events and macro conditions first), QindaTK's three-level report designer and value-list cells, the owner's check in Access with an XML round trip | calculated fields as generated columns ✔; value lists with Limit To List, Allow Zero Length ✔; Hyperlink and Large Number ✔; the Indexes dialog (several fields, descending, Unique, Ignore Nulls) ✔; the Simple, Crosstab, Find Duplicates and Find Unmatched wizards ✔; union queries in the designer and Access SQL, subqueries in criteria ✔; Group On intervals, ten group levels, running sums, Keep Together and Force New Page on the pages ✔; data macros (five table events; SetField, RaiseError, LogEvent, StopMacro) replayed by undo without running twice, the application log, AutoExec ✔; Access XML import, linked tables to a .qbase, CSV or Excel sheet with the Linked Table Manager ✔; eighteen new commands on the menus and the ribbon ✔ | base_engine tests against hand-worked results (calculated fields, value lists, empty text, hyperlinks, large numbers, indexes, the four wizards, unions and subqueries, intervals, running sums, page flags, data macros with undo, XML round trips, linked-table refresh); the service over the seeded starter; the real window at 1280 and 520 px with grabs; ribbon squeeze, menu export, icons, fixtures — met on qinda ([verification.md](../verification.md#m86-base-gates-d-094)) |
 
 Every milestone follows AGENTS.md: ≤ 500 lines per file, tests headless,
 docs in the same commit, a `docs/decisions.md` entry, fixtures and grabs

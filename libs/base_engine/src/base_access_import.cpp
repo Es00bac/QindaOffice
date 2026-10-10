@@ -71,6 +71,10 @@ public:
 
     void readSchema()
     {
+        if (std::optional<AccessSchema> parsed = m_reader.parsedSchema()) {
+            m_schema = std::move(parsed);
+            return;
+        }
         QString error;
         const QString ddl = m_reader.schema(&error);
         if (!ddl.trimmed().isEmpty()) {

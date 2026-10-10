@@ -158,11 +158,14 @@ private slots:
             QVERIFY(view->property("compiled").toMap().value(str("sql")).toString().contains(str("10000")));
             // What the grid cannot hold is said, and can stay SQLite SQL.
             QMetaObject::invokeMethod(view, "showSql");
-            view->setProperty("sqlText", str("SELECT name FROM donors UNION SELECT name FROM campaigns"));
+            // (M86: a union is a design of its own now; a join on two pairs
+            // of fields is still beyond the grid)
+            view->setProperty("sqlText", str("SELECT donors.name FROM donors INNER JOIN donations ON donations.donor_id = donors.id "
+                                             "AND donations.donor_id = donors.id"));
             QMetaObject::invokeMethod(view, "showDesign");
             scene.settle();
             QCOMPARE(view->property("mode").toString(), str("sql"));
-            QVERIFY(view->property("sqlError").toString().contains(str("UNION")));
+            QVERIFY(view->property("sqlError").toString().contains(str("one pair of fields")));
             QVERIFY(scene.visible("queryKeepSqlite"));
             QindaOffice::Test::saveGrab(scene.window, str("qindabase_sqlrefused_1280"));
             QMetaObject::invokeMethod(view, "keepAsSqlite");

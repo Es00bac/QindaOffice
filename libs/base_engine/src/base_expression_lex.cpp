@@ -12,6 +12,9 @@ QList<Token> tokenize(const QString &src, QString *error)
     const int n = int(src.size());
     while (i < n) {
         const QChar c = src.at(i);
+        const int start = i;
+        const qsizetype before = out.size();
+        // (positions are stamped on the token this pass adds, below)
         if (c.isSpace()) {
             ++i;
         } else if (c.isDigit() || (c == QLatin1Char('.') && i + 1 < n && src.at(i + 1).isDigit())) {
@@ -73,8 +76,12 @@ QList<Token> tokenize(const QString &src, QString *error)
                 return {};
             }
         }
+        if (out.size() > before) {
+            out.last().begin = start;
+            out.last().end = i;
+        }
     }
-    out.append(Token{Token::End, {}});
+    out.append(Token{Token::End, {}, int(n), int(n)});
     return out;
 }
 
@@ -89,7 +96,7 @@ QList<Token> bareWordsAsText(QList<Token> tokens, const QString &text)
         return t.kind == Token::Word && !keywords.contains(t.text.toLower());
     });
     if (wordsOnly) {
-        return {Token{Token::String, text.trimmed()}, Token{Token::End, {}}};
+        return {Token{Token::String, text.trimmed(), 0, int(text.size())}, Token{Token::End, {}, int(text.size()), int(text.size())}};
     }
     return tokens;
 }

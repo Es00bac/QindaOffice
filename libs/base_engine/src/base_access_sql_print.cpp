@@ -254,6 +254,9 @@ QString accessSql(const QueryDesign &design)
     if (design.kind == QueryKind::Sql) {
         return design.sql;
     }
+    if (design.kind == QueryKind::Union) {
+        return unionText(design); // M86
+    }
     if (design.tables.isEmpty()) {
         return {}; // nothing to show until the query reads a table
     }

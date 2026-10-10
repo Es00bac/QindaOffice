@@ -102,6 +102,9 @@ public:
     Q_INVOKABLE void setTotal(const QString &field, const QString &function);
     Q_INVOKABLE QString columnLabel(const QString &columnId) const;
     Q_INVOKABLE QString cellText(const QString &rowId, const QString &columnId) const;
+    // M86: the text a cell's editor starts from (a hyperlink's whole stored
+    // text, money without its symbol) — datasheet_edit.cpp.
+    Q_INVOKABLE QString cellEditText(const QString &rowId, const QString &columnId) const;
     Q_INVOKABLE QVariantList lookupChoices(const QString &columnId) const;
     Q_INVOKABLE QVariantMap setCell(const QString &rowId, const QString &columnId, const QVariant &value);
     Q_INVOKABLE QVariantMap deleteImpact(const QStringList &rowIds) const;

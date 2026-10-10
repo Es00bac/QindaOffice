@@ -42,10 +42,129 @@ QHash<QString, QString> lookupMap(const BaseFile &file, const LookupDef &lookup)
 
 ReportTotal totalFrom(const QVariantMap &m)
 {
-    return {m.value(s("field")).toString(), m.value(s("function"), s("sum")).toString(), m.value(s("label")).toString()};
+    return {m.value(s("field")).toString(), m.value(s("function"), s("sum")).toString(), m.value(s("label")).toString(),
+            m.value(s("running"), s("none")).toString()};
+}
+
+ReportSection sectionFrom(const QVariant &v)
+{
+    const QVariantMap m = v.toMap();
+    ReportSection out;
+    out.newPage = m.value(s("newPage"), s("none")).toString();
+    out.keepTogether = m.value(s("keepTogether")).toBool();
+    return out;
+}
+
+ReportGroup groupFrom(const QVariant &v)
+{
+    const QVariantMap m = v.toMap();
+    ReportGroup g;
+    g.field = v.metaType().id() == QMetaType::QString ? v.toString() : m.value(s("field")).toString();
+    g.label = m.value(s("label")).toString();
+    g.pageBreakBefore = m.value(s("pageBreakBefore")).toBool();
+    for (const QVariant &t : m.value(s("totals")).toList()) {
+        g.totals.append(totalFrom(t.toMap()));
+    }
+    const QVariantMap interval = m.value(s("interval")).toMap();
+    g.interval.by = interval.value(s("by"), s("value")).toString();
+    g.interval.size = interval.value(s("size"), 1).toDouble();
+    g.descending = m.value(s("descending")).toBool();
+    g.keepTogether = m.value(s("keepTogether"), s("no")).toString();
+    g.header = sectionFrom(m.value(s("header")));
+    g.footer = sectionFrom(m.value(s("footer")));
+    // M80's "a new page per group" is the header's Force New Page Before.
+    if (g.pageBreakBefore && g.header.newPage == QLatin1String("none")) {
+        g.header.newPage = s("before");
+    }
+    return g;
+}
+
+QStringList fieldsOf(const QVariantList &groups)
+{
+    QStringList out;
+    for (const QVariant &g : groups) {
+        out.append(g.metaType().id() == QMetaType::QString ? g.toString() : g.toMap().value(s("field")).toString());
+    }
+    return out;
+}
+
+// What the toolkit's design can hold of the levels: the leading ones while
+// their fields are distinct, at most three, without M86's options.
+QVariantList projection(const QVariantList &levels)
+{
+    QVariantList out;
+    QStringList used;
+    for (const QVariant &v : levels) {
+        const QVariantMap level = v.toMap();
+        const QString field = level.value(s("field")).toString();
+        if (field.isEmpty() || used.contains(field, Qt::CaseInsensitive) || out.size() == 3) {
+            break;
+        }
+        used.append(field);
+        const QString newPage = level.value(s("header")).toMap().value(s("newPage")).toString();
+        QVariantList totals;
+        for (const QVariant &t : level.value(s("totals")).toList()) {
+            QVariantMap total = t.toMap();
+            total.remove(s("running"));
+            totals.append(total);
+        }
+        QVariantMap g{{s("field"), field},
+                      {s("pageBreakBefore"), level.value(s("pageBreakBefore")).toBool() || newPage == QLatin1String("before")
+                                                 || newPage == QLatin1String("both")},
+                      {s("totals"), totals}};
+        if (!level.value(s("label")).toString().isEmpty()) {
+            g.insert(s("label"), level.value(s("label")));
+        }
+        out.append(g);
+    }
+    return out;
 }
 
 } // namespace
+
+QVariantList reportLevels(const QVariantMap &report)
+{
+    const QVariantList access = report.value(s("accessGroups")).toList();
+    const QVariantList groups = report.value(s("groups")).toList();
+    if (!access.isEmpty() && fieldsOf(projection(access)) == fieldsOf(groups)) {
+        return access;
+    }
+    QVariantList out;
+    for (const QVariant &g : groups) {
+        QVariantMap level = g.metaType().id() == QMetaType::QString ? QVariantMap{{s("field"), g}} : g.toMap();
+        // The toolkit's own designer changed the groups: its levels win, and
+        // a level on the same field keeps its M86 options.
+        for (const QVariant &a : access) {
+            const QVariantMap known = a.toMap();
+            if (known.value(s("field")).toString() == level.value(s("field")).toString()) {
+                for (auto it = known.cbegin(); it != known.cend(); ++it) {
+                    if (!level.contains(it.key())) {
+                        level.insert(it.key(), it.value());
+                    }
+                }
+                break;
+            }
+        }
+        out.append(level);
+    }
+    // The toolkit's first-cut keys: one group with a sum.
+    if (out.isEmpty() && !report.contains(s("groups")) && !report.value(s("groupField")).toString().isEmpty()) {
+        QVariantList totals;
+        if (const QString sum = report.value(s("sumField")).toString(); !sum.isEmpty()) {
+            totals.append(QVariantMap{{s("field"), sum}, {s("function"), s("sum")}});
+        }
+        out.append(QVariantMap{{s("field"), report.value(s("groupField"))}, {s("totals"), totals}});
+    }
+    return out;
+}
+
+QVariantMap reportWithLevels(const QVariantMap &report, const QVariantList &levels)
+{
+    QVariantMap out = report;
+    out.insert(s("accessGroups"), levels);
+    out.insert(s("groups"), projection(levels));
+    return out;
+}
 
 int ReportSource::columnIndex(const QString &name) const
 {
@@ -162,27 +281,22 @@ ReportSpec ReportSpec::fromReportMap(const QVariantMap &report)
             spec.columns.append({m.value(s("field")).toString(), m.value(s("label")).toString()});
         }
     }
-    for (const QVariant &v : report.value(s("groups")).toList()) {
-        const QVariantMap m = v.toMap();
-        ReportGroup g;
-        g.field = v.metaType().id() == QMetaType::QString ? v.toString() : m.value(s("field")).toString();
-        g.label = m.value(s("label")).toString();
-        g.pageBreakBefore = m.value(s("pageBreakBefore")).toBool();
-        for (const QVariant &t : m.value(s("totals")).toList()) {
-            g.totals.append(totalFrom(t.toMap()));
-        }
+    // M80's groups, or M86's levels (reportLevels: "accessGroups" while the
+    // toolkit's "groups" is still their view; the first-cut groupField too).
+    for (const QVariant &v : reportLevels(report)) {
+        ReportGroup g = groupFrom(v);
         if (!g.field.isEmpty()) {
             spec.groups.append(g);
         }
     }
-    // The toolkit's first-cut keys: one group with a sum, an equality filter.
-    if (spec.groups.isEmpty() && !report.value(s("groupField")).toString().isEmpty()) {
-        ReportGroup g;
-        g.field = report.value(s("groupField")).toString();
-        if (const QString sum = report.value(s("sumField")).toString(); !sum.isEmpty()) {
-            g.totals.append({sum, s("sum"), QString()});
-        }
-        spec.groups.append(g);
+    const QVariantMap sections = report.value(s("sections")).toMap();
+    spec.reportHeader = sectionFrom(sections.value(s("reportHeader")));
+    spec.detailSection = sectionFrom(sections.value(s("detail")));
+    spec.reportFooter = sectionFrom(sections.value(s("reportFooter")));
+    for (const QVariant &v : report.value(s("runningSums")).toList()) {
+        const QVariantMap m = v.toMap();
+        spec.runningSums.append({m.value(s("field")).toString(), m.value(s("over"), s("all")).toString(),
+                                 m.value(s("label")).toString()});
     }
     for (const QVariant &t : report.value(s("totals")).toList()) {
         spec.totals.append(totalFrom(t.toMap()));

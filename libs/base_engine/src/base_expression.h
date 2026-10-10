@@ -23,6 +23,11 @@ struct Context {
     std::function<std::optional<FieldRef>(const QString &, const QString &)> resolve;
     CurrencyFormat currency;
     QList<QueryParameter> *parameters = nullptr;
+    // M86 (D-094): compiles a subquery's Access SQL ("SELECT [city] FROM
+    // [donors] GROUP BY [city] HAVING Count(*) > 1") into SQLite SQL, or
+    // sets `error`. Unset where a subquery means nothing (rules, macros,
+    // calculated fields): a subquery there is an error.
+    std::function<QString(const QString &accessSql, QString *error)> subquery;
 };
 
 struct Compiled {
@@ -30,6 +35,9 @@ struct Compiled {
     std::optional<FieldType> type;
     bool aggregate = false;
     QString error;
+    // valueFor (M86): the text was one literal, already converted to the
+    // target type's storage ("100" on money is 10000 minor units).
+    bool literal = false;
     [[nodiscard]] bool ok() const { return error.isEmpty(); }
 };
 

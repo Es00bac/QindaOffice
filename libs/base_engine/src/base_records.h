@@ -58,6 +58,12 @@ struct ColumnInfo {
     QString inputMask;
     QString validationRule;
     QString validationText;
+    // M86 (D-094): a calculated field (read-only, worked out by SQLite), Allow
+    // Zero Length (typing "" stores an empty text when it is Yes), and a
+    // linked table's columns (read-only: the copy follows its source).
+    bool calculated = false;
+    bool allowZeroLength = true;
+    bool linked = false;
     [[nodiscard]] QString label() const { return caption.isEmpty() ? name : caption; }
     [[nodiscard]] QVariantMap toMap() const;
     // A stored value as the datasheet shows it: displayText, through the
@@ -104,9 +110,12 @@ public:
                                         QString *display, QString *error = nullptr, bool matchAny = false,
                                         const QString &condition = {});
 
-    // Lookup choices: value → display text (at most `limit`, sorted by display).
+    // Lookup choices: value → display text (at most `limit`, sorted by
+    // display). M86: a value list's choices, in its own order, stored as
+    // `type` stores them.
     [[nodiscard]] static QList<QPair<QVariant, QString>> lookupChoices(const BaseFile &file, const LookupDef &lookup,
-                                                                       int limit = 20000);
+                                                                       int limit = 20000,
+                                                                       FieldType type = FieldType::Text);
     // A typed value, or a display text resolved through the lookup.
     [[nodiscard]] static Parsed resolveInput(const BaseFile &file, const ColumnInfo &column, const QVariant &input);
 

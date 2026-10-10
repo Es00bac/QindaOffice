@@ -57,7 +57,7 @@ private slots:
         QVERIFY(def);
         QCOMPARE(def->fields.at(1).validationRule, str("> 0"));
         QCOMPARE(def->fields.at(1).validationText, str("A gift is more than nothing."));
-        QCOMPARE(def->ruleTriggers.size(), 6); // insert + update for three rules
+        QCOMPARE(def->derivedTriggers.size(), 6); // insert + update for three rules
         QVERIFY(def->triggerSql.isEmpty());   // derived from the design, never kept verbatim
         Result r = insert(db, "gifts", {{str("amount"), str("0")}});
         QVERIFY(!r.ok);
@@ -127,7 +127,7 @@ private slots:
         QVERIFY(!preview.ok);
         QVERIFY2(preview.error.contains(str("2 record(s) break the validation rule of amount (> 0)")), qPrintable(preview.error));
         QVERIFY(!db.apply(plan).ok);
-        QVERIFY(readTable(*db.file, str("gifts"))->ruleTriggers.isEmpty()); // nothing changed
+        QVERIFY(readTable(*db.file, str("gifts"))->derivedTriggers.isEmpty()); // nothing changed
         QVERIFY(db.exec(str("UPDATE gifts SET amount = 100 WHERE amount < 0")).ok);
         plan = planAlterTable(*db.file, *readTable(*db.file, str("gifts")), after);
         QVERIFY(db.apply(plan).ok);
@@ -147,7 +147,7 @@ private slots:
         QVERIFY2(plan.ok(), qPrintable(plan.error));
         QVERIFY(plan.sqlText().contains(str("CREATE TRIGGER")));
         QVERIFY(db.apply(plan).ok);
-        QCOMPARE(readTable(*db.file, str("gifts"))->ruleTriggers.size(), 6);
+        QCOMPARE(readTable(*db.file, str("gifts"))->derivedTriggers.size(), 6);
         QVERIFY(!insert(db, "gifts", {{str("amount"), str("-2")}}).ok);
         // A renamed table keeps its rules (under triggers named for it).
         after = redesign(*readTable(*db.file, str("gifts")));
@@ -155,7 +155,7 @@ private slots:
         QVERIFY(db.apply(planAlterTable(*db.file, *readTable(*db.file, str("gifts")), after)).ok);
         const std::optional<TableDef> renamed = readTable(*db.file, str("presents"));
         QCOMPARE(renamed->fields.at(1).validationRule, str("> 0"));
-        QVERIFY(renamed->ruleTriggers.first().contains(str("presents")));
+        QVERIFY(renamed->derivedTriggers.first().contains(str("presents")));
         QVERIFY(!insert(db, "presents", {{str("amount"), str("-2")}}).ok);
         // Removing a rule is one undoable design step.
         after = redesign(*renamed);

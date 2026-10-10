@@ -25,3 +25,13 @@ qqo_add_base_test(tst_base_rules)
 qqo_add_base_test(tst_base_query_m80)
 qqo_add_base_test(tst_base_access_sql)
 qqo_add_base_test(tst_base_macro_report)
+# M86 (D-094): calculated fields, value lists, Allow Zero Length, Hyperlink
+# and Large Number; the Indexes dialog; query wizards, unions and
+# subqueries; report intervals, levels, running sums and page control; data
+# macros; Access's XML import and linked tables.
+qqo_add_base_test(tst_base_fields_m86)
+qqo_add_base_test(tst_base_indexes)
+qqo_add_base_test(tst_base_query_m86)
+qqo_add_base_test(tst_base_report_m86)
+qqo_add_base_test(tst_base_data_macro)
+qqo_add_base_test(tst_base_xml_links)

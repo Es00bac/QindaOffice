@@ -94,6 +94,9 @@ OfficeWindow {
     }
 
     BaseCommands { id: commands_; window: window }
+    // M86 (D-094): the wizards, table events, hyperlinks, XML import, links,
+    // application log and AutoExec (AccessToolsCommands.qml).
+    readonly property AccessToolsCommands accessCommands: AccessToolsCommands { window: window }
     // (the report wizard, the SQL view and friends are reached by tests
     // through these aliases too)
 
@@ -107,6 +110,11 @@ OfficeWindow {
     ReportWizardDialog { id: reportWizard_; window: window }
     LabelWizardDialog { id: labelWizard_; window: window }
     FormControlDialog { id: formControlDialog_; window: window }
+    // M86 (D-094)
+    QueryWizardDialog { id: queryWizard_; objectName: "queryWizardDialog"; window: window }
+    HyperlinkDialog { id: hyperlinkDialog_; objectName: "hyperlinkDialog"; window: window }
+    LinkTableDialog { id: linkTableDialog_; objectName: "linkTableDialog"; window: window }
+    LinkedTableManagerDialog { id: linkedTableManager_; objectName: "linkedTableManager"; window: window }
     property alias planDialog: planDialog_
     property alias relationshipDialog: relationshipDialog_
     property alias parametersDialog: parametersDialog_
@@ -116,6 +124,10 @@ OfficeWindow {
     property alias reportWizard: reportWizard_
     property alias labelWizard: labelWizard_
     property alias formControlDialog: formControlDialog_
+    property alias queryWizard: queryWizard_
+    property alias hyperlinkDialog: hyperlinkDialog_
+    property alias linkTableDialog: linkTableDialog_
+    property alias linkedTableManager: linkedTableManager_
     property alias promptDialog: promptDialog_
     property alias confirmDialog: confirmDialog_
     property alias exportDialog: exportDialog_
@@ -190,6 +202,9 @@ OfficeWindow {
     Connections {
         target: window.base
         function onNotify(title, text, variant) { window.notify(title, text, variant) }
+        // M86: Access runs a macro named AutoExec as a database opens
+        // (Shift held skips it) — after the open has settled.
+        function onDatabaseOpened() { Qt.callLater(window.accessCommands.runAutoExec) }
     }
     Component.onCompleted: window.baseHost.preferencesPageUrl = Qt.resolvedUrl("BasePreferencesPage.qml")
 }

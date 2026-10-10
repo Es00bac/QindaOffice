@@ -17,6 +17,11 @@
 //   date        DATE            TEXT yyyy-MM-dd
 //   dateTime    DATETIME        TEXT yyyy-MM-dd HH:mm:ss
 //   file        FILE            BLOB, at most 32 MB (base_file_field.h, M65)
+//   hyperlink   HYPERLINK TEXT  TEXT: an address or Access's "display#address#…"
+//                               (base_hyperlink.h, M86)
+//   largeNumber BIGINT          INTEGER (64-bit; Access's Large Number, M86)
+// A calculated field (M86, base_calculated.h) is a generated column of its
+// result type: FieldDef::calculated, never a FieldType of its own.
 // The declared type is the source of truth for a column's QindaBase type;
 // qb_fields.type only disambiguates (autoNumber). Foreign SQLite files map
 // by affinity (typeFromDeclared); BLOB columns are `other` (read-only).
@@ -34,7 +39,23 @@
 
 namespace QindaOffice::Base {
 
-enum class FieldType { AutoNumber, Text, LongText, Integer, Number, Currency, YesNo, Date, DateTime, File, Other };
+// AGENT-NOTE: values are never stored as numbers (typeId is the stored
+// form), so M86 inserted Hyperlink and LargeNumber before Other.
+enum class FieldType {
+    AutoNumber,
+    Text,
+    LongText,
+    Integer,
+    Number,
+    Currency,
+    YesNo,
+    Date,
+    DateTime,
+    File,
+    Hyperlink,   // M86
+    LargeNumber, // M86
+    Other
+};
 
 struct CurrencyFormat {
     QString symbol = QStringLiteral("$");
@@ -52,7 +73,9 @@ constexpr int kShortTextLimit = 255;
 // an INTEGER PRIMARY KEY (an AutoNumber when the table says AUTOINCREMENT
 // or when `autoIncrement` is known).
 [[nodiscard]] FieldType typeFromDeclared(const QString &declared, bool rowidPrimaryKey = false);
-[[nodiscard]] bool isNumeric(FieldType type); // integer/number/currency/autoNumber
+[[nodiscard]] bool isNumeric(FieldType type); // integer/number/currency/autoNumber/largeNumber
+// Whole numbers: AutoNumber, Whole number and (M86) Large Number.
+[[nodiscard]] bool isWholeNumber(FieldType type);
 // Typed in as text (every type but autoNumber, file and other).
 [[nodiscard]] bool isTypable(FieldType type);
 
@@ -72,7 +95,7 @@ struct Parsed {
 // QByteArray is a file field's bytes.
 [[nodiscard]] Parsed parseValue(FieldType type, const QVariant &value, const CurrencyFormat &currency = {});
 // Storage value → display text ("$1,250.00", "Yes", "2026-03-01",
-// "PNG image · 24 KB").
+// "PNG image · 24 KB"; M86: a hyperlink's display text).
 [[nodiscard]] QString displayText(FieldType type, const QVariant &stored, const CurrencyFormat &currency = {});
 // Storage value → the text an editor starts from ("1250.00", "Yes").
 [[nodiscard]] QString editText(FieldType type, const QVariant &stored, const CurrencyFormat &currency = {});

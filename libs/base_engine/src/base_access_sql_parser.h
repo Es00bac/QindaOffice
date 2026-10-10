@@ -60,6 +60,10 @@ private:
     bool updateStatement();
     bool deleteStatement();
     bool appendStatement();
+    // M86: SELECT … UNION [ALL] SELECT … [ORDER BY …] (base_access_sql_union.cpp);
+    // `unions` holds the UNION tokens found at depth 0.
+    bool unionStatement(const QList<int> &unions);
+    [[nodiscard]] QList<int> topLevelUnions() const;
     // A [field] or table.field naming a field of the query's tables: (the
     // table's reference in the design, the field's own spelling).
     [[nodiscard]] std::optional<QPair<QString, QString>> fieldRefIn(const QList<Token> &t, int first, int last) const;

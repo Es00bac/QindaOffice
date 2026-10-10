@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Table designs: validation and schema plans (create, alter/rebuild, drop,
-// relationships). See base_schema.h for how a change is planned.
+// Table designs: column and table SQL, and the schema plans that create,
+// drop and relate tables (planAlterTable is base_schema_alter.cpp, the
+// checks base_schema_validate.cpp). See base_schema.h for how a change is
+// planned.
+#include "base_calculated.h"
+#include "base_indexes.h"
 #include "base_rules.h"
 #include "base_schema_p.h"
 
@@ -49,11 +53,6 @@ QString defaultSql(const FieldDef &field, const CurrencyFormat &currency, QStrin
     return sqlLiteral(parsed.value);
 }
 
-bool integerLike(FieldType type)
-{
-    return type == FieldType::Integer || type == FieldType::AutoNumber;
-}
-
 } // namespace
 
 namespace detail {
@@ -63,6 +62,7 @@ QString expectedStorage(FieldType type)
     switch (type) {
     case FieldType::AutoNumber:
     case FieldType::Integer:
+    case FieldType::LargeNumber:
     case FieldType::Currency:
     case FieldType::YesNo:
         return QStringLiteral("'integer'");
@@ -86,29 +86,10 @@ bool lossy(FieldType from, FieldType to)
     if (to == FieldType::YesNo) {
         return true;
     }
-    if (integerLike(to) && (from == FieldType::Number || from == FieldType::Currency)) {
+    if (isWholeNumber(to) && (from == FieldType::Number || from == FieldType::Currency)) {
         return true;
     }
     return from == FieldType::DateTime && to == FieldType::Date;
-}
-
-QString metaInsert(const QString &table, const FieldDef &f)
-{
-    const auto text = [](const QString &value) {
-        return value.trimmed().isEmpty() ? QStringLiteral("NULL") : quoteLiteral(value.trimmed());
-    };
-    return QStringLiteral("INSERT OR REPLACE INTO qb_fields(table_name, field_name, type, caption, description, "
-                          "lookup_table, lookup_field, lookup_display, validation_rule, validation_text, input_mask) "
-                          "VALUES(%1, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11)")
-        .arg(quoteLiteral(table), quoteLiteral(f.name), quoteLiteral(typeId(f.type)),
-             f.caption.isEmpty() ? QStringLiteral("NULL") : quoteLiteral(f.caption),
-             f.description.isEmpty() ? QStringLiteral("NULL") : quoteLiteral(f.description),
-             f.lookup.isSet() ? quoteLiteral(f.lookup.table) : QStringLiteral("NULL"),
-             f.lookup.isSet() ? quoteLiteral(f.lookup.valueField) : QStringLiteral("NULL"),
-             f.lookup.isSet() && !f.lookup.displayField.isEmpty() ? quoteLiteral(f.lookup.displayField)
-                                                                  : QStringLiteral("NULL"),
-             text(f.validationRule))
-        .arg(text(f.validationText), text(f.inputMask));
 }
 
 void appendFieldIndexes(QStringList *out, const TableDef &table, const QString &name)
@@ -134,110 +115,6 @@ QList<Relationship> incoming(const BaseFile &file, const QString &table)
         }
     }
     return out;
-}
-
-QString validateTable(const BaseFile &file, const TableDef &table, const QString &existingName)
-{
-    if (QString e = validateName(table.name, QStringLiteral("table")); !e.isEmpty()) {
-        return e;
-    }
-    if (BaseFile::isSystemName(table.name)) {
-        return QStringLiteral("Table names starting with qb_ or sqlite_ are reserved.");
-    }
-    if (table.name.compare(existingName, Qt::CaseInsensitive) != 0 && file.tableExists(table.name)) {
-        return QStringLiteral("There is already a table named %1.").arg(table.name);
-    }
-    if (table.name.compare(existingName, Qt::CaseInsensitive) != 0
-        && !file.db().scalar(QStringLiteral("SELECT name FROM sqlite_schema WHERE name=? COLLATE NOCASE"), {table.name})
-                .toString()
-                .isEmpty()) {
-        return QStringLiteral("The name %1 is already used by a view or index.").arg(table.name);
-    }
-    if (table.complexKeys) {
-        return QStringLiteral("%1 has a relationship over several fields, which QindaBase cannot redesign; use the "
-                              "SQL view.")
-            .arg(table.name);
-    }
-    if (table.fields.isEmpty()) {
-        return QStringLiteral("A table needs at least one field.");
-    }
-    QSet<QString> names;
-    int autoNumbers = 0;
-    int keys = 0;
-    for (const FieldDef &f : table.fields) {
-        if (QString e = validateName(f.name, QStringLiteral("field")); !e.isEmpty()) {
-            return e;
-        }
-        if (names.contains(f.name.toLower())) {
-            return QStringLiteral("Two fields are named %1.").arg(f.name);
-        }
-        names.insert(f.name.toLower());
-        autoNumbers += f.type == FieldType::AutoNumber ? 1 : 0;
-        keys += f.primaryKey ? 1 : 0;
-        if (f.type == FieldType::AutoNumber && !f.primaryKey) {
-            return QStringLiteral("The AutoNumber field %1 must be the primary key.").arg(f.name);
-        }
-        if (f.type == FieldType::Other && f.originalName.isEmpty()) {
-            return QStringLiteral("Choose a type for %1.").arg(f.name);
-        }
-        // AGENT-GUARD (D-074): a file field holds bytes the user inserts after
-        // the record exists — it can be no key, index, default or lookup, and
-        // not required (no record could be saved before its file).
-        if (f.type == FieldType::File
-            && (f.primaryKey || f.unique || f.indexed || f.required || !f.defaultValue.trimmed().isEmpty()
-                || f.lookup.isSet())) {
-            return QStringLiteral("The file field %1 cannot be a key, unique, indexed, required, looked up or have a "
-                                  "default value.")
-                .arg(f.name);
-        }
-        if (f.lookup.isSet()) {
-            const bool self = f.lookup.table.compare(table.name, Qt::CaseInsensitive) == 0;
-            if (!self && !file.tableExists(f.lookup.table)) {
-                return QStringLiteral("The lookup of %1 names a missing table %2.").arg(f.name, f.lookup.table);
-            }
-            if (!self && !fieldTypes(file, f.lookup.table).contains(f.lookup.valueField)) {
-                return QStringLiteral("%1 has no field %2 to look up.").arg(f.lookup.table, f.lookup.valueField);
-            }
-        }
-    }
-    if (autoNumbers > 1) {
-        return QStringLiteral("A table can have only one AutoNumber field.");
-    }
-    if (autoNumbers == 1 && keys > 1) {
-        return QStringLiteral("An AutoNumber key must be the only key field.");
-    }
-    if (table.withoutRowid && keys == 0) {
-        return QStringLiteral("This table needs a primary key.");
-    }
-    for (const Relationship &r : table.relationships) {
-        if (table.fieldIndex(r.childField) < 0) {
-            return QStringLiteral("The relationship names a missing field %1.").arg(r.childField);
-        }
-        const bool self = r.parentTable.compare(table.name, Qt::CaseInsensitive) == 0;
-        std::optional<TableDef> parent = self ? std::optional<TableDef>(table) : readTable(file, r.parentTable);
-        if (!parent) {
-            return QStringLiteral("The relationship names a missing table %1.").arg(r.parentTable);
-        }
-        const FieldDef *key = parent->field(r.parentField);
-        if (key == nullptr) {
-            return QStringLiteral("%1 has no field %2.").arg(r.parentTable, r.parentField);
-        }
-        if (!(key->primaryKey && parent->primaryKey().size() == 1) && !key->unique) {
-            return QStringLiteral("%1.%2 must be the primary key or unique to be on the one side of a relationship.")
-                .arg(r.parentTable, r.parentField);
-        }
-        const FieldType childType = table.field(r.childField)->type;
-        const bool compatible = childType == key->type || (integerLike(childType) && integerLike(key->type));
-        if (!compatible) {
-            return QStringLiteral("%1 (%2) and %3.%4 (%5) have different types.")
-                .arg(r.childField, typeLabel(childType), r.parentTable, r.parentField, typeLabel(key->type));
-        }
-        if (r.onDelete == RefAction::SetNull && table.field(r.childField)->required) {
-            return QStringLiteral("%1 is required, so deleting a %2 record cannot set it to empty.")
-                .arg(r.childField, r.parentTable);
-        }
-    }
-    return {};
 }
 
 } // namespace detail
@@ -269,6 +146,15 @@ QString validateName(const QString &name, const QString &what)
 QString columnSql(const FieldDef &field, bool singlePrimaryKey, bool autoIncrement, const CurrencyFormat &currency,
                   QString *error)
 {
+    if (field.calculated) {
+        // M86: the generated column of a calculated field; createTableSql and
+        // the planners fill generatedSql from its expression first.
+        if (field.generatedSql.trimmed().isEmpty()) {
+            *error = QStringLiteral("Give the calculated field %1 an expression.").arg(field.name);
+            return {};
+        }
+        return q(field.name) + QLatin1Char(' ') + declaredType(field.type) + generatedClause(field.generatedSql);
+    }
     QString declared = declaredType(field.type);
     if (!field.declared.isEmpty() && field.type != FieldType::AutoNumber) {
         const bool rowidKey = singlePrimaryKey && field.primaryKey
@@ -306,8 +192,18 @@ QString createTableSql(const TableDef &table, const QString &name, const Currenc
 {
     const QStringList keys = table.primaryKey();
     QStringList parts;
-    for (const FieldDef &f : table.fields) {
+    for (const FieldDef &input : table.fields) {
         QString problem;
+        FieldDef f = input;
+        if (f.calculated) {
+            const CompiledCalculation c = compileCalculatedField(table, f, currency);
+            if (!c.ok()) {
+                *error = c.error;
+                return {};
+            }
+            f.type = c.type;
+            f.generatedSql = c.sql;
+        }
         const QString column = columnSql(f, keys.size() == 1, table.autoIncrement, currency, &problem);
         if (!problem.isEmpty()) {
             *error = problem;
@@ -351,6 +247,10 @@ SchemaPlan planCreateTable(const BaseFile &file, const TableDef &input)
         plan.error = e;
         return plan;
     }
+    if (QString e = resolveCalculatedTypes(&table, file.currency()); !e.isEmpty()) {
+        plan.error = e;
+        return plan;
+    }
     QString error;
     const QString create = createTableSql(table, table.name, file.currency(), &error);
     if (!error.isEmpty()) {
@@ -363,6 +263,7 @@ SchemaPlan planCreateTable(const BaseFile &file, const TableDef &input)
     }
     plan.statements.append(create);
     appendFieldIndexes(&plan.statements, table, table.name);
+    plan.statements.append(indexStatements(TableDef(), table, true));
     if (file.hasSystemTables()) {
         plan.statements.append(systemColumnStatements(file));
         for (const FieldDef &f : table.fields) {
@@ -373,7 +274,7 @@ SchemaPlan planCreateTable(const BaseFile &file, const TableDef &input)
         }
     }
     plan.notes.append(QStringLiteral("Creates %1 with %2 field(s).").arg(table.name).arg(table.fields.size()));
-    appendRuleStatements(&plan, file, TableDef(), table, false);
+    appendDerivedStatements(&plan, file, TableDef(), table, false);
     return plan;
 }
 

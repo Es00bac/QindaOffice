@@ -10,6 +10,8 @@ namespace QindaOffice::Base::Expr::detail {
 struct Token {
     enum Kind { End, Number, String, Date, Bracket, Word, Op } kind = End;
     QString text;
+    int begin = 0; // M86: [begin, end) in the source (a subquery's text)
+    int end = 0;
 };
 
 QList<Token> tokenize(const QString &src, QString *error);

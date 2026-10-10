@@ -73,9 +73,11 @@ private slots:
         QVERIFY2(ok(back), qPrintable(back.value(str("error")).toString()));
         QCOMPARE(f.service.compileQuery(back.value(str("design")).toMap()).value(str("sql")),
                  f.service.compileQuery(design).value(str("sql")));
-        const QVariantMap refused = f.service.parseAccessSql(str("SELECT name FROM donors UNION SELECT name FROM campaigns"));
+        // M86 (D-094): a union is a design of its own; one whose parts show
+        // different numbers of columns is still refused.
+        const QVariantMap refused = f.service.parseAccessSql(str("SELECT name FROM donors UNION SELECT name, id FROM campaigns"));
         QVERIFY(!ok(refused));
-        QVERIFY(refused.value(str("error")).toString().contains(str("UNION")));
+        QVERIFY(refused.value(str("error")).toString().contains(str("union")));
     }
 
     void crosstabAndMakeTableRun()

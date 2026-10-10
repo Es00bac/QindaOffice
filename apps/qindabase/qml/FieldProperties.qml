@@ -8,8 +8,10 @@ import QindaTK as Tk
 // Validation Rule and Validation Text, and its Input Mask with the
 // wizard's presets), a lookup to another table, and the relationship the
 // field belongs to (the parent table, and what happens to this record when
-// its parent is deleted or renumbered). Edits go back to the designer as
-// `edited(key, value)` / `relationEdited(relationship)`.
+// its parent is deleted or renumbered). M86 (D-094): a calculated field's
+// expression and result type, a value list with Limit To List, and Allow
+// Zero Length. Edits go back to the designer as `edited(key, value)` /
+// `relationEdited(relationship)`.
 Tk.Flex {
     id: sheet
 
@@ -22,7 +24,14 @@ Tk.Flex {
     // a related record's name — has none (base_rules.h validateRules).
     readonly property bool maskable: ["text", "longText", "integer", "number", "currency", "date", "dateTime"]
                                          .indexOf(field.type) >= 0 && !field.lookupTable
-    readonly property bool ruled: field.type !== "autoNumber" && field.type !== "file"
+    readonly property bool ruled: field.type !== "autoNumber" && field.type !== "file" && !calculated
+    readonly property bool calculated: field.type === "calculated" // M86
+    readonly property bool textual: ["text", "longText", "hyperlink"].indexOf(field.type) >= 0
+    readonly property var resultTypes: [
+        { id: "", label: qsTr("From the expression") }, { id: "text", label: qsTr("Short text") },
+        { id: "integer", label: qsTr("Whole number") }, { id: "largeNumber", label: qsTr("Large number") },
+        { id: "number", label: qsTr("Decimal number") }, { id: "currency", label: qsTr("Currency") },
+        { id: "yesNo", label: qsTr("Yes/No") }, { id: "date", label: qsTr("Date") }, { id: "dateTime", label: qsTr("Date & time") }]
     readonly property var refActions: [
         { id: "noAction", label: qsTr("Refuse while related records exist") },
         { id: "cascade", label: qsTr("Delete the related records too") },
@@ -47,6 +56,31 @@ Tk.Flex {
     gap: Tk.Theme.space.xs
 
     Tk.SectionHeader { title: qsTr("Field properties · %1").arg(sheet.field.name || "") }
+    // M86: a calculated field is its expression and the type it gives.
+    Tk.PropertyRow {
+        visible: sheet.calculated
+        label: qsTr("Expression")
+        hint: qsTr("Worked out from the record's own fields: [quantity] * [unit_price], [first] & \" \" & [last]")
+        Tk.TextField {
+            objectName: "fieldExpression"
+            text: sheet.field.expression || ""
+            mono: true
+            placeholderText: "[quantity] * [unit_price]"
+            onEditingFinished: if (text !== (sheet.field.expression || "")) sheet.edited("expression", text)
+        }
+    }
+    Tk.PropertyRow {
+        visible: sheet.calculated
+        label: qsTr("Result type")
+        Tk.ComboBox {
+            objectName: "fieldResultType"
+            small: true
+            textRole: "label"
+            model: sheet.resultTypes
+            currentIndex: Math.max(0, sheet.resultTypes.findIndex(function(t) { return t.id === (sheet.field.resultType || "") }))
+            onActivated: function(index) { sheet.edited("resultType", sheet.resultTypes[index].id) }
+        }
+    }
     Tk.PropertyRow {
         label: qsTr("Caption")
         hint: qsTr("Shown as the column heading and on forms")
@@ -58,6 +92,7 @@ Tk.Flex {
         }
     }
     Tk.PropertyRow {
+        visible: !sheet.calculated
         label: qsTr("Required")
         Tk.Switch {
             objectName: "fieldRequired"
@@ -68,6 +103,17 @@ Tk.Flex {
         }
     }
     Tk.PropertyRow {
+        visible: sheet.textual
+        label: qsTr("Allow zero length")
+        Tk.Switch {
+            objectName: "fieldAllowZeroLength"
+            checked: sheet.field.allowZeroLength !== false
+            tooltip: qsTr("Typing \"\" stores an empty text; when off, every writer is refused one")
+            onToggled: sheet.edited("allowZeroLength", checked)
+        }
+    }
+    Tk.PropertyRow {
+        visible: !sheet.calculated
         label: qsTr("Default value")
         hint: sheet.field.type === "date" || sheet.field.type === "dateTime" ? qsTr("A date, or Date() / Now() for today") : ""
         Tk.TextField {
@@ -101,8 +147,10 @@ Tk.Flex {
         }
     }
 
-    Tk.SectionHeader { title: qsTr("Validation") }
+    // (a calculated field takes no rule: its value is not typed)
+    Tk.SectionHeader { visible: !sheet.calculated; title: qsTr("Validation") }
     Tk.PropertyRow {
+        visible: !sheet.calculated
         label: qsTr("Validation rule")
         hint: qsTr("Criteria every value must meet: > 0, Between 1 And 5, Like \"*@*.*\", <= Date()")
         Tk.TextField {
@@ -115,6 +163,7 @@ Tk.Flex {
         }
     }
     Tk.PropertyRow {
+        visible: !sheet.calculated
         label: qsTr("Validation text")
         hint: qsTr("The message shown when a value breaks the rule")
         Tk.TextField {
@@ -152,8 +201,9 @@ Tk.Flex {
         }
     }
 
-    Tk.SectionHeader { title: qsTr("Relationship") }
+    Tk.SectionHeader { visible: !sheet.calculated; title: qsTr("Relationship") }
     Tk.PropertyRow {
+        visible: !sheet.calculated
         label: qsTr("Related table")
         hint: sheet.relationship !== null ? qsTr("Each %1 record points to one %2 record by %3.")
                                                 .arg(sheet.tableName).arg(sheet.relationship.parentTable).arg(sheet.relationship.parentField)
@@ -195,21 +245,48 @@ Tk.Flex {
         }
     }
 
-    Tk.SectionHeader { title: qsTr("Lookup") }
+    Tk.SectionHeader { visible: !sheet.calculated; title: qsTr("Lookup") }
     Tk.PropertyRow {
+        visible: !sheet.calculated
         label: qsTr("Show values from")
-        hint: qsTr("The datasheet and forms show and accept the related record's name")
+        hint: qsTr("The datasheet and forms show and accept the related record's name, or one of a list of values")
         Tk.ComboBox {
             objectName: "fieldLookupTable"
             small: true
-            model: [qsTr("None")].concat(sheet.tables)
-            currentIndex: sheet.field.lookupTable ? Math.max(0, model.indexOf(sheet.field.lookupTable)) : 0
+            model: [qsTr("None"), qsTr("A list of values")].concat(sheet.tables)
+            currentIndex: sheet.field.lookupTable ? Math.max(0, model.indexOf(sheet.field.lookupTable))
+                          : (sheet.field.lookupValues || []).length > 0 ? 1 : 0
             onActivated: function(index) {
-                const table = index === 0 ? "" : model[index]
+                const table = index < 2 ? "" : model[index]
                 sheet.edited("lookupTable", table)
                 sheet.edited("lookupField", table ? sheet.keyField(table) : "")
                 sheet.edited("lookupDisplay", table ? sheet.displayField(table) : "")
+                sheet.edited("lookupValues", index === 1 ? [qsTr("First choice"), qsTr("Second choice")] : [])
             }
+        }
+    }
+    // M86: Access's Value List lookup.
+    Tk.PropertyRow {
+        visible: (sheet.field.lookupValues || []).length > 0
+        label: qsTr("Values")
+        hint: qsTr("The choices, separated by semicolons: Check;Card;Cash")
+        Tk.TextField {
+            objectName: "fieldLookupValues"
+            text: (sheet.field.lookupValues || []).join(";")
+            onEditingFinished: {
+                const list = text.split(";").map(function(v) { return v.trim() }).filter(function(v) { return v.length > 0 })
+                if (JSON.stringify(list) !== JSON.stringify(sheet.field.lookupValues || [])) sheet.edited("lookupValues", list)
+            }
+        }
+    }
+    Tk.PropertyRow {
+        visible: (sheet.field.lookupValues || []).length > 0
+        label: qsTr("Limit to list")
+        Tk.Switch {
+            objectName: "fieldLimitToList"
+            checked: sheet.field.limitToList === true
+            tooltip: qsTr("Only the list's values: every writer is refused another one")
+            onToggled: sheet.edited("limitToList", checked)
         }
     }
     Tk.PropertyRow {

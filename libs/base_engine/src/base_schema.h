@@ -34,7 +34,33 @@ struct LookupDef {
     QString table;
     QString valueField;
     QString displayField;
+    // M86 (D-094): Access's Value List lookup — the choices themselves
+    // ("Check";"Card";"Cash"), and Limit To List, which the database
+    // enforces like a validation rule (base_rules.h). A field looks up a
+    // table or a value list, never both.
+    QStringList values{};
+    bool limitToList = false;
     [[nodiscard]] bool isSet() const { return !table.isEmpty() && !valueField.isEmpty(); }
+    [[nodiscard]] bool isValueList() const { return !values.isEmpty(); }
+};
+
+// M86 (D-094, base_indexes.h): an index the Indexes dialog designs — over
+// several fields, descending, ignoring Nulls (a partial index) or under a
+// name of its own. A plain single-field index stays the field's Indexed
+// property (FieldDef::indexed / unique).
+struct IndexField {
+    QString field;
+    bool descending = false;
+};
+
+struct IndexDef {
+    QString name;         // as the user sees it ("ByDonorDate")
+    QString originalName; // the SQLite index it was read from; "" = new
+    QList<IndexField> fields;
+    bool unique = false;
+    bool ignoreNulls = false;
+    [[nodiscard]] QVariantMap toMap() const;
+    static IndexDef fromMap(const QVariantMap &map);
 };
 
 struct FieldDef {
@@ -56,6 +82,16 @@ struct FieldDef {
     QString validationRule;
     QString validationText;
     QString inputMask;
+    // M86 (D-094, base_calculated.h): a calculated field is a generated
+    // column computing `expression` (Access text over the record's fields)
+    // as `type` (the result type). `generatedSql` is a foreign file's own
+    // generated-column SQL, kept verbatim while `expression` is empty.
+    bool calculated = false;
+    QString expression;
+    QString generatedSql;
+    // M86: Access's Allow Zero Length for text, long text and hyperlinks;
+    // "No" is enforced by the database (base_rules.h).
+    bool allowZeroLength = true;
 
     [[nodiscard]] QVariantMap toMap() const;
     static FieldDef fromMap(const QVariantMap &map);
@@ -89,7 +125,18 @@ struct TableDef {
     // and the names of the triggers that enforce the rules now (base_rules.h).
     QString validationRule;
     QString validationText;
-    QStringList ruleTriggers;
+    // The triggers QindaBase derives from the design (validation rules, M80;
+    // M86: data macros and a linked table's guard): their names as read, so
+    // a plan drops them before it makes them again (base_rules.h,
+    // base_data_macro.h, base_links.h).
+    QStringList derivedTriggers;
+    // M86 (D-094): the Indexes dialog's indexes (base_indexes.h), the
+    // table's data macros by event ({"beforeChange": Macro::toMap(), …},
+    // base_data_macro.h) and, for a linked table, its source
+    // (LinkSource::toMap, base_links.h — read-only here).
+    QList<IndexDef> indexes;
+    QVariantMap dataMacros;
+    QVariantMap link;
 
     [[nodiscard]] int fieldIndex(const QString &name) const;
     [[nodiscard]] const FieldDef *field(const QString &name) const;

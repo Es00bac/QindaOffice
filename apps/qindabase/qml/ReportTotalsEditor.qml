@@ -6,7 +6,9 @@ import QindaTK as Tk
 // A list of report totals — a function over a field each — for a group's
 // footer or the report's (ReportGroupsPanel.qml). Every footer prints the
 // record count first, so Count here counts a field's filled values. The
-// whole list goes back as `edited(totals)`.
+// whole list goes back as `edited(totals)`. M86 (D-094): a group's sum or
+// count may also run (Access's Running Sum) over the enclosing group or
+// over the report (`allowRunning`).
 Tk.Flex {
     id: editor
 
@@ -14,6 +16,7 @@ Tk.Flex {
     property var fields: []
     property var functions: [] // [{id, label}]
     property string objectPrefix: "reportTotal"
+    property bool allowRunning: false
     signal edited(var totals)
 
     function changed(index, patch) {
@@ -54,6 +57,20 @@ Tk.Flex {
                 Tk.Flex.grow: 1
                 Tk.Flex.basis: 0
                 onActivated: function(i) { editor.changed(total.index, { field: editor.fields[i] }) }
+            }
+            Tk.ComboBox {
+                objectName: editor.objectPrefix + "Running_" + total.index
+                readonly property var runs: [{ id: "none", label: qsTr("not running") }, { id: "group", label: qsTr("running in the group") },
+                                             { id: "all", label: qsTr("running over all") }]
+                visible: editor.allowRunning && ["sum", "countValues"].indexOf(total.modelData.function) >= 0
+                small: true
+                textRole: "label"
+                model: runs
+                currentIndex: Math.max(0, runs.findIndex(function(r) { return r.id === (total.modelData.running || "none") }))
+                tooltip: qsTr("Also print the total so far (Access's Running Sum)")
+                Tk.Flex.grow: 1
+                Tk.Flex.basis: 0
+                onActivated: function(i) { editor.changed(total.index, { running: runs[i].id }) }
             }
             Tk.IconButton {
                 iconName: "x"; small: true; tooltip: qsTr("Remove this total")

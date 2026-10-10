@@ -17,6 +17,7 @@ QString snapshotType(FieldType type, bool lookup)
     switch (type) {
     case FieldType::AutoNumber:
     case FieldType::Integer:
+    case FieldType::LargeNumber:
         return QStringLiteral("INTEGER");
     case FieldType::Number:
     case FieldType::Currency:
@@ -84,8 +85,8 @@ Result writeSnapshot(const QString &path, const QString &table, const QList<Snap
                 v = col.lookupDisplay.value(key(v), v.toString());
             } else if (col.type == FieldType::Currency && v.metaType().id() == QMetaType::LongLong) {
                 v = double(v.toLongLong()) / scale;
-            } else if (col.type == FieldType::File && v.isValid()) {
-                v = displayText(FieldType::File, v, currency); // reports show what the cell holds
+            } else if ((col.type == FieldType::File || col.type == FieldType::Hyperlink) && v.isValid()) {
+                v = displayText(col.type, v, currency); // reports show what the cell holds (M86: a link's text)
             }
             values.append(v);
         }
@@ -114,8 +115,8 @@ Result writeFormMirror(const BaseFile &file, const QString &path, const QString 
         if (c.type == FieldType::File) {
             continue; // the form shows files beside the designer (FileFieldPanel.qml), not in it
         }
-        if (c.lookup.isSet() && !c.lookup.displayField.isEmpty()) {
-            continue; // M80: a lookup is a combo or list box beside the designer (FormLookups.qml)
+        if ((c.lookup.isSet() && !c.lookup.displayField.isEmpty()) || c.lookup.isValueList()) {
+            continue; // M80: a lookup (M86: a value list too) is a combo or list box beside the designer (FormLookups.qml)
         }
         QString sql = quoteIdentifier(c.name) + QLatin1Char(' ') + declaredType(c.type);
         if (c.primaryKey && def->primaryKey().size() == 1) {

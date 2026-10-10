@@ -11,7 +11,9 @@ import QindaTK as Tk
 // be kept as SQLite SQL (M80, D-089 §4). Query types: select, update,
 // delete, append, crosstab and make-table; Query Parameters declares the
 // prompts. Running a draft needs no save; action and make-table queries
-// always say what they will change first.
+// always say what they will change first. M86 (D-094): a union query shows
+// its parts (QueryUnionPane.qml); a part opens in the grid like any select
+// (enterPart) and goes back into the union as one step (leavePart).
 Item {
     id: view
 
@@ -25,6 +27,10 @@ Item {
     property string mode: "design" // design | sql
     property string sqlText: ""     // the Access SQL being edited in SQL view
     property string sqlError: ""    // why that text does not fit the grid
+    // M86: the union while one of its parts is in the grid (null otherwise).
+    property var unionDesign: null
+    property int partIndex: -1
+    property var unionHistory: []
     readonly property bool dirty: JSON.stringify(design) !== original
     readonly property bool sqlOnly: design.kind === "sql"
     readonly property var compiled: base !== null && window.view === "queryDesign" ? base.compileQuery(runnable()) : ({})
@@ -53,15 +59,59 @@ Item {
         return out
     }
 
-    // The design without empty grid columns.
-    function runnable() {
-        const d = Object.assign({}, design)
-        d.columns = (design.columns || []).filter(function(c) { return (c.field || "").length > 0 || (c.expression || "").trim().length > 0 })
+    // The design without empty grid columns (M86: a part in the grid runs
+    // inside its union).
+    function trimmed(source) {
+        const d = Object.assign({}, source)
+        d.columns = (source.columns || []).filter(function(c) { return (c.field || "").length > 0 || (c.expression || "").trim().length > 0 })
         return d
+    }
+    function runnable() {
+        if (unionDesign === null) return trimmed(design)
+        const u = JSON.parse(JSON.stringify(unionDesign))
+        u.parts[partIndex] = trimmed(design)
+        return u
+    }
+    function enterPart(index) {
+        unionHistory = history
+        unionDesign = JSON.parse(JSON.stringify(design))
+        partIndex = index
+        design = JSON.parse(JSON.stringify(unionDesign.parts[index]))
+        history = []
+        future = []
+        syncHost()
+    }
+    function leavePart() {
+        if (unionDesign === null) return
+        const part = trimmed(design)
+        const at = partIndex
+        const changed = JSON.stringify(part) !== JSON.stringify(unionDesign.parts[at])
+        design = unionDesign
+        history = unionHistory
+        future = []
+        unionDesign = null
+        partIndex = -1
+        if (changed) edit(function(d) { d.parts[at] = part })
+        syncHost()
+    }
+    // A select becomes a union of itself and a copy to change (Access's
+    // Union button keeps the select as the first part); a union goes back
+    // to its first part.
+    function makeUnion(d) {
+        if (d.kind === "union") return
+        const part = trimmed(d)
+        part.kind = "select"
+        part.top = 0
+        part.columns = part.columns.map(function(c) { return Object.assign({}, c, { sort: 0 }) })
+        for (const key of Object.keys(d)) delete d[key]
+        Object.assign(d, { kind: "union", parts: [part, JSON.parse(JSON.stringify(part))], unionAll: [false],
+                           unionOrder: [], tables: [], joins: [], columns: [], totals: false })
     }
     function load(map) {
         if (!map || map.ok === false) { window.notify(qsTr("Cannot design"), map ? map.error : "", "danger"); return }
         name = map.name || ""
+        unionDesign = null
+        partIndex = -1
         const d = Object.assign({}, map)
         delete d.ok
         delete d.name
@@ -137,6 +187,7 @@ Item {
     // ---- SQL view (Access SQL both ways) ----
     function showSql() {
         if (mode === "sql") return
+        leavePart()
         sqlText = accessText
         sqlError = ""
         mode = "sql"
@@ -181,6 +232,7 @@ Item {
         else window.commands.runQuery(name, runnable(), ({}))
     }
     function save() {
+        leavePart() // M86: a part goes back into its union first
         if (!applySql()) { window.notify(qsTr("Query not saved"), sqlError, "danger"); return false }
         let target = name
         if (target.length === 0) {
@@ -224,7 +276,15 @@ Item {
         case "baseQueryTotalsAction": edit(function(d) { d.totals = !d.totals }); break
         case "baseQueryClearAction": edit(function(d) { d.columns = [] }); break
         case "baseQueryParametersAction": parametersDialog.edit(design.parameters || []); break
-        case "baseQueryTypeSelectAction": edit(function(d) { d.kind = "select" }); mode = "design"; break
+        case "baseQueryTypeSelectAction":
+            if (design.kind === "union" && unionDesign === null) edit(function(d) { const first = d.parts[0]; for (const key of Object.keys(d)) delete d[key]; Object.assign(d, first) })
+            else edit(function(d) { d.kind = "select" })
+            mode = "design"
+            break
+        case "baseQueryTypeUnionAction":
+            if (unionDesign === null) edit(makeUnion)
+            mode = "design"
+            break
         case "baseQueryTypeUpdateAction": edit(function(d) { d.kind = "update" }); mode = "design"; break
         case "baseQueryTypeDeleteAction": edit(function(d) { d.kind = "delete" }); mode = "design"; break
         case "baseQueryTypeCrosstabAction": edit(makeCrosstab); mode = "design"; break
@@ -264,13 +324,33 @@ Item {
                 direction: Tk.Flex.Column
                 gap: Tk.Theme.space.md
                 padding: Tk.Theme.space.md
+                Tk.Notice {
+                    objectName: "queryUnionPart"
+                    visible: view.partIndex >= 0 && view.mode === "design"
+                    variant: "info"
+                    text: view.unionDesign !== null ? qsTr("Part %1 of %2 of the union query: a select with its own fields and criteria; the union sorts at its end.")
+                                                      .arg(view.partIndex + 1).arg(view.unionDesign.parts.length) : ""
+                    actions: [
+                        Tk.Button {
+                            objectName: "queryBackToUnion"
+                            text: qsTr("Back to the union")
+                            small: true
+                            onClicked: view.leavePart()
+                        }
+                    ]
+                }
                 QueryTablesPane {
                     id: tablesPane
-                    visible: view.mode === "design"
+                    visible: view.mode === "design" && view.design.kind !== "union"
                     view: view
                 }
                 QueryGrid {
-                    visible: view.mode === "design"
+                    visible: view.mode === "design" && view.design.kind !== "union"
+                    width: body.width - Tk.Theme.space.md * 2
+                    view: view
+                }
+                QueryUnionPane {
+                    visible: view.mode === "design" && view.design.kind === "union"
                     width: body.width - Tk.Theme.space.md * 2
                     view: view
                 }

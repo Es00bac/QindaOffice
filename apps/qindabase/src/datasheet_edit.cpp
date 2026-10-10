@@ -154,10 +154,12 @@ QVariantList DatasheetModel::lookupChoices(const QString &columnId) const
 {
     QVariantList out;
     const int column = columnIndex(columnId);
-    if (column < 0 || file() == nullptr || !m_columns.at(column).lookup.isSet()) {
+    const Engine::ColumnInfo *info = column >= 0 ? &m_columns.at(column) : nullptr;
+    if (info == nullptr || file() == nullptr || (!info->lookup.isSet() && !info->lookup.isValueList())) {
         return out;
     }
-    for (const auto &[value, text] : Engine::Records::lookupChoices(*file(), m_columns.at(column).lookup)) {
+    // M86: a value list's choices come in its own order, typed as the field.
+    for (const auto &[value, text] : Engine::Records::lookupChoices(*file(), info->lookup, 20000, info->type)) {
         out.append(QVariantMap{{QStringLiteral("value"), value}, {QStringLiteral("text"), text}});
     }
     return out;
@@ -308,7 +310,7 @@ void DatasheetModel::preparePivot()
         const bool lookup = !m_lookups.value(c).isEmpty();
         QString type = QStringLiteral("text");
         if (!lookup) {
-            if (col.type == Engine::FieldType::Integer || col.type == Engine::FieldType::AutoNumber) {
+            if (Engine::isWholeNumber(col.type)) { // M86: Large Number too
                 type = QStringLiteral("integer");
             } else if (col.type == Engine::FieldType::Number || col.type == Engine::FieldType::Currency) {
                 type = QStringLiteral("number");
@@ -337,7 +339,7 @@ void DatasheetModel::preparePivot()
                 row.append(v.metaType().id() == QMetaType::LongLong ? double(v.toLongLong()) / scale : v.toDouble());
             } else if (type == Engine::FieldType::Number) {
                 row.append(v.toDouble());
-            } else if (type == Engine::FieldType::Integer || type == Engine::FieldType::AutoNumber) {
+            } else if (Engine::isWholeNumber(type)) {
                 row.append(v.toLongLong());
             } else if (type == Engine::FieldType::YesNo) {
                 row.append(v.toLongLong() != 0);
@@ -359,6 +361,13 @@ void DatasheetModel::preparePivot()
                      {QStringLiteral("revision"), QString::number(m_pivotRevision)},
                      {QStringLiteral("fields"), fields}};
     emit pivotChanged();
+}
+
+QString DatasheetModel::cellEditText(const QString &rowId, const QString &columnId) const
+{
+    const int column = columnIndex(columnId);
+    const int row = rowOf(rowId);
+    return column < 0 || row < 0 ? QString() : edit(row, column);
 }
 
 } // namespace QindaOffice::Apps::Base

@@ -31,7 +31,9 @@
 // base_service_report_output.cpp (M80: reports evaluated by the engine,
 // mailing labels), base_service_import.cpp (CSV, Excel and Access import),
 // base_service_io.cpp (export, maintenance), base_service_files.cpp (file
-// fields).
+// fields); M86 (D-094): base_service_access_tools.cpp (query wizards, data
+// macros, the application log, hyperlinks, report levels, AutoExec) and
+// base_service_links.cpp (Access's XML import, linked tables).
 
 #include "datasheet_model.h"
 
@@ -82,6 +84,9 @@ class BaseService : public QObject {
     Q_PROPERTY(QVariantList macroActions READ macroActions CONSTANT)
     Q_PROPERTY(QVariantList labelProducts READ labelProducts CONSTANT)
     Q_PROPERTY(QVariantList parameterTypes READ parameterTypes CONSTANT)
+    // M86: the table events and the actions a data macro takes.
+    Q_PROPERTY(QVariantList dataMacroEvents READ dataMacroEvents CONSTANT)
+    Q_PROPERTY(QVariantList dataMacroActions READ dataMacroActions CONSTANT)
     // M80: the label sheet a label report shows and prints (label_sheet.h).
     Q_PROPERTY(QindaOffice::Apps::Base::LabelSheet *labels READ labels CONSTANT)
 public:
@@ -107,6 +112,8 @@ public:
     [[nodiscard]] QVariantList macroActions() const;
     [[nodiscard]] QVariantList labelProducts() const;
     [[nodiscard]] QVariantList parameterTypes() const;
+    [[nodiscard]] QVariantList dataMacroEvents() const;
+    [[nodiscard]] QVariantList dataMacroActions() const;
     [[nodiscard]] LabelSheet *labels() const { return m_labels; }
     [[nodiscard]] QindaOffice::Base::BaseFile *file() const;
 
@@ -211,6 +218,52 @@ public:
     // A report object's own shape: {ok, type: "report" | "labels", source}.
     Q_INVOKABLE QVariantMap reportInfo(const QString &name) const;
 
+    // ---- M86 Access tools (base_service_access_tools.cpp) ----
+    // A query wizard's design ({ok, design} or {ok:false, error}): kind
+    // simple | crosstab | duplicates | unmatched, `spec` the wizard's answers
+    // (base_query_wizards.h's specs as maps).
+    Q_INVOKABLE QVariantMap queryWizard(const QString &kind, const QVariantMap &spec) const;
+    // A table event's data macro: {ok, table, event, label, description,
+    // actions}; checked; saved as one undoable schema step (base_data_macro.h).
+    Q_INVOKABLE QVariantMap dataMacroDesign(const QString &table, const QString &event) const;
+    Q_INVOKABLE QVariantMap checkDataMacro(const QString &table, const QString &event, const QVariantMap &macro) const;
+    Q_INVOKABLE QVariantMap saveDataMacro(const QString &table, const QString &event, const QVariantMap &macro);
+    // The application log (LogEvent's lines) in the datasheet.
+    Q_INVOKABLE QVariantMap openApplicationLog();
+    // A hyperlink's parts {display, address, subAddress, screenTip, target,
+    // shown} and the text that stores them (base_hyperlink.h).
+    Q_INVOKABLE QVariantMap hyperlinkParts(const QString &text) const;
+    Q_INVOKABLE QString hyperlinkText(const QVariantMap &parts) const;
+    // A report map's Group, Sort and Total levels, and the map with new
+    // levels (base_report.h: "accessGroups" beside the toolkit's "groups").
+    Q_INVOKABLE QVariantList reportLevels(const QVariantMap &report) const;
+    Q_INVOKABLE QVariantMap reportWithLevels(const QVariantMap &report, const QVariantList &levels) const;
+    // The macro Access runs when a database opens ("AutoExec", any case), or "".
+    Q_INVOKABLE QString autoExecMacro() const;
+
+    // ---- M86 XML import and linked tables (base_service_links.cpp) ----
+    // The tables an Access XML file holds: {ok, tables:[{name, fields,
+    // records}], schema}; the import is one undo step and returns the
+    // Access import's report.
+    Q_INVOKABLE QVariantMap xmlTables(const QUrl &url) const;
+    Q_INVOKABLE QVariantMap importXml(const QUrl &url, const QStringList &tables);
+    // What a link can name in a file: a database's tables or a workbook's
+    // sheets — {ok, tables} / {ok, sheets}.
+    Q_INVOKABLE QVariantMap linkChoices(const QUrl &url, const QString &kind) const;
+    // A new linked table (spec {kind: qbase|csv|xlsx, url, table, sheet,
+    // delimiter, headerRow}) as one undo step: {ok, rows}.
+    Q_INVOKABLE QVariantMap linkTable(const QString &name, const QVariantMap &spec);
+    // [{table, kind, source, path, refreshed, rows, problem}]
+    Q_INVOKABLE QVariantList linkedTables() const;
+    // The link of `table` ({linked:false} for an ordinary table).
+    Q_INVOKABLE QVariantMap linkInfo(const QString &table) const;
+    Q_INVOKABLE QVariantMap refreshLink(const QString &table);
+    Q_INVOKABLE QVariantMap refreshAllLinks();
+    Q_INVOKABLE QVariantMap relinkTable(const QString &table, const QUrl &url);
+    Q_INVOKABLE QVariantMap unlinkTable(const QString &table);
+    // What the refresh at open found ([{table, ok, error, rows}]).
+    Q_INVOKABLE QVariantList linkRefreshResults() const { return m_openLinks; }
+
     // ---- import (base_service_import.cpp) ----
     // A proposal is {ok, plan, header, preview (first rows), rowCount} plus
     // the detected delimiter (CSV) or {sheets, sheet} (Excel); the import
@@ -251,6 +304,8 @@ public:
 
 signals:
     void fileChanged();
+    // M86: a database file was opened (BaseDocument::opened) — AutoExec.
+    void databaseOpened();
     void objectsChanged();
     // Any records changed (edits, imports, undo) — views showing one
     // record's files reload on it.
@@ -260,6 +315,8 @@ signals:
 
 private:
     void bindFile();
+    // M86: linked tables are refreshed when a database opens (not an undo step).
+    void refreshLinksAtOpen();
     // M80: a make-table query's plan for runQuery to show (query tools).
     [[nodiscard]] QVariantMap makeTablePlan(const QindaOffice::Base::QueryDesign &design, const QVariantMap &parameters);
     QVariantMap importTable(const QindaOffice::Base::CsvTable &table, const QVariantMap &plan, const QString &source);
@@ -272,6 +329,7 @@ private:
     // M80: the records the open report reads (openReport), so a design edit
     // re-evaluates without asking for the parameters again.
     std::shared_ptr<QindaOffice::Base::ReportSource> m_reportSource;
+    QVariantList m_openLinks; // M86: the refresh at open (linkRefreshResults)
     QTemporaryDir m_scratch;
 };
 

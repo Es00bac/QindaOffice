@@ -21,14 +21,15 @@ QString q(const QString &identifier)
     return quoteIdentifier(identifier);
 }
 
-const char *const kKinds[] = {"select", "update", "delete", "append", "sql", "crosstab", "makeTable"};
+const char *const kKinds[] = {"select", "update", "delete", "append", "sql", "crosstab", "makeTable", "union"};
 const char *const kTotals[] = {"groupBy", "sum", "average", "count", "min", "max", "where", "expression"};
 
 // Keys QueryDesign::toMap writes; everything else in a saved map is `extra`.
 const QStringList kKnownKeys{s("kind"),        s("tables"),         s("joins"),          s("columns"),
                              s("totals"),      s("distinct"),       s("top"),            s("topPercent"),
                              s("appendTable"), s("makeTable"),      s("columnHeadings"), s("parameters"),
-                             s("sql"),         s("version")};
+                             s("sql"),         s("version"),        s("parts"),          s("unionAll"),
+                             s("unionOrder")};
 
 } // namespace
 
@@ -111,6 +112,23 @@ QVariantMap QueryDesign::toMap() const
     out.insert(s("columnHeadings"), columnHeadings);
     out.insert(s("parameters"), parameterList);
     out.insert(s("sql"), sql);
+    if (kind == QueryKind::Union) {
+        QVariantList partList;
+        for (const QueryDesign &p : parts) {
+            partList.append(p.toMap());
+        }
+        QVariantList allList;
+        for (const bool all : unionAll) {
+            allList.append(all);
+        }
+        QVariantList orderList;
+        for (const UnionSort &o : unionOrder) {
+            orderList.append(QVariantMap{{s("column"), o.column}, {s("descending"), o.descending}});
+        }
+        out.insert(s("parts"), partList);
+        out.insert(s("unionAll"), allList);
+        out.insert(s("unionOrder"), orderList);
+    }
     return out;
 }
 
@@ -163,6 +181,18 @@ QueryDesign QueryDesign::fromMap(const QVariantMap &map)
     d.makeTable = map.value(s("makeTable")).toString().trimmed();
     d.columnHeadings = map.value(s("columnHeadings")).toStringList();
     d.sql = map.value(s("sql")).toString();
+    for (const QVariant &v : map.value(s("parts")).toList()) {
+        d.parts.append(QueryDesign::fromMap(v.toMap()));
+    }
+    for (const QVariant &v : map.value(s("unionAll")).toList()) {
+        d.unionAll.append(v.toBool());
+    }
+    for (const QVariant &v : map.value(s("unionOrder")).toList()) {
+        const QVariantMap m = v.toMap();
+        if (!m.value(s("column")).toString().trimmed().isEmpty()) {
+            d.unionOrder.append({m.value(s("column")).toString().trimmed(), m.value(s("descending")).toBool()});
+        }
+    }
     for (auto it = map.cbegin(); it != map.cend(); ++it) {
         if (!kKnownKeys.contains(it.key())) {
             d.extra.insert(it.key(), it.value());
@@ -205,11 +235,14 @@ CompiledQuery compileDesign(const BaseFile &file, const QueryDesign &design, con
     if (design.kind == QueryKind::Crosstab) {
         return detail::compileCrosstab(file, design, parameterValues);
     }
+    if (design.kind == QueryKind::Union) {
+        return detail::compileUnion(file, design, parameterValues);
+    }
     detail::QueryCore core;
     if (const QString e = detail::buildQueryCore(file, design, &out.parameters, &core); !e.isEmpty()) {
         return fail(e);
     }
-    const Expr::Context ctx{core.resolve, core.currency, &out.parameters};
+    const Expr::Context ctx{core.resolve, core.currency, &out.parameters, detail::subqueryCompiler(file)};
     if (design.kind == QueryKind::Select || design.kind == QueryKind::MakeTable) {
         QString error;
         out.sql = detail::selectSql(design, core, &out.columns, &error);

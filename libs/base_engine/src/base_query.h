@@ -30,9 +30,10 @@
 namespace QindaOffice::Base {
 
 // M80 (D-089): Crosstab (Access's TRANSFORM … PIVOT) and MakeTable
-// (SELECT … INTO). Ids: select | update | delete | append | sql |
-// crosstab | makeTable.
-enum class QueryKind { Select, Update, Delete, Append, Sql, Crosstab, MakeTable };
+// (SELECT … INTO); M86 (D-094): Union (SELECT … UNION [ALL] SELECT …).
+// Ids: select | update | delete | append | sql | crosstab | makeTable |
+// union.
+enum class QueryKind { Select, Update, Delete, Append, Sql, Crosstab, MakeTable, Union };
 // groupBy | sum | average | count | min | max | where | expression
 enum class TotalKind { GroupBy, Sum, Average, Count, Min, Max, Where, Expression };
 
@@ -80,6 +81,12 @@ struct QueryParameter {
     [[nodiscard]] QVariantMap toMap() const;
 };
 
+// M86: a union query's order — an output column of its first part.
+struct UnionSort {
+    QString column;
+    bool descending = false;
+};
+
 struct QueryDesign {
     QueryKind kind = QueryKind::Select;
     QList<QueryTable> tables;
@@ -93,6 +100,12 @@ struct QueryDesign {
     QString makeTable;           // M80: the new table of a make-table query
     QStringList columnHeadings;  // M80: a crosstab's fixed column headings, in order
     QList<QueryParameter> parameters; // M80: declared parameters (prompt, type)
+    // M86 (D-094, base_query_union.cpp): a union query's parts — select
+    // designs, each its own grid — joined by UNION (unionAll[i] false) or
+    // UNION ALL between part i and i + 1, sorted by its own order.
+    QList<QueryDesign> parts;
+    QList<bool> unionAll;
+    QList<UnionSort> unionOrder;
     QString sql; // hand-written SQL (kind Sql)
     QVariantMap extra; // members this version does not know, kept on save
 

@@ -39,8 +39,13 @@ Result prepare(const BaseFile &file, const ColumnInfo *column, const QString &fi
         return Result::failure(QStringLiteral("There is no field %1.").arg(field));
     }
     if (column->readOnly) {
+        // M86: a calculated field is worked out; a linked table follows its source.
         return Result::failure(column->type == FieldType::AutoNumber
                                    ? QStringLiteral("%1 is numbered by the database.").arg(column->label())
+                               : column->calculated ? QStringLiteral("%1 is calculated from its expression.").arg(column->label())
+                               : column->linked
+                                   ? QStringLiteral("%1 belongs to a linked table; change its source, then refresh the link.")
+                                         .arg(column->label())
                                    : QStringLiteral("%1 cannot be edited here.").arg(column->label()));
     }
     const Parsed parsed = Records::resolveInput(file, *column, input);

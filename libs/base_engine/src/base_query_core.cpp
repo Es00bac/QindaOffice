@@ -2,6 +2,7 @@
 // The query compiler's shared core (base_query_p.h): tables and field
 // resolution, each grid column's SQL with its total, the criteria rows and
 // the FROM clause with its joins.
+#include "base_access_sql.h"
 #include "base_query_p.h"
 
 #include <QHash>
@@ -94,6 +95,31 @@ QString QueryCore::having() const
     return havingRows.isEmpty() ? QString() : QStringLiteral("\nHAVING ") + disjunction(havingRows);
 }
 
+std::function<QString(const QString &, QString *)> subqueryCompiler(const BaseFile &file)
+{
+    return [&file](const QString &text, QString *error) -> QString {
+        const AccessSqlParse parsed = parseAccessSql(file, text);
+        if (!parsed.ok) {
+            *error = parsed.error;
+            return {};
+        }
+        if (parsed.design.kind != QueryKind::Select && parsed.design.kind != QueryKind::Union) {
+            *error = QStringLiteral("a subquery is a SELECT.");
+            return {};
+        }
+        const CompiledQuery compiled = compileQuery(file, parsed.design);
+        if (!compiled.ok) {
+            *error = compiled.error;
+            return {};
+        }
+        if (!compiled.parameters.isEmpty()) {
+            *error = QStringLiteral("a subquery cannot ask for values; give them in its text.");
+            return {};
+        }
+        return compiled.sql;
+    };
+}
+
 bool totalsOn(const QueryDesign &design)
 {
     return design.kind == QueryKind::Crosstab
@@ -154,7 +180,7 @@ QString buildQueryCore(const BaseFile &file, const QueryDesign &design, QList<Qu
             parameters->append(declared);
         }
     }
-    const Expr::Context ctx{core->resolve, core->currency, parameters};
+    const Expr::Context ctx{core->resolve, core->currency, parameters, subqueryCompiler(file)};
     const bool totals = totalsOn(design);
     for (int i = 0; i < design.columns.size(); ++i) {
         const QueryColumn &c = design.columns.at(i);

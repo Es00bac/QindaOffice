@@ -9,6 +9,10 @@ import QindaTK as Tk
 // bottom. What keeps the macro from running is listed as it is edited
 // (BaseService.checkMacro). Designer edits have their own undo while the
 // view is open; Save stores the macro as one undo step of the database.
+// M86 (D-094): the same designer edits a table's data macro (`dataMacro`:
+// {table, event, label}) — SetField, RaiseError, LogEvent and StopMacro,
+// each with a condition — saved as a schema step that makes its triggers;
+// a data macro runs when records change, never from here.
 Item {
     id: view
 
@@ -17,14 +21,20 @@ Item {
     property var macro: ({ description: "", actions: [] })
     property string original: "{}"
     property string name: ""
+    property var dataMacro: null // M86: {table, event, label} while a table event is designed
+    property var tableFields: [] // M86: the data macro's table's fields (SetField picks one)
     property int current: -1
     property var history: []
     property var future: []
     readonly property bool dirty: JSON.stringify(macro) !== original
-    readonly property var problems: base !== null && window.view === "macroDesign" ? base.checkMacro(macro, name).problems : []
+    readonly property var problems: base === null || window.view !== "macroDesign" ? []
+        : dataMacro !== null ? base.checkDataMacro(dataMacro.table, dataMacro.event, macro).problems
+                             : base.checkMacro(macro, name).problems
 
     function load(map) {
         if (!map || map.ok === false) { window.notify(qsTr("Cannot design"), map ? map.error : "", "danger"); return }
+        dataMacro = map.event ? { table: map.table, event: map.event, label: map.label } : null
+        tableFields = dataMacro !== null ? base.tableFields(map.table).map(function(f) { return f.name }) : []
         name = map.name || ""
         macro = { description: map.description || "", actions: map.actions || [] }
         original = JSON.stringify(macro)
@@ -35,7 +45,7 @@ Item {
     }
     function syncHost() {
         if (window === null || window.baseHost === null || window.view !== "macroDesign") return
-        window.baseHost.designDirty = dirty || name.length === 0 && macro.actions.length > 0
+        window.baseHost.designDirty = dirty || (dataMacro === null && name.length === 0 && macro.actions.length > 0)
         window.baseHost.designCanUndo = history.length > 0
         window.baseHost.designCanRedo = future.length > 0
     }
@@ -67,7 +77,7 @@ Item {
     }
     function addAction(id) {
         const at = current < 0 ? macro.actions.length : current + 1
-        edit(function(m) { m.actions.splice(at, 0, { action: id || "openForm", arguments: ({}) }) })
+        edit(function(m) { m.actions.splice(at, 0, { action: id || (view.dataMacro !== null ? "setField" : "openForm"), arguments: ({}) }) })
         current = at
     }
     function removeAction(index) {
@@ -91,10 +101,19 @@ Item {
         }
     }
     function run() {
+        if (dataMacro !== null) { window.notify(qsTr("A data macro runs by itself"), qsTr("It runs whenever a record of %1 is saved or deleted, by QindaBase or any other program.").arg(dataMacro.table), "info"); return }
         if (problems.length > 0) { window.notify(qsTr("The macro cannot run yet"), problems.join("\n"), "warning"); return }
         window.commands.macroRunner.run(macro.actions, name || qsTr("New macro"))
     }
     function save() {
+        if (dataMacro !== null) {
+            // M86: a schema step — the triggers the macro runs as.
+            const saved = base.saveDataMacro(dataMacro.table, dataMacro.event, macro)
+            if (!saved.ok) { window.notify(qsTr("Data macro not saved"), saved.error, "danger"); return false }
+            original = JSON.stringify(macro)
+            syncHost()
+            return true
+        }
         let target = name
         if (target.length === 0) {
             let n = base.macroNames.length + 1
@@ -117,7 +136,10 @@ Item {
         syncHost()
         return true
     }
-    function discard() { load(original === "{}" ? base.newMacroDesign() : Object.assign(JSON.parse(original), { name: name, ok: true })) }
+    function discard() {
+        if (dataMacro !== null) { load(base.dataMacroDesign(dataMacro.table, dataMacro.event)); return }
+        load(original === "{}" ? base.newMacroDesign() : Object.assign(JSON.parse(original), { name: name, ok: true }))
+    }
 
     Tk.Flex {
         anchors.fill: parent
@@ -137,7 +159,14 @@ Item {
                 gap: Tk.Theme.space.sm
                 wrap: Tk.Flex.Wrap
                 Tk.Icon { name: "workflow"; size: Tk.Theme.size.icon; color: Tk.Theme.color.accent }
-                Tk.Heading { objectName: "macroDesignName"; level: 3; text: view.name || qsTr("New macro"); Tk.Flex.shrink: 0 }
+                Tk.Heading {
+                    objectName: "macroDesignName"
+                    level: 3
+                    text: view.dataMacro !== null ? qsTr("%1 · %2").arg(view.dataMacro.label).arg(view.dataMacro.table)
+                                                  : view.name || qsTr("New macro")
+                    Tk.Flex.shrink: 0
+                }
+                Tk.Badge { visible: view.dataMacro !== null; text: qsTr("data macro") }
                 Tk.TextField {
                     objectName: "macroDescription"
                     small: true
@@ -150,6 +179,7 @@ Item {
                 Tk.Button { text: qsTr("Save"); iconName: "save"; enabled: view.dirty || view.name.length === 0; onClicked: view.save() }
                 Tk.Button {
                     objectName: "macroRun"
+                    visible: view.dataMacro === null
                     text: qsTr("Run"); iconName: "play"; variant: "accent"
                     enabled: view.macro.actions.length > 0
                     onClicked: view.run()
@@ -175,7 +205,9 @@ Item {
                 }
                 Tk.Label {
                     visible: view.macro.actions.length === 0
-                    text: qsTr("No actions yet. Add Action puts one under the selected action; each runs in turn, top to bottom.")
+                    text: view.dataMacro !== null
+                          ? qsTr("No actions yet. A table event sets fields of the record being saved (SetField), cancels the change with a message (RaiseError), writes to the application log (LogEvent) or stops (StopMacro), each when its condition holds.")
+                          : qsTr("No actions yet. Add Action puts one under the selected action; each runs in turn, top to bottom.")
                     muted: true
                     wrapMode: Text.Wrap
                 }
@@ -186,6 +218,9 @@ Item {
                         required property int index
                         width: body.width - Tk.Theme.space.md * 2
                         base: view.base
+                        catalog: view.dataMacro !== null && view.base !== null ? view.base.dataMacroActions
+                                 : view.base !== null ? view.base.macroActions : []
+                        fieldNames: view.tableFields
                         step: modelData
                         stepIndex: index
                         selected: index === view.current

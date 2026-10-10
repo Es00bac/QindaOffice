@@ -42,8 +42,9 @@ Tk.Box {
         Tk.Badge {
             objectName: "queryKindBadge"
             text: ({ select: qsTr("select"), update: qsTr("update"), delete: qsTr("delete"), append: qsTr("append"),
-                     crosstab: qsTr("crosstab"), makeTable: qsTr("make table"), sql: qsTr("SQL") })[header.design.kind] || ""
-            variant: ["select", "sql", "crosstab"].indexOf(header.design.kind) >= 0 ? "accent" : "warning"
+                     crosstab: qsTr("crosstab"), makeTable: qsTr("make table"), sql: qsTr("SQL"),
+                     union: qsTr("union") })[header.design.kind] || ""
+            variant: ["select", "sql", "crosstab", "union"].indexOf(header.design.kind) >= 0 ? "accent" : "warning"
         }
         Tk.ComboBox {
             objectName: "queryAppendTable"

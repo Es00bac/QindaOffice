@@ -1,19 +1,70 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Schema plans and M80's table metadata (D-089): the qb_fields columns an
-// older file lacks, the table's own qb_fields row, and the rule triggers a
-// plan drops and recreates (base_rules.h).
+// Schema plans and the table metadata M80 and M86 added (D-089, D-094):
+// the qb_fields columns an older file lacks, the table's own qb_fields row,
+// and the derived triggers a plan drops and recreates — validation rules
+// (base_rules.h), data macros (base_data_macro.h) and a linked table's guard
+// (base_links.h).
+#include "base_data_macro.h"
+#include "base_links.h"
 #include "base_rules.h"
 #include "base_schema_p.h"
+
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 namespace QindaOffice::Base::detail {
 
 namespace {
 
-const char *const kM80Columns[] = {"validation_rule", "validation_text", "input_mask"};
+struct AddedColumn {
+    const char *name;
+    const char *type;
+};
+
+// AGENT-CONTRACT (system tables v1, base_file.cpp kSystemSchema): columns are
+// only ever added, never renamed; an older file gains them in its first plan
+// that writes qb_fields.
+constexpr AddedColumn kAddedColumns[] = {
+    {"validation_rule", "TEXT"}, {"validation_text", "TEXT"}, {"input_mask", "TEXT"},            // M80
+    {"expression", "TEXT"},      {"lookup_values", "TEXT"},   {"limit_to_list", "INTEGER"},       // M86
+    {"allow_zero_length", "INTEGER"}, {"data_macros", "TEXT"}, {"link_source", "TEXT"}};          // M86
+
+// The qb_fields columns in MetaColumn order.
+constexpr const char *kMetaColumns[] = {"field_name",      "type",           "caption",          "description",
+                                        "lookup_table",    "lookup_field",   "lookup_display",   "validation_rule",
+                                        "validation_text", "input_mask",     "expression",       "lookup_values",
+                                        "limit_to_list",   "allow_zero_length", "data_macros",   "link_source"};
 
 QString orNull(const QString &text)
 {
     return text.trimmed().isEmpty() ? QStringLiteral("NULL") : quoteLiteral(text.trimmed());
+}
+
+QString json(const QVariantMap &map)
+{
+    return map.isEmpty() ? QStringLiteral("NULL")
+                         : quoteLiteral(QString::fromUtf8(QJsonDocument(QJsonObject::fromVariantMap(map)).toJson(QJsonDocument::Compact)));
+}
+
+QString jsonList(const QStringList &list)
+{
+    return list.isEmpty() ? QStringLiteral("NULL")
+                          : quoteLiteral(QString::fromUtf8(QJsonDocument(QJsonArray::fromStringList(list)).toJson(QJsonDocument::Compact)));
+}
+
+const QString kInsert = QStringLiteral(
+    "INSERT OR REPLACE INTO qb_fields(table_name, field_name, type, caption, description, lookup_table, lookup_field, "
+    "lookup_display, validation_rule, validation_text, input_mask, expression, lookup_values, limit_to_list, "
+    "allow_zero_length, data_macros, link_source) VALUES(");
+
+// Every derived trigger of `table`, in the order a plan creates them.
+QStringList derivedStatements(const TableDef &table, const CurrencyFormat &currency, QString *error)
+{
+    QStringList out = ruleTriggerStatements(table, currency);
+    out.append(dataMacroStatements(table, currency, error));
+    out.append(linkGuardStatements(table));
+    return out;
 }
 
 } // namespace
@@ -27,6 +78,17 @@ QStringList systemFieldColumns(const BaseFile &file)
     return out;
 }
 
+QStringList systemFieldSelect(const BaseFile &file)
+{
+    const QStringList have = systemFieldColumns(file);
+    QStringList out;
+    for (const char *column : kMetaColumns) {
+        const QString name = QString::fromLatin1(column);
+        out.append(have.contains(name) ? name : QStringLiteral("NULL"));
+    }
+    return out;
+}
+
 QStringList systemColumnStatements(const BaseFile &file)
 {
     QStringList out;
@@ -34,37 +96,80 @@ QStringList systemColumnStatements(const BaseFile &file)
         return out;
     }
     const QStringList have = systemFieldColumns(file);
-    for (const char *column : kM80Columns) {
-        if (!have.contains(QString::fromLatin1(column))) {
-            out.append(QStringLiteral("ALTER TABLE qb_fields ADD COLUMN %1 TEXT").arg(QString::fromLatin1(column)));
+    for (const AddedColumn &column : kAddedColumns) {
+        if (!have.contains(QString::fromLatin1(column.name))) {
+            out.append(QStringLiteral("ALTER TABLE qb_fields ADD COLUMN %1 %2")
+                           .arg(QString::fromLatin1(column.name), QString::fromLatin1(column.type)));
         }
     }
     return out;
 }
 
-QString metaTableInsert(const TableDef &table)
+QString metaInsert(const QString &table, const FieldDef &f)
 {
-    if (table.validationRule.trimmed().isEmpty() && table.validationText.trimmed().isEmpty()) {
-        return {};
-    }
-    return QStringLiteral("INSERT OR REPLACE INTO qb_fields(table_name, field_name, type, caption, description, "
-                          "lookup_table, lookup_field, lookup_display, validation_rule, validation_text, input_mask) "
-                          "VALUES(%1, '', NULL, NULL, NULL, NULL, NULL, NULL, %2, %3, NULL)")
-        .arg(quoteLiteral(table.name), orNull(table.validationRule), orNull(table.validationText));
+    const bool lookup = f.lookup.isSet();
+    QStringList values{quoteLiteral(table),
+                       quoteLiteral(f.name),
+                       f.type == FieldType::Other && f.calculated ? QStringLiteral("NULL") : quoteLiteral(typeId(f.type)),
+                       f.caption.isEmpty() ? QStringLiteral("NULL") : quoteLiteral(f.caption),
+                       f.description.isEmpty() ? QStringLiteral("NULL") : quoteLiteral(f.description),
+                       lookup ? quoteLiteral(f.lookup.table) : QStringLiteral("NULL"),
+                       lookup ? quoteLiteral(f.lookup.valueField) : QStringLiteral("NULL"),
+                       lookup && !f.lookup.displayField.isEmpty() ? quoteLiteral(f.lookup.displayField)
+                                                                  : QStringLiteral("NULL"),
+                       orNull(f.validationRule),
+                       orNull(f.validationText),
+                       orNull(f.inputMask),
+                       f.calculated ? orNull(f.expression) : QStringLiteral("NULL"),
+                       jsonList(f.lookup.values),
+                       f.lookup.isValueList() && f.lookup.limitToList ? QStringLiteral("1") : QStringLiteral("NULL"),
+                       f.allowZeroLength ? QStringLiteral("NULL") : QStringLiteral("0"),
+                       QStringLiteral("NULL"),
+                       QStringLiteral("NULL")};
+    return kInsert + values.join(QStringLiteral(", ")) + QLatin1Char(')');
 }
 
-void appendRuleStatements(SchemaPlan *plan, const BaseFile &file, const TableDef &before, const TableDef &after,
-                          bool rebuilt)
+QString metaTableInsert(const TableDef &table)
+{
+    if (table.validationRule.trimmed().isEmpty() && table.validationText.trimmed().isEmpty() && table.dataMacros.isEmpty()
+        && table.link.isEmpty()) {
+        return {};
+    }
+    QStringList values{quoteLiteral(table.name), QStringLiteral("''")};
+    for (int i = 0; i < 6; ++i) {
+        values.append(QStringLiteral("NULL")); // type … lookup_display
+    }
+    values << orNull(table.validationRule) << orNull(table.validationText);
+    for (int i = 0; i < 5; ++i) {
+        values.append(QStringLiteral("NULL")); // input_mask … allow_zero_length
+    }
+    values << json(table.dataMacros) << json(table.link);
+    return kInsert + values.join(QStringLiteral(", ")) + QLatin1Char(')');
+}
+
+void appendDerivedStatements(SchemaPlan *plan, const BaseFile &file, const TableDef &before, const TableDef &after,
+                             bool rebuilt)
 {
     const CurrencyFormat currency = file.currency();
-    const QStringList creates = ruleTriggerStatements(after, currency);
-    const QStringList existing = before.name.isEmpty() ? QStringList() : ruleTriggerStatements(before, currency);
-    const bool same = creates == existing && before.ruleTriggers.size() == existing.size();
-    if ((same && !rebuilt) || (creates.isEmpty() && before.ruleTriggers.isEmpty())) {
+    QString error;
+    const QStringList creates = derivedStatements(after, currency, &error);
+    if (!error.isEmpty()) {
+        plan->error = error;
+        return;
+    }
+    QString ignored;
+    const QStringList existing = before.name.isEmpty() ? QStringList() : derivedStatements(before, currency, &ignored);
+    // Statements that are not triggers (the application log's table) do not
+    // count against the triggers the table has now.
+    const qsizetype triggers = std::count_if(existing.cbegin(), existing.cend(), [](const QString &statement) {
+        return statement.startsWith(QLatin1String("CREATE TRIGGER"));
+    });
+    const bool same = creates == existing && before.derivedTriggers.size() == triggers;
+    if ((same && !rebuilt) || (creates.isEmpty() && before.derivedTriggers.isEmpty())) {
         return;
     }
     QStringList drops;
-    for (const QString &name : before.ruleTriggers) {
+    for (const QString &name : before.derivedTriggers) {
         drops.append(QStringLiteral("DROP TRIGGER IF EXISTS %1").arg(quoteIdentifier(name)));
     }
     plan->statements = drops + plan->statements;
@@ -84,6 +189,17 @@ void appendRuleStatements(SchemaPlan *plan, const BaseFile &file, const TableDef
         plan->notes.append(QStringLiteral("Checks every new or changed record against the table's validation rule "
                                           "(%1).")
                                .arg(after.validationRule.trimmed()));
+    }
+    if (before.dataMacros != after.dataMacros) {
+        QStringList events;
+        for (const QString &event : dataMacroEvents()) {
+            if (!dataMacro(after, event).steps.isEmpty()) {
+                events.append(dataMacroEventLabel(event));
+            }
+        }
+        plan->notes.append(events.isEmpty() ? QStringLiteral("Removes the table's data macros.")
+                                            : QStringLiteral("Runs the data macros %1 for every writer of the table.")
+                                                  .arg(events.join(QStringLiteral(", "))));
     }
 }
 

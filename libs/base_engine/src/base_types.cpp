@@ -2,6 +2,7 @@
 #include "base_types.h"
 
 #include "base_file_field.h"
+#include "base_hyperlink.h"
 
 #include <QDate>
 #include <QDateTime>
@@ -33,6 +34,9 @@ constexpr TypeRow kTypes[] = {
     {FieldType::Date, "date", "Date", "DATE"},
     {FieldType::DateTime, "dateTime", "Date & time", "DATETIME"},
     {FieldType::File, "file", "File or picture", "FILE"},
+    // M86 (D-094): TEXT affinity for links; INTEGER affinity for BIGINT.
+    {FieldType::Hyperlink, "hyperlink", "Hyperlink", "HYPERLINK TEXT"},
+    {FieldType::LargeNumber, "largeNumber", "Large number", "BIGINT"},
     {FieldType::Other, "other", "Other (read-only)", "BLOB"},
 };
 
@@ -154,9 +158,9 @@ QString typeLabel(FieldType type)
 
 QList<FieldType> designableTypes()
 {
-    return {FieldType::AutoNumber, FieldType::Text,  FieldType::LongText, FieldType::Integer,
-            FieldType::Number,     FieldType::Currency, FieldType::YesNo,    FieldType::Date,
-            FieldType::DateTime,   FieldType::File};
+    return {FieldType::AutoNumber, FieldType::Text,     FieldType::LongText, FieldType::Integer,
+            FieldType::LargeNumber, FieldType::Number,  FieldType::Currency, FieldType::YesNo,
+            FieldType::Date,        FieldType::DateTime, FieldType::Hyperlink, FieldType::File};
 }
 
 QString declaredType(FieldType type)
@@ -169,6 +173,12 @@ FieldType typeFromDeclared(const QString &declared, bool rowidPrimaryKey)
     const QString t = declared.trimmed().toUpper();
     if (t == QLatin1String("FILE")) {
         return FieldType::File;
+    }
+    if (t.startsWith(QLatin1String("HYPERLINK"))) {
+        return FieldType::Hyperlink; // M86, before the TEXT rule below
+    }
+    if (t == QLatin1String("BIGINT") && !rowidPrimaryKey) {
+        return FieldType::LargeNumber; // M86: Access's Large Number
     }
     if (t.contains(QLatin1String("BOOL")) || t == QLatin1String("BIT") || t == QLatin1String("YESNO")) {
         return FieldType::YesNo;
@@ -203,99 +213,17 @@ FieldType typeFromDeclared(const QString &declared, bool rowidPrimaryKey)
 
 bool isNumeric(FieldType type)
 {
-    return type == FieldType::AutoNumber || type == FieldType::Integer || type == FieldType::Number
-           || type == FieldType::Currency;
+    return isWholeNumber(type) || type == FieldType::Number || type == FieldType::Currency;
+}
+
+bool isWholeNumber(FieldType type)
+{
+    return type == FieldType::AutoNumber || type == FieldType::Integer || type == FieldType::LargeNumber;
 }
 
 bool isTypable(FieldType type)
 {
     return type != FieldType::AutoNumber && type != FieldType::File && type != FieldType::Other;
-}
-
-std::optional<qint64> parseMoney(const QString &raw, int decimals, QString *error)
-{
-    QString text = raw.trimmed();
-    bool negative = false;
-    if (text.startsWith(QLatin1Char('(')) && text.endsWith(QLatin1Char(')'))) {
-        negative = true;
-        text = text.mid(1, text.size() - 2).trimmed();
-    }
-    // Drop any currency symbol or code around the digits.
-    static const QRegularExpression symbols(QStringLiteral("[^0-9.,\\-+\\s]"));
-    text.remove(symbols);
-    text = stripGrouping(text);
-    if (text.startsWith(QLatin1Char('-'))) {
-        negative = !negative;
-        text.remove(0, 1);
-    } else if (text.startsWith(QLatin1Char('+'))) {
-        text.remove(0, 1);
-    }
-    static const QRegularExpression shape(QStringLiteral("^(\\d*)(?:\\.(\\d*))?$"));
-    const QRegularExpressionMatch m = shape.match(text);
-    if (text.isEmpty() || !m.hasMatch() || (m.captured(1).isEmpty() && m.captured(2).isEmpty())) {
-        if (error != nullptr) {
-            *error = QStringLiteral("needs an amount");
-        }
-        return std::nullopt;
-    }
-    const QString whole = m.captured(1);
-    QString fraction = m.captured(2);
-    while (fraction.size() > decimals && fraction.endsWith(QLatin1Char('0'))) {
-        fraction.chop(1);
-    }
-    if (fraction.size() > decimals) {
-        if (error != nullptr) {
-            *error = QStringLiteral("takes at most %1 decimal places").arg(decimals);
-        }
-        return std::nullopt;
-    }
-    fraction = fraction.leftJustified(decimals, QLatin1Char('0'));
-    const QString digits = (whole.isEmpty() ? QStringLiteral("0") : whole) + fraction;
-    if (digits.size() > 18) {
-        if (error != nullptr) {
-            *error = QStringLiteral("is too large");
-        }
-        return std::nullopt;
-    }
-    bool ok = false;
-    const qint64 minor = digits.toLongLong(&ok);
-    if (!ok) {
-        if (error != nullptr) {
-            *error = QStringLiteral("needs an amount");
-        }
-        return std::nullopt;
-    }
-    return negative ? -minor : minor;
-}
-
-QString formatMoney(qint64 minor, int decimals, const QString &symbol, bool grouping)
-{
-    const bool negative = minor < 0;
-    // AGENT-GUARD: unsigned magnitude so INT64_MIN does not overflow.
-    const quint64 magnitude = negative ? quint64(0) - quint64(minor) : quint64(minor);
-    quint64 scale = 1;
-    for (int i = 0; i < decimals; ++i) {
-        scale *= 10;
-    }
-    QString whole = QString::number(magnitude / scale);
-    if (grouping) {
-        for (int i = int(whole.size()) - 3; i > 0; i -= 3) {
-            whole.insert(i, QLatin1Char(','));
-        }
-    }
-    QString out = symbol + whole;
-    if (decimals > 0) {
-        out += QLatin1Char('.') + QString::number(magnitude % scale).rightJustified(decimals, QLatin1Char('0'));
-    }
-    return negative ? QLatin1Char('-') + out : out;
-}
-
-QString formatNumber(double value)
-{
-    if (std::isfinite(value) && std::floor(value) == value && std::fabs(value) < 1e15) {
-        return QString::number(qint64(value));
-    }
-    return QString::number(value, 'g', 15);
 }
 
 Parsed parseInput(FieldType type, const QString &raw, const CurrencyFormat &currency)
@@ -313,7 +241,8 @@ Parsed parseInput(FieldType type, const QString &raw, const CurrencyFormat &curr
     case FieldType::LongText:
         return value(raw);
     case FieldType::AutoNumber:
-    case FieldType::Integer: {
+    case FieldType::Integer:
+    case FieldType::LargeNumber: {
         bool ok = false;
         const qint64 n = stripGrouping(text).toLongLong(&ok);
         return ok ? value(QVariant::fromValue(n)) : fail(QStringLiteral("needs a whole number"));
@@ -353,6 +282,12 @@ Parsed parseInput(FieldType type, const QString &raw, const CurrencyFormat &curr
         return dt ? value(dt->toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")))
                   : fail(QStringLiteral("needs a date and time (yyyy-mm-dd hh:mm)"));
     }
+    case FieldType::Hyperlink:
+        // M86: an address or Access's "display#address#…" (base_hyperlink.h).
+        if (text.size() > kHyperlinkLimit) {
+            return fail(QStringLiteral("holds at most %1 characters").arg(kHyperlinkLimit));
+        }
+        return value(text);
     case FieldType::File:
         return fail(QStringLiteral("takes a file (use Insert File)"));
     case FieldType::Other:
@@ -399,7 +334,7 @@ Parsed parseValue(FieldType type, const QVariant &input, const CurrencyFormat &c
             }
             return value(QVariant::fromValue(qint64(rounded)));
         }
-        if (type == FieldType::Integer || type == FieldType::AutoNumber || type == FieldType::YesNo) {
+        if (isWholeNumber(type) || type == FieldType::YesNo) {
             if (std::floor(d) != d || std::fabs(d) > 9e18) {
                 return fail(QStringLiteral("needs a whole number"));
             }
@@ -416,7 +351,7 @@ Parsed parseValue(FieldType type, const QVariant &input, const CurrencyFormat &c
         if (type == FieldType::Number) {
             return value(double(n));
         }
-        if (type == FieldType::Integer || type == FieldType::AutoNumber) {
+        if (isWholeNumber(type)) {
             return value(QVariant::fromValue(n));
         }
         return parseInput(type, QString::number(n), currency);
@@ -452,6 +387,8 @@ QString displayText(FieldType type, const QVariant &stored, const CurrencyFormat
         const std::optional<FileInfo> info = fileInfo(stored);
         return info ? fileDisplayText(*info) : stored.toString();
     }
+    case FieldType::Hyperlink:
+        return parseHyperlink(stored.toString()).shown();
     case FieldType::Other:
         if (id == QMetaType::QByteArray) {
             return QStringLiteral("(binary, %1 bytes)").arg(stored.toByteArray().size());
@@ -473,6 +410,9 @@ QString editText(FieldType type, const QVariant &stored, const CurrencyFormat &c
     if (type == FieldType::Currency && stored.isValid() && !stored.isNull()
         && (stored.metaType().id() == QMetaType::LongLong || stored.metaType().id() == QMetaType::Int)) {
         return formatMoney(stored.toLongLong(), currency.decimals, QString(), false);
+    }
+    if (type == FieldType::Hyperlink && stored.isValid() && !stored.isNull()) {
+        return stored.toString(); // the whole stored text, display and address
     }
     return displayText(type, stored, currency);
 }

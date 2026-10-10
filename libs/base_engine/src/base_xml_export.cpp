@@ -3,8 +3,11 @@
 // base_xml_export.h for the contract.
 #include "base_xml_export.h"
 
+#include "base_hyperlink.h"
+#include "base_indexes.h"
 #include "base_schema.h"
 
+#include <QRegularExpression>
 #include <QXmlStreamWriter>
 
 #include <cmath>
@@ -21,6 +24,7 @@ QString s(const char *text)
 
 const QString kXsd = s("http://www.w3.org/2001/XMLSchema");
 const QString kOd = s("urn:schemas-microsoft-com:officedata");
+const QString kQb = QString::fromLatin1(kQindaBaseXmlNamespace);
 
 bool nameStart(QChar c)
 {
@@ -70,6 +74,8 @@ JetType jetType(const ColumnInfo &c, bool fitsInt32)
     case FieldType::Date:
     case FieldType::DateTime: return {s("datetime"), s("datetime"), s("xsd:dateTime"), {}, 0};
     case FieldType::File: return {s("oleobject"), s("image"), {}, s("xsd:base64Binary"), 1476395008};
+    case FieldType::Hyperlink: return {s("hyperlink"), s("ntext"), {}, s("xsd:string"), 536870910};
+    case FieldType::LargeNumber: return {s("bigint"), s("bigint"), s("xsd:long"), {}, 0};
     case FieldType::Other: break;
     }
     return {s("memo"), s("ntext"), {}, s("xsd:string"), 536870910};
@@ -83,7 +89,9 @@ QString xmlValue(const ColumnInfo &c, const QVariant &v, const CurrencyFormat &c
     }
     switch (c.type) {
     case FieldType::AutoNumber:
-    case FieldType::Integer: return QString::number(v.toLongLong());
+    case FieldType::Integer:
+    case FieldType::LargeNumber: return QString::number(v.toLongLong());
+    case FieldType::Hyperlink: return parseHyperlink(v.toString()).accessText();
     case FieldType::Number: {
         const double d = v.toDouble();
         return std::isfinite(d) ? QString::number(d, 'g', 17) : QString();
@@ -111,6 +119,20 @@ void writeIndex(QXmlStreamWriter &w, const QString &name, const QStringList &fie
 }
 
 } // namespace
+
+QString nameFromXml(const QString &element)
+{
+    static const QRegularExpression escape(s("_x([0-9A-Fa-f]{4})_"));
+    QString out;
+    qsizetype last = 0;
+    for (QRegularExpressionMatchIterator it = escape.globalMatch(element); it.hasNext();) {
+        const QRegularExpressionMatch m = it.next();
+        out += element.mid(last, m.capturedStart() - last);
+        out += QChar(char16_t(m.captured(1).toUShort(nullptr, 16)));
+        last = m.capturedEnd();
+    }
+    return out + element.mid(last);
+}
 
 QString xmlName(const QString &name)
 {
@@ -161,6 +183,7 @@ AccessXml accessXml(const QString &name, const QList<ColumnInfo> &columns, const
     w.writeStartDocument();
     w.writeNamespace(kXsd, s("xsd"));
     w.writeNamespace(kOd, s("od"));
+    w.writeNamespace(kQb, s("qb"));
     w.writeStartElement(kXsd, s("schema"));
     w.writeStartElement(kXsd, s("element"));
     w.writeAttribute(s("name"), s("dataroot"));
@@ -195,6 +218,13 @@ AccessXml accessXml(const QString &name, const QList<ColumnInfo> &columns, const
                 writeIndex(w, f.name, {xmlName(f.name)}, false, f.unique);
             }
         }
+        for (const IndexDef &index : design->indexes) {
+            QStringList fields;
+            for (const IndexField &f : index.fields) {
+                fields.append(xmlName(f.field));
+            }
+            writeIndex(w, index.name, fields, false, index.unique);
+        }
         w.writeEndElement(); // appinfo
         w.writeEndElement(); // annotation
     }
@@ -214,6 +244,11 @@ AccessXml accessXml(const QString &name, const QList<ColumnInfo> &columns, const
         w.writeAttribute(s("minOccurs"), required ? s("1") : s("0"));
         w.writeAttribute(kOd, s("jetType"), t.jet);
         w.writeAttribute(kOd, s("sqlSType"), t.sql);
+        const FieldDef *field = design != nullptr ? design->field(c.name) : nullptr;
+        w.writeAttribute(kQb, s("type"), typeId(c.type));
+        if (field != nullptr && field->calculated && !field->expression.isEmpty()) {
+            w.writeAttribute(kQb, s("expression"), field->expression);
+        }
         if (c.type == FieldType::AutoNumber) {
             w.writeAttribute(kOd, s("autoUnique"), s("yes"));
         }

@@ -66,6 +66,9 @@ public:
 
 signals:
     void fileReplaced();
+    // M86: a database file was opened (load(); not a new database, not the
+    // reopen after Save As) — the window runs its AutoExec macro on it.
+    void opened();
     // An undo/redo could not be replayed; the history was cleared.
     void undoFailed(const QString &message);
 

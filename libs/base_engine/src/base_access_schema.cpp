@@ -304,7 +304,19 @@ std::optional<FieldType> accessFieldType(const AccessColumn &column)
     if (starts("BOOL")) {
         return FieldType::YesNo;
     }
-    if (starts("SMALLINT") || starts("INTEGER") || starts("BIGINT")) {
+    // M86 (D-094): the XML import's words — QindaBase's own type ("QB:date",
+    // from its qb:type annotation) and Access's hyperlink — and BIGINT as
+    // Access's Large Number.
+    if (starts("QB:")) {
+        return typeFromId(column.type.mid(3).trimmed());
+    }
+    if (starts("HYPERLINK")) {
+        return FieldType::Hyperlink;
+    }
+    if (starts("BIGINT")) {
+        return FieldType::LargeNumber;
+    }
+    if (starts("SMALLINT") || starts("INTEGER")) {
         return FieldType::Integer;
     }
     if (t == QLatin1String("NUMERIC(15,2)")) {

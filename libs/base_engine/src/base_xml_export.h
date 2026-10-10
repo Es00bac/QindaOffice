@@ -23,8 +23,14 @@
 //  * Types: autonumber/int, text(255)/nvarchar, memo/ntext, longinteger/int
 //    (double when a value does not fit 32 bits — Access's Long Integer),
 //    double/float, currency/money, yesno/bit, datetime/datetime,
-//    oleobject/image. The primary key and single-field indexes are
-//    od:index annotations.
+//    oleobject/image; M86: hyperlink/ntext (Access's "display#address#"),
+//    bigint/bigint (Large Number). The primary key, single-field indexes
+//    and (M86) the Indexes dialog's indexes are od:index annotations.
+//  * M86 (D-094): every field element also carries QindaBase's own type as
+//    qb:type (namespace urn:qindaqt:qindabase, which Access ignores) and a
+//    calculated field its expression as qb:expression, so the XML import
+//    (base_xml_import.h) gives back the same design — Date apart from Date
+//    & time, Long Text apart from Short Text, money, links.
 
 #include "base_records.h"
 
@@ -45,7 +51,10 @@ struct AccessXml {
                                   const QList<QVariantList> &rows, const CurrencyFormat &currency,
                                   const TableDef *design, const QString &schemaFile,
                                   const QDateTime &generated = QDateTime::currentDateTime());
-// An XML name for a field or table name (Access's _xHHHH_ escaping).
+// An XML name for a field or table name (Access's _xHHHH_ escaping), and
+// back (M86).
 [[nodiscard]] QString xmlName(const QString &name);
+[[nodiscard]] QString nameFromXml(const QString &element);
+inline constexpr char kQindaBaseXmlNamespace[] = "urn:qindaqt:qindabase";
 
 } // namespace QindaOffice::Base

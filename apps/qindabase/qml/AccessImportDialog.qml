@@ -11,12 +11,19 @@ import QindaTK as Tk
 // (base_access_import.h, D-074). The whole import is one undo step.
 // Afterwards the dialog turns into the report: what was imported, and
 // every table, field, relationship and query left out with the reason.
+// M86 (D-094): mode "xml" imports Access's XML export instead (Export ▸
+// XML File, QindaBase's own M80 export included — base_xml_import.h): the
+// schema it carries (inline or the .xsd beside it) or, without one, field
+// types read from the values; no mdb-tools needed.
 Tk.Dialog {
     id: dialog
 
     property var window: null
     readonly property var base: window !== null ? window.base : null
     property url source: ""
+    property string mode: "access" // access | xml (M86)
+    property var records: ({})     // xml: table → records in the file
+    property string schemaSource: "" // xml: "", "embedded" or the .xsd's name
     property var tables: []
     property var chosen: []
     property bool queries: true
@@ -25,16 +32,31 @@ Tk.Dialog {
     property var report: null // the import's result (AccessImportReport::toMap)
     readonly property bool reporting: report !== null
 
-    title: reporting ? qsTr("Access import report") : qsTr("Import an Access database")
+    title: reporting ? qsTr("Access import report") : mode === "xml" ? qsTr("Import Access XML") : qsTr("Import an Access database")
     subtitle: String(source).replace(/^.*\//, "")
     dialogWidth: Tk.Theme.size.dialogWidth * 1.3
     primaryText: reporting ? qsTr("Close") : qsTr("Import")
     secondaryText: reporting ? "" : qsTr("Cancel")
     primaryEnabled: reporting || chosen.length > 0
 
-    function openFor(url) {
+    function openFor(url, how) {
         source = url
         report = null
+        mode = how === "xml" ? "xml" : "access"
+        if (mode === "xml") {
+            queriesAvailable = false
+            queries = false
+            const x = base.xmlTables(url)
+            const counts = {}
+            for (const t of x.tables || []) counts[t.name] = t.records
+            records = counts
+            schemaSource = x.ok ? x.schema : ""
+            tables = Object.keys(counts)
+            chosen = tables.slice()
+            error = x.ok ? "" : x.error
+            open()
+            return
+        }
         const tools = base.accessTools()
         queriesAvailable = tools.queries === true
         queries = queriesAvailable
@@ -55,7 +77,7 @@ Tk.Dialog {
     }
     onAccepted: {
         if (reporting) { report = null; return }
-        const r = base.importAccess(source, chosen, queries)
+        const r = mode === "xml" ? base.importXml(source, chosen) : base.importAccess(source, chosen, queries)
         const done = (r.tables || []).map(function(t) { return qsTr("%1 (%2)").arg(t.table).arg(t.rows) })
         if (done.length > 0) window.notify(qsTr("Imported"), done.join(", "), (r.skipped || []).length ? "warning" : "success")
         Qt.callLater(showReport, r)
@@ -68,21 +90,26 @@ Tk.Dialog {
         Tk.Caption {
             visible: !dialog.reporting
             wrapMode: Text.Wrap
-            text: qsTr("Each table comes with its records, field types, key, indexes and required fields, then the relationships between the tables you import. Access forms, reports and macros do not come across.")
+            text: dialog.mode === "xml"
+                  ? (dialog.schemaSource.length > 0
+                     ? qsTr("The file carries its schema (%1): each table comes with its records, field types, key, indexes and required fields.")
+                       .arg(dialog.schemaSource === "embedded" ? qsTr("inside the file") : dialog.schemaSource)
+                     : qsTr("The file carries no schema: each table comes with its records, and the field types are read from the values."))
+                  : qsTr("Each table comes with its records, field types, key, indexes and required fields, then the relationships between the tables you import. Access forms, reports and macros do not come across.")
         }
         Repeater {
             model: dialog.reporting ? [] : dialog.tables
             delegate: Tk.CheckBox {
                 required property string modelData
                 objectName: "accessTable_" + modelData
-                text: modelData
+                text: dialog.mode === "xml" ? qsTr("%1 (%n record(s))", "", dialog.records[modelData] || 0).arg(modelData) : modelData
                 checked: dialog.chosen.indexOf(modelData) >= 0
                 onToggled: dialog.toggle(modelData, checked)
             }
         }
         Tk.CheckBox {
             objectName: "accessQueries"
-            visible: !dialog.reporting
+            visible: !dialog.reporting && dialog.mode === "access"
             enabled: dialog.queriesAvailable
             text: dialog.queriesAvailable ? qsTr("Also bring the saved select queries that read one imported table")
                                           : qsTr("Saved queries need mdb-queries, which is not installed")

@@ -32,6 +32,9 @@ Item {
     property int rowCount: 0
     property bool truncated: false
     readonly property var designDocument: session !== null ? session.model : null
+    // M86: the source's fields with their QindaBase types, for Group On.
+    readonly property var sourceInfo: reportName.length > 0 && base !== null && !labels ? (base.reportInfo(reportName).source || ({})) : ({})
+    readonly property var sourceFields: sourceInfo.name ? base.sourceFields(sourceInfo.kind, sourceInfo.name) : []
     readonly property bool designDirty: designDocument !== null && designDocument.revision !== savedRevision
     readonly property alias output: output
     readonly property alias pages: pages
@@ -90,6 +93,8 @@ Item {
         output.rowCount = built.rowCount
         output.groupCount = built.groupCount
         output.bands = built.bands
+        output.pageBreaks = built.pageBreaks || 0   // M86: Force New Page and Keep Together
+        output.groupsMoved = built.groupsMoved || 0
     }
     // Fresh data from the database, the design as it is now.
     function refreshData() {
@@ -153,6 +158,8 @@ Item {
         property int groupCount: 0
         property string errorText: ""
         property var bands: []
+        property int pageBreaks: 0  // M86 (base_report_layout.h)
+        property int groupsMoved: 0
     }
     Connections {
         target: view.designDocument
@@ -178,7 +185,9 @@ Item {
             orientation: Qt.Horizontal
             Item {
                 T.SplitView.fillWidth: true
-                T.SplitView.minimumWidth: Tk.Theme.size.panelMinWidth
+                // M86: a narrow window gives the Group, Sort and Total pane its room.
+                T.SplitView.minimumWidth: view.width < Tk.Theme.size.panelMinWidth * 2.5 ? Tk.Theme.size.panelMinWidth * 0.6
+                                                                                         : Tk.Theme.size.panelMinWidth
                 Tk.Flex {
                     anchors.fill: parent
                     direction: Tk.Flex.Row
@@ -224,9 +233,16 @@ Item {
                         objectName: "reportGroupsPanel"
                         visible: view.groupSortVisible || view.designing
                         width: designScroll.width - Tk.Theme.space.md * 2
+                        base: view.base
                         designDocument: view.designDocument
                         provider: snapshot
                         table: view.table
+                        fieldTypes: {
+                            const out = ({})
+                            for (const f of view.sourceFields) out[f.name] = f.type === "calculated" ? f.resultType : f.type
+                            return out
+                        }
+                        lookups: view.sourceFields.filter(function(f) { return !!f.lookupTable }).map(function(f) { return f.name })
                     }
                     Tk.ReportDesigner {
                         objectName: "baseReportDesigner"

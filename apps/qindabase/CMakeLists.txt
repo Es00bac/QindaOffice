@@ -16,6 +16,7 @@ set(qindabase_qml
     qml/BaseWindow.qml
     qml/BaseRibbonLayout.qml
     qml/BaseCommands.qml
+    qml/AccessToolsCommands.qml
     qml/NavigationPane.qml
     qml/StartView.qml
     qml/DatasheetView.qml
@@ -23,13 +24,17 @@ set(qindabase_qml
     qml/PivotPanel.qml
     qml/TableDesignView.qml
     qml/FieldProperties.qml
+    qml/TableProperties.qml
+    qml/IndexesDialog.qml
     qml/QueryDesignView.qml
     qml/QueryDesignHeader.qml
     qml/QueryTablesPane.qml
     qml/QueryGrid.qml
     qml/QueryGridColumn.qml
     qml/QuerySqlPane.qml
+    qml/QueryUnionPane.qml
     qml/QueryParametersDialog.qml
+    qml/QueryWizardDialog.qml
     qml/MacroDesignView.qml
     qml/MacroActionRow.qml
     qml/MacroRunner.qml
@@ -40,6 +45,8 @@ set(qindabase_qml
     qml/ReportView.qml
     qml/ReportHeaderBar.qml
     qml/ReportGroupsPanel.qml
+    qml/ReportGroupLevel.qml
+    qml/ReportSectionsPanel.qml
     qml/ReportTotalsEditor.qml
     qml/LabelPages.qml
     qml/LabelWizardDialog.qml
@@ -50,6 +57,9 @@ set(qindabase_qml
     qml/ParametersDialog.qml
     qml/ImportCsvDialog.qml
     qml/AccessImportDialog.qml
+    qml/LinkTableDialog.qml
+    qml/LinkedTableManagerDialog.qml
+    qml/HyperlinkDialog.qml
     qml/FileFieldPanel.qml
     qml/FormWizardDialog.qml
     qml/ReportWizardDialog.qml
@@ -72,12 +82,16 @@ qt_add_qml_module(qindabase_app
         src/base_document.cpp src/base_document.h
         src/base_host.cpp src/base_host.h
         src/base_host_actions.cpp
+        src/base_host_actions_access.cpp
+        src/base_report_layout.cpp src/base_report_layout.h
         src/base_service.cpp src/base_service.h
+        src/base_service_access_tools.cpp
         src/base_service_files.cpp
         src/base_service_form_controls.cpp
         src/base_service_forms.cpp
         src/base_service_import.cpp
         src/base_service_io.cpp
+        src/base_service_links.cpp
         src/base_service_macros.cpp
         src/base_service_queries.cpp
         src/base_service_query_tools.cpp

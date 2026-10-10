@@ -170,6 +170,7 @@ QString canonical(const Typed &t, std::optional<Engine::FieldType> type, const E
     case Engine::FieldType::Currency:
         return QString::number(t.number, 'f', currency.decimals);
     case Engine::FieldType::Integer:
+    case Engine::FieldType::LargeNumber: // M86
         return QString::number(qint64(t.number));
     case Engine::FieldType::Number:
         return numberText(t.number);

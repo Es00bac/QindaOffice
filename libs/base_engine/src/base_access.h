@@ -25,6 +25,7 @@
 // cases identifiers, so names are matched back case-blind to the spelling
 // mdb-tables and mdb-export print (base_access_schema.h).
 
+#include "base_access_schema.h"
 #include "base_csv.h"
 
 #include <QHash>
@@ -59,6 +60,9 @@ public:
     [[nodiscard]] virtual QString querySql(const QString &name, QString *error) = 0;
     // Query name → MSysObjects.Flags (its kind); empty when unreadable.
     [[nodiscard]] virtual QHash<QString, int> queryFlags(QString *error) = 0;
+    // M86: a reader that knows the design already (the XML import,
+    // base_xml_import.h) hands it over instead of mdb-schema's DDL.
+    [[nodiscard]] virtual std::optional<AccessSchema> parsedSchema() { return std::nullopt; }
 };
 
 class MdbToolsReader final : public AccessReader {

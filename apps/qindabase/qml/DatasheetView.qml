@@ -9,7 +9,9 @@ import QindaOffice.Base.App
 // step through base_engine), the last row "✱" adds a record, the header
 // carries sort/filter state, the footer the totals row and record
 // navigation. A PivotTable view of the same rows reuses QindaTK's
-// QueryBuilder and PivotView (PivotPanel.qml).
+// QueryBuilder and PivotView (PivotPanel.qml). M86 (D-094): the current
+// hyperlink cell is the host's hyperlinkTarget (Home ▸ Hyperlink), and a
+// linked table says where its records come from.
 Item {
     id: view
 
@@ -31,7 +33,29 @@ Item {
     readonly property var fileTarget: fileColumn === null ? ({})
         : { table: sheet.sourceName, rowid: Number(grid.activeRowId.slice(1)), field: fileColumn.name, hasFile: filePanel.hasFile }
     onFileTargetChanged: if (window !== null && visible) window.baseHost.fileTarget = fileTarget
-    onVisibleChanged: if (window !== null && visible) window.baseHost.fileTarget = fileTarget
+    onVisibleChanged: {
+        if (window === null) return
+        if (visible) window.baseHost.fileTarget = fileTarget
+        window.baseHost.hyperlinkTarget = visible ? hyperlinkTarget : ({})
+    }
+    // M86: the current cell when it is a hyperlink field of a saved record;
+    // `cellRevision` re-reads its text after edits and undo.
+    property int cellRevision: 0
+    readonly property var hyperlinkColumn: {
+        if (sheet === null || grid.activeRowId.length === 0 || grid.activeRowId === "new") return null
+        const columns = sheet.columns
+        for (let i = 0; i < columns.length; ++i)
+            if (columns[i].name === grid.activeColumnId && columns[i].hyperlink) return columns[i]
+        return null
+    }
+    readonly property var hyperlinkTarget: hyperlinkColumn === null || cellRevision < 0 ? ({})
+        : { rowId: grid.activeRowId, field: hyperlinkColumn.name, label: hyperlinkColumn.label,
+            text: sheet.cellEditText(grid.activeRowId, hyperlinkColumn.name),
+            editable: sheet.editable && !hyperlinkColumn.readOnly }
+    onHyperlinkTargetChanged: if (window !== null && visible) window.baseHost.hyperlinkTarget = hyperlinkTarget
+    // M86: the open table's link ({linked:false} for an ordinary table).
+    readonly property var link: sheet !== null && base !== null && sheet.sourceKind === "table" && cellRevision >= 0
+                                ? base.linkInfo(sheet.sourceName) : ({ linked: false })
 
     function refresh() { if (sheet !== null) sheet.refresh() }
     function activeRange() {
@@ -214,6 +238,32 @@ Item {
             onPredicateChanged: if (valid) view.sheet.setFilters(clauses, conjunction)
         }
         Tk.Notice {
+            objectName: "datasheetLinkNotice"
+            Tk.Flex.shrink: 0
+            visible: view.link.linked === true
+            variant: view.link.problem ? "warning" : "info"
+            iconName: "link-2"
+            text: view.link.problem
+                  ? qsTr("Linked to %1, which could not be read: %2. These are the records read %3.")
+                    .arg(view.link.source).arg(view.link.problem).arg(view.link.refreshed || qsTr("before"))
+                  : qsTr("Linked to %1: read-only here, read %2. Change the source, then refresh.")
+                    .arg(view.link.source).arg(view.link.refreshed || "")
+            actions: [
+                Tk.Button {
+                    objectName: "datasheetRefreshLink"
+                    text: qsTr("Refresh")
+                    iconName: "rotate-cw"
+                    small: true
+                    enabled: view.base !== null && !view.base.readOnly
+                    onClicked: {
+                        const r = view.base.refreshLink(view.sheet.sourceName)
+                        if (!r.ok) view.window.notify(qsTr("Not refreshed"), r.error, "warning")
+                        view.cellRevision++
+                    }
+                }
+            ]
+        }
+        Tk.Notice {
             objectName: "datasheetNotice"
             Tk.Flex.shrink: 0
             visible: view.sheet !== null && (view.sheet.error.length > 0 || view.sheet.pendingMessage.length > 0)
@@ -316,6 +366,10 @@ Item {
             // A freshly opened source starts on its first record.
             if (grid.activeRowId.length === 0 || grid.activeRow < 0) Qt.callLater(function() { grid.setCurrent(0, 0, false) })
         }
-        function onRowsChanged() { if (view.mode === "pivot") view.sheet.preparePivot() }
+        function onRowsChanged() { view.cellRevision++; if (view.mode === "pivot") view.sheet.preparePivot() }
+    }
+    Connections {
+        target: view.sheet !== null ? view.sheet.grid : null
+        function onCellsChanged() { view.cellRevision++ }
     }
 }

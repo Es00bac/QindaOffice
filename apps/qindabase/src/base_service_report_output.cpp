@@ -13,6 +13,7 @@
 #include "base_labels.h"
 #include "base_objects.h"
 #include "base_report.h"
+#include "base_report_layout.h"
 #include "base_service.h"
 #include "label_sheet.h"
 
@@ -118,7 +119,8 @@ QVariantMap BaseService::buildReport(QObject *document, const QVariantMap &repor
     for (const Engine::ReportBand &b : run.bands) {
         output.bands.append({toolkitKind(b.kind), b.level, b.text, b.cells, b.pageBreakBefore, b.strong});
         bands.append(QVariantMap{{s("kind"), kindName(b.kind)}, {s("level"), b.level}, {s("text"), b.text},
-                                 {s("cells"), b.cells}, {s("pageBreakBefore"), b.pageBreakBefore}});
+                                 {s("cells"), b.cells}, {s("pageBreakBefore"), b.pageBreakBefore},
+                                 {s("keepTogether"), b.keepTogether}, {s("spacer"), b.spacer}, {s("keepWith"), b.keepWith}});
     }
     // AGENT-CONTRACT (QindaTK local_report_spec.h): documentJson reads the
     // spec's paper, orientation and page bands only; the bands carry the rest.
@@ -129,7 +131,9 @@ QVariantMap BaseService::buildReport(QObject *document, const QVariantMap &repor
     layout.pageFooter = spec.pageFooter;
     layout.paperId = spec.paperId;
     layout.landscape = spec.landscape;
-    const QJsonObject json = Report::documentJson(output, layout, pages->documentIdString());
+    QJsonObject json = Report::documentJson(output, layout, pages->documentIdString());
+    // M86: Force New Page and Keep Together on the toolkit's blocks.
+    const PageControl control = applyReportPageControl(&json, run.bands);
     QindaTK::OperationError error;
     if (!QindaTK::RichTextCodec::fromJsonObject(json, *pages, &error)) {
         return failed(error.message);
@@ -139,7 +143,10 @@ QVariantMap BaseService::buildReport(QObject *document, const QVariantMap &repor
             {s("groupCount"), run.groupCount},
             {s("columns"), run.columnLabels},
             {s("bands"), bands},
-            {s("truncated"), m_reportSource->truncated}};
+            {s("truncated"), m_reportSource->truncated},
+            {s("pageControl"), control.applied},
+            {s("pageBreaks"), control.pageBreaks},
+            {s("groupsMoved"), control.groupsMoved}};
 }
 
 QVariantMap BaseService::createLabels(const QString &name, const QVariantMap &spec)

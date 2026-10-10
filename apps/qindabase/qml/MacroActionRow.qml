@@ -12,6 +12,9 @@ Tk.Card {
     id: row
 
     property var base: null
+    // The actions offered (M80's macro actions; M86: a data macro's).
+    property var catalog: base !== null ? base.macroActions : []
+    property var fieldNames: [] // M86: a data macro's table fields (SetField)
     property var step: ({ action: "openForm", arguments: ({}) })
     property int stepIndex: 0
     property bool compact: false // the button dialog: one action, no ordering
@@ -22,7 +25,7 @@ Tk.Card {
     signal moved(int delta)
     signal picked()
 
-    readonly property var actions: base !== null ? base.macroActions : []
+    readonly property var actions: catalog
     readonly property var info: actions.find(function(a) { return a.id === row.step.action }) || ({ arguments: [], description: "" })
 
     // A choice argument's words (the stored values are Access's ids).
@@ -39,7 +42,7 @@ Tk.Card {
     function namesFor(kind) {
         if (base === null) return []
         return ({ form: base.formNames, report: base.reportNames, query: base.queryNames, table: base.tableNames,
-                  macro: base.macroNames })[kind] || []
+                  macro: base.macroNames, field: row.fieldNames })[kind] || []
     }
     function setArgument(id, value) {
         const args = Object.assign({}, row.step.arguments || {})
@@ -99,9 +102,12 @@ Tk.Card {
                 id: argument
                 required property var modelData
                 readonly property string value: String((row.step.arguments || {})[modelData.id] || "")
-                readonly property bool picksName: ["form", "report", "query", "table", "macro"].indexOf(modelData.kind) >= 0
+                readonly property bool picksName: ["form", "report", "query", "table", "macro", "field"].indexOf(modelData.kind) >= 0
                 label: modelData.label + (modelData.required ? " *" : "")
-                hint: modelData.kind === "where" ? qsTr("An Access condition, e.g. [city] = \"Portland\"") : ""
+                hint: modelData.kind === "where" && row.fieldNames.length > 0
+                      ? qsTr("When to do it: [amount] <= 0, IsInsert, [Old].[status] <> [status] (empty: always)")
+                      : modelData.kind === "where" ? qsTr("An Access condition, e.g. [city] = \"Portland\"")
+                      : modelData.kind === "value" ? qsTr("A value or an expression: \"Paid\", [qty] * [price], Date()") : ""
                 Tk.Flex {
                     direction: Tk.Flex.Row
                     gap: 0
@@ -123,7 +129,7 @@ Tk.Card {
                         objectName: "macroText_" + row.stepIndex + "_" + argument.modelData.id
                         visible: !argument.picksName && argument.modelData.kind !== "choice"
                         small: true
-                        mono: argument.modelData.kind === "where"
+                        mono: argument.modelData.kind === "where" || argument.modelData.kind === "value"
                         text: argument.value
                         Tk.Flex.grow: 1
                         Tk.Flex.basis: 0

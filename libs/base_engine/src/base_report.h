@@ -36,6 +36,23 @@
 //  * Band texts follow the toolkit's: a group header "Label: value", a
 //    group footer "Label value total · Count n · Total amount $1,250.00",
 //    the report footer "Report total · Count n · …".
+//  * M86 (D-094): Access's Group, Sort and Total beyond the toolkit's
+//    design lives in the report map's own members, which QindaTK keeps and
+//    ignores: "accessGroups" (up to kReportGroupLimit levels, each with an
+//    interval — prefix characters, a date part, a numeric range — an order,
+//    Keep Together and its header's and footer's Force New Page and Keep
+//    Together), "sections" (the report header, detail and report footer)
+//    and "runningSums" (detail columns summing over the group or over the
+//    report). "groups" stays the toolkit's view of the leading levels it
+//    can hold (reportWithLevels writes both); when the toolkit's own
+//    designer has changed "groups" since, "groups" wins (reportLevels).
+//  * A group total may run (Access's Running Sum): its footer also prints
+//    the total so far, over the enclosing group or over the report.
+//  * Bands carry Force New Page as pageBreakBefore on the band that must
+//    start a page (a page break before detail rows is a `spacer` band of its
+//    own), Keep Together of a section as keepTogether, and Keep Together
+//    "Whole Group" as keepWith (the header's group runs to that band); the
+//    app lays them out (base_report_layout.h).
 
 #include "base_file.h"
 #include "base_query.h"
@@ -48,6 +65,7 @@
 namespace QindaOffice::Base {
 
 constexpr int kReportRowLimit = 4000; // the toolkit's report read bound
+constexpr int kReportGroupLimit = 10; // M86: Access's group levels
 
 struct ReportColumn {
     QString name;
@@ -82,13 +100,43 @@ struct ReportTotal {
     QString field;
     QString function = QStringLiteral("sum");
     QString label; // "" = "Sum of <field label>"
+    QString running = QStringLiteral("none"); // M86: none | group | all
+};
+
+// M86: Access's Group On — the field's values grouped by an interval.
+struct ReportInterval {
+    // value | prefix | year | quarter | month | week | day | hour | minute | range
+    QString by = QStringLiteral("value");
+    double size = 1; // prefix: characters; range: its width in the field's units (money in units)
+};
+
+// M86: Access's Force New Page (none | before | after | both) and Keep
+// Together of one section.
+struct ReportSection {
+    QString newPage = QStringLiteral("none");
+    bool keepTogether = false;
+    [[nodiscard]] bool before() const { return newPage == QLatin1String("before") || newPage == QLatin1String("both"); }
+    [[nodiscard]] bool after() const { return newPage == QLatin1String("after") || newPage == QLatin1String("both"); }
 };
 
 struct ReportGroup {
     QString field;
     QString label; // "" = the field's label
-    bool pageBreakBefore = false;
+    bool pageBreakBefore = false; // M80: every group of this level but the first starts a page
     QList<ReportTotal> totals;
+    ReportInterval interval{};    // M86
+    bool descending = false;      // M86: with Z on top
+    QString keepTogether = QStringLiteral("no"); // M86: no | wholeGroup | withFirstDetail
+    ReportSection header{};       // M86
+    ReportSection footer{};       // M86
+};
+
+// M86: a detail column summing a field (or counting the records, field
+// "") as the records go, over the innermost group or over the report.
+struct ReportRunningSum {
+    QString field;
+    QString over = QStringLiteral("all"); // all | group
+    QString label;
 };
 
 struct ReportSortKey {
@@ -110,8 +158,19 @@ struct ReportSpec {
     QString filterValue;
     QString paperId = QStringLiteral("letter");
     bool landscape = false;
+    // M86 (D-094): the report's own sections and running sums.
+    ReportSection reportHeader;
+    ReportSection detailSection;
+    ReportSection reportFooter;
+    QList<ReportRunningSum> runningSums;
     static ReportSpec fromReportMap(const QVariantMap &report);
 };
+
+// M86: the Group, Sort and Total levels of a report map, as the pane edits
+// them ("accessGroups" while "groups" still is their view, else "groups"),
+// and the report map with `levels` written back (both members).
+[[nodiscard]] QVariantList reportLevels(const QVariantMap &report);
+[[nodiscard]] QVariantMap reportWithLevels(const QVariantMap &report, const QVariantList &levels);
 
 struct ReportBand {
     // One for one with QindaTK's LocalReport::Band::Kind.
@@ -122,6 +181,12 @@ struct ReportBand {
     QStringList cells;
     bool pageBreakBefore = false;
     bool strong = false;
+    // M86: Keep Together of the band's section; a spacer is an empty band
+    // carrying a page break before detail rows; keepWith (a group header
+    // whose group is kept whole) is the index of the band the group ends at.
+    bool keepTogether = false;
+    bool spacer = false;
+    int keepWith = -1;
 };
 
 // Every total the run computed, in band order (level -1: the report footer).

@@ -82,7 +82,12 @@ QVariantMap BaseService::compileQuery(const QVariantMap &design) const
         return failed(tr("No database is open."));
     }
     const Engine::CompiledQuery c = Engine::compileQuery(*file(), Engine::QueryDesign::fromMap(design));
+    QStringList columns; // M86: a union's order picks from its first part's columns
+    for (const Engine::OutputColumn &o : c.columns) {
+        columns.append(o.name);
+    }
     return {{QStringLiteral("ok"), c.ok},
+            {QStringLiteral("columns"), columns},
             {QStringLiteral("error"), c.error},
             {QStringLiteral("sql"), c.sql},
             {QStringLiteral("action"), c.action},

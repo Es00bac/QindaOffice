@@ -5,6 +5,102 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-094: QindaBase: calculated fields, wizards, union queries, report intervals, data macros, links
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart; M86, builds on D-049, D-074 and D-089; the
+re-ranked list is in
+[office-parity.md](plans/office-parity.md#qindabase-against-microsoft-access-survey-of-2026-10-09-m80);
+details in [qindabase.md](qindabase.md))
+
+**Context.** After M80 the Access user's next gaps outside the form
+designer were items 3–8 of the ranked list: calculated fields and Value
+List lookups; the query wizards and union queries; report grouping on
+intervals, running sums, more than three levels, Keep Together and Force
+New Page; data macros and AutoExec; XML import and linked tables; the
+Indexes dialog, Allow Zero Length, the Hyperlink and Large Number types.
+A `.qbase` must stay a plain SQLite file that other tools read and write
+safely, undo stays SQLite session changesets (data) and whole-file images
+(schema), and QindaTK — installed through Portage, not this milestone's to
+change — designs and lays out reports with at most three group levels.
+
+**Decision.**
+
+1. **Calculated fields are generated columns.** A Calculated field's Access
+   expression compiles (the query compiler: literals by the type they meet,
+   money in minor units) to `GENERATED ALWAYS AS (…) VIRTUAL`, with the
+   result type worked out or chosen; it is read-only everywhere and keeps
+   no key, default, rule, mask or lookup. `qb_fields.expression` keeps the
+   Access text; a foreign file's own generated SQL is kept as it is.
+   Date(), totals, parameters and the field itself are refused (a stored
+   value must not change by itself).
+2. **Rules other writers meet are triggers.** Value lists (`lookup_values`,
+   `limit_to_list`) answer with the list's own spelling and, with Limit To
+   List, are enforced like M80's rules (`qbv:<table>:<field>:li|lu`); Allow
+   Zero Length No (`allow_zero_length`) refuses `""` (`…:zi|zu`). A plan
+   that adds one is refused, with the count, while records break it.
+3. **Hyperlink** (`HYPERLINK TEXT`) stores Access's
+   `display#address#subaddress#screentip`; cells show the display text,
+   Edit Hyperlink edits the four parts, Open Hyperlink opens only web,
+   e-mail, FTP and file addresses. **Large Number** (`BIGINT`) is exact to
+   64 bits (an `.xlsx` export writes values past 2^53 as text).
+4. **Indexes dialog**: indexes over up to ten fields, each ascending or
+   descending, Unique, Ignore Nulls (a partial index), named
+   `qbi:<table>:<name>`; a plain one-field index stays the field's Indexed
+   property, a foreign file's index names are kept, a unique index is
+   refused while values repeat.
+5. **Wizards write ordinary designs** (`base_query_wizards.h`): Simple
+   (related tables through their relationships, detail or totals, dates by
+   month, quarter or year), Crosstab ("Total Of …", dates by interval),
+   Find Duplicates ("NumberOfDups", or `In (SELECT …)` with other fields)
+   and Find Unmatched; saved and opened like any query.
+6. **Union is a query kind**: select parts joined by UNION or UNION ALL,
+   sorted only at the end, compiled, printed and read back as Access SQL;
+   the designer lists the parts and opens each in the grid. Subqueries in
+   criteria (`In`, `Exists`, a scalar) compile.
+7. **The engine owns report grouping.** Up to ten levels with Access's
+   Group On intervals (first characters; year, quarter, month, week, day,
+   hour, minute; numeric ranges), descending groups, running sums over the
+   group or all, Keep Together and Force New Page per section. The report
+   map keeps the levels in `accessGroups` beside the toolkit's `groups`,
+   the levels it can hold; when the toolkit's own designer changes its
+   groups, those win. The bands carry the page flags; the app puts them on
+   QindaTK's report document and keeps whole groups on a page by
+   paginating it with QindaTK's own layout (`base_report_layout.h`).
+8. **Data macros are SQLite triggers** (`qbm:<table>:bi|bu|bd|ai|au|ad`):
+   Before Change / Before Delete / After Insert / After Update / After
+   Delete with SetField, RaiseError, LogEvent (`qb_application_log`, shown
+   read-only) and StopMacro, each with a condition (`[Old]`, `IsInsert`),
+   so every writer meets them. Window actions are refused. Undo and redo
+   replay a changeset with the `qb.quiet` row set (SQLite fires triggers
+   while it applies one), and SetField runs under `qb.busy:<table>`, so
+   nothing runs twice. **AutoExec** runs when a database file is opened
+   (not a new one, not Save As), unless Shift is held.
+9. **XML import reverses M80's export**: the schema inline or beside the
+   file (Access's annotations, QindaBase's own `qb:type` and `qb:expression`)
+   or, without one, types read from the values; one undo step with M65's
+   import report.
+10. **Linked tables are guarded local copies** of a `.qbase`/SQLite table,
+    a CSV file or an Excel sheet: read-only (`qbk:<table>:i|u|d` triggers),
+    read again as the database opens and on Refresh (one undo step), the
+    path kept relative to the database's folder first; a source that cannot
+    be read leaves the last copy with the reason. The Linked Table Manager
+    refreshes, relinks and converts to a local table.
+11. Eighteen commands (`base_host_actions_access.cpp`), each in the menu
+    tree and on the ribbon, answered by `AccessToolsCommands.qml`.
+
+**Consequences.** Other SQLite tools meet the same lists, empty-text rules,
+data macros and link guards; QindaBase's triggers are named `qbv:`, `qbm:`,
+`qbk:` and its indexes `qbi:`. Older files gain the M86 `qb_fields` columns
+in their first plan that needs them. Linked tables are not editable (Access
+edits linked tables; a copy kept in step is what QindaBase can promise).
+QindaTK gaps reported, not worked around inside QindaTK: `LocalReport` and
+`ReportDesigner` hold three group levels and refuse a field twice (its
+designer shows the first levels it can hold); `documentJson` breaks pages
+only before group headers and has no Keep Together, so the app edits its
+JSON, checked against the toolkit's block walk; `EditableGrid` has no
+drop-down cell for value lists (typing matches the list, case-blind).
+
 ## D-093: QindaNote: formatted typing, tags, search, import
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

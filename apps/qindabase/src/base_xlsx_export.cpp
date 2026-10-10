@@ -14,6 +14,8 @@
 #include <workbook.h>
 #include <xlsx_bridge.h>
 
+#include <cstdlib>
+
 namespace QindaOffice::Apps::Base {
 
 namespace Engine = ::QindaOffice::Base;
@@ -87,8 +89,13 @@ Engine::Result writeXlsx(const QString &path, const QString &sheetName, const QL
                 } else {
                     book.setCellValue(0, addr, Calc::Value(text));
                 }
-            } else if (type == Engine::FieldType::File) {
+            } else if (type == Engine::FieldType::File || type == Engine::FieldType::Hyperlink) {
+                // M86: a hyperlink exports the text it shows, as Access does.
                 book.setCellValue(0, addr, Calc::Value(Engine::displayText(type, v, currency)));
+            } else if (type == Engine::FieldType::LargeNumber && id == QMetaType::LongLong
+                       && std::llabs(v.toLongLong()) > (qint64(1) << 53)) {
+                // M86: past 2^53 a double would change the number; it goes as text.
+                book.setCellValue(0, addr, Calc::Value(QString::number(v.toLongLong())));
             } else if (numeric) {
                 book.setCellValue(0, addr, Calc::Value(v.toDouble()));
             } else {

@@ -293,8 +293,13 @@ private slots:
                  QByteArray::fromHex("89504E470D0A1A0A0000000D49484452"));
         const TableDef dues = readTable(*db.file, str("Dues")).value();
         QCOMPARE(dues.fields.at(3).type, FieldType::DateTime);
-        QCOMPARE(dues.otherIndexSql.size(), 1);
-        QVERIFY(dues.otherIndexSql.first().contains(str("\"Period\" DESC")));
+        // M86 (D-094): a multi-field index with a descending field is the
+        // Indexes dialog's (an IndexDef), no longer verbatim SQL.
+        QCOMPARE(dues.otherIndexSql.size(), 0);
+        QCOMPARE(dues.indexes.size(), 1);
+        QCOMPARE(dues.indexes.first().fields.size(), 2);
+        QVERIFY(dues.indexes.first().fields.at(1).descending);
+        QCOMPARE(dues.indexes.first().fields.at(1).field, str("Period"));
         QCOMPARE(readTable(*db.file, str("Events"))->fields.at(3).type, FieldType::Number); // fractions of a cent
         QVERIFY(report.notes.join(str(" ")).contains(str("Events.Fee")));
         QVERIFY(report.skipped.join(str(" ")).contains(str("Members.Badges")));

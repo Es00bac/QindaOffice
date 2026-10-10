@@ -10,7 +10,11 @@
 # templates and report snapshots; M80 (D-089): validation rules and input
 # masks, crosstab and make-table queries, declared parameters, the SQL
 # view in Access SQL both ways, macros and where conditions, reports
-# evaluated with exact totals, mailing labels and Access's XML.
+# evaluated with exact totals, mailing labels and Access's XML; M86 (D-094):
+# calculated fields, value lists, Allow Zero Length, Hyperlink and Large
+# Number fields, the Indexes dialog, query wizards, union queries and
+# subqueries, report intervals, running sums and page control, data macros,
+# Access's XML import and linked tables.
 # Qt Core + the SQLite C API only: no Gui, no Quick, no desktop archives
 # (AGENTS.md rules 8/9), so every behaviour is testable offscreen.
 #
@@ -35,6 +39,12 @@ endif()
 add_library(base_engine STATIC
     src/base_access.cpp
     src/base_access.h
+    src/base_access_import.cpp
+    src/base_access_import.h
+    src/base_access_query.cpp
+    src/base_access_query.h
+    src/base_access_schema.cpp
+    src/base_access_schema.h
     src/base_access_sql.h
     src/base_access_sql_columns.cpp
     src/base_access_sql_lex.cpp
@@ -43,29 +53,41 @@ add_library(base_engine STATIC
     src/base_access_sql_parser.h
     src/base_access_sql_print.cpp
     src/base_access_sql_statements.cpp
-    src/base_access_import.cpp
-    src/base_access_import.h
-    src/base_access_query.cpp
-    src/base_access_query.h
-    src/base_access_schema.cpp
-    src/base_access_schema.h
+    src/base_access_sql_union.cpp
+    src/base_calculated.cpp
+    src/base_calculated.h
     src/base_changes.cpp
     src/base_csv.cpp
     src/base_csv.h
+    src/base_data_macro.cpp
+    src/base_data_macro.h
     src/base_expression.cpp
     src/base_expression.h
     src/base_expression_calls.cpp
     src/base_expression_lex.cpp
     src/base_expression_p.h
+    src/base_expression_parser.h
+    src/base_expression_sub.cpp
     src/base_file.cpp
     src/base_file.h
+    src/base_file_field.cpp
+    src/base_file_field.h
+    src/base_form_controls.cpp
+    src/base_form_controls.h
     src/base_functions.cpp
+    src/base_hyperlink.cpp
+    src/base_hyperlink.h
+    src/base_indexes.cpp
+    src/base_indexes.h
     src/base_input_mask.cpp
     src/base_input_mask.h
     src/base_labels.cpp
     src/base_labels.h
+    src/base_links.cpp
+    src/base_links.h
     src/base_macro.cpp
     src/base_macro.h
+    src/base_money.cpp
     src/base_objects.cpp
     src/base_objects.h
     src/base_query.h
@@ -75,25 +97,29 @@ add_library(base_engine STATIC
     src/base_query_maketable.cpp
     src/base_query_p.h
     src/base_query_run.cpp
+    src/base_query_union.cpp
+    src/base_query_wizards.cpp
+    src/base_query_wizards.h
     src/base_records.cpp
     src/base_records.h
     src/base_records_edit.cpp
     src/base_records_file.cpp
     src/base_report.cpp
     src/base_report.h
+    src/base_report_keys.cpp
+    src/base_report_p.h
     src/base_report_run.cpp
+    src/base_report_totals.cpp
     src/base_rules.cpp
     src/base_rules.h
-    src/base_file_field.cpp
-    src/base_file_field.h
-    src/base_form_controls.cpp
-    src/base_form_controls.h
     src/base_schema.h
     src/base_schema_alter.cpp
+    src/base_schema_maps.cpp
     src/base_schema_p.h
     src/base_schema_plan.cpp
     src/base_schema_read.cpp
     src/base_schema_rules.cpp
+    src/base_schema_validate.cpp
     src/base_snapshot.cpp
     src/base_snapshot.h
     src/base_sqlite.cpp
@@ -104,6 +130,8 @@ add_library(base_engine STATIC
     src/base_types.h
     src/base_xml_export.cpp
     src/base_xml_export.h
+    src/base_xml_import.cpp
+    src/base_xml_import.h
 )
 
 target_include_directories(base_engine

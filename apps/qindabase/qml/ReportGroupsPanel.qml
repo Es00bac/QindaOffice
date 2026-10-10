@@ -4,20 +4,26 @@ import QtQuick
 import QindaTK as Tk
 
 // Group, Sort and Total (M80, D-089 §6): Access's pane for a report's
-// grouping — up to three group levels (QindaTK's report design holds
-// three), each with a new page when it changes and the totals its footer
-// prints; the sort order inside the groups (four keys in all, groups
-// included); and the report's own totals. Every change is one step of the
-// design document's history (a field not yet bound is bound first), and
-// the pages rebuild from it with the engine's exact totals.
+// grouping — M86 (D-094): up to ten group levels (ReportGroupLevel.qml:
+// Group On intervals, order, Keep Together, Force New Page of the header
+// and footer, running totals), the sort order inside the groups, the
+// report's own totals, and its pages and running sums
+// (ReportSectionsPanel.qml). The levels live in the report map beside the
+// toolkit's own view of them (BaseService.reportLevels / reportWithLevels,
+// base_report.h); every change is one step of the design document's
+// history (a field not yet bound is bound first), and the pages rebuild
+// from it with the engine's exact totals.
 Tk.Flex {
     id: panel
 
+    property var base: null
     property var designDocument: null
     property var provider: null
     property string table: ""
+    property var fieldTypes: ({}) // M86: field → QindaBase type id (the report's source)
+    property var lookups: []      // M86: fields shown by a related record's name
     readonly property var report: designDocument !== null ? designDocument.report : ({})
-    readonly property var groups: report.groups || []
+    readonly property var levels: base !== null && designDocument !== null ? base.reportLevels(report) : []
     readonly property var sort: (report.query || ({})).sort || []
     readonly property var totals: report.totals || []
     readonly property var fields: provider !== null && table.length > 0 && provider.connected
@@ -36,10 +42,21 @@ Tk.Flex {
         return missing.length === 0 || designDocument.bindTable(provider, table, have.concat(missing))
     }
     function apply(ok) { if (!ok) failed(designDocument.lastError); return ok }
-    function setGroups(next) {
+    function setLevels(next) {
         const names = []
         next.forEach(function(g) { names.push(g.field); (g.totals || []).forEach(function(t) { names.push(t.field) }) })
-        return apply(bound(names) && designDocument.setReportGroups(next))
+        if (!apply(bound(names))) return false
+        const design = copy(designDocument.design)
+        design.report = base.reportWithLevels(design.report || ({}), next)
+        return apply(designDocument.setDesign(design))
+    }
+    function setLevel(index, patch) { const next = copy(levels); Object.assign(next[index], patch); setLevels(next) }
+    function removeLevel(index) { const next = copy(levels); next.splice(index, 1); setLevels(next) }
+    function addGroup() { addLevel() } // M80's name, kept for callers (tst_qindabase_ui_m80)
+    function addLevel() {
+        const used = levels.map(function(g) { return g.field })
+        const field = fields.find(function(f) { return used.indexOf(f) < 0 }) || fields[0]
+        if (field) setLevels(copy(levels).concat([{ field: field, pageBreakBefore: false, totals: [] }]))
     }
     function setReport(key, value, names) {
         if (!apply(bound(names))) return false
@@ -50,72 +67,34 @@ Tk.Flex {
         design.report = r
         return apply(designDocument.setDesign(design))
     }
-    function setGroup(index, patch) { const next = copy(groups); Object.assign(next[index], patch); setGroups(next) }
-    function addGroup() {
-        const used = groups.map(function(g) { return g.field })
-        const field = fields.find(function(f) { return used.indexOf(f) < 0 })
-        if (field) setGroups(copy(groups).concat([{ field: field, pageBreakBefore: false, totals: [] }]))
-    }
 
     direction: Tk.Flex.Column
     gap: Tk.Theme.space.xs
 
     Tk.SectionHeader { title: qsTr("Group, sort and total") }
     Repeater {
-        model: panel.groups
-        delegate: Tk.Card {
-            id: level
+        model: panel.levels
+        // (ReportGroupLevel's own required `index` takes the model's index)
+        delegate: ReportGroupLevel {
             required property var modelData
-            required property int index
-            objectName: "reportGroup_" + index
-            padding: Tk.Theme.space.sm
-            Tk.Flex {
-                direction: Tk.Flex.Column
-                gap: Tk.Theme.space.xs
-                Tk.Flex {
-                    direction: Tk.Flex.Row
-                    align: Tk.Flex.Center
-                    gap: Tk.Theme.space.sm
-                    wrap: Tk.Flex.Wrap
-                    Tk.Caption { text: level.index === 0 ? qsTr("Group on") : qsTr("then on"); Tk.Flex.shrink: 0 }
-                    Tk.ComboBox {
-                        objectName: "reportGroupField_" + level.index
-                        small: true
-                        model: panel.fields
-                        currentIndex: model.indexOf(level.modelData.field)
-                        Tk.Flex.grow: 1
-                        Tk.Flex.basis: Tk.Theme.size.fieldWidth * 0.6
-                        onActivated: function(i) { panel.setGroup(level.index, { field: panel.fields[i] }) }
-                    }
-                    Tk.IconButton {
-                        iconName: "x"; small: true; tooltip: qsTr("Remove this group level")
-                        onClicked: { const next = panel.copy(panel.groups); next.splice(level.index, 1); panel.setGroups(next) }
-                    }
-                }
-                Tk.CheckBox {
-                    text: qsTr("Start a new page")
-                    checked: level.modelData.pageBreakBefore === true
-                    tooltip: qsTr("Start each group after the first on a new page")
-                    onToggled: panel.setGroup(level.index, { pageBreakBefore: checked })
-                }
-                ReportTotalsEditor {
-                    objectPrefix: "reportGroupTotal_" + level.index
-                    totals: level.modelData.totals || []
-                    fields: panel.fields
-                    functions: panel.functions
-                    onEdited: function(next) { panel.setGroup(level.index, { totals: next }) }
-                }
-            }
+            panel: panel
+            level: modelData
         }
+    }
+    Tk.Caption {
+        objectName: "reportLevelsNote"
+        visible: panel.levels.length > 3
+        wrapMode: Text.Wrap
+        text: qsTr("The pages print all %1 levels; the report designer beside them shows the first levels it can hold.").arg(panel.levels.length)
     }
     Tk.Button {
         objectName: "reportAddGroup"
-        visible: panel.groups.length < 3
+        visible: panel.levels.length < 10
         text: qsTr("Add a group")
         iconName: "list-tree"
         small: true
         enabled: panel.designDocument !== null && panel.fields.length > 0
-        onClicked: panel.addGroup()
+        onClicked: panel.addLevel()
     }
     Tk.Overline { title: qsTr("SORT WITHIN THE GROUPS") }
     Repeater {
@@ -156,7 +135,7 @@ Tk.Flex {
     }
     Tk.Button {
         objectName: "reportAddSort"
-        visible: panel.groups.length + panel.sort.length < 4
+        visible: panel.sort.length < 4
         text: qsTr("Add a sort")
         iconName: "arrow-up-a-z"
         small: true
@@ -171,4 +150,5 @@ Tk.Flex {
         functions: panel.functions
         onEdited: function(next) { panel.setReport("totals", next, next.map(function(t) { return t.field })) }
     }
+    ReportSectionsPanel { panel: panel }
 }

@@ -24,6 +24,12 @@
 //    test its own field; the record rule is an expression over any field.
 //  * A plan that adds or changes a rule is refused while existing records
 //    break it (SchemaPlan::refusals, checked inside the plan's transaction).
+//  * M86 (D-094): Allow Zero Length "No" (text, long text, hyperlink) and a
+//    value list's Limit To List are rules of the same kind — triggers
+//    "qbv:<table>:<field>:zi|zu" (the field may not hold '') and
+//    "qbv:<table>:<field>:li|lu" (the field holds one of the list's values,
+//    converted by the field's type), Null passing, refused while records
+//    break them.
 
 #include "base_schema.h"
 
@@ -36,6 +42,13 @@ struct CompiledRule {
 };
 
 [[nodiscard]] bool isRuleTrigger(const QString &name);
+// Any trigger QindaBase derives from a design: rules ("qbv:"), and M86's
+// data macros ("qbm:", base_data_macro.h) and link guards ("qbk:",
+// base_links.h).
+[[nodiscard]] bool isDerivedTrigger(const QString &name);
+// The fields' value lists as SQL literals by the field's type, or the
+// first value that does not fit (M86).
+[[nodiscard]] QString valueListSql(const FieldDef &field, const CurrencyFormat &currency, QString *error);
 // `row` qualifies the columns: "NEW" in a trigger, a quoted table name in a check.
 [[nodiscard]] CompiledRule compileFieldRule(const TableDef &table, const FieldDef &field, const QString &row,
                                             const CurrencyFormat &currency);

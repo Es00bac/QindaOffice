@@ -2,6 +2,8 @@
 // planAlterTable: renames first (plain ALTER, which rewrites references),
 // then either simple ADD COLUMN / CREATE INDEX steps or the 12-step table
 // rebuild. See base_schema.h.
+#include "base_calculated.h"
+#include "base_indexes.h"
 #include "base_rules.h"
 #include "base_schema_p.h"
 
@@ -58,6 +60,27 @@ void appendRename(QStringList *out, const QString &from, const QString &to, cons
     }
 }
 
+// A design without what only reading it gives (its link aside): what a
+// linked table's design may not change (base_links.h).
+QVariantMap designOf(const TableDef &table)
+{
+    QVariantMap map = table.toMap();
+    for (const char *key : {"link", "derivedTriggers", "originalName", "name"}) {
+        map.remove(QString::fromLatin1(key));
+    }
+    return map;
+}
+
+// Whether a kept field's calculation changed (SQLite cannot alter a
+// generated column, so the table is rebuilt).
+bool calculationChanged(const FieldDef &old, const FieldDef &f)
+{
+    return old.calculated != f.calculated
+           || (f.calculated
+               && (old.expression.trimmed() != f.expression.trimmed() || old.type != f.type
+                   || old.generatedSql.trimmed() != f.generatedSql.trimmed()));
+}
+
 } // namespace
 
 SchemaPlan planAlterTable(const BaseFile &file, const TableDef &before, const TableDef &input)
@@ -78,7 +101,26 @@ SchemaPlan planAlterTable(const BaseFile &file, const TableDef &before, const Ta
         plan.error = e;
         return plan;
     }
+    // AGENT-GUARD (M86, base_links.h): a linked table's design is its
+    // source's; only the link itself (relink, unlink) changes here.
+    if (!before.link.isEmpty() && !after.link.isEmpty() && designOf(before) != designOf(after)) {
+        plan.error = QStringLiteral("%1 is linked to %2; change the source's design, or convert it to a local table "
+                                    "first.")
+                         .arg(before.name, after.link.value(QStringLiteral("path")).toString());
+        return plan;
+    }
     const CurrencyFormat currency = file.currency();
+    if (QString e = resolveCalculatedTypes(&after, currency); !e.isEmpty()) {
+        plan.error = e;
+        return plan;
+    }
+    // Calculated fields with their SQL, for columnSql (base_calculated.h).
+    TableDef compiled = after;
+    for (FieldDef &f : compiled.fields) {
+        if (f.calculated) {
+            f.generatedSql = compileCalculatedField(after, f, currency).sql;
+        }
+    }
     if (QString e = validateRules(after, currency); !e.isEmpty()) {
         plan.error = e;
         return plan;
@@ -121,7 +163,12 @@ SchemaPlan planAlterTable(const BaseFile &file, const TableDef &before, const Ta
     }
 
     const QString table = q(before.name);
-    bool rebuild = !dropped.isEmpty() || !sameRelationships(before.relationships, after.relationships);
+    bool rebuild = !dropped.isEmpty() || !sameRelationships(before.relationships, after.relationships)
+                   || indexesNeedRebuild(before, after);
+    if (const QString e = uniqueIndexProblem(db, before, after); !e.isEmpty()) {
+        plan.error = e;
+        return plan;
+    }
     QStringList survivingOrder;
     for (const FieldDef &f : after.fields) {
         if (!f.originalName.isEmpty()) {
@@ -150,7 +197,7 @@ SchemaPlan planAlterTable(const BaseFile &file, const TableDef &before, const Ta
         const FieldDef &old = *oldByName.value(f.originalName.toLower());
         if (f.type != old.type || f.required != old.required || f.primaryKey != old.primaryKey
             || f.defaultValue.trimmed() != old.defaultValue.trimmed() || (old.unique && !f.unique)
-            || (old.indexed && !f.indexed && !f.unique)) {
+            || (old.indexed && !f.indexed && !f.unique) || calculationChanged(old, f)) {
             rebuild = true;
         }
         // A foreign BLOB column (Other) may become a file field; nothing else
@@ -224,7 +271,7 @@ SchemaPlan planAlterTable(const BaseFile &file, const TableDef &before, const Ta
         // Phase B (simple): new columns at the end, new indexes.
         for (const FieldDef *f : added) {
             QString error;
-            const QString column = columnSql(*f, false, false, currency, &error);
+            const QString column = columnSql(*compiled.field(f->name), false, false, currency, &error);
             if (!error.isEmpty()) {
                 plan.error = error;
                 return plan;
@@ -242,13 +289,14 @@ SchemaPlan planAlterTable(const BaseFile &file, const TableDef &before, const Ta
                 plan.statements.append(QStringLiteral("CREATE INDEX %1 ON %2(%3)").arg(index, target, q(f.name)));
             }
         }
+        plan.statements.append(indexStatements(before, after, false));
     } else {
         // Phase B (rebuild): sqlite.org/lang_altertable.html §7.
         plan.legacyAlter = true;
         plan.statements.append(QStringLiteral("PRAGMA legacy_alter_table=ON"));
         const QString temp = QStringLiteral("qb_rebuild_") + after.name;
         QString error;
-        const QString create = createTableSql(after, temp, currency, &error);
+        const QString create = createTableSql(compiled, temp, currency, &error);
         if (!error.isEmpty()) {
             plan.error = error;
             return plan;
@@ -257,8 +305,8 @@ SchemaPlan planAlterTable(const BaseFile &file, const TableDef &before, const Ta
         QStringList into;
         QStringList from;
         for (const FieldDef &f : after.fields) {
-            if (f.originalName.isEmpty()) {
-                continue;
+            if (f.originalName.isEmpty() || f.calculated) {
+                continue; // a calculated field is worked out, never copied
             }
             const FieldDef &old = *oldByName.value(f.originalName.toLower());
             into.append(q(f.name));
@@ -286,6 +334,7 @@ SchemaPlan planAlterTable(const BaseFile &file, const TableDef &before, const Ta
         plan.statements.append(QStringLiteral("DROP TABLE %1").arg(target));
         plan.statements.append(QStringLiteral("ALTER TABLE %1 RENAME TO %2").arg(q(temp), target));
         appendFieldIndexes(&plan.statements, after, after.name);
+        plan.statements.append(indexStatements(before, after, true));
         plan.statements.append(after.otherIndexSql);
         plan.statements.append(after.triggerSql);
         for (const FieldDef *f : added) {
@@ -307,7 +356,7 @@ SchemaPlan planAlterTable(const BaseFile &file, const TableDef &before, const Ta
             plan.statements.append(own);
         }
     }
-    appendRuleStatements(&plan, file, before, after, rebuild);
+    appendDerivedStatements(&plan, file, before, after, rebuild);
     if (plan.statements.isEmpty()) {
         plan.notes.append(QStringLiteral("Nothing to change."));
     }

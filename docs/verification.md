@@ -33,6 +33,180 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M86 Base gates (D-094)
+
+Qualified on qinda (branch `m86-base-access2` on `m60-office-formats`
+9b94a9d) as a targeted build — base_engine, the QindaBase app and their
+tests only (configured without debug info; every build through the shared
+`qq-build` slots, every test at the lowest CPU and I/O priority): **26/26
+CTest targets passed, 157.7 s** (`ctest --preset dev -R "base"`). QtTest
+counts (functions incl. init/cleanup), none skipped; **new** binaries in
+bold:
+
+- base_engine — `tst_base_types` 6, `tst_base_file` 12, `tst_base_schema`
+  11, `tst_base_records` 9, `tst_base_query` 9, `tst_base_io` 7,
+  `tst_base_access` 7, `tst_base_rules` 10, `tst_base_query_m80` 7,
+  `tst_base_access_sql` 6, `tst_base_macro_report` 10,
+  **`tst_base_fields_m86` 8, `tst_base_indexes` 6, `tst_base_query_m86` 8,
+  `tst_base_report_m86` 7, `tst_base_data_macro` 5, `tst_base_xml_links`
+  6**.
+- QindaBase — `tst_qindabase_service` 9, `tst_qindabase_interchange` 6,
+  `tst_qindabase_host` 7, `tst_qindabase_menu_export` 4,
+  `tst_qindabase_ui` 13, `tst_qindabase_m80` 9, `tst_qindabase_ui_m80` 9,
+  **`tst_qindabase_m86` 10, `tst_qindabase_ui_m86` 9**: 210 QtTest
+  functions in all (134 base_engine, 76 QindaBase), 0 failed. The only
+  warnings are QindaTK's own (`FormDesigner.qml:190`, a binding loop in M80's
+  form test, outside M86).
+
+The fixtures are hand-built (the engine tests' lines, gifts, notes, visits,
+donors and members tables, a CSV file, Access-shaped XML) and the seeded
+Donors & Donations starter (40 donors, 120 donations); no owner database
+was opened. Existing expectations changed by design: a UNION parses now, so
+the refusals use a union whose parts differ in width and, in the window, a
+join on two pairs of fields (`tst_base_access_sql`, `tst_qindabase_m80`,
+`tst_qindabase_ui_m80`); an Access table's descending two-field index
+arrives as a designed index (`tst_base_access`); `TableDef::ruleTriggers`
+is `derivedTriggers` (`tst_base_rules`). The structural
+fixtures were rewritten with `QQO_UPDATE_FIXTURES=1` and the diff read:
+additions only — the calculated, value-list and zero-length properties, the
+union pane's buttons and part notice, the datasheet's link notice, the
+report's page and running-sum controls, the Home ▸ Hyperlink group — and
+`Card#tableProperties` now `TableProperties#tableProperties`; the same at
+1280 and 520.
+
+**Fields by hand** (automated: `tst_base_fields_m86`, `tst_base_indexes`):
+`[qty] * [price]` is 3 × $19.99 = 5997 minor units, `[price] * 0.9` 1799,
+`[item] & " x" & [qty]` "Pen x3", a Null quantity a Null total; the total
+is read-only, follows an edit and its undo, survives a rebuild, and `+ 100`
+recalculates every record to 15997; Date(), Sum, the field itself and a
+prompt are refused; a foreign `STORED` column keeps `a * 2` through a
+rebuild. A value list refuses "Wire" from another SQLite writer ("must be
+one of its list: Check, Card, Cash"), stores "card" as "Card", offers 1, 2,
+5 typed, and limiting a list is refused while 1 record holds 7. Allow Zero
+Length No refuses `''` from any writer; typing `""` stores an empty text
+where allowed; turning it off is refused while 1 record holds one.
+Hyperlinks parse into their four parts (a bare `https://example.org/#top`
+keeps its fragment); `HYPERLINK TEXT` and `BIGINT` read back as their types;
+9,007,199,254,740,993 is stored exactly. Indexes: `ByDonorDay` (donor,
+day descending, Ignore Nulls) is `CREATE INDEX … "day" DESC … WHERE "donor"
+IS NOT NULL AND "day" IS NOT NULL`, read back and kept by name; adding and
+dropping one needs no rebuild; a unique one is refused while "2 set(s) of
+values repeat in city"; names survive renames and rebuilds; a missing
+field, a duplicate name, a file field and an empty index are refused.
+
+**Queries by hand** (automated: `tst_base_query_m86`): over four donors and
+five gifts the Simple wizard's totals by donor are Ada 3801 / 1267 / 3,
+Grace 5199 / 2599.5 / 2 (from the relationship's join), by month December
+2025 199 … April 2026 1000 in calendar order, an unrelated table refused;
+the Crosstab wizard by quarter is Card 7801 (Qtr 1), Cash 199 (Qtr 4),
+Check 1000 (Qtr 2) with "Total Of amount"; Find Duplicates gives Ada × 2,
+the two Ada records with their cities, and ids 1 and 4 for name + e-mail;
+Find Unmatched ids 3 and 4. Unions: Portland ∪ Bend sorted (Ada Bend, Ada
+Portland, Alan Portland), UNION 3 cities, UNION ALL 8, `ORDER BY 1 DESC`;
+a PARAMETERS union prints and parses back to the same SQL and runs for
+Bend; a part that sorts is refused. Subqueries: `In (SELECT …)` {1, 2},
+above the average {2500, 5000}, Exists, refused in rules and with prompts.
+
+**Reports by hand** (automated: `tst_base_report_m86`): over seven gifts —
+first letters A and G ($68.64 for A); months November 2025 … March 2026
+with January's 3 gifts $130.30 and March's "—"; quarters Q4 2025, Q1 2026;
+years descending 2026 ($163.64), 2025; $50 ranges $0.00 – $49.99 (5 gifts,
+$68.64), $100.00 – $149.99, (blank); a month on text, a range on a date,
+characters of money refused. Four levels nest (16 headers, 6 innermost
+groups, 7 records), eleven are refused. Running sums: the group's column
+10.10, 30.30, 30.31, then 33.33 …, the records numbered 1–7, the donor
+footers' running sum $68.64 and $168.64, a running average refused. Page
+flags: a title page, then Card, Cash, Check and the report total each
+starting a page (a new page after each method footer), Keep Together on
+the bands, a whole group kept with its
+footer, a new page before every record but each group's first (4 spacers),
+the totals on their own page; the levels round-trip beside the toolkit's
+one group, and the toolkit's own change of groups wins.
+
+**Data macros by hand** (automated: `tst_base_data_macro`): Before Change
+raises "Amounts are positive." for 0 from QindaBase and from a plain
+`UPDATE`, sets "New" on insert and counts updates (`Nz([updated], 0) + 1`,
+2 after two edits), StopMacro skips "Anonymous", After Insert logs "New gift
+from Ada", Before Delete keeps receipted gifts, After Delete logs; undo and
+redo of the insert and of a delete replay the record and its log line once,
+with no `qb.%` rows left; window actions, a missing field, SetField after a
+delete, an expression as an error message, the key, an empty LogEvent and
+an unknown event are refused; a removed macro takes its trigger, a renamed
+table keeps its macros (`qbm:gifts:ai`).
+
+**XML and links by hand** (automated: `tst_base_xml_links`): M80's export of
+a members table (every type, the key's numbers, required fields, an index,
+a calculated field) imports into an empty file with the same design and
+records (`members.xsd`, 3 steps, undone); an Access-shaped file with its
+schema inline gives AutoNumber, "Item Name", Currency, Date, Yes/No; one
+without a schema reads Integer and Date & time from the values. A link to
+another `.qbase`: 2 records, read-only for QindaBase, other writers,
+designs, relationships and macros; a refresh to 3 is one undo step; a new
+source field redesigns the copy; a missing source keeps 3 records with the
+reason (also at open); relinked; converted to an editable table. A CSV link
+types `joined` Date and `dues` Currency (6032 in all) with the path kept
+relative; an Excel link without the window's reader says so.
+
+**Through the service and the window** (automated: `tst_qindabase_m86`,
+`tst_qindabase_ui_m86`): on the seeded starter the four wizards match SQL
+worked out by hand (repeated cities, donors who never gave, Check's 2026
+cell and total to the cent, the summary's sums and counts adding up to all
+120 gifts); a union parses, runs (UNION ALL: 160 rows), saves and opens;
+a calculated `[amount] + 100` shows $100.00 more and refuses typing; a
+hyperlink shows "Ada's page" and edits as its four parts; 9007199254740993
+stays exact; a value list stores "Silver" for "silver" and refuses
+"Platinum"; Allow Zero Length No refuses `''`; a Before Change macro refuses
+$0.50 from the datasheet and a cent from SQL, an After Insert line follows a
+datasheet record, the Application Log shows it, undo takes both and redo
+brings both, and undoing the saves removes the triggers; the donors XML
+(`donors.xsd`, 40 records) imports into an empty database with the same
+keys, e-mails and dates; links to a `.qbase`, a CSV file and an Excel sheet
+are read-only, refresh (one undo step), convert, keep their copy when the
+CSV goes, and are read again by a second document opening the file
+(`databaseOpened` once; goals and members fresh, prices not); four report
+levels print beside the toolkit's ≤ 3; a new page before each donor gives
+one break per page flag, all on the document; whole groups move;
+`AutoExec` is found by name. In the window at 1280 and 520 px: the Crosstab
+and Find Duplicates wizards from the ribbon (the crosstab saved and shown,
+4 rows); the union designer with its parts, a part in the grid and back,
+run; a value list, a calculated field, the Indexes dialog (donor and date
+descending) applied at 1280 (`qbi:donations:GiftsByDonor`, `with_fee`
+stored as integers); the After Insert event in the macro designer (Run
+disabled), saved, a raw insert logged and shown in Application Log; a
+hyperlink cell's target, Open's URL and Edit Hyperlink writing
+`Ada Lovelace#https://example.org/ada##Her page`; Access XML import and its
+report (campaigns as campaigns 2); a CSV link chosen in the dialog, its
+datasheet notice, the manager, Refresh All Links; four report levels with
+a page break per donor (107 pages) and whole groups kept (8 pages); a
+database whose AutoExec opens campaigns as it loads. The ribbon gate
+(coverage, icons, squeeze at 520), the panel export's validator and the
+icon check (`tst_qindabase_ui_m80::iconsExist`, every `base…` action) hold
+with the 18 new commands.
+
+**Grabs looked at** (`QQO_GRAB_DIR`, 1280 and 520): the wizards, the
+crosstab result, the union designer and a part, a value list, a calculated
+field, the Indexes dialog, the data macro designer, the application log,
+Edit Hyperlink, the XML import and its report, Link Table, the linked
+datasheet and the manager, report levels and Keep Together, AutoExec.
+Fixed on the way: a calculated field showed the Validation rows, the
+crosstab wizard proposed a foreign key as the value, the hyperlink dialog's
+label was cut, the navigation pane's record counts lagged an import, the
+ribbon fell back to File after a designer, and at 520 px the Group, Sort
+and Total pane was clipped (the pages now give it room).
+
+**Owner's desktop check** (not run here — no app was launched into the
+live session): on a copy of a real database, add a calculated field and a
+value list and type into them; open Indexes and Data Macros from Table
+Design; run each query wizard from Create ▸ Queries; write a union in the
+SQL view; group a report by month with a running sum and Keep Together,
+then print it; save a data macro that logs, add a record and open Database
+Tools ▸ Application Log; save a macro named AutoExec and reopen the file
+(and again holding Shift); export a table as XML, import it into a new
+database, and import Access's own ExportXML of the same table; link a
+`.qbase`, a CSV and an `.xlsx` sheet, change each source and reopen; check
+Edit and Open Hyperlink with a web and a mailto address; repeat in the dark
+and light themes and at compact density.
+
 ## M84 Note gates (D-093)
 
 Qualified on qinda (Portage QindaTK r15, Qt 6.11.1) in one tree built

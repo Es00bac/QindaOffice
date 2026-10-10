@@ -41,6 +41,13 @@ Expr::Context ruleContext(const TableDef &table, const QString &row, const Curre
     return ctx;
 }
 
+// M86: Allow Zero Length "No" is checked for the text kinds only.
+bool zeroLengthChecked(const FieldDef &f)
+{
+    return !f.allowZeroLength && !f.calculated
+           && (f.type == FieldType::Text || f.type == FieldType::LongText || f.type == FieldType::Hyperlink);
+}
+
 QString triggerName(const QString &table, const QString &field, const char *when)
 {
     return kPrefix + table + QLatin1Char(':') + field + QLatin1Char(':') + QLatin1String(when);
@@ -59,6 +66,27 @@ QString trigger(const QString &name, const QString &event, const QString &table,
 bool isRuleTrigger(const QString &name)
 {
     return name.startsWith(kPrefix, Qt::CaseInsensitive);
+}
+
+bool isDerivedTrigger(const QString &name)
+{
+    return isRuleTrigger(name) || name.startsWith(QLatin1String("qbm:"), Qt::CaseInsensitive)
+           || name.startsWith(QLatin1String("qbk:"), Qt::CaseInsensitive);
+}
+
+QString valueListSql(const FieldDef &field, const CurrencyFormat &currency, QString *error)
+{
+    QStringList literals;
+    for (const QString &value : field.lookup.values) {
+        const Parsed parsed = parseInput(field.type, value, currency);
+        if (!parsed.ok || !parsed.value.isValid()) {
+            *error = QStringLiteral("The value list of %1: \"%2\" %3.")
+                         .arg(field.name, value, parsed.ok ? QStringLiteral("is empty") : parsed.error);
+            return {};
+        }
+        literals.append(sqlLiteral(parsed.value));
+    }
+    return literals.join(QStringLiteral(", "));
 }
 
 CompiledRule compileFieldRule(const TableDef &table, const FieldDef &field, const QString &row,
@@ -154,12 +182,30 @@ QString validateRules(const TableDef &table, const CurrencyFormat &currency)
         if (f.validationText.size() > 255) {
             return QStringLiteral("The validation text of %1 is longer than 255 characters.").arg(f.name);
         }
+        if (f.lookup.isValueList()) {
+            // M86: value lists fit typed fields that are not worked out.
+            static const QList<FieldType> listed{FieldType::Text,     FieldType::LongText, FieldType::Integer,
+                                                 FieldType::LargeNumber, FieldType::Number, FieldType::Currency,
+                                                 FieldType::Date,     FieldType::DateTime};
+            if (!listed.contains(f.type) || f.calculated) {
+                return QStringLiteral("%1 cannot have a value list: lists fit text, number, money and date fields.")
+                    .arg(f.name);
+            }
+            if (f.lookup.isSet()) {
+                return QStringLiteral("%1 looks up a table and a value list; choose one.").arg(f.name);
+            }
+            QString problem;
+            if (valueListSql(f, currency, &problem).isEmpty()) {
+                return problem;
+            }
+        }
         if (f.inputMask.trimmed().isEmpty()) {
             continue;
         }
         // AGENT-GUARD (base_input_mask.h): masks shape typed text, so a field
         // that takes no typing (or takes a related record's name) has none.
-        if (!isTypable(f.type) || f.type == FieldType::YesNo || f.lookup.isSet()) {
+        if (!isTypable(f.type) || f.type == FieldType::YesNo || f.type == FieldType::Hyperlink || f.calculated
+            || f.lookup.isSet() || f.lookup.isValueList()) {
             return QStringLiteral("%1 cannot have an input mask: masks shape what is typed into text, number, "
                                   "money and date fields.")
                 .arg(f.name);
@@ -190,6 +236,30 @@ QStringList ruleTriggerStatements(const TableDef &table, const CurrencyFormat &c
         out.append(trigger(triggerName(table.name, f.name, "i"), QStringLiteral("INSERT"), table.name, r.sql, message));
         out.append(trigger(triggerName(table.name, f.name, "u"), QStringLiteral("UPDATE OF %1").arg(q(f.name)),
                            table.name, r.sql, message));
+    }
+    // M86: Allow Zero Length "No" and Limit To List.
+    for (const FieldDef &f : table.fields) {
+        const QString label = f.caption.isEmpty() ? f.name : f.caption;
+        const QString column = QStringLiteral("NEW.%1").arg(q(f.name));
+        if (zeroLengthChecked(f)) {
+            const QString message = QStringLiteral("%1 cannot be an empty text (Allow Zero Length is No).").arg(label);
+            const QString rule = QStringLiteral("%1 <> ''").arg(column);
+            out.append(trigger(triggerName(table.name, f.name, "zi"), QStringLiteral("INSERT"), table.name, rule, message));
+            out.append(trigger(triggerName(table.name, f.name, "zu"), QStringLiteral("UPDATE OF %1").arg(q(f.name)),
+                               table.name, rule, message));
+        }
+        if (f.lookup.isValueList() && f.lookup.limitToList) {
+            QString problem;
+            const QString list = valueListSql(f, currency, &problem);
+            if (!problem.isEmpty()) {
+                continue; // validateRules refused the design already
+            }
+            const QString message = QStringLiteral("%1 must be one of its list: %2.").arg(label, f.lookup.values.join(QStringLiteral(", ")));
+            const QString rule = QStringLiteral("%1 IN (%2)").arg(column, list);
+            out.append(trigger(triggerName(table.name, f.name, "li"), QStringLiteral("INSERT"), table.name, rule, message));
+            out.append(trigger(triggerName(table.name, f.name, "lu"), QStringLiteral("UPDATE OF %1").arg(q(f.name)),
+                               table.name, rule, message));
+        }
     }
     const CompiledRule record = compileTableRule(table, QStringLiteral("NEW"), currency);
     if (record.ok() && !record.sql.isEmpty()) {
@@ -225,6 +295,32 @@ QList<QPair<QString, QString>> ruleRefusals(const TableDef &before, const TableD
                         QStringLiteral("%1 record(s) break the validation rule of %2 (%3). Correct them, or change the "
                                        "rule, first.")
                             .arg(QStringLiteral("%1"), f.name, f.validationRule.trimmed())});
+        }
+    }
+    // M86: a field that newly refuses '' or values off its list.
+    for (const FieldDef &f : after.fields) {
+        const FieldDef *old = f.originalName.isEmpty() ? nullptr : before.field(f.originalName);
+        if (old == nullptr) {
+            continue; // a new field holds nothing yet
+        }
+        const QString column = QStringLiteral("%1.%2").arg(row, q(f.name));
+        if (zeroLengthChecked(f) && (!zeroLengthChecked(*old) || old->type != f.type)) {
+            out.append({QStringLiteral("SELECT count(*) FROM %1 WHERE %2 = ''").arg(row, column),
+                        QStringLiteral("%1 record(s) hold an empty text in %2. Fill them in, or allow zero length, first.")
+                            .arg(QStringLiteral("%1"), f.name)});
+        }
+        const bool limited = f.lookup.isValueList() && f.lookup.limitToList;
+        const bool wasLimited = old->lookup.isValueList() && old->lookup.limitToList;
+        if (limited && (!wasLimited || old->lookup.values != f.lookup.values || old->type != f.type)) {
+            QString problem;
+            const QString list = valueListSql(f, currency, &problem);
+            if (problem.isEmpty()) {
+                out.append({QStringLiteral("SELECT count(*) FROM %1 WHERE %2 IS NOT NULL AND %2 NOT IN (%3)")
+                                 .arg(row, column, list),
+                            QStringLiteral("%1 record(s) hold a value of %2 that is not in its list. Correct them, or "
+                                           "add the values to the list, first.")
+                                .arg(QStringLiteral("%1"), f.name)});
+            }
         }
     }
     const bool tableChanged = before.validationRule.trimmed() != after.validationRule.trimmed() || retyped;

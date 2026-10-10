@@ -57,6 +57,12 @@ struct QueryCore {
 // TRANSFORM … PIVOT as plain SQL (base_query_crosstab.cpp); `values` are
 // the parameter values (nullptr: headings from every row).
 [[nodiscard]] CompiledQuery compileCrosstab(const BaseFile &file, const QueryDesign &design, const QVariantMap *values);
+// M86 (D-094): what Expr::Context::subquery calls in a query — the
+// subquery's Access SQL parsed (base_access_sql.h) and compiled like a
+// saved select; one that asks for parameters is refused.
+[[nodiscard]] std::function<QString(const QString &, QString *)> subqueryCompiler(const BaseFile &file);
+// SELECT … UNION [ALL] SELECT … (M86, base_query_union.cpp).
+[[nodiscard]] CompiledQuery compileUnion(const BaseFile &file, const QueryDesign &design, const QVariantMap *values);
 // Binds a statement's :name parameters from user text, typed per parameter.
 [[nodiscard]] Result bindParameters(const BaseFile &file, Statement &statement, const QList<QueryParameter> &declared,
                                     const QVariantMap &values);

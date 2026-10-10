@@ -47,6 +47,18 @@ bool renameIn(QVariantMap &def, const QString &kind, const QString &from, const 
     bool changed = false;
     const auto same = [&](const QVariant &v) { return v.toString().compare(from, Qt::CaseInsensitive) == 0; };
     if (kind == QLatin1String("query")) {
+        // M86: a union query's parts are queries of their own.
+        QVariantList parts = def.value(QStringLiteral("parts")).toList();
+        for (QVariant &part : parts) {
+            QVariantMap m = part.toMap();
+            if (renameIn(m, kind, from, to)) {
+                part = m;
+                changed = true;
+            }
+        }
+        if (!parts.isEmpty()) {
+            def.insert(QStringLiteral("parts"), parts);
+        }
         QVariantList tables = def.value(QStringLiteral("tables")).toList();
         for (QVariant &t : tables) {
             QVariantMap m = t.toMap();

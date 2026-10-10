@@ -29,6 +29,10 @@
 //  * `fileTarget` is the file field the File commands act on (M65): the
 //    datasheet's current cell or the form's chosen file field, as
 //    {table, rowid, field, hasFile}; empty when there is none.
+//  * M86 (D-094): `hyperlinkTarget` is the hyperlink cell Edit Hyperlink
+//    and Open Hyperlink act on — {rowId, field, text, editable} of the
+//    datasheet's current cell; the M86 commands live in
+//    base_host_actions_access.cpp.
 
 #include "base_service.h"
 #include "document_host.h"
@@ -62,6 +66,7 @@ class BaseHost : public Quick::DocumentHost {
     Q_PROPERTY(bool designCanUndo READ designCanUndo WRITE setDesignCanUndo NOTIFY designChanged)
     Q_PROPERTY(bool designCanRedo READ designCanRedo WRITE setDesignCanRedo NOTIFY designChanged)
     Q_PROPERTY(QVariantMap fileTarget READ fileTarget WRITE setFileTarget NOTIFY fileTargetChanged)
+    Q_PROPERTY(QVariantMap hyperlinkTarget READ hyperlinkTarget WRITE setHyperlinkTarget NOTIFY hyperlinkTargetChanged)
     Q_PROPERTY(bool navigationVisible READ navigationVisible NOTIFY navigationChanged)
     Q_PROPERTY(qreal zoom READ zoom NOTIFY zoomChanged)
     Q_PROPERTY(bool printable READ printable NOTIFY printSourceChanged)
@@ -91,6 +96,8 @@ public:
     void setDesignCanRedo(bool can);
     [[nodiscard]] QVariantMap fileTarget() const { return m_fileTarget; }
     void setFileTarget(const QVariantMap &target);
+    [[nodiscard]] QVariantMap hyperlinkTarget() const { return m_hyperlinkTarget; }
+    void setHyperlinkTarget(const QVariantMap &target);
     [[nodiscard]] bool navigationVisible() const { return m_navigationVisible; }
     [[nodiscard]] qreal zoom() const { return m_zoom; }
     [[nodiscard]] bool printable() const { return !m_report.isNull() || !m_labels.isNull(); }
@@ -105,6 +112,8 @@ public:
     Q_INVOKABLE QVariantMap exportReportPdf(const QUrl &url);
     // Checks a command's radio state from QML (query type, workspace).
     Q_INVOKABLE void setChecked(const QString &id, bool checked);
+    // M86: Shift held while a database opens skips its AutoExec macro, as in Access.
+    [[nodiscard]] Q_INVOKABLE bool shiftHeld() const;
 
 signals:
     void viewChanged();
@@ -112,6 +121,7 @@ signals:
     void designChanged();
     void navigationChanged();
     void fileTargetChanged();
+    void hyperlinkTargetChanged();
     void zoomChanged();
     void printSourceChanged();
     void actionRequested(const QString &id);
@@ -133,6 +143,10 @@ private:
     void insertMenus();
     void syncEnablement();
     void updateStatus();
+    // base_host_actions_access.cpp (M86)
+    void createAccessToolActions();
+    void insertAccessToolMenus();
+    void syncAccessToolEnablement(bool writable);
 
     BaseDocument *m_document = nullptr;
     BaseService *m_service = nullptr;
@@ -144,6 +158,7 @@ private:
     QString m_selectedKind;
     QString m_selectedName;
     QVariantMap m_fileTarget;
+    QVariantMap m_hyperlinkTarget;
     qreal m_zoom = 1.0;
     bool m_designDirty = false;
     bool m_designHistory = false;

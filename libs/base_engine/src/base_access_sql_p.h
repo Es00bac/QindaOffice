@@ -60,6 +60,8 @@ struct SplitTerm {
 [[nodiscard]] bool isKeyword(const QString &word);
 // "Sum" for sum, "Avg" for avg, … ("" for anything else).
 [[nodiscard]] QString accessAggregate(const QString &sqlFunction);
+// M86: a union design as Access SQL (base_access_sql_union.cpp).
+[[nodiscard]] QString unionText(const QueryDesign &design);
 // Access PARAMETERS types ↔ field types.
 [[nodiscard]] QString parameterType(FieldType type);
 [[nodiscard]] std::optional<FieldType> parameterTypeFrom(const QString &word);

@@ -70,7 +70,13 @@ QVariantMap ColumnInfo::toMap() const
             {QStringLiteral("maskHint"), inputMask.isEmpty() ? QString()
                                                              : maskHint(InputMask::parse(inputMask).value_or(InputMask()))},
             {QStringLiteral("validationRule"), validationRule},
-            {QStringLiteral("validationText"), validationText}};
+            {QStringLiteral("validationText"), validationText},
+            {QStringLiteral("lookupValues"), lookup.values},
+            {QStringLiteral("limitToList"), lookup.limitToList},
+            {QStringLiteral("calculated"), calculated},
+            {QStringLiteral("allowZeroLength"), allowZeroLength},
+            {QStringLiteral("linked"), linked},
+            {QStringLiteral("hyperlink"), type == FieldType::Hyperlink}};
 }
 
 QString ColumnInfo::display(const QVariant &stored, const CurrencyFormat &currency) const
@@ -107,7 +113,12 @@ QList<ColumnInfo> Records::columns(const BaseFile &file, const QString &table)
         c.type = f.type;
         c.required = f.required;
         c.primaryKey = f.primaryKey;
-        c.readOnly = !isTypable(f.type) || def->withoutRowid; // a file changes through setFile
+        // A file changes through setFile; M86: a calculated field is worked
+        // out by SQLite and a linked table follows its source.
+        c.calculated = f.calculated;
+        c.linked = !def->link.isEmpty();
+        c.readOnly = !isTypable(f.type) || def->withoutRowid || f.calculated || c.linked;
+        c.allowZeroLength = f.allowZeroLength;
         c.defaultValue = f.defaultValue;
         c.lookup = f.lookup;
         c.inputMask = f.inputMask;
@@ -206,7 +217,7 @@ RowSet Records::read(const BaseFile &file, const QString &table, const RowQuery 
         return set;
     }
     const std::optional<TableDef> def = readTable(file, table);
-    set.editable = def && !def->withoutRowid && !file.readOnly();
+    set.editable = def && !def->withoutRowid && !file.readOnly() && def->link.isEmpty();
     QVariantList bindings;
     QString error;
     QString where = whereClause(set.columns, query.filters, file.currency(), &bindings, &error, query.matchAny);
@@ -336,9 +347,18 @@ QVariant Records::total(const BaseFile &file, const QString &table, const QStrin
     return value;
 }
 
-QList<QPair<QVariant, QString>> Records::lookupChoices(const BaseFile &file, const LookupDef &lookup, int limit)
+QList<QPair<QVariant, QString>> Records::lookupChoices(const BaseFile &file, const LookupDef &lookup, int limit,
+                                                      FieldType type)
 {
     QList<QPair<QVariant, QString>> out;
+    if (lookup.isValueList()) {
+        const CurrencyFormat currency = file.currency();
+        for (const QString &text : lookup.values.mid(0, limit)) {
+            const Parsed parsed = parseInput(type, text, currency);
+            out.append({parsed.ok ? parsed.value : QVariant(text), text});
+        }
+        return out;
+    }
     if (!lookup.isSet() || !file.tableExists(lookup.table)) {
         return out;
     }
@@ -358,6 +378,26 @@ QList<QPair<QVariant, QString>> Records::lookupChoices(const BaseFile &file, con
 Parsed Records::resolveInput(const BaseFile &file, const ColumnInfo &column, const QVariant &input)
 {
     const CurrencyFormat currency = file.currency();
+    const bool textual = column.type == FieldType::Text || column.type == FieldType::LongText
+                         || column.type == FieldType::Hyperlink;
+    // M86: typing "" stores an empty text, as in Access — when the field
+    // allows zero length (the database refuses it otherwise, base_rules.h).
+    if (textual && input.typeId() == QMetaType::QString && input.toString().trimmed() == QLatin1String("\"\"")) {
+        return column.allowZeroLength ? Parsed{true, QVariant(QStringLiteral("")), {}}
+                                      : Parsed{false, {}, QStringLiteral("cannot be an empty text (Allow Zero Length is No)")};
+    }
+    // M86: a value list takes its own spelling of a choice ("check" → "Check").
+    if (column.lookup.isValueList() && input.typeId() == QMetaType::QString && !input.toString().trimmed().isEmpty()) {
+        const QString text = input.toString().trimmed();
+        for (const QString &value : column.lookup.values) {
+            if (value.compare(text, Qt::CaseInsensitive) == 0) {
+                return parseInput(column.type, value, currency);
+            }
+        }
+        if (column.lookup.limitToList) {
+            return Parsed{false, {}, QStringLiteral("must be one of its list: %1").arg(column.lookup.values.join(QStringLiteral(", ")))};
+        }
+    }
     // Typed text is shaped by the field's input mask first (base_input_mask.h).
     if (!column.inputMask.isEmpty() && !column.lookup.isSet() && input.typeId() == QMetaType::QString) {
         if (const std::optional<InputMask> mask = InputMask::parse(column.inputMask)) {

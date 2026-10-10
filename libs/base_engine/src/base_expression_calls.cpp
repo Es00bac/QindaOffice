@@ -1,12 +1,153 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Access functions → SQLite SQL for the expression compiler
 // (base_expression.cpp): Year/Month/Day, text functions, Nz, IIf, Round,
-// Int, Date()/Now(), DateSerial and the aggregates.
+// Int, Date()/Now(), DateSerial and the aggregates; M86: DatePart and the
+// date patterns of Format (what the Crosstab Query Wizard groups by).
 #include "base_expression_p.h"
 
 #include <QHash>
 
 namespace QindaOffice::Base::Expr::detail {
+
+namespace {
+
+// A quoted SQL text literal's content ("'q'" → q), or nullopt.
+std::optional<QString> literalText(const QString &sql)
+{
+    if (sql.size() >= 2 && sql.startsWith(QLatin1Char('\'')) && sql.endsWith(QLatin1Char('\''))) {
+        return sql.mid(1, sql.size() - 2).replace(QStringLiteral("''"), QStringLiteral("'"));
+    }
+    return std::nullopt;
+}
+
+QString part(const char *code, const QString &date)
+{
+    return QStringLiteral("CAST(strftime('%1', %2) AS INTEGER)").arg(QLatin1String(code), date);
+}
+
+QString monthName(const QString &date, bool full)
+{
+    static const char *const names[] = {"January", "February", "March",     "April",   "May",      "June",
+                                        "July",    "August",   "September", "October", "November", "December"};
+    QString sql = QStringLiteral("(CASE %1").arg(part("%m", date));
+    for (int m = 0; m < 12; ++m) {
+        const QString name = QString::fromLatin1(names[m]);
+        sql += QStringLiteral(" WHEN %1 THEN '%2'").arg(m + 1).arg(full ? name : name.left(3));
+    }
+    return sql + QStringLiteral(" END)");
+}
+
+QString dayName(const QString &date, bool full)
+{
+    static const char *const names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+    QString sql = QStringLiteral("(CASE %1").arg(part("%w", date));
+    for (int d = 0; d < 7; ++d) {
+        const QString name = QString::fromLatin1(names[d]);
+        sql += QStringLiteral(" WHEN %1 THEN '%2'").arg(d).arg(full ? name : name.left(3));
+    }
+    return sql + QStringLiteral(" END)");
+}
+
+// DatePart's intervals (Access's, the week starting on Sunday).
+std::optional<QString> datePart(const QString &interval, const QString &date)
+{
+    const QString i = interval.toLower();
+    if (i == QLatin1String("yyyy")) {
+        return part("%Y", date);
+    }
+    if (i == QLatin1String("q")) {
+        return QStringLiteral("((%1 + 2) / 3)").arg(part("%m", date));
+    }
+    if (i == QLatin1String("m")) {
+        return part("%m", date);
+    }
+    if (i == QLatin1String("d")) {
+        return part("%d", date);
+    }
+    if (i == QLatin1String("y")) {
+        return part("%j", date);
+    }
+    if (i == QLatin1String("w")) {
+        return QStringLiteral("(%1 + 1)").arg(part("%w", date));
+    }
+    if (i == QLatin1String("ww")) {
+        return QStringLiteral("((%1 + %2 - 1) / 7 + 1)").arg(part("%j", date), part("%w", QStringLiteral("date(%1, 'start of year')").arg(date)));
+    }
+    if (i == QLatin1String("h")) {
+        return part("%H", date);
+    }
+    if (i == QLatin1String("n")) {
+        return part("%M", date);
+    }
+    if (i == QLatin1String("s")) {
+        return part("%S", date);
+    }
+    return std::nullopt;
+}
+
+// Format's date patterns: named (Short Date, Medium Date, Long Date) and
+// built of yyyy yy q mmmm mmm mm m dddd ddd dd d hh h nn ss with literal
+// text between ("mmm yyyy", "yyyy-mm"); "" for any other pattern.
+QString formatDate(const QString &pattern, const QString &date)
+{
+    const QString named = pattern.toLower();
+    if (named == QLatin1String("short date")) {
+        return QStringLiteral("date(%1)").arg(date);
+    }
+    if (named == QLatin1String("medium date")) {
+        return formatDate(QStringLiteral("dd-mmm-yy"), date);
+    }
+    if (named == QLatin1String("long date")) {
+        return formatDate(QStringLiteral("dddd, mmmm d, yyyy"), date);
+    }
+    static const char *const tokens[] = {"yyyy", "yy", "mmmm", "mmm", "mm", "m", "dddd", "ddd", "dd", "d",
+                                         "hh",   "h",  "nn",   "ss",  "q"};
+    QStringList parts;
+    QString literal;
+    const auto flush = [&] {
+        if (!literal.isEmpty()) {
+            parts.append(QStringLiteral("'%1'").arg(QString(literal).replace(QLatin1Char('\''), QStringLiteral("''"))));
+            literal.clear();
+        }
+    };
+    for (int i = 0; i < pattern.size();) {
+        const QString rest = pattern.mid(i).toLower();
+        const auto token = std::find_if(std::begin(tokens), std::end(tokens),
+                                        [&](const char *t) { return rest.startsWith(QLatin1String(t)); });
+        if (token == std::end(tokens)) {
+            if (pattern.at(i).isLetterOrNumber() && pattern.at(i) != QLatin1Char('T')) {
+                return {}; // a number pattern or a code QindaBase does not know
+            }
+            literal += pattern.at(i++);
+            continue;
+        }
+        flush();
+        const QString t = QString::fromLatin1(*token);
+        i += int(t.size());
+        if (t == QLatin1String("yyyy")) {
+            parts.append(QStringLiteral("strftime('%Y', %1)").arg(date));
+        } else if (t == QLatin1String("yy")) {
+            parts.append(QStringLiteral("substr(strftime('%Y', %1), 3)").arg(date));
+        } else if (t == QLatin1String("q")) {
+            parts.append(QStringLiteral("CAST((%1 + 2) / 3 AS TEXT)").arg(part("%m", date)));
+        } else if (t == QLatin1String("mmmm") || t == QLatin1String("mmm")) {
+            parts.append(monthName(date, t.size() == 4));
+        } else if (t == QLatin1String("dddd") || t == QLatin1String("ddd")) {
+            parts.append(dayName(date, t.size() == 4));
+        } else {
+            static const QHash<QString, QString> codes{{QStringLiteral("mm"), QStringLiteral("%m")}, {QStringLiteral("dd"), QStringLiteral("%d")},
+                                                       {QStringLiteral("hh"), QStringLiteral("%H")}, {QStringLiteral("nn"), QStringLiteral("%M")},
+                                                       {QStringLiteral("ss"), QStringLiteral("%S")}, {QStringLiteral("m"), QStringLiteral("%m")},
+                                                       {QStringLiteral("d"), QStringLiteral("%d")}, {QStringLiteral("h"), QStringLiteral("%H")}};
+            const QString code = QStringLiteral("strftime('%1', %2)").arg(codes.value(t), date);
+            parts.append(t.size() == 2 ? code : QStringLiteral("CAST(CAST(%1 AS INTEGER) AS TEXT)").arg(code));
+        }
+    }
+    flush();
+    return parts.isEmpty() ? QString() : QLatin1Char('(') + parts.join(QStringLiteral(" || ")) + QLatin1Char(')');
+}
+
+} // namespace
 
 CallResult callSql(const QString &name, const QList<CallArg> &args)
 {
@@ -111,6 +252,27 @@ CallResult callSql(const QString &name, const QList<CallArg> &args)
     }
     if (name == QLatin1String("now")) {
         return CallResult{QStringLiteral("datetime('now','localtime')"), FieldType::DateTime};
+    }
+    if (name == QLatin1String("datepart")) {
+        need(2);
+        const std::optional<QString> interval = literalText(arg(0));
+        const std::optional<QString> sql = interval ? datePart(*interval, arg(1)) : std::nullopt;
+        if (!sql) {
+            return CallResult{{}, {}, false, QStringLiteral("DatePart() takes an interval in quotes: \"yyyy\", \"q\", \"m\", \"d\", \"ww\", \"w\", \"y\", \"h\", \"n\" or \"s\".")};
+        }
+        return CallResult{*sql, FieldType::Integer, agg};
+    }
+    if (name == QLatin1String("format")) {
+        need(1);
+        if (args.size() == 1) {
+            return CallResult{QStringLiteral("CAST(%1 AS TEXT)").arg(arg(0)), FieldType::Text, agg};
+        }
+        const std::optional<QString> pattern = literalText(arg(1));
+        const QString sql = pattern ? formatDate(*pattern, arg(0)) : QString();
+        if (sql.isEmpty()) {
+            return CallResult{{}, {}, false, QStringLiteral("Format() takes a date pattern in quotes here: \"yyyy\", \"q\", \"mmm\", \"mmm yyyy\", \"Short Date\"…")};
+        }
+        return CallResult{sql, FieldType::Text, agg};
     }
     if (name == QLatin1String("dateserial")) {
         need(3);

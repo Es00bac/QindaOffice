@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Table designs: maps for QML, and reading a table back from SQLite
-// introspection (table_xinfo, index_list, foreign_key_list) plus qb_fields.
+// Table designs: reading a table back from SQLite introspection
+// (table_xinfo, index_list, foreign_key_list) plus qb_fields. The maps for
+// QML are base_schema_maps.cpp.
+#include "base_calculated.h"
+#include "base_indexes.h"
 #include "base_rules.h"
 #include "base_schema_p.h"
 
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QRegularExpression>
 
 namespace QindaOffice::Base {
@@ -41,187 +47,6 @@ QString unwrapParens(QString text)
 
 } // namespace
 
-QString refActionId(RefAction action)
-{
-    switch (action) {
-    case RefAction::Restrict: return s("restrict");
-    case RefAction::Cascade: return s("cascade");
-    case RefAction::SetNull: return s("setNull");
-    case RefAction::NoAction: break;
-    }
-    return s("noAction");
-}
-
-RefAction refActionFromId(const QString &id)
-{
-    if (id == QLatin1String("restrict")) {
-        return RefAction::Restrict;
-    }
-    if (id == QLatin1String("cascade")) {
-        return RefAction::Cascade;
-    }
-    if (id == QLatin1String("setNull")) {
-        return RefAction::SetNull;
-    }
-    return RefAction::NoAction;
-}
-
-// ---- maps ------------------------------------------------------------------
-
-QVariantMap FieldDef::toMap() const
-{
-    return {{s("name"), name},
-            {s("originalName"), originalName},
-            {s("type"), typeId(type)},
-            {s("typeLabel"), typeLabel(type)},
-            {s("declared"), declared},
-            {s("primaryKey"), primaryKey},
-            {s("required"), required},
-            {s("defaultValue"), defaultValue},
-            {s("unique"), unique},
-            {s("indexed"), indexed},
-            {s("caption"), caption},
-            {s("description"), description},
-            {s("lookupTable"), lookup.table},
-            {s("lookupField"), lookup.valueField},
-            {s("lookupDisplay"), lookup.displayField},
-            {s("validationRule"), validationRule},
-            {s("validationText"), validationText},
-            {s("inputMask"), inputMask}};
-}
-
-FieldDef FieldDef::fromMap(const QVariantMap &map)
-{
-    FieldDef f;
-    f.name = map.value(s("name")).toString().trimmed();
-    f.originalName = map.value(s("originalName")).toString();
-    f.type = typeFromId(map.value(s("type")).toString()).value_or(FieldType::Text);
-    f.declared = map.value(s("declared")).toString();
-    f.primaryKey = map.value(s("primaryKey")).toBool();
-    f.required = map.value(s("required")).toBool();
-    f.defaultValue = map.value(s("defaultValue")).toString();
-    f.unique = map.value(s("unique")).toBool();
-    f.indexed = map.value(s("indexed")).toBool();
-    f.caption = map.value(s("caption")).toString();
-    f.description = map.value(s("description")).toString();
-    f.lookup.table = map.value(s("lookupTable")).toString();
-    f.lookup.valueField = map.value(s("lookupField")).toString();
-    f.lookup.displayField = map.value(s("lookupDisplay")).toString();
-    f.validationRule = map.value(s("validationRule")).toString().trimmed();
-    f.validationText = map.value(s("validationText")).toString().trimmed();
-    f.inputMask = map.value(s("inputMask")).toString().trimmed();
-    return f;
-}
-
-QString Relationship::id() const
-{
-    return childTable + QLatin1Char('.') + childField + QLatin1Char('>') + parentTable + QLatin1Char('.') + parentField;
-}
-
-QVariantMap Relationship::toMap() const
-{
-    return {{s("id"), id()},
-            {s("childTable"), childTable},
-            {s("childField"), childField},
-            {s("parentTable"), parentTable},
-            {s("parentField"), parentField},
-            {s("onDelete"), refActionId(onDelete)},
-            {s("onUpdate"), refActionId(onUpdate)}};
-}
-
-Relationship Relationship::fromMap(const QVariantMap &map)
-{
-    Relationship r;
-    r.childTable = map.value(s("childTable")).toString();
-    r.childField = map.value(s("childField")).toString();
-    r.parentTable = map.value(s("parentTable")).toString();
-    r.parentField = map.value(s("parentField")).toString();
-    r.onDelete = refActionFromId(map.value(s("onDelete")).toString());
-    r.onUpdate = refActionFromId(map.value(s("onUpdate")).toString());
-    return r;
-}
-
-bool Relationship::sameLink(const Relationship &other) const
-{
-    return childTable.compare(other.childTable, Qt::CaseInsensitive) == 0
-           && childField.compare(other.childField, Qt::CaseInsensitive) == 0
-           && parentTable.compare(other.parentTable, Qt::CaseInsensitive) == 0
-           && parentField.compare(other.parentField, Qt::CaseInsensitive) == 0;
-}
-
-int TableDef::fieldIndex(const QString &name) const
-{
-    for (int i = 0; i < fields.size(); ++i) {
-        if (fields.at(i).name.compare(name, Qt::CaseInsensitive) == 0) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-const FieldDef *TableDef::field(const QString &name) const
-{
-    const int i = fieldIndex(name);
-    return i < 0 ? nullptr : &fields.at(i);
-}
-
-QStringList TableDef::primaryKey() const
-{
-    QStringList out;
-    for (const FieldDef &f : fields) {
-        if (f.primaryKey) {
-            out.append(f.name);
-        }
-    }
-    return out;
-}
-
-QVariantMap TableDef::toMap() const
-{
-    QVariantList fieldList;
-    for (const FieldDef &f : fields) {
-        fieldList.append(f.toMap());
-    }
-    QVariantList relationList;
-    for (const Relationship &r : relationships) {
-        relationList.append(r.toMap());
-    }
-    return {{s("name"), name},
-            {s("originalName"), originalName},
-            {s("fields"), fieldList},
-            {s("relationships"), relationList},
-            {s("autoIncrement"), autoIncrement},
-            {s("withoutRowid"), withoutRowid},
-            {s("complexKeys"), complexKeys},
-            {s("otherIndexSql"), otherIndexSql},
-            {s("triggerSql"), triggerSql},
-            {s("validationRule"), validationRule},
-            {s("validationText"), validationText},
-            {s("ruleTriggers"), ruleTriggers}};
-}
-
-TableDef TableDef::fromMap(const QVariantMap &map)
-{
-    TableDef t;
-    t.name = map.value(s("name")).toString().trimmed();
-    t.originalName = map.value(s("originalName")).toString();
-    for (const QVariant &v : map.value(s("fields")).toList()) {
-        t.fields.append(FieldDef::fromMap(v.toMap()));
-    }
-    for (const QVariant &v : map.value(s("relationships")).toList()) {
-        t.relationships.append(Relationship::fromMap(v.toMap()));
-    }
-    t.autoIncrement = map.value(s("autoIncrement"), true).toBool();
-    t.withoutRowid = map.value(s("withoutRowid")).toBool();
-    t.complexKeys = map.value(s("complexKeys")).toBool();
-    t.otherIndexSql = map.value(s("otherIndexSql")).toStringList();
-    t.triggerSql = map.value(s("triggerSql")).toStringList();
-    t.validationRule = map.value(s("validationRule")).toString().trimmed();
-    t.validationText = map.value(s("validationText")).toString().trimmed();
-    t.ruleTriggers = map.value(s("ruleTriggers")).toStringList();
-    return t;
-}
-
 // ---- reading ---------------------------------------------------------------
 
 QString defaultToEditText(const QString &sqlDefault, FieldType type, const CurrencyFormat &currency)
@@ -256,6 +81,24 @@ QString defaultToEditText(const QString &sqlDefault, FieldType type, const Curre
     return QLatin1Char('=') + inner; // an expression, kept verbatim
 }
 
+namespace {
+
+QVariantMap jsonMap(const QVariant &text)
+{
+    return QJsonDocument::fromJson(text.toString().toUtf8()).object().toVariantMap();
+}
+
+QStringList jsonList(const QVariant &text)
+{
+    QStringList out;
+    for (const QJsonValue &v : QJsonDocument::fromJson(text.toString().toUtf8()).array()) {
+        out.append(v.toString());
+    }
+    return out;
+}
+
+} // namespace
+
 std::optional<TableDef> readTable(const BaseFile &file, const QString &name, QString *error)
 {
     const Connection &db = file.db();
@@ -270,31 +113,32 @@ std::optional<TableDef> readTable(const BaseFile &file, const QString &name, QSt
     TableDef table;
     table.name = master.first().value(0).toString();
     table.originalName = table.name;
-    const QString sql = master.first().value(1).toString().toUpper();
+    const QString createSql = master.first().value(1).toString();
+    const QString sql = createSql.toUpper();
     table.autoIncrement = sql.contains(QLatin1String("AUTOINCREMENT"));
     table.withoutRowid = sql.contains(QLatin1String("WITHOUT ROWID"));
     const CurrencyFormat currency = file.currency();
 
     // Metadata QindaBase keeps for the columns (captions, lookups, type ids;
-    // M80: rules and masks — columns an older file may not have yet, read
-    // as NULL; the row with an empty field_name holds the table's own rule).
+    // M80: rules and masks; M86: expressions, value lists, Allow Zero
+    // Length, and on the table's own row its data macros and link) —
+    // columns an older file may not have yet read as NULL. The row with an
+    // empty field_name holds the table's own settings.
     QHash<QString, QVariantList> meta;
     if (file.hasSystemTables()) {
-        const QStringList have = detail::systemFieldColumns(file);
-        QStringList select{s("field_name"), s("type"), s("caption"), s("description"), s("lookup_table"),
-                           s("lookup_field"), s("lookup_display")};
-        for (const char *extra : {"validation_rule", "validation_text", "input_mask"}) {
-            select.append(have.contains(s(extra)) ? s(extra) : s("NULL"));
-        }
+        const QStringList select = detail::systemFieldSelect(file);
         for (const QVariantList &row : db.rows(
                  QStringLiteral("SELECT %1 FROM qb_fields WHERE table_name=?").arg(select.join(QStringLiteral(", "))),
                  {table.name})) {
             meta.insert(row.value(0).toString().toLower(), row);
         }
         const QVariantList own = meta.value(QString());
-        table.validationRule = own.value(7).toString();
-        table.validationText = own.value(8).toString();
+        table.validationRule = own.value(detail::MetaValidationRule).toString();
+        table.validationText = own.value(detail::MetaValidationText).toString();
+        table.dataMacros = jsonMap(own.value(detail::MetaDataMacros));
+        table.link = jsonMap(own.value(detail::MetaLink));
     }
+    const QHash<QString, QString> generated = generatedColumnSql(createSql);
     const QList<QVariantList> columns = db.rows(QStringLiteral("SELECT name, type, \"notnull\", dflt_value, pk, hidden "
                                                                "FROM pragma_table_xinfo(?) ORDER BY cid"),
                                                 {table.name});
@@ -303,65 +147,52 @@ std::optional<TableDef> readTable(const BaseFile &file, const QString &name, QSt
         pkCount += c.value(4).toInt() > 0 && c.value(5).toInt() == 0 ? 1 : 0;
     }
     for (const QVariantList &c : columns) {
-        if (c.value(5).toInt() != 0) {
-            continue; // generated or hidden column: not designable
+        const int hidden = c.value(5).toInt();
+        if (hidden == 1) {
+            continue; // a virtual table's hidden column: not designable
         }
         FieldDef f;
         f.name = c.value(0).toString();
         f.originalName = f.name;
         f.declared = c.value(1).toString();
+        // M86: hidden 2 and 3 are generated columns — calculated fields.
+        f.calculated = hidden == 2 || hidden == 3;
         f.primaryKey = c.value(4).toInt() > 0;
         const bool rowidKey = f.primaryKey && pkCount == 1 && !table.withoutRowid
                               && f.declared.trimmed().compare(QLatin1String("INTEGER"), Qt::CaseInsensitive) == 0;
         f.type = typeFromDeclared(f.declared, rowidKey);
-        f.required = c.value(2).toInt() != 0 && !rowidKey;
+        f.required = c.value(2).toInt() != 0 && !rowidKey && !f.calculated;
         const QVariantList m = meta.value(f.name.toLower());
         if (!m.isEmpty()) {
-            if (const std::optional<FieldType> t = typeFromId(m.value(1).toString());
+            if (const std::optional<FieldType> t = typeFromId(m.value(detail::MetaType).toString());
                 t && (typeFromDeclared(f.declared, rowidKey) == *t || (rowidKey && *t == FieldType::Integer))) {
                 f.type = *t;
             }
-            f.caption = m.value(2).toString();
-            f.description = m.value(3).toString();
-            f.lookup.table = m.value(4).toString();
-            f.lookup.valueField = m.value(5).toString();
-            f.lookup.displayField = m.value(6).toString();
-            f.validationRule = m.value(7).toString();
-            f.validationText = m.value(8).toString();
-            f.inputMask = m.value(9).toString();
+            f.caption = m.value(detail::MetaCaption).toString();
+            f.description = m.value(detail::MetaDescription).toString();
+            f.lookup.table = m.value(detail::MetaLookupTable).toString();
+            f.lookup.valueField = m.value(detail::MetaLookupField).toString();
+            f.lookup.displayField = m.value(detail::MetaLookupDisplay).toString();
+            f.validationRule = m.value(detail::MetaValidationRule).toString();
+            f.validationText = m.value(detail::MetaValidationText).toString();
+            f.inputMask = m.value(detail::MetaInputMask).toString();
+            f.lookup.values = jsonList(m.value(detail::MetaLookupValues));
+            f.lookup.limitToList = m.value(detail::MetaLimitToList).toInt() != 0;
+            f.allowZeroLength = m.value(detail::MetaAllowZeroLength).isNull()
+                                || m.value(detail::MetaAllowZeroLength).toInt() != 0;
+            if (f.calculated) {
+                f.expression = m.value(detail::MetaExpression).toString();
+            }
         }
-        f.defaultValue = defaultToEditText(c.value(3).toString(), f.type, currency);
+        if (f.calculated && f.expression.isEmpty()) {
+            f.generatedSql = generated.value(f.name.toLower()); // a foreign file's own
+        }
+        f.defaultValue = f.calculated ? QString() : defaultToEditText(c.value(3).toString(), f.type, currency);
         table.fields.append(f);
     }
-    // Indexes: single-column plain/unique ones are field properties; the
-    // rest are kept verbatim through rebuilds.
-    for (const QVariantList &idx :
-         db.rows(QStringLiteral("SELECT name, \"unique\", origin, partial FROM pragma_index_list(?)"), {table.name})) {
-        const QString indexName = idx.value(0).toString();
-        const bool unique = idx.value(1).toInt() != 0;
-        const QString origin = idx.value(2).toString();
-        if (origin == QLatin1String("pk")) {
-            continue;
-        }
-        const QList<QVariantList> cols =
-            db.rows(QStringLiteral("SELECT name FROM pragma_index_info(?) ORDER BY seqno"), {indexName});
-        const bool simple = cols.size() == 1 && !cols.first().value(0).isNull() && idx.value(3).toInt() == 0;
-        if (simple) {
-            const int fi = table.fieldIndex(cols.first().value(0).toString());
-            if (fi >= 0) {
-                FieldDef &f = table.fields[fi];
-                (unique ? f.unique : f.indexed) = true;
-                continue;
-            }
-        }
-        if (origin == QLatin1String("c")) {
-            const QVariant sqlText =
-                db.scalar(QStringLiteral("SELECT sql FROM sqlite_schema WHERE type='index' AND name=?"), {indexName});
-            if (!sqlText.toString().isEmpty()) {
-                table.otherIndexSql.append(sqlText.toString());
-            }
-        }
-    }
+    // Indexes: plain single-field ones are field properties, the Indexes
+    // dialog's are IndexDefs, the rest are kept verbatim (base_indexes.h).
+    readIndexes(db, &table);
     // Foreign keys (this table is the child).
     const QList<QVariantList> keys = db.rows(
         QStringLiteral("SELECT id, seq, \"table\", \"from\", \"to\", on_update, on_delete FROM pragma_foreign_key_list(?)"),
@@ -389,12 +220,13 @@ std::optional<TableDef> readTable(const BaseFile &file, const QString &name, QSt
         r.onDelete = actionFromSql(k.value(6).toString());
         table.relationships.append(r);
     }
-    // The triggers QindaBase makes for validation rules are derived from the
-    // design (base_rules.h); every other trigger is kept verbatim.
+    // The triggers QindaBase derives from the design (rules, M80; data
+    // macros and link guards, M86) are made again from it by every plan;
+    // every other trigger is kept verbatim.
     for (const QVariantList &t : db.rows(
              QStringLiteral("SELECT name, sql FROM sqlite_schema WHERE type='trigger' AND tbl_name=?"), {table.name})) {
-        if (isRuleTrigger(t.value(0).toString())) {
-            table.ruleTriggers.append(t.value(0).toString());
+        if (isDerivedTrigger(t.value(0).toString())) {
+            table.derivedTriggers.append(t.value(0).toString());
         } else {
             table.triggerSql.append(t.value(1).toString());
         }

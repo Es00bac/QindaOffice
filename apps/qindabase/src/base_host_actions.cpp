@@ -197,6 +197,7 @@ void BaseHost::createActions()
         m_zoom = 1.0;
         emit zoomChanged();
     });
+    createAccessToolActions(); // M86 (base_host_actions_access.cpp)
 }
 
 void BaseHost::insertMenus()
@@ -261,6 +262,7 @@ void BaseHost::insertMenus()
     tree->insertInto(QStringLiteral("viewMenu"), firstView, a("baseRenameObjectAction"));
     tree->insertInto(QStringLiteral("viewMenu"), firstView, a("baseDeleteObjectAction"));
     tree->insertInto(QStringLiteral("viewMenu"), firstView, MenuNode::separator());
+    insertAccessToolMenus(); // M86
 }
 
 void BaseHost::syncEnablement()
@@ -352,6 +354,7 @@ void BaseHost::syncEnablement()
     actions()->setEnabled({id(ActionId::kViewZoomIn), id(ActionId::kViewZoomOut), id(ActionId::kViewZoomReset)},
                           zoomable);
     actions()->setEnabled({id(ActionId::kFilePrint), id(ActionId::kFilePrintPreview)}, printable());
+    syncAccessToolEnablement(writable); // M86
     updateStatus();
 }
 

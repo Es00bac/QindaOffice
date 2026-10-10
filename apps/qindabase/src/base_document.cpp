@@ -103,6 +103,7 @@ bool BaseDocument::load(const QString &path, QString *error)
     m_file.reset();
     m_scratch.reset();
     adopt(std::move(file), QFileInfo(path).absoluteFilePath(), false);
+    emit opened();
     return true;
 }
 

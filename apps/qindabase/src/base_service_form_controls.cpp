@@ -30,7 +30,8 @@ QString s(const char *text)
 
 bool isLookup(const Engine::ColumnInfo &c)
 {
-    return c.lookup.isSet() && !c.lookup.displayField.isEmpty();
+    // M86: a value list is a lookup too (its own choices).
+    return (c.lookup.isSet() && !c.lookup.displayField.isEmpty()) || c.lookup.isValueList();
 }
 
 QVariantList withoutNames(const QVariantList &list, const QSet<QString> &names, const QString &key)
@@ -158,7 +159,7 @@ QVariantList BaseService::lookupChoices(const QString &table, const QString &fie
     }
     for (const Engine::ColumnInfo &c : Engine::Records::columns(*file(), table)) {
         if (c.name.compare(field, Qt::CaseInsensitive) == 0 && isLookup(c)) {
-            for (const auto &[value, text] : Engine::Records::lookupChoices(*file(), c.lookup)) {
+            for (const auto &[value, text] : Engine::Records::lookupChoices(*file(), c.lookup, 20000, c.type)) {
                 out.append(QVariantMap{{s("value"), value}, {s("text"), text}});
             }
         }

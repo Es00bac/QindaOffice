@@ -70,7 +70,7 @@ TableDef makeTable(const char *name, std::initializer_list<F> fields, std::initi
         t.relationships.append(r);
         const int i = t.fieldIndex(r.childField);
         t.fields[i].indexed = true;
-        t.fields[i].lookup = {r.parentTable, s("id"), s(l.display)};
+        t.fields[i].lookup = {r.parentTable, s("id"), s(l.display), {}, false};
     }
     return t;
 }

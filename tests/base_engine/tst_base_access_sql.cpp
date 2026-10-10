@@ -245,7 +245,9 @@ private slots:
     {
         Seeded db;
         const char *const refused[] = {
-            "SELECT name FROM donors UNION SELECT name FROM campaigns;",
+            // M86 (D-094): a union is a design of its own now; one whose parts
+            // show different numbers of columns is still refused.
+            "SELECT name FROM donors UNION SELECT name, id FROM campaigns;",
             "SELECT donors.name FROM donors INNER JOIN donations ON donations.donor_id = donors.id "
             "AND donations.id = donors.id;",
             "INSERT INTO archive (who) VALUES (\"x\");",
@@ -259,7 +261,7 @@ private slots:
             QVERIFY2(!p.ok, sql);
             QVERIFY2(!p.error.isEmpty(), sql);
         }
-        QVERIFY(parseAccessSql(*db.file, str(refused[0])).error.contains(str("UNION")));
+        QVERIFY(parseAccessSql(*db.file, str(refused[0])).error.contains(str("union")));
     }
 };
 

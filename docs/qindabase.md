@@ -10,7 +10,11 @@ pairs with QindaBooks without sharing its file format: the books stay in
 Excel import, the complete Access import and file fields: [D-074](decisions.md#d-074-qindabase-excel-import-the-complete-access-import-file-fields) (M65);
 Access's validation rules, input masks, crosstab and make-table queries, the
 Access SQL view, macros, subforms and buttons, engine-evaluated reports,
-mailing labels and XML export: [D-089](decisions.md#d-089-qindabase-accesss-queries-forms-and-reports) (M80).
+mailing labels and XML export: [D-089](decisions.md#d-089-qindabase-accesss-queries-forms-and-reports) (M80);
+calculated fields, value lists, the Indexes dialog, Hyperlink and Large
+Number, the query wizards, union queries, report intervals and page
+control, data macros and AutoExec, XML import and linked tables:
+[D-094](decisions.md#d-094-qindabase-calculated-fields-wizards-union-queries-report-intervals-data-macros-links) (M86).
 
 | Part | Where |
 | --- | --- |
@@ -31,7 +35,8 @@ state is in three system tables:
 | --- | --- |
 | `qb_meta(key, value)` | `schemaVersion` (1), `created`, `template`, `description`, `currency.symbol`, `currency.decimals`. Unknown keys are kept. A newer `schemaVersion` opens read-only. |
 | `qb_objects(id, kind, name, definition, description, created, modified)` | Saved queries, forms, reports and (M80) macros as JSON (`kind` = `query` \| `form` \| `report` \| `macro`; names unique per kind, case-blind). Unknown JSON members survive a load–edit–save. |
-| `qb_fields(table_name, field_name, type, caption, description, lookup_table, lookup_field, lookup_display, validation_rule, validation_text, input_mask)` | What SQLite cannot say about a column: its QindaBase type (AutoNumber), caption, description, lookup and (M80) validation rule, validation text and input mask. The row with an empty `field_name` holds the table's own record rule. An older file gains the three M80 columns in its first plan that needs them. |
+| `qb_fields(table_name, field_name, type, caption, description, lookup_table, lookup_field, lookup_display, validation_rule, validation_text, input_mask, expression, lookup_values, limit_to_list, allow_zero_length, data_macros, link_source)` | What SQLite cannot say about a column: its QindaBase type (AutoNumber), caption, description, lookup and (M80) validation rule, validation text and input mask; (M86) a calculated field's Access expression, a value list (JSON) and Limit To List, Allow Zero Length. The row with an empty `field_name` holds the table's own record rule and (M86) its data macros and link (JSON). An older file gains the M80 and M86 columns in its first plan that needs them. |
+| `qb_application_log` (M86) | What data macros' LogEvent wrote (created, category, object type, table, event, description) — Access's USysApplicationLog; made by the first data macro that logs, shown read-only by Database Tools ▸ Application Log. |
 
 **Plain SQLite files** (`.sqlite`, `.db`, …) open as they are: their
 tables show and edit, nothing is written to the file until the user
@@ -53,6 +58,9 @@ are never changed.
 | Date | `DATE` | `yyyy-MM-dd` text | accepts ISO, US m/d/yyyy, "Mar 14, 2026" |
 | Date & time | `DATETIME` | `yyyy-MM-dd HH:mm:ss` text | accepts AM/PM |
 | File or picture | `FILE` | BLOB, at most 32 MB | M65: the bytes only (see *File fields*) |
+| Hyperlink (M86) | `HYPERLINK TEXT` | Access's `display#address#subaddress#screentip` text, at most 8,192 characters | shows the display text; Home ▸ Hyperlink edits and opens it |
+| Large number (M86) | `BIGINT` | 64-bit integer | exact past 2^53 (Access's Large Number) |
+| Calculated (M86) | `<result type> GENERATED ALWAYS AS (…) VIRTUAL` | not stored; worked out on read | read-only; see *Calculated fields* |
 
 The declared type is the source of truth, so other tools see sensible
 types. Columns of foreign files map by SQLite affinity (`VARCHAR(40)` →
@@ -82,6 +90,30 @@ description.
 not text-decimal. It is what SQLite, spreadsheets and Access's Double do,
 it sorts and compares numerically in plain SQL, and money — the one place
 where binary fractions hurt — has its own exact type.
+
+## Calculated fields, value lists, empty text (M86)
+
+A **Calculated** field (`base_calculated.h`) is an Access expression over
+the record's own fields — `[quantity] * [unit_price]`, `[first] & " " &
+[last]`, `[given] + 30` — compiled by the query compiler into an SQLite
+generated column, so every tool reads the value and nothing can write it.
+Literals take the type they meet (`[price] + 100` on money adds $100.00),
+money stays in minor units (`[price] * 0.9` rounds to the cent), and the
+result type is worked out from the expression unless the designer picks
+one. Date(), Now(), totals, parameters and the field itself are refused
+(the value must not change by itself), and a calculated field is no key,
+required field, default, rule, mask or lookup. A changed expression
+rebuilds the table, recalculating every record; `qb_fields.expression`
+keeps the Access text (a foreign file's own generated SQL is kept as is).
+
+A **Value List** lookup offers fixed choices (`Check`, `Card`, `Cash`) in
+their own order instead of another table's records; typed input takes the
+list's spelling (`card` → `Card`), and **Limit To List** refuses anything
+else — enforced by triggers (`qbv:<table>:<field>:li|lu`) like the rules
+below, so other SQLite writers meet it too, and refused in a plan while
+records hold other values. **Allow Zero Length** (text and hyperlink
+fields, on by default): when off, an empty text is refused by every writer
+(`…:zi|zu`); typing `""` in a cell stores an empty text when it is on.
 
 ## Validation rules and input masks (M80)
 
@@ -175,6 +207,16 @@ is refused, with the count, while records would break the rule. A table
 rename rewrites the saved queries, forms and reports that name it, in the
 same step.
 
+**M86.** The properties add a calculated field's expression and result type,
+a value list with Limit To List, and Allow Zero Length. Table Design ▸
+**Indexes** (`base_indexes.h`) lists the indexes over several fields — each
+field ascending or descending, Unique and Ignore Nulls (records with an
+empty field stay out: a partial index), at most ten fields — made as
+`qbi:<table>:<name>`; a plain one-field index stays the field's Indexed
+property, a foreign file's own index names are kept, and a unique index is
+refused, with the count, while values repeat. The table properties list its
+**table events** (data macros, below) and, for a linked table, its source.
+
 ## Datasheets
 
 A table or query result in QindaTK's `EditableGrid` over a
@@ -189,6 +231,11 @@ names its row and nothing is kept), and a **totals row** (sum, average,
 count, minimum, maximum per column — exact for tables, integer minor units
 for money). Lookup fields show the related record's name and accept it.
 The record bar shows "n of N", the filter state and the field's type.
+**M86**: a hyperlink cell shows its display text and is the host's
+`hyperlinkTarget` — Home ▸ **Edit Hyperlink** edits its text to display,
+address, place in the document and ScreenTip; **Open Hyperlink** opens web,
+e-mail, FTP and file addresses only. A linked table's datasheet is
+read-only and says where its records come from, with Refresh.
 
 **PivotTable** mode summarises the rows with QindaTK's `QueryBuilder` and
 `PivotView` over `QueryController`. QindaTK's query engine sums in double
@@ -252,10 +299,32 @@ statement Access would show — `PARAMETERS`, `TRANSFORM … PIVOT … IN (…)`
 `SELECT … INTO`, `INSERT INTO … SELECT`, `UPDATE … SET`, `DELETE`, `TOP n
 PERCENT`, `[bracketed]` names — and edits made there go back into the grid
 on Design, Run or Save: WHERE and HAVING split into criteria and Or rows,
-ORDER BY onto its columns. What the grid cannot hold (UNION, subqueries,
-joins on several fields, `INSERT … VALUES`, an Or inside an And) is said,
-with **Keep as SQLite SQL** to store the text as a hand-written query. Under
-it, the SQLite statement the query runs as.
+ORDER BY onto its columns. What the grid cannot hold (joins on several
+fields, `INSERT … VALUES`, an Or inside an And) is said, with **Keep as
+SQLite SQL** to store the text as a hand-written query. Under it, the
+SQLite statement the query runs as.
+
+**Union queries** (M86, `base_query_union.cpp`): a kind of their own (Query
+Design ▸ Union Query, or `… UNION [ALL] SELECT …` in the SQL view): select
+parts with the same number of columns, each joined by UNION or UNION ALL,
+sorted only at the end (Access's rule: a part that sorts or takes Top is
+refused). The designer lists the parts; a part opens in the grid like any
+select and goes back as one step. It prints and reads back as Access SQL,
+parameters included. **Subqueries in criteria** — `In (SELECT …)`,
+`Exists (SELECT …)`, `> (SELECT Avg(…) …)` — compile in the grid and the
+SQL view (never in a rule, and they ask for no parameters).
+
+**Query wizards** (M86, `base_query_wizards.h`, Create ▸ Queries): the
+**Simple Query Wizard** (fields from one table or tables joined through
+their relationships; every record or totals — Sum, Avg, Min, Max, a count
+of the records — with dates by day, month, quarter or year), the
+**Crosstab Query Wizard** (up to three row headings, a column heading — a
+date by year, quarter, month or day — a value and its function, the row's
+"Total Of …"), **Find Duplicates** (the repeated values with
+"NumberOfDups", or every record that repeats them with other fields) and
+**Find Unmatched** (the records of one table with no related record in
+another). Each writes an ordinary design, saved under its name as one undo
+step and opened — or opened in the designer.
 
 ## Forms
 
@@ -299,6 +368,28 @@ are Access expressions over the table (`[city] = "Portland" And [amount] >
 100`), compiled with literals converted and quoted. Data changes go through
 saved queries — there is no RunSQL.
 
+**AutoExec** (M86): a macro named AutoExec (any case) runs when a database
+file is opened — not when a new database is made, nor after Save As —
+unless Shift is held as it opens.
+
+**Data macros** (M86, `base_data_macro.h`): Access's table events —
+Before Change, Before Delete, After Insert, After Update, After Delete —
+designed in the macro designer (Table Design ▸ Table events, or the table
+properties), with **SetField**, **RaiseError**, **LogEvent** and
+**StopMacro**, each with an If condition; `[field]` is the record being
+saved (the old record in a delete), `[Old].[field]` the record before an
+update, `IsInsert` tells a new record from an edit. They are SQLite
+triggers (`qbm:<table>:bi|bu|bd|ai|au|ad`), so every writer — the
+datasheet, forms, action queries, imports and other SQLite tools — meets
+them: RaiseError cancels the change with its message, SetField writes the
+record (Before Change) or updates it, LogEvent appends to
+`qb_application_log` (Database Tools ▸ **Application Log** shows it).
+Window actions (OpenForm, MessageBox, …) belong to ordinary macros and are
+refused. Saving a table's data macro is one schema step. Undo and redo
+replay what the macros did without running them again: the replay sets the
+`qb.quiet` row of `qb_meta` (SQLite fires triggers while it applies a
+changeset), and SetField's own update runs under `qb.busy:<table>`.
+
 ## Reports
 
 A report is a table or saved select query printed in groups with totals,
@@ -327,6 +418,27 @@ page per group, the sort order inside them (four keys with the groups) and
 the report's own totals — each change one step of the design's history. The
 report wizard offers two group levels and a sort. A report prints on its
 own paper and orientation from the first page.
+
+**M86: Access's grouping and page control** (`base_report.h`). Group,
+Sort and Total holds **up to ten levels**, each with Access's **Group On**
+— each value, the first 1–10 characters, a date's year, quarter, month,
+week, day, hour or minute, or numeric ranges of a width — ascending or
+descending, its totals (a sum or count may be a **running sum** over the
+group or over all), **Keep Together** (no, the whole group on one page, the
+header with the first record) and its header's and footer's **Force New
+Page** (before, after, both) and Keep Together. The report's own sections
+take a title page, a new page before or after each record, and its totals
+on a page of their own; **running-sum columns** number the records or sum a
+number field over the innermost group or the report. The levels live in
+the report map as `accessGroups` beside QindaTK's `groups` (the levels its
+designer can hold: three, no field twice); when the toolkit's designer
+changes its groups, those win, a level on the same field keeping its
+options. The engine's bands carry the page flags; the window puts them on
+the toolkit's report document — checked against its block walk, unchanged
+when the shape differs — and keeps a whole group on one page by laying the
+pages out with QindaTK's own paginator, moving each group that would cross
+a page and fits on one (`base_report_layout.h`). Preview, print and PDF
+read the same pages.
 
 **Mailing labels** (M80, `base_labels.h`, Create ▸ Labels): the Label
 Wizard takes a table or query, an Avery sheet (5160–8163 on US Letter,
@@ -379,6 +491,26 @@ datasheet's totals row and queries.
   with Access's annotations (`od:jetType`, `od:sqlSType`, required fields,
   AutoNumber, the primary key and indexes) — which Access's External Data ▸
   XML File imports with its structure.
+* **XML import** (M86, `base_xml_import.h`, External Data ▸ Import XML):
+  Access's ExportXML data — QindaBase's own export included — with its
+  schema inline or in the `.xsd` beside it (Access's `od:` annotations and
+  QindaBase's `qb:type` / `qb:expression` give the exact types, keys,
+  indexes and calculated fields) or, without a schema, types read from the
+  values; the chosen tables are one undo step and the dialog shows M65's
+  import report. A name already taken gets a number.
+* **Linked tables** (M86, `base_links.h`, External Data ▸ Link): a table of
+  another `.qbase` (or SQLite) file, a CSV / text file or an Excel sheet
+  (through `calc_io`) shown as a read-only table. QindaBase keeps a copy of
+  the source's records — every query, form and report reads it like any
+  table — guarded by triggers (`qbk:<table>:i|u|d`) against every writer,
+  read again when the database opens (nothing to undo) and on Refresh All
+  Links or the datasheet's Refresh (one undo step; a source whose fields
+  changed redesigns the copy). The source's path is kept relative to the
+  database's folder first, so the two can move together; a source that
+  cannot be read leaves the last copy and the reason. The **Linked Table
+  Manager** refreshes, relinks (a moved file) and converts a link to an
+  ordinary, editable table. Linked tables take no relationships pointing at
+  them, no data macros and no design changes.
 * **Writing `.accdb` is not possible** with open-source tools (mdb-tools
   only reads; Jackcess needs Java): records go to Access as Excel, CSV or
   XML, and come back through the Access import below.
@@ -425,11 +557,13 @@ menu (open, design, export, new form/report, rename, delete — deletes
 say what they take with them and refuse while other records depend on a
 table). The ribbon: File (database: back up, properties, compact) · Home
 (views, clipboard, history, records, sort & filter, find, file field,
-object) · Create (tables, queries, forms, reports and labels, macros)
-· External Data · Database Tools (relationships, SQL, integrity) · View,
-and contextual **Table Design** (with Validation), **Query Design** (six
-query types, Parameters), **Form & Report** (Controls, Group, Sort and
-Total) and **Macro Design** tabs that come forward with their designer. Database Tools ▸
+hyperlink, object) · Create (tables, queries with the four wizards,
+forms, reports and labels, macros) · External Data (import with XML,
+export, link) · Database Tools (relationships, SQL, integrity, the
+application log) · View, and contextual **Table Design** (with Validation,
+Indexes and the table events), **Query Design** (seven query types with
+Union, Parameters), **Form & Report** (Controls, Group, Sort and Total)
+and **Macro Design** tabs that come forward with their designer. Database Tools ▸
 Relationships draws every table on QindaTK's `DiagramCanvas` (dragging a
 key onto a field proposes a relationship; deleting a wire ends one — both
 through the preview). Database Tools ▸ SQL shows QindaTK's
@@ -458,12 +592,22 @@ every call returns a map with `ok` and `error`. Groups: database
 `inputMaskPresets`, `macroActions`, `labelProducts`, `parameterTypes`; the
 `labels` sheet), import (`csvProposal`, `importCsv`,
 `xlsxProposal`, `importXlsx`, `accessTools`, `accessTables`,
-`importAccess(url, tables, queries)` → the import report), export and
+`importAccess(url, tables, queries)` → the import report), M86
+(`queryWizard`, `dataMacroDesign`, `checkDataMacro`, `saveDataMacro`,
+`openApplicationLog`, `hyperlinkParts`, `hyperlinkText`, `reportLevels`,
+`reportWithLevels`, `autoExecMacro`, `xmlTables`, `importXml`,
+`linkChoices`, `linkTable`, `linkedTables`, `linkInfo`, `refreshLink`,
+`refreshAllLinks`, `relinkTable`, `unlinkTable`, `linkRefreshResults`; the
+catalogs `dataMacroEvents`, `dataMacroActions`; the `databaseOpened`
+signal), export and
 maintenance (`exportObject`, `compactAndRepair`, `checkIntegrity`,
 `backupNow`) and file fields (`fileInfo`, `insertFile`, `saveFile`,
 `removeFile`). `base.datasheet` is the `DatasheetModel`; the service's
 `recordsChanged()` tells views showing one record's files to reload.
-Commands are `base…Action` ids (`base_host_actions.cpp`, 71 of them); the
-host announces them as `actionRequested(id)` and `BaseCommands.qml`
-answers. `BaseHost.fileTarget` ({table, rowid, field, hasFile}) names the
-file field the File commands act on.
+Commands are `base…Action` ids (`base_host_actions.cpp`, 71 of them, and
+M86's 18 in `base_host_actions_access.cpp`); the host announces them as
+`actionRequested(id)` and `BaseCommands.qml` answers (M86's in
+`AccessToolsCommands.qml`). `BaseHost.fileTarget` ({table, rowid, field,
+hasFile}) names the file field the File commands act on, and (M86)
+`BaseHost.hyperlinkTarget` ({rowId, field, label, text, editable}) the
+hyperlink cell.

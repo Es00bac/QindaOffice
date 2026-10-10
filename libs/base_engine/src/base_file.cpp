@@ -26,13 +26,17 @@ const char *const kSystemSchema[] = {
     " kind TEXT NOT NULL, name TEXT NOT NULL, definition TEXT NOT NULL, description TEXT,"
     " created TEXT, modified TEXT)",
     "CREATE UNIQUE INDEX IF NOT EXISTS qb_objects_name ON qb_objects(kind, name COLLATE NOCASE)",
-    // M80 (D-089) added validation_rule, validation_text and input_mask; an
-    // older file gets them by ALTER TABLE ADD COLUMN in the first plan that
-    // writes qb_fields (detail::systemColumnStatements). The row with an
-    // empty field_name holds the table's own validation rule.
+    // M80 (D-089) added validation_rule, validation_text and input_mask, M86
+    // (D-094) expression, lookup_values, limit_to_list, allow_zero_length,
+    // data_macros and link_source; an older file gets them by ALTER TABLE
+    // ADD COLUMN in the first plan that writes qb_fields
+    // (detail::systemColumnStatements). The row with an empty field_name
+    // holds the table's own validation rule, data macros and link.
     "CREATE TABLE IF NOT EXISTS qb_fields(table_name TEXT NOT NULL, field_name TEXT NOT NULL, type TEXT,"
     " caption TEXT, description TEXT, lookup_table TEXT, lookup_field TEXT, lookup_display TEXT,"
     " validation_rule TEXT, validation_text TEXT, input_mask TEXT,"
+    " expression TEXT, lookup_values TEXT, limit_to_list INTEGER, allow_zero_length INTEGER,"
+    " data_macros TEXT, link_source TEXT,"
     " PRIMARY KEY(table_name, field_name))",
 };
 

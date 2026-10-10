@@ -204,7 +204,9 @@ bool SqlParser::clauses(int first, QHash<QString, Range> *out)
         if (!end && (depth != 0 || m_t.at(i).kind != Token::Word)) {
             continue;
         }
-        if (!end && (m_t.at(i).is("union") || m_t.at(i).is("exists"))) {
+        // M86: EXISTS (SELECT …) is a subquery the compiler takes; a UNION
+        // reaches here only inside a part (run() splits unions first).
+        if (!end && m_t.at(i).is("union")) {
             return fail(QStringLiteral("%1 is SQL the design grid cannot show; keep this as SQL.").arg(m_t.at(i).text.toUpper()));
         }
         const auto key = std::find_if(std::begin(keys), std::end(keys), [&](const char *k) { return !end && m_t.at(i).is(k); });
@@ -256,7 +258,9 @@ AccessSqlParse SqlParser::run()
     }
     bool ok = false;
     const Token &head = at(m_first);
-    if (head.is("select")) {
+    if (const QList<int> unions = topLevelUnions(); !unions.isEmpty()) {
+        ok = unionStatement(unions); // M86
+    } else if (head.is("select")) {
         ok = selectStatement(m_first);
     } else if (head.is("transform")) {
         ok = crosstabStatement();
