@@ -38,7 +38,7 @@ void PlanHost::insertMenus()
     const QString close = QString::fromLatin1(ActionId::kFileCloseWindow);
     tree->insertInto(QStringLiteral("fileMenu"), close,
                      MenuNode::submenu(QStringLiteral("planImportExportMenu"), tr("&Import and Export"),
-                                       nodes({"planImportMspdiAction", nullptr, "planExportPdfAction",
+                                       nodes({"planImportMspdiAction", "planImportTasksAction", nullptr, "planExportPdfAction",
                                                 "planExportCsvAction", "planExportXlsxAction",
                                                 "planExportMspdiAction", "planExportTimelineAction"})));
     tree->insertInto(QStringLiteral("fileMenu"), close, a("planPageSetupAction"));
@@ -46,15 +46,21 @@ void PlanHost::insertMenus()
 
     const QString before = QStringLiteral("aiMenu");
     QList<MenuNode> task = nodes({"planInsertTaskAction", "planInsertMilestoneAction", "planInsertSummaryAction",
-                                    "planDeleteTaskAction", nullptr, "planIndentAction", "planOutdentAction",
+                                    "planInsertRecurringAction", "planDeleteTaskAction", nullptr, "planIndentAction",
+                                    "planOutdentAction",
                                     "planMoveUpAction", "planMoveDownAction", nullptr, "planLinkAction",
                                     "planUnlinkAction", nullptr});
     task.append(MenuNode::submenu(QStringLiteral("planProgressMenu"), tr("&Progress"),
                                   nodes({"planMark0Action", "planMark25Action", "planMark50Action", "planMark75Action",
                                            "planMark100Action", nullptr, "planMarkOnTrackAction",
                                            "planUpdateTasksAction"})));
+    // M83: Project's task types and effort driving, Split Task.
+    task.append(MenuNode::submenu(QStringLiteral("planTaskTypeMenu"), tr("Task T&ype"),
+                                  nodes({"planTaskTypeFixedUnitsAction", "planTaskTypeFixedDurationAction",
+                                           "planTaskTypeFixedWorkAction", nullptr, "planEffortDrivenAction"})));
     task.append(nodes({nullptr, "planManualScheduleAction", "planAutoScheduleAction", "planRespectLinksAction",
-                         "planInactivateAction", nullptr, "planTaskInfoAction", "planTaskNotesAction",
+                         "planSplitTaskAction", "planRemoveSplitsAction", "planInactivateAction", nullptr,
+                         "planTaskInfoAction", "planRecurringInfoAction", "planTaskNotesAction",
                          "planScrollToTaskAction", nullptr, "planToggleSubtasksAction", "planExpandAllAction"}));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("planTaskMenu"), tr("&Task"), task));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("planResourceMenu"), tr("&Resource"),
@@ -69,10 +75,12 @@ void PlanHost::insertMenus()
                                                               "planClearLevelingSelectedAction",
                                                               "planNextOverallocationAction"})));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("planProjectMenu"), tr("&Project"),
-                                                     nodes({"planProjectInfoAction", "planWorkingTimeAction", nullptr,
+                                                     nodes({"planProjectInfoAction", "planWorkingTimeAction",
+                                                              "planCustomFieldsAction", nullptr,
                                                               "planSetBaselineAction", "planClearBaselineAction",
                                                               nullptr, "planStatusDateAction",
-                                                              "planUpdateProjectAction", "planRecalculateAction"})));
+                                                              "planUpdateProjectAction", "planRescheduleWorkAction",
+                                                              "planRecalculateAction"})));
     tree->insertMenuBefore(before, MenuNode::submenu(QStringLiteral("planReportMenu"), tr("Re&port"),
                                                      nodes({"planReportOverviewAction", "planReportCriticalAction",
                                                               "planReportResourcesAction", "planReportLateAction",
@@ -87,23 +95,23 @@ void PlanHost::insertMenus()
     view.append(MenuNode::submenu(QStringLiteral("planTablesMenu"), tr("T&ables"),
                                   nodes({"planTableEntryAction", "planTableTrackingAction", "planTableVarianceAction",
                                            "planTableCostAction", "planTableScheduleAction", "planTableWorkAction",
-                                           "planTableBaselineAction", "planTableDelayAction"})));
+                                           "planTableBaselineAction", "planTableDelayAction", "planTableCustomAction"})));
     // M79: Project's View ▸ Data ▸ Filter and Sort.
     view.append(MenuNode::submenu(QStringLiteral("planFilterMenu"), tr("&Filter"),
                                   nodes({"planFilterAllAction", nullptr, "planFilterCriticalAction",
                                            "planFilterIncompleteAction", "planFilterCompletedAction",
                                            "planFilterLateAction", "planFilterSlippingAction", "planFilterMilestonesAction",
                                            "planFilterSummaryAction", "planFilterDeadlinesAction", nullptr,
-                                           "planFilterResourceAction", "planFilterDateRangeAction", nullptr,
-                                           "planFilterRelatedSummariesAction"})));
+                                           "planFilterResourceAction", "planFilterDateRangeAction",
+                                           "planFilterCustomAction", nullptr, "planFilterRelatedSummariesAction"})));
     view.append(MenuNode::submenu(QStringLiteral("planSortMenu"), tr("S&ort"),
                                   nodes({"planSortIdAction", "planSortStartAction", "planSortFinishAction",
-                                           "planSortPriorityAction", "planSortCostAction"})));
+                                           "planSortPriorityAction", "planSortCostAction", "planSortCustomAction"})));
     view.append(MenuNode::submenu(QStringLiteral("planTimescaleMenu"), tr("Time&scale"),
                                   nodes({"planTimescaleDaysAction", "planTimescaleWeeksAction",
                                            "planTimescaleMonthsAction", nullptr, "planGoToTodayAction"})));
     view.append(nodes({nullptr, "planShowTimelineAction", "planShowCriticalAction", "planShowSlackAction",
-                         "planShowBaselineAction"}));
+                         "planShowProgressLinesAction", "planShowBaselineAction"}));
     view.append(MenuNode::submenu(QStringLiteral("planBaselineShownMenu"), tr("Baseline &Shown"),
                                   nodes({"planBaselineShown0Action", "planBaselineShown1Action", "planBaselineShown2Action",
                                            "planBaselineShown3Action", "planBaselineShown4Action", "planBaselineShown5Action",
@@ -158,6 +166,7 @@ void PlanHost::syncEnablement()
                       !m_findText.isEmpty());
     model->setEnabled(QString::fromLatin1(ActionId::kEditUndo), m_document->undoStack()->canUndo());
     model->setEnabled(QString::fromLatin1(ActionId::kEditRedo), m_document->undoStack()->canRedo());
+    syncScheduleState(); // M83 (plan_host_schedule.cpp)
 }
 
 void PlanHost::syncChecks()
@@ -197,6 +206,7 @@ void PlanHost::syncChecks()
         entry->setChecked(true);
     }
     action(QStringLiteral("planShowSlackAction"))->setChecked(m_service->showSlack());
+    syncScheduleState(); // M83 (plan_host_schedule.cpp)
 }
 
 } // namespace QindaOffice::Apps::Plan

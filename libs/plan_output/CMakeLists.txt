@@ -12,10 +12,13 @@ add_library(plan_output STATIC
     src/gantt_print_bars.cpp
     src/gantt_print_extras.cpp
     src/gantt_print_p.h
+    src/gantt_print_tracking.cpp
     src/network_print.cpp
     src/network_print.h
     src/plan_page_output.cpp
     src/plan_page_output.h
+    src/plan_import_xlsx.cpp
+    src/plan_import_xlsx.h
     src/plan_xlsx.cpp
     src/plan_xlsx.h
     src/report_print.cpp

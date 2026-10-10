@@ -26,6 +26,17 @@ void putDate(QJsonObject &o, const char *key, Minutes value);            // omit
 
 [[nodiscard]] QJsonObject taskToJson(const Task &task);
 [[nodiscard]] Task taskFromJson(const QJsonObject &o, QStringList *warnings);
+// M83 (D-092): the keys of task types, elapsed durations, splits, recurring
+// tasks, custom fields and a typed actual cost ("type", "effortDriven",
+// "unassignedWork", "durationElapsed", "splits", "recurring", "recurrence",
+// "custom", "actualCost"); defaults are not written.
+void putM83(QJsonObject &o, const Task &task);
+void takeM83(const QJsonObject &o, Task &task);
+[[nodiscard]] QJsonObject recurrenceToJson(const TaskRecurrence &recurrence);
+[[nodiscard]] TaskRecurrence recurrenceFromJson(const QJsonObject &o);
+// M83: the project's custom field definitions ("customFields" in .qplan).
+[[nodiscard]] QJsonArray customFieldsToJson(const QList<CustomFieldDef> &defs);
+[[nodiscard]] QList<CustomFieldDef> customFieldsFromJson(const QJsonValue &value);
 // A task's or an assignment's baselines: [{number, start, finish, duration,
 // work, cost}] for the ones that are set (M79: numbers 0–10).
 [[nodiscard]] QJsonArray baselinesToJson(const std::array<BaselineData, kBaselineCount> &list);

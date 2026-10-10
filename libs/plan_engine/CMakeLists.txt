@@ -6,12 +6,24 @@
 # file format, Microsoft Project XML (MSPDI) and CSV; since M79 (D-088) also
 # Project's filters and sorts and the Network Diagram's layout. Qt Core only: no Gui,
 # no Quick, no desktop archives (AGENTS.md rules 8/9), so every behaviour is
-# testable offscreen.
+# testable offscreen. M83 (D-092): task types and effort driving, custom
+# fields and their formulas, elapsed durations and lags, split and recurring
+# tasks, actual work and cost, progress lines, Reschedule Uncompleted Work,
+# editable recurring calendar exceptions and work weeks, Excel/CSV import.
 # AGENT-GUARD: never add Gui here — painting (print, PDF, timeline PNG)
 # lives in plan_output.
 add_library(plan_engine STATIC
     src/baselines.cpp
     src/baselines.h
+    src/calendar_edit.cpp
+    src/calendar_edit.h
+    src/custom_field_catalog.cpp
+    src/custom_fields.cpp
+    src/custom_fields.h
+    src/custom_formula.cpp
+    src/custom_formula_functions.cpp
+    src/custom_formula_p.h
+    src/custom_formula_parse.cpp
     src/leveling.cpp
     src/leveling.h
     src/mspdi.h
@@ -19,6 +31,8 @@ add_library(plan_engine STATIC
     src/mspdi_assemble.cpp
     src/mspdi_baselines.cpp
     src/mspdi_common.cpp
+    src/mspdi_custom.cpp
+    src/mspdi_custom.h
     src/mspdi_keep.cpp
     src/mspdi_keep.h
     src/mspdi_order.cpp
@@ -27,6 +41,8 @@ add_library(plan_engine STATIC
     src/mspdi_reader_calendar.cpp
     src/mspdi_reader_p.h
     src/mspdi_recurrence.cpp
+    src/mspdi_timephased.cpp
+    src/mspdi_timephased.h
     src/mspdi_writer.cpp
     src/network_layout.cpp
     src/network_layout.h
@@ -35,10 +51,13 @@ add_library(plan_engine STATIC
     src/plan_clipboard.cpp
     src/plan_edit.h
     src/plan_field_edit.cpp
+    src/plan_field_work.cpp
     src/plan_fields.cpp
     src/plan_fields_p.h
     src/plan_file.cpp
     src/plan_file.h
+    src/plan_import.cpp
+    src/plan_import.h
     src/plan_json.cpp
     src/plan_json.h
     src/plan_links.cpp
@@ -54,6 +73,8 @@ add_library(plan_engine STATIC
     src/plan_types.h
     src/plan_views.cpp
     src/plan_views.h
+    src/recurring_tasks.cpp
+    src/recurring_tasks.h
     src/resources.cpp
     src/resources.h
     src/scheduler.cpp
@@ -61,6 +82,13 @@ add_library(plan_engine STATIC
     src/scheduler_p.h
     src/scheduler_graph.cpp
     src/scheduler_rollup.cpp
+    src/scheduler_time.cpp
+    src/task_segments.cpp
+    src/task_segments.h
+    src/task_types.cpp
+    src/task_types.h
+    src/tracking.cpp
+    src/tracking.h
     src/work_calendar.cpp
     src/work_calendar.h
 )

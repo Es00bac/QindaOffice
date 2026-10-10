@@ -6,7 +6,9 @@ import QindaOffice.Plan.App
 // Project Information: title, manager, company, start date, status date,
 // the project calendar, currency and hours per day, and (M79) Project's
 // critical path options — the critical slack limit and multiple critical
-// paths. The finish is the scheduler's and shown read-only. One undo step.
+// paths — and (M83) Project Options' new-task type and effort driving and
+// whether Actual Cost can be typed. The finish is the scheduler's and shown
+// read-only. One undo step.
 Tk.Dialog {
     id: dialog
 
@@ -32,6 +34,9 @@ Tk.Dialog {
         hoursField.text = String(info.hoursPerDay || "")
         slackField.text = String(info.criticalSlackDays || 0)
         multipleSwitch.checked = info.multipleCriticalPaths === true
+        typeBox.currentIndex = Number(info.defaultTaskType || 0)
+        effortSwitch.checked = info.newTasksEffortDriven === true
+        costsSwitch.checked = info.editableActualCosts !== true
         calendarBox.currentIndex = Math.max(0, calendarNames.indexOf(String(info.calendar || "")))
         notesField.text = String(info.notes || "")
         error.visible = false
@@ -45,6 +50,9 @@ Tk.Dialog {
         if (hoursField.text !== String(info.hoursPerDay || "")) fields.hoursPerDay = hoursField.text
         if (slackField.text !== String(info.criticalSlackDays || 0)) fields.criticalSlackDays = slackField.text
         if (multipleSwitch.checked !== (info.multipleCriticalPaths === true)) fields.multipleCriticalPaths = multipleSwitch.checked
+        fields.defaultTaskType = typeBox.currentIndex
+        fields.newTasksEffortDriven = effortSwitch.checked
+        fields.editableActualCosts = !costsSwitch.checked
         const r = plan.setProjectInfo(fields)
         if (!r.ok) {
             error.text = String(r.error || "")
@@ -79,6 +87,17 @@ Tk.Dialog {
                 Tk.TextField { id: slackField; objectName: "projectCriticalSlack"; mono: true }
             }
             Tk.Switch { id: multipleSwitch; objectName: "projectMultipleCriticalPaths"; text: qsTr("Calculate multiple critical paths") }
+            Tk.PropertyRow {
+                label: qsTr("New tasks are")
+                Tk.ComboBox {
+                    id: typeBox
+                    objectName: "projectDefaultTaskType"
+                    small: true
+                    model: [qsTr("Fixed Units"), qsTr("Fixed Duration"), qsTr("Fixed Work")]
+                }
+            }
+            Tk.Switch { id: effortSwitch; objectName: "projectNewTasksEffortDriven"; text: qsTr("New tasks are effort driven") }
+            Tk.Switch { id: costsSwitch; objectName: "projectActualCostsCalculated"; text: qsTr("Actual costs are always calculated") }
         }
         Tk.TextArea { id: notesField; rows: 3; placeholderText: qsTr("Notes about the project") }
     }

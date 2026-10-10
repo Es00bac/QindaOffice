@@ -172,6 +172,7 @@ void PlanHost::createActions()
     on("planPageSetupAction", [this] { emit pageSetupRequested(); });
     on("planGoToTodayAction", [this] { emit goToTodayRequested(); });
     createTrackingActions(); // M79 (plan_host_views.cpp)
+    createScheduleActions(); // M83 (plan_host_schedule.cpp)
     wireEditCommands();
 }
 

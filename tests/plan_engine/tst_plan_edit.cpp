@@ -51,7 +51,9 @@ private slots:
         const EditResult bad = set(p, a, "duration", QStringLiteral("a while"));
         QVERIFY(!bad.ok);
         QVERIFY(bad.error.contains(QStringLiteral("not a duration")));
-        QVERIFY(!set(p, a, "work", QStringLiteral("8h")).ok); // calculated
+        // M83 (D-092): Work is typed now; a task without resources keeps it.
+        QVERIFY(set(p, a, "work", QStringLiteral("8h")).ok);
+        QCOMPARE(p.tasks.at(a).unassignedWork, 8 * 60);
         QVERIFY(set(p, a, "name", QStringLiteral("  Venue walkthrough ")).ok);
         QCOMPARE(p.tasks.at(a).name, QStringLiteral("Venue walkthrough"));
         QVERIFY(set(p, a, "notes", QStringLiteral("Bring the floor plan\nand a tape measure")).ok);

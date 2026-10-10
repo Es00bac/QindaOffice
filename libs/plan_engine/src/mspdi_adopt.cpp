@@ -11,6 +11,7 @@
 // once replayed from the kept list, once from the model — and Project
 // refuses a repeated element in its ordered sequences.
 #include "mspdi.h"
+#include "mspdi_custom.h"
 #include "mspdi_keep.h"
 #include "mspdi_p.h"
 
@@ -161,6 +162,9 @@ int adoptKeptElements(Project &project)
     for (Assignment &a : project.assignments) {
         adopted += adoptBaselines(a.extra, a.baselines, decimals);
     }
+    // M83 (D-092): custom fields, task types, effort driving, recurring
+    // flags and the project's defaults (mspdi_custom.h).
+    adopted += adoptM83Elements(project);
     return adopted;
 }
 

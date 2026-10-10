@@ -47,7 +47,7 @@ struct Gala {
         t.duration = duration;
         t.outlineLevel = level;
         for (int pr : preds) {
-            t.predecessors.append(Link{p.tasks.at(pr).uid, LinkType::FinishToStart, 0, std::nullopt, {}});
+            t.predecessors.append(Link{p.tasks.at(pr).uid, LinkType::FinishToStart, 0, std::nullopt, false, {}});
         }
         p.tasks.append(t);
         return int(p.tasks.size()) - 1;

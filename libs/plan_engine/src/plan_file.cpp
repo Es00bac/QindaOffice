@@ -187,6 +187,16 @@ QJsonObject infoToJson(const ProjectInfo &info)
     if (!info.levelClearFirst) {
         o.insert(QStringLiteral("levelClearFirst"), false);
     }
+    // M83: Project Options' new-task type and effort driving, typed actual costs.
+    if (info.defaultTaskType != TaskType::FixedUnits) {
+        o.insert(QStringLiteral("defaultTaskType"), int(info.defaultTaskType));
+    }
+    if (info.newTasksEffortDriven) {
+        o.insert(QStringLiteral("newTasksEffortDriven"), true);
+    }
+    if (info.editableActualCosts) {
+        o.insert(QStringLiteral("editableActualCosts"), true);
+    }
     return o;
 }
 
@@ -216,10 +226,13 @@ ProjectInfo infoFromJson(const QJsonObject &o)
                                                               : LevelingOrder::Standard;
     info.levelWithinSlack = o.value(QStringLiteral("levelWithinSlack")).toBool();
     info.levelClearFirst = o.value(QStringLiteral("levelClearFirst")).toBool(true);
+    info.defaultTaskType = TaskType(std::clamp(o.value(QStringLiteral("defaultTaskType")).toInt(), 0, 2));
+    info.newTasksEffortDriven = o.value(QStringLiteral("newTasksEffortDriven")).toBool();
+    info.editableActualCosts = o.value(QStringLiteral("editableActualCosts")).toBool();
     info.extra = extraOf(o, {"title", "manager", "company", "notes", "start", "statusDate", "currency", "calendarUid",
                              "minutesPerDay", "minutesPerWeek", "daysPerMonth", "defaultStart", "defaultFinish",
                              "criticalSlackDays", "multipleCriticalPaths", "levelingOrder", "levelWithinSlack",
-                             "levelClearFirst"});
+                             "levelClearFirst", "defaultTaskType", "newTasksEffortDriven", "editableActualCosts"});
     return info;
 }
 
@@ -283,6 +296,12 @@ QByteArray writePlanJson(const Project &project)
         if (a.costInput != 0) {
             o.insert(QStringLiteral("cost"), a.costInput); // M79: a cost resource's amount
         }
+        if (a.workInput >= 0) {
+            o.insert(QStringLiteral("work"), a.workInput); // M83: set by a task-type rule
+        }
+        if (a.workSpan >= 0) {
+            o.insert(QStringLiteral("workSpan"), a.workSpan);
+        }
         const QJsonArray baselines = baselinesToJson(a.baselines);
         if (!baselines.isEmpty()) {
             o.insert(QStringLiteral("baselines"), baselines); // M79
@@ -290,6 +309,9 @@ QByteArray writePlanJson(const Project &project)
         assignments.append(o);
     }
     root.insert(QStringLiteral("assignments"), assignments);
+    if (!project.customFields.isEmpty()) {
+        root.insert(QStringLiteral("customFields"), customFieldsToJson(project.customFields)); // M83
+    }
     root.insert(QStringLiteral("view"), project.view);
     return QJsonDocument(root).toJson(QJsonDocument::Indented);
 }
@@ -369,7 +391,9 @@ LoadResult readPlanJson(const QByteArray &json, Project *out)
         a.units = std::clamp(o.value(QStringLiteral("units")).toInt(100), 1, 1000000);
         baselinesFromJson(o.value(QStringLiteral("baselines")), &a.baselines);
         a.costInput = integer(o, "cost");
-        a.extra = extraOf(o, {"uid", "task", "resource", "units", "baselines", "cost"});
+        a.workInput = o.contains(QStringLiteral("work")) ? std::max<qint64>(0, integer(o, "work")) : kWorkFollowsDuration;
+        a.workSpan = o.contains(QStringLiteral("workSpan")) ? std::max<qint64>(0, integer(o, "workSpan")) : -1;
+        a.extra = extraOf(o, {"uid", "task", "resource", "units", "baselines", "cost", "work", "workSpan"});
         if (p.taskIndex(a.taskUid) < 0 || p.resourceIndex(a.resourceUid) < 0 || p.assignmentIndex(a.taskUid, a.resourceUid) >= 0) {
             result.warnings.append(QStringLiteral("An assignment to a missing task or resource was dropped."));
             continue;
@@ -380,8 +404,10 @@ LoadResult readPlanJson(const QByteArray &json, Project *out)
         seen.insert(a.uid);
         p.assignments.append(a);
     }
+    p.customFields = customFieldsFromJson(root.value(QStringLiteral("customFields"))); // M83
     p.view = root.value(QStringLiteral("view")).toObject();
-    p.extra = extraOf(root, {"format", "version", "project", "calendars", "tasks", "resources", "assignments", "view"});
+    p.extra = extraOf(root, {"format", "version", "project", "calendars", "tasks", "resources", "assignments", "view",
+                             "customFields"});
     if (p.info.start == kNoDate) {
         p.info.start = toMinutes(QDate::currentDate(), p.info.defaultStartMinute);
         result.warnings.append(QStringLiteral("The project had no start date; today is used."));

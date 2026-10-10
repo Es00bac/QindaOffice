@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The task sheet's fields as text (plan_edit.h).
 #include "baselines.h"
+#include "custom_fields.h"
 #include "leveling.h"
 #include "plan_edit.h"
 #include "plan_fields_p.h"
 #include "plan_time.h"
 #include "scheduler.h"
+#include "task_types.h"
 #include "work_calendar.h"
 
 
@@ -32,10 +34,10 @@ constexpr FieldInfo kTaskFields[] = {
     {"successors", "Successors", false},
     {"resources", "Resource Names", true},
     {"percent", "% Complete", true},
-    {"work", "Work", false},
+    {"work", "Work", true}, // M83: typed, Project's task-type rules apply
     {"cost", "Cost", false},
     {"fixedCost", "Fixed Cost", true},
-    {"actualCost", "Actual Cost", false},
+    {"actualCost", "Actual Cost", true}, // M83: when the project lets it be typed
     {"remainingCost", "Remaining Cost", false},
     {"notes", "Notes", true},
     {"constraint", "Constraint Type", true},
@@ -67,13 +69,16 @@ constexpr FieldInfo kTaskFields[] = {
     // Work, Delay and Baseline tables).
     {"actualDuration", "Act. Dur.", true},
     {"remainingDuration", "Rem. Dur.", true},
-    {"actualWork", "Act. Work", false},
+    {"actualWork", "Act. Work", true}, // M83
     {"remainingWork", "Rem. Work", false},
     {"baselineWork", "Baseline Work", false},
     {"workVariance", "Work Var.", false},
     {"levelingDelay", "Leveling Delay", true},
     {"preLeveledStart", "Preleveled Start", false},
     {"preLeveledFinish", "Preleveled Finish", false},
+    // M83 (D-092): Project's task type and effort driving (task_types.h).
+    {"type", "Type", true},
+    {"effortDriven", "Effort Driven", true},
 };
 
 const FieldInfo *taskField(const QString &id)
@@ -120,7 +125,7 @@ QStringList taskFieldIds()
 bool isTaskFieldEditable(const QString &field)
 {
     const FieldInfo *f = taskField(field);
-    return f != nullptr && f->editable;
+    return (f != nullptr && f->editable) || isCustomField(field); // M83: Text1 … Finish10
 }
 
 QString taskFieldTitle(const QString &field)
@@ -161,6 +166,12 @@ QString taskFieldText(const Project &project, int index, const QString &field, c
         if (!t.notes.isEmpty()) {
             flags << QStringLiteral("note");
         }
+        if (!t.splits.isEmpty()) {
+            flags << QStringLiteral("split"); // M83
+        }
+        if (t.recurring) {
+            flags << QStringLiteral("recurring"); // M83
+        }
         return flags.join(QLatin1Char(' '));
     }
     if (field == QLatin1String("mode")) {
@@ -170,7 +181,7 @@ QString taskFieldText(const Project &project, int index, const QString &field, c
         return t.name;
     }
     if (field == QLatin1String("duration")) {
-        return formatDuration(t.duration, t.summary ? DurationUnit::Days : t.durationUnit, fmt, t.estimated, locale);
+        return taskDurationText(t, fmt, locale); // M83: elapsed durations read "2 edays"
     }
     if (field == QLatin1String("start")) {
         return formatDate(t.start, locale);
@@ -200,10 +211,10 @@ QString taskFieldText(const Project &project, int index, const QString &field, c
         return formatMoney(t.fixedCost, cur, locale);
     }
     if (field == QLatin1String("actualCost")) {
-        return formatMoney(divRound(t.cost * t.percentComplete, 100), cur, locale);
+        return formatMoney(actualCostOf(project, t), cur, locale); // M83: typed when allowed
     }
     if (field == QLatin1String("remainingCost")) {
-        return formatMoney(t.cost - divRound(t.cost * t.percentComplete, 100), cur, locale);
+        return formatMoney(t.cost - actualCostOf(project, t), cur, locale);
     }
     if (field == QLatin1String("notes")) {
         return t.notes.section(QLatin1Char('\n'), 0, 0);
@@ -290,12 +301,14 @@ QString trackingFieldText(const Project &project, int index, const QString &fiel
     const Task &t = project.tasks.at(index);
     const DurationFormat fmt = durationFormatOf(project.info);
     const Minutes actual = actualDurationOf(t, project.info.minutesPerDay);
-    const Minutes actualWork = divRound(t.work * t.percentComplete, 100);
+    const Minutes actualWork = actualWorkOf(t, project.info.minutesPerDay); // M83: as typed
+    const bool elapsed = !t.summary && t.durationElapsed;
     if (field == QLatin1String("actualDuration")) {
-        return formatDuration(actual, t.summary ? DurationUnit::Days : t.durationUnit, fmt, false, locale);
+        return formatDuration(actual, t.summary ? DurationUnit::Days : t.durationUnit, fmt, false, locale, elapsed);
     }
     if (field == QLatin1String("remainingDuration")) {
-        return formatDuration(t.duration - actual, t.summary ? DurationUnit::Days : t.durationUnit, fmt, false, locale);
+        return formatDuration(t.duration - actual, t.summary ? DurationUnit::Days : t.durationUnit, fmt, false, locale,
+                              elapsed);
     }
     if (field == QLatin1String("actualWork")) {
         return formatWork(actualWork, locale);
@@ -319,7 +332,7 @@ QString trackingFieldText(const Project &project, int index, const QString &fiel
     if (field == QLatin1String("preLeveledFinish")) {
         return t.preLeveledFinish == kNoDate ? QStringLiteral("NA") : formatDate(t.preLeveledFinish, locale);
     }
-    return {};
+    return workOrCustomFieldText(project, index, field, locale); // M83
 }
 
 QString taskFieldEditText(const Project &project, int index, const QString &field, const QLocale &locale)
@@ -343,6 +356,9 @@ QString taskFieldEditText(const Project &project, int index, const QString &fiel
     }
     if (field == QLatin1String("priority")) {
         return QString::number(t.priority);
+    }
+    if (isCustomField(field)) {
+        return customFieldEditText(project, index, field, locale); // M83
     }
     return taskFieldText(project, index, field, locale);
 }

@@ -25,7 +25,11 @@
 // clipboard), plan_service_views.cpp (Gantt rows, calendar events, usage
 // table), plan_service_display.cpp (M79: filter, sort, Gantt styles, the
 // Network Diagram, Task Usage), plan_service_tracking.cpp (M79: Update
-// Tasks, Mark on Track, leveling options, Level Selection).
+// Tasks, Mark on Track, leveling options, Level Selection),
+// plan_service_fields.cpp (M83: task types, assignments' units and work,
+// custom fields with their filter and sort), plan_service_schedule.cpp
+// (M83: splits, recurring tasks, Reschedule Uncompleted Work, the import,
+// recurring calendar exceptions and work weeks).
 //
 // AGENT-CONTRACT (M79, the rows a view shows): `visibleRows()` is the
 // project's tasks in the sort order (outline kept), without those under a
@@ -107,6 +111,8 @@ class PlanService : public QObject {
     Q_PROPERTY(QString ganttStyle READ ganttStyle WRITE setGanttStyle NOTIFY viewChanged)
     Q_PROPERTY(int ganttBaseline READ ganttBaseline WRITE setGanttBaseline NOTIFY viewChanged)
     Q_PROPERTY(bool showSlack READ showSlack WRITE setShowSlack NOTIFY viewChanged)
+    // M83: Project's progress lines (paper: QindaTK's GanttView draws none).
+    Q_PROPERTY(bool showProgressLines READ showProgressLines WRITE setShowProgressLines NOTIFY viewChanged)
     Q_PROPERTY(QindaTK::ResourcePlanModel *taskUsageModel READ taskUsageModel CONSTANT)
     Q_PROPERTY(QVariantList taskUsageRows READ taskUsageRows NOTIFY changed)
     Q_PROPERTY(QSizeF networkSize READ networkSize NOTIFY changed)
@@ -187,6 +193,8 @@ public:
     void setGanttBaseline(int number); // 0–10
     [[nodiscard]] bool showSlack() const { return m_showSlack; }
     void setShowSlack(bool on);
+    [[nodiscard]] bool showProgressLines() const { return m_showProgressLines; }
+    void setShowProgressLines(bool on);
     [[nodiscard]] QindaTK::ResourcePlanModel *taskUsageModel() const { return m_taskUsage; }
     [[nodiscard]] QVariantList taskUsageRows() const { return m_taskUsageRows; }
     // The Network Diagram's layout of the visible rows (points).
@@ -293,6 +301,56 @@ public:
     Q_INVOKABLE QVariantMap levelSelection();
     Q_INVOKABLE QVariantMap clearLevelingSelected();
 
+    // ---- M83 (D-092): task types and custom fields (plan_service_fields.cpp) ----
+    // "units" | "duration" | "work" on the selection; effort driving likewise.
+    Q_INVOKABLE QVariantMap setSelectedTaskType(const QString &type);
+    Q_INVOKABLE QVariantMap setSelectedEffortDriven(bool on);
+    // The task's assignments: [{resourceUid, name, kind ("work"|"material"|
+    // "cost"), units, work, cost}] as text; field "units" | "work" typed.
+    Q_INVOKABLE QVariantList assignmentDetails(const QString &taskId) const;
+    Q_INVOKABLE QVariantMap setAssignmentField(const QString &taskId, int resourceUid, const QString &field,
+                                               const QString &text);
+    // Project ▸ Custom Fields: [{field, title, alias, lookup, formula, used}]
+    // of one kind ("Text", "Number", …); a definition {field, kind, alias,
+    // lookup: [{value, description}] (as typed), restrict, formula} saved as
+    // one step; the fields in use [{field, title}]; a task's custom values
+    // [{field, title, value, editable}].
+    Q_INVOKABLE QVariantList customFields(const QString &kind) const;
+    Q_INVOKABLE QVariantMap customFieldDefinition(const QString &field) const;
+    Q_INVOKABLE QVariantMap saveCustomField(const QString &field, const QVariantMap &definition);
+    Q_INVOKABLE QVariantList usedCustomFields() const;
+    Q_INVOKABLE QVariantList taskCustomValues(const QString &taskId) const;
+    // View ▸ Filter ▸ Custom Field… (test: plan_views.h) and Sort ▸ by
+    // Custom Field…; both view state.
+    Q_INVOKABLE QVariantMap applyCustomFilter(const QString &field, const QString &test, const QString &value);
+    Q_INVOKABLE QVariantMap setCustomSort(const QString &field, bool descending);
+
+    // ---- M83: schedule tools (plan_service_schedule.cpp) ----
+    // Split Task: the current task stops at `stop`, resumes at `resume`.
+    Q_INVOKABLE QVariantMap splitCurrentTask(const QString &stop, const QString &resume);
+    Q_INVOKABLE QVariantMap removeSplitsSelected();
+    Q_INVOKABLE QVariantMap rescheduleUncompletedWork(const QString &after);
+    // Recurring tasks: the pattern of a recurring summary as fields ({} for
+    // a new one), and Insert (taskId empty) or Recurring Task Information.
+    // Fields: name, duration, frequency ("daily"|"weekly"|"monthly"|
+    // "yearly"), every, workdays, days (Mon-first bit mask), byPosition,
+    // day, position, weekday, month, from, to, count, startTime.
+    Q_INVOKABLE QVariantMap recurringTaskFields(const QString &taskId) const;
+    Q_INVOKABLE QVariantMap saveRecurringTask(const QString &taskId, const QVariantMap &fields);
+    // Import Tasks: a preview {headers, rows, mapping, fields: [{id, title}]}
+    // of an .xlsx or .csv, then the import with the chosen mapping (one step).
+    Q_INVOKABLE QVariantMap importPreview(const QUrl &url, bool firstRowHeaders = true);
+    Q_INVOKABLE QVariantMap importTasks(const QUrl &url, const QStringList &mapping, bool firstRowHeaders);
+    // Change Working Time: a calendar's recurring exceptions and work weeks
+    // as fields (same keys as the recurring task's pattern, plus hours) and
+    // their edits; index -1 adds.
+    Q_INVOKABLE QVariantList recurringExceptions(int calendarUid) const;
+    Q_INVOKABLE QVariantMap saveRecurringException(int calendarUid, int index, const QVariantMap &fields);
+    Q_INVOKABLE QVariantMap deleteRecurringException(int calendarUid, int index);
+    Q_INVOKABLE QVariantList workWeeks(int calendarUid) const;
+    Q_INVOKABLE QVariantMap saveWorkWeek(int calendarUid, int index, const QVariantMap &fields);
+    Q_INVOKABLE QVariantMap deleteWorkWeek(int calendarUid, int index);
+
     // The Gantt rows for a project (the committed one or a moved preview
     // copy; plan_service_views.cpp). Same order and ids for both.
     [[nodiscard]] QVariantList ganttRows(const Engine::Project &project) const;
@@ -379,6 +437,7 @@ private:
     QString m_ganttStyle = QStringLiteral("gantt");
     int m_ganttBaseline = 0;
     bool m_showSlack = false;
+    bool m_showProgressLines = false; // M83
     QList<int> m_filtered; // filter only (the Calendar view)
     QindaTK::ResourcePlanModel *m_taskUsage = nullptr;
     QVariantList m_taskUsageRows;

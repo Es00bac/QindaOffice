@@ -205,7 +205,7 @@ DurationCode durationCode(int code)
     return out;
 }
 
-int durationFormat(DurationUnit unit, bool estimated)
+int durationFormat(DurationUnit unit, bool estimated, bool elapsed)
 {
     int code = 7;
     switch (unit) {
@@ -225,6 +225,7 @@ int durationFormat(DurationUnit unit, bool estimated)
         code = 11;
         break;
     }
+    code += elapsed ? 1 : 0; // M83: the elapsed variant follows each unit (4, 6, 8, 10, 12)
     return estimated ? code + 32 : code;
 }
 

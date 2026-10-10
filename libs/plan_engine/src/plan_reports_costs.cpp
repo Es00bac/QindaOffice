@@ -4,6 +4,7 @@
 // planned, done and left — with the baseline and its variance once one is
 // set. Actuals follow each task's % complete (QindaPlan spreads work and
 // cost evenly over a task's duration); a summary adds up its subtasks'.
+#include "plan_fields_p.h"
 #include "plan_reports_p.h"
 
 #include "baselines.h"
@@ -41,7 +42,8 @@ void actualsOf(const Project &project, int index, qint64 *cost, Minutes *work)
         if (!t.effectiveActive) {
             continue;
         }
-        *cost += share(t.summary ? t.fixedCost : t.cost, t.percentComplete);
+        // M83: a typed Actual Cost counts as typed (plan_fields_p.h).
+        *cost += t.summary ? share(t.fixedCost, t.percentComplete) : actualCostOf(project, t);
         *work += t.summary ? 0 : share(t.work, t.percentComplete);
     }
 }

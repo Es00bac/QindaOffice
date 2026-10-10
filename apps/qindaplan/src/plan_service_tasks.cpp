@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // PlanService: task edits (plan_service.h). Every call is one undo step.
+#include "custom_fields.h"
 #include "outline.h"
 #include "plan_document.h"
 #include "plan_edit.h"
@@ -20,8 +21,11 @@ QString errorOf(const Engine::EditResult &r)
 // (the mode first, so dates typed for a manual task stay manual).
 const QStringList &dialogFields()
 {
+    // M83: the type and effort driving before the duration (they decide
+    // what a new duration changes).
     static const QStringList fields{
-        QStringLiteral("mode"),       QStringLiteral("name"),           QStringLiteral("duration"),
+        QStringLiteral("mode"),       QStringLiteral("type"),           QStringLiteral("effortDriven"),
+        QStringLiteral("name"),       QStringLiteral("duration"),
         QStringLiteral("constraint"), QStringLiteral("constraintDate"), QStringLiteral("start"),
         QStringLiteral("finish"),     QStringLiteral("percent"),        QStringLiteral("actualStart"),
         QStringLiteral("actualFinish"), QStringLiteral("predecessors"), QStringLiteral("resources"),
@@ -114,6 +118,15 @@ QVariantMap PlanService::saveTaskInfo(const QString &taskId, const QVariantMap &
             // Later fields read the effect of earlier ones (a new duration
             // moves the finish the dialog still shows as it was).
             Engine::schedule(p);
+        }
+        // M83: the Custom Fields page sends the fields it changed.
+        for (auto it = fields.cbegin(); it != fields.cend(); ++it) {
+            if (Engine::isCustomField(it.key())) {
+                const Engine::EditResult r = Engine::setTaskField(p, row, it.key(), it.value().toString(), locale);
+                if (!r.ok) {
+                    return r.error;
+                }
+            }
         }
         return QString();
     });

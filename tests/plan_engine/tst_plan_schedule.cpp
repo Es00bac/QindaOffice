@@ -241,7 +241,7 @@ private slots:
         b.link(bb, a);
         b.link(a, bb);
         b.link(c, bb);
-        b.p.tasks[c].predecessors.append(Link{4242, LinkType::FinishToStart, 0, std::nullopt, {}});
+        b.p.tasks[c].predecessors.append(Link{4242, LinkType::FinishToStart, 0, std::nullopt, false, {}});
         const Project &p = b.run();
         QVERIFY(p.issues.size() >= 3);
         QVERIFY(b.t(a).warning.contains(QStringLiteral("circular")));

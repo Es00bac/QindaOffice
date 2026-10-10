@@ -75,6 +75,12 @@ void paintLegend(QPainter *painter, const Geometry &g);
 // The lower lane of a row: the chosen baseline ("gantt", "tracking") or the
 // pre-leveled dates ("leveling"); false when the task has none.
 bool lowerBar(const Geometry &g, const Task &t, Minutes *start, Minutes *finish);
+// gantt_print_tracking.cpp (M83): a split task's gaps over its bar, the
+// progress line at the status date, and whether any printed task is split
+// (the legend lists it then).
+void paintSplitGaps(QPainter *painter, const Geometry &g, int h, int index, const QRectF &bar);
+void paintProgressLine(QPainter *painter, const Geometry &g, int h, int firstRow, int lastRow);
+[[nodiscard]] bool anySplit(const Geometry &g);
 // Shared drawing bits.
 QPolygonF diamond(qreal cx, qreal cy, qreal half);
 void arrowHead(QPainter *painter, QPointF tip, bool pointingRight, const QColor &color);

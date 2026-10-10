@@ -216,11 +216,6 @@ Minutes SchedulePass::lagOf(const LinkRef &ref) const
     return link.lag;
 }
 
-Minutes SchedulePass::lagAdd(Minutes at, Minutes lag) const
-{
-    return lag == 0 ? at : m_projectCal.add(at, lag);
-}
-
 void SchedulePass::forward(const QList<int> &order)
 {
     QList<Task> &tasks = m_project.tasks;
@@ -252,26 +247,24 @@ void SchedulePass::forward(const QList<int> &order)
         if (t.parentIndex >= 0) {
             floor = std::max(floor, m_entryFloor.at(t.parentIndex));
         }
-        const WorkCalendar &c = cal(i);
         const Minutes d = t.summary ? 0 : t.duration;
         for (const LinkRef &ref : m_incoming.at(i)) {
             const Task &p = tasks.at(ref.predecessor);
-            const Minutes lag = lagOf(ref);
             Minutes req = 0;
             switch (t.predecessors.at(ref.link).type) {
             case LinkType::FinishToStart:
-                req = lagAdd(p.earlyFinish, lag);
+                req = lagged(ref, p.earlyFinish);
                 break;
             case LinkType::StartToStart:
-                req = lagAdd(p.earlyStart, lag);
+                req = lagged(ref, p.earlyStart);
                 break;
             case LinkType::FinishToFinish:
-                req = lagAdd(p.earlyFinish, lag);
-                req = d > 0 ? c.subtract(req, d) : req;
+                req = lagged(ref, p.earlyFinish);
+                req = d > 0 ? before(i, req, length(i)) : req;
                 break;
             case LinkType::StartToFinish:
-                req = lagAdd(p.earlyStart, lag);
-                req = d > 0 ? c.subtract(req, d) : req;
+                req = lagged(ref, p.earlyStart);
+                req = d > 0 ? before(i, req, length(i)) : req;
                 break;
             }
             floor = std::max(floor, req);
@@ -292,6 +285,7 @@ void SchedulePass::forwardLeaf(int i, Minutes floor)
     Task &t = m_project.tasks[i];
     const WorkCalendar &c = cal(i);
     const Minutes d = t.duration;
+    const Minutes len = length(i); // M83: with its split gaps, elapsed or working
     Minutes es = floor;
     bool conflict = false;
     if (t.manual) {
@@ -300,7 +294,7 @@ void SchedulePass::forwardLeaf(int i, Minutes floor)
         }
     } else if (t.constraintDate != kNoDate) {
         const Minutes date = t.constraintDate;
-        const Minutes startForFinish = d > 0 ? c.subtract(date, d) : date;
+        const Minutes startForFinish = d > 0 ? before(i, date, len) : date;
         switch (t.constraint) {
         case ConstraintType::AsSoonAsPossible:
         case ConstraintType::AsLateAsPossible:
@@ -333,7 +327,7 @@ void SchedulePass::forwardLeaf(int i, Minutes floor)
             break;
         }
     }
-    t.unleveledStart = d > 0 ? c.snapForward(es) : es;
+    t.unleveledStart = d > 0 ? snap(i, es) : es;
     // M79: Project's Leveling Delay holds the task back from this early
     // start (elapsed or working time, leveling.h). A hard constraint pins the
     // task, so it is never delayed (leveling refuses such tasks too).
@@ -346,20 +340,20 @@ void SchedulePass::forwardLeaf(int i, Minutes floor)
         es = std::max(es, t.levelingFloor); // legacy floor (plan_types.h)
     }
     if (d > 0) {
-        es = c.snapForward(es);
+        es = snap(i, es);
     }
-    Minutes ef = d > 0 ? c.add(es, d) : es;
+    Minutes ef = d > 0 ? after(i, es, len) : es;
     if (t.manual && t.manualFinish != kNoDate) {
         ef = std::max(es, t.manualFinish);
     }
     if (t.actualStart != kNoDate) {
         es = t.actualStart;
-        ef = d > 0 ? c.add(es, d) : es;
+        ef = d > 0 ? after(i, es, len) : es;
     }
     if (t.actualFinish != kNoDate) {
         ef = std::max(t.actualFinish, t.actualStart != kNoDate ? t.actualStart : kNoDate);
         if (t.actualStart == kNoDate) {
-            es = d > 0 ? c.subtract(ef, d) : ef;
+            es = d > 0 ? before(i, ef, len) : ef;
         }
     }
     t.earlyStart = es;
@@ -388,21 +382,23 @@ void SchedulePass::backward(const QList<int> &order)
     const auto backRequirement = [&](const LinkRef &ref) {
         const Task &p = tasks.at(ref.predecessor);
         const Task &s = tasks.at(ref.successor);
-        const Minutes lag = lagOf(ref);
-        const auto lagSub = [&](Minutes x) { return lag == 0 ? x : m_projectCal.add(x, -lag); };
+        const auto lagSub = [&](Minutes x) { return lagged(ref, x, true); };
         const Minutes sLS = s.summary ? m_entryLateStart.at(ref.successor) : s.lateStart;
         const Minutes sLF = s.summary ? m_exitCeiling.at(ref.successor) : s.lateFinish;
-        const WorkCalendar &c = p.summary ? m_projectCal : cal(ref.predecessor);
         const Minutes d = p.duration;
+        // A summary's span is on the project calendar; a leaf's on its own (M83).
+        const auto plus = [&](Minutes x) {
+            return d <= 0 ? x : p.summary ? m_projectCal.add(x, d) : after(ref.predecessor, x, length(ref.predecessor));
+        };
         switch (s.predecessors.at(ref.link).type) {
         case LinkType::FinishToStart:
             return lagSub(sLS);
         case LinkType::StartToStart:
-            return d > 0 ? c.add(lagSub(sLS), d) : lagSub(sLS);
+            return plus(lagSub(sLS));
         case LinkType::FinishToFinish:
             return lagSub(sLF);
         case LinkType::StartToFinish:
-            return d > 0 ? c.add(lagSub(sLF), d) : lagSub(sLF);
+            return plus(lagSub(sLF));
         }
         return lagSub(sLS);
     };
@@ -466,7 +462,7 @@ void SchedulePass::backwardLeaf(int i, Minutes ceiling)
             lf = std::min(lf, t.constraintDate);
             break;
         case ConstraintType::StartNoLaterThan:
-            lf = std::min(lf, d > 0 ? c.add(t.constraintDate, d) : t.constraintDate);
+            lf = std::min(lf, d > 0 ? after(i, t.constraintDate, length(i)) : t.constraintDate);
             break;
         case ConstraintType::MustStartOn:
         case ConstraintType::MustFinishOn:
@@ -476,11 +472,11 @@ void SchedulePass::backwardLeaf(int i, Minutes ceiling)
             break;
         }
     }
-    if (d > 0 && !complete) {
+    if (d > 0 && !complete && !t.durationElapsed) {
         lf = c.snapBackward(lf);
     }
     t.lateFinish = lf;
-    t.lateStart = d > 0 ? c.subtract(lf, d) : lf;
+    t.lateStart = d > 0 ? before(i, lf, length(i)) : lf;
     if (complete) {
         t.lateStart = t.earlyStart;
     }

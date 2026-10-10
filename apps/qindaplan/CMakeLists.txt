@@ -35,6 +35,17 @@ set(qindaplan_qml
     qml/TaskUsageView.qml
     qml/UpdateTasksDialog.qml
     qml/FilterDialog.qml
+    # M83 (D-092): custom fields, recurring tasks and calendar recurrences,
+    # Split Task, the Excel/CSV import, Task Information's new pages.
+    qml/CustomFieldsDialog.qml
+    qml/ImportTasksDialog.qml
+    qml/RecurrencePatternEditor.qml
+    qml/RecurringTaskDialog.qml
+    qml/SplitTaskDialog.qml
+    qml/TaskInfoAssignments.qml
+    qml/TaskInfoCustom.qml
+    qml/WorkingTimeRecurring.qml
+    qml/WorkingTimeWeeks.qml
 )
 foreach(qml_file IN LISTS qindaplan_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -51,19 +62,23 @@ qt_add_qml_module(qindaplan_app
     DEPENDENCIES QtQuick QindaTK QindaOffice.Shell
     SOURCES
         src/plan_command_table.h
+        src/plan_calendar_text.h
         src/plan_document.cpp src/plan_document.h
         src/plan_gantt_adapter.cpp src/plan_gantt_adapter.h
         src/plan_host.cpp src/plan_host.h
         src/plan_host_actions.cpp
         src/plan_host_menus.cpp
+        src/plan_host_schedule.cpp
         src/plan_host_views.cpp
         src/plan_network_item.cpp src/plan_network_item.h
         src/plan_service.cpp src/plan_service.h
         src/plan_service_columns.cpp
         src/plan_service_display.cpp
+        src/plan_service_fields.cpp
         src/plan_service_output.cpp
         src/plan_service_project.cpp
         src/plan_service_resources.cpp
+        src/plan_service_schedule.cpp
         src/plan_service_tasks.cpp
         src/plan_service_tracking.cpp
         src/plan_service_views.cpp

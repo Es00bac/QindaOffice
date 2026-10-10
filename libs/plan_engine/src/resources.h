@@ -5,9 +5,12 @@
 // per day, against what its calendar and maximum units allow.
 //
 // AGENT-CONTRACT (overallocation): a work resource is overallocated on a
-// day when the sum over its assignments of (the task's working minutes that
-// day × units) exceeds (the resource calendar's working minutes that day ×
-// max units). Day granularity is Project's "Day by Day" leveling basis; a
+// day when the sum over its assignments of their work that day exceeds (the
+// resource calendar's working minutes that day × max units). M83: an
+// assignment's work is spread evenly over its span — the task's working
+// segments, split gaps left out, wall-clock for an elapsed duration
+// (task_types.h, task_segments.h); before M83 it was the task's working
+// minutes × units, which is the same for an assignment nothing retyped. Day granularity is Project's "Day by Day" leveling basis; a
 // resource double-booked for one hour of one day counts. Material
 // resources are never overallocated.
 

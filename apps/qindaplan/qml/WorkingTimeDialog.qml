@@ -8,9 +8,10 @@ import QindaOffice.Plan.App
 // own), set each weekday's hours ("08:00–12:00, 13:00–17:00",
 // "Nonworking", or "default" to inherit from the base calendar) and keep
 // the list of exceptions — holidays and odd working days. Every change is
-// applied at once as its own undo step and the schedule follows. M79:
-// Project's recurring exceptions and alternative work weeks from its XML
-// are listed (and scheduled) but not edited here.
+// applied at once as its own undo step and the schedule follows. M79 read
+// and scheduled Project's recurring exceptions and alternative work weeks;
+// M83 (D-092) makes, changes and removes them here too
+// (WorkingTimeRecurring.qml, WorkingTimeWeeks.qml).
 Tk.Dialog {
     id: dialog
 
@@ -22,14 +23,17 @@ Tk.Dialog {
 
     objectName: "workingTimeDialog"
     title: qsTr("Change Working Time")
-    dialogWidth: Tk.Theme.size.dialogWidth * 1.6
+    dialogWidth: Tk.Theme.size.dialogWidth * 1.7
     primaryText: qsTr("Done")
     secondaryText: ""
 
     function refresh() {
         calendarList = plan.calendars()
         week = plan.calendarWeek(calendarUid)
-        exceptions = plan.calendarExceptions(calendarUid)
+        // The dated exceptions here; recurring ones and work weeks below.
+        exceptions = plan.calendarExceptions(calendarUid).filter(function(e) { return e.readOnly !== true })
+        recurring.refresh()
+        workWeeks.refresh()
     }
     function openFor(uid) {
         calendarUid = uid
@@ -126,6 +130,18 @@ Tk.Dialog {
                     if (!error.visible) { exName.text = ""; exFrom.text = ""; exTo.text = ""; exHours.text = "" }
                 }
             }
+        }
+        WorkingTimeRecurring {
+            id: recurring
+            plan: dialog.plan
+            calendarUid: dialog.calendarUid
+            onReport: function(r) { dialog.report(r) }
+        }
+        WorkingTimeWeeks {
+            id: workWeeks
+            plan: dialog.plan
+            calendarUid: dialog.calendarUid
+            onReport: function(r) { dialog.report(r) }
         }
     }
 }

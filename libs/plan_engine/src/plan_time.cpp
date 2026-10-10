@@ -160,7 +160,7 @@ DurationFormat durationFormatOf(const ProjectInfo &info)
     return {info.minutesPerDay, info.minutesPerWeek, info.daysPerMonth};
 }
 
-Minutes minutesPerUnit(DurationUnit unit, const DurationFormat &format)
+Minutes minutesPerUnit(DurationUnit unit, const DurationFormat &format, bool elapsed)
 {
     switch (unit) {
     case DurationUnit::Minutes:
@@ -168,11 +168,11 @@ Minutes minutesPerUnit(DurationUnit unit, const DurationFormat &format)
     case DurationUnit::Hours:
         return 60;
     case DurationUnit::Days:
-        return format.minutesPerDay;
+        return elapsed ? 1440 : format.minutesPerDay;
     case DurationUnit::Weeks:
-        return format.minutesPerWeek;
+        return elapsed ? 10080 : format.minutesPerWeek;
     case DurationUnit::Months:
-        return Minutes(format.minutesPerDay) * format.daysPerMonth;
+        return elapsed ? 43200 : Minutes(format.minutesPerDay) * format.daysPerMonth;
     }
     return format.minutesPerDay;
 }
@@ -195,7 +195,14 @@ std::optional<ParsedDuration> parseDuration(const QString &text, const DurationF
     if (!ok) {
         return std::nullopt;
     }
-    const QString u = m.captured(3).toLower();
+    QString u = m.captured(3).toLower();
+    // M83: Project's elapsed units are the working ones with an "e" in
+    // front ("ed", "edays", "eh", "ewk", "emon"); "em" is elapsed minutes.
+    bool elapsed = false;
+    if (u.size() > 1 && u.startsWith(QLatin1Char('e'))) {
+        elapsed = true;
+        u = u.mid(1);
+    }
     DurationUnit unit = DurationUnit::Days;
     if (u.isEmpty() || u == QLatin1String("d") || u == QLatin1String("day") || u == QLatin1String("days")
         || u == QLatin1String("dy") || u == QLatin1String("dys")) {
@@ -215,7 +222,7 @@ std::optional<ParsedDuration> parseDuration(const QString &text, const DurationF
     } else {
         return std::nullopt;
     }
-    const double minutes = value * double(minutesPerUnit(unit, format));
+    const double minutes = value * double(minutesPerUnit(unit, format, elapsed));
     if (minutes > 1e12) {
         return std::nullopt;
     }
@@ -223,6 +230,7 @@ std::optional<ParsedDuration> parseDuration(const QString &text, const DurationF
     out.minutes = Minutes(std::llround(minutes)) * (negative ? -1 : 1);
     out.unit = unit;
     out.estimated = !m.captured(4).isEmpty();
+    out.elapsed = elapsed;
     return out;
 }
 
@@ -262,11 +270,20 @@ QString unitWord(DurationUnit unit, bool one)
 } // namespace
 
 QString formatDuration(Minutes minutes, DurationUnit unit, const DurationFormat &format, bool estimated,
-                       const QLocale &locale)
+                       const QLocale &locale, bool elapsed)
 {
-    const double value = double(minutes) / double(minutesPerUnit(unit, format));
+    const double value = double(minutes) / double(minutesPerUnit(unit, format, elapsed));
     const bool one = std::abs(value - 1.0) < 1e-9 || std::abs(value + 1.0) < 1e-9;
-    return number(value, locale) + QLatin1Char(' ') + unitWord(unit, one) + (estimated ? QStringLiteral("?") : QString());
+    return number(value, locale) + QLatin1Char(' ') + (elapsed ? QStringLiteral("e") : QString()) + unitWord(unit, one)
+        + (estimated ? QStringLiteral("?") : QString());
+}
+
+QString taskDurationText(const Task &task, const DurationFormat &format, const QLocale &locale)
+{
+    if (task.summary) {
+        return formatDuration(task.duration, DurationUnit::Days, format, task.estimated, locale);
+    }
+    return formatDuration(task.duration, task.durationUnit, format, task.estimated, locale, task.durationElapsed);
 }
 
 QString formatSpan(Minutes minutes, const DurationFormat &format, const QLocale &locale)
@@ -294,8 +311,11 @@ QString formatLag(const Link &link, const DurationFormat &format, const QLocale 
     if (link.lag == 0) {
         return {};
     }
-    const DurationUnit unit = link.lag % format.minutesPerDay == 0 ? DurationUnit::Days : DurationUnit::Hours;
-    return (link.lag > 0 ? QStringLiteral("+") : QString()) + formatDuration(link.lag, unit, format, false, locale);
+    // M83: an elapsed lag reads in elapsed days or hours ("+2 edays").
+    const Minutes day = link.lagElapsed ? 1440 : format.minutesPerDay;
+    const DurationUnit unit = link.lag % day == 0 ? DurationUnit::Days : DurationUnit::Hours;
+    return (link.lag > 0 ? QStringLiteral("+") : QString())
+        + formatDuration(link.lag, unit, format, false, locale, link.lagElapsed);
 }
 
 int currencyDecimals(const QString &currency)

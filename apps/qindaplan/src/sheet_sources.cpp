@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "sheet_sources.h"
 
+#include "custom_fields.h"
 #include "plan_edit.h"
 #include "plan_service.h"
 
@@ -40,6 +41,10 @@ QVariantMap indicatorStyle(const Engine::Task &t)
         style.insert(QStringLiteral("iconTone"), QStringLiteral("positive"));
     } else if (t.constraint != Engine::ConstraintType::AsSoonAsPossible) {
         style.insert(QStringLiteral("icon"), QStringLiteral("calendar-clock"));
+    } else if (t.recurring) {
+        style.insert(QStringLiteral("icon"), QStringLiteral("repeat")); // M83: a recurring task
+    } else if (!t.splits.isEmpty()) {
+        style.insert(QStringLiteral("icon"), QStringLiteral("scissors")); // M83: a split task
     } else if (!t.notes.isEmpty()) {
         style.insert(QStringLiteral("icon"), QStringLiteral("sticky-note"));
     }
@@ -119,7 +124,12 @@ QVariantMap TaskSheetSource::cellStyle(const QString &rowId, const QString &colu
                                      QStringLiteral("remainingCost"), QStringLiteral("startVariance"),
                                      QStringLiteral("finishVariance"), QStringLiteral("durationVariance"),
                                      QStringLiteral("baselineDuration")};
-    if (numeric.contains(columnId)) {
+    // M83: Number, Cost and Duration custom fields line up as numbers.
+    const std::optional<Engine::CustomFieldInfo> custom = Engine::customFieldInfo(columnId);
+    const bool customNumber = Engine::isCustomField(columnId) && custom
+        && (custom->kind == Engine::CustomFieldKind::Number || custom->kind == Engine::CustomFieldKind::Cost
+            || custom->kind == Engine::CustomFieldKind::Duration);
+    if (numeric.contains(columnId) || customNumber) {
         style.insert(QStringLiteral("horizontalAlignment"), QStringLiteral("right"));
     }
     return style;

@@ -5,8 +5,11 @@
 # real window — views, ribbon gate, fixtures, grabs (tst_qindaplan_ui).
 # M79 (D-088): Project's scheduling, tracking and views through the host
 # (tst_qindaplan_tracking) and the real window (tst_qindaplan_views).
+# M83 (D-092): task types, custom fields, splits, recurring tasks, the import
+# and calendar recurrences through the host (tst_qindaplan_m83) and the real
+# window (tst_qindaplan_m83_ui).
 foreach(name IN ITEMS tst_qindaplan_service tst_qindaplan_menu_export tst_qindaplan_ui
-                      tst_qindaplan_tracking tst_qindaplan_views)
+                      tst_qindaplan_tracking tst_qindaplan_views tst_qindaplan_m83 tst_qindaplan_m83_ui)
     add_executable(${name} ${name}.cpp plan_app_test_support.h)
     target_link_libraries(${name} PRIVATE qindaplan_app qindaplan_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)

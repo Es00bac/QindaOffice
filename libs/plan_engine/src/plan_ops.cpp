@@ -4,6 +4,7 @@
 #include "plan_edit.h"
 #include "plan_time.h"
 #include "scheduler.h"
+#include "task_types.h"
 #include "work_calendar.h"
 
 #include <QSet>
@@ -53,6 +54,9 @@ int addTask(Project &project, int at, NewTaskKind kind, const QString &name)
     t.duration = kind == NewTaskKind::Milestone ? 0 : project.info.minutesPerDay;
     t.estimated = kind == NewTaskKind::Task;
     t.milestone = kind == NewTaskKind::Milestone;
+    // M83: Project Options' default task type and effort driving.
+    t.type = project.info.defaultTaskType;
+    t.effortDriven = project.info.newTasksEffortDriven || t.type == TaskType::FixedWork;
     const int index = insertTask(project, at, t);
     if (kind == NewTaskKind::Summary) {
         Task child;
@@ -275,19 +279,13 @@ EditResult assignResource(Project &project, int taskIndex, int resourceUid, int 
     if (units <= 0 || units > 1000000) {
         return EditResult::fail(QStringLiteral("Units must be more than zero."));
     }
-    const int taskUid = project.tasks.at(taskIndex).uid;
-    const int existing = project.assignmentIndex(taskUid, resourceUid);
+    // M83: Project's task types decide what new units or a new resource
+    // change (task_types.h).
+    const int existing = project.assignmentIndex(project.tasks.at(taskIndex).uid, resourceUid);
     if (existing >= 0) {
-        project.assignments[existing].units = units;
-        return {};
+        return setAssignmentUnits(project, existing, units);
     }
-    Assignment a;
-    a.uid = project.nextAssignmentUid();
-    a.taskUid = taskUid;
-    a.resourceUid = resourceUid;
-    a.units = units;
-    project.assignments.append(a);
-    return {};
+    return changeAssignments(project, taskIndex, {{resourceUid, units}}, {});
 }
 
 EditResult unassignResource(Project &project, int taskIndex, int resourceUid)
@@ -295,12 +293,10 @@ EditResult unassignResource(Project &project, int taskIndex, int resourceUid)
     if (taskIndex < 0 || taskIndex >= project.tasks.size()) {
         return EditResult::fail(QStringLiteral("There is no such task."));
     }
-    const int a = project.assignmentIndex(project.tasks.at(taskIndex).uid, resourceUid);
-    if (a < 0) {
+    if (project.assignmentIndex(project.tasks.at(taskIndex).uid, resourceUid) < 0) {
         return EditResult::fail(QStringLiteral("That resource is not assigned to this task."));
     }
-    project.assignments.removeAt(a);
-    return {};
+    return changeAssignments(project, taskIndex, {}, {resourceUid});
 }
 
 int addResource(Project &project, int at, const QString &name, ResourceType type)

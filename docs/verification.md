@@ -111,6 +111,197 @@ notebooks; import a real Word file (expect one page per Heading 1) and a
 Word; print a formatted page; dark and light themes (the page stays
 paper); the panel menu's new Insert, Format and Tags menus.
 
+## M83 Plan gates (D-092)
+
+Qualified on qinda (branch `m83-plan-task-types`, merged with
+`m60-office-formats` ca3cbeb) as a targeted build — plan_engine,
+plan_output, calc_io, the QindaPlan app and their tests only, every step at
+`nice -n 19 ionice -c3` (the owner's game server runs there): **25/25 CTest
+targets passed, 67.8 s** (`ctest --preset dev -R "plan"`). QtTest counts
+(functions incl. init/cleanup and data rows), none skipped; **new** binaries
+in bold. Every file M83 touched was recompiled without a compiler warning.
+
+- plan_engine — `tst_plan_calendar` 8, `tst_plan_schedule` 15,
+  `tst_plan_edit` 9, `tst_plan_file` 8, `tst_plan_resources` 9,
+  `tst_plan_mspdi` 6, `tst_plan_mspdi_keep` 6, `tst_plan_critical` 7,
+  `tst_plan_leveling` 11, `tst_plan_views` 9, `tst_plan_mspdi_m79` 12,
+  **`tst_plan_task_types` 11, `tst_plan_custom_fields` 9,
+  `tst_plan_tracking_m83` 7, `tst_plan_recurring_import` 6,
+  `tst_plan_mspdi_m83` 9**.
+- plan_output — `tst_plan_output` 9, **`tst_plan_output_m83` 4**.
+- QindaPlan — `tst_qindaplan_service` 11, `tst_qindaplan_menu_export` 4,
+  `tst_qindaplan_ui` 8, `tst_qindaplan_tracking` 11, `tst_qindaplan_views` 9,
+  **`tst_qindaplan_m83` 8, `tst_qindaplan_m83_ui` 4**: 210 QtTest functions
+  in all (142 plan_engine, 13 plan_output, 55 QindaPlan), 0 failed.
+
+The fixtures are hand-built: a Project-shaped
+`tests/plan_engine/data/project_m83_sample.xml` (a Fixed Work task with two
+assignments' Work and Units, an elapsed duration after an elapsed lag, a
+Fixed Duration task split by Project's own daily TimephasedData, a
+recurring summary with its occurrences, custom field definitions with
+Project's Guid / SecondaryPID / SecondaryGuid, an alias, a restricting
+lookup table and a formula, a resource's Text1 and an unknown FieldID), the
+M63 keep sample and the seeded gala; no owner file was opened. Existing
+expectations changed by design: Work is typed (`tst_plan_edit`: 8 h on a
+task without resources is kept), the 2016 sample's elapsed duration is
+modelled instead of warned about (`tst_plan_mspdi`), and the filter list
+has twelve entries (`tst_plan_views`).
+
+**Task types by hand** (automated: `tst_plan_task_types`): Fixed Units — a
+4-day task at 100 % is 32 h; 10 days makes 80 h; 60 h makes 7.5 days
+(Wednesday 11 noon); 50 % makes 15 days at 60 h ($3,600 at $60/h). Fixed
+Duration — 20 h over 10 days is 25 %; 50 % makes 40 h. Fixed Work — 10 days
+halves the units; 200 % makes 2.5 days; 80 h at 200 % is 5 days; effort
+driving cannot be turned off. Effort driven: a second person halves a
+Fixed Units task (and removing him restores it), 48 h over 100 % + 50 % is
+4 days, a Fixed Duration task's units halve, Fixed Work is always effort
+driven, a task that is not adds Ben's work; Resource Names typed follow
+the same rules. Work typed on a task without resources (24 h) is taken by
+the first resource (3 days). One assignment's work typed apart: Ben done
+Tuesday night while Ana works 4 days (the daily load says so), then Ben
+the longest at 6 days; 12 days stretches both. `.qplan` and MSPDI carry
+types, effort driving, the defaults, work and spans.
+
+**Custom fields** (automated: `tst_plan_custom_fields`): the 120 fields
+and Project's FieldIDs; values of every kind typed and shown (12.5, Yes,
+dates at 08:00 / 17:00, $1,234.50, 3 days, 2 edays, NA); aliases unique,
+lookup tables restricting, an empty definition removed; formulas —
+`[Duration]/480` = 5, `IIf([% Complete]=100,…)`, `[Cost]>1000`,
+`[Finish]+7`, `ProjDateDiff([Start],[Finish])/60` = 40, an alias and `Mid`
+in a text — a bad formula refused before it is stored, a circle shows
+`#ERROR`, 1/0 an error, removing a formula keeps its values; filters
+(equals, contains, is set, greater, less, not equals — an unset number is
+0, as in Project) and sorts both ways; typing the default stores nothing;
+the keep sample's Text1 "Department" read, changed values and alias
+written from the model, the rest replayed, re-read equal and re-written
+byte for byte; an M82 `.qplan`'s kept Type, EffortDriven, definition and
+value adopted, each written once.
+
+**Elapsed time, splits, tracking** (automated: `tst_plan_tracking_m83`):
+2 edays from Friday 08:00 end Sunday 08:00 (48 h of work at 100 %), a
+successor starts Monday, a 2-eday lag from Friday 17:00 too; LinkLag 28800
+with LagFormat 8 and DurationFormat 8 both ways. A 4-day task split
+Tuesday night to Thursday finishes Friday (Wednesday's load 0), a split
+inside a gap or past the finish is refused, a task without resources is
+split too; MSPDI writes 3 + 3 periods (a placeholder for the task without
+resources) and reads the splits back; Remove Splits. Reschedule
+Uncompleted Work after Wednesday 17:00: Monday done of four days → Tuesday
+and Wednesday skipped, finish Monday 9; a should-have-started task gets
+Start No Earlier Than Thursday; a later one is untouched. The progress
+line at Thursday 17:00 bends to Tuesday night (behind), to Monday 9 (ahead),
+to Tuesday 08:00 (should have started), straight for done and future
+tasks. Act. Work 10 h of 40 = 25 %; 50 h finishes the task with 50 h of
+work; Act. Cost refused while calculated, then $700 typed: remaining $500,
+cost $1,200, `.qplan` round trip, NA restores $1,000.
+
+**Recurring tasks, calendars, import** (automated:
+`tst_plan_recurring_import`): a weekly Monday/Wednesday stand-up, four
+occurrences at 09:00 (Mon 2 … Wed 11), the recurring indicator and text;
+every two weeks three times (7-day blocks); every second working day; the
+last Friday of the month; the pattern through `.qplan`, the flag and the
+occurrences through MSPDI; a pattern refused once an occurrence has
+progress. Three Mondays closed move a 5-day task to Tuesday 10; Christmas
+yearly; Fridays instead (two); a work week with Fridays off in March;
+refusals for a bad index or no days; `.qplan` and MSPDI carry them as
+Project's elements. CSV: BOM, quotes, embedded line breaks, the
+semicolon; the mapping guessed from Project's titles. Import: six tasks
+under an outline, links by source ID with a lag, resources created, a
+custom field; warnings for the unknown predecessor 99 and the duration
+"abc"; nothing mapped to Task Name is refused.
+
+**Microsoft Project XML** (automated: `tst_plan_mspdi_m83`): the fixture
+reads with no warning and schedules as Project did — every task's Start,
+Finish and Duration are written as the file has them (Cure the screed
+Wednesday 17:00 → Friday 17:00; Fit cabinets Monday 9 → Thursday 12 with
+Tuesday's split; Snag walk 13 → 20 March 10:00); the definitions element is
+written back byte for byte, all 7 task values, the resource's value and
+Project's four daily periods too, and re-reading the export gives the
+same model and the same bytes. Changes are written from the model: Text1
+renamed keeps Guid / SecondaryPID / SecondaryGuid in the schema's order
+and its ValueList, a new formula keeps Number1's Guid and SecondaryPID, a
+cleared Flag1 value is gone, a new Text2 gets a bare definition after the
+kept ones, the unknown FieldID stays; a task type and effort driving
+changed; Ana's 8 h on the Fixed Work task end Monday 17:00 (assignment
+Finish and Work) and read back as her span. Splits moved inside the same
+dates replace Project's periods with ours (Mon–Tue 8 h, a zero gap,
+Thursday 4 h); Stop/Resume-style actual + remaining periods are a split,
+a weekend between daily periods is not; a rescheduled task without
+resources goes out through a placeholder and back. `.qplan` keeps it all.
+**Schema:** `writtenShapeFollowsTheSchema` checks every Task, Resource and
+Assignment child against Project's order, every ExtendedAttribute
+definition against the schema's sequence (FieldID … ValueList) and every
+value against FieldID, Value, DurationFormat, and the spelling of Type,
+EffortDriven, Recurring, LagFormat and FieldID; no MSPDI XSD ships through
+Portage.
+
+**Printed output and Excel** (automated: `tst_plan_output_m83`): a task
+sheet written to `.xlsx` (ID, WBS, name, duration, predecessors, Text1
+titled "Trade", Number1) reads back through calc_io as a table whose
+headers map onto every field in a project that renamed Text1 the same way
+(and "Trade" is left unmapped in one that did not); importing it gives the
+same outline, durations, links (FS + 1 day), custom values and dates; a
+file that is no workbook is refused with a reason. The printed Gantt draws
+the split gap and, only when asked, the progress line (bent to Survey's
+Monday night and Order's Tuesday start).
+
+**Through the host and the window** (automated: `tst_qindaplan_m83`,
+`tst_qindaplan_m83_ui`): the 15 commands exist; Task ▸ Fixed Duration and
+Effort Driven on the selection (checked state follows); a second person
+halves Recruit volunteers (10 → 5 days, 80 h) and undo restores it; Sam's
+4 h on Venue setup (one day, 20 h) through the assignment API, "soon"
+refused; the Custom Fields table titled "Owner", a restricted value
+refused, a formula column (Sponsor outreach 39), the Custom Field filter
+(2 rows, "Custom Field: Owner"), the custom sort; Task Information's
+Custom Fields page saves with the dialog; Split Task, the split indicator,
+Remove Splits; a recurring check-in inserted and cut to two occurrences;
+Reschedule Uncompleted Work after 3 April splits Sponsor outreach, undone
+in one step; a CSV imported (links translated) and undone in one step; a
+yearly holiday and a work week made, listed, deleted, a backwards one
+refused; the Gantt PDF with a split and progress lines. In the real
+window at 1280 and 520 px: the Custom Fields table, Custom Fields with
+its lookup table, the Custom Field filter, Recurring Task, Split Task, Task
+Information's Resources (three people on Venue setup), Advanced and Custom
+Fields pages, Change Working Time with a recurring exception being edited
+and a work week, Reschedule Uncompleted Work, and Import Tasks with its
+guessed column map importing two tasks.
+
+**UI gates**: the structural fixtures `qindaplan_{1280,520}.txt` were
+regenerated deliberately (`QQO_UPDATE_FIXTURES=1`; the diff is the new
+ribbon items — Task Type and Effort Driven, Split, Recurring, Custom
+Fields, Reschedule, the Custom table / filter / sort, Progress Lines,
+Import Tasks — with some Task-tab labels squeezed at 1280 as the squeeze
+design allows); the ribbon gate (every menu command on the ribbon, every
+icon real, every tab inside the ribbon at 1320 and 520 px) and the panel
+export's validator pass with the 15 new commands. Grabs looked at
+(`QQO_GRAB_DIR`): `qindaplan_m83_{custom_table,custom_fields,custom_filter,
+recurring_task,split_task,task_info_resources,task_info_advanced,
+task_info_custom,working_time,working_time_editing,reschedule,
+import_tasks}_{1280,520}`, the Gantt PDF rendered with `pdftoppm`
+(`qindaplan_m83_gantt.pdf`), and plan_output's `gantt_m83_split` and
+`gantt_m83_progress_line`.
+
+**QindaTK gaps** (reported, not worked around in the toolkit): GanttView
+draws no split bars (the window shows a split task as one bar with the
+split indicator; paper and PDF draw the gaps) and no progress lines
+(paper and PDF only), besides D-088's slack bars, deadline markers, bar
+styles and second baseline lane.
+
+**On the desktop (manual, the owner):** in Microsoft Project, save as XML
+a plan with a Fixed Work task, a split task (Task ▸ Split Task), a
+recurring task and a custom field with a lookup table and a formula (e.g.
+Number1 = `[Duration]/480`); open it in QindaPlan and compare dates, the
+custom columns (View ▸ Tables ▸ Custom Fields) and the split's dates in
+Task Usage with Project's. In QindaPlan, add a resource to an
+effort-driven task, type an assignment's work in Task Information ▸
+Resources, split another task, Insert ▸ Recurring Task, rename Text2 in
+Project ▸ Custom Fields and type values, add a yearly holiday in Change
+Working Time; save as XML and open it in Project — the durations and work
+match QindaPlan's, the split shows as a split bar, the recurring task as a
+recurring summary, the custom fields with their names, lookup values and
+formula results, and the holiday in Change Working Time; the rest of the
+file is unchanged. Import an Excel task list of yours (File ▸ Import Tasks
+from Excel or CSV) and check the column map's guesses.
+
 ## M82 polish gates (D-091)
 
 Qualified on qinda (branch `m82-calc-show-polish`, merged with

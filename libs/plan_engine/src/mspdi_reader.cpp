@@ -5,6 +5,8 @@
 // hold is kept verbatim (mspdi_keep.h, M63); calendars: mspdi_reader_calendar.cpp.
 #include "mspdi_reader_p.h"
 
+#include "mspdi_custom.h"
+
 #include <algorithm>
 
 namespace QindaOffice::Plan {
@@ -22,6 +24,17 @@ void store(QJsonObject &extra, const QList<Kept> &kept, const QJsonObject &stamp
     if (!stamp.isEmpty()) {
         extra.insert(kStampKey, stamp);
     }
+}
+
+QString elementText(const QString &xml)
+{
+    QXmlStreamReader in(xml);
+    return in.readNextStartElement() ? in.readElementText(QXmlStreamReader::SkipChildElements).trimmed() : QString();
+}
+
+bool truth(const QString &text)
+{
+    return text == QLatin1String("1") || text.compare(QLatin1String("true"), Qt::CaseInsensitive) == 0;
 }
 
 } // namespace
@@ -102,6 +115,14 @@ void Reader::readProject()
             m_info.criticalSlackDays = std::clamp(integer(0), 0, 999); // M79
         } else if (n == QLatin1String("MultipleCriticalPaths")) {
             m_info.multipleCriticalPaths = boolean(); // M79
+        } else if (n == QLatin1String("DefaultTaskType")) {
+            m_info.defaultTaskType = TaskType(std::clamp(integer(0), 0, 2)); // M83
+        } else if (n == QLatin1String("NewTasksEffortDriven")) {
+            m_info.newTasksEffortDriven = boolean(); // M83
+        } else if (n == QLatin1String("EditableActualCosts")) {
+            m_info.editableActualCosts = boolean(); // M83
+        } else if (n == QLatin1String("ExtendedAttributes")) {
+            readCustomDefinitions(capture(in()), m_info, &m_raw.customFields); // M83 (mspdi_custom.h)
         } else if (n == QLatin1String("ScheduleFromStart")) {
             if (!boolean()) {
                 warn(QStringLiteral("The project is scheduled from its finish date; it is imported as scheduled from its start."));
@@ -246,7 +267,24 @@ void Reader::readTask()
             t.preLeveledStart = parseWireDateTime(text());
         } else if (n == QLatin1String("PreLeveledFinish")) {
             t.preLeveledFinish = parseWireDateTime(text());
-        } else if (n == QLatin1String("WBS") || n == QLatin1String("OutlineNumber") || n == QLatin1String("Work")
+        } else if (n == QLatin1String("Type") || n == QLatin1String("EffortDriven") || n == QLatin1String("Recurring")
+                   || n == QLatin1String("ExtendedAttribute")) {
+            // M83: modelled; kept too for the project summary task (assemble).
+            const QString xml = capture(in());
+            raw.summaryKept << Kept{n, previous, xml, false};
+            if (n == QLatin1String("Type")) {
+                t.type = TaskType(std::clamp(elementText(xml).toInt(), 0, 2));
+            } else if (n == QLatin1String("EffortDriven")) {
+                t.effortDriven = truth(elementText(xml));
+            } else if (n == QLatin1String("Recurring")) {
+                t.recurring = truth(elementText(xml));
+            } else {
+                readCustomValue(t, xml);
+            }
+        } else if (n == QLatin1String("Work")) {
+            raw.hasWork = true; // M83: kept for a task without resources (assemble)
+            raw.work = duration();
+        } else if (n == QLatin1String("WBS") || n == QLatin1String("OutlineNumber")
                    || n == QLatin1String("ManualDuration") || n == QLatin1String("Summary")
                    || n == QLatin1String("Critical") || n == QLatin1String("OverAllocated")
                    || n == QLatin1String("EarlyStart") || n == QLatin1String("EarlyFinish")
@@ -336,6 +374,10 @@ void Reader::readAssignment()
                 raw.resourceUid = ok ? raw.resourceUid : kUnassignedResource;
             } else if (n == QLatin1String("Units")) {
                 raw.units = std::clamp<qint64>(scaledDecimal(value, 2).value_or(100), 0, 100000000);
+                raw.unitsExact = double(scaledDecimal(value, 9).value_or(1000000000)) / 1e9;
+            } else if (n == QLatin1String("Work")) {
+                raw.hasWork = true; // M83: the assignment's work as Project stores it
+                raw.work = parseWireDuration(value).value_or(0);
             }
         } else if (n == QLatin1String("Cost")) {
             // Computed — except for a cost resource, whose assignment's

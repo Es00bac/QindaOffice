@@ -162,6 +162,7 @@ namespace {
     o.pagesWide = host.printPagesWide();
     o.style = service.ganttStyle(); // M79: Gantt, Tracking or Leveling Gantt
     o.showSlack = service.showSlack();
+    o.showProgressLine = service.showProgressLines(); // M83
     QStringList columns = service.tableFields();
     columns.removeAll(QStringLiteral("indicators"));
     columns.removeAll(QStringLiteral("notes"));

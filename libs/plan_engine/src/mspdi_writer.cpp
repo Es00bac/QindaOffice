@@ -7,8 +7,10 @@
 // file had that QindaPlan does not model (M63, D-071). Write a new element
 // through Children, never straight to the stream, or it lands out of order.
 #include "mspdi.h"
+#include "mspdi_custom.h"
 #include "mspdi_keep.h"
 #include "mspdi_p.h"
+#include "mspdi_timephased.h"
 
 #include "plan_time.h"
 #include "work_calendar.h"
@@ -62,7 +64,7 @@ private:
     void calendar(const Calendar &cal);
     void workingTimes(const DayHours &hours);
     void summaryTask();
-    void task(const Task &t);
+    void task(const Task &t, int index);
     void resource(const Resource &r);
     void assignment(const Assignment &a);
     // M79 (mspdi_p.h "byte-faithful baselines"): a task's or an
@@ -122,15 +124,17 @@ void Writer::project()
     put(c, "MinutesPerDay", info.minutesPerDay);
     put(c, "MinutesPerWeek", info.minutesPerWeek);
     put(c, "DaysPerMonth", info.daysPerMonth);
-    fallback(c, "DefaultTaskType", QStringLiteral("0")); // fixed units: work follows duration × units
+    put(c, "DefaultTaskType", int(info.defaultTaskType)); // M83: modelled
     fallback(c, "DurationFormat", QStringLiteral("7"));
     fallback(c, "WorkFormat", QStringLiteral("2"));
+    put(c, "EditableActualCosts", flag(info.editableActualCosts)); // M83: modelled
     fallback(c, "HonorConstraints", flag(true));
     put(c, "MultipleCriticalPaths", flag(info.multipleCriticalPaths)); // M79: modelled
-    fallback(c, "NewTasksEffortDriven", flag(false));
+    put(c, "NewTasksEffortDriven", flag(info.newTasksEffortDriven)); // M83: modelled
     fallback(c, "NewTasksEstimated", flag(false));
     fallback(c, "WeekStartDay", QStringLiteral("1"));
     date(c, "StatusDate", info.statusDate);
+    writeCustomDefinitions(c, m_xml, m_p); // M83: ExtendedAttributes (mspdi_custom.h)
     collection(c, "Calendars", [this] {
         for (const Calendar &cal : m_p.calendars) {
             calendar(cal);
@@ -138,8 +142,8 @@ void Writer::project()
     });
     collection(c, "Tasks", [this] {
         summaryTask();
-        for (const Task &t : m_p.tasks) {
-            task(t);
+        for (int i = 0; i < m_p.tasks.size(); ++i) {
+            task(m_p.tasks.at(i), i);
         }
     });
     collection(c, "Resources", [this] {
@@ -151,6 +155,7 @@ void Writer::project()
         for (const Assignment &a : m_p.assignments) {
             assignment(a);
         }
+        writeSplitPlaceholders(m_xml, m_p); // M83: split tasks without resources
     });
     c.write(m_xml);
 }
@@ -342,7 +347,7 @@ void Writer::baselines(Children &c, const std::array<BaselineData, kBaselineCoun
     }
 }
 
-void Writer::task(const Task &t)
+void Writer::task(const Task &t, int index)
 {
     m_xml.writeStartElement(QStringLiteral("Task"));
     Children c(Kind::Task, t.extra);
@@ -354,7 +359,8 @@ void Writer::task(const Task &t)
     put(c, "Name", t.name);
     put(c, "Active", flag(t.active));
     put(c, "Manual", flag(t.manual));
-    fallback(c, "Type", QStringLiteral("0")); // fixed units, unless the file said otherwise
+    // M83: Project's task type (a summary is fixed duration) and effort driving.
+    put(c, "Type", t.summary && t.type == TaskType::FixedUnits ? 1 : int(t.type));
     put(c, "IsNull", flag(false));
     put(c, "WBS", t.wbs);
     put(c, "OutlineNumber", t.wbs);
@@ -368,8 +374,10 @@ void Writer::task(const Task &t)
         date(c, "ManualFinish", t.manualFinish);
         put(c, "ManualDuration", wireDuration(t.duration));
     }
-    put(c, "DurationFormat", durationFormat(t.durationUnit, t.estimated));
+    put(c, "DurationFormat", durationFormat(t.durationUnit, t.estimated, t.durationElapsed));
     put(c, "Work", wireDuration(t.work));
+    put(c, "EffortDriven", flag(!t.summary && (t.effortDriven || t.type == TaskType::FixedWork)));
+    put(c, "Recurring", flag(t.recurring));
     put(c, "OverAllocated", flag(t.overallocated));
     put(c, "Estimated", flag(t.estimated));
     put(c, "Milestone", flag(t.milestone));
@@ -413,18 +421,17 @@ void Writer::task(const Task &t)
             m_xml.writeTextElement(QStringLiteral("PredecessorUID"), QString::number(l.predecessorUid));
             m_xml.writeTextElement(QStringLiteral("Type"), QString::number(wireLinkType(l.type)));
             m_xml.writeTextElement(QStringLiteral("CrossProject"), flag(false));
-            if (l.lagPercent) {
-                m_xml.writeTextElement(QStringLiteral("LinkLag"), QString::number(qint64(*l.lagPercent) * 10));
-                m_xml.writeTextElement(QStringLiteral("LagFormat"), QStringLiteral("19"));
-            } else {
-                m_xml.writeTextElement(QStringLiteral("LinkLag"), QString::number(l.lag * 10));
-                m_xml.writeTextElement(QStringLiteral("LagFormat"),
-                                       l.lag % m_p.info.minutesPerDay == 0 ? QStringLiteral("7") : QStringLiteral("5"));
-            }
+            // M83: elapsed lags in elapsed days or hours (e% for a percentage).
+            const bool days = l.lag % (l.lagElapsed ? 1440 : m_p.info.minutesPerDay) == 0;
+            const int format = l.lagPercent ? (l.lagElapsed ? 20 : 19) : (days ? 7 : 5) + (l.lagElapsed ? 1 : 0);
+            m_xml.writeTextElement(QStringLiteral("LinkLag"),
+                                   QString::number(l.lagPercent ? qint64(*l.lagPercent) * 10 : l.lag * 10));
+            m_xml.writeTextElement(QStringLiteral("LagFormat"), QString::number(format));
             m_xml.writeEndElement();
         });
     }
     baselines(c, t.baselines, t.extra, false);
+    writeCustomValues(c, m_xml, m_p, index); // M83: custom fields (mspdi_custom.h)
     c.write(m_xml);
     m_xml.writeEndElement();
 }
@@ -479,7 +486,7 @@ void Writer::assignment(const Assignment &a)
     put(c, "ResourceUID", a.resourceUid);
     put(c, "Cost", cents(a.cost));
     if (t != nullptr) {
-        date(c, "Finish", t->finish);
+        date(c, "Finish", assignmentFinish(m_p, a)); // M83: its own span
         date(c, "Start", t->start);
     }
     put(c, "Units", decimalText(a.units, 2));
@@ -488,6 +495,7 @@ void Writer::assignment(const Assignment &a)
         put(c, "Work", wireDuration(a.work)); // a material's "work" is its quantity (Units)
     }
     baselines(c, a.baselines, a.extra, true); // M79
+    writeSplitTimephased(c, m_xml, m_p, a);   // M83: a split task's segments
     c.write(m_xml);
     m_xml.writeEndElement();
 }

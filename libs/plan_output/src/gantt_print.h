@@ -43,6 +43,7 @@ struct GanttPrintOptions {
     bool showBarText = true;
     bool showSlack = false;    // M79: total slack as a thin bar after the task (Detail Gantt)
     bool showDeadlines = true; // M79: a deadline arrow on the task's row
+    bool showProgressLine = false; // M83: Project's progress line at the status date
     Minutes today = kNoDate;
     Minutes statusDate = kNoDate;
     QList<int> hiddenTaskUids; // collapsed subtasks the window hides

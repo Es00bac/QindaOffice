@@ -9,7 +9,8 @@
 // AGENT-CONTRACT (filter ids, the app's planFilter…Action commands map onto
 // them one to one): "all", "critical", "incomplete", "completed", "late",
 // "slipping", "milestones", "summary", "deadlines", "resource" (Using
-// Resource…, needs resourceUid), "dateRange" (Date Range…, needs from/to).
+// Resource…, needs resourceUid), "dateRange" (Date Range…, needs from/to),
+// M83 "custom" (Custom Field…: a custom field tested against a value).
 // "late" and "slipping" are plan_reports.h's isLate/isSlipped against the
 // status date (or today). With related summary rows on, every match keeps
 // its summary ancestors (Project's "Show related summary rows").
@@ -17,12 +18,15 @@
 // AGENT-CONTRACT (sort ids, planSort…Action): "id", "start", "finish",
 // "priority", "cost". Siblings are sorted under their summary (Project's
 // "Keep outline structure"); ties keep the outline order. Start and finish
-// ascend; priority and cost descend, as Project's built-in sorts do.
+// ascend; priority and cost descend, as Project's built-in sorts do. M83:
+// "custom:<Field>" sorts by a custom field ascending, "custom:<Field>:desc"
+// descending; tasks without a value come last.
 
 #include "plan_types.h"
 
 #include <QDate>
 #include <QStringList>
+#include <QVariant>
 
 namespace QindaOffice::Plan {
 
@@ -31,6 +35,12 @@ struct TaskFilter {
     int resourceUid = 0; // "resource"
     QDate from;          // "dateRange": tasks working on any day in [from, to]
     QDate to;
+    // M83 "custom": `field` ("Text1") passes `test` — "equals", "notEquals",
+    // "contains", "greater", "less", "isSet", "notSet" — against `value`,
+    // read once by the field's kind (parseCustomFieldValue, custom_fields.h).
+    QString field;
+    QString test = QStringLiteral("equals");
+    QVariant value;
 };
 
 [[nodiscard]] QStringList taskFilterIds();

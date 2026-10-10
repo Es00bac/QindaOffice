@@ -3,10 +3,11 @@ import QtQuick
 import QindaTK as Tk
 import QindaOffice.Plan.App
 
-// Task Information (Shift+F2): the task's fields on four pages — General
-// (name, duration, dates, progress, mode), Predecessors, Advanced
-// (constraint, deadline, priority, calendar, fixed cost, active, milestone)
-// and Notes. Save
+// Task Information (Shift+F2): the task's fields on six pages — General
+// (name, duration, dates, progress, mode), Predecessors, Resources (M83:
+// each assignment's units and work, applied at once), Advanced (task type
+// and effort driving — M83 — constraint, deadline, priority, calendar,
+// fixed cost, active, milestone), Notes and Custom Fields (M83). Save
 // sends only what changed, as one undo step; the engine checks every value
 // and a refusal keeps the dialog open with the reason.
 Tk.Dialog {
@@ -15,6 +16,8 @@ Tk.Dialog {
     property PlanService plan: null
     property string taskId: ""
     property var info: ({})
+    readonly property var pageNames: ["general", "predecessors", "resources", "advanced", "notes", "custom"]
+    readonly property var typeNames: ["Fixed Units", "Fixed Duration", "Fixed Work"]
 
     objectName: "taskInfoDialog"
     title: info.summary === true ? qsTr("Summary Task Information") : qsTr("Task Information")
@@ -39,7 +42,12 @@ Tk.Dialog {
         activeSwitch.checked = info.activeFlag !== false
         milestoneSwitch.checked = info.milestoneFlag === true
         notesField.text = String(info.notes || "")
-        pages.currentIndex = page === "notes" ? 3 : page === "predecessors" ? 1 : page === "advanced" ? 2 : 0
+        typeBox.currentIndex = Math.max(0, typeNames.indexOf(String(info.type || "Fixed Units")))
+        effortSwitch.checked = String(info.effortDriven || "No") === "Yes"
+        assignments.taskId = id
+        assignments.refresh()
+        custom.load(id)
+        pages.currentIndex = Math.max(0, pageNames.indexOf(page))
         error.visible = false
         open()
     }
@@ -56,7 +64,9 @@ Tk.Dialog {
         out.active = activeSwitch.checked ? "Yes" : "No"
         out.milestone = milestoneSwitch.checked ? "Yes" : "No"
         out.notes = notesField.text
-        return out
+        out.type = typeNames[typeBox.currentIndex]
+        out.effortDriven = effortSwitch.checked ? "Yes" : "No"
+        return custom.collect(out)
     }
     onAccepted: {
         const r = plan.saveTaskInfo(taskId, collect())
@@ -80,7 +90,8 @@ Tk.Dialog {
         Tk.TabStrip {
             id: pages
             objectName: "taskInfoPages"
-            model: [qsTr("General"), qsTr("Predecessors"), qsTr("Advanced"), qsTr("Notes")]
+            model: [qsTr("General"), qsTr("Predecessors"), qsTr("Resources"), qsTr("Advanced"), qsTr("Notes"),
+                    qsTr("Custom Fields")]
             onTabActivated: function(index) { pages.currentIndex = index }
         }
         TaskInfoGeneral {
@@ -105,10 +116,43 @@ Tk.Dialog {
                 }
             }
         }
-        Tk.Flex {
+        TaskInfoAssignments {
+            id: assignments
+            objectName: "taskInfoAssignments"
             visible: pages.currentIndex === 2
+            plan: dialog.plan
+            onReport: function(r) {
+                error.visible = !r.ok
+                if (!r.ok) error.text = String(r.error || "")
+                else dialog.info = dialog.plan.taskInfo(dialog.taskId)
+            }
+        }
+        Tk.Flex {
+            visible: pages.currentIndex === 3
             direction: Tk.Flex.Column
             gap: Tk.Theme.space.sm
+            // M83: Project's task type and effort driving (task_types.h).
+            Tk.Grid {
+                columns: "1fr auto"
+                columnGap: Tk.Theme.space.lg
+                Tk.PropertyRow {
+                    label: qsTr("Task type")
+                    enabled: dialog.info.summary !== true
+                    Tk.ComboBox {
+                        id: typeBox
+                        objectName: "taskInfoType"
+                        small: true
+                        model: [qsTr("Fixed Units"), qsTr("Fixed Duration"), qsTr("Fixed Work")]
+                        onActivated: function(i) { if (i === 2) effortSwitch.checked = true }
+                    }
+                }
+                Tk.Switch {
+                    id: effortSwitch
+                    objectName: "taskInfoEffortDriven"
+                    enabled: dialog.info.summary !== true && typeBox.currentIndex !== 2
+                    text: qsTr("Effort driven")
+                }
+            }
             Tk.PropertyRow {
                 label: qsTr("Constraint")
                 Tk.ComboBox {
@@ -150,9 +194,15 @@ Tk.Dialog {
         Tk.TextArea {
             id: notesField
             objectName: "taskInfoNotes"
-            visible: pages.currentIndex === 3
+            visible: pages.currentIndex === 4
             rows: 8
             placeholderText: qsTr("Notes for this task")
+        }
+        TaskInfoCustom {
+            id: custom
+            objectName: "taskInfoCustom"
+            visible: pages.currentIndex === 5
+            plan: dialog.plan
         }
     }
 }

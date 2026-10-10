@@ -14,13 +14,19 @@
 // assignments; since M79 (D-088) also baselines 0–10 of tasks, assignments
 // and the project summary task (each element replayed byte for byte while
 // unchanged), leveling delay and the pre-leveled dates, and the critical
-// slack limit and multiple critical paths. Everything else a file holds —
-// custom fields and their definitions, task type, hyperlinks, cost rate
-// tables, recurring calendar exceptions and alternative work weeks (M79:
-// also scheduled, derived from the kept elements), views, timephased data, elements
-// of later Project versions — is KEPT verbatim and written back in
-// Project's order (mspdi_keep.h, D-071); values Project derives from the
-// schedule travel only while the object's dates and progress are as read.
+// slack limit and multiple critical paths; since M83 (D-092) task types,
+// effort driving, assignment work, elapsed durations and lags, split tasks
+// (from and to assignment timephased data), the recurring flag, custom
+// field values and definitions (mspdi_custom.h — each element replayed as
+// written while unchanged) and the project's DefaultTaskType,
+// NewTasksEffortDriven and EditableActualCosts. Everything else a file
+// holds — hyperlinks, cost rate tables, recurring calendar exceptions and
+// alternative work weeks (M79: also scheduled, derived from the kept
+// elements; M83: made and edited through them, calendar_edit.h), views,
+// timephased data, elements of later Project versions — is KEPT verbatim
+// and written back in Project's order (mspdi_keep.h, D-071); values Project
+// derives from the schedule travel only while the object's dates and
+// progress are as read.
 // Native .mpp files are out of scope.
 //
 // AGENT-CONTRACT (units on the wire, mspdi_p.h has the converters):

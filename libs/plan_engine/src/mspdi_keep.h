@@ -3,10 +3,10 @@
 
 // Private to mspdi_*.cpp (M63, D-071): what QindaPlan does not model in a
 // Microsoft Project XML file is KEPT, verbatim, and written back in the
-// order Project writes it — custom fields (ExtendedAttribute, and the
-// project's ExtendedAttributes / OutlineCodes definitions), task type,
-// hyperlinks, cost rate tables, recurring calendar
-// exceptions, views and tables, and every element a later Project adds.
+// order Project writes it — outline codes, hyperlinks, cost rate tables,
+// recurring calendar exceptions, views and tables, and every element a
+// later Project adds. (Custom fields and task type were kept here until
+// M83 modelled them, mspdi_custom.h; a .qplan of that time adopts them.)
 //
 // AGENT-CONTRACT (storage): each object's kept children are a JSON array in
 // its `extra` under "mspdi" — [{name, after, xml, derived}] — so they also
@@ -90,6 +90,12 @@ public:
     void text(QXmlStreamWriter &out, const QString &name, const QString &value);
     // True when the file had this element (a default is then not written).
     [[nodiscard]] bool kept(const QString &name) const;
+    // M83: will write() replay a kept element called `name`? (A derived one
+    // only while the stamp holds — ask after the stamp's elements are added.)
+    [[nodiscard]] bool replays(const QString &name) const;
+    // M83: leaves the kept elements called `name` out (what they say no
+    // longer holds although the stamp does; the writer writes its own).
+    void drop(const QString &name);
     void write(QXmlStreamWriter &out);
 
 private:

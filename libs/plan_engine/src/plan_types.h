@@ -32,6 +32,7 @@
 #include <QDate>
 #include <QJsonObject>
 #include <QList>
+#include <QMap>
 #include <QString>
 #include <QUuid>
 
@@ -66,6 +67,12 @@ enum class ResourceType { Work, Material, Cost };
 // Project's leveling order (Resource Leveling dialog, M79): which task keeps
 // its dates on an overbooked day (leveling.h).
 enum class LevelingOrder { IdOnly, Standard, PriorityStandard };
+// M83: Project's task types, in MSPDI Type order 0..2 — which of duration,
+// units and work stays put when another of them changes (task_types.h).
+enum class TaskType { FixedUnits, FixedDuration, FixedWork };
+// M83: an assignment whose work no task-type rule has set yet works its
+// units for the task's whole duration (every assignment before M83).
+inline constexpr Minutes kWorkFollowsDuration = -1;
 
 // Working time within one day, minutes from midnight: 0 <= from < to <= 1440.
 struct WorkingTime {
@@ -141,12 +148,56 @@ struct Link {
     // lag is that percentage (may be negative) of the predecessor's duration.
     Minutes lag = 0;
     std::optional<int> lagPercent;
+    // M83: an elapsed lag ("2ed", MSPDI LagFormat 4–12 even) runs on the
+    // wall clock, around nights and weekends.
+    bool lagElapsed = false;
     QJsonObject extra;
     friend bool operator==(const Link &a, const Link &b)
     {
         return a.predecessorUid == b.predecessorUid && a.type == b.type && a.lag == b.lag
-            && a.lagPercent == b.lagPercent;
+            && a.lagPercent == b.lagPercent && a.lagElapsed == b.lagElapsed;
     }
+};
+
+// M83: a split in a task (Project's Split Task): after `at` minutes of the
+// task's duration the work stops for `gap` minutes, then resumes. Both are
+// working minutes on the task's calendar (wall-clock minutes for an elapsed
+// duration), so a split moves with its task.
+struct TaskSplit {
+    Minutes at = 0;
+    Minutes gap = 0;
+    friend bool operator==(const TaskSplit &, const TaskSplit &) = default;
+};
+
+// M83: Project's recurring task (Insert ▸ Recurring Task): a summary whose
+// subtasks are the occurrences. The pattern is a RecurringException's
+// (daily every N days, weekly on days, monthly or yearly by day or
+// position) within [from, to], or `count` occurrences from `from`.
+struct TaskRecurrence {
+    RecurringException pattern; // kind, every, daysOfWeek, day, position, weekday, month, from, to
+    bool workdays = false;      // daily: every N working days of the project calendar
+    int count = 0;              // > 0: end after this many occurrences (else at pattern.to)
+    Minutes duration = 480;     // each occurrence's duration
+    int startMinute = 8 * 60;   // each occurrence starts at this time of day
+    friend bool operator==(const TaskRecurrence &, const TaskRecurrence &) = default;
+};
+
+// M83: a custom field's definition (Project ▸ Custom Fields; MSPDI
+// ExtendedAttributes): the field it renames (Text1 … Text30, Number1 … 20,
+// Date1 … 10, Flag1 … 20, Cost1 … 10, Duration1 … 10, Start1 … 10,
+// Finish1 … 10), its alias, a lookup table and a formula (custom_fields.h).
+struct CustomLookupEntry {
+    QString value; // in the stored spelling of a value (custom_fields.h)
+    QString description;
+    friend bool operator==(const CustomLookupEntry &, const CustomLookupEntry &) = default;
+};
+struct CustomFieldDef {
+    QString field; // "Text1"
+    QString alias; // "Department"; empty = not renamed
+    QList<CustomLookupEntry> lookup;
+    bool restrictToList = false; // only lookup values may be typed
+    QString formula;             // Project's formula; empty = typed values
+    QJsonObject extra;           // the definition's MSPDI parts QindaPlan does not model
 };
 
 struct BaselineData {
@@ -203,6 +254,33 @@ struct Task {
     Minutes levelingFloor = kNoDate;
     QString notes;
     std::array<BaselineData, kBaselineCount> baselines;
+    // ---- M83 (D-092) ----
+    // Project's task type and effort-driven flag (task_types.h): which of
+    // duration, units and work a change recalculates; whether added or
+    // removed resources share the task's work. Fixed Work is always effort
+    // driven, as in Project.
+    TaskType type = TaskType::FixedUnits;
+    bool effortDriven = false;
+    // Work typed on a task without work assignments (Project keeps it; the
+    // first resources assigned take it over).
+    Minutes unassignedWork = 0;
+    // Duration in wall-clock minutes ("3ed", MSPDI DurationFormat 4–12 even):
+    // the task runs around the clock, ignoring its calendar.
+    bool durationElapsed = false;
+    QList<TaskSplit> splits; // in order of `at`; the duration excludes the gaps
+    // A recurring summary task: the pattern its occurrences (its subtasks)
+    // were made from; `recurring` without a pattern = Project's flag read
+    // from Microsoft Project XML (which does not carry the pattern).
+    bool recurring = false;
+    std::optional<TaskRecurrence> recurrence;
+    // Custom field values (Text1 … Finish10) in Microsoft Project XML's own
+    // spelling — text, decimal numbers, "1"/"0", dates "yyyy-MM-ddTHH:mm:ss",
+    // cost in cents, durations "PT8H0M0S" (+ "|<DurationFormat>") —
+    // custom_fields.h converts. A formula field stores nothing here.
+    QMap<QString, QString> custom;
+    // Actual Cost typed while ProjectInfo::editableActualCosts is on (minor
+    // units); -1 = Project calculates it from % complete.
+    qint64 actualCostInput = -1;
     QJsonObject extra;
 
     // ---- computed (schedule()) ----
@@ -266,6 +344,14 @@ struct Assignment {
     // M79: what the assignment of a cost resource costs (minor units; Project
     // types it on the assignment). Unused for work and material.
     qint64 costInput = 0;
+    // M83: a work resource's work as Project stores it (MSPDI Work), set by
+    // the task-type rules (task_types.h) — or kWorkFollowsDuration: the
+    // assignment works its units for the task's whole duration.
+    Minutes workInput = kWorkFollowsDuration;
+    // M83: the working minutes of the task it works, from the task's start
+    // (-1 = the whole duration): shorter only when its units or work were
+    // typed apart from the others' on a Fixed Units or Fixed Work task.
+    Minutes workSpan = -1;
     // M79: what Set Baseline saved for the assignment (Project keeps the
     // assignment's baseline work and cost next to the task's).
     std::array<BaselineData, kBaselineCount> baselines;
@@ -300,6 +386,12 @@ struct ProjectInfo {
     LevelingOrder levelingOrder = LevelingOrder::Standard;
     bool levelWithinSlack = false;
     bool levelClearFirst = true;
+    // M83 (MSPDI DefaultTaskType / NewTasksEffortDriven / EditableActualCosts):
+    // what a new task is, and whether Actual Cost can be typed (Project's
+    // "Actual costs are always calculated by Project" turned off).
+    TaskType defaultTaskType = TaskType::FixedUnits;
+    bool newTasksEffortDriven = false;
+    bool editableActualCosts = false;
     QJsonObject extra;
 };
 
@@ -316,6 +408,9 @@ struct Project {
     QList<Task> tasks;
     QList<Resource> resources;
     QList<Assignment> assignments;
+    // M83: the task custom fields renamed, given a lookup table or a formula
+    // (one entry per field; a field without one is plain "Text1").
+    QList<CustomFieldDef> customFields;
     QJsonObject view;  // window/view state the app persists (tables, zoom, …)
     QJsonObject extra; // unknown top-level fields
 

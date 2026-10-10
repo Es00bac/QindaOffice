@@ -272,7 +272,14 @@ QVariantMap PlanService::currentTask() const
             {QStringLiteral("collapsed"), m_collapsed.contains(t.uid)},
             {QStringLiteral("percent"), t.percentComplete},
             {QStringLiteral("startUtc"), utcOf(t.start)},
-            {QStringLiteral("finishUtc"), utcOf(t.finish)}};
+            {QStringLiteral("finishUtc"), utcOf(t.finish)},
+            // M83: what the Task Type, Effort Driven and recurring commands show.
+            {QStringLiteral("type"), t.type == Engine::TaskType::FixedDuration ? QStringLiteral("duration")
+                                     : t.type == Engine::TaskType::FixedWork   ? QStringLiteral("work")
+                                                                               : QStringLiteral("units")},
+            {QStringLiteral("effortDriven"), t.effortDriven || t.type == Engine::TaskType::FixedWork},
+            {QStringLiteral("recurring"), t.recurring},
+            {QStringLiteral("milestoneFlag"), t.isMilestone()}};
 }
 
 void PlanService::setCurrentResourceUid(int uid)
@@ -421,8 +428,15 @@ void PlanService::rebuildSheets()
         rows.append(idOfRow(i));
     }
     rows.append(QStringLiteral("new"));
-    if (m_sheet->columns() == 0) {
-        m_sheet->setColumnIds(tableFields());
+    const QStringList fields = tableFields();
+    bool same = m_sheet->columns() == fields.size();
+    for (int c = 0; same && c < fields.size(); ++c) {
+        same = m_sheet->columnIdAt(c) == fields.at(c);
+    }
+    if (!same) {
+        // M83: the Custom Fields table follows the fields the project uses.
+        m_sheet->setColumnIds(fields);
+        emit viewChanged();
     }
     // AGENT-GUARD: only a different row set may reset the grid (a reset
     // loses the edit cursor); plain value changes are a source notify.

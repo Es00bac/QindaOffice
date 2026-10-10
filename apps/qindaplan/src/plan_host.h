@@ -28,7 +28,8 @@
 // Files: plan_host.cpp (document, view, printing), plan_host_actions.cpp
 // (commands), plan_host_views.cpp (M79: views, tables, filters, sorts,
 // baselines shown, tracking and leveling commands), plan_host_menus.cpp
-// (menus and enablement).
+// (menus and enablement), plan_host_schedule.cpp (M83: task types, splits,
+// recurring tasks, custom fields, Reschedule Uncompleted Work, the import).
 
 #include "document_host.h"
 #include "plan_service.h"
@@ -111,8 +112,14 @@ signals:
     void filterRequested(const QString &filterId);
     void updateTasksRequested();
     void levelingOptionsRequested();
+    // M83 (D-092): the dialogs of Split Task, Recurring Task (taskId empty =
+    // Insert), Custom Fields and Update Project's Reschedule Uncompleted Work.
+    void splitTaskRequested();
+    void recurringTaskRequested(const QString &taskId);
+    void customFieldsRequested();
+    void rescheduleRequested();
     void findRequested(bool replace);
-    // "pdf" | "csv" | "xlsx" (M63) | "mspdi" | "png" | "import"
+    // "pdf" | "csv" | "xlsx" (M63) | "mspdi" | "png" | "import" | "importTasks" (M83)
     void fileRequested(const QString &what);
     void scrollToTaskRequested(const QString &taskId);
     void goToTodayRequested();
@@ -132,6 +139,9 @@ private:
     // plan_host_views.cpp (M79)
     void createViewActions();
     void createTrackingActions();
+    // plan_host_schedule.cpp (M83)
+    void createScheduleActions();
+    void syncScheduleState();
     [[nodiscard]] static QString viewActionId(const QString &view);
     [[nodiscard]] bool isGanttView() const;
     void switchTable(const QString &from, const QString &to);

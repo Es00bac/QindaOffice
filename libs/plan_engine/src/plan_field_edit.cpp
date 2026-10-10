@@ -6,6 +6,7 @@
 #include "plan_fields_p.h"
 #include "plan_time.h"
 #include "scheduler.h"
+#include "task_types.h"
 #include "work_calendar.h"
 
 #include <QRegularExpression>
@@ -45,23 +46,32 @@ bool isNa(const QString &text)
 
 EditResult setDuration(Project &project, int index, const QString &text)
 {
-    Task &t = project.tasks[index];
-    if (t.summary) {
+    if (project.tasks.at(index).summary) {
         return EditResult::fail(QStringLiteral("A summary task's duration comes from its subtasks."));
     }
     const std::optional<ParsedDuration> d = parseDuration(text, durationFormatOf(project.info));
     if (!d) {
-        return EditResult::fail(QStringLiteral("“%1” is not a duration. Try 5d, 3 days, 4h or 2w.").arg(text.trimmed()));
+        return EditResult::fail(QStringLiteral("“%1” is not a duration. Try 5d, 3 days, 4h, 2w or 2ed (elapsed).")
+                                    .arg(text.trimmed()));
     }
-    t.duration = d->minutes;
+    // M83: the task type decides what else a new duration changes.
+    const EditResult r = setTaskDuration(project, index, d->minutes);
+    if (!r.ok) {
+        return r;
+    }
+    Task &t = project.tasks[index];
     t.durationUnit = d->unit;
     t.estimated = d->estimated;
+    t.durationElapsed = d->elapsed;
     if (d->minutes > 0) {
         t.milestone = false;
     }
+    t.splits.removeIf([&](const TaskSplit &s) { return s.at <= 0 || s.at >= t.duration; });
     if (t.manual && t.manualStart != kNoDate) {
         const WorkCalendar c(project, effectiveCalendarUid(project, index));
-        t.manualFinish = d->minutes > 0 ? c.add(c.snapForward(t.manualStart), d->minutes) : t.manualStart;
+        t.manualFinish = d->minutes <= 0 ? t.manualStart
+                         : t.durationElapsed ? t.manualStart + d->minutes
+                                             : c.add(c.snapForward(t.manualStart), d->minutes);
     }
     return {};
 }
@@ -90,8 +100,13 @@ EditResult setDateField(Project &project, int index, const QString &field, const
             if (*date < t.manualStart) {
                 return EditResult::fail(QStringLiteral("The finish cannot be before the start."));
             }
-            t.manualFinish = *date;
-            t.duration = c.workBetween(t.manualStart, *date);
+            const Minutes start = t.manualStart;
+            const Minutes length = t.durationElapsed ? *date - start : c.workBetween(start, *date);
+            const EditResult r = setTaskDuration(project, index, length); // M83: the task type's rule
+            if (!r.ok) {
+                return r;
+            }
+            project.tasks[index].manualFinish = *date;
         }
         return {};
     }
@@ -290,7 +305,7 @@ EditResult setTaskField(Project &project, int index, const QString &field, const
         || field == QLatin1String("remainingDuration")) {
         return setTrackingField(project, index, field, text);
     }
-    return EditResult::fail(QStringLiteral("Unknown field %1.").arg(field));
+    return setWorkOrCustomField(project, index, field, text, locale); // M83 (plan_field_work.cpp)
 }
 
 EditResult setTrackingField(Project &project, int index, const QString &field, const QString &text)
@@ -322,7 +337,10 @@ EditResult setTrackingField(Project &project, int index, const QString &field, c
         // Project: an actual duration at or past the duration finishes the
         // task (and lengthens it to what it took).
         if (d->minutes >= t.duration) {
-            t.duration = std::max(t.duration, d->minutes);
+            const EditResult r = setTaskDuration(project, index, std::max(t.duration, d->minutes)); // M83
+            if (!r.ok) {
+                return r;
+            }
             setPercentComplete(project, {index}, 100);
         } else {
             const int pct = t.duration > 0 ? int(std::clamp<qint64>(divRound(d->minutes * 100, t.duration), 0, 99)) : 0;
@@ -331,7 +349,10 @@ EditResult setTrackingField(Project &project, int index, const QString &field, c
         return {};
     }
     // Remaining duration: the duration becomes actual + remaining.
-    t.duration = actual + d->minutes;
+    const EditResult r = setTaskDuration(project, index, actual + d->minutes); // M83
+    if (!r.ok) {
+        return r;
+    }
     if (d->minutes == 0) {
         setPercentComplete(project, {index}, actual > 0 ? 100 : t.percentComplete);
     } else if (actual > 0) {

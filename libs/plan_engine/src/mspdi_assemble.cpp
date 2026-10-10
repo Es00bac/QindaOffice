@@ -3,6 +3,7 @@
 // validated Project (mspdi_p.h), which is then scheduled.
 #include "mspdi_keep.h"
 #include "mspdi_p.h"
+#include "mspdi_timephased.h"
 
 #include "outline.h"
 #include "plan_time.h"
@@ -64,8 +65,11 @@ void assembleTasks(Raw &raw, Project &p, int decimals, Minutes *earliest)
             p.info.notes = t.task.notes; // the project summary task (UID 0)
             // Its unmodelled elements travel with the project (M63), its
             // baselines too (M79: replayed while unchanged, mspdi_p.h).
-            if (t.task.extra.contains(kKeptKey)) {
-                p.info.extra.insert(kSummaryKey, t.task.extra.value(kKeptKey));
+            // M83: what the model reads of a task (Type, EffortDriven,
+            // Recurring, custom fields) the summary keeps as written.
+            QList<Kept> kept = keptFromJson(t.task.extra.value(kKeptKey)) + t.summaryKept;
+            if (!kept.isEmpty()) {
+                p.info.extra.insert(kSummaryKey, keptToJson(kept));
                 p.info.extra.insert(kSummaryStampKey, t.task.extra.value(kStampKey));
             }
             storeBaselineFragments(p.info.extra, t.baselines, kSummaryBaselinesKey);
@@ -94,9 +98,9 @@ void assembleTasks(Raw &raw, Project &p, int decimals, Minutes *earliest)
         const DurationCode code = durationCode(rt.durationFormat);
         t.durationUnit = code.percent || !code.known ? DurationUnit::Days : code.unit;
         t.estimated = t.estimated || code.estimated;
-        if (code.elapsed) {
-            raw.warn(QStringLiteral("Elapsed durations are read as working time (task “%1”).").arg(t.name));
-        }
+        t.durationElapsed = code.elapsed; // M83: elapsed durations run on the wall clock
+        t.effortDriven = t.effortDriven || t.type == TaskType::FixedWork;
+        t.unassignedWork = rt.hasWork ? std::max<Minutes>(0, rt.work) : 0; // kept only without resources (assemble)
         t.duration = std::max<Minutes>(0, t.duration);
         if (rt.constraintCode >= 0 && rt.constraintCode <= 7) {
             t.constraint = ConstraintType(rt.constraintCode);
@@ -172,10 +176,8 @@ void assembleTasks(Raw &raw, Project &p, int decimals, Minutes *earliest)
                 link.lagPercent = int(divRound(rl.lagTenths, 10));
             } else {
                 link.lag = divRound(rl.lagTenths, 10);
-                if (lag.elapsed && rl.lagTenths != 0) {
-                    raw.warn(QStringLiteral("Elapsed lags are read as working time (task “%1”).").arg(t.name));
-                }
             }
+            link.lagElapsed = lag.elapsed; // M83: elapsed lags run on the wall clock
             bool duplicate = false;
             for (const Link &existing : std::as_const(t.predecessors)) {
                 duplicate = duplicate || existing.predecessorUid == link.predecessorUid;
@@ -196,7 +198,7 @@ void assembleTasks(Raw &raw, Project &p, int decimals, Minutes *earliest)
     }
 }
 
-void assembleResources(Raw &raw, Project &p, int decimals)
+void assembleResources(Raw &raw, Project &p, int decimals, QHash<int, QStringList> *placeholders)
 {
     QList<RawResource> kept;
     QSet<int> uids;
@@ -242,6 +244,8 @@ void assembleResources(Raw &raw, Project &p, int decimals)
     }
     for (const RawAssignment &ra : std::as_const(raw.assignments)) {
         if (ra.resourceUid == kUnassignedResource) {
+            // M83: a task without resources carries its splits here.
+            (*placeholders)[ra.taskUid] += keptTimephased(ra.extra);
             continue;
         }
         const int resourceUid = remap.value(ra.resourceUid, ra.resourceUid);
@@ -263,6 +267,26 @@ void assembleResources(Raw &raw, Project &p, int decimals)
         a.units = int(std::clamp<qint64>(ra.units, 0, 100000000));
         if (p.resources.at(p.resourceIndex(resourceUid)).type == ResourceType::Cost) {
             a.costInput = centsToMinor(ra.costCents, decimals);
+        }
+        if (p.resources.at(p.resourceIndex(resourceUid)).type == ResourceType::Work && ra.hasWork) {
+            // M83: Project's Work is the assignment's; one that ends before
+            // its task (work ÷ units short of the duration, a flat contour)
+            // works that long (task_types.h).
+            // AGENT-NOTE: work that is exactly its units over the whole task
+            // is read as following the duration (what QindaPlan did before
+            // M83, and what the task-type rules keep while nothing is typed):
+            // it writes back the same, and a duration set directly still moves it.
+            const Task &t = p.tasks.at(ti);
+            const Minutes follows = t.isMilestone() ? 0 : divRound(t.duration * a.units, 100);
+            a.workInput = std::abs(ra.work - follows) <= 1 ? kWorkFollowsDuration : std::max<Minutes>(0, ra.work);
+            const double span = ra.unitsExact > 0 ? double(ra.work) / ra.unitsExact : 0.0;
+            bool contoured = false;
+            for (const Kept &k : keptFromJson(ra.extra.value(kKeptKey))) {
+                contoured = contoured || (k.name == QLatin1String("WorkContour") && !k.xml.contains(QLatin1String(">0<")));
+            }
+            if (a.workInput >= 0 && !contoured && t.duration > 0 && span > 0 && span < double(t.duration) - 1.0) {
+                a.workSpan = std::llround(span);
+            }
         }
         a.extra = ra.extra; // kept elements (mspdi_keep.h)
         for (const RawBaseline &b : ra.baselines) { // M79
@@ -294,7 +318,22 @@ void assemble(Raw &raw, Project *out)
     assembleCalendars(raw, p);
     Minutes earliest = kNoDate;
     assembleTasks(raw, p, decimals, &earliest);
-    assembleResources(raw, p, decimals);
+    QHash<int, QStringList> placeholders;
+    assembleResources(raw, p, decimals, &placeholders);
+    p.customFields = raw.customFields; // M83 (mspdi_custom.h)
+    QSet<int> worked; // M83: a task's own Work counts only when no resource does it
+    for (const Assignment &a : std::as_const(p.assignments)) {
+        const int r = p.resourceIndex(a.resourceUid);
+        if (r >= 0 && p.resources.at(r).type == ResourceType::Work) {
+            worked.insert(a.taskUid);
+        }
+    }
+    for (Task &t : p.tasks) {
+        if (t.summary || worked.contains(t.uid)) {
+            t.unassignedWork = 0;
+        }
+    }
+    deriveSplits(p, placeholders); // M83 (mspdi_timephased.h)
     if (p.info.start == kNoDate) {
         p.info.start = earliest != kNoDate
                            ? earliest

@@ -90,7 +90,7 @@ private slots:
     void filters()
     {
         const Plan x;
-        QCOMPARE(taskFilterIds().size(), 11);
+        QCOMPARE(taskFilterIds().size(), 12); // M83 added Custom Field…
         QCOMPARE(taskFilterTitle(QStringLiteral("deadlines")), QStringLiteral("Tasks With Deadlines"));
         QCOMPARE(x.filtered(QStringLiteral("all")).size(), 6);
         QCOMPARE(x.filtered(QStringLiteral("completed")), strings({"Phase", "Brief"}));

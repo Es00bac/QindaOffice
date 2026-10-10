@@ -18,7 +18,9 @@
 // "lateStart" "lateFinish" "active" "milestone" "calendar" "critical"
 // "priority" "deadline" (M63) "actualDuration" "remainingDuration"
 // "actualWork" "remainingWork" "baselineWork" "workVariance"
-// "levelingDelay" "preLeveledStart" "preLeveledFinish" (M79);
+// "levelingDelay" "preLeveledStart" "preLeveledFinish" (M79); "type"
+// "effortDriven" and the custom fields "Text1" … "Finish10" (M83, D-092 —
+// "work", "actualWork" and "actualCost" became typed then too);
 // resource fields "id" "indicators" "name" "type" "materialLabel"
 // "initials" "group" "maxUnits" "standardRate" "costPerUse" "calendar"
 // "email" "work" "cost" "overallocated".
@@ -27,7 +29,9 @@
 // auto-scheduled task sets Start No Earlier Than; typing a finish sets
 // Finish No Earlier Than; a constraint date typed on an ASAP task makes it
 // SNET; % complete > 0 records an actual start, 100% an actual finish;
-// Resource Names creates resources it does not know.
+// Resource Names creates resources it does not know. M83: Duration, Work
+// and Resource Names follow the task's type and effort driving
+// (task_types.h).
 
 #include "plan_types.h"
 
@@ -65,6 +69,10 @@ EditResult setTaskField(Project &project, int index, const QString &field, const
 // "Ana[50%], Ben, Paper[200 sheets]".
 [[nodiscard]] QString resourceNamesText(const Project &project, int index, const QLocale &locale = QLocale());
 EditResult setResourceNames(Project &project, int index, const QString &text, const QLocale &locale = QLocale());
+
+// M83: work as typed — hours unless it says otherwise ("40", "40h", "5d",
+// "2w"); nullopt when it is not work (elapsed units are not).
+[[nodiscard]] std::optional<Minutes> parseWorkText(const QString &text, const ProjectInfo &info);
 
 // ---- the resource sheet ----
 [[nodiscard]] QStringList resourceFieldIds();

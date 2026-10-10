@@ -252,6 +252,7 @@ void paintBars(QPainter *painter, const Geometry &g, int h, int firstRow, int la
                     painter->drawRect(QRectF(x0, bar.center().y() - band / 2, bar.width() * t.percentComplete / 100.0, band));
                 }
             }
+            paintSplitGaps(painter, g, h, index, bar); // M83: Project's split bars
         }
         if (g.options.showBarText) {
             // What Project's style writes after the bar: resources, % complete

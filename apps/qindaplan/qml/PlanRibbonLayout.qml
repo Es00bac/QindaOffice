@@ -9,7 +9,10 @@ import QindaOffice.Shell
 // registers (plan_command_table.h). M79 (D-088): the Tracking and Leveling
 // Gantt, Network Diagram and Task Usage views, Filter and Sort, the baseline
 // the bars show, Slack, Mark on Track / Update Tasks, Level Selection,
-// Leveling Options, the Cost and Work Overview dashboards.
+// Leveling Options, the Cost and Work Overview dashboards. M83 (D-092): Task
+// Type and Effort Driven, Split Task, Recurring Task, Custom Fields and their
+// table, filter and sort, Reschedule Uncompleted Work, progress lines,
+// Import Tasks from Excel or CSV.
 QtObject {
     readonly property var views: ["planViewGanttAction", "planViewTrackingGanttAction", "planViewLevelingGanttAction",
                                   "planViewNetworkAction", "planViewTaskSheetAction", "planViewTaskUsageAction", "|",
@@ -17,14 +20,14 @@ QtObject {
                                   "planViewReportsAction"]
     readonly property var tables: ["planTableEntryAction", "planTableTrackingAction", "planTableVarianceAction",
                                    "planTableCostAction", "planTableScheduleAction", "planTableWorkAction",
-                                   "planTableBaselineAction", "planTableDelayAction"]
+                                   "planTableBaselineAction", "planTableDelayAction", "planTableCustomAction"]
     readonly property var filters: ["planFilterAllAction", "|", "planFilterCriticalAction", "planFilterIncompleteAction",
                                     "planFilterCompletedAction", "planFilterLateAction", "planFilterSlippingAction",
                                     "planFilterMilestonesAction", "planFilterSummaryAction", "planFilterDeadlinesAction", "|",
-                                    "planFilterResourceAction", "planFilterDateRangeAction", "|",
+                                    "planFilterResourceAction", "planFilterDateRangeAction", "planFilterCustomAction", "|",
                                     "planFilterRelatedSummariesAction"]
     readonly property var sorts: ["planSortIdAction", "planSortStartAction", "planSortFinishAction",
-                                  "planSortPriorityAction", "planSortCostAction"]
+                                  "planSortPriorityAction", "planSortCostAction", "planSortCustomAction"]
     readonly property var baselinesShown: ["planBaselineShown0Action", "planBaselineShown1Action", "planBaselineShown2Action",
                                            "planBaselineShown3Action", "planBaselineShown4Action", "planBaselineShown5Action",
                                            "planBaselineShown6Action", "planBaselineShown7Action", "planBaselineShown8Action",
@@ -33,7 +36,7 @@ QtObject {
     readonly property var tabs: [
         StandardRibbon.fileTab([
             { id: "exchange", label: qsTr("Microsoft Project"), items: [
-                { action: "planImportMspdiAction", size: "large" }, "planExportMspdiAction",
+                { action: "planImportMspdiAction", size: "large" }, "planImportTasksAction", "planExportMspdiAction",
                 "planExportCsvAction", "planExportXlsxAction", "planExportTimelineAction"] }],
             [], [{ action: "planExportPdfAction", iconName: "file-output" }, "planPageSetupAction"]),
         { id: "home", label: qsTr("Task"), keyTip: "T", groups: [
@@ -52,15 +55,23 @@ QtObject {
                 [{ action: "planOutdentAction", size: "icon" }, { action: "planIndentAction", size: "icon" },
                  { action: "planLinkAction", size: "icon" }, { action: "planUnlinkAction", size: "icon" },
                  { action: "planMoveUpAction", size: "icon" }, { action: "planMoveDownAction", size: "icon" },
+                 { id: "planSplit", label: qsTr("Split Task"), iconName: "scissors", size: "icon",
+                   menu: ["planSplitTaskAction", "planRemoveSplitsAction"] },
                  "planInactivateAction"]] },
-            { id: "mode", label: qsTr("Tasks"), items: ["planManualScheduleAction", "planAutoScheduleAction"] },
+            { id: "mode", label: qsTr("Tasks"), items: ["planManualScheduleAction", "planAutoScheduleAction",
+                { id: "planTaskType", label: qsTr("Task Type"), iconName: "clock",
+                  menu: ["planTaskTypeFixedUnitsAction", "planTaskTypeFixedDurationAction", "planTaskTypeFixedWorkAction",
+                         "|", "planEffortDrivenAction"] }] },
             { id: "insert", label: qsTr("Insert"), items: [
                 { action: "planInsertTaskAction", size: "large", split: true,
-                  menu: ["planInsertTaskAction", "planInsertMilestoneAction", "planInsertSummaryAction"] },
+                  menu: ["planInsertTaskAction", "planInsertMilestoneAction", "planInsertSummaryAction",
+                         "planInsertRecurringAction"] },
                 "planInsertMilestoneAction", "planInsertSummaryAction",
                 "planDeleteTaskAction"] },
             { id: "properties", label: qsTr("Properties"), items: [
-                { action: "planTaskInfoAction", size: "large" }, "planTaskNotesAction", "planScrollToTaskAction"] },
+                { action: "planTaskInfoAction", size: "large", split: true,
+                  menu: ["planTaskInfoAction", "planRecurringInfoAction"] },
+                "planTaskNotesAction", "planScrollToTaskAction"] },
             StandardRibbon.historyGroup(),
             StandardRibbon.editingGroup([])
         ] },
@@ -90,11 +101,11 @@ QtObject {
         ] },
         { id: "project", label: qsTr("Project"), keyTip: "J", groups: [
             { id: "projectProperties", label: qsTr("Properties"), items: [
-                { action: "planProjectInfoAction", size: "large" }, "planWorkingTimeAction"] },
+                { action: "planProjectInfoAction", size: "large" }, "planWorkingTimeAction", "planCustomFieldsAction"] },
             { id: "projectSchedule", label: qsTr("Schedule"), items: [
                 { action: "planShowCriticalAction", size: "large" }, "planRecalculateAction"] },
             { id: "status", label: qsTr("Status"), items: [
-                { action: "planStatusDateAction", size: "large" }, "planUpdateProjectAction"] },
+                { action: "planStatusDateAction", size: "large" }, "planUpdateProjectAction", "planRescheduleWorkAction"] },
             { id: "baseline", label: qsTr("Baseline"), items: [
                 { action: "planSetBaselineAction", size: "large" }, "planClearBaselineAction"] }
         ] },
@@ -117,7 +128,7 @@ QtObject {
         ]),
         { id: "ganttFormat", label: qsTr("Gantt Chart Format"), keyTip: "G", contextId: "ganttFormat", groups: [
             { id: "barStyles", label: qsTr("Bar styles"), items: [
-                { action: "planShowCriticalAction", size: "large" }, "planShowSlackAction",
+                { action: "planShowCriticalAction", size: "large" }, "planShowSlackAction", "planShowProgressLinesAction",
                 { action: "planShowBaselineAction", split: true, menu: baselinesShown }, "planShowBarTextAction"] },
             { id: "formatTimescale", label: qsTr("Timescale"), items: [
                 { action: "planTimescaleWeeksAction", size: "large" }, "planTimescaleDaysAction",

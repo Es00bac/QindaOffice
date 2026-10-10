@@ -240,6 +240,7 @@ void paintPage(QPainter *painter, const Geometry &g, int page)
         paintLinks(painter, g, h, firstRow, lastRow);
         paintBarExtras(painter, g, h, firstRow, lastRow);
         paintBars(painter, g, h, firstRow, lastRow);
+        paintProgressLine(painter, g, h, firstRow, lastRow); // M83
     }
     painter->restore();
     if (h == 0) {

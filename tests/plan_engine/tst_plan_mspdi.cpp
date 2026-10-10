@@ -186,7 +186,9 @@ private slots:
         QCOMPARE_AT(vendor.manualStart, at(16));
         const Task &foil = byName(p, "Foil cover (dropped)");
         QVERIFY(!foil.active);
-        QVERIFY(r.warnings.join(QLatin1Char('\n')).contains(QStringLiteral("Elapsed")));
+        // M83 (D-092): an elapsed duration is modelled, no longer a warning.
+        QVERIFY(foil.durationElapsed);
+        QVERIFY(!r.warnings.join(QLatin1Char('\n')).contains(QStringLiteral("Elapsed")));
 
         // Resources: the blank UID 0 is skipped; rates are per hour.
         QCOMPARE(p.resources.size(), 3);

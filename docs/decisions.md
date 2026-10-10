@@ -95,6 +95,182 @@ document needs bindings over them; `Tk.Ribbon` returns to its first tab when
 a contextual tab goes away; the rich-text model has no per-paragraph user
 data, so tags live beside it.
 
+## D-092: QindaPlan: task types, custom fields, actuals, splits, recurring tasks
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart; M83, builds on D-051, D-071 and D-088; details
+in [plan.md](plan.md#task-types-and-effort-driven-scheduling-task_typesh-m83);
+what remains is ranked in docs/plans/office-parity.md)
+
+**Context.** After M79 the gaps ranked first in QindaPlan were Project's
+work formula and what hangs on it. Every assignment worked its units for
+the whole duration, so Work could not be typed, adding a resource could not
+shorten a task, and a Project file's assignment Work that was not duration
+× units was recomputed on reading. Custom fields (Text1–30 …) travelled
+blind in Microsoft Project XML (D-071) and were never shown. Elapsed
+durations and lags were read as working time with a warning; a split task
+came back unsplit and a recurring task as a plain summary; actual work and
+cost could not be typed; there was no progress line and no Reschedule
+Uncompleted Work; tasks could not be imported from Excel or CSV; and Change
+Working Time listed recurring exceptions and work weeks read-only. Two
+constraints held: MSPDI stays the interchange and stays byte-faithful while
+unchanged (D-071, D-088), and QindaTK is installed through Portage and not
+this milestone's to change — its GanttView draws neither split bars nor
+progress lines.
+
+**Decision.**
+
+1. **Project's work formula, with its task types** (`task_types.h`). Per
+   assignment Work = Duration × Units, and what a change recalculates is
+   Project's table: Fixed Units — units → duration, duration → work, work
+   → duration; Fixed Work — units → duration, duration → units, work →
+   duration; Fixed Duration — units → work, duration → work, work → units
+   (`Task::type`, MSPDI `Type` 0/1/2; a summary is written Fixed
+   Duration). **Effort driven** (`Task::effortDriven`, always on for Fixed
+   Work, MSPDI `EffortDriven`): resources added to or removed from a task
+   that already has work assignments share its work by units — a Fixed
+   Units or Fixed Work task gets shorter or longer, a Fixed Duration
+   task's units change; the first resources assigned take the work typed
+   on the task (`Task::unassignedWork`) or duration × units. An
+   assignment's work is an input (`Assignment::workInput`) or follows the
+   duration (`kWorkFollowsDuration`, what every assignment did before M83
+   and keeps until a rule sets its work, so old plans schedule as before);
+   one whose units or work is typed apart on a Fixed Units or Fixed Work
+   task works a shorter span (`workSpan`) and the task's duration is its
+   longest assignment. Units stay whole percents; on Fixed Duration and
+   Fixed Work tasks the work is the truth (units its rounded share), and
+   usage, leveling and costs spread the exact work. Project Information
+   holds Project's defaults for new tasks (`DefaultTaskType`,
+   `NewTasksEffortDriven`; Fixed Units, not effort driven, as Project
+   2010+). Material and cost resources take no part.
+2. **Custom fields are Project's** (`custom_fields.h`,
+   `custom_formula.cpp`). The 120 task fields Text1–30, Number1–20,
+   Date1–10, Flag1–20, Cost1–10, Duration1–10, Start1–10 and Finish1–10
+   under Project 2019's FieldIDs; values per task (`Task::custom`, in
+   MSPDI's spelling); definitions (`Project::customFields`): a new name
+   (alias), a lookup table (value, description; optionally the only values
+   allowed) and a formula in Project's language — `[Field]` references
+   (`[Duration]` in minutes, dates as days since 30 Dec 1899, other custom
+   fields by name or alias), VBA operators and precedence, `IIf`,
+   `Switch`, `Choose`, text, math and date functions, `ProjDateDiff`,
+   `ProjDateAdd`, `ProjDateSub`, `ProjDurConv`, `ProjDateValue`,
+   `ProjDurValue`, the `pj…` constants; a formula that fails shows
+   `#ERROR` and circular references stop at depth 8. As in Project an
+   unset number, cost, flag or duration is 0 (a typed 0 is stored as
+   unset), text is empty and a date NA. The fields are columns (the
+   Custom Fields table shows the fields in use under their new names),
+   edited in the sheet and in Task Information's Custom Fields page,
+   filtered (equals, not equals, greater, less, contains, is set, is not
+   set) and sorted (keeping the outline). **In MSPDI every definition and
+   value is read into the model and kept as written**
+   (`mspdiExtendedAttributes`, `mspdiCustom`): replayed byte for byte
+   while the model still says it, written from the model once changed (a
+   definition keeps Project's Guid, SecondaryPID and the rest in the
+   schema's order), dropped once cleared, added after the kept ones when
+   new; a resource's custom field and a FieldID QindaPlan does not know
+   travel untouched; a formula QindaPlan cannot evaluate keeps Project's
+   value.
+3. **Elapsed durations and lags run on the wall clock**
+   (`Task::durationElapsed`, `Link::lagElapsed`; typed `3ed`, `2eh`, `1ew`,
+   `1emo`; MSPDI `DurationFormat` and `LagFormat` 4, 6, 8, 10, 12, +32
+   when estimated). An elapsed task's start is not moved to working time
+   and its work runs around the clock at its units.
+4. **Split tasks** (`Task::splits`; `tracking.h` Split Task, Remove
+   Splits): after `at` working minutes the work stops for `gap` working
+   minutes of the task's calendar, so a split moves with its task; the
+   scheduler's length is duration + gaps; usage, overallocation, costs and
+   the printed Gantt leave the gaps out. MSPDI has no split element: the
+   reader derives the splits from the stretches with no work but with
+   working time between an assignment's TimephasedData periods with work —
+   actual (Type 2) and remaining (Type 1), so Project's Stop/Resume reads
+   as a split — or a placeholder assignment's (ResourceUID −65535) for a
+   task without resources; the writer replays Project's own periods while
+   the assignment's stamp holds and they still split its work where the
+   task does, and otherwise writes one Type 1 period per segment with its
+   share of the work and an empty one per gap (a placeholder assignment
+   for a task without resources).
+5. **Recurring tasks are Project's recurring summary tasks**
+   (`recurring_tasks.h`). Insert ▸ Recurring Task makes a summary flagged
+   recurring (MSPDI `Recurring`) whose subtasks are the occurrences, each
+   Start No Earlier Than its date at the pattern's time: daily (every N
+   days or working days), weekly on days, monthly or yearly by day or by
+   position, through a date or for N occurrences (at most 999). The
+   pattern is kept in the `.qplan` so Recurring Task Information can make
+   the occurrences again (refused once one has progress); Project's XML
+   carries no pattern, so a recurring task read from it keeps its
+   occurrences and its flag.
+6. **Actuals typed, the progress line, Reschedule Uncompleted Work**
+   (`tracking.h`, `plan_field_work.cpp`). Act. Work is typed (it sets %
+   complete) and Act. Cost too when the project's actual costs are not
+   always calculated (`EditableActualCosts`, MSPDI, Project Information):
+   the cost is then the actual typed plus the remaining calculated. The
+   **progress line** (View ▸ Progress Lines; on the printed Gantt) joins
+   at the status date each in-progress or should-have-started task's
+   progress point — its start plus its actual duration — so it bends left
+   where work is behind. **Reschedule Uncompleted Work** to start after a
+   date (Project ▸ Update Project) splits an in-progress task where its
+   actual duration ends and resumes it at the date (Project's Stop and
+   Resume) and gives a task that should have started and has not Start No
+   Earlier Than the date.
+7. **Excel and CSV task import** (`plan_import.h`, `plan_import_xlsx.h`):
+   Project's Import Wizard for tasks. The first sheet of an `.xlsx`
+   (through calc_io; a date-formatted cell reads as an ISO date-time) or a
+   CSV (RFC 4180; the separator sniffed; UTF-8, else Latin-1); each column
+   mapped onto a task field — guessed from Project's and QindaPlan's column
+   names, the field ids and the custom fields' new names, changed per
+   column in the dialog; the rows appended as one undo step, every cell
+   read exactly as if typed (a refused cell is a warning naming the row
+   and the field, and the import goes on); the outline from an Outline
+   Level or WBS column; predecessors by the source's IDs, translated. The
+   sheet exports (CSV, Excel) title custom fields by their new names, so a
+   sheet exported here imports back.
+8. **Change Working Time makes recurring exceptions and work weeks**
+   (`calendar_edit.h`): add, change and remove. The MSPDI elements stay
+   the truth (D-088): an edit writes Project's own `<Exception>` /
+   `<WorkWeek>` element and derives the model again, so a `.qplan` and an
+   MSPDI export carry it with no new key, and a kind QindaPlan cannot
+   expand still travels untouched.
+9. **Commands and file.** New persistent ids, never renamed or reused,
+   each in the menu tree and on the ribbon (rule 5):
+   `planTaskType{FixedUnits,FixedDuration,FixedWork}Action` (a radio
+   group), `planEffortDrivenAction`, `planSplitTaskAction`,
+   `planRemoveSplitsAction`, `planInsertRecurringAction`,
+   `planRecurringInfoAction`, `planCustomFieldsAction`,
+   `planRescheduleWorkAction`, `planTableCustomAction`,
+   `planFilterCustomAction`, `planSortCustomAction`,
+   `planShowProgressLinesAction`, `planImportTasksAction`. Task
+   Information grows Resources (units and work per assignment), Advanced
+   (task type, effort driven) and Custom Fields pages. The `.qplan` stays
+   version 1 with new keys (task `type`, `effortDriven`, `unassignedWork`,
+   `durationElapsed`, `splits`, `recurring`, `recurrence`, `custom`,
+   `actualCost`; link `lagElapsed`; assignment `work`, `workSpan`; project
+   `defaultTaskType`, `newTasksEffortDriven`, `editableActualCosts`,
+   `customFields`); what an M63–M82 file kept verbatim of these (task
+   Type, EffortDriven, Recurring, custom values and definitions, the
+   project's defaults) joins the model on load (`adoptM83Elements`), each
+   element written once.
+
+**Consequences.** Typing work, units or duration, and adding or removing
+resources, change a task as they do in Project, and a Project file's
+assignment work, task types, custom fields, elapsed durations, splits and
+recurring tasks read, schedule and go back as Project wrote them. Behaviour
+changed by design: Work is typed (a task without resources keeps it); an
+elapsed duration is scheduled instead of warned about; the filter list has
+Custom Field…; an assignment whose work is exactly its units over its task
+keeps following the duration. Not done, ranked in office-parity.md: groups
+and highlight filters (no group-header rows in QindaTK's GanttView and
+EditableGrid), earned value and interim plans, editing assignments in Task
+Usage, custom fields of resources (kept, not shown), fractional units below
+1 %, contours (kept), the nth weekday or weekend day of a month in
+recurring exceptions. QindaTK gaps, reported and not worked around in the
+toolkit: GanttView draws no split bars (the window shows a split task as one
+bar; the printout and PDF draw the gaps) and no progress lines (printout
+only), besides D-088's slack bars, deadline markers, bar styles and second
+baseline lane. Microsoft Project is not available here: the fixtures are
+hand-built in Project's shape, the output is checked structurally (no MSPDI
+XSD ships through Portage), and the owner's check in Project is the manual
+gate (`docs/verification.md`).
+
 ## D-091: QindaCalc and QindaShow everyday polish
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: the everyday

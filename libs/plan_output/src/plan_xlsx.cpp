@@ -3,6 +3,7 @@
 #include "plan_xlsx.h"
 
 #include "baselines.h"
+#include "custom_fields.h"
 #include "plan_edit.h"
 #include "plan_time.h"
 
@@ -147,7 +148,9 @@ bool writeTaskSheetXlsx(const Project &project, const QStringList &fields, const
     };
     for (qint32 c = 0; c < fields.size(); ++c) {
         const QString &f = fields.at(c);
-        put(0, c, Calc::Value(taskFieldTitle(f)), kindOf(f) == Cell::Text ? header : headerRight);
+        // M83: a custom field under its new name ("Owner", not "Text1").
+        const QString title = isCustomField(f) ? customFieldTitle(project, f) : taskFieldTitle(f);
+        put(0, c, Calc::Value(title), kindOf(f) == Cell::Text ? header : headerRight);
         sheet.setColumnWidth(c, f == QLatin1String("name") ? 280 : kindOf(f) == Cell::Date ? 140 : 110);
     }
     for (qint32 r = 0; r < project.tasks.size(); ++r) {

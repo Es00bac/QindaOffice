@@ -91,7 +91,8 @@ void PlanHost::createViewActions()
     for (const QString &filter : ::QindaOffice::Plan::taskFilterIds()) {
         ActionEntry *entry = action(QStringLiteral("planFilter") + capitalized(filter) + QStringLiteral("Action"));
         connect(entry, &ActionEntry::triggered, this, [this, filter] {
-            if (filter == QLatin1String("resource") || filter == QLatin1String("dateRange")) {
+            if (filter == QLatin1String("resource") || filter == QLatin1String("dateRange")
+                || filter == QLatin1String("custom")) { // M83: Custom Field… asks too
                 emit filterRequested(filter);
                 syncChecks();
                 return;

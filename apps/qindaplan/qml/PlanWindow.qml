@@ -135,10 +135,20 @@ OfficeWindow {
     LevelDialog { id: level; plan: window.plan }
     PageSetupDialog { id: pageSetup; host: window.planHost }
     ResourceInfoDialog { id: resourceInfo; plan: window.plan; host: window.planHost }
-    PlanFileDialogs { id: files; plan: window.plan; host: window.planHost }
+    PlanFileDialogs {
+        id: files
+        plan: window.plan
+        host: window.planHost
+        onImportChosen: function(file) { importTasks.openFor(file) }
+    }
     FindTaskDialog { id: findDialog; plan: window.plan; host: window.planHost }
     UpdateTasksDialog { id: updateTasks; plan: window.plan }
     FilterDialog { id: filterDialog; plan: window.plan }
+    // M83 (D-092)
+    CustomFieldsDialog { id: customFields; plan: window.plan }
+    SplitTaskDialog { id: splitTask; plan: window.plan }
+    RecurringTaskDialog { id: recurringTask; plan: window.plan }
+    ImportTasksDialog { id: importTasks; plan: window.plan }
 
     Binding {
         target: window.planHost
@@ -166,6 +176,10 @@ OfficeWindow {
         function onFilterRequested(filterId) { filterDialog.openFor(filterId) }
         function onUpdateTasksRequested() { updateTasks.openDialog() }
         function onLevelingOptionsRequested() { level.openDialog() }
+        function onSplitTaskRequested() { splitTask.openDialog() }
+        function onRecurringTaskRequested(taskId) { recurringTask.openFor(taskId) }
+        function onCustomFieldsRequested() { customFields.openDialog() }
+        function onRescheduleRequested() { statusDate.openReschedule() }
     }
     Connections {
         target: window.plan

@@ -1581,19 +1581,19 @@ QQuickRootItem#PlanWindow
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_editPasteAction
                 RibbonButton#ribbonAction_editPasteAction
-                  Icon#ribbonButtonIcon
+                  Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel
+                  QQuickText#ribbonButtonLabel [hidden]
             RibbonGroup#ribbonGroup_editing
               Overline#ribbonGroupCaption
               QQuickRectangle#ribbonGroupCard
               RibbonSlot#ribbonItem_editFindAction
                 RibbonButton#ribbonAction_editFindAction
-                  Icon#ribbonButtonIcon
+                  Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel
+                  QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_editReplaceAction
                 RibbonButton#ribbonAction_editReplaceAction
                   Icon#ribbonButtonIcon [hidden]
@@ -1644,10 +1644,10 @@ QQuickRootItem#PlanWindow
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_planInsertTaskAction
                 RibbonButton#ribbonAction_planInsertTaskAction
-                  Icon#ribbonButtonIcon
+                  Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel
+                  QQuickText#ribbonButtonLabel [hidden]
             RibbonGroup#ribbonGroup_mode
               Overline#ribbonGroupCaption
               QQuickRectangle#ribbonGroupCard
@@ -1663,6 +1663,12 @@ QQuickRootItem#PlanWindow
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planTaskType
+                RibbonButton#ribbonAction_planTaskType
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
             RibbonGroup#ribbonGroup_properties
               Overline#ribbonGroupCaption
               QQuickRectangle#ribbonGroupCard
@@ -1674,10 +1680,10 @@ QQuickRootItem#PlanWindow
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_planTaskInfoAction
                 RibbonButton#ribbonAction_planTaskInfoAction
-                  Icon#ribbonButtonIcon
-                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel
+                  QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_planTaskNotesAction
                 RibbonButton#ribbonAction_planTaskNotesAction
                   Icon#ribbonButtonIcon [hidden]
@@ -1759,6 +1765,12 @@ QQuickRootItem#PlanWindow
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_planSplit
+                RibbonButton#ribbonAction_planSplit
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_planTracking
                 RibbonButton#ribbonAction_planTracking
                   Icon#ribbonButtonIcon [hidden]
@@ -1776,8 +1788,8 @@ QQuickRootItem#PlanWindow
               QQuickRectangle#ribbonGroupCard
               RibbonSlot#ribbonItem_planViewGanttAction
                 RibbonButton#ribbonAction_planViewGanttAction
-                  Icon#ribbonButtonIcon
+                  Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel
+                  QQuickText#ribbonButtonLabel [hidden]
         QQuickRectangle#ribbonBackground

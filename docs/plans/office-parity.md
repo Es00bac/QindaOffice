@@ -89,24 +89,25 @@ locally, contents never copied anywhere):
 ## QindaPlan against Microsoft Project (survey of 2026-10-09, M79)
 
 Measured against Project's everyday features area by area: what QindaPlan
-had before M79, what M79 closed (D-088), and what is still missing. The
+had before M79, what M79 closed (D-088), and what is still missing — with
+what M83 closed since (D-092) marked "M83 ✔" in the last column. The
 ranked list at the end is the order the remaining gaps should be closed in.
 
 | Area | Before M79 | M79 closed | Still missing |
 | --- | --- | --- | --- |
-| Task scheduling | auto/manual; the eight constraints with conflicts reported; FS/SS/FF/SF with lag, lead and % lag; summary links; inactive tasks; deadlines only flagged | a **deadline is a late finish** (negative slack, critical, dates unmoved, summaries too) | task types and effort-driven scheduling; elapsed durations and lags (read as working time); split and recurring tasks; scheduling from the finish date; "honor constraints" off; manual summaries |
-| Calendars | base and resource calendars, per-day hours, dated exceptions | Project's **recurring exceptions** (yearly or monthly on a day or a position, weekly, every N days) and **alternative work weeks** scheduled (kept as written; shown in Change Working Time) | creating and editing recurring exceptions and work weeks here; the nth weekday / weekend day of a month; new base calendars from Project's templates (24 Hours, Night Shift) |
+| Task scheduling | auto/manual; the eight constraints with conflicts reported; FS/SS/FF/SF with lag, lead and % lag; summary links; inactive tasks; deadlines only flagged | a **deadline is a late finish** (negative slack, critical, dates unmoved, summaries too) | **M83 ✔** task types and effort-driven scheduling; elapsed durations and lags; split and recurring tasks. Still: scheduling from the finish date; "honor constraints" off; manual summaries |
+| Calendars | base and resource calendars, per-day hours, dated exceptions | Project's **recurring exceptions** (yearly or monthly on a day or a position, weekly, every N days) and **alternative work weeks** scheduled (kept as written; shown in Change Working Time) | **M83 ✔** recurring exceptions and work weeks made, changed and removed here. Still: the nth weekday / weekend day of a month; new base calendars from Project's templates (24 Hours, Night Shift) |
 | Summary tasks and outline | outline, roll-ups, collapse, WBS, the project summary task in MSPDI | sorts keep the outline; summaries follow filters as related rows | Show Outline Level N; the project summary row in the sheet; WBS code masks (kept) |
 | Critical path and slack | critical tasks, total and free slack columns, critical bars | **critical slack limit**, **multiple critical paths** (MSPDI both), slack in the Gantt (text after the bar; bars on paper), the Critical filter | driving predecessors (Task Path); slack bars in the window (QindaTK's GanttView draws none) |
-| Baselines and tracking | Baseline, 1, 2; Variance table; status date; Update Project; % complete records actuals; late/slipped | **Baseline … Baseline 10** for tasks, assignments and the summary (set and clear for the project or the selection, byte-faithful in MSPDI); the **Tracking Gantt**; Work and Baseline tables; **Update Tasks** (actual/remaining duration typed); **Mark on Track** | interim plans (Start1–10/Finish1–10); actual work and cost typed; progress lines; earned value; Reschedule Uncompleted Work (needs splits) |
+| Baselines and tracking | Baseline, 1, 2; Variance table; status date; Update Project; % complete records actuals; late/slipped | **Baseline … Baseline 10** for tasks, assignments and the summary (set and clear for the project or the selection, byte-faithful in MSPDI); the **Tracking Gantt**; Work and Baseline tables; **Update Tasks** (actual/remaining duration typed); **Mark on Track** | **M83 ✔** actual work and cost typed; progress lines; Reschedule Uncompleted Work. Still: interim plans (Set Interim Plan into Start1–10/Finish1–10, fields that now exist); earned value |
 | Resources | work and material, standard rate, cost per use, max units, calendars, group, e-mail | **cost resources** (an amount per assignment; MSPDI Type 2 both ways) | overtime rates; cost rate tables A–E (kept); availability over time; generic and budget resources |
-| Assignments, work/units/duration | units per assignment; work = duration × units | — | **task types (fixed units / duration / work) and effort-driven**; Work typed on a task or an assignment; assignment work apart from duration × units; contours and assignment delay (kept) |
+| Assignments, work/units/duration | units per assignment; work = duration × units | — | **M83 ✔** task types (fixed units / duration / work) and effort driven; Work typed on a task or an assignment; assignment work apart from duration × units. Still: contours and assignment delay (kept); units below 1 % (whole percents) |
 | Usage, overallocation, leveling | per-day overallocation, Resource Usage, Next Overallocation, a two-pass leveling heuristic with Clear Leveling | Project's **Leveling Delay** (relative, edays, read and written in MSPDI with the pre-leveled dates); leveling order (ID Only / Standard / Priority, Standard), within slack only, clear first, range; priority 1000 never moves; **Level Selection**, Clear Leveling of the selection; the **Leveling Gantt** and Delay table; **Task Usage** | leveling that splits work or levels hour by hour; leveling one assignment of a task; Resource Graph; Team Planner |
 | Views | Gantt (with the Timeline strip), Task Sheet, Resource Sheet, Resource Usage, Calendar, Reports | **Network Diagram**, **Tracking Gantt**, **Leveling Gantt**, **Task Usage** | Detail Gantt's slack bars on screen; Resource Graph; Team Planner; choosing the Timeline's tasks; split views (Task Form) |
-| Filters, groups, custom fields | — | **eleven filters** (All, Critical, Incomplete, Completed, Late, Slipping, Milestones, Summary, With Deadlines, Using Resource…, Date Range…) with related summary rows; **five sorts** keeping the outline — on the sheet, Gantt, Network Diagram, Task Usage, Calendar and print | **groups** (needs group-header rows in QindaTK's GanttView and EditableGrid); highlight filters; AutoFilter; **custom fields** (Text1–30, Number1–20, Flag1–20 … kept in MSPDI, not shown) |
+| Filters, groups, custom fields | — | **eleven filters** (All, Critical, Incomplete, Completed, Late, Slipping, Milestones, Summary, With Deadlines, Using Resource…, Date Range…) with related summary rows; **five sorts** keeping the outline — on the sheet, Gantt, Network Diagram, Task Usage, Calendar and print | **M83 ✔** task custom fields (Text1–30, Number1–20, Date, Flag, Cost, Duration, Start, Finish) shown, typed, filtered and sorted, with new names, lookup tables and formulas, byte-faithful in MSPDI. Still: **groups** (needs group-header rows in QindaTK's GanttView and EditableGrid); highlight filters; AutoFilter; resource custom fields (kept); graphical indicators |
 | Printing and PDF | the Gantt across pages (timescale on every page, legend, today/status lines), page setup (range, pages wide), reports | the Tracking and Leveling styles, slack bars, deadline arrows, a legend of exactly what is drawn, the view's filter and sort; the **Network Diagram** printed (≥ 55 %) | header/footer text; notes pages; fit to N pages tall; printing the usage views and the calendar |
 | Reports | Project Overview, Critical Tasks, Resource Overview, Late Tasks | **Cost Overview**, **Work Overview** | burndown, cash flow, earned value, milestone and upcoming-task reports; charts in reports |
-| Import and export | MSPDI read/write keeping what it does not model; CSV and `.xlsx` of the sheet; Timeline PNG; PDF | MSPDI also carries what M79 models (above) | Excel/CSV task import (Project's Import Wizard); resource/assignment export maps; MPX |
+| Import and export | MSPDI read/write keeping what it does not model; CSV and `.xlsx` of the sheet; Timeline PNG; PDF | MSPDI also carries what M79 models (above) | **M83 ✔** Excel/CSV task import (Project's Import Wizard: a column map, outline, links). Still: resource and assignment import and export maps; MPX |
 
 **`.mpp` without Java: not feasible in a milestone, said plainly.** The
 only maintained reader of Project's binary files is MPXJ (Java, LGPL); in
@@ -119,31 +120,34 @@ undocumented and change between Project versions — weeks of work with a
 lasting risk of misread fields. Project saves the same plan as XML (File ▸
 Save As ▸ XML Format), which QindaPlan reads and writes without loss.
 
-**Ranked: what is left after M79.**
+**Ranked: what is left after M83.**
 
-M79 also closed what was ranked second and third before it: Project's
-recurring calendar exceptions and alternative work weeks are scheduled (a
-Project file with yearly holidays no longer schedules differently here),
-and cost resources keep their amounts both ways.
+M79 closed what was ranked second and third before it (Project's recurring
+calendar exceptions and alternative work weeks scheduled; cost resources).
+M83 (D-092) closed what was ranked 1, 3 and 5–8 after M79: task types and
+effort-driven scheduling with Work typed on a task or an assignment;
+custom fields shown and edited with their aliases, lookup tables and
+formulas; actual work and cost typed, progress lines and Reschedule
+Uncompleted Work; elapsed durations and lags, split and recurring tasks;
+the Excel/CSV task import; recurring calendar exceptions and work weeks
+made here.
 
-1. Task types (fixed units / duration / work) and effort-driven
-   scheduling, with Work typed on a task or an assignment — a model change
-   (assignment work as an input, fractional units).
-2. Groups and highlight filters — needs group-header rows in QindaTK.
-3. Custom fields shown and edited, with their MSPDI aliases and lookups.
-4. Earned value (BCWS/BCWP/ACWP, SV/CV, SPI/CPI, EAC/VAC) and interim plans.
-5. Actual work and cost typed; progress lines; Reschedule Uncompleted Work
-   (with task splits).
-6. Elapsed durations and lags; split and recurring tasks.
-7. Excel/CSV task import.
-8. Creating and editing recurring calendar exceptions and work weeks (read
-   from Project and scheduled today, not made here).
-9. Printing: headers and footers, notes, the usage views; slack bars on
-   screen (QindaTK's GanttView).
-10. Overtime and cost rate tables A–E; resource availability periods.
-11. Resource Graph, Team Planner, choosing the Timeline's tasks; burndown
-    and cash-flow reports.
-12. `.mpp` reading (only through Java's MPXJ, see above).
+1. Groups and highlight filters — needs group-header rows in QindaTK's
+   GanttView and EditableGrid.
+2. Earned value (BCWS/BCWP/ACWP, SV/CV, SPI/CPI, EAC/VAC) and interim
+   plans (Set Interim Plan into Start1–10/Finish1–10, now real fields).
+3. Assignments edited in Task Usage (work per day, i.e. contours) and a
+   Task Form split view.
+4. Split bars and progress lines in the window — QindaTK's GanttView
+   draws neither (the printout and PDF do); slack bars on screen likewise.
+5. Printing: headers and footers, notes, the usage views.
+6. Overtime and cost rate tables A–E; resource availability periods;
+   resource custom fields (kept in MSPDI, not shown).
+7. Resource Graph, Team Planner, choosing the Timeline's tasks; burndown
+   and cash-flow reports.
+8. Scheduling from the finish date; the nth weekday or weekend day of a
+   month in recurring exceptions; calendar templates.
+9. `.mpp` reading (only through Java's MPXJ, see above).
 
 ## QindaBase against Microsoft Access (survey of 2026-10-09, M80)
 
@@ -226,6 +230,7 @@ data), and Access databases come in through the mdb-tools import.
 | **M80** QindaBase: Access's queries, forms and reports — **done 2026-10-09 (D-089)**; open: the ranked list above (form events and macro conditions first), the owner's check in Access with an XML export | validation rules and texts per field and record, enforced by triggers, refused while records break them, Test Validation Rules ✔; input masks with the wizard's presets ✔; crosstab and make-table queries, declared parameters, Top n percent, Unique Values ✔; the SQL view in Access SQL both ways, Keep as SQLite SQL ✔; macros (fourteen actions) with the Macro Design tab, run from the navigation pane and form buttons ✔; lookups as combo and list boxes, subforms, command buttons ✔; reports evaluated by the engine with exact totals, Group, Sort and Total (three levels, four sort keys), the report's paper from the first page ✔; mailing labels on Avery sheets with the Label Wizard ✔; XML export for Access ✔; fifteen new commands on the menus and the ribbon ✔ | base_engine tests against hand-worked results (rules, masks, crosstab, make-table with undo, declared parameters, Top percent, Access SQL round trips and refusals, macros, where conditions, form controls, two-level report totals in cents, label placement, XML); the service over the seeded starter; the real window at 1280 and 520 px with grabs and PDFs; ribbon squeeze, menu export, icons, fixtures — met on qinda ([verification.md](../verification.md#m80-base-gates-d-089)) |
 | **M81** Mail: Outlook's everyday mail handling in QindaMail — **done 2026-10-09 (D-090, [mail.md](../mail.md#organizing-mail-m81))**; open: the owner's check with real accounts, Quick Steps, editing server rules, categories on CalDAV events and tasks (needs `CATEGORIES` in QindaTK's mapping), a Sieve reply per audience | Rules and Alerts: client-side rules on arrival (after a mailbox's baseline) and Run Rules Now, every Outlook condition, exception and action (move, copy, delete, permanently delete, mark read, flag, categories, importance, forward, redirect, desktop alert, stop), order, on/off, Create Rule, JSON import/export, server rules read-only ✔; color categories with a master list per mailbox, on mail, events, tasks and contacts, filtered and searched, as IMAP keywords and through Graph/EWS ✔; follow-up flags with Outlook's dates, Mark Complete and Clear, as `\Flagged` and through Graph/EWS, flagged mail on the task board ✔; search folders (Outlook's presets and custom, live in the folder tree) ✔; automatic replies through Graph, EWS or a ManageSieve vacation that keeps the user's script, else plainly unavailable ✔; Clean Up and Ignore Conversation ✔ | office_mail tests (every condition, exception and action, order and stop, keywords and flags, search folders, Sieve vacation through a fake ManageSieve server), mail_exchange tests (Graph and EWS automatic replies, categories, flags and rules through the fakes), the app through fake IMAP, SMTP, ManageSieve, Graph and EWS servers and the real window (dialogs at 1280 and 520 px with grabs), ribbon squeeze, menu export, fixtures — met on qinda ([verification.md](../verification.md#m81-mail-gates-d-090)) |
 | **M82** Calc and Show everyday polish — **done 2026-10-09 (D-091)**; open: the owner's check in Excel and PowerPoint, editing in the second window, Arrange All (the desktop arranges windows), a combo's secondary axis drawn as its own, multi-level categories edited in Edit Data, a view's printer-settings part | Calc: Excel's text overflow on screen and paper (left, right, centred; stopped by values, formulas and merges; wrapped, Fill, numbers and merged text never spill; `####`) ✔; View ▸ Split, four panes with draggable bars ✔; View ▸ New Window, a view-only second window on any sheet ✔; View ▸ Custom Views (zoom, panes, hidden rows and columns, filter, print settings) read and written as Excel's `customWorkbookViews` / `customSheetViews` / `Z_…wvu` names ✔; Show: New Slide, Layout, Reset Slide, Duplicate Slide and Reuse Slides (keep or take formatting) on the deck's own layouts with a thumbnail gallery and PowerPoint's placeholder prompts ✔; Browse for Themes with a template's masters and layouts, Apply to All or to the selected slides ✔; combo charts edited in every plot, multi-level categories kept, kind changes keeping per-point colours and data labels ✔ | engine, calc_io and show_model tests over hand-built Excel- and PowerPoint-shaped packages (schema-valid, read back equal, untouched parts byte for byte); LibreOffice renders a deck built from layouts and reused slides and an edited combo chart; the real windows — overflow checked on grabs and in the exported PDF, split panes, the second window, Custom Views through their dialogs, the layout gallery, Reuse Slides, a combo's Edit Data; ribbon squeeze, menu export, fixtures, grabs at 1280 and 520 px — met on qinda ([verification.md](../verification.md#m82-polish-gates-d-091)) |
+| **M83** QindaPlan: task types, custom fields, actuals, splits, recurring tasks — **done 2026-10-09 (D-092)**; open: the ranked list above (groups and highlight filters first), the owner's check in Project | task types (Fixed Units / Duration / Work) with Project's recalculation table and effort-driven assignment changes, Work typed on a task or an assignment ✔; the 120 task custom fields with new names, lookup tables and formulas, as columns, typed, filtered and sorted ✔; elapsed durations and lags ✔; Split Task and Remove Splits ✔; recurring tasks as Project's recurring summaries ✔; Act. Work and Act. Cost typed, progress lines, Reschedule Uncompleted Work ✔; the Excel/CSV task import with a column map ✔; recurring calendar exceptions and work weeks made here ✔; MSPDI carries all of it — custom fields byte for byte while unchanged, splits as timephased data ✔ | plan_engine tests worked by hand (each task type's table, effort driving, splits, elapsed time, rescheduling, the progress line, actuals, recurrences, calendars, formulas, filters, the import) and a Project-shaped MSPDI fixture (read, scheduled as Project did, written, re-read equal, unknown elements and unchanged definitions byte for byte, the schema's sequences checked structurally — no MSPDI XSD in Portage); the xlsx import round trip and the printed split gaps and progress line; the app through the host and the real window (dialogs, grabs at 1280 and 520 px), ribbon squeeze, menu export, fixtures — met on qinda ([verification.md](../verification.md#m83-plan-gates-d-092)) |
 | **M84** QindaNote: OneNote's everyday note-taking — **done 2026-10-09 (D-093, [qindanote.md](../qindanote.md))**; open: the owner's check on the desktop (typing, tags, search, import of real Word files), page versions, floating pictures inside formatted text, page colour in Word, the QindaTK gaps in D-093 | formatted typing in text blocks (QindaTK rich text: run formats, Title, Heading 1–6, Quote, Code, lists with Tab, links, tables in a block, sanitised paste, undo per edit) ✔; the page format versioned, old pages unchanged ✔; formatting in print, PDF, Word and Markdown ✔; OneNote's tags, custom tags, Find Tags and its summary page ✔; Search Notebooks (Ctrl+E) across open and recent notebooks ✔; import of Word (page per Heading 1), Markdown and HTML, `.one` refused with the way round ✔; page templates, page colour, rule lines, subpages, Link to File ✔ | `tst_note_rich`, `tst_note_export`, `tst_note_tags`, `tst_note_search`, `tst_note_import`; the Note UI fixtures, grabs at 1280/520, ribbon squeeze and menu-export gates |
 
 Every milestone follows AGENTS.md: ≤ 500 lines per file, tests headless,

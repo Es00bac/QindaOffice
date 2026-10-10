@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Task copy/paste and the task sheet as CSV (plan_file.h).
+#include "custom_fields.h"
 #include "outline.h"
 #include "plan_edit.h"
 #include "plan_file.h"
@@ -65,7 +66,7 @@ QByteArray copyTasks(const Project &project, const QList<int> &indices)
         o.remove(QStringLiteral("levelingFloor"));
         // A pasted task starts unleveled, without the source's baselines.
         for (const char *key : {"levelingDelay", "levelingDelayWorking", "preLeveledStart", "preLeveledFinish",
-                                "mspdiBaselines"}) {
+                                "mspdiBaselines", "actualCost"}) {
             o.remove(QLatin1String(key));
         }
         tasks.append(o);
@@ -82,7 +83,10 @@ QByteArray copyTasks(const Project &project, const QList<int> &indices)
                                        {QStringLiteral("material"), res.type == ResourceType::Material},
                                        {QStringLiteral("costResource"), res.type == ResourceType::Cost}, // M79
                                        {QStringLiteral("cost"), a.costInput},
-                                       {QStringLiteral("units"), a.units}});
+                                       {QStringLiteral("units"), a.units},
+                                       // M83: the work the task-type rules gave it
+                                       {QStringLiteral("work"), a.workInput},
+                                       {QStringLiteral("workSpan"), a.workSpan}});
     }
     const QJsonObject root{{QStringLiteral("format"), QStringLiteral("qindaplan-tasks")},
                            {QStringLiteral("version"), kPlanFormatVersion},
@@ -173,6 +177,8 @@ QList<int> pasteTasks(Project &project, int at, const QByteArray &data)
         a.resourceUid = project.resources.at(r).uid;
         a.units = std::clamp(o.value(QStringLiteral("units")).toInt(100), 1, 1000000);
         a.costInput = qint64(o.value(QStringLiteral("cost")).toDouble());
+        a.workInput = std::max<qint64>(kWorkFollowsDuration, qint64(o.value(QStringLiteral("work")).toDouble(-1)));
+        a.workSpan = std::max<qint64>(-1, qint64(o.value(QStringLiteral("workSpan")).toDouble(-1)));
         project.assignments.append(a);
     }
     computeStructure(project);
@@ -188,7 +194,7 @@ QByteArray taskSheetCsv(const Project &project, const QStringList &fields, const
     QStringList lines;
     QStringList header;
     for (const QString &f : fields) {
-        header.append(csvField(taskFieldTitle(f)));
+        header.append(csvField(isCustomField(f) ? customFieldTitle(project, f) : taskFieldTitle(f))); // M83
     }
     lines.append(header.join(QLatin1Char(',')));
     for (int i = 0; i < project.tasks.size(); ++i) {

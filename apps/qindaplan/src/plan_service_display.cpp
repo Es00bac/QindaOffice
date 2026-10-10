@@ -3,6 +3,7 @@
 // the contract) — Project's filter and sort, the Gantt styles and the
 // baseline the bars draw, the Network Diagram's layout and the Task Usage
 // table. All of it is view state: not undoable, not saved.
+#include "custom_fields.h"
 #include "network_layout.h"
 #include "plan_document.h"
 #include "plan_reports.h"
@@ -17,6 +18,9 @@ namespace QindaOffice::Apps::Plan {
 
 QString PlanService::filterTitle() const
 {
+    if (m_filter.id == QLatin1String("custom")) { // M83: name the field
+        return QStringLiteral("Custom Field: %1").arg(Engine::customFieldTitle(project(), m_filter.field));
+    }
     return Engine::taskFilterTitle(m_filter.id);
 }
 

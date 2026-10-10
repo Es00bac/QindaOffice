@@ -6,8 +6,9 @@ import QindaOffice.Plan.App
 // The file chooser behind File ▸ Import and Export: PDF of what is on
 // screen (the Gantt chart or the open report), the task sheet as CSV or
 // Excel (M63),
-// Microsoft Project XML out and in, and the Timeline as a PNG. Results
-// come back as toasts through PlanService.notify.
+// Microsoft Project XML out and in, the Timeline as a PNG, and (M83) the
+// workbook or CSV file Import Tasks reads (importChosen opens its mapping).
+// Results come back as toasts through PlanService.notify.
 //
 // AGENT-NOTE: ONE FileDialog that switches mode, declared as a window child
 // like OfficeWindow's own dialogs (non-Item, so the window still seats one
@@ -17,19 +18,22 @@ Dialogs.FileDialog {
 
     property PlanService plan: null
     property PlanHost host: null
-    property string what: "pdf"   // pdf | csv | xlsx | mspdi | png | import
+    property string what: "pdf"   // pdf | csv | xlsx | mspdi | png | import | importTasks
+    readonly property bool opening: what === "import" || what === "importTasks"
+    signal importChosen(url file)
 
     objectName: "planFileDialog"
-    title: what === "import" ? qsTr("Import Microsoft Project XML") : qsTr("Export")
-    fileMode: what === "import" ? Dialogs.FileDialog.OpenFile : Dialogs.FileDialog.SaveFile
-    nameFilters: what === "pdf" ? [qsTr("PDF (*.pdf)")]
+    title: what === "import" ? qsTr("Import Microsoft Project XML") : what === "importTasks" ? qsTr("Import Tasks") : qsTr("Export")
+    fileMode: opening ? Dialogs.FileDialog.OpenFile : Dialogs.FileDialog.SaveFile
+    nameFilters: what === "importTasks" ? [qsTr("Excel workbook or CSV (*.xlsx *.csv *.txt)")]
+               : what === "pdf" ? [qsTr("PDF (*.pdf)")]
                : what === "csv" ? [qsTr("CSV (*.csv)")]
                : what === "xlsx" ? [qsTr("Excel workbook (*.xlsx)")]
                : what === "png" ? [qsTr("PNG image (*.png)")] : [qsTr("Microsoft Project XML (*.xml)")]
 
     function request(kind) {
         what = kind
-        if (kind !== "import") {
+        if (kind !== "import" && kind !== "importTasks") {
             const base = (plan !== null ? plan.title : "Project").replace(/[^A-Za-z0-9 _-]/g, "").trim() || "Project"
             const suffix = kind === "pdf" ? ".pdf" : kind === "csv" ? ".csv" : kind === "xlsx" ? ".xlsx"
                          : kind === "mspdi" ? ".xml" : ".png"
@@ -42,7 +46,9 @@ Dialogs.FileDialog {
         else plan.notify(qsTr("Export failed"), String(r.error || ""), "danger")
     }
     onAccepted: {
-        if (what === "import") {
+        if (what === "importTasks") {
+            importChosen(selectedFile)
+        } else if (what === "import") {
             const r = plan.importMspdi(selectedFile)
             if (r.ok) plan.notify(qsTr("Imported"), qsTr("%1 tasks from Microsoft Project XML").arg(r.tasks), "info")
             else plan.notify(qsTr("Import failed"), String(r.error || ""), "danger")

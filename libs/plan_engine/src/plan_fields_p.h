@@ -46,6 +46,21 @@ inline Minutes actualDurationOf(const Task &t, int minutesPerDay)
 struct EditResult;
 EditResult setTrackingField(Project &project, int index, const QString &field, const QString &text);
 
+// ---- M83 (plan_field_work.cpp) ----
+// Work, Type, Effort Driven, Act. Work, Act. Cost and the custom fields
+// (Text1 … Finish10): typed, and as text (empty for any other field).
+EditResult setWorkOrCustomField(Project &project, int index, const QString &field, const QString &text,
+                                const QLocale &locale);
+[[nodiscard]] QString workOrCustomFieldText(const Project &project, int index, const QString &field,
+                                            const QLocale &locale);
+// The actual work % complete stands for, read as actualDurationOf reads the
+// actual duration: the roundest value that rounds to it (whole days, whole
+// hours, half and quarter hours), else the exact share.
+[[nodiscard]] Minutes actualWorkOf(const Task &task, int minutesPerDay);
+// Actual Cost: typed (while the project lets it be typed) or the task's
+// cost × % complete, as Project calculates it.
+[[nodiscard]] qint64 actualCostOf(const Project &project, const Task &task);
+
 // The constraint's name as the sheet shows it ("Start No Earlier Than").
 inline QString constraintName(ConstraintType type)
 {

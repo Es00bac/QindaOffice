@@ -37,7 +37,17 @@ private:
     void backward(const QList<int> &order);
     void backwardLeaf(int i, Minutes ceiling);
     [[nodiscard]] Minutes lagOf(const LinkRef &ref) const;
-    [[nodiscard]] Minutes lagAdd(Minutes at, Minutes lag) const;
+    // M83 (scheduler_time.cpp): `at` moved by the link's lag (back = the
+    // other way) — working time on the project calendar, or wall-clock time
+    // for an elapsed lag.
+    [[nodiscard]] Minutes lagged(const LinkRef &ref, Minutes at, bool back = false) const;
+    // M83: a leaf task's length on its own clock — its duration plus its
+    // split gaps — and instants that far after / before another, on its
+    // calendar or, for an elapsed duration, on the wall clock.
+    [[nodiscard]] Minutes length(int taskIndex) const;
+    [[nodiscard]] Minutes after(int taskIndex, Minutes start, Minutes length) const;
+    [[nodiscard]] Minutes before(int taskIndex, Minutes finish, Minutes length) const;
+    [[nodiscard]] Minutes snap(int taskIndex, Minutes instant) const;
     // M79: the total slack at or below which a task is critical.
     [[nodiscard]] Minutes criticalLimit() const;
     // M79: the task, or a summary above it, has a successor link.

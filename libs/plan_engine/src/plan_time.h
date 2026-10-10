@@ -44,19 +44,25 @@ struct DurationFormat {
     int daysPerMonth = 20;
 };
 [[nodiscard]] DurationFormat durationFormatOf(const ProjectInfo &info);
-[[nodiscard]] Minutes minutesPerUnit(DurationUnit unit, const DurationFormat &format);
+// M83: an ELAPSED unit is wall-clock time, as in Project: 1 emin, 1 ehr = 60,
+// 1 eday = 1440, 1 ewk = 10080, 1 emon = 30 edays.
+[[nodiscard]] Minutes minutesPerUnit(DurationUnit unit, const DurationFormat &format, bool elapsed = false);
 
 struct ParsedDuration {
     Minutes minutes = 0;
     DurationUnit unit = DurationUnit::Days;
     bool estimated = false;
+    bool elapsed = false; // M83: "2ed", "3 ehrs", "1 ewk", "1 emon"
 };
 // "5 days", "1 day", "4 hrs", "30 mins", "2 wks", "1 mon", "1.5d", "0",
-// "3?" (estimated); a bare number is days. Negative only with allowNegative.
+// "3?" (estimated); a bare number is days. M83: the elapsed forms "2ed",
+// "2 edays", "4eh", "1 ewk", "1 emon". Negative only with allowNegative.
 [[nodiscard]] std::optional<ParsedDuration> parseDuration(const QString &text, const DurationFormat &format,
                                                           bool allowNegative = false);
 [[nodiscard]] QString formatDuration(Minutes minutes, DurationUnit unit, const DurationFormat &format,
-                                     bool estimated = false, const QLocale &locale = QLocale());
+                                     bool estimated = false, const QLocale &locale = QLocale(), bool elapsed = false);
+// A task's duration as the sheet shows it (summary tasks in days).
+[[nodiscard]] QString taskDurationText(const Task &task, const DurationFormat &format, const QLocale &locale = QLocale());
 // A span in the unit that reads best (slack, variances): days when it is a
 // whole number of hours per day, else hours.
 [[nodiscard]] QString formatSpan(Minutes minutes, const DurationFormat &format, const QLocale &locale = QLocale());

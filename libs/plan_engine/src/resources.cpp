@@ -3,6 +3,8 @@
 
 #include "plan_time.h"
 #include "scheduler.h"
+#include "task_segments.h"
+#include "task_types.h"
 #include "work_calendar.h"
 
 #include <QSet>
@@ -40,7 +42,10 @@ private:
     QHash<int, WorkCalendar> m_cache;
 };
 
-// Working minutes per day of one assignment (not yet × units).
+// The work of one assignment per day (minutes). M83: its work, spread
+// evenly over its span — the first part of the task's working segments, split
+// gaps left out, on the wall clock for an elapsed task (task_types.h,
+// task_segments.h) — rounded so the days add up to the work exactly.
 QMap<qint64, Minutes> assignmentDays(const Project &project, const Assignment &a, Calendars &calendars,
                                      const QHash<int, int> &taskIndex)
 {
@@ -53,16 +58,36 @@ QMap<qint64, Minutes> assignmentDays(const Project &project, const Assignment &a
     if (!t.effectiveActive || t.summary || t.start == kNoDate || t.finish <= t.start) {
         return out;
     }
+    const Minutes work = assignmentWork(t, a);
+    const Minutes span = assignmentSpan(t, a);
+    if (work <= 0 || span <= 0) {
+        return out;
+    }
     const WorkCalendar &c = calendars.get(effectiveCalendarUid(project, ti));
-    const qint64 first = kEpoch.daysTo(dateOf(t.start));
-    const qint64 last = kEpoch.daysTo(dateOf(t.finish));
-    for (qint64 day = first; day <= last; ++day) {
-        const Minutes lo = std::max(t.start, day * 1440);
-        const Minutes hi = std::min(t.finish, (day + 1) * 1440);
-        const Minutes m = hi > lo ? c.workBetween(lo, hi) : 0;
-        if (m > 0) {
-            out.insert(day, m);
+    QMap<qint64, Minutes> minutes;
+    Minutes total = 0;
+    for (const TimeInterval &iv : workingWindow(t, c, span)) {
+        const qint64 first = kEpoch.daysTo(dateOf(iv.from));
+        const qint64 last = kEpoch.daysTo(dateOf(std::max(iv.from, iv.to - 1)));
+        for (qint64 day = first; day <= last; ++day) {
+            const Minutes lo = std::max(iv.from, day * 1440);
+            const Minutes hi = std::min(iv.to, (day + 1) * 1440);
+            const Minutes m = taskMinutesBetween(t, c, lo, hi);
+            if (m > 0) {
+                minutes[day] += m;
+                total += m;
+            }
         }
+    }
+    Minutes done = 0;
+    Minutes seen = 0;
+    for (auto it = minutes.cbegin(); it != minutes.cend() && total > 0; ++it) {
+        seen += it.value();
+        const Minutes upTo = divRound(work * seen, total);
+        if (upTo > done) {
+            out.insert(it.key(), upTo - done);
+        }
+        done = upTo;
     }
     return out;
 }
@@ -96,7 +121,7 @@ DailyLoad dailyLoad(const Project &project)
         const QMap<qint64, Minutes> days = assignmentDays(project, a, calendars, index);
         QMap<qint64, qint64> &into = load[a.resourceUid];
         for (auto it = days.cbegin(); it != days.cend(); ++it) {
-            into[it.key()] += it.value() * a.units;
+            into[it.key()] += it.value() * 100; // unit-minutes: 100 = one minute of one person
         }
     }
     return load;
@@ -250,7 +275,7 @@ UsageTable usageTable(const Project &project, const QDate &from, int count, bool
             ar.over = QList<bool>(count, false);
             const QMap<qint64, Minutes> adays = assignmentDays(project, a, calendars, index);
             for (auto it = adays.cbegin(); it != adays.cend(); ++it) {
-                const Minutes m = divRound(it.value() * a.units, 100);
+                const Minutes m = it.value();
                 ar.total += m;
                 if (it.key() >= firstDay && it.key() < endDay) {
                     ar.work[bucketOf(it.key())] += m;
@@ -305,7 +330,7 @@ UsageTable taskUsageTable(const Project &project, const QList<int> &rows, const 
         }
         const QMap<qint64, Minutes> days = assignmentDays(project, a, calendars, index);
         for (auto it = days.cbegin(); it != days.cend(); ++it) {
-            const Minutes m = divRound(it.value() * a.units, 100);
+            const Minutes m = it.value();
             row.total += m;
             taskTotal[ti] += m;
             if (inRange(it.key())) {

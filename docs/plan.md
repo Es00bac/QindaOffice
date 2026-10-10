@@ -9,7 +9,14 @@ M79 ([D-088](decisions.md#d-088-qindaplan-projects-scheduling-tracking-and-views
 brought Project's scheduling, tracking and views: deadlines and the slack
 options in the critical path, Project's leveling delay and options,
 Baseline … Baseline 10, the Tracking and Leveling Gantt, the Network
-Diagram, Task Usage, filters and sorts; what is still missing is ranked in
+Diagram, Task Usage, filters and sorts. M83
+([D-092](decisions.md#d-092-qindaplan-task-types-custom-fields-actuals-splits-recurring-tasks))
+brought Project's work formula — task types and effort-driven scheduling —
+custom fields with lookup tables and formulas, elapsed durations and lags,
+split and recurring tasks, actual work and cost typed, the progress line,
+Reschedule Uncompleted Work, the Excel/CSV task import and recurring
+calendar exceptions and work weeks made here; what is still missing is
+ranked in
 [office-parity.md](plans/office-parity.md#qindaplan-against-microsoft-project-survey-of-2026-10-09-m79).
 Microsoft Project is the reference for *scope and scheduling semantics*,
 not for look or file format. Native `.mpp` files are out of scope: Project
@@ -18,8 +25,8 @@ and writes.
 
 | Target | Depends on | What it is |
 | --- | --- | --- |
-| `plan_engine` | Qt Core | The model, calendars, scheduler, leveling, baselines, reports, editing, `.qplan`, MSPDI, CSV; filters, sorts and the Network Diagram's layout (M79). No Gui. |
-| `plan_output` | `plan_engine`, Qt Gui, `calc_io` (M63) | One page painter each for the printed Gantt (in the Gantt, Tracking and Leveling styles, M79), the Network Diagram (M79), the reports and the Timeline (PDF, paper, PNG); the task sheet as xlsx. |
+| `plan_engine` | Qt Core | The model, calendars, scheduler, leveling, baselines, reports, editing, `.qplan`, MSPDI, CSV; filters, sorts and the Network Diagram's layout (M79); task types, custom fields and formulas, splits, recurring tasks, the CSV task import (M83). No Gui. |
+| `plan_output` | `plan_engine`, Qt Gui, `calc_io` (M63) | One page painter each for the printed Gantt (in the Gantt, Tracking and Leveling styles, M79; split gaps and the progress line, M83), the Network Diagram (M79), the reports and the Timeline (PDF, paper, PNG); the task sheet as xlsx, and an xlsx read as an import table (M83). |
 | `apps/qindaplan` | `office_quick`, both libraries, QindaTK | `PlanHost`, `PlanDocument`, `PlanService`, the QML window. |
 
 ## Model (`plan_types.h`)
@@ -44,6 +51,21 @@ and writes.
   dates before the last leveling. The project carries the leveling order,
   "within slack only" and "clear first", and the critical-path options
   (`criticalSlackDays`, `multipleCriticalPaths`).
+- **Work** (M83): a task has a type (`TaskType`: Fixed Units, Fixed
+  Duration, Fixed Work) and `effortDriven`; an assignment's work is
+  `workInput`, or follows the duration (`kWorkFollowsDuration`: its units
+  over the whole task, as before M83), over its span (`workSpan`, the
+  whole duration when -1); a task without resources may hold typed work
+  (`unassignedWork`). Units are whole percents.
+- **Elapsed time** (M83): `Task::durationElapsed` and `Link::lagElapsed`
+  are wall-clock minutes (around nights and weekends).
+- **Splits** (M83): `Task::splits` — after `at` working minutes the work
+  stops for `gap` working minutes of the task's calendar; `duration`
+  excludes the gaps.
+- **Recurring tasks** (M83): a summary with `recurring` set (and, made
+  here, its `recurrence` pattern) whose subtasks are the occurrences.
+- **Custom fields** (M83): `Task::custom` (field → value in MSPDI's
+  spelling) and `Project::customFields` (alias, lookup table, formula).
 
 ## Working time (`work_calendar.h`)
 
@@ -57,6 +79,14 @@ project holiday applies to every resource), a work week covering the date
 the standard week (flagged) so no loop can run away; every day walk is
 bounded (~100 years). `add(s, w)` ends a full day at 17:00 the same day,
 not 08:00 the next.
+
+Since M83 recurring exceptions and work weeks are also **made here**
+(`calendar_edit.h`; Change Working Time ▸ Recurring exceptions and Work
+weeks: add, change, remove). The MSPDI elements stay the truth: an edit
+writes Project's own `<Exception>` (Type 2–7: yearly or monthly by day or
+position, weekly on days, every N days; through a date or after N
+occurrences) or `<WorkWeek>` into the calendar and derives the model again,
+so `.qplan` and MSPDI carry it with no new key.
 
 The standard calendar is Monday–Friday 08:00–12:00 and 13:00–17:00.
 
@@ -87,6 +117,14 @@ One deterministic pass per change:
 5. Roll-ups (summary dates, duration, % complete weighted by duration),
    work and cost, per-day overallocation.
 
+M83: a task's length on its clock is its duration plus its split gaps; an
+elapsed duration and an elapsed lag are wall-clock time and an elapsed
+task's start is not moved to working time (`scheduler_time.cpp`). Work is
+each assignment's (`assignmentWork`: its typed work, or span × units),
+spread evenly over its window; cost is work × rate + per use + fixed cost,
+and once Act. Cost is typed (with actual costs not always calculated) the
+actual typed plus the remaining calculated.
+
 A task runs on its own calendar, else its first work resource's, else the
 project's. Links the scheduler must ignore — to a missing task, onto the
 task's own summary or subtask, FF/SF onto a summary, or part of a cycle
@@ -94,6 +132,60 @@ from a file (every link inside a strongly connected component) — are
 listed in `Project::issues`, on `Task::warning` and in `Task::ignoredLinks`
 (views don't draw them). The editing operations refuse to create them
 (`linkProblem`). A 2,000-task plan schedules in ~30 ms (`tst_plan_schedule`).
+
+## Task types and effort-driven scheduling (`task_types.h`, M83)
+
+Project's work formula: per assignment **Work = Duration × Units**. What a
+change recalculates depends on the task's type, as in Project:
+
+| Type | units typed | duration typed | work typed |
+| --- | --- | --- | --- |
+| Fixed Units (default) | duration | work | duration |
+| Fixed Work | duration | units | duration |
+| Fixed Duration | work | work | units |
+
+**Effort driven** (always on for Fixed Work): resources added to or
+removed from a task that already has work assignments share its work in
+proportion to their units — two people on a 4-day effort-driven Fixed
+Units task make it 2 days; on a Fixed Duration task their units halve. The
+first resources assigned are never effort driven: they take the work typed
+on the task, if any, else duration × units. Without effort driving an added
+resource adds work. Typing one assignment's units or work on a Fixed Units
+or Fixed Work task changes only that assignment's span; the task lasts as
+long as its longest assignment (Project's behaviour). Units stay whole
+percents; on Fixed Duration and Fixed Work tasks the work is the truth.
+A summary is Fixed Duration and never effort driven; material and cost
+resources take no part. Typing work on a task without resources keeps it
+for the first resources assigned. New tasks take the project's Default task
+type and "New tasks are effort driven" (Project Information; Fixed Units,
+off — Project 2010+'s defaults).
+
+## Custom fields (`custom_fields.h`, `custom_formula.cpp`, M83)
+
+Project's task custom fields: Text1–30, Number1–20, Date1–10, Flag1–20,
+Cost1–10, Duration1–10, Start1–10 and Finish1–10 (FieldIDs as Project 2019
+writes them). Project ▸ Custom Fields gives one a new name (its alias, used
+as its column title everywhere, the CSV and Excel headers too), a lookup
+table (values with descriptions, optionally the only values allowed) or a
+formula. Values are typed in the sheet (the Custom Fields table shows the
+fields in use) and in Task Information's Custom Fields page, in the field's
+kind: `12.5`, `Yes`, `$1,200`, `3d` / `2ed`, a date. As in Project an unset
+number, cost, flag or duration is 0 (typing 0 leaves it unset), text is
+empty and a date `NA`.
+
+**Formulas** are Project's language: `[Field]` references (`[Duration]`,
+`[Work]` and the like in minutes, `[Cost]` in currency, dates as days since
+30 Dec 1899, `[% Complete]`, baselines, actuals, `[Name]`, other custom
+fields by name or alias), `+ - * / \ Mod ^ &`, comparisons, `And Or Not`
+with VBA precedence, `IIf`, `Switch`, `Choose`, `Abs`, `Int`, `Fix`,
+`Round`, `Sgn`, `Sqr`, `Len`, `Left`, `Right`, `Mid`, `UCase`, `LCase`,
+`Trim`, `InStr`, `Str`, `CStr`, `Val`, `CDbl`, `CInt`, `Year`, `Month`,
+`Day`, `Weekday`, `Hour`, `Minute`, `Now`, `Date`, `DateDiff`, `DateAdd`,
+`ProjDateDiff`, `ProjDateAdd`, `ProjDateSub`, `ProjDurConv`,
+`ProjDateValue`, `ProjDurValue`, `pj…` constants, `True`/`False`, NA
+(4294967296). A formula is checked when saved; one that fails for a task
+shows `#ERROR`; a circular reference stops at depth 8. Removing a formula
+keeps its last values as typed ones (as Project does).
 
 ## Resources and leveling (`resources.h`, `leveling.h`)
 
@@ -150,6 +242,36 @@ makes the duration actual + remaining. % complete stays the stored truth
 roundest value that rounds to it (whole days, then half days, tenths of a
 day, whole hours), else the exact share.
 
+M83 (`tracking.h`, `plan_field_work.cpp`):
+
+- **Act. Work** is typed (it sets % complete; Project's % work complete is
+  % complete for evenly spread work) and **Act. Cost** too once Project
+  Information's "Actual costs are always calculated" is off (MSPDI
+  `EditableActualCosts`): the cost is then the actual typed plus the
+  remaining calculated.
+- **Split Task** (Task ▸ Split Task…, the selected task: where the work
+  stops and when it resumes) and **Remove Splits**. A split is working time
+  on the task's calendar, so it moves with the task; usage, overallocation,
+  costs and the printout leave it out. QindaTK's GanttView draws a split
+  task as one bar (a toolkit gap); the indicators column shows it.
+- **Reschedule Uncompleted Work** to start after a date (Project ▸
+  Reschedule Uncompleted Work…, Update Project's second choice; all tasks
+  or the selection): an in-progress task is split where its actual
+  duration ends and resumes at the date (Project's Stop / Resume); a task
+  that should have started and has not gets Start No Earlier Than the date.
+- **The progress line** (View ▸ Progress Lines, printed on the Gantt):
+  at the status date it joins each task's progress point — start plus
+  actual duration — for tasks in progress or that should have started, so
+  it bends left where work is behind and right where it is ahead.
+- **Recurring tasks** (`recurring_tasks.h`; Task ▸ Insert ▸ Recurring
+  Task…): a summary flagged recurring whose subtasks are the occurrences —
+  daily (every N days, or working days), weekly on days, monthly or yearly
+  by day or position, from a start through a date or for N occurrences (at
+  most 999) — each Start No Earlier Than its date at the pattern's time,
+  with the pattern's duration. Recurring Task Information changes the
+  pattern (refused once an occurrence has progress). An occurrence on a
+  non-working day starts at the next working time.
+
 ## Editing (`plan_edit.h`)
 
 The sheets edit through field ids (`name`, `duration`, `start`,
@@ -163,7 +285,11 @@ resources). Durations accept `5d`, `3 days`, `4h`, `2w`, `1 mon`, `3?`
 Act. Dur., Rem. Dur., Act. Cost, Act. Work — M79, as Project's), Variance,
 Cost, Schedule (which also shows Deadline and Priority, M63), and (M79)
 Work, Baseline and Delay (Leveling Delay typed as `2 edays`, `36 ehrs` or a
-working `2d`). `priority` takes 0–1000 (500 = medium,
+working `2d`). M83: Work, Act. Work and Act. Cost are typed (above);
+`type` takes Fixed Units / Fixed Duration / Fixed Work and `effortDriven`
+Yes / No; a duration or lag may be elapsed (`3ed`, `2eh`, `1ew`, `1emo`);
+custom fields take their kind's values; the Custom Fields table lists the
+fields in use. `priority` takes 0–1000 (500 = medium,
 as in Project); `deadline` takes a date or `NA` — it never moves the
 schedule, and a task that finishes after it shows the missed-deadline flag
 (`missed-deadline` in the indicators text, a red flag in the sheet).
@@ -177,7 +303,10 @@ range); with **Show Related Summary Rows** (on by default, as in Project)
 each match keeps its summaries. View ▸ Sort orders by ID, start, finish,
 priority (descending) or cost (descending), siblings under their summary
 ("keep outline structure"). Filters and sorts are view state (not undoable,
-not saved). The rows they leave — without what a collapsed summary hides —
+not saved). M83: **Custom Field…** filters on one field (equals, does
+not equal, greater, less, contains, is set, is not set; the value read as
+the field's kind) and **by Custom Field…** sorts by one (ascending or
+descending, the outline kept). The rows they leave — without what a collapsed summary hides —
 are the rows of the task sheet, the Gantt views, the Network Diagram, Task
 Usage and the printout; the Calendar takes the filter.
 
@@ -207,7 +336,18 @@ baselines numbered to 10, an assignment's `baselines`, and the project's
 `criticalSlackDays`, `multipleCriticalPaths`, `levelingOrder`,
 `levelWithinSlack`, `levelClearFirst`. Older files load as before: a
 leveling floor becomes the equivalent delay, and baselines 3–10 kept as
-Project XML elements (M63–M78) join the model. Every object keeps keys it does not know and writes them back; a
+Project XML elements (M63–M78) join the model. M83 added, still within
+version 1: a task's `type`, `effortDriven`, `unassignedWork`,
+`durationElapsed`, `splits` (`[{at, gap}]`), `recurring`, `recurrence`
+(`{kind, every, days, day, position, weekday, month, from, to, count,
+workdays, duration, startMinute}`), `custom` (`{"Text1": "…"}`) and
+`actualCost`; a link's `lagElapsed`; an assignment's `work` and
+`workSpan`; the project's `defaultTaskType`, `newTasksEffortDriven`,
+`editableActualCosts` and `customFields` (`[{field, alias, lookup:
+[{value, description}], restrict, formula}]`). What an M63–M82 file kept as
+Project XML of these (task `Type`, `EffortDriven`, `Recurring`, custom
+values and definitions, the project defaults) joins the model on load
+(`adoptM83Elements`). Every object keeps keys it does not know and writes them back; a
 file with a higher `version` is refused with a message; duplicate ids are
 renumbered and dangling assignments dropped, each with a warning. The task
 clipboard (`application/x-qindaplan-tasks`) is the same task JSON; pasting
@@ -229,16 +369,21 @@ the project summary task,
 `LevelingDelay`/`LevelingDelayFormat` (tenths of a minute; format 8 =
 elapsed days, which leveling writes, 7 = working days; the file's own
 format kept while it fits), `PreLeveledStart`/`PreLeveledFinish`,
-`CriticalSlackLimit` and `MultipleCriticalPaths`. Costs are decimal cents on the wire (MPXJ's reading), rates per
+`CriticalSlackLimit` and `MultipleCriticalPaths`; since M83 task `Type`
+and `EffortDriven`, an assignment's `Work` as its own (work exactly its
+units over the task reads as following the duration; work ÷ `Units` short
+of the duration, with a flat contour, is its span), the project's
+`DefaultTaskType`, `NewTasksEffortDriven` and `EditableActualCosts`,
+elapsed `DurationFormat` and `LagFormat` (4, 6, 8, 10, 12; +32 estimated),
+`Recurring`, splits (below) and custom fields (below). Costs are decimal cents on the wire (MPXJ's reading), rates per
 hour, units decimals. The project summary task (UID 0) is skipped on import
 and written on export. Whatever cannot be represented is reported as a
 warning, never silently dropped.
 
 **What QindaPlan does not model is kept** (M63, D-071; `mspdi_keep.h`).
 Every child of Project, Calendar, Task, Resource and Assignment the reader
-does not turn into the model — custom fields (`ExtendedAttribute`) and the
-project's definitions of them (`ExtendedAttributes`, `OutlineCodes`), task
-type, effort driven, contact, hyperlinks, cost rate tables, availability,
+does not turn into the model — resource custom fields, outline codes
+(`OutlineCodes`), contact, hyperlinks, cost rate tables, availability,
 resource notes, work contours, the summary task's fields, views, tables,
 filters, and elements of Project versions not yet written — is captured
 verbatim into the object's `extra` (`"mspdi"`: name, the element before it,
@@ -275,6 +420,29 @@ Because `extra` round-trips through `.qplan`, a Project file saved as
   dropped). The project summary task's are replayed while no task's
   baseline of that number changed, and rolled up from the top-level tasks
   once one has.
+- **Custom fields go back as Project wrote them** (M83,
+  `mspdi_custom.h`). Each `<ExtendedAttribute>` definition and task value
+  is read into the model and kept as written: replayed byte for byte while
+  the model still says it; written from the model once changed (a
+  definition keeps Project's `Guid`, `SecondaryPID`, `SecondaryGuid` … in
+  the schema's order); dropped once cleared; a new one added after the
+  kept ones (with a bare definition — FieldID, FieldName — when the field
+  has none). A resource's custom field and a FieldID QindaPlan does not
+  know travel untouched; a formula QindaPlan cannot evaluate keeps
+  Project's value.
+- **Splits are timephased data** (M83, `mspdi_timephased.h`). Project has
+  no split element: a split is a stretch with no work but with working
+  time between an assignment's TimephasedData periods with work (actual
+  Type 2 and remaining Type 1, so Project's Stop / Resume reads as one),
+  or a placeholder assignment's (ResourceUID −65535) for a task without
+  resources. Project's periods are replayed while the assignment's stamp
+  holds and they still split its work where the task does; otherwise each
+  assignment gets one Type 1 period per segment with its share of the work
+  and an empty one per gap, and a split task without resources a
+  placeholder assignment carrying them.
+- **Recurring tasks** read as summaries flagged `Recurring` with their
+  occurrences; Project's XML has no pattern, so Recurring Task
+  Information can only change a pattern made here.
 - **Derived values follow the schedule.** Timephased data, actual and
   remaining work and duration, variances, earned-value fields, leveling
   delay and the like are what Project computed from the dates and progress
@@ -302,6 +470,9 @@ what the style draws. `networkPainter` prints the Network Diagram (above).
 in lanes, milestone callouts above and below that never overlap — at a
 crowded edge a label is shortened or dropped). One painter serves paper,
 PDF and the window (D-004: paper colours live in `PlanPaperStyle`).
+M83: a split task's gaps are paper between its segments joined by a dotted
+line, and the progress line (when on) is drawn at the status date; the
+legend lists Split and Progress line when drawn (`gantt_print_tracking.cpp`).
 `writeTaskSheetXlsx` (M63) writes the table on screen as an Excel workbook
 through calc_io: the fields' titles as a bold frozen header; costs as numbers
 under the project currency's format; dates as date-times under
@@ -310,6 +481,26 @@ days (`0.## d`), work as hours (`0.## h`); % complete as a fraction under
 `0%`; ID and priority as whole numbers; names indented by outline level.
 *File ▸ Import and Export ▸ Export Task Sheet as Excel…*
 (`planExportXlsxAction`) exports the same columns as the CSV.
+`readTaskTableXlsx` (M83) reads an `.xlsx`'s first sheet for the task
+import: each cell as Excel shows it, a date-formatted one as
+`yyyy-MM-ddTHH:mm`.
+
+## Task import (`plan_import.h`, M83)
+
+*File ▸ Import and Export ▸ Import Tasks from Excel or CSV…*
+(`planImportTasksAction`) is Project's Import Wizard for tasks. The table —
+an `.xlsx`'s first sheet or a CSV (RFC 4180; the separator the first line
+uses most; UTF-8, else Latin-1) — is previewed with one row per column:
+its header, a sample and the task field it maps to, guessed from Project's
+and QindaPlan's column names, the field ids and the custom fields' new
+names, and changed per column (or "do not import"). Import appends the
+rows as new tasks in one undo step; each cell goes through the sheet's own
+field typing, so it means what it would mean typed (a start sets Start No
+Earlier Than, a refused value becomes a warning naming the row and the
+field, and the import goes on). An Outline Level or WBS column places the
+tasks in an outline; predecessors refer to the source's ID column (else
+the data row number) and are translated to the new IDs; a summary's
+duration, work, finish, resources and % complete come from its subtasks.
 
 ## QindaPlan (app)
 
@@ -379,4 +570,21 @@ days (`0.## d`), work as hours (`0.## h`); % complete as a fraction under
   `planShowSlackAction`; leveling `planLevelingOptionsAction`,
   `planLevelSelectionAction`, `planClearLevelingSelectedAction`; tracking
   `planUpdateTasksAction`, `planMarkOnTrackAction`; reports
-  `planReport{Cost,Work}Action`; resources `planAddCostResourceAction`.
+  `planReport{Cost,Work}Action`; resources `planAddCostResourceAction`;
+  M83: task types `planTaskType{FixedUnits,FixedDuration,FixedWork}Action`
+  (radio), `planEffortDrivenAction`; `planSplitTaskAction`,
+  `planRemoveSplitsAction`; recurring tasks `planInsertRecurringAction`,
+  `planRecurringInfoAction`; `planCustomFieldsAction`,
+  `planRescheduleWorkAction`; view `planTableCustomAction`,
+  `planFilterCustomAction`, `planSortCustomAction`,
+  `planShowProgressLinesAction`; files `planImportTasksAction`.
+- **M83 dialogs**: Task Information has six pages (General, Predecessors,
+  Resources — each assignment's units and work —, Advanced — task type,
+  effort driven —, Notes, Custom Fields); Custom Fields (`CustomFieldsDialog.qml`:
+  kind, field, new name, lookup table, formula); Recurring Task
+  (`RecurringTaskDialog.qml` with `RecurrencePatternEditor.qml`); Split
+  Task (`SplitTaskDialog.qml`); Import Tasks (`ImportTasksDialog.qml`: the
+  column map); Change Working Time's Recurring exceptions and Work weeks
+  sections (`WorkingTimeRecurring.qml`, `WorkingTimeWeeks.qml`); Project
+  Information's default task type, effort driving and actual costs; Update
+  Project's Reschedule Uncompleted Work (`StatusDateDialog.qml`).

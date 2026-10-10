@@ -302,7 +302,7 @@ bool parseLevelingDelay(const QString &text, const ProjectInfo &info, Minutes *m
         return false;
     }
     *minutes = d->minutes;
-    *elapsed = false;
+    *elapsed = d->elapsed; // M83: parseDuration reads "2 emon" too
     return true;
 }
 

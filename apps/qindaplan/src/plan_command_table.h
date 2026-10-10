@@ -155,6 +155,27 @@ inline std::span<const PlanCommand> planCommands()
         // Report ▸ Dashboards.
         {"planReportCostAction", QT_TRANSLATE_NOOP("PlanHost", "C&ost Overview"), "", "circle-dollar-sign", nullptr},
         {"planReportWorkAction", QT_TRANSLATE_NOOP("PlanHost", "&Work Overview"), "", "briefcase", nullptr},
+        // ---- M83 (D-092): task types, custom fields, schedule tools ----
+        // Task ▸ Task Type (the selection's; Project's Task Information).
+        {"planTaskTypeFixedUnitsAction", QT_TRANSLATE_NOOP("PlanHost", "Fixed &Units"), "", "users", "planTaskType"},
+        {"planTaskTypeFixedDurationAction", QT_TRANSLATE_NOOP("PlanHost", "Fixed &Duration"), "", "clock", "planTaskType"},
+        {"planTaskTypeFixedWorkAction", QT_TRANSLATE_NOOP("PlanHost", "Fixed &Work"), "", "briefcase", "planTaskType"},
+        {"planEffortDrivenAction", QT_TRANSLATE_NOOP("PlanHost", "&Effort Driven"), "", "scale", ""},
+        // Task ▸ Schedule and Insert.
+        {"planSplitTaskAction", QT_TRANSLATE_NOOP("PlanHost", "S&plit Task…"), "", "scissors", nullptr},
+        {"planRemoveSplitsAction", QT_TRANSLATE_NOOP("PlanHost", "Remove S&plits"), "", "merge", nullptr},
+        {"planInsertRecurringAction", QT_TRANSLATE_NOOP("PlanHost", "&Recurring Task…"), "", "repeat", nullptr},
+        {"planRecurringInfoAction", QT_TRANSLATE_NOOP("PlanHost", "Recurring Task In&formation…"), "", "list-restart", nullptr},
+        // Project.
+        {"planCustomFieldsAction", QT_TRANSLATE_NOOP("PlanHost", "Custom &Fields…"), "", "text-cursor-input", nullptr},
+        {"planRescheduleWorkAction", QT_TRANSLATE_NOOP("PlanHost", "Reschedule Uncompleted &Work…"), "", "history", nullptr},
+        // View: the custom fields as a table, filtered and sorted by one.
+        {"planTableCustomAction", QT_TRANSLATE_NOOP("PlanHost", "C&ustom Fields Table"), "", "columns-3", "planTable"},
+        {"planFilterCustomAction", QT_TRANSLATE_NOOP("PlanHost", "Custom &Field…"), "", "funnel", "planFilter"},
+        {"planSortCustomAction", QT_TRANSLATE_NOOP("PlanHost", "by Custom &Field…"), "", "tag", "planSort"},
+        {"planShowProgressLinesAction", QT_TRANSLATE_NOOP("PlanHost", "&Progress Lines"), "", "chart-line", ""},
+        // File ▸ Import and Export: Project's Import Wizard for tasks.
+        {"planImportTasksAction", QT_TRANSLATE_NOOP("PlanHost", "Import &Tasks from Excel or CSV…"), "", "import", nullptr},
     };
     return kCommands;
 }

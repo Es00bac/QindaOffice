@@ -142,6 +142,26 @@ void paintLegend(QPainter *painter, const Geometry &g)
                         },
                         QStringLiteral("Deadline")});
     }
+    if (anySplit(g)) { // M83
+        entries.append({[&s, painter, cy](qreal x) {
+                            painter->setPen(QPen(s.accent, 0.6));
+                            painter->setBrush(s.tint(s.accent, 0.42));
+                            painter->drawRect(QRectF(x, cy - 3.5, 6, 7));
+                            painter->drawRect(QRectF(x + 12, cy - 3.5, 6, 7));
+                            QPen dots(s.muted, 0.7);
+                            dots.setDashPattern({1.2, 1.6});
+                            painter->setPen(dots);
+                            painter->drawLine(QPointF(x + 6, cy), QPointF(x + 12, cy));
+                        },
+                        QStringLiteral("Split")});
+    }
+    if (o.showProgressLine && o.statusDate != kNoDate) {
+        entries.append({[&s, painter, cy](qreal x) {
+                            painter->setPen(QPen(s.warning, 1.0));
+                            painter->drawPolyline(QPolygonF({QPointF(x + 12, cy - 5), QPointF(x + 4, cy), QPointF(x + 12, cy + 5)}));
+                        },
+                        QStringLiteral("Progress line")});
+    }
     if (o.today != kNoDate) {
         entries.append({[&s, painter, cy](qreal x) { dashedLine(painter, x + 9, cy - 5, cy + 5, s.accent); }, QStringLiteral("Today")});
     }

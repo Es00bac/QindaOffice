@@ -28,3 +28,13 @@ qqo_add_plan_test(tst_plan_critical)
 qqo_add_plan_test(tst_plan_leveling)
 qqo_add_plan_test(tst_plan_views)
 qqo_add_plan_test(tst_plan_mspdi_m79)
+# M83 (D-092): task types and effort driving, custom fields, elapsed
+# durations and lags, split and recurring tasks, actual work and cost, the
+# progress line, Reschedule Uncompleted Work, recurring calendar exceptions
+# and work weeks edited here, and the Excel/CSV task import.
+qqo_add_plan_test(tst_plan_task_types)
+qqo_add_plan_test(tst_plan_custom_fields)
+qqo_add_plan_test(tst_plan_tracking_m83)
+qqo_add_plan_test(tst_plan_recurring_import)
+# M83: a Project-shaped file of all of it (data/project_m83_sample.xml).
+qqo_add_plan_test(tst_plan_mspdi_m83)

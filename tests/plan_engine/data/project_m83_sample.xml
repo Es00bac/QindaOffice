@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- M83 (D-092) fixture, written by hand in the shape Microsoft Project 2019
+     saves (File > Save As > XML): Fixed Work and Fixed Duration tasks with
+     effort driving and their assignments' Work and Units, an elapsed duration
+     (DurationFormat 8) after an elapsed lag (LagFormat 8), a split task in
+     Project's own daily timephased data (the Tuesday empty), a recurring
+     summary with its two occurrences, custom fields - Text1 renamed "Trade"
+     with a lookup table that restricts (Project's Guid and SecondaryPID kept
+     around it), Number1 "Days" with a formula, Flag1, a resource Text1 - and
+     a value of a FieldID QindaPlan does not know. Expected schedule
+     (standard calendar):
+       1 Wire the floor   Fixed Work 2d, Ana + Ben 16 h each   Mon 2 - Tue 3
+       2 Cure the screed  2 edays, FS + 1 eday                  Wed 4 17:00 - Fri 6 17:00
+       3 Fit cabinets     Fixed Duration 3d, Ben 50 %, split    Mon 9, (Tue 10), Wed 11 - Thu 12
+       4 Snag walk        recurring: 1 Fri 13 09:00, 2 Fri 20 09:00, 1 h each
+       7 Owner sign-off   milestone FS 3                        Thu 12 17:00 -->
+<Project xmlns="http://schemas.microsoft.com/project">
+ <SaveVersion>14</SaveVersion>
+ <BuildNumber>16.0.10730.20102</BuildNumber>
+ <Name>Fit-out.xml</Name>
+ <GUID>D0000000-0000-4000-8000-000000000083</GUID>
+ <Title>Fit-out</Title>
+ <ScheduleFromStart>1</ScheduleFromStart>
+ <StartDate>2026-03-02T08:00:00</StartDate>
+ <FinishDate>2026-03-20T10:00:00</FinishDate>
+ <FYStartDate>1</FYStartDate>
+ <CriticalSlackLimit>0</CriticalSlackLimit>
+ <CurrencyDigits>2</CurrencyDigits>
+ <CurrencySymbol>$</CurrencySymbol>
+ <CurrencyCode>USD</CurrencyCode>
+ <CurrencySymbolPosition>0</CurrencySymbolPosition>
+ <CalendarUID>1</CalendarUID>
+ <DefaultStartTime>08:00:00</DefaultStartTime>
+ <DefaultFinishTime>17:00:00</DefaultFinishTime>
+ <MinutesPerDay>480</MinutesPerDay>
+ <MinutesPerWeek>2400</MinutesPerWeek>
+ <DaysPerMonth>20</DaysPerMonth>
+ <DefaultTaskType>2</DefaultTaskType>
+ <DefaultFixedCostAccrual>3</DefaultFixedCostAccrual>
+ <DurationFormat>7</DurationFormat>
+ <WorkFormat>2</WorkFormat>
+ <EditableActualCosts>1</EditableActualCosts>
+ <HonorConstraints>0</HonorConstraints>
+ <MultipleCriticalPaths>0</MultipleCriticalPaths>
+ <NewTasksEffortDriven>1</NewTasksEffortDriven>
+ <NewTasksEstimated>1</NewTasksEstimated>
+ <SplitsInProgressTasks>1</SplitsInProgressTasks>
+ <WeekStartDay>1</WeekStartDay>
+ <ExtendedAttributes>
+  <ExtendedAttribute>
+   <FieldID>188743731</FieldID>
+   <FieldName>Text1</FieldName>
+   <Guid>000039B7-8BBE-4CEB-82C4-FA8C0B400033</Guid>
+   <Alias>Trade</Alias>
+   <SecondaryPID>255869028</SecondaryPID>
+   <SecondaryGuid>000039B7-8BBE-4CEB-82C4-FA8C0F404064</SecondaryGuid>
+   <RestrictValues>1</RestrictValues>
+   <ValueList>
+    <Value><ID>1</ID><Value>Electrical</Value><Description>Sparks</Description></Value>
+    <Value><ID>2</ID><Value>Joinery</Value></Value>
+   </ValueList>
+  </ExtendedAttribute>
+  <ExtendedAttribute>
+   <FieldID>188743767</FieldID>
+   <FieldName>Number1</FieldName>
+   <Guid>000039B7-8BBE-4CEB-82C4-FA8C0B400057</Guid>
+   <Alias>Days</Alias>
+   <SecondaryPID>255869047</SecondaryPID>
+   <Formula>[Duration]/480</Formula>
+  </ExtendedAttribute>
+  <ExtendedAttribute>
+   <FieldID>188743752</FieldID>
+   <FieldName>Flag1</FieldName>
+   <Guid>000039B7-8BBE-4CEB-82C4-FA8C0B400048</Guid>
+  </ExtendedAttribute>
+  <ExtendedAttribute>
+   <FieldID>205520904</FieldID>
+   <FieldName>Text1</FieldName>
+   <Alias>Crew</Alias>
+  </ExtendedAttribute>
+ </ExtendedAttributes>
+ <Calendars>
+  <Calendar>
+   <UID>1</UID>
+   <Name>Standard</Name>
+   <IsBaseCalendar>1</IsBaseCalendar>
+   <IsBaselineCalendar>0</IsBaselineCalendar>
+   <BaseCalendarUID>-1</BaseCalendarUID>
+   <WeekDays>
+    <WeekDay><DayType>1</DayType><DayWorking>0</DayWorking></WeekDay>
+    <WeekDay><DayType>2</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>3</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>4</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>5</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>6</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+    <WeekDay><DayType>7</DayType><DayWorking>0</DayWorking></WeekDay>
+   </WeekDays>
+  </Calendar>
+ </Calendars>
+ <Tasks>
+  <Task>
+   <UID>0</UID><ID>0</ID><Name>Fit-out</Name><Type>1</Type><IsNull>0</IsNull><OutlineLevel>0</OutlineLevel>
+   <EffortDriven>0</EffortDriven><Recurring>0</Recurring>
+  </Task>
+  <Task>
+   <UID>1</UID><GUID>D1000000-0000-4000-8000-000000000001</GUID><ID>1</ID><Name>Wire the floor</Name>
+   <Active>1</Active><Manual>0</Manual><Type>2</Type><IsNull>0</IsNull>
+   <WBS>1</WBS><OutlineNumber>1</OutlineNumber><OutlineLevel>1</OutlineLevel><Priority>500</Priority>
+   <Start>2026-03-02T08:00:00</Start><Finish>2026-03-03T17:00:00</Finish><Duration>PT16H0M0S</Duration>
+   <DurationFormat>7</DurationFormat><Work>PT32H0M0S</Work><EffortDriven>1</EffortDriven><Recurring>0</Recurring>
+   <Estimated>0</Estimated><Milestone>0</Milestone><Summary>0</Summary>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <ExtendedAttribute><FieldID>188743731</FieldID><Value>Electrical</Value></ExtendedAttribute>
+   <ExtendedAttribute><FieldID>188743767</FieldID><Value>2</Value></ExtendedAttribute>
+   <ExtendedAttribute><FieldID>188743752</FieldID><Value>1</Value></ExtendedAttribute>
+  </Task>
+  <Task>
+   <UID>2</UID><GUID>D1000000-0000-4000-8000-000000000002</GUID><ID>2</ID><Name>Cure the screed</Name>
+   <Active>1</Active><Manual>0</Manual><Type>0</Type><IsNull>0</IsNull>
+   <WBS>2</WBS><OutlineNumber>2</OutlineNumber><OutlineLevel>1</OutlineLevel><Priority>500</Priority>
+   <Start>2026-03-04T17:00:00</Start><Finish>2026-03-06T17:00:00</Finish><Duration>PT48H0M0S</Duration>
+   <DurationFormat>8</DurationFormat><Work>PT0H0M0S</Work><EffortDriven>0</EffortDriven><Recurring>0</Recurring>
+   <Estimated>0</Estimated><Milestone>0</Milestone><Summary>0</Summary>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <PredecessorLink><PredecessorUID>1</PredecessorUID><Type>1</Type><CrossProject>0</CrossProject><LinkLag>14400</LinkLag><LagFormat>8</LagFormat></PredecessorLink>
+   <ExtendedAttribute><FieldID>188743767</FieldID><Value>6</Value></ExtendedAttribute>
+  </Task>
+  <Task>
+   <UID>3</UID><GUID>D1000000-0000-4000-8000-000000000003</GUID><ID>3</ID><Name>Fit cabinets</Name>
+   <Active>1</Active><Manual>0</Manual><Type>1</Type><IsNull>0</IsNull>
+   <WBS>3</WBS><OutlineNumber>3</OutlineNumber><OutlineLevel>1</OutlineLevel><Priority>500</Priority>
+   <Start>2026-03-09T08:00:00</Start><Finish>2026-03-12T17:00:00</Finish><Duration>PT24H0M0S</Duration>
+   <DurationFormat>7</DurationFormat><Work>PT12H0M0S</Work><EffortDriven>1</EffortDriven><Recurring>0</Recurring>
+   <Estimated>0</Estimated><Milestone>0</Milestone><Summary>0</Summary>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <PredecessorLink><PredecessorUID>2</PredecessorUID><Type>1</Type><CrossProject>0</CrossProject><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+   <ExtendedAttribute><FieldID>188743731</FieldID><Value>Joinery</Value></ExtendedAttribute>
+   <ExtendedAttribute><FieldID>188743767</FieldID><Value>3</Value></ExtendedAttribute>
+  </Task>
+  <Task>
+   <UID>4</UID><GUID>D1000000-0000-4000-8000-000000000004</GUID><ID>4</ID><Name>Snag walk</Name>
+   <Active>1</Active><Manual>0</Manual><Type>1</Type><IsNull>0</IsNull>
+   <WBS>4</WBS><OutlineNumber>4</OutlineNumber><OutlineLevel>1</OutlineLevel><Priority>500</Priority>
+   <Start>2026-03-13T09:00:00</Start><Finish>2026-03-20T10:00:00</Finish><Duration>PT41H0M0S</Duration>
+   <DurationFormat>7</DurationFormat><Work>PT0H0M0S</Work><EffortDriven>0</EffortDriven><Recurring>1</Recurring>
+   <Estimated>0</Estimated><Milestone>0</Milestone><Summary>1</Summary>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+  </Task>
+  <Task>
+   <UID>5</UID><GUID>D1000000-0000-4000-8000-000000000005</GUID><ID>5</ID><Name>Snag walk 1</Name>
+   <Active>1</Active><Manual>0</Manual><Type>0</Type><IsNull>0</IsNull>
+   <WBS>4.1</WBS><OutlineNumber>4.1</OutlineNumber><OutlineLevel>2</OutlineLevel><Priority>500</Priority>
+   <Start>2026-03-13T09:00:00</Start><Finish>2026-03-13T10:00:00</Finish><Duration>PT1H0M0S</Duration>
+   <DurationFormat>5</DurationFormat><Work>PT0H0M0S</Work><EffortDriven>0</EffortDriven><Recurring>0</Recurring>
+   <Estimated>0</Estimated><Milestone>0</Milestone><Summary>0</Summary>
+   <ConstraintType>4</ConstraintType><CalendarUID>-1</CalendarUID><ConstraintDate>2026-03-13T09:00:00</ConstraintDate>
+  </Task>
+  <Task>
+   <UID>6</UID><GUID>D1000000-0000-4000-8000-000000000006</GUID><ID>6</ID><Name>Snag walk 2</Name>
+   <Active>1</Active><Manual>0</Manual><Type>0</Type><IsNull>0</IsNull>
+   <WBS>4.2</WBS><OutlineNumber>4.2</OutlineNumber><OutlineLevel>2</OutlineLevel><Priority>500</Priority>
+   <Start>2026-03-20T09:00:00</Start><Finish>2026-03-20T10:00:00</Finish><Duration>PT1H0M0S</Duration>
+   <DurationFormat>5</DurationFormat><Work>PT0H0M0S</Work><EffortDriven>0</EffortDriven><Recurring>0</Recurring>
+   <Estimated>0</Estimated><Milestone>0</Milestone><Summary>0</Summary>
+   <ConstraintType>4</ConstraintType><CalendarUID>-1</CalendarUID><ConstraintDate>2026-03-20T09:00:00</ConstraintDate>
+  </Task>
+  <Task>
+   <UID>7</UID><GUID>D1000000-0000-4000-8000-000000000007</GUID><ID>7</ID><Name>Owner sign-off</Name>
+   <Active>1</Active><Manual>0</Manual><Type>0</Type><IsNull>0</IsNull>
+   <WBS>5</WBS><OutlineNumber>5</OutlineNumber><OutlineLevel>1</OutlineLevel><Priority>500</Priority>
+   <Start>2026-03-12T17:00:00</Start><Finish>2026-03-12T17:00:00</Finish><Duration>PT0H0M0S</Duration>
+   <DurationFormat>7</DurationFormat><Work>PT0H0M0S</Work><EffortDriven>0</EffortDriven><Recurring>0</Recurring>
+   <Estimated>0</Estimated><Milestone>1</Milestone><Summary>0</Summary>
+   <ConstraintType>0</ConstraintType><CalendarUID>-1</CalendarUID>
+   <PredecessorLink><PredecessorUID>3</PredecessorUID><Type>1</Type><CrossProject>0</CrossProject><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+   <ExtendedAttribute><FieldID>188744339</FieldID><Value>1</Value></ExtendedAttribute>
+  </Task>
+ </Tasks>
+ <Resources>
+  <Resource><UID>0</UID><ID>0</ID><Type>1</Type><IsNull>0</IsNull></Resource>
+  <Resource>
+   <UID>1</UID><ID>1</ID><Name>Ana</Name><Type>1</Type><IsNull>0</IsNull><MaxUnits>1.00</MaxUnits>
+   <StandardRate>60</StandardRate><StandardRateFormat>2</StandardRateFormat><CostPerUse>0</CostPerUse><CalendarUID>-1</CalendarUID>
+   <ExtendedAttribute><FieldID>205520904</FieldID><Value>North</Value></ExtendedAttribute>
+  </Resource>
+  <Resource>
+   <UID>2</UID><ID>2</ID><Name>Ben</Name><Type>1</Type><IsNull>0</IsNull><MaxUnits>1.00</MaxUnits>
+   <StandardRate>40</StandardRate><StandardRateFormat>2</StandardRateFormat><CostPerUse>0</CostPerUse><CalendarUID>-1</CalendarUID>
+  </Resource>
+ </Resources>
+ <Assignments>
+  <Assignment>
+   <UID>1</UID><TaskUID>1</TaskUID><ResourceUID>1</ResourceUID><Finish>2026-03-03T17:00:00</Finish>
+   <Start>2026-03-02T08:00:00</Start><Units>1</Units><Work>PT16H0M0S</Work>
+  </Assignment>
+  <Assignment>
+   <UID>2</UID><TaskUID>1</TaskUID><ResourceUID>2</ResourceUID><Finish>2026-03-03T17:00:00</Finish>
+   <Start>2026-03-02T08:00:00</Start><Units>1</Units><Work>PT16H0M0S</Work>
+  </Assignment>
+  <Assignment>
+   <UID>3</UID><TaskUID>3</TaskUID><ResourceUID>2</ResourceUID><Finish>2026-03-12T17:00:00</Finish>
+   <Start>2026-03-09T08:00:00</Start><Units>0.5</Units><Work>PT12H0M0S</Work><WorkContour>0</WorkContour>
+   <TimephasedData><Type>1</Type><UID>3</UID><Start>2026-03-09T08:00:00</Start><Finish>2026-03-10T08:00:00</Finish><Unit>2</Unit><Value>PT4H0M0S</Value></TimephasedData>
+   <TimephasedData><Type>1</Type><UID>3</UID><Start>2026-03-10T08:00:00</Start><Finish>2026-03-11T08:00:00</Finish><Unit>2</Unit><Value>PT0H0M0S</Value></TimephasedData>
+   <TimephasedData><Type>1</Type><UID>3</UID><Start>2026-03-11T08:00:00</Start><Finish>2026-03-12T08:00:00</Finish><Unit>2</Unit><Value>PT4H0M0S</Value></TimephasedData>
+   <TimephasedData><Type>1</Type><UID>3</UID><Start>2026-03-12T08:00:00</Start><Finish>2026-03-12T17:00:00</Finish><Unit>2</Unit><Value>PT4H0M0S</Value></TimephasedData>
+  </Assignment>
+ </Assignments>
+</Project>

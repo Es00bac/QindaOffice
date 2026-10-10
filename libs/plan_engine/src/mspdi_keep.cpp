@@ -220,6 +220,17 @@ bool Children::kept(const QString &name) const
     return std::any_of(m_kept.cbegin(), m_kept.cend(), [&name](const Kept &k) { return k.name == name; });
 }
 
+bool Children::replays(const QString &name) const
+{
+    return std::any_of(m_kept.cbegin(), m_kept.cend(),
+                       [&](const Kept &k) { return k.name == name && (!k.derived || stampHolds(k.name)); });
+}
+
+void Children::drop(const QString &name)
+{
+    m_kept.removeIf([&name](const Kept &k) { return k.name == name; });
+}
+
 void Children::write(QXmlStreamWriter &out)
 {
     int seq = 0;

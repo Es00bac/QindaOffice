@@ -2,13 +2,16 @@
 // Project's task filters and sorts (plan_views.h).
 #include "plan_views.h"
 
+#include "custom_fields.h"
 #include "outline.h"
 #include "plan_reports.h"
 #include "plan_time.h"
 
+#include <QHash>
 #include <QSet>
 
 #include <algorithm>
+#include <cmath>
 
 namespace QindaOffice::Plan {
 
@@ -31,6 +34,7 @@ constexpr Named kFilters[] = {
     {"deadlines", "Tasks With Deadlines"},
     {"resource", "Using Resource…"},
     {"dateRange", "Date Range…"},
+    {"custom", "Custom Field…"}, // M83
 };
 
 constexpr Named kSorts[] = {
@@ -56,6 +60,44 @@ QStringList idsOf(const Named (&list)[N])
         out.append(QLatin1String(n.id));
     }
     return out;
+}
+
+// M83: one custom field's test (TaskFilter has the tests).
+bool customMatches(const Project &project, int index, const TaskFilter &filter)
+{
+    const std::optional<QVariant> v = customFieldValue(project, index, filter.field);
+    const std::optional<CustomFieldInfo> info = customFieldInfo(filter.field);
+    if (filter.test == QLatin1String("isSet") || filter.test == QLatin1String("notSet")) {
+        // A number, cost, flag or duration is set when it is not 0 (No).
+        const bool numeric = v && v->typeId() != QMetaType::QString && info && info->kind != CustomFieldKind::Date
+                          && info->kind != CustomFieldKind::Start && info->kind != CustomFieldKind::Finish;
+        const bool set = v.has_value() && (!numeric || v->toDouble() != 0.0);
+        return set == (filter.test == QLatin1String("isSet"));
+    }
+    if (!v || !filter.value.isValid()) {
+        return filter.test == QLatin1String("notEquals");
+    }
+    int c = 0;
+    if (v->typeId() == QMetaType::QString) {
+        const QString a = v->toString();
+        const QString b = filter.value.toString();
+        if (filter.test == QLatin1String("contains")) {
+            return a.contains(b, Qt::CaseInsensitive);
+        }
+        c = QString::compare(a, b, Qt::CaseInsensitive);
+    } else {
+        double a = v->toDouble();
+        double b = filter.value.toDouble();
+        if (info && (info->kind == CustomFieldKind::Date || info->kind == CustomFieldKind::Start
+                     || info->kind == CustomFieldKind::Finish)) {
+            a = std::floor(a / 1440.0); // dates compare by day
+            b = std::floor(b / 1440.0);
+        }
+        c = std::abs(a - b) < 1e-9 ? 0 : (a < b ? -1 : 1);
+    }
+    return filter.test == QLatin1String("equals") ? c == 0 : filter.test == QLatin1String("notEquals") ? c != 0
+           : filter.test == QLatin1String("greater") ? c > 0 : filter.test == QLatin1String("less") ? c < 0
+                                                     : filter.test == QLatin1String("contains") && c == 0;
 }
 
 bool usesResource(const Project &project, const Task &t, int resourceUid)
@@ -114,6 +156,9 @@ bool taskMatches(const Project &project, int index, const TaskFilter &filter, Mi
     if (id == QLatin1String("resource")) {
         return !t.summary && usesResource(project, t, filter.resourceUid);
     }
+    if (id == QLatin1String("custom")) {
+        return customMatches(project, index, filter);
+    }
     if (id == QLatin1String("dateRange")) {
         if (!filter.from.isValid() || !filter.to.isValid() || t.start == kNoDate) {
             return false;
@@ -171,9 +216,35 @@ QList<int> sortedOutline(const Project &project, const QString &key)
         const int parent = project.tasks.at(i).parentIndex;
         (parent >= 0 && parent < n ? children[parent] : roots).append(i);
     }
+    // M83: "custom:<Field>[:desc]" — values first, in order; none last.
+    const QStringList parts = key.split(QLatin1Char(':'));
+    const bool custom = parts.size() >= 2 && parts.first() == QLatin1String("custom");
+    const bool descending = parts.size() >= 3 && parts.at(2) == QLatin1String("desc");
+    QHash<int, std::optional<QVariant>> values;
+    if (custom) {
+        for (int i = 0; i < n; ++i) {
+            values.insert(i, customFieldValue(project, i, parts.at(1)));
+        }
+    }
     const auto less = [&](int a, int b) {
         const Task &x = project.tasks.at(a);
         const Task &y = project.tasks.at(b);
+        if (custom) {
+            const std::optional<QVariant> &u = values[a];
+            const std::optional<QVariant> &v = values[b];
+            if (u.has_value() != v.has_value()) {
+                return u.has_value();
+            }
+            if (u && v) {
+                const int c = u->typeId() == QMetaType::QString
+                                  ? QString::localeAwareCompare(u->toString(), v->toString())
+                                  : (u->toDouble() < v->toDouble() ? -1 : u->toDouble() > v->toDouble() ? 1 : 0);
+                if (c != 0) {
+                    return descending ? c > 0 : c < 0;
+                }
+            }
+            return a < b;
+        }
         if (key == QLatin1String("start") && x.start != y.start) {
             return x.start < y.start;
         }

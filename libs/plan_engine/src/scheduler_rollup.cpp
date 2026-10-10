@@ -7,6 +7,7 @@
 #include "plan_time.h"
 #include "scheduler.h"
 #include "scheduler_p.h"
+#include "task_types.h"
 
 #include <algorithm>
 
@@ -46,8 +47,7 @@ void SchedulePass::freeSlackAndAlap()
         bool any = false;
         for (const LinkRef &ref : m_outgoing.at(i)) {
             const Task &s = tasks.at(ref.successor);
-            const Minutes lag = lagOf(ref);
-            const auto lagSub = [&](Minutes x) { return lag == 0 ? x : m_projectCal.add(x, -lag); };
+            const auto lagSub = [&](Minutes x) { return lagged(ref, x, true); };
             Minutes r = 0;
             switch (s.predecessors.at(ref.link).type) {
             case LinkType::FinishToStart:
@@ -75,9 +75,10 @@ void SchedulePass::freeSlackAndAlap()
         const bool started = t.actualStart != kNoDate || t.percentComplete > 0;
         if (t.constraint == ConstraintType::AsLateAsPossible && !t.manual && !started && free > 0) {
             const Minutes d = t.duration;
-            const Minutes ef = c.snapBackward(c.add(t.earlyFinish, free));
+            const Minutes moved = c.add(t.earlyFinish, free);
+            const Minutes ef = t.durationElapsed ? moved : c.snapBackward(moved);
             t.finish = ef;
-            t.start = d > 0 ? c.subtract(ef, d) : ef;
+            t.start = d > 0 ? before(i, ef, length(i)) : ef; // M83: split gaps, elapsed
             t.freeSlack = 0;
         }
     }
@@ -184,7 +185,8 @@ void SchedulePass::costs()
         resourceByUid.insert(res.uid, r);
     }
     for (Task &t : tasks) {
-        t.work = 0;
+        // M83: work typed on a task without resources counts as its work.
+        t.work = t.summary ? 0 : t.unassignedWork;
         t.cost = t.fixedCost;
     }
     for (Assignment &a : m_project.assignments) {
@@ -201,7 +203,7 @@ void SchedulePass::costs()
             continue;
         }
         if (r.type == ResourceType::Work) {
-            a.work = t.isMilestone() ? 0 : divRound(t.duration * a.units, 100);
+            a.work = assignmentWork(t, a); // M83: Project's task types (task_types.h)
             a.cost = divRound(a.work * r.standardRate, 60) + r.costPerUse;
             t.work += a.work;
         } else if (r.type == ResourceType::Cost) {
@@ -214,6 +216,13 @@ void SchedulePass::costs()
         t.cost += a.cost;
         r.work += a.work;
         r.cost += a.cost;
+    }
+    for (Task &t : tasks) {
+        // M83: an Actual Cost typed (Project's "actual costs are always
+        // calculated" off) replaces the calculated share; what remains stays.
+        if (!t.summary && m_project.info.editableActualCosts && t.actualCostInput >= 0) {
+            t.cost = t.actualCostInput + (t.cost - divRound(t.cost * t.percentComplete, 100));
+        }
     }
     for (int i = m_n - 1; i >= 0; --i) {
         const Task &t = tasks.at(i);

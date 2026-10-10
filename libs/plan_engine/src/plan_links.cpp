@@ -3,8 +3,11 @@
 #include "plan_edit.h"
 #include "plan_time.h"
 #include "scheduler.h"
+#include "task_types.h"
 
 #include <QRegularExpression>
+
+#include <algorithm>
 
 namespace QindaOffice::Plan {
 
@@ -227,33 +230,39 @@ EditResult setResourceNames(Project &project, int index, const QString &text, co
         }
         wanted.append({res.uid, units, cost});
     }
+    // M83 (task_types.h): units changed on kept assignments first, then the
+    // resources added and removed in one change, so an effort-driven task
+    // shares its work as Project does.
     const int taskUid = copy.tasks.at(index).uid;
-    copy.assignments.removeIf([&](const Assignment &a) {
-        if (a.taskUid != taskUid) {
-            return false;
+    QList<int> removed;
+    for (const Assignment &a : std::as_const(copy.assignments)) {
+        const bool kept = std::any_of(wanted.cbegin(), wanted.cend(),
+                                      [&](const Wanted &w) { return w.resourceUid == a.resourceUid; });
+        if (a.taskUid == taskUid && !kept) {
+            removed.append(a.resourceUid);
         }
-        for (const Wanted &w : std::as_const(wanted)) {
-            if (w.resourceUid == a.resourceUid) {
-                return false;
-            }
-        }
-        return true;
-    });
+    }
+    QList<ResourceRequest> added;
     for (const Wanted &w : std::as_const(wanted)) {
         const int existing = copy.assignmentIndex(taskUid, w.resourceUid);
-        if (existing >= 0) {
-            copy.assignments[existing].units = w.units;
-            if (w.cost) {
-                copy.assignments[existing].costInput = *w.cost;
+        if (existing < 0) {
+            added.append({w.resourceUid, w.units});
+            continue;
+        }
+        if (copy.assignments.at(existing).units != w.units) {
+            const EditResult r = setAssignmentUnits(copy, existing, w.units);
+            if (!r.ok) {
+                return r;
             }
-        } else {
-            Assignment a;
-            a.uid = copy.nextAssignmentUid();
-            a.taskUid = taskUid;
-            a.resourceUid = w.resourceUid;
-            a.units = w.units;
-            a.costInput = w.cost.value_or(0);
-            copy.assignments.append(a);
+        }
+    }
+    const EditResult r = changeAssignments(copy, index, added, removed);
+    if (!r.ok) {
+        return r;
+    }
+    for (const Wanted &w : std::as_const(wanted)) {
+        if (w.cost) {
+            copy.assignments[copy.assignmentIndex(taskUid, w.resourceUid)].costInput = *w.cost;
         }
     }
     project = copy;

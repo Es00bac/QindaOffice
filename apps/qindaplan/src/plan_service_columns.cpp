@@ -3,6 +3,7 @@
 // Schedule — Project's standard tables; Schedule also shows the Deadline and
 // Priority Microsoft Project XML carries, M63; M79 adds Work, Baseline and
 // Delay) and the column widths both sheets ask for (plan_service.h).
+#include "custom_fields.h"
 #include "plan_edit.h"
 #include "plan_service.h"
 
@@ -39,6 +40,8 @@ const QList<TableDef> &tables()
          {"indicators", "name", "baselineDuration", "baselineStart", "baselineFinish", "baselineWork", "baselineCost"}},
         {"delay", "Delay",
          {"indicators", "name", "levelingDelay", "duration", "start", "finish", "successors", "resources"}},
+        // M83: the custom fields in use (added in tableFields(), D-092).
+        {"custom", "Custom Fields", {"indicators", "name"}},
     };
     return defs;
 }
@@ -92,6 +95,15 @@ QStringList PlanService::tableFields() const
             for (const char *f : t.fields) {
                 out.append(QLatin1String(f));
             }
+            if (m_table == QLatin1String("custom")) {
+                // M83: the fields the project uses, else a first few to type in.
+                QStringList used = Engine::customFieldsInUse(project());
+                if (used.isEmpty()) {
+                    used = {QStringLiteral("Text1"), QStringLiteral("Number1"), QStringLiteral("Flag1"),
+                            QStringLiteral("Date1"), QStringLiteral("Cost1")};
+                }
+                out += used;
+            }
             return out;
         }
     }
@@ -112,9 +124,11 @@ QVariantList PlanService::sheetColumns() const
 {
     QVariantList out;
     for (const QString &f : tableFields()) {
+        const QString title = Engine::isCustomField(f) ? Engine::customFieldTitle(project(), f) // M83: its alias
+                              : f == QLatin1String("indicators") || f == QLatin1String("mode") ? QString()
+                                                                                               : Engine::taskFieldTitle(f);
         out.append(QVariantMap{{QStringLiteral("id"), f},
-                               {QStringLiteral("title"), f == QLatin1String("indicators") || f == QLatin1String("mode")
-                                                             ? QString() : Engine::taskFieldTitle(f)},
+                               {QStringLiteral("title"), title},
                                {QStringLiteral("factor"), widthFactor(f)}});
     }
     return out;

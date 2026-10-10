@@ -4,6 +4,7 @@
 // Private to mspdi_*.cpp: the MSPDI wire conventions (mspdi.h lists them)
 // as exact converters. Nothing here uses floating point for money or time.
 
+#include "mspdi_keep.h"
 #include "plan_types.h"
 
 #include <QHash>
@@ -52,7 +53,7 @@ struct DurationCode {
     bool known = true;
 };
 [[nodiscard]] DurationCode durationCode(int code);
-[[nodiscard]] int durationFormat(DurationUnit unit, bool estimated);
+[[nodiscard]] int durationFormat(DurationUnit unit, bool estimated, bool elapsed = false);
 
 // PredecessorLink Type: 0 FF, 1 FS, 2 SF, 3 SS.
 [[nodiscard]] std::optional<LinkType> linkTypeFromWire(int code);
@@ -94,6 +95,13 @@ struct RawTask {
     int levelingDelayFormat = 8; // edays, Project's default
     QList<RawLink> links;
     QList<RawBaseline> baselines;
+    // M83: the task's Work as written (work typed on a task without
+    // resources), and the elements the model reads that the project summary
+    // task must still carry as kept ones (Type, EffortDriven, Recurring,
+    // ExtendedAttribute — mspdi_custom.h).
+    bool hasWork = false;
+    Minutes work = 0;
+    QList<Kept> summaryKept;
 };
 
 struct RawResource {
@@ -109,6 +117,9 @@ struct RawAssignment {
     int taskUid = 0;
     int resourceUid = 0;
     qint64 units = 100;
+    double unitsExact = 1.0; // M83: Units as written (1.0 = 100 %), for the work's span
+    bool hasWork = false;    // M83: Work as written becomes the assignment's work
+    Minutes work = 0;
     qint64 costCents = 0; // M79: a cost resource's assignment is its Cost
     QList<RawBaseline> baselines; // M79
     QJsonObject extra; // kept elements and their stamp (mspdi_keep.h)
@@ -122,6 +133,7 @@ struct Raw {
     QList<RawTask> tasks;
     QList<RawResource> resources;
     QList<RawAssignment> assignments;
+    QList<CustomFieldDef> customFields; // M83 (mspdi_custom.h)
     QStringList warnings;
     void warn(const QString &message)
     {
