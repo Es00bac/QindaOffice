@@ -81,6 +81,10 @@ struct ExtraPart {
     QByteArray bytes;
     QString contentType;
     QString relType; // from the document part
+    // M87: a part related from another extra part (recordset1.xml from
+    // recordsets.xml) names that part here, and the relationship id.
+    QString parent;
+    QString relId;
 };
 
 // A whole package: [Content_Types], rels, docProps, document, pages,
@@ -154,7 +158,11 @@ inline QByteArray build(const QList<PageSpec> &pages, const QList<MasterSpec> &m
     }
     for (const ExtraPart &part : extra) {
         w.addPart(part.name, part.bytes, part.contentType);
-        w.addRelationship(doc, part.relType, part.name);
+        if (part.parent.isEmpty()) {
+            w.addRelationship(doc, part.relType, part.name);
+        } else {
+            w.addRelationshipWithId(part.parent, part.relId, part.relType, part.name);
+        }
     }
     return w.toZip();
 }
@@ -266,7 +274,7 @@ inline QByteArray officePackage(const QList<ExtraPart> &more = {})
                                        "xmlns='http://schemas.microsoft.com/office/visio/2012/main' xml:space='preserve'>"
                                        "<ValidationProperties/></Validation>"),
                             str("application/vnd.ms-visio.validation+xml"),
-                            str("http://schemas.microsoft.com/visio/2010/relationships/validation")}};
+                            str("http://schemas.microsoft.com/visio/2010/relationships/validation"), {}, {}}};
     extra.append(more);
     return build({plan, notes}, {box}, {}, smallTheme(), extra);
 }

@@ -78,6 +78,50 @@ Page *Drawing::page(const QString &pageId)
     return i < 0 ? nullptr : &pages[i];
 }
 
+const DataRecordset *Drawing::recordset(const QString &recordsetId) const
+{
+    for (const DataRecordset &r : recordsets) {
+        if (r.id == recordsetId) {
+            return &r;
+        }
+    }
+    return nullptr;
+}
+
+DataRecordset *Drawing::recordset(const QString &recordsetId)
+{
+    for (DataRecordset &r : recordsets) {
+        if (r.id == recordsetId) {
+            return &r;
+        }
+    }
+    return nullptr;
+}
+
+QString DataRecordset::rowKey(int row) const
+{
+    if (row < 0 || row >= rows.size()) {
+        return {};
+    }
+    if (keyColumn >= 0 && keyColumn < rows.at(row).size()) {
+        return rows.at(row).at(keyColumn);
+    }
+    return QLatin1Char('#') + QString::number(row + 1);
+}
+
+int DataRecordset::rowOf(const QString &key) const
+{
+    if (key.isEmpty()) {
+        return -1;
+    }
+    for (int i = 0; i < rows.size(); ++i) {
+        if (rowKey(i) == key) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 QString Drawing::newId(const QString &prefix)
 {
     // AGENT-GUARD: a file edited by hand (or a paste from an older window)
@@ -85,9 +129,12 @@ QString Drawing::newId(const QString &prefix)
     // items ever share one.
     for (;;) {
         const QString id = prefix + QString::number(++serial);
-        bool used = pageIndex(id) >= 0;
+        bool used = pageIndex(id) >= 0 || recordset(id) != nullptr;
         for (const Page &page : std::as_const(pages)) {
             used = used || page.contains(id);
+            for (const Comment &comment : page.comments) {
+                used = used || comment.id == id;
+            }
             for (const Shape &shape : page.shapes) {
                 used = used || shape.groupId == id;
             }

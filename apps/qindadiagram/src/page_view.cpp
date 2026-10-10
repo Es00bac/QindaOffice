@@ -3,7 +3,9 @@
 
 #include "diagram_service.h"
 #include "geometry.h"
+#include "layers.h"
 #include "ops.h"
+#include "print_tiles.h"
 #include "painter.h"
 #include "routing.h"
 #include "stencils.h"
@@ -12,7 +14,9 @@
 #include <qindatk/canvas_surface.h>
 
 #include <QPainter>
+#include <QPainterPath>
 
+#include <algorithm>
 #include <cmath>
 
 namespace QindaOffice::Apps::Diagram {
@@ -196,6 +200,8 @@ void DiagramPageView::paint(QPainter *painter)
     }
     const QHash<QString, Route> routes = routePage(page);
     options.routes = &routes;
+    // M87: the background pages show under the page (never editable here).
+    options.backgrounds = backgroundChain(m_service->drawing(), page);
     paintPage(painter, page, options);
     if (!m_dropStencil.isEmpty() && !m_overview) {
         Drawing ghost;
@@ -212,7 +218,97 @@ void DiagramPageView::paint(QPainter *painter)
     if (!m_overview) {
         paintGuides(painter, page, toView);
         paintFeedback(painter, page, toView);
+        paintReview(painter, page, toView);
     }
+}
+
+QVariantList DiagramPageView::autoConnectArrows() const
+{
+    const Page *page = m_service != nullptr ? m_service->currentPage() : nullptr;
+    const Shape *shape = page != nullptr ? page->shape(m_autoConnectShape) : nullptr;
+    if (shape == nullptr || isContainer(*shape) || m_surface == nullptr) {
+        return {};
+    }
+    const QTransform toView = documentToView();
+    const QRectF b = toView.mapRect(shapeBounds(*shape));
+    const double gap = 16; // view pixels outside the shape's box
+    return {QPointF(b.center().x(), b.top() - gap), QPointF(b.right() + gap, b.center().y()),
+            QPointF(b.center().x(), b.bottom() + gap), QPointF(b.left() - gap, b.center().y())};
+}
+
+QString DiagramPageView::commentMarkerAt(double x, double y) const
+{
+    if (m_service == nullptr || m_surface == nullptr) {
+        return {};
+    }
+    const QTransform toView = documentToView();
+    for (const QVariant &v : m_service->commentMarkers()) {
+        const QVariantMap m = v.toMap();
+        const QPointF at = toView.map(QPointF(m.value(QStringLiteral("x")).toDouble(), m.value(QStringLiteral("y")).toDouble()));
+        if (QRectF(at.x() - 2, at.y() - 16, 20, 18).contains(QPointF(x, y))) {
+            return m.value(QStringLiteral("id")).toString();
+        }
+    }
+    return {};
+}
+
+void DiagramPageView::paintReview(QPainter *painter, const Page &page, const QTransform &toView)
+{
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    if (m_showPageBreaks) {
+        // Where one sheet ends and the next begins, each cut drawn once
+        // across the page (Visio's page breaks).
+        QList<double> xs;
+        QList<double> ys;
+        const auto add = [](QList<double> &list, double v, double edge) {
+            if (v > edge + 0.5 && std::none_of(list.cbegin(), list.cend(), [v](double o) { return std::abs(o - v) < 0.5; })) {
+                list.append(v);
+            }
+        };
+        for (const QRectF &tile : pageBreakTiles(page)) {
+            add(xs, tile.left(), 0);
+            add(ys, tile.top(), 0);
+        }
+        painter->setPen(QPen(m_accentColor, 1, Qt::DashLine));
+        for (const double x : std::as_const(xs)) {
+            painter->drawLine(toView.map(QPointF(x, 0)), toView.map(QPointF(x, page.size.height())));
+        }
+        for (const double y : std::as_const(ys)) {
+            painter->drawLine(toView.map(QPointF(0, y)), toView.map(QPointF(page.size.width(), y)));
+        }
+    }
+    // A speech-bubble marker on every commented item (screen only).
+    for (const QVariant &v : m_service->commentMarkers()) {
+        const QVariantMap m = v.toMap();
+        const QPointF at = toView.map(QPointF(m.value(QStringLiteral("x")).toDouble(), m.value(QStringLiteral("y")).toDouble()));
+        QPainterPath bubble;
+        bubble.addRoundedRect(QRectF(at.x(), at.y() - 14, 16, 11), 3, 3);
+        bubble.moveTo(at.x() + 3, at.y() - 3.5);
+        bubble.lineTo(at.x() + 2, at.y() + 1);
+        bubble.lineTo(at.x() + 7, at.y() - 3.5);
+        const bool active = m.value(QStringLiteral("id")).toString() == m_service->activeComment();
+        QColor fill = m_accentColor;
+        fill.setAlphaF(m.value(QStringLiteral("done")).toBool() ? 0.45f : 1.0f);
+        painter->setPen(QPen(active ? m_handleColor : fill, active ? 2 : 1));
+        painter->setBrush(fill);
+        painter->drawPath(bubble);
+    }
+    // Visio's AutoConnect arrows: a small triangle beyond each side.
+    const QVariantList arrows = autoConnectArrows();
+    for (int i = 0; i < arrows.size(); ++i) {
+        const QPointF c = arrows.at(i).toPointF();
+        static const QPointF dirs[] = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
+        const QPointF d = dirs[i];
+        const QPointF n(-d.y(), d.x());
+        const double r = i == m_autoConnectHover ? 8 : 6;
+        QColor fill = m_accentColor;
+        fill.setAlphaF(i == m_autoConnectHover ? 1.0f : 0.7f);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(fill);
+        painter->drawPolygon(QPolygonF({c + d * r, c - d * r * 0.6 + n * r, c - d * r * 0.6 - n * r}));
+    }
+    painter->restore();
 }
 
 void DiagramPageView::paintGuides(QPainter *painter, const Page &page, const QTransform &toView)

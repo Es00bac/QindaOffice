@@ -29,7 +29,9 @@ DiagramHost::DiagramHost()
     setDocument(m_document);
     m_service = new DiagramService(m_document, this);
     createActions();
+    createM87Actions();
     wireActions();
+    wireM87Actions();
     insertMenus();
 
     // Undo/redo follow the drawing's stack.
@@ -54,6 +56,11 @@ DiagramHost::DiagramHost()
         if (kind == QLatin1String("connector") || kind == QLatin1String("mixed")) {
             contexts << QStringLiteral("connector");
         }
+        // M87: Visio's Container tab while a container or a lane is selected.
+        if (!m_service->containerInfo().isEmpty()) {
+            contexts << QStringLiteral("container");
+        }
+        syncM87();
         setRibbonContexts(contexts);
     };
     connect(m_service, &DiagramService::selectionChanged, this, sync);

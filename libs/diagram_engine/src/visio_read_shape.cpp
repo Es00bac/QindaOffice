@@ -110,18 +110,6 @@ PageReader::PageReader(ReadContext &ctx, SourcePage &source, Page &page, const Q
     , m_pageTransform(pageTransform)
     , m_variation(variation)
 {
-    if (const XmlElement *pageSheet = source.entry ? child(*source.entry, u"PageSheet") : nullptr) {
-        const Sheet sheet = Sheet::merge(*pageSheet, nullptr);
-        if (const Section *layers = sheet.section(u"Layer")) {
-            int ix = 0;
-            for (const Row *row : layers->orderedRows()) {
-                if (row->number(u"Visible", 1) == 0) {
-                    m_hiddenLayers.insert(ix);
-                }
-                ++ix;
-            }
-        }
-    }
 }
 
 void PageReader::prescan(const XmlElement *connects)
@@ -146,20 +134,6 @@ void PageReader::readShapes(const XmlElement *shapes)
             readShape(c.element, top, 0);
         }
     }
-}
-
-bool PageReader::hiddenByLayer(const Sheet &sheet) const
-{
-    const Cell *member = sheet.cell(u"LayerMember");
-    if (member == nullptr || member->value.trimmed().isEmpty() || m_hiddenLayers.isEmpty()) {
-        return false;
-    }
-    for (const QString &part : member->value.split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
-        if (!m_hiddenLayers.contains(part.trimmed().toInt())) {
-            return false;
-        }
-    }
-    return true;
 }
 
 void PageReader::readShape(const XmlElementPtr &element, const Parent &parent, int depth)
@@ -188,7 +162,9 @@ void PageReader::readShape(const XmlElementPtr &element, const Parent &parent, i
             m_source.unmodelled.insert(key, element);
         }
     };
-    if (sheet.type == QLatin1String("Guide") || hiddenByLayer(sheet) || depth > 32) {
+    // M87: a shape on a hidden layer is read like any other (layers are
+    // modelled now); guides and runaway nesting stay kept, not shown.
+    if (sheet.type == QLatin1String("Guide") || depth > 32) {
         keep();
         return;
     }
@@ -323,6 +299,8 @@ bool PageReader::makeShape(const XmlElementPtr &element, const Sheet &sheet, con
     shape.data = shapeData(sheet);
     shape.ports = connectionPoints(sheet, box);
     shape.aspectLocked = lookup.number(u"LockAspect", 0) != 0;
+    readItemExtras(sheet, shape.layers, shape.links); // M87
+    readContainer(sheet, k, shape);
     shape.groupId = groupId;
     shape.extra.insert(QStringLiteral("vsdx"), keyObject(m_ctx.source->token, key));
     m_modelIds.insert(intAttribute(*element, u"ID", -1), shape.id);
@@ -361,6 +339,7 @@ void PageReader::makeConnector(const XmlElementPtr &element, const Sheet &sheet,
         }
     }
     c.data = shapeData(sheet);
+    readItemExtras(sheet, c.layers, c.links); // M87
     c.groupId = parent.groupId;
     c.extra.insert(QStringLiteral("vsdx"), keyObject(m_ctx.source->token, key));
     m_modelIds.insert(intAttribute(*element, u"ID", -1), c.id);

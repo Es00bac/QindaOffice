@@ -16,6 +16,9 @@ import QindaTK as Tk
 //  * Text tool: a click edits a shape's text, or drops a text box.
 // Keys (forwarded from the canvas): Delete, arrows nudge (Shift = 1 unit),
 // Escape, F2/Enter edit text.
+// M87 (D-095): hovering a shape shows Visio's AutoConnect arrows (when on);
+// a click on one connects to the shape in line or adds one; a click on a
+// comment marker opens the comment; Ctrl+click follows a shape's link.
 MouseArea {
     id: input
     objectName: "diagramCanvasInput"
@@ -27,6 +30,7 @@ MouseArea {
     required property var spatialTransform
     required property var pageView
     property bool editing: false
+    property bool autoConnect: true
 
     property string mode: ""
     property point startDoc
@@ -38,12 +42,15 @@ MouseArea {
     readonly property real glueTolerance: 10 / Math.max(0.05, canvas.zoom)
 
     signal textEditRequested(string id)
+    signal commentRequested(string id)
 
     anchors.fill: parent
     acceptedButtons: Qt.LeftButton
     hoverEnabled: true
     enabled: !editing
-    cursorShape: diagram.tool === "connector" ? Qt.CrossCursor
+    onExited: pageView.autoConnectShape = ""
+    cursorShape: pageView.autoConnectHover >= 0 && pageView.autoConnectShape.length > 0 ? Qt.PointingHandCursor
+               : diagram.tool === "connector" ? Qt.CrossCursor
                : diagram.tool === "text" ? Qt.IBeamCursor
                : diagram.formatPainter ? Qt.PointingHandCursor : Qt.ArrowCursor
 
@@ -69,6 +76,25 @@ MouseArea {
         if (at >= 0) next.splice(at, 1)
         else next.push(id)
         diagram.selection = next
+    }
+    // The AutoConnect arrow (0 top … 3 left) under a view point, or -1.
+    function arrowAt(x, y) {
+        const arrows = pageView.autoConnectArrows()
+        for (let i = 0; i < arrows.length; ++i)
+            if (Math.hypot(arrows[i].x - x, arrows[i].y - y) <= Tk.Theme.size.handle) return i
+        return -1
+    }
+    function updateAutoConnect(x, y, d) {
+        if (!autoConnect || diagram.tool !== "pointer" || diagram.formatPainter) {
+            pageView.autoConnectShape = ""
+            return
+        }
+        const near = arrowAt(x, y)
+        pageView.autoConnectHover = near
+        if (near >= 0) return // keep the arrows of the shape they belong to
+        const id = diagram.shapeAt(d.x, d.y)
+        const item = id.length > 0 ? diagram.item(id) : ({})
+        pageView.autoConnectShape = id.length > 0 && !item.container ? id : ""
     }
     function nearConnectorEnd(x, y) {
         if (diagram.selectionKind !== "connector" || diagram.selection.length !== 1) return -1
@@ -99,6 +125,17 @@ MouseArea {
             mode = "text"
             return
         }
+        const marker = pageView.commentMarkerAt(mouse.x, mouse.y)
+        if (marker.length > 0) {
+            commentRequested(marker)
+            return
+        }
+        const arrow = arrowAt(mouse.x, mouse.y)
+        if (arrow >= 0 && pageView.autoConnectShape.length > 0) {
+            diagram.autoConnect(pageView.autoConnectShape, arrow)
+            pageView.autoConnectShape = ""
+            return
+        }
         const end = nearConnectorEnd(mouse.x, mouse.y)
         if (end >= 0) {
             mode = "end"
@@ -116,6 +153,11 @@ MouseArea {
             return
         }
         if (id.length > 0) {
+            // Ctrl+click follows a link, as in Visio; else Shift/Ctrl toggle.
+            if ((mouse.modifiers & Qt.ControlModifier) && (diagram.item(id).linkCount || 0) > 0) {
+                diagram.followLink(id)
+                return
+            }
             if (mouse.modifiers & (Qt.ShiftModifier | Qt.ControlModifier)) toggle(id)
             else if (diagram.selection.indexOf(id) < 0) diagram.selection = [id]
             mode = diagram.selection.indexOf(id) >= 0 ? "move" : ""
@@ -129,8 +171,10 @@ MouseArea {
         const d = docAt(mouse.x, mouse.y)
         if (!pressed) {
             pageView.hoverShapeId = diagram.tool === "connector" ? diagram.shapeAt(d.x, d.y) : ""
+            updateAutoConnect(mouse.x, mouse.y, d)
             return
         }
+        pageView.autoConnectShape = ""
         if (mode === "move") {
             if (!moved && Math.hypot(mouse.x - startView.x, mouse.y - startView.y) < 3) return
             moved = true

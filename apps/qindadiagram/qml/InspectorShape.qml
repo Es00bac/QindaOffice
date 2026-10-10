@@ -135,6 +135,61 @@ Tk.Flex {
         }
     }
 
+    // M87 (D-095): Visio's Container Format — how it follows its members.
+    Tk.Flex {
+        id: containerSection
+        objectName: "diagramContainerSection"
+        visible: section.isShape && !!section.item.container
+        direction: Tk.Flex.Column
+        align: Tk.Flex.Stretch
+        gap: Tk.Theme.space.sm
+        readonly property var info: section.item.container ? section.diagram.containerInfo() : ({})
+        Tk.Overline { title: section.item.lane ? qsTr("SWIMLANE") : qsTr("CONTAINER") }
+        Tk.PropertyRow {
+            label: qsTr("Resize")
+            Tk.Segmented {
+                objectName: "diagramContainerResize"
+                stretch: true
+                model: [{ text: qsTr("Expand"), value: "expand" }, { text: qsTr("Fit"), value: "fit" },
+                        { text: qsTr("Fixed"), value: "none" }]
+                currentIndex: ["expand", "fit", "none"].indexOf(containerSection.info.resize || "expand")
+                tooltip: qsTr("Grow as shapes need room, always fit the shapes, or never resize")
+                onActivated: function(index) { section.diagram.setContainerResize(["expand", "fit", "none"][index]) }
+            }
+        }
+        Tk.PropertyRow {
+            label: qsTr("Margin")
+            Tk.NumberField {
+                objectName: "diagramContainerMargin"
+                value: containerSection.info.margin || 0
+                from: 0
+                to: 200
+                stepSize: 2
+                suffix: " px"
+                tooltip: qsTr("Space kept between the shapes and the container's edge")
+                onValueModified: function(value) { section.diagram.setContainerMargin(value) }
+            }
+        }
+        Tk.Flex {
+            direction: Tk.Flex.Row
+            gap: Tk.Theme.space.xs
+            Tk.Button {
+                objectName: "diagramContainerFitButton"
+                small: true
+                iconName: "shrink"
+                text: qsTr("Fit to contents")
+                onClicked: section.diagram.fitContainers()
+            }
+            Tk.Button {
+                objectName: "diagramContainerDisbandButton"
+                small: true
+                iconName: "ungroup"
+                text: qsTr("Disband")
+                onClicked: section.diagram.disbandContainers()
+            }
+        }
+    }
+
     Tk.Flex {
         visible: section.isConnector
         direction: Tk.Flex.Column

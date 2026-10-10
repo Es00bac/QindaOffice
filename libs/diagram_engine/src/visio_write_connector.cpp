@@ -5,6 +5,7 @@
 
 #include "text_paint.h"
 #include "visio_geometry.h"
+#include "visio_write_m87.h"
 
 #include <QLineF>
 
@@ -202,6 +203,12 @@ XmlElementPtr freshConnector(WriteContext &ctx, const Connector &connector, int 
     if (!connector.data.isEmpty()) {
         insertChild(*e, dataSection(connector.data));
     }
+    if (!connector.layers.isEmpty()) {
+        writeLayerMember(*e, connector.layers); // M87
+    }
+    if (!connector.links.isEmpty()) {
+        writeHyperlinks(*e, connector.links);
+    }
     return e;
 }
 
@@ -234,6 +241,12 @@ void updateConnector(WriteContext &ctx, XmlElement &element, const Connector &co
     }
     if (connector.data != snapshot.data) {
         updateData(element, snapshot.data, connector.data, merged, master != nullptr ? &masterSheet : nullptr);
+    }
+    if (connector.layers != snapshot.layers) {
+        writeLayerMember(element, connector.layers); // M87
+    }
+    if (connector.links != snapshot.links) {
+        writeHyperlinks(element, connector.links, master != nullptr ? &masterSheet : nullptr);
     }
 }
 

@@ -2,8 +2,11 @@
 // One page's plan: what is written verbatim, moved, merged or fresh, and
 // with which Visio IDs (visio_write_p.h; the writing is visio_write_emit.cpp).
 #include "visio_write_cells.h"
+#include "visio_write_m87.h"
 
 #include "geometry.h"
+#include "ops.h"
+#include "stencils.h"
 
 #include <QJsonObject>
 
@@ -272,6 +275,7 @@ void PageWriter::plan()
         const SourceItem *item = itemOf(c.extra);
         planItem(c.id, c.extra, c.groupId, item != nullptr && unchanged(c, *item));
     }
+    planRelationships();
     for (const int id : std::as_const(m_reserved)) {
         m_nextId = std::max(m_nextId, id + 1); // fresh IDs above everything kept
     }
@@ -290,6 +294,70 @@ void PageWriter::plan()
         p.id = p.id == 0 ? freshId() : p.id;
         m_visioIds.insert(c.id, p.id);
     }
+}
+
+void PageWriter::planRelationships()
+{
+    for (const Shape &s : m_page.shapes) {
+        if (!isContainer(s)) {
+            continue;
+        }
+        const QStringList members = Ops::containerMembers(m_page, s.id);
+        if (!members.isEmpty()) {
+            m_membersOf.insert(s.id, members);
+        }
+        for (const QString &m : members) {
+            m_containersOf[m].append(s.id);
+        }
+    }
+    // AGENT-GUARD (Visio's container bookkeeping): once anything on the page
+    // changed, every container, every member and every shape that was a
+    // member is written merged, so the Relationships cells on both sides
+    // agree with the page as it is now; an untouched page stays verbatim.
+    bool changed = false;
+    for (const Plan &p : std::as_const(m_plans)) {
+        changed = changed || p.mode != Mode::Verbatim;
+    }
+    if (m_source != nullptr) {
+        for (const SourceItem &item : std::as_const(m_ctx.source->items)) {
+            changed = changed || (item.page == m_source->id && !m_usedKeys.contains(item.key));
+        }
+    }
+    if (!changed) {
+        return;
+    }
+    const auto hadRelationships = [](const SourceItem *item) {
+        if (item == nullptr) {
+            return false;
+        }
+        const QList<const XmlElement *> cells = item->element->elements(kNs, u"Cell");
+        return std::any_of(cells.cbegin(), cells.cend(),
+                           [](const XmlElement *c) { return c->attribute({}, u"N") == QLatin1String("Relationships"); });
+    };
+    for (const Shape &s : m_page.shapes) {
+        Plan &p = m_plans[s.id];
+        const bool related = m_membersOf.contains(s.id) || m_containersOf.contains(s.id) || hadRelationships(p.item);
+        const bool rigidMember = !s.groupId.isEmpty() && m_groups.value(s.groupId).rigid;
+        if (related && p.mode == Mode::Verbatim && !rigidMember) {
+            p.mode = Mode::Merged;
+            p.frame = FrameChange{false, {}};
+            m_verbatimIds.remove(p.id);
+        }
+    }
+}
+
+void PageWriter::writeMembership(XmlElement &element, const QString &modelId) const
+{
+    const auto ids = [this](const QStringList &items) {
+        QList<int> out;
+        for (const QString &id : items) {
+            if (const int v = m_visioIds.value(id, 0); v > 0) {
+                out.append(v);
+            }
+        }
+        return out;
+    };
+    writeRelationships(element, ids(m_membersOf.value(modelId)), ids(m_containersOf.value(modelId)));
 }
 
 } // namespace QindaOffice::Diagram::Visio

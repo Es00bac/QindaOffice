@@ -19,7 +19,15 @@
 // Files: diagram_service.cpp (selection, tool state, item maps),
 // diagram_service_pages.cpp (pages, page settings, canvas reads),
 // diagram_service_edit.cpp (shapes, connectors, arrange, style, data),
-// diagram_service_io.cpp (clipboard, find, import/export, layout).
+// diagram_service_io.cpp (clipboard, find, import/export, layout); M87
+// (D-095): diagram_service_review.cpp (layers, hyperlinks, comments,
+// background pages, print setup), diagram_service_structure.cpp
+// (containers, swimlanes, AutoConnect, Re-Layout), diagram_service_data.cpp
+// (external data).
+//
+// AGENT-CONTRACT (M87): every page edit goes through editPage, which after
+// the change lets Visio's container behaviour settle (Ops::settle) and Auto
+// Size grow the page (Ops::applyAutoSize) — in the same undo step.
 
 #include "drawing.h"
 #include "drawing_document.h"
@@ -67,6 +75,21 @@ class DiagramService : public QObject {
     // The item whose text an in-place editor covers ("" when none).
     Q_PROPERTY(QString editingTextId READ editingTextId WRITE setEditingTextId NOTIFY editingTextIdChanged)
     Q_PROPERTY(bool canPaste READ canPaste NOTIFY clipboardChanged)
+    // ---- M87 (D-095) ----
+    // The current page's layers: index, name, visible, print, locked,
+    // active, glue, color, count (items on it).
+    Q_PROPERTY(QVariantList layers READ layerList NOTIFY changed)
+    // The current page's comment threads: id, author, initials, date,
+    // text, done, itemId, anchor, replies [{id, author, date, text}].
+    Q_PROPERTY(QVariantList comments READ commentList NOTIFY changed)
+    Q_PROPERTY(int commentTotal READ commentTotal NOTIFY changed)
+    Q_PROPERTY(QString activeComment READ activeComment WRITE setActiveComment NOTIFY activeCommentChanged)
+    // Recordsets: id, name, source, sheet, columns, rowCount, keyColumn, refreshed, linked.
+    Q_PROPERTY(QVariantList recordsets READ recordsetList NOTIFY changed)
+    // Background pages of the drawing: id, name.
+    Q_PROPERTY(QVariantList backgroundPages READ backgroundPageList NOTIFY changed)
+    // The stencil AutoConnect adds ("" = like the shape it starts from).
+    Q_PROPERTY(QString quickShape READ quickShape WRITE setQuickShape NOTIFY quickShapeChanged)
 public:
     explicit DiagramService(Engine::DrawingDocument *document, QObject *parent = nullptr);
 
@@ -168,6 +191,91 @@ public:
     Q_INVOKABLE bool setData(const QString &id, const QString &key, const QString &value);
     Q_INVOKABLE bool removeData(const QString &id, const QString &key);
 
+    // ---- M87 (D-095): layers, links, comments, background pages, print
+    // setup (diagram_service_review.cpp) ----
+    [[nodiscard]] QVariantList layerList() const;
+    Q_INVOKABLE int addLayer(const QString &name);
+    Q_INVOKABLE bool removeLayer(int index);
+    // key: name | visible | print | locked | active | glue | color ("" = none)
+    Q_INVOKABLE bool setLayerProperty(int index, const QString &key, const QVariant &value);
+    // The layers the selection is on (indexes, the first item's).
+    Q_INVOKABLE QVariantList selectionLayers() const;
+    Q_INVOKABLE bool assignSelectionToLayers(const QVariantList &indexes);
+    // [{description, address, subAddress}] of an item.
+    Q_INVOKABLE QVariantList links(const QString &itemId) const;
+    Q_INVOKABLE bool setSelectionLinks(const QVariantList &links);
+    // Follows an item's first link: a page of the drawing, or the address
+    // through the desktop (never in tests: they follow page links only).
+    Q_INVOKABLE bool followLink(const QString &itemId);
+    [[nodiscard]] QVariantList commentList() const;
+    [[nodiscard]] int commentTotal() const;
+    [[nodiscard]] QString activeComment() const { return m_activeComment; }
+    void setActiveComment(const QString &id);
+    // On the selection's first item, else on the page; a reply to `parentId`.
+    Q_INVOKABLE QString addComment(const QString &text, const QString &parentId = {});
+    Q_INVOKABLE bool editComment(const QString &id, const QString &text);
+    Q_INVOKABLE bool setCommentDone(const QString &id, bool done);
+    Q_INVOKABLE bool deleteComment(const QString &id = {});
+    // Walks every comment thread of the drawing (+1 / -1), page by page.
+    Q_INVOKABLE QString stepComment(int step);
+    // Screen markers: [{id, x, y}] in page units (one per commented item and
+    // for the page's own comments).
+    Q_INVOKABLE QVariantList commentMarkers() const;
+    [[nodiscard]] QVariantList backgroundPageList() const;
+    Q_INVOKABLE bool setBackgroundPage(bool background);
+    Q_INVOKABLE bool setBackPage(const QString &backId);
+    Q_INVOKABLE QString addBackgroundPage();
+    Q_INVOKABLE bool addBorderAndTitle();
+    Q_INVOKABLE bool setAutoSize(bool on);
+    // style: arc | gap | square; on: lastRouted | horizontal | vertical
+    Q_INVOKABLE bool setLineJumpStyle(const QString &style, const QString &on);
+    // {paper ("" = the printer's, else a paper name or "page"), landscape,
+    // zoom (0 = fit), across, down, center}
+    Q_INVOKABLE bool setPrintSetup(const QVariantMap &setup);
+    // Where the printed sheets meet on the current page (rects, page units).
+    Q_INVOKABLE QVariantList pageBreaks() const;
+
+    // ---- M87: containers, swimlanes, AutoConnect, Re-Layout
+    // (diagram_service_structure.cpp) ----
+    // A lane before/after the selected one, else joining the nearest pool.
+    Q_INVOKABLE QString insertSwimlane(const QString &type, bool before, double x, double y);
+    Q_INVOKABLE QString insertPhase(double x, double y);
+    // A container of `type` around the selection, else one at (x, y).
+    Q_INVOKABLE QString insertContainer(const QString &type, double x, double y);
+    Q_INVOKABLE bool fitContainers();
+    Q_INVOKABLE bool disbandContainers();
+    // resize: expand | fit | none
+    Q_INVOKABLE bool setContainerResize(const QString &resize);
+    Q_INVOKABLE bool setContainerMargin(double margin);
+    Q_INVOKABLE bool selectContainerContents();
+    // The selected container's behaviour: resize, margin ({} for none).
+    Q_INVOKABLE QVariantMap containerInfo() const;
+    [[nodiscard]] QString quickShape() const { return m_quickShape; }
+    void setQuickShape(const QString &stencilId);
+    // side: 0 top, 1 right, 2 bottom, 3 left (Visio's AutoConnect arrows).
+    Q_INVOKABLE QString autoConnect(const QString &fromId, int side);
+    // {kind, rankGap, nodeGap}; kinds as LayoutKind names (layout.h).
+    Q_INVOKABLE bool relayout(const QVariantMap &options);
+
+    // ---- M87: external data (diagram_service_data.cpp) ----
+    // A preview of a file: columns, rows (the first 50), sheets, sheet; or
+    // {error}.
+    Q_INVOKABLE QVariantMap readDataFile(const QUrl &file, const QString &sheet = {});
+    // Links the file as a recordset; matches shapes when `matchColumn` ≥ 0
+    // (their text, or data field `shapeField`). Returns the recordset id.
+    Q_INVOKABLE QString linkData(const QUrl &file, const QString &sheet, int keyColumn, int matchColumn,
+                                 const QString &shapeField);
+    [[nodiscard]] QVariantList recordsetList() const;
+    // Rows of a recordset with how many shapes link to each: [{row, cells, linked}].
+    Q_INVOKABLE QVariantList recordsetRows(const QString &recordsetId) const;
+    Q_INVOKABLE bool linkSelectionToRow(const QString &recordsetId, int row);
+    Q_INVOKABLE int autoLinkData(const QString &recordsetId, int column, const QString &shapeField);
+    Q_INVOKABLE bool unlinkSelection();
+    Q_INVOKABLE bool refreshData(const QString &recordsetId = {});
+    Q_INVOKABLE bool removeRecordset(const QString &recordsetId);
+    Q_INVOKABLE QStringList shapesFromRows(const QString &recordsetId, const QVariantList &rows,
+                                           const QString &stencilId, int textColumn);
+
     // ---- clipboard, find, import/export, layout (diagram_service_io.cpp) ----
     Q_INVOKABLE bool copy();
     Q_INVOKABLE bool cut();
@@ -200,6 +308,8 @@ signals:
     void notify(const QString &title, const QString &text, const QString &variant);
     // The view should bring this page-space rectangle into sight.
     void revealRequested(const QRectF &rect);
+    void activeCommentChanged();
+    void quickShapeChanged();
     // Begin in-place text editing of the item.
     void textEditRequested(const QString &id);
 
@@ -221,6 +331,8 @@ private:
     int m_findIndex = -1;
     int m_revision = 0;
     int m_pasteCount = 0;
+    QString m_activeComment;   // M87
+    QString m_quickShape;      // M87
     mutable QString m_stencilTheme;
     mutable QVariantList m_stencilCache;
 };

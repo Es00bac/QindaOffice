@@ -28,11 +28,20 @@ QStringList insertCopies(Drawing &drawing, Page &page, QVector<Shape> shapes, QV
     QHash<QString, QString> ids;
     QHash<QString, QString> groups;
     QStringList out;
+    // M87: layers name indexes of THIS page and links name recordsets of
+    // THIS drawing; a copy from elsewhere keeps only what exists here.
+    const auto layersHere = [&page](QList<int> &layers) {
+        layers.removeIf([&page](int i) { return i < 0 || i >= page.layers.size(); });
+    };
     for (Shape &shape : shapes) {
         const QString fresh = drawing.newId(QStringLiteral("s"));
         ids.insert(shape.id, fresh);
         shape.id = fresh;
         shape.rect.translate(offset);
+        layersHere(shape.layers);
+        if (shape.dataLink.linked() && drawing.recordset(shape.dataLink.recordset) == nullptr) {
+            shape.dataLink = {};
+        }
         if (!shape.groupId.isEmpty()) {
             if (!groups.contains(shape.groupId)) {
                 groups.insert(shape.groupId, drawing.newId(QStringLiteral("g")));
@@ -51,6 +60,7 @@ QStringList insertCopies(Drawing &drawing, Page &page, QVector<Shape> shapes, QV
         };
         remap(connector.from);
         remap(connector.to);
+        layersHere(connector.layers);
         connector.id = drawing.newId(QStringLiteral("c"));
         if (!connector.groupId.isEmpty()) {
             if (!groups.contains(connector.groupId)) {
@@ -426,6 +436,12 @@ bool removePage(Drawing &drawing, const QString &pageId)
         return false;
     }
     drawing.pages.removeAt(index);
+    // M87: pages that showed it as their background lose it.
+    for (Page &page : drawing.pages) {
+        if (page.backPageId == pageId) {
+            page.backPageId.clear();
+        }
+    }
     return true;
 }
 

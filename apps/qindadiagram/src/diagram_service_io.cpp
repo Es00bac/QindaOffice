@@ -181,9 +181,7 @@ int DiagramService::replace(const QString &find, const QString &replacement)
 bool DiagramService::autoLayout(const QString &kind)
 {
     LayoutOptions options;
-    options.kind = kind == QLatin1String("leftRight") ? LayoutKind::LeftRight
-                 : kind == QLatin1String("tree")      ? LayoutKind::Tree
-                                                      : LayoutKind::TopDown;
+    options.kind = layoutKindOf(kind); // M87: every Re-Layout style by name
     if (options.kind == LayoutKind::Tree) {
         options.nodeGap = 28;
         options.rankGap = 48;

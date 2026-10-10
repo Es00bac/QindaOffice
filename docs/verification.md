@@ -33,6 +33,148 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M87 Diagram gates (D-095)
+
+Qualified on qinda (Portage QindaTK 0.1.0-r17, Qt 6.11.1) in one tree built
+with `-O0` through `qq-build` (nice 19, idle I/O; no parallelism flags),
+only the diagram scope (diagram_engine, the QindaDiagram app and their
+tests), with `QQO_OOXML_SCHEMA_DIR` set and LibreOffice and `pdftotext`
+present: `ctest --preset dev -R diagram` — **14/14 passed, 41.46 s**, no
+compiler or QML warning. QtTest totals (test functions plus
+init/cleanup): `tst_diagram_model` 12, `tst_diagram_ops` 13,
+`tst_diagram_output` 10, `tst_diagram_visio_read` 12,
+`tst_diagram_visio_write` 6, `tst_diagram_visio_roundtrip` 6 + 1 skipped
+(the corpus, below), the new `tst_diagram_m87_structure` 8,
+`tst_diagram_m87_review` 7, `tst_diagram_m87_data` 5,
+`tst_diagram_m87_visio` 6, `tst_qindadiagram_host` 10,
+`tst_qindadiagram_menu_export` 4, `tst_qindadiagram_ui` 10 and the new
+`tst_qindadiagram_m87` 7 — 116 passed, 1 skipped.
+
+- `tst_diagram_m87_structure` (every edit settled as the service settles
+  it): Insert ▸ Container wraps the selection behind it with its margin; a
+  member dragged half out grows the container, one dragged right out
+  leaves it alone, a shape dropped in is taken in; Always fit hugs the
+  members, No automatic resize never moves; Delete takes the members and
+  the connector between them, Disband keeps them. Pools: Swimlane after
+  and before (the lanes after move with their shapes), a lane with no
+  reference joins the nearest pool, a phase spans the pool and no lane
+  takes it in, a deeper lane pushes the rest and a longer one lengthens
+  all, a lane dragged along the stack takes that place with its shapes, a
+  deleted lane closes the pool, a member growing past its lane grows the
+  lane and the pool. AutoConnect adds the quick shape 48 units beyond on
+  the facing connection points, connects to a shape in line instead, and
+  steps past one in its way. Re-Layout: bottom to top and right to left
+  mirror the layered layout (connectors leave the facing side), compact
+  tree indents each level, radial puts one level per ring with the next
+  further out and straight outline-glued connectors, circular puts every
+  shape on one ring without overlaps. A wall that every L/Z/U candidate
+  crosses: the searched route clears every shape and stays right-angled.
+  Line jumps: the last routed line hops by default, the horizontal one
+  when asked; arc, gap and square draw three different paths.
+- `tst_diagram_m87_review`: layers (unique names, the active layer for new
+  shapes, unknown indexes dropped; hidden only when every layer is, not
+  picked and not painted; locked when any is; off paper when none prints;
+  the layer colour on the line, checked in pixels; a layer refusing glue
+  takes no ends; removing a layer renumbers); links (blank ones dropped,
+  addresses trimmed, a page link resolved); comments (on a shape or the
+  page, a reply in its thread, Done for the thread, removal with replies);
+  background pages (a title block painted and printed behind its page,
+  chains drawn farthest first, cycles and foreground pages refused, users
+  cleared when a page stops being a background); Auto Size growing by a
+  whole sheet, pulling content in from above, shrinking to what is used;
+  print tiles (the M50 default turned to the sheet, fit to 2 × 1, actual
+  size on landscape letter as 2 × 2 sheets centred, a 1200-dpi device, a
+  page that fits on one sheet); the `.qdiagram` file keeping all of it,
+  unknown members of layers and comments kept, a drawing without M87
+  features writing none of their members, a pasted copy keeping only the
+  layers and data its page has.
+- `tst_diagram_m87_data`: CSV (quotes, blank rows, duplicate and empty
+  headers) and an Excel workbook through calc_io (an empty first sheet
+  skipped, the named sheet, numbers as Excel shows them; `.xls` and a
+  missing file refused with why); link by matching text keeping a shape's
+  own fields, a keyless recordset linked by position, refresh with the key
+  column moved, a vanished row counted and its shape keeping its values;
+  unlink keeping the values; removing data unlinking its shapes; shapes
+  made from rows placed in a row and linked.
+- `tst_diagram_m87_visio` (on a hand-built Visio-shaped package,
+  `visio_fixture.h`): its layers (a hidden one's shape read, not dropped),
+  hyperlinks, swimlane container, comments, background page (no longer
+  reported as approximate), print, Auto Size, jump and data parts read;
+  the untouched package written byte for byte part by part, then a renamed
+  layer rewriting the Layer section only, a reply rewriting the comments
+  part with Visio's IDs kept (the reply on the shape it answers), refreshed
+  data rewriting the data parts and the `_VisDM_` rows with `RowMap`; a
+  drawing made here (pool, layers, link, comment, jumps, print, Borders &
+  Titles, a linked recordset) written with the content types, the
+  relationships, the PageSheet cells, the container cells and
+  Relationships and the rowset, schema-checked where the shared OPC rules
+  apply and read back equal; **LibreOffice** converts an edited drawing (a
+  lane inserted into the pool, a new comment) to PDF and `pdftotext` finds
+  its labels.
+- `tst_qindadiagram_m87` (the host and its service, each command one undo
+  step): Swimlane and Swimlane Before join the pool, Phase spans it,
+  deleting the middle lane with a step in it closes the pool and one undo
+  brings all back, Insert ▸ Container wraps the selection, the Container
+  ribbon context, Fit and Disband; a hidden layer's shape has no canvas
+  proxy and Select All skips it; a page link followed; comment threads
+  walked across pages and wrapping, selecting their shapes; Link Data to
+  Shapes from a CSV, Refresh All after the file changed, Unlink, shapes
+  from rows; AutoConnect, radial Re-Layout, Auto Size; a page printed
+  across two sheets in the PDF with its background under it.
+- **Visio corpus** (`QQO_VISIO_CORPUS`, run by hand on qinda, never
+  committed): a Visio 2013 sample drawing and the two M65 exports — **3
+  files, 5 pages, 23 shapes, 5 connectors, 0 failures** (read, write,
+  re-read, compare).
+- **LibreOffice, looked at**: `visio_m87.pdf` (pdftoppm at 60 dpi) — page
+  1 shows the pool with the inserted Support lane stacked under Sales and
+  the background page's title block drawn behind the page; page 2 is the
+  background page itself.
+- Fixtures `qindadiagram_1280/520.txt` regenerated deliberately
+  (`QQO_UPDATE_FIXTURES=1`, 40 lines each): the hidden Comments pane, the
+  inspector's hidden container section, the Data and Review tabs, Home's
+  Layers button; nothing else moved.
+- Grabs reviewed (`QQO_GRAB_DIR`): `qindadiagram_m87_swimlanes_{1320,520}`
+  (the three-lane pool with a phase, the red Review layer on the
+  decision, two comment markers and the Comments pane — in the closed
+  drawer at 520 — the page breaks of letter paper at 100 % as single
+  dashed lines, the AutoConnect arrows round the hovered start shape, the
+  Data linked toast inside the window), `qindadiagram_m87_{layers,link,
+  layout,externalData,linkdata,pagesetup}_{1320,520}` (every dialog
+  inside the window at 520 px; the data columns share the table's width)
+  and `qindadiagram_tab_{data,review,container}_1320`. They caught three
+  defects fixed before commit: a toast spilling past the window's edge
+  (`Tk.Toast` sizes without its text — an explicit width), page breaks
+  drawn twice as overlapping rectangles, data columns too narrow to read.
+- The ribbon gate (every menu command on the ribbon, icons real, every item
+  inside the ribbon at 1320 and 520 px) and the menu-export gate (the
+  desktop validator; File Edit View Insert Format Arrange Design Data
+  Review AI Settings Help; every exported id resolves) pass.
+- Found and fixed on the way: a lane inserted before another was pulled
+  back by the settle pass (a pool still whole is now left alone); a new
+  phase was taken into the lane under its centre and grew the pool;
+  `addBorderAndTitle` read a page through a pointer that adding the
+  background page had moved; `Tk.Flex.wrap` is an enum, and a dialog's
+  `background` property is FINAL (`PageSetupDialog` failed to load);
+  number fields with no model must echo `valueModified` (D-198), else edits
+  snapped back.
+
+**Owner's desktop check (QindaQt session, not run here):** draw a
+cross-functional flowchart — Insert ▸ Swimlane three times, Swimlane
+Before, a Phase, shapes in the lanes; drag a lane's edge and a lane along
+the pool; delete a lane; wrap a selection in a container and drag a member
+past its edge; AutoConnect from the hover arrows; Layer Properties (hide,
+lock, colour, non-printing) and Assign to Layer; Insert ▸ Link to a page
+and to a web address, Ctrl+click both (the web one through the portal);
+comments with a reply in the pane, Previous / Next; Link Data to Shapes
+from a real Excel workbook, change the workbook, Refresh All; Re-Layout
+radial and circular; Page Setup at 100 % on letter with Page Breaks on,
+then print to PDF and to paper; Borders & Titles; save as `.vsdx` and open
+it in **Microsoft Visio** — no repair prompt, the pool and phase as
+containers, layers, links, comments, the background page, print setup and
+External Data's rows (expect a prompt to relink the source before Refresh)
+— then change things in Visio and open it back here; dark and light
+themes; the panel menu's new Data and Review menus.
+
 ## M86 Base gates (D-094)
 
 Qualified on qinda (branch `m86-base-access2` on `m60-office-formats`

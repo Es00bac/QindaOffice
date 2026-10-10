@@ -51,6 +51,9 @@ void DiagramHost::insertMenus()
                                  sub("diagramToolsMenu", tr("T&ools"),
                                      {a("diagramToolPointerAction"), a("diagramToolTextAction"),
                                       a("diagramToolConnectorAction")}),
+                                 // M87: Visio's Home ▸ Editing ▸ Layers.
+                                 sub("diagramLayersMenu", tr("La&yers"),
+                                     {a("diagramLayerPropertiesAction"), a("diagramAssignLayerAction")}),
                                  MenuNode::separator()}) {
         tree->insertInto(QStringLiteral("editMenu"), find, node);
     }
@@ -59,7 +62,8 @@ void DiagramHost::insertMenus()
     const QString zoomIn = id(ActionId::kViewZoomIn);
     for (const MenuNode &node : {a("diagramShowShapesPanelAction"), a("diagramShowInspectorAction"),
                                  a("diagramShowMinimapAction"), a("diagramShowRulersAction"), a("diagramShowGridAction"),
-                                 a("diagramSnapAction"), MenuNode::separator()}) {
+                                 a("diagramSnapAction"), a("diagramShowPageBreaksAction"), a("diagramAutoConnectAction"),
+                                 MenuNode::separator()}) {
         tree->insertInto(QStringLiteral("viewMenu"), zoomIn, node);
     }
     const QString toolBars = id(ActionId::kViewShowToolBars);
@@ -70,12 +74,15 @@ void DiagramHost::insertMenus()
     const QString before = QStringLiteral("aiMenu");
     tree->insertMenuBefore(before, sub("diagramInsertMenu", tr("&Insert"),
                                        {a("diagramNewPageAction"), a("diagramDuplicatePageAction"),
-                                        a("diagramRenamePageAction"), a("diagramDeletePageAction"), MenuNode::separator(),
+                                        a("diagramRenamePageAction"), a("diagramDeletePageAction"),
+                                        a("diagramInsertBackgroundPageAction"), MenuNode::separator(),
                                         a("diagramInsertTextBoxAction"), a("diagramInsertPictureAction"),
                                         a("diagramInsertNoteAction"), a("diagramInsertCalloutAction"), MenuNode::separator(),
                                         a("diagramInsertContainerAction"), a("diagramInsertSwimlaneAction"),
-                                        a("diagramInsertVerticalLaneAction"), a("diagramInsertPhaseAction"),
-                                        MenuNode::separator(), a("diagramOrgChartFromCsvAction")}));
+                                        a("diagramInsertSwimlaneBeforeAction"), a("diagramInsertVerticalLaneAction"),
+                                        a("diagramInsertPhaseAction"), MenuNode::separator(),
+                                        a(ActionId::kInsertHyperlink), a("diagramFollowLinkAction"), MenuNode::separator(),
+                                        a("diagramOrgChartFromCsvAction")}));
     tree->insertMenuBefore(
         before,
         sub("diagramFormatMenu", tr("F&ormat"),
@@ -100,7 +107,11 @@ void DiagramHost::insertMenus()
                  {a("diagramRouteOrthogonalAction"), a("diagramRouteStraightAction"), a("diagramRouteCurvedAction"),
                   MenuNode::separator(), a("diagramArrowNoneAction"), a("diagramArrowEndAction"),
                   a("diagramArrowStartAction"), a("diagramArrowBothAction"), MenuNode::separator(),
-                  a("diagramLineJumpsAction")})}));
+                  a("diagramLineJumpsAction"),
+                  sub("diagramLineJumpStyleMenu", tr("Line Jump &Style"),
+                      {a("diagramJumpArcAction"), a("diagramJumpGapAction"), a("diagramJumpSquareAction"),
+                       MenuNode::separator(), a("diagramJumpLastRoutedAction"), a("diagramJumpHorizontalAction"),
+                       a("diagramJumpVerticalAction")})})}));
     tree->insertMenuBefore(
         before,
         sub("diagramArrangeMenu", tr("A&rrange"),
@@ -116,8 +127,19 @@ void DiagramHost::insertMenus()
              MenuNode::separator(), a("diagramGroupAction"), a("diagramUngroupAction"), MenuNode::separator(),
              a("diagramRotateRightAction"), a("diagramRotateLeftAction"), a("diagramFlipHorizontalAction"),
              a("diagramFlipVerticalAction"), a("diagramLockAspectAction"), MenuNode::separator(),
+             // M87: Visio's Container Format tab and AutoConnect.
+             sub("diagramContainerMenu", tr("&Container"),
+                 {a("diagramContainerFitAction"), a("diagramContainerDisbandAction"), a("diagramContainerSelectAction"),
+                  MenuNode::separator(), a("diagramContainerResizeNoneAction"), a("diagramContainerResizeExpandAction"),
+                  a("diagramContainerResizeFitAction")}),
+             sub("diagramAutoConnectMenu", tr("AutoConnec&t"),
+                 {a("diagramConnectUpAction"), a("diagramConnectRightAction"), a("diagramConnectDownAction"),
+                  a("diagramConnectLeftAction")}),
              sub("diagramLayoutMenu", tr("Auto-&Layout"),
-                 {a("diagramLayoutTopDownAction"), a("diagramLayoutLeftRightAction"), a("diagramLayoutTreeAction")})}));
+                 {a("diagramLayoutTopDownAction"), a("diagramLayoutBottomUpAction"), a("diagramLayoutLeftRightAction"),
+                  a("diagramLayoutRightLeftAction"), MenuNode::separator(), a("diagramLayoutTreeAction"),
+                  a("diagramLayoutCompactTreeAction"), a("diagramLayoutRadialAction"), a("diagramLayoutCircularAction"),
+                  MenuNode::separator(), a("diagramLayoutOptionsAction")})}));
     QList<MenuNode> themeItems;
     for (const auto &t : ::QindaOffice::Diagram::themes()) {
         themeItems.append(MenuNode::action(QStringLiteral("diagramTheme_") + t.id));
@@ -128,8 +150,18 @@ void DiagramHost::insertMenus()
                      sub("diagramPaperMenu", tr("Paper &Size"),
                          {a("diagramPaperLetterAction"), a("diagramPaperLegalAction"), a("diagramPaperTabloidAction"),
                           a("diagramPaperA5Action"), a("diagramPaperA4Action"), a("diagramPaperA3Action")}),
-                     a("diagramFitPageAction"), a("diagramBackgroundColorAction"), MenuNode::separator(),
+                     a("diagramFitPageAction"), a("diagramAutoSizeAction"), a("diagramBackgroundColorAction"),
+                     a("diagramBordersTitlesAction"), MenuNode::separator(),
                      sub("diagramThemesMenu", tr("&Themes"), themeItems)}));
+    // M87: Visio's Data and Review tabs as menus.
+    tree->insertMenuBefore(before, sub("diagramDataMenu", tr("Da&ta"),
+                                       {a("diagramLinkDataAction"), a("diagramExternalDataAction"),
+                                        a("diagramRefreshDataAction"), a("diagramUnlinkDataAction")}));
+    tree->insertMenuBefore(before, sub("diagramReviewMenu", tr("Revie&w"),
+                                       {a("diagramNewCommentAction"), a("diagramDeleteCommentAction"),
+                                        MenuNode::separator(), a("diagramPreviousCommentAction"),
+                                        a("diagramNextCommentAction"), MenuNode::separator(),
+                                        a("diagramShowCommentsAction")}));
 }
 
 void DiagramHost::syncEnablement()

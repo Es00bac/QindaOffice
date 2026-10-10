@@ -6,7 +6,9 @@
 #include "geometry.h"
 #include "shape_path.h"
 #include "stencils.h"
+#include "visio_data.h"
 #include "visio_geometry.h"
+#include "visio_write_m87.h"
 
 #include <QBuffer>
 #include <QImage>
@@ -195,13 +197,21 @@ XmlElementPtr freshShape(WriteContext &ctx, const Shape &shape, int id, const QT
         writeText(*e, shape.text, shape.textStyle, familyOf(ctx, shape.textStyle));
     }
     if (!shape.data.isEmpty()) {
-        insertChild(*e, dataSection(shape.data));
+        insertChild(*e, dataSection(shape.data, linkedColumns(*ctx.drawing, shape)));
     }
     const QVector<QPointF> ports = portsOf(shape);
     if (!ports.isEmpty()) {
         insertChild(*e, connectionSection(QList<QPointF>(ports.cbegin(), ports.cend()), p.width, p.height));
     }
     writeGeometry(*e, shape, 0);
+    // M87 (D-095): layers, hyperlinks, Visio's container cells.
+    if (!shape.layers.isEmpty()) {
+        writeLayerMember(*e, shape.layers);
+    }
+    if (!shape.links.isEmpty()) {
+        writeHyperlinks(*e, shape.links);
+    }
+    writeContainerCells(*e, shape, p.pxPerInch);
     if (picture) {
         QString compression;
         const QString rel = addPicture(ctx, part, shape.image, &compression);
@@ -248,8 +258,9 @@ void updateShape(WriteContext &ctx, XmlElement &element, const Shape &shape, con
     if (!shape.text.isEmpty() && (shape.textBox != snapshot.textBox || sizeChanged || shape.textStyle.align != snapshot.textStyle.align)) {
         writeTextBlock(element, normalizedTextBox(shape), p, shape.textStyle);
     }
-    if (shape.data != snapshot.data) {
-        updateData(element, snapshot.data, shape.data, merged, master != nullptr ? &masterSheet : nullptr);
+    if (shape.data != snapshot.data || shape.dataLink != snapshot.dataLink) {
+        updateData(element, snapshot.data, shape.data, merged, master != nullptr ? &masterSheet : nullptr,
+                   linkedColumns(*ctx.drawing, shape));
     }
     if (merged.foreignData() == nullptr && (shape.paths != snapshot.paths || sizeChanged)) {
         writeGeometry(element, shape, clearGeometry(element, master));
@@ -266,6 +277,17 @@ void updateShape(WriteContext &ctx, XmlElement &element, const Shape &shape, con
     }
     if (shape.aspectLocked != snapshot.aspectLocked) {
         setCell(element, QStringLiteral("LockAspect"), shape.aspectLocked ? QStringLiteral("1") : QStringLiteral("0"));
+    }
+    // M87 (D-095): what changed of the layers, links and container cells.
+    if (shape.layers != snapshot.layers) {
+        writeLayerMember(element, shape.layers);
+    }
+    if (shape.links != snapshot.links) {
+        writeHyperlinks(element, shape.links, master != nullptr ? &masterSheet : nullptr);
+    }
+    if (shape.structure != snapshot.structure || shape.containerResize != snapshot.containerResize
+        || shape.containerMargin != snapshot.containerMargin || shape.type != snapshot.type) {
+        writeContainerCells(element, shape, p.pxPerInch);
     }
 }
 

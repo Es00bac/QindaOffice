@@ -70,6 +70,10 @@ struct SourcePage {
     int maxId = 0;
     QString name;                 // as read, to tell a rename
     QSizeF size;                  // page units as read, to tell a resize
+    // M87 (D-095): the page's settings as read — layers, line jumps, print
+    // setup, Auto Size, background, comments (no shapes or connectors) —
+    // to tell what the writer must rewrite in the PageSheet.
+    Page read;
 };
 
 struct Source {
@@ -88,6 +92,14 @@ struct Source {
     int fillStyle = -1;
     int textStyle = -1;
     int connectorStyle = -1;      // the style named "Connector", if any
+    // M87: the comments part as read (empty when the package has none).
+    QString commentsPart;
+    Ooxml::XmlElementPtr comments;
+    // M87: external data as read (visio_data.h) — the recordsets and every
+    // shape's link (model shape id → link).
+    QString recordsetsPart;
+    QVector<DataRecordset> recordsets;
+    QHash<QString, DataLink> links;
 };
 
 [[nodiscard]] inline QString itemKey(const QString &page, int id)

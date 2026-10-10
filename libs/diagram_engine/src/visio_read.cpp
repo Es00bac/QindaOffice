@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Visio package → Drawing (visio_io.h): the document, masters and pages;
 // shapes are in visio_read_shape.cpp.
+#include "visio_data.h"
 #include "visio_io.h"
 #include "visio_read_p.h"
 
@@ -92,6 +93,7 @@ void readPages(ReadContext &ctx, const QString &documentPart)
     if (!pages) {
         return;
     }
+    QHash<QString, QString> backPages; // model page id → Visio ID of its background page
     for (const Ooxml::XmlChild &c : pages->children) {
         if (!c.element || !c.element->is(kNs, u"Page")) {
             continue;
@@ -124,6 +126,13 @@ void readPages(ReadContext &ctx, const QString &documentPart)
                           QJsonObject{{QStringLiteral("src"), ctx.source->token}, {QStringLiteral("page"), source.id}});
         source.name = page.name;
         source.size = page.size;
+        // M87 (D-095): layers, line jumps, print setup, Auto Size, and a
+        // background page as one (BackPage resolved once every page is read).
+        readPageSettings(ctx.doc, sheet, page);
+        page.backgroundPage = source.background;
+        if (entry.hasAttribute({}, u"BackPage")) {
+            backPages.insert(page.id, entry.attribute({}, u"BackPage"));
+        }
         int variation = int(cellNumber(sheet, u"VariationColorIndex", 0));
         if (variation < 0 || variation > 64) {
             variation = 0; // 65534: "use the document's"
@@ -139,9 +148,29 @@ void readPages(ReadContext &ctx, const QString &documentPart)
             reader.readConnects(connects);
             reader.snapshot();
         }
-        ctx.backgroundPages += source.background ? 1 : 0;
+        // Layer indexes past the page's layers name nothing.
+        const int layerCount = int(page.layers.size());
+        for (Shape &shape : page.shapes) {
+            shape.layers.removeIf([layerCount](int i) { return i >= layerCount; });
+        }
+        for (Connector &connector : page.connectors) {
+            connector.layers.removeIf([layerCount](int i) { return i >= layerCount; });
+        }
+        source.read = page;
+        source.read.shapes.clear();
+        source.read.connectors.clear();
         ctx.source->pages.insert(source.id, source);
         ctx.drawing->pages.append(page);
+    }
+    for (auto it = backPages.cbegin(); it != backPages.cend(); ++it) {
+        for (const Page &back : std::as_const(ctx.drawing->pages)) {
+            if (back.extra.value(QLatin1String("vsdx")).toObject().value(QLatin1String("page")).toString() == it.value()) {
+                Page *page = ctx.drawing->page(it.key());
+                page->backPageId = back.id;
+                ctx.source->pages[page->extra.value(QLatin1String("vsdx")).toObject().value(QLatin1String("page")).toString()]
+                    .read.backPageId = back.id;
+            }
+        }
     }
 }
 
@@ -156,15 +185,11 @@ QStringList warningsFor(const ReadContext &ctx)
         out << tr("%n embedded object(s) are kept in the file but shown as frames.", nullptr, ctx.objects);
     }
     if (ctx.kept > 0) {
-        out << tr("%n shape(s) QindaDiagram does not show (guides, hidden layers, ink) are kept in the file.", nullptr,
-                  ctx.kept);
+        out << tr("%n shape(s) QindaDiagram does not show (guides, ink) are kept in the file.", nullptr, ctx.kept);
     }
     if (ctx.richText > 0) {
         out << tr("%n shape(s) have text in several formats; each is shown in one until you edit it.", nullptr,
                   ctx.richText);
-    }
-    if (ctx.backgroundPages > 0) {
-        out << tr("%n background page(s) are shown as ordinary pages.", nullptr, ctx.backgroundPages);
     }
     return out;
 }
@@ -210,6 +235,8 @@ bool readPackage(const QByteArray &zip, ReadResult *result, QString *error)
     ctx.drawing = &drawing;
     readMasters(ctx, documentPart);
     readPages(ctx, documentPart);
+    readComments(ctx, documentPart); // M87: after the pages, whose items they name
+    readRecordsets(ctx, documentPart);
     if (drawing.pages.isEmpty()) {
         return fail(tr("The Visio drawing has no pages."));
     }

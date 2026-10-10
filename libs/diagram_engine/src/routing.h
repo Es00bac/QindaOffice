@@ -14,7 +14,14 @@
 //  * Curved: one cubic Bézier leaving and entering along the end normals.
 //
 // Line jumps (Page::lineJumps): a later connector hops over each earlier
-// connector it crosses, on straight segments only.
+// connector it crosses, on straight segments only — or, by the page's
+// JumpOn (M87), the horizontal or the vertical one of the two; drawn as an
+// arc, a gap or a square (Page::jumpStyle).
+//
+// M87 (D-095): when every quick candidate crosses a shape, an orthogonal
+// route is searched on the visibility grid around the shapes
+// (routing_search.cpp), so a right-angle connector goes round whatever is
+// in its way whenever any way exists.
 
 #include "drawing.h"
 
@@ -36,6 +43,7 @@ struct Route {
     QVector<QPointF> points;
     bool curved = false;
     QVector<Jump> jumps;
+    JumpStyle jumpStyle = JumpStyle::Arc; // M87: how routePath draws the jumps
     QPointF labelPoint;
     // Unit directions pointing INTO each end (arrowheads point along them).
     QPointF startDirection;

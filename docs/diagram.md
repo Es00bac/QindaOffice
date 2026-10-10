@@ -8,11 +8,16 @@ containers and swimlanes, shape data, pages, auto-layout — not for look.
 Since M65 its file format too: `.vsdx`, `.vsdm`, `.vstx` and `.vstm` open
 and save natively, with what the user did not change kept as Visio wrote it
 ([visio-interchange.md](visio-interchange.md), decision
-[D-073](decisions.md#d-073-visio-interchange-for-qindadiagram)).
+[D-073](decisions.md#d-073-visio-interchange-for-qindadiagram)). Since M87
+Visio's everyday tools — swimlanes and containers that behave, layers,
+links, comments, external data, AutoConnect, more Re-Layout styles,
+background pages, printing across sheets
+([below](#visios-everyday-tools-m87), decision
+[D-095](decisions.md#d-095-qindadiagram-visios-everyday-drawing-tools)).
 
 | Target | Depends on | What it is |
 | --- | --- | --- |
-| `diagram_engine` | Qt Core/Gui/Svg, `office_core` | The drawing model, stencils, routing, the one painter, edits, layout, file format, importers, `DrawingDocument`. No Quick. |
+| `diagram_engine` | Qt Core/Gui/Svg, `office_core`, `office_ooxml` (M65), `calc_io` (M87, private: workbooks for external data) | The drawing model, stencils, routing, the one painter, edits, layout, file format, importers, `DrawingDocument`. No Quick. |
 | `qindadiagram_app` | `office_quick`, `diagram_engine`, QindaTK | The host, the service, the canvas adapter and page view, the QML window. |
 | `qindadiagram` | `qindadiagram_app` | The binary (`org.qindaqt.QindaDiagram`). |
 
@@ -76,27 +81,173 @@ id (a newer file) draws as a rectangle and keeps its id.
   where they were.
 - **Containers** (container, lanes, phase, team) carry the shapes lying
   inside them when they move; membership is geometric (inside and above),
-  never stored.
+  never stored. Since M87 they also grow round what is dropped in them,
+  and lanes form pools ([Containers and swimlanes](#containers-and-swimlanes)).
 - **Groups** are one level: grouping members of groups regroups them;
   selecting any member selects the group.
 - **Routing** is a pure function of the page (`routing.h`): orthogonal
   routes leave along each end's normal, choose the cheapest of the L, Z
   and U candidates and detours around every shape (length, bends and
-  crossings), never cutting through a shape when a candidate avoids it.
+  crossings); when every candidate crosses a shape, a cheapest-path search
+  on the visibility grid round the shapes finds one that does not (M87).
   Line jumps (per page) hop a later connector over each earlier one it
-  crosses.
+  crosses — or the horizontal or the vertical one of the two — as an arc,
+  a gap or a square (M87).
 - **Auto-layout** (`layout.h`): flowchart top-to-bottom or left-to-right
   (cycles broken, longest-path ranks, barycentre ordering, each shape
   pulled under its predecessors) and org chart trees (parents centred over
   children; a manager whose four or more reports are all leaves hangs them
-  in a column beside a trunk). Selection or whole page; connectors re-glue
-  to the facing connection points.
+  in a column beside a trunk); since M87 also bottom-to-top, right-to-left,
+  compact tree, radial and circular, with the spacing between ranks and
+  between neighbours. Selection or whole page; connectors re-glue to the
+  facing connection points (radial and circular glue to the outlines and
+  draw straight, as Visio does).
 - **Themes** (`themes.h`) are document data: a fill/line pair per role
   (primary, decision, terminal, data, neutral, accent, container, note),
   connector and text colours and a font. New shapes take the drawing's
   theme; Design ▸ Themes restyles every shape and connector (sizes,
   patterns and shadows stay). Six themes: Qinda, Slate, Forest, Sunset,
   Ocean, Print (black and white).
+
+## Visio's everyday tools (M87)
+
+D-095. Each tool below is kept in `.qdiagram`, travels through `.vsdx` as
+Visio writes it ([visio-interchange.md](visio-interchange.md#what-m87-carries))
+and is one undo step per command.
+
+### Containers and swimlanes
+
+- **Membership stays geometric** (D-050). After every edit the service
+  runs `Ops::settle(page, before)` in the same undo step: a container
+  expands round the members it had and the shapes dropped in it this edit
+  (a member dragged half out pulls the edge with it; a stranger lying
+  across the edge does not), or fits them exactly, or stays put — Visio's
+  *Automatic resize* (Expand as needed, the default; Always fit; No
+  automatic resize, a phase's default), with a margin (an eighth of an
+  inch unless set) and room for the header band.
+- **Container commands**: Insert ▸ Container wraps the selection (behind
+  it, fitted to it); Fit to Contents; Disband Container (the container
+  goes, the members stay); Select Contents; Delete takes the members too
+  (a connector between two that go goes with them).
+- **Pools**: lanes of one orientation, unrotated, the same length and
+  touching edge to edge are one pool — found, never stored, so M50
+  drawings, Visio's own swimlanes and hand-placed lanes behave alike.
+  Insert ▸ Swimlane adds after the selected lane (or at the end of the
+  nearest pool), Swimlane Before before it; the lanes after it move down
+  with their shapes. Deleting a lane closes the gap. Resizing a lane's
+  depth pushes the lanes after it; making one longer makes all of them
+  longer; dragging a lane along the stack moves it to that place with its
+  shapes. A phase spans the pool across, clear of the lane headers, and
+  keeps spanning it as lanes come and go.
+- **Contextual Container tab** (a container or lane selected): Fit to
+  Contents, Automatic resize, Select Contents, Disband Container,
+  Swimlane, Swimlane Before, Phase; the inspector's container section
+  holds the same resize choice and the margin.
+
+### AutoConnect
+
+With View ▸ AutoConnect on (the default), hovering a shape shows four
+arrows; clicking one (or Arrange ▸ AutoConnect ▸ Add and Connect Above /
+Right / Below / Left) connects to the nearest shape lying in that
+direction, else adds the **quick shape** — the stencil last chosen in the
+Shapes panel, else one like the source — 48 units beyond, clear of other
+shapes, and connects to it (`Ops::autoConnect`). The new shape is selected
+so the next click carries on.
+
+### Layers
+
+Edit ▸ Layers ▸ Layer Properties lists the page's layers (name, Visible,
+Print, Lock, Active, Glue, colour, how many items) and adds, renames and
+removes them; Assign to Layer puts the selection on the layers ticked.
+Visio's rules (`layers.h`, the only place they live): an item on no layer
+behaves as before; on layers it is hidden only when every one of them is
+hidden, kept off paper and out of exports when none prints, locked when
+any is locked, glued to when one takes glue; the first coloured layer
+paints its lines and text. Hidden and locked items cannot be picked,
+moved or selected with Select All. New shapes and connectors go on the
+active layers. Snap is kept for Visio but not honoured (QindaTK's canvas
+snaps to every shape).
+
+### Links and comments
+
+- **Insert ▸ Link** (Ctrl+K, the suite's `insertHyperlinkAction`): several
+  links per shape or connector — a web address or file, or a page of this
+  drawing — each with a description. Open Link (or Ctrl+click) goes to the
+  page, or hands the address to the desktop (`QDesktopServices`, the portal
+  in a QindaQt session). The PDF export carries no live links (Qt's PDF
+  engine writes no link annotations).
+- **Comments** (Review ▸ New Comment, Ctrl+Alt+M): on the selected item or
+  the page, with the author's name and initials as Write and Show give
+  them; replies, edits, Done (a whole thread) and Delete in the **Comments
+  pane** (Review ▸ Comments Pane; the inspector's drawer below 900 px);
+  a marker on the page for each commented item; Previous / Next walk every
+  thread of the drawing, page by page, and wrap. Markers are screen-only: comments never print.
+
+### Pages: backgrounds, Auto Size, printing
+
+- **Background pages**: Insert ▸ Background Page makes one and shows it
+  behind the current page; Page Setup marks a page as a background or
+  chooses the background behind it. A background is drawn under its pages
+  on screen, in print and in exports, and can have a background of its own
+  (drawn farthest first; a cycle is refused). Design ▸ Borders & Titles
+  puts a border and a title block on the page's background (made when
+  there is none).
+- **Auto Size** (Design ▸ Auto Size, Page Setup): the page grows and
+  shrinks by whole sheets of its print paper so everything fits; what lies
+  left of or above the page moves in by whole sheets.
+- **Print setup** (File ▸ Page Setup ▸ Print): the printer paper and its
+  orientation, then either a print zoom (100 % prints actual size across as
+  many sheets as it takes) or fit to N sheets across by M down, and
+  centring. View ▸ Page Breaks shows where the sheets meet. Print, Print
+  Preview and Export PDF follow it (`print_tiles.h`: a sheet's printable
+  area is the paper less the host's print margin, sheets left to right then
+  top to bottom). Untouched, a page prints as M50 printed it.
+- **Line jumps**: Format ▸ Connector ▸ Line Jump Style (Design ▸ Line
+  jumps on the ribbon) chooses arc, gap or square and which line jumps:
+  the last routed, the horizontal or the vertical one.
+
+### Re-Layout
+
+Arrange ▸ Auto-Layout (and Design ▸ Re-layout): flowchart top to bottom,
+bottom to top, left to right, right to left; org chart tree; compact tree
+(children under their parent, indented, as a file tree reads); radial (the
+root in the middle, each level on a ring, every subtree a wedge as wide as
+its leaves); circular (every shape on one ring, neighbours together).
+Layout Options sets the style and the two spacings, in inches or
+centimetres; the selection is arranged, else the page.
+
+### External data
+
+- **Data ▸ Link Data to Shapes** reads an Excel workbook (`.xlsx`,
+  `.xlsm`; through calc_io, so cells read as Excel shows them; a sheet is
+  chosen when there are several; `.xls` is refused with what to do) or a
+  CSV file (RFC 4180, the first row naming the columns; blank rows
+  skipped), at most 64 MB, 256 columns and 20 000 rows. It shows the first
+  rows, asks how a row is known (a key column, or its position) and can
+  link at once every shape whose text (or a shape data field) equals a
+  column. The table is kept in the drawing (`DataRecordset`), so the
+  drawing opens with its data anywhere.
+- A linked shape holds one shape-data field per column, in column order,
+  beside its own fields (`data_link.h` AGENT-CONTRACT).
+- **External Data** (Data ▸ External Data): the rows with how many shapes
+  each feeds; link a row to the selection, link automatically by a column,
+  make a shape per row (the quick shape, text from a chosen column),
+  refresh, remove the data (its shapes are unlinked, their values kept).
+- **Refresh All** reads every source file again: linked fields are
+  rewritten, rows that went are counted (their shapes keep their values),
+  the key column is found by its name wherever it moved. **Unlink from Row** keeps the
+  values. Data graphics are not drawn yet.
+
+### Commands, menus and ribbon (M87)
+
+40 new commands (their ids in D-095) plus Insert ▸ Link: Edit ▸ Layers;
+View ▸ Page Breaks, AutoConnect; Insert ▸ Background Page, Swimlane
+Before, Link, Open Link; Format ▸ Connector ▸ Line Jump Style; Arrange ▸
+Container, AutoConnect, the Auto-Layout styles and Layout Options;
+Design ▸ Auto Size, Borders & Titles; new **Data** and **Review** menus.
+The ribbon gains Data and Review tabs, the contextual Container tab,
+Home ▸ Layers, Insert ▸ Links, Design ▸ Line jumps, and every new command
+somewhere on it (the ribbon gate).
 
 ## The `.qdiagram` file
 
@@ -106,6 +257,15 @@ height, background, grid, gridSpacing, lineJumps, shapes, connectors}`;
 shapes and connectors as the model above (colours as `#rrggbb` /
 `#aarrggbb`, empty for none; pictures as base64).
 
+- M87 members, each written only when it differs from its default, so an
+  M50 drawing saves byte for byte as before: on a shape `layers`, `links`,
+  `dataLink`, `structure` (a container kind read from Visio),
+  `containerResize`, `containerMargin`; on a connector `layers`, `links`;
+  on a page `jumpStyle`, `jumpOn`, `layers`, `comments`, `backgroundPage`,
+  `backPage`, `autoSize`, `print` (`paperWidth`, `paperHeight`, `zoom`,
+  `across`, `down`, `center`); on the drawing `recordsets` (name, source,
+  sheet, columns, rows, key column, refresh time). Ids `m…` (comments)
+  and `r…` (recordsets) come from the same counter as the rest.
 - Saves are atomic (`QSaveFile`).
 - Members this version does not know are kept per object (root, page,
   shape, connector) and written back, so a newer minor revision survives a
@@ -121,7 +281,9 @@ shapes and connectors as the model above (colours as `#rrggbb` /
 - **One painter** (`painter.h`) draws the canvas, the Shapes panel
   thumbnails, Print, Print Preview, Export PDF (the host's one
   `PrintRenderCallback`: each page fitted on one sheet, turned a quarter
-  when page and sheet orientation differ), PNG (2×, page or selection,
+  when page and sheet orientation differ — or, since M87, across the
+  sheets its print setup asks for, its background pages under it and
+  non-printing layers left out), PNG (2×, page or selection,
   96-dpi metadata), SVG (`QSvgGenerator`, page or selection) and Copy as
   Picture (PNG + SVG on the clipboard). Text is laid out at a fixed
   reference size and scaled, so line breaks match on every device.
@@ -152,7 +314,9 @@ shapes and connectors as the model above (colours as `#rrggbb` /
 - **Not supported**: compressed draw.io diagrams (refused with the
   diagrams.net setting that turns compression off); rich text runs inside
   one shape (one run per shape); per-page zoom memory (each page opens
-  fitted).
+  fitted); data graphics, drawing scale and guides (the rest of Visio's
+  everyday features still missing are ranked in
+  [plans/office-parity.md](plans/office-parity.md#qindadiagram-against-microsoft-visio-survey-of-2026-10-09-m87)).
 
 ## DrawingDocument and undo
 
@@ -167,17 +331,20 @@ stack's clean state; recovery snapshots are the file's JSON.
 ## QindaDiagram (app)
 
 `DiagramHost : DocumentHost` owns the `DrawingDocument`, the window's
-`DiagramService` (`diagram`) and 101 `diagram…Action` commands (never
-rename one; `--list-commands` prints them) plus the shared text ids
+`DiagramService` (`diagram`) and the `diagram…Action` commands — 101 at
+M50, 40 more in M87 (`diagram_host_m87.cpp`; never rename one;
+`--list-commands` prints them) — plus the shared text ids
 (`formatBold…`, `formatAlign…`, `formatGrow/ShrinkFont`,
-`formatTextColor`). Menus: File (Import, Export, Page Setup), Edit
-(Duplicate, Delete, Edit Text, Shape Data, Format Painter, Tools), View
-(panels, rulers, grid, snap, fit), Insert, Format (Text, fill, line,
-quick styles, Connector), Arrange (Align, Distribute, Order, groups,
-rotate/flip, aspect lock, Auto-Layout), Design (orientation, paper, fit,
-background, Themes). Ribbon (`DiagramRibbonLayout.qml`): File · Home ·
-Insert · Design · Arrange · View, plus the contextual **Shape** and
-**Connector** tabs (`ribbonContexts`).
+`formatTextColor`) and `insertHyperlinkAction`. Menus: File (Import,
+Export, Page Setup), Edit (Duplicate, Delete, Edit Text, Shape Data,
+Format Painter, Tools, Layers), View (panels, rulers, grid, snap, page
+breaks, AutoConnect, fit), Insert, Format (Text, fill, line, quick
+styles, Connector), Arrange (Align, Distribute, Order, groups,
+rotate/flip, aspect lock, Container, AutoConnect, Auto-Layout), Design
+(orientation, paper, fit, Auto Size, background, Borders & Titles,
+Themes), Data, Review. Ribbon (`DiagramRibbonLayout.qml`): File · Home ·
+Insert · Design · Arrange · Data · Review · View, plus the contextual
+**Shape**, **Connector** and **Container** tabs (`ribbonContexts`).
 
 `DiagramService` is the whole QML API: pages, the selection (item ids,
 group-expanded), the tool (`pointer` / `connector` / `text`, mirrored by
@@ -227,7 +394,12 @@ QindaDiagram builds on QindaTK's canvas stack — `CanvasView`,
   `Tk.StrokeStyleEditor`, shadow, corners, opacity, quick styles; for
   connectors routing, arrowheads and label position), Text and Data
   (shape data); without one, the page (name, paper, orientation, size,
-  background, grid, line jumps, fit) and the theme list.
+  background, grid, line jumps, fit) and the theme list. A container adds
+  its section (automatic resize, margin, Fit to Contents, Disband; M87).
+- The **Comments pane** (M87) takes the inspector's place while it is
+  open; the dialogs of M87 — Layer Properties, Assign to Layer, Links,
+  Layout Options, Link Data to Shapes, External Data and the extended Page
+  Setup — are window children like the others.
 - Rulers in inches (centimetres where the locale is metric) with the page
   band and the pointer; page tabs, page menu and zoom in the bar under the
   page; the minimap (off by default) in the canvas corner. Below 900 px

@@ -202,6 +202,10 @@ QVector<QPointF> portsOf(const Shape &shape)
 
 bool isContainer(const Shape &shape)
 {
+    // M87: a container read from Visio (its kind in `structure`) is one too.
+    if (!shape.structure.isEmpty()) {
+        return true;
+    }
     const Stencil *s = stencil(shape.type);
     return s != nullptr && s->container;
 }

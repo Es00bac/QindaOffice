@@ -4,6 +4,7 @@
 #include "ops.h"
 
 #include "geometry.h"
+#include "layers.h"
 #include "routing.h"
 #include "stencils.h"
 #include "themes.h"
@@ -33,7 +34,8 @@ QStringList shapeIds(const Page &page, const QStringList &ids)
 {
     QStringList out;
     for (const Shape &shape : page.shapes) {
-        if (ids.contains(shape.id) && !shape.locked) {
+        // M87: a shape on a locked layer stays put, as a locked shape does.
+        if (ids.contains(shape.id) && !shape.locked && !layersLocked(page, shape.layers)) {
             out.append(shape.id);
         }
     }
@@ -71,6 +73,7 @@ QString addShape(Drawing &drawing, Page &page, const QString &type, QPointF cent
     shape.style = shapeStyleFor(palette, stencil);
     shape.textStyle = textStyleFor(palette, stencil);
     shape.aspectLocked = stencil->aspectLocked;
+    shape.layers = activeLayers(page); // M87: new items go on the active layers
     if (stencil->container) {
         // Containers go under everything so what is inside stays visible.
         int at = 0;
@@ -97,6 +100,7 @@ QString addConnector(Drawing &drawing, Page &page, const Endpoint &from, const E
     connector.from = from;
     connector.to = to;
     connector.routing = routing;
+    connector.layers = activeLayers(page);
     styleConnector(theme(drawing.themeId), connector);
     page.connectors.append(connector);
     return connector.id;
@@ -107,14 +111,14 @@ int removeItems(Page &page, const QStringList &ids)
     int removed = 0;
     for (const QString &id : ids) {
         const int s = page.shapeIndex(id);
-        if (s >= 0 && !page.shapes.at(s).locked) {
+        if (s >= 0 && !page.shapes.at(s).locked && !layersLocked(page, page.shapes.at(s).layers)) {
             unglueFrom(page, id);
             page.shapes.removeAt(s);
             ++removed;
         }
     }
     for (int i = int(page.connectors.size()) - 1; i >= 0; --i) {
-        if (ids.contains(page.connectors.at(i).id)) {
+        if (ids.contains(page.connectors.at(i).id) && !layersLocked(page, page.connectors.at(i).layers)) {
             page.connectors.removeAt(i);
             ++removed;
         }
@@ -176,7 +180,7 @@ QString shapeAt(const Page &page, QPointF point, const QStringList &ignore)
 {
     for (int i = int(page.shapes.size()) - 1; i >= 0; --i) {
         const Shape &shape = page.shapes.at(i);
-        if (!ignore.contains(shape.id) && shapeContains(shape, point)) {
+        if (!ignore.contains(shape.id) && layersVisible(page, shape.layers) && shapeContains(shape, point)) {
             return shape.id;
         }
     }
@@ -188,7 +192,8 @@ Endpoint glueAt(const Page &page, QPointF point, double tolerance, const QString
     // A connection point wins when one is close, even on a shape below.
     for (int i = int(page.shapes.size()) - 1; i >= 0; --i) {
         const Shape &shape = page.shapes.at(i);
-        if (ignore.contains(shape.id)) {
+        // M87: hidden shapes and shapes on layers that refuse glue take none.
+        if (ignore.contains(shape.id) || !layersVisible(page, shape.layers) || !layersGlue(page, shape.layers)) {
             continue;
         }
         const int port = nearestPort(shape, point, tolerance);
@@ -201,7 +206,7 @@ Endpoint glueAt(const Page &page, QPointF point, double tolerance, const QString
         const Shape *shape = page.shape(id);
         // Containers and lanes take glue only on their header or edge; a
         // drop inside a lane lands on the page, not on the lane.
-        if (!isContainer(*shape)) {
+        if (!isContainer(*shape) && layersGlue(page, shape->layers)) {
             return Endpoint{id, -1, point};
         }
     }

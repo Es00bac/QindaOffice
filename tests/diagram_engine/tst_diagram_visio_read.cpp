@@ -385,7 +385,10 @@ private slots:
         const Shape &s = r.drawing.pages.at(2).shapes.first();
         QVERIFY(near(s.rect.center(), QPointF(240, 192)));
         QCOMPARE(s.rect.size(), QSizeF(96, 96));
-        QVERIFY(r.warnings.join(QLatin1Char('\n')).contains(str("background page")));
+        // M87 (D-095): background pages are modelled, no longer approximate.
+        QVERIFY(r.drawing.pages.at(1).backgroundPage);
+        QCOMPARE(r.drawing.pages.at(0).backPageId, r.drawing.pages.at(1).id);
+        QVERIFY(!r.warnings.join(QLatin1Char('\n')).contains(str("background page")));
     }
 
     void themedColoursComeFromTheTheme()

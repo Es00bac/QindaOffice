@@ -278,13 +278,87 @@ private slots:
             // The other tabs, for review; Shape with a shape selected.
             scene.host.diagram()->selectAll();
             QQuickItem *ribbon = scene.item(str("officeRibbon"));
-            for (const char *tab : {"insert", "design", "arrange", "shape", "connector"}) {
+            for (const char *tab : {"insert", "design", "arrange", "data", "review", "shape", "connector", "container"}) {
+                if (qstrcmp(tab, "container") == 0) {
+                    scene.host.diagram()->find(str("Coordinator")); // a lane: the Container tab (M87)
+                }
                 QVariant ok;
                 QMetaObject::invokeMethod(ribbon, "activateTab", Q_RETURN_ARG(QVariant, ok), Q_ARG(QVariant, str(tab)));
                 QVERIFY2(ok.toBool(), tab);
                 QTest::qWait(100);
                 QindaOffice::Test::saveGrab(scene.window, str("qindadiagram_tab_%1_1320").arg(str(tab)));
             }
+        }
+    }
+
+    // M87 (D-095): Visio's everyday tools in the real window — a pool with a
+    // phase and a coloured layer, comment markers and the Comments pane,
+    // page breaks, AutoConnect arrows over a hovered shape, and the new
+    // dialogs (Layer Properties, Links, Layout Options, Link Data, External
+    // Data, Page Setup with print and background settings) at both widths.
+    void m87ToolsRender()
+    {
+        QTemporaryDir dir;
+        const QString csv = dir.filePath(str("steps.csv"));
+        {
+            QFile file(csv);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("Step,Owner,Days\nReview application,Dana,2\nSchedule orientation,Sam,1\n");
+        }
+        for (const int width : {1320, 520}) {
+            Scene scene(QSize(width, width == 1320 ? 840 : 760));
+            QVERIFY2(scene.window != nullptr, qPrintable(scene.error));
+            QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+            DiagramService *d = scene.host.diagram();
+            // The flowchart's lanes are one pool: a phase spans it.
+            QVERIFY(!d->insertPhase(700, 300).isEmpty());
+            d->addLayer(str("Review"));
+            d->setLayerProperty(0, str("color"), str("#c00000"));
+            d->find(str("Background check"));
+            d->assignSelectionToLayers({0});
+            d->addComment(str("Checks can take a week."));
+            d->setSelection({});
+            d->addComment(str("Confirm the lanes with the coordinator."));
+            d->linkData(QUrl::fromLocalFile(csv), {}, 0, 0, {});
+            scene.host.actions()->trigger(str("diagramShowPageBreaksAction"));
+            d->setPrintSetup({{str("paper"), str("letter")}, {str("zoom"), 1}});
+            scene.host.setCommentsPaneVisible(true);
+            scene.settle();
+            QQuickItem *pane = scene.item(str("diagramCommentsPane"));
+            QVERIFY(pane != nullptr);
+            QCOMPARE(pane->isVisible(), width > 900);
+            QVERIFY(scene.item(str("commentCard_") + d->commentList().first().toMap().value(str("id")).toString()) != nullptr);
+            // AutoConnect arrows over the hovered start shape.
+            d->find(str("Interested in volunteering"));
+            QQuickItem *view = scene.item(str("diagramPageView"));
+            view->setProperty("autoConnectShape", d->selection().value(0));
+            QTest::qWait(100);
+            QVariantList arrows;
+            QMetaObject::invokeMethod(view, "autoConnectArrows", Q_RETURN_ARG(QVariantList, arrows));
+            QCOMPARE(arrows.size(), 4);
+            QindaOffice::Test::saveGrab(scene.window, grabName("m87_swimlanes", width));
+            view->setProperty("autoConnectShape", QString());
+            for (const char *dialog : {"layers", "link", "layout", "externalData"}) {
+                emit scene.host.dialogRequested(str(dialog));
+                QTest::qWait(150);
+                QindaOffice::Test::saveGrab(scene.window, str("qindadiagram_m87_%1_%2").arg(str(dialog)).arg(width));
+                QTest::keyClick(scene.window, Qt::Key_Escape);
+                QTest::qWait(80);
+            }
+            QObject *linkData = scene.window->findChild<QObject *>(str("diagramLinkDataDialog"));
+            QVERIFY(linkData != nullptr);
+            QMetaObject::invokeMethod(linkData, "openWith", Q_ARG(QVariant, QUrl::fromLocalFile(csv)));
+            QTest::qWait(150);
+            QindaOffice::Test::saveGrab(scene.window, grabName("m87_linkdata", width));
+            QVERIFY(linkData->property("visible").toBool());
+            QTest::keyClick(scene.window, Qt::Key_Escape);
+            QTest::qWait(80);
+            emit scene.host.pageSetupRequested();
+            QTest::qWait(150);
+            QindaOffice::Test::saveGrab(scene.window, grabName("m87_pagesetup", width));
+            QTest::keyClick(scene.window, Qt::Key_Escape);
+            QCOMPARE(d->recordsetList().size(), 1);
+            QCOMPARE(d->commentTotal(), 2);
         }
     }
 

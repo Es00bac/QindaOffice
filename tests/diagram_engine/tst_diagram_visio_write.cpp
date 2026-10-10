@@ -245,7 +245,7 @@ private slots:
         // A macro-enabled source keeps its VBA project only as .vsdm/.vstm.
         const VisioFixture::ExtraPart vba{str("visio/vbaProject.bin"), QByteArray("VBA\0\1\2", 6),
                                           str("application/vnd.ms-office.vbaProject"),
-                                          str("http://schemas.microsoft.com/visio/2010/relationships/vbaProject")};
+                                          str("http://schemas.microsoft.com/visio/2010/relationships/vbaProject"), {}, {}};
         Visio::ReadResult r;
         QVERIFY(Visio::readData(VisioFixture::officePackage({vba}), &r));
         const auto macro = Package::fromData(Visio::write(r.drawing, r.source.get(), Visio::Kind::MacroDrawing));

@@ -311,15 +311,22 @@ void DiagramHost::wireActions()
     onId("diagramDeletePageAction", [d] { d->deletePage(); });
     onId("diagramRenamePageAction", [this] { emit renamePageRequested(); });
     for (const auto &[command, stencil] : {std::pair{"diagramInsertTextBoxAction", "text"},
-                                           {"diagramInsertContainerAction", "container"},
-                                           {"diagramInsertSwimlaneAction", "laneHorizontal"},
-                                           {"diagramInsertVerticalLaneAction", "laneVertical"},
-                                           {"diagramInsertPhaseAction", "phase"},
                                            {"diagramInsertCalloutAction", "calloutRect"},
                                            {"diagramInsertNoteAction", "note"}}) {
         const QString type = id(stencil);
         onId(command, [this, type] { m_service->addShape(type, m_viewCenter.x(), m_viewCenter.y()); });
     }
+    // M87 (D-095): Visio's container and cross-functional flowchart
+    // behaviour — a container wraps the selection; a swimlane joins the
+    // selected lane's pool (after it) or the nearest one; a phase spans it.
+    onId("diagramInsertContainerAction",
+         [this] { m_service->insertContainer(QStringLiteral("container"), m_viewCenter.x(), m_viewCenter.y()); });
+    for (const auto &[command, stencil] : {std::pair{"diagramInsertSwimlaneAction", "laneHorizontal"},
+                                           {"diagramInsertVerticalLaneAction", "laneVertical"}}) {
+        const QString type = id(stencil);
+        onId(command, [this, type] { m_service->insertSwimlane(type, false, m_viewCenter.x(), m_viewCenter.y()); });
+    }
+    onId("diagramInsertPhaseAction", [this] { m_service->insertPhase(m_viewCenter.x(), m_viewCenter.y()); });
     onId("diagramInsertPictureAction", [this] { emit openFileRequested(QStringLiteral("picture")); });
     onId("diagramOrgChartFromCsvAction", [this] { emit openFileRequested(QStringLiteral("orgChart")); });
     onId("diagramImportDrawioAction", [this] { emit openFileRequested(QStringLiteral("drawio")); });

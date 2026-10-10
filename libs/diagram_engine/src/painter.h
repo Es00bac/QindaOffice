@@ -20,6 +20,7 @@
 #include <QRectF>
 #include <QSet>
 #include <QString>
+#include <QVector>
 
 class QPainter;
 
@@ -33,6 +34,12 @@ struct PaintOptions {
     QSet<QString> hideTextOf;   // items whose text an editor is covering
     // Precomputed routes (the canvas caches them); null: route here.
     const QHash<QString, Route> *routes = nullptr;
+    // M87 (D-095): paper rules — items whose layers do not print stay off
+    // (print, PDF and the exports; the screen shows them).
+    bool printing = false;
+    // M87: background pages painted under this one, farthest first
+    // (layers.h backgroundChain); never the screen grid.
+    QVector<const Page *> backgrounds;
 };
 
 void paintPage(QPainter *painter, const Page &page, const PaintOptions &options = {});

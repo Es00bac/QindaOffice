@@ -8,6 +8,8 @@
 #include "ooxml_namespaces.h"
 #include "ooxml_properties.h"
 #include "themes.h"
+#include "visio_data.h"
+#include "visio_write_m87.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -71,13 +73,25 @@ QString uniqueName(const QString &wanted, QSet<QString> &taken, int index)
     return name;
 }
 
-void copyDocumentRelationships(WriteContext &ctx, const QString &documentPart, Kind kind)
+void copyDocumentRelationships(WriteContext &ctx, const QString &documentPart, Kind kind, bool commentsKept, bool dataKept)
 {
     const Source &source = *ctx.source;
     for (const Ooxml::Relationship &rel : source.package->relationships(source.documentPart)) {
         if (rel.type == QStringView(Rel::Pages) || rel.type == QStringView(Rel::Masters)
             || rel.type == QStringView(Rel::Windows)) {
             continue; // written below
+        }
+        // M87: comments written afresh replace the package's own, and the
+        // parts that thread them (Visio 365's modern comments, persons).
+        const QString targetName = rel.external ? QString() : source.package->targetPart(source.documentPart, rel).toLower();
+        if (!commentsKept && (rel.type == QStringView(kCommentsRelType) || targetName.contains(QLatin1String("comment"))
+                              || targetName.contains(QLatin1String("person")))) {
+            continue;
+        }
+        // M87: changed external data is written afresh (visio_data.h); the
+        // connections Visio made travel either way.
+        if (!dataKept && rel.type == QStringView(kRecordsetsRelType)) {
+            continue;
         }
         if (rel.type.endsWith(QLatin1String("/vbaProject")) && !isMacro(kind)) {
             continue; // a drawing without macros carries no VBA project
@@ -108,6 +122,32 @@ bool sourceWindowsFit(const Source &source, const QSet<QString> &pageIds, QStrin
     for (const XmlElement *w : children(*windows, u"Window")) {
         const QString page = w->attribute({}, u"Page");
         if (!page.isEmpty() && !pageIds.contains(page)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Whether every page's comments are the ones read from `source` (and no
+// page that had comments is gone).
+bool commentsAsRead(const Drawing &drawing, const Source &source, const QVector<const SourcePage *> &sourcePages)
+{
+    QSet<QString> seen;
+    for (int i = 0; i < drawing.pages.size(); ++i) {
+        const SourcePage *sp = sourcePages.at(i);
+        if (sp == nullptr) {
+            if (!drawing.pages.at(i).comments.isEmpty()) {
+                return false;
+            }
+            continue;
+        }
+        seen.insert(sp->id);
+        if (!(drawing.pages.at(i).comments == sp->read.comments)) {
+            return false;
+        }
+    }
+    for (auto it = source.pages.cbegin(); it != source.pages.cend(); ++it) {
+        if (!seen.contains(it.key()) && !it->read.comments.isEmpty()) {
             return false;
         }
     }
@@ -148,36 +188,51 @@ QByteArray write(const Drawing &drawing, const Source *source, Kind kind, QStrin
             ctx.masterParts.insert(it.key(), copier->copyPart(it.value()));
         }
     }
-    if (source != nullptr) {
-        copyDocumentRelationships(ctx, documentPart, kind);
-    }
-    // Pages: source pages keep their IDs, new pages take the next free ones.
-    const QString pagesPart = QStringLiteral("visio/pages/pages.xml");
-    XmlElementPtr pages = makeElement(QStringLiteral("Pages"));
-    pages->setAttribute(QString::fromUtf16(Ooxml::Ns::XML), QStringLiteral("space"), QStringLiteral("preserve"));
+    // Pages: source pages keep their IDs, new pages take the next free ones
+    // (decided first: a page names its background page by ID, M87).
     int nextPageId = 0;
     for (const Page &page : drawing.pages) {
         if (const SourcePage *sp = sourcePageOf(source, page)) {
             nextPageId = std::max(nextPageId, sp->id.toInt() + 1);
         }
     }
-    QSet<QString> names;
+    QVector<const SourcePage *> sourcePages;
+    QHash<QString, QString> pageIds; // model page id → Visio page ID
     QSet<QString> writtenIds;
-    QString firstPageId;
-    QSizeF firstPageInches;
-    for (int i = 0; i < drawing.pages.size(); ++i) {
-        const Page &page = drawing.pages.at(i);
+    for (const Page &page : drawing.pages) {
         const SourcePage *sp = sourcePageOf(source, page);
         if (sp != nullptr && writtenIds.contains(sp->id)) {
             sp = nullptr; // a duplicated page is a new page
         }
         const QString id = sp != nullptr ? sp->id : QString::number(nextPageId++);
         writtenIds.insert(id);
+        sourcePages.append(sp);
+        pageIds.insert(page.id, id);
+    }
+    // M87: comments as read travel with the package's own part; changed
+    // ones are written afresh (visio_write_m87.cpp).
+    const bool commentsKept = source != nullptr && source->comments && commentsAsRead(drawing, *source, sourcePages);
+    const bool dataKept = source != nullptr && recordsetsAsRead(drawing, *source);
+    if (source != nullptr) {
+        copyDocumentRelationships(ctx, documentPart, kind, commentsKept, dataKept);
+    }
+    const QString pagesPart = QStringLiteral("visio/pages/pages.xml");
+    XmlElementPtr pages = makeElement(QStringLiteral("Pages"));
+    pages->setAttribute(QString::fromUtf16(Ooxml::Ns::XML), QStringLiteral("space"), QStringLiteral("preserve"));
+    QSet<QString> names;
+    QString firstPageId;
+    QSizeF firstPageInches;
+    QHash<QString, QHash<QString, int>> shapeIds; // model page id → model item → Visio ID
+    for (int i = 0; i < drawing.pages.size(); ++i) {
+        const Page &page = drawing.pages.at(i);
+        const SourcePage *sp = sourcePages.at(i);
+        const QString id = pageIds.value(page.id);
         const double scale = sp != nullptr ? sp->scale : 1.0;
         const QSizeF inches(page.size.width() / kPx / scale, page.size.height() / kPx / scale);
         const QString part = QStringLiteral("visio/pages/page%1.xml").arg(i + 1);
         PageWriter pageWriter(ctx, page, sp, part);
         const XmlElementPtr contents = pageWriter.build();
+        shapeIds.insert(page.id, pageWriter.visioIds());
         writer.addXmlPart(part, *contents, QString::fromUtf16(Type::Page));
         const QString rel = writer.addRelationship(pagesPart, QString::fromUtf16(Rel::Page), part);
         QList<int> masters = pageWriter.mastersUsed().values();
@@ -195,17 +250,33 @@ QByteArray write(const Drawing &drawing, const Source *source, Kind kind, QStrin
                 entry->setAttribute({}, QStringLiteral("Name"), name);
                 entry->setAttribute({}, QStringLiteral("NameU"), name);
             }
+            XmlElement *sheet = child(*entry, u"PageSheet");
+            if (sheet == nullptr && (page.size != sp->size || pageSettingsDiffer(page, sp->read))) {
+                sheet = &appendElement(*entry, QStringLiteral("PageSheet"));
+            }
             if (page.size != sp->size) {
-                XmlElement *sheet = child(*entry, u"PageSheet");
-                if (sheet == nullptr) {
-                    sheet = &appendElement(*entry, QStringLiteral("PageSheet"));
-                }
                 setCell(*sheet, QStringLiteral("PageWidth"), numberText(inches.width()));
                 setCell(*sheet, QStringLiteral("PageHeight"), numberText(inches.height()));
+            }
+            if (pageSettingsDiffer(page, sp->read)) {
+                writePageSettings(*sheet, page, &sp->read); // M87
             }
             entry->removeChildren(kNs, u"Rel");
         } else {
             entry = freshPageEntry(id.toInt(), name, inches);
+            writePageSettings(*child(*entry, u"PageSheet"), page, nullptr); // M87
+        }
+        // M87: a background page, and the one shown behind this page.
+        const Page *back = drawing.page(page.backPageId);
+        if (page.backgroundPage) {
+            entry->setAttribute({}, QStringLiteral("Background"), QStringLiteral("1"));
+        } else {
+            entry->removeAttribute({}, u"Background");
+        }
+        if (back != nullptr && back->backgroundPage && pageIds.contains(back->id)) {
+            entry->setAttribute({}, QStringLiteral("BackPage"), pageIds.value(back->id));
+        } else {
+            entry->removeAttribute({}, u"BackPage");
         }
         appendElement(*entry, QStringLiteral("Rel")).setAttribute(QString::fromUtf16(Ooxml::Ns::R), QStringLiteral("id"), rel);
         pages->appendElement(entry);
@@ -214,11 +285,13 @@ QByteArray write(const Drawing &drawing, const Source *source, Kind kind, QStrin
             firstPageInches = inches;
         }
     }
-    // A background page that is gone may not stay named as one.
-    for (Ooxml::XmlChild &c : pages->children) {
-        if (c.element && c.element->hasAttribute({}, u"BackPage")
-            && !writtenIds.contains(c.element->attribute({}, u"BackPage"))) {
-            c.element->removeAttribute({}, u"BackPage");
+    if (!dataKept) {
+        writeRecordsets(writer, documentPart, drawing, pageIds, shapeIds); // M87: external data
+    }
+    if (!commentsKept) {
+        if (const XmlElementPtr comments = commentsElement(drawing, pageIds, shapeIds)) {
+            writer.addXmlPart(QStringLiteral("visio/comments.xml"), *comments, QString::fromUtf16(kCommentsType));
+            writer.addRelationship(documentPart, QString::fromUtf16(kCommentsRelType), QStringLiteral("visio/comments.xml"));
         }
     }
     writer.addXmlPart(pagesPart, *pages, QString::fromUtf16(Type::Pages));

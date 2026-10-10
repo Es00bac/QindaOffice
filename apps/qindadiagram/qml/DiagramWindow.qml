@@ -102,10 +102,12 @@ OfficeWindow {
                 Tk.Flex.basis: 0
             }
             Tk.Divider { vertical: true; visible: inspectorSlot.visible }
+            // The right-hand pane: the inspector, or (Review ▸ Comments
+            // Pane, M87) the comments.
             Item {
                 id: inspectorSlot
                 objectName: "diagramInspectorSlot"
-                visible: !window.narrow && window.diagramHost.inspectorVisible
+                visible: !window.narrow && (window.diagramHost.inspectorVisible || window.diagramHost.commentsPaneVisible)
                 Tk.Flex.basis: window.inspectorWidth
                 Tk.Flex.shrink: 0
             }
@@ -179,14 +181,26 @@ OfficeWindow {
             id: inspector
             parent: window.narrow ? inspectorDrawer : inspectorSlot
             anchors.fill: parent
+            visible: !window.diagramHost.commentsPaneVisible
             diagram: window.diagram
             spatialTransform: canvasView.spatialTransform
+        }
+        CommentsPane {
+            id: commentsPane
+            parent: window.narrow ? inspectorDrawer : inspectorSlot
+            anchors.fill: parent
+            visible: window.diagramHost.commentsPaneVisible
+            diagram: window.diagram
         }
 
         Tk.Toast {
             id: toast
             objectName: "diagramToast"
             z: 10
+            // AGENT-NOTE: an explicit width — Tk.Toast's implicit width
+            // leaves out its title and message (a QindaTK gap, D-095), so an
+            // anchored toast spilled past the window's right edge.
+            width: Math.min(Tk.Theme.size.dialogWidth, parent.width - Tk.Theme.space.lg * 2)
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             anchors.margins: Tk.Theme.space.lg
@@ -202,6 +216,21 @@ OfficeWindow {
 
     // ---- dialogs ----
     PageSetupDialog { id: pageSetup; diagram: window.diagram }
+    // M87 (D-095): Visio's layers, links, Re-Layout options and external data.
+    LayersDialog { id: layersDialog; diagram: window.diagram }
+    AssignLayersDialog { id: assignLayersDialog; diagram: window.diagram }
+    LinkDialog { id: linkDialog; diagram: window.diagram }
+    LayoutDialog { id: layoutDialog; diagram: window.diagram }
+    LinkDataDialog { id: linkDataDialog; diagram: window.diagram }
+    ExternalDataDialog { id: externalDataDialog; diagram: window.diagram }
+    Dialogs.FileDialog {
+        id: dataFile
+        objectName: "diagramDataFile"
+        title: qsTr("Link data to shapes")
+        fileMode: Dialogs.FileDialog.OpenFile
+        nameFilters: [qsTr("Data (*.xlsx *.xlsm *.csv *.txt)"), qsTr("Excel workbook (*.xlsx *.xlsm)"), qsTr("CSV (*.csv *.txt)")]
+        onAccepted: linkDataDialog.openWith(selectedFile)
+    }
     ColorDialog { id: colorDialog; diagram: window.diagram }
     ReplaceDialog { id: replaceDialog; diagram: window.diagram }
     Tk.PromptDialog {
@@ -263,8 +292,21 @@ OfficeWindow {
         function onReplaceRequested() { replaceDialog.openWith("") }
         function onZoomRequested(how) { canvasView.zoom(how) }
         function onInspectorRequested(section) {
+            window.diagramHost.commentsPaneVisible = false
             inspector.show(section)
             if (window.narrow) window.drawer = "inspector"
+        }
+        function onDialogRequested(which) {
+            if (which === "layers") layersDialog.openFor()
+            else if (which === "assignLayers") assignLayersDialog.openFor()
+            else if (which === "link") linkDialog.openFor()
+            else if (which === "layout") layoutDialog.openFor()
+            else if (which === "linkData") dataFile.open()
+            else if (which === "externalData") externalDataDialog.openFor()
+            else if (which === "newComment") {
+                if (window.narrow) window.drawer = "inspector"
+                commentsPane.compose()
+            }
         }
     }
     Connections {

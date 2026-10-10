@@ -3,10 +3,11 @@ import QtQuick
 import QindaOffice.Shell
 
 // QindaDiagram's ribbon (D-041, D-050): File · Home · Insert · Design ·
-// Arrange · View, plus the contextual Shape and Connector tabs while those
-// are selected. Every string is an ActionEntry id DiagramHost registers
-// (AGENTS.md rule 5); the two slots are host widgets for the font face and
-// size, which have no single command.
+// Arrange · Data · Review · View, plus the contextual Shape, Connector and
+// Container tabs while those are selected (M87, D-095 adds Data, Review,
+// Container and Visio's everyday tools on the others). Every string is an
+// ActionEntry id DiagramHost registers (AGENTS.md rule 5); the two slots
+// are host widgets for the font face and size, which have no single command.
 QtObject {
     property Component fontSlot: null
     property Component sizeSlot: null
@@ -24,7 +25,19 @@ QtObject {
                                           "diagramQuickStyle4Action", "diagramQuickStyle5Action", "diagramQuickStyle6Action"]
     readonly property var paperIds: ["diagramPaperLetterAction", "diagramPaperLegalAction", "diagramPaperTabloidAction", "|",
                                      "diagramPaperA5Action", "diagramPaperA4Action", "diagramPaperA3Action"]
-    readonly property var layoutIds: ["diagramLayoutTopDownAction", "diagramLayoutLeftRightAction", "diagramLayoutTreeAction"]
+    readonly property var layoutIds: ["diagramLayoutTopDownAction", "diagramLayoutBottomUpAction",
+                                      "diagramLayoutLeftRightAction", "diagramLayoutRightLeftAction", "|",
+                                      "diagramLayoutTreeAction", "diagramLayoutCompactTreeAction",
+                                      "diagramLayoutRadialAction", "diagramLayoutCircularAction", "|",
+                                      "diagramLayoutOptionsAction"]
+    readonly property var jumpIds: ["diagramLineJumpsAction", "|", "diagramJumpArcAction", "diagramJumpGapAction",
+                                    "diagramJumpSquareAction", "|", "diagramJumpLastRoutedAction",
+                                    "diagramJumpHorizontalAction", "diagramJumpVerticalAction"]
+    readonly property var layerIds: ["diagramLayerPropertiesAction", "diagramAssignLayerAction"]
+    readonly property var resizeIds: ["diagramContainerResizeNoneAction", "diagramContainerResizeExpandAction",
+                                      "diagramContainerResizeFitAction"]
+    readonly property var connectIds: ["diagramConnectUpAction", "diagramConnectRightAction", "diagramConnectDownAction",
+                                       "diagramConnectLeftAction"]
 
     function lineGroup(id) {
         return { id: id, label: qsTr("Line"), items: [
@@ -68,16 +81,19 @@ QtObject {
                 { id: "homeAlign", label: qsTr("Align"), iconName: "align-start-vertical", menu: alignIds },
                 { id: "homeOrder", label: qsTr("Order"), iconName: "layers", menu: orderIds },
                 "diagramGroupAction"] },
-            StandardRibbon.editingGroup(["diagramDuplicateAction", "diagramDeleteAction"])
+            StandardRibbon.editingGroup(["diagramDuplicateAction", "diagramDeleteAction",
+                                         { id: "homeLayers", label: qsTr("Layers"), iconName: "layers-2", menu: layerIds }])
         ] },
         { id: "insert", label: qsTr("Insert"), keyTip: "N", groups: [
             { id: "pages", label: qsTr("Pages"), items: [
                 { action: "diagramNewPageAction", size: "large" }, "diagramDuplicatePageAction",
-                "diagramRenamePageAction", "diagramDeletePageAction"] },
+                "diagramRenamePageAction", "diagramDeletePageAction", "diagramInsertBackgroundPageAction"] },
             { id: "illustrations", label: qsTr("Illustrations"), items: [{ action: "diagramInsertPictureAction", size: "large" }] },
             { id: "diagramParts", label: qsTr("Diagram parts"), items: [
                 { action: "diagramInsertContainerAction", size: "large" }, "diagramInsertSwimlaneAction",
-                "diagramInsertVerticalLaneAction", "diagramInsertPhaseAction"] },
+                "diagramInsertSwimlaneBeforeAction", "diagramInsertVerticalLaneAction", "diagramInsertPhaseAction"] },
+            { id: "links", label: qsTr("Links"), items: [
+                { action: "insertHyperlinkAction", size: "large" }, "diagramFollowLinkAction"] },
             { id: "insertText", label: qsTr("Text"), items: [
                 { action: "diagramInsertTextBoxAction", size: "large" }, "diagramInsertCalloutAction", "diagramInsertNoteAction"] },
             { id: "insertOrg", label: qsTr("Org chart"), items: [{ action: "diagramOrgChartFromCsvAction", size: "large" }] }
@@ -87,14 +103,15 @@ QtObject {
                 { action: "diagramPageSetupAction", size: "large" },
                 { id: "orientation", label: qsTr("Orientation"), iconName: "file", menu: ["diagramPortraitAction", "diagramLandscapeAction"] },
                 { id: "paperSize", label: qsTr("Size"), iconName: "layout-template", menu: paperIds },
-                "diagramFitPageAction"] },
+                "diagramFitPageAction", "diagramAutoSizeAction"] },
             { id: "themes", label: qsTr("Themes"), items: [
                 { id: "themeMenu", label: qsTr("Themes"), iconName: "palette", size: "large", menu: themeIds }] },
             { id: "backgrounds", label: qsTr("Backgrounds"), items: [
-                { action: "diagramBackgroundColorAction", size: "large" }, "diagramShowGridAction"] },
+                { action: "diagramBackgroundColorAction", size: "large" }, "diagramBordersTitlesAction",
+                "diagramInsertBackgroundPageAction", "diagramShowGridAction"] },
             { id: "layouts", label: qsTr("Layouts"), items: [
                 { id: "relayout", label: qsTr("Re-layout"), iconName: "workflow", size: "large", menu: layoutIds },
-                "diagramLineJumpsAction"] }
+                { id: "lineJumps", label: qsTr("Line jumps"), iconName: "waypoints", menu: jumpIds }] }
         ] },
         { id: "arrange", label: qsTr("Arrange"), keyTip: "A", groups: [
             { id: "align", label: qsTr("Align"), rows: [
@@ -114,13 +131,30 @@ QtObject {
             { id: "autoLayout", label: qsTr("Auto-layout"), items: [
                 { action: "diagramLayoutTopDownAction", size: "large", label: qsTr("Top to bottom") },
                 { action: "diagramLayoutLeftRightAction", label: qsTr("Left to right") },
-                { action: "diagramLayoutTreeAction", label: qsTr("Org chart") }] }
+                { action: "diagramLayoutTreeAction", label: qsTr("Org chart") },
+                { id: "moreLayouts", label: qsTr("More"), iconName: "workflow", menu: layoutIds }] },
+            { id: "arrangeContainer", label: qsTr("Container"), items: [
+                { id: "arrangeContainerMenu", label: qsTr("Container"), iconName: "square-dashed",
+                  menu: ["diagramContainerFitAction", "diagramContainerDisbandAction", "diagramContainerSelectAction", "|"].concat(resizeIds) },
+                { id: "arrangeConnect", label: qsTr("AutoConnect"), iconName: "route", menu: connectIds }] }
+        ] },
+        { id: "data", label: qsTr("Data"), keyTip: "T", groups: [
+            { id: "externalData", label: qsTr("External data"), items: [
+                { action: "diagramLinkDataAction", size: "large" }, "diagramExternalDataAction",
+                "diagramRefreshDataAction", "diagramUnlinkDataAction"] },
+            { id: "dataShape", label: qsTr("Shape data"), items: [{ action: "diagramShapeDataAction", size: "large" }] }
+        ] },
+        { id: "review", label: qsTr("Review"), keyTip: "R", groups: [
+            { id: "comments", label: qsTr("Comments"), items: [
+                { action: "diagramNewCommentAction", size: "large" }, "diagramDeleteCommentAction",
+                "diagramPreviousCommentAction", "diagramNextCommentAction", "diagramShowCommentsAction"] }
         ] },
         StandardRibbon.viewTab([
             { id: "panels", label: qsTr("Panels"), items: [
                 { action: "diagramShowShapesPanelAction", size: "large" }, "diagramShowInspectorAction", "diagramShowMinimapAction"] },
             { id: "visualAids", label: qsTr("Visual aids"), items: [
-                "diagramShowRulersAction", "diagramShowGridAction", "diagramSnapAction"] },
+                "diagramShowRulersAction", "diagramShowGridAction", "diagramSnapAction", "diagramShowPageBreaksAction",
+                "diagramAutoConnectAction"] },
             { id: "fit", label: qsTr("Fit"), items: [
                 { action: "diagramZoomFitPageAction", size: "large" }, "diagramZoomSelectionAction"] }
         ]),
@@ -134,8 +168,12 @@ QtObject {
             { id: "shapeArrange", label: qsTr("Arrange"), items: [
                 "diagramRotateRightAction", "diagramFlipHorizontalAction", "diagramLockAspectAction",
                 { id: "shapeOrder", label: qsTr("Order"), iconName: "layers", menu: orderIds }] },
+            { id: "shapeConnect", label: qsTr("AutoConnect"), items: [
+                { action: "diagramConnectRightAction", size: "large" }, "diagramConnectDownAction",
+                "diagramConnectLeftAction", "diagramConnectUpAction"] },
             { id: "shapeEdit", label: qsTr("Shape"), items: [
-                { action: "diagramEditTextAction", size: "large" }, "diagramShapeDataAction", "diagramDuplicateAction", "diagramDeleteAction"] }
+                { action: "diagramEditTextAction", size: "large" }, "diagramShapeDataAction", "insertHyperlinkAction",
+                "diagramDuplicateAction", "diagramDeleteAction"] }
         ] },
         { id: "connector", label: qsTr("Connector"), keyTip: "C", contextId: "connector", groups: [
             { id: "routing", label: qsTr("Routing"), items: [
@@ -147,7 +185,18 @@ QtObject {
                 "diagramArrowNoneAction"] },
             lineGroup("connectorLine"),
             { id: "connectorLabel", label: qsTr("Label"), items: [
-                { action: "diagramEditTextAction", size: "large" }, "diagramLineJumpsAction"] }
+                { action: "diagramEditTextAction", size: "large" },
+                { id: "connectorJumps", label: qsTr("Line jumps"), iconName: "waypoints", menu: jumpIds }] }
+        ] },
+        { id: "container", label: qsTr("Container"), keyTip: "O", contextId: "container", groups: [
+            { id: "containerSize", label: qsTr("Size"), items: [
+                { action: "diagramContainerFitAction", size: "large" },
+                { id: "containerResize", label: qsTr("Automatic resize"), iconName: "expand", menu: resizeIds }] },
+            { id: "containerMembership", label: qsTr("Membership"), items: [
+                { action: "diagramContainerSelectAction", size: "large" }, "diagramContainerDisbandAction"] },
+            { id: "containerLanes", label: qsTr("Swimlanes"), items: [
+                { action: "diagramInsertSwimlaneAction", size: "large" }, "diagramInsertSwimlaneBeforeAction",
+                "diagramInsertPhaseAction"] }
         ] }
     ]
 }

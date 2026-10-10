@@ -46,6 +46,10 @@ class DiagramHost : public Quick::DocumentHost {
     Q_PROPERTY(bool minimapVisible READ minimapVisible WRITE setMinimapVisible NOTIFY viewStateChanged)
     Q_PROPERTY(bool rulersVisible READ rulersVisible WRITE setRulersVisible NOTIFY viewStateChanged)
     Q_PROPERTY(bool snapEnabled READ snapEnabled WRITE setSnapEnabled NOTIFY viewStateChanged)
+    // M87 (D-095): View ▸ Page Breaks, View ▸ AutoConnect, Review ▸ Comments Pane.
+    Q_PROPERTY(bool pageBreaksVisible READ pageBreaksVisible NOTIFY viewStateChanged)
+    Q_PROPERTY(bool autoConnectEnabled READ autoConnectEnabled NOTIFY viewStateChanged)
+    Q_PROPERTY(bool commentsPaneVisible READ commentsPaneVisible WRITE setCommentsPaneVisible NOTIFY viewStateChanged)
 public:
     DiagramHost();
     ~DiagramHost() override;
@@ -65,6 +69,10 @@ public:
     void setRulersVisible(bool visible);
     [[nodiscard]] bool snapEnabled() const;
     void setSnapEnabled(bool enabled);
+    [[nodiscard]] bool pageBreaksVisible() const;
+    [[nodiscard]] bool autoConnectEnabled() const;
+    [[nodiscard]] bool commentsPaneVisible() const;
+    void setCommentsPaneVisible(bool visible);
 
     // Export PDF through the print callback (landscape when the first page is).
     Q_INVOKABLE bool exportPdfTo(const QUrl &file);
@@ -86,6 +94,9 @@ signals:
     void zoomRequested(const QString &how);
     // The inspector should show a section ("data", "style", "text", "page").
     void inspectorRequested(const QString &section);
+    // M87: a dialog the window owns — "layers", "assignLayers", "link",
+    // "layout", "linkData", "externalData".
+    void dialogRequested(const QString &which);
 
 protected:
     // QindaDiagram drawings and Visio 2013+ drawings and templates open
@@ -95,6 +106,9 @@ protected:
     [[nodiscard]] QString saveFilterString() const override;
     void documentReplaced() override;
     [[nodiscard]] Quick::PrintRenderCallback printRenderCallback() const override;
+    // M87: the first page's printer paper (Print Setup), with the margin
+    // the print tiles assume (print_tiles.h kPrintMargin).
+    [[nodiscard]] std::optional<QPageLayout> printPageLayout() const override;
 
 private:
     // diagram_host_actions.cpp
@@ -105,6 +119,12 @@ private:
     void syncEnablement();
     void syncChecks();
     bool toggled(const char *id) const;
+    // diagram_host_m87.cpp (M87, D-095): the commands of Visio's everyday
+    // tools — containers and swimlanes, layers, links, comments, external
+    // data, Re-Layout styles, AutoConnect, page breaks, background pages.
+    void createM87Actions();
+    void wireM87Actions();
+    void syncM87();
 
     ::QindaOffice::Diagram::DrawingDocument *m_document = nullptr;
     DiagramService *m_service = nullptr;

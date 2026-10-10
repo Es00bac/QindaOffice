@@ -5,6 +5,7 @@
 
 #include "drawing_document.h"
 #include "geometry.h"
+#include "layers.h"
 #include "ops.h"
 #include "painter.h"
 #include "routing.h"
@@ -234,11 +235,16 @@ void DiagramService::selectAll()
     const Page *page = currentPage();
     QStringList ids;
     if (page != nullptr) {
+        // M87: as in Visio, hidden layers and locked ones are not selected.
         for (const Shape &shape : page->shapes) {
-            ids.append(shape.id);
+            if (layersVisible(*page, shape.layers) && !layersLocked(*page, shape.layers)) {
+                ids.append(shape.id);
+            }
         }
         for (const Connector &connector : page->connectors) {
-            ids.append(connector.id);
+            if (layersVisible(*page, connector.layers) && !layersLocked(*page, connector.layers)) {
+                ids.append(connector.id);
+            }
         }
     }
     setSelection(ids);

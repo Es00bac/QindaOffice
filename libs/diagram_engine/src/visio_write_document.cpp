@@ -270,10 +270,9 @@ XmlElementPtr freshPageEntry(int id, const QString &name, QSizeF inches)
     appendCell(sheet, QStringLiteral("ShdwType"), kZero);
     appendCell(sheet, QStringLiteral("ShdwObliqueAngle"), kZero);
     appendCell(sheet, QStringLiteral("ShdwScaleFactor"), QStringLiteral("1"));
-    appendCell(sheet, QStringLiteral("DrawingResizeType"), QStringLiteral("1"));
     appendCell(sheet, QStringLiteral("PageShapeSplit"), QStringLiteral("1"));
-    appendCell(sheet, QStringLiteral("PrintPageOrientation"),
-               inches.width() > inches.height() ? QStringLiteral("2") : QStringLiteral("1"));
+    // M87: Auto Size, line jumps and print setup follow the page model
+    // (visio_write_m87.cpp writePageSettings).
     return page;
 }
 

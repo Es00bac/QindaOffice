@@ -62,7 +62,8 @@ locally, contents never copied anywhere):
   Markdown and HTML, page templates and page polish — D-093,
   [qindanote.md](../qindanote.md).)*
 - **QindaDiagram**: `.qdiagram`; draw.io import; no Visio (`.vsdx`).
-  *(M65: closed — D-073.)*
+  *(M65: closed — D-073. M87: Visio's everyday drawing tools — D-095; the
+  survey below.)*
 - **QindaPlan**: Project XML (MSPDI) open/save, but unmodelled task fields
   (priority, deadlines, custom fields) silently dropped; no `.xlsx`.
   *(M63: closed — D-071. M79: Project's scheduling, tracking and views —
@@ -232,6 +233,71 @@ Zero Length, the Hyperlink and Large Number types.
    Extended, rich-text Long Text.
 9. `.accdb` writing (not feasible; see above).
 
+## QindaDiagram against Microsoft Visio (survey of 2026-10-09, M87)
+
+Measured against Visio's everyday drawing features area by area: what
+QindaDiagram had before M87, what M87 closed (D-095), and what is still
+missing. The ranked list at the end is the order the remaining gaps should
+be closed in.
+
+| Area | Before M87 | M87 closed | Still missing |
+| --- | --- | --- | --- |
+| Shapes and stencils | 49 stencils in seven categories (basic, flowchart, org chart, network, containers, UML-lite, arrows and callouts); search across every stencil; Visio shapes read as their own outlines | — | floor plan (walls, doors, windows, furniture, dimension lines); database / ER (entities, crow's-foot ends); UML sequence, activity, state and component shapes; Visio's other basic, flowchart and network shapes (delay, display, multiple documents, star, cube, wireless access point …); My Shapes (custom stencils); opening Visio stencils (`.vssx`); the document stencil of an opened drawing |
+| Connectors | right-angle routing over a few L/Z/U candidates (a route could cross a shape when none was clear), straight, curved; glue to connection points and outlines; line jumps (arcs, the later connector) | **routing round shapes**: when no quick candidate is clear, a cheapest-path search on the visibility grid finds the right-angle route round every shape; **line-jump styles** (arc, gap, square) and **which line jumps** (the last routed, horizontal or vertical lines); **AutoConnect** (connect to the shape in line, or add one there) | connector routes the user adjusts (dragging a segment, waypoints; Visio's own route is redrawn once edited); splitting a connector when a shape is dropped on it; per-connector jump settings; Visio's many-sided jump styles (shown square); Visio's 45 arrowheads (four drawn here) and crow's feet |
+| Text on shapes and connectors | one format per shape (a Visio shape's several formats kept until edited); text box from Visio; connector labels positioned along the route | — | several formats in one shape, bullets and paragraph spacing; text fields (page number, date, shape data); moving and turning a text block; spelling |
+| Themes, fill, line, effects | six themes, quick styles, solid and vertical-gradient fills, four dash patterns, a soft shadow, opacity | — | theme variants; Visio's theme colours and effects (approximated); pattern fills; gradient directions; shadow presets, glow, soft edges, bevel, reflection; Visio's 23 dash patterns |
+| Containers and swimlanes | container, lane and phase stencils; members (geometric) carried when the container moves | Visio's **container behaviour**: expand as needed / always fit / fixed, with a margin; **Fit to Contents**, **Disband**, **Select Contents**; Insert ▸ Container **wraps the selection**; Delete takes the members; **cross-functional pools**: Insert Swimlane after or before the selected lane, Delete closing the pool, one lane resized resizing the pool, a lane dragged to a new place, phases spanning the pool and following it; Visio's containers and swimlanes read as containers and written with their Relationships both ways | a cross-functional flowchart frame with its title; switching lane orientation; locked membership (membership is geometric); lists; Visio's CFF lists |
+| Layers | none — Visio layers kept, shapes on hidden layers neither shown nor editable | **Layer Properties** (visible, print, lock, active, glue, colour), **Assign to Layer**, new shapes on the active layers; hidden, locked and non-printing layers honoured on the canvas, in Select All, print and export; Visio's Layer section and LayerMember read and written | snapping per layer (kept, not honoured); Visio's automatic layers per master |
+| Pages, backgrounds, auto size | pages, page size and orientation, background colour, Fit Page to Drawing; Visio background pages shown as ordinary pages | **background pages** shown and printed under their pages (chains, cycles refused), Insert ▸ Background Page, background choice in Page Setup; **Borders & Titles**; **Auto Size** by whole sheets; Visio's Background / BackPage and DrawingResizeType read and written | drawing scale (architectural scales) and dimension lines; page units; the backgrounds gallery designs |
+| Rulers, grid, guides, snap and glue | rulers, grid, snap to grid and shapes, dynamic alignment guides while dragging | glue per layer | guides (Visio's are kept, not shown or created); the Snap & Glue options; grid spacing |
+| Align, group, rotate, re-layout | align (6), distribute (2), one-level groups, rotate and flip, order; Re-Layout: flowchart top-to-bottom and left-to-right, org chart tree | **Re-Layout styles**: flowchart bottom-to-top and right-to-left, **compact tree**, **radial**, **circular**, with the spacing (Layout Options) | hierarchy alignments, Auto Align & Space, Space Shapes by a distance; nested groups (flattened); the page's layout style remembered |
+| Shape data, data graphics, data linking | shape data (ordered key/value fields), searched by Find | **Link Data to Shapes** from Excel workbooks and CSV files (sheet, key column, automatic linking by text or a field); the **External Data** window (rows with their links, link a row to the selection, shapes from rows, refresh, remove); **Refresh All**; **Unlink**; Visio's DataRecordSets, rowsets, RowMap and `_VisDM_` rows read and written | **data graphics** (text callouts, data bars, icon sets, colour by value); typed shape data and Define Shape Data / data sets; ODBC, SharePoint and SQL sources; a refresh-conflicts dialog |
+| Org chart, AutoConnect, Quick Shapes | Org Chart from CSV with the tree layout | **AutoConnect** arrows on the hovered shape and Add and Connect commands, with a quick shape (the stencil last chosen) | Org Chart from Excel and Exchange; Org Chart tools (position type, assistant layout, show / hide subordinates, team frames, synchronise); the Quick Shapes mini toolbar |
+| Hyperlinks and comments | Visio hyperlinks kept, not shown; no comments | **Insert ▸ Link** (web addresses, files and pages of the drawing; several per shape), **Open Link** and Ctrl+click; **comments** with replies, resolving, markers on the page, the **Comments pane** and Previous / Next; Visio's Hyperlink section and comments part read and written | links inside the PDF export; @mentions; Visio 365's threaded (modern) comments — replies travel to Visio as comments on the same shape |
+| Printing and export | each page fitted on one sheet; PDF, PNG, SVG; Copy as Picture | **Print Setup**: the printer paper, a print zoom (actual size, across as many sheets as it takes) or fit to N × M sheets, centring; **page breaks** on screen; background pages print with their pages; non-printing layers stay off paper and out of exports; Visio's print cells read and written | headers and footers, printing gridlines, the current view or selection; export resolution, JPEG, TIFF, EMF, HTML |
+| Visio fidelity | D-073: one text format, routes recomputed, one group level, layers, hyperlinks and comments kept but not editable, theme effects approximated, the 2003–2010 formats refused | layers, hyperlinks, comments, containers, background pages, print setup, line jumps and external data modelled both ways | the rest of D-073's limits; `.vsd` (below) |
+
+**`.vsd` (Visio 2003–2010 binary): feasible as a visual import, not done
+in M87, said plainly.** `media-libs/libvisio` (::gentoo 0.1.11; 0.1.10 is
+already on qinda as a LibreOffice dependency) parses `.vsd`, `.vdx` and `.vss` into
+librevenge drawing callbacks: paths, text and styles per page. It reports
+what Visio *draws*, not what Visio *means* — no connector glue, no masters
+as masters, little shape data — and it never writes. A read-only import
+(an optional dependency found through pkg-config, a librevenge drawing
+interface turned into pages of custom outlines and text, refused cleanly
+without it) is about a milestone of its own; saving stays `.vsdx` (Visio
+2010 and later open it). Visio itself turns a `.vsd` into a `.vsdx` with
+File ▸ Save As, which QindaDiagram then opens with everything.
+
+**Ranked: what is left after M87.**
+
+M87 (D-095) closed the everyday gaps ranked first: cross-functional
+swimlanes and containers that behave, layers, the Re-Layout styles,
+external data, AutoConnect, hyperlinks and comments, background pages and
+Auto Size, printing across sheets, routing round shapes and line-jump
+styles — each kept in `.qdiagram` and carried through `.vsdx`.
+
+1. Floor plans: drawing scale, walls, doors, windows and furniture
+   stencils, dimension lines.
+2. Database and UML diagrams: entities with crow's-foot ends; sequence,
+   activity and state shapes.
+3. Data graphics on linked shapes (text, data bars, icon sets, colour by
+   value).
+4. Several text formats in one shape, bullets and text fields.
+5. Connector routes the user adjusts (segments, waypoints), and Visio's
+   own route kept on an edited connector.
+6. Custom stencils (My Shapes), Visio stencils (`.vssx`) and the document
+   stencil.
+7. Guides, the Snap & Glue options and grid spacing.
+8. Theme variants, Visio's theme effects, pattern fills and shape effects.
+9. Org Chart tools and Org Chart from Excel.
+10. More basic, flowchart and network shapes; more arrowheads.
+11. Printing headers and footers, the view or selection; export options;
+    links in PDF.
+12. Nested groups, a cross-functional frame with a title, lane orientation,
+    locked containers and lists.
+13. `.vsd` import through libvisio (feasible, visual only; see above).
+
 ## Milestones
 
 | Milestone | Scope | Gate |
@@ -262,6 +328,7 @@ Zero Length, the Hyperlink and Large Number types.
 | **M83** QindaPlan: task types, custom fields, actuals, splits, recurring tasks — **done 2026-10-09 (D-092)**; open: the ranked list above (groups and highlight filters first), the owner's check in Project | task types (Fixed Units / Duration / Work) with Project's recalculation table and effort-driven assignment changes, Work typed on a task or an assignment ✔; the 120 task custom fields with new names, lookup tables and formulas, as columns, typed, filtered and sorted ✔; elapsed durations and lags ✔; Split Task and Remove Splits ✔; recurring tasks as Project's recurring summaries ✔; Act. Work and Act. Cost typed, progress lines, Reschedule Uncompleted Work ✔; the Excel/CSV task import with a column map ✔; recurring calendar exceptions and work weeks made here ✔; MSPDI carries all of it — custom fields byte for byte while unchanged, splits as timephased data ✔ | plan_engine tests worked by hand (each task type's table, effort driving, splits, elapsed time, rescheduling, the progress line, actuals, recurrences, calendars, formulas, filters, the import) and a Project-shaped MSPDI fixture (read, scheduled as Project did, written, re-read equal, unknown elements and unchanged definitions byte for byte, the schema's sequences checked structurally — no MSPDI XSD in Portage); the xlsx import round trip and the printed split gaps and progress line; the app through the host and the real window (dialogs, grabs at 1280 and 520 px), ribbon squeeze, menu export, fixtures — met on qinda ([verification.md](../verification.md#m83-plan-gates-d-092)) |
 | **M84** QindaNote: OneNote's everyday note-taking — **done 2026-10-09 (D-093, [qindanote.md](../qindanote.md))**; open: the owner's check on the desktop (typing, tags, search, import of real Word files), page versions, floating pictures inside formatted text, page colour in Word, the QindaTK gaps in D-093 | formatted typing in text blocks (QindaTK rich text: run formats, Title, Heading 1–6, Quote, Code, lists with Tab, links, tables in a block, sanitised paste, undo per edit) ✔; the page format versioned, old pages unchanged ✔; formatting in print, PDF, Word and Markdown ✔; OneNote's tags, custom tags, Find Tags and its summary page ✔; Search Notebooks (Ctrl+E) across open and recent notebooks ✔; import of Word (page per Heading 1), Markdown and HTML, `.one` refused with the way round ✔; page templates, page colour, rule lines, subpages, Link to File ✔ | `tst_note_rich`, `tst_note_export`, `tst_note_tags`, `tst_note_search`, `tst_note_import`; the Note UI fixtures, grabs at 1280/520, ribbon squeeze and menu-export gates |
 | **M86** QindaBase: Access's next tools outside the form designer — **done 2026-10-09 (D-094)**; open: the ranked list above (form events and macro conditions first), QindaTK's three-level report designer and value-list cells, the owner's check in Access with an XML round trip | calculated fields as generated columns ✔; value lists with Limit To List, Allow Zero Length ✔; Hyperlink and Large Number ✔; the Indexes dialog (several fields, descending, Unique, Ignore Nulls) ✔; the Simple, Crosstab, Find Duplicates and Find Unmatched wizards ✔; union queries in the designer and Access SQL, subqueries in criteria ✔; Group On intervals, ten group levels, running sums, Keep Together and Force New Page on the pages ✔; data macros (five table events; SetField, RaiseError, LogEvent, StopMacro) replayed by undo without running twice, the application log, AutoExec ✔; Access XML import, linked tables to a .qbase, CSV or Excel sheet with the Linked Table Manager ✔; eighteen new commands on the menus and the ribbon ✔ | base_engine tests against hand-worked results (calculated fields, value lists, empty text, hyperlinks, large numbers, indexes, the four wizards, unions and subqueries, intervals, running sums, page flags, data macros with undo, XML round trips, linked-table refresh); the service over the seeded starter; the real window at 1280 and 520 px with grabs; ribbon squeeze, menu export, icons, fixtures — met on qinda ([verification.md](../verification.md#m86-base-gates-d-094)) |
+| **M87** QindaDiagram: Visio's everyday drawing tools — **done 2026-10-09 (D-095, [diagram.md](../diagram.md#visios-everyday-tools-m87))**; open: the ranked list above (floor plans and database diagrams first), the owner's check in Visio | cross-functional swimlanes (pools: insert before / after, close up, resize together, reorder, phases across) and Visio's container behaviour (expand / fit / fixed, margin, Fit to Contents, Disband, Select Contents, wrap the selection, Delete with members) ✔; layers (Layer Properties, Assign to Layer, active, hidden, locked, non-printing, glue, colour) ✔; Re-Layout styles (flowchart in four directions, compact tree, radial, circular, spacing) ✔; Link Data to Shapes from Excel and CSV, External Data, Refresh All, Unlink ✔; AutoConnect with a quick shape ✔; hyperlinks and comments with the Comments pane ✔; background pages, Borders & Titles, Auto Size ✔; Print Setup across sheets with page breaks ✔; right-angle routing round shapes, line-jump styles ✔; all of it in `.qdiagram` and in `.vsdx` as Visio writes it (Layer, LayerMember, Hyperlink, comments part, Relationships and container User cells, Background / BackPage, print and jump cells, DataRecordSets and rowsets) ✔ | diagram_engine tests worked by hand (containers, pools, AutoConnect, layouts, routing, jumps, layers, links, comments, background pages, Auto Size, print tiles, data linking, the file); `.vsdx`: a Visio-shaped package read, untouched parts byte for byte, edits rewriting only what they touch, a fresh drawing written as Visio writes it, read back equal and schema-checked where the shared OPC rules apply; LibreOffice renders the written drawing; the app through the host and the real window (grabs at 1320 and 520 px), ribbon squeeze, menu export, fixtures — met on qinda ([verification.md](../verification.md#m87-diagram-gates-d-095)) |
 
 Every milestone follows AGENTS.md: ≤ 500 lines per file, tests headless,
 docs in the same commit, a `docs/decisions.md` entry, fixtures and grabs

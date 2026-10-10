@@ -4,7 +4,10 @@
 M65 / D-073. QindaDiagram opens and saves Microsoft Visio drawings natively —
 no LibreOffice in between — and a saved file opens in Visio with what the
 user did not change exactly as Visio wrote it (the D-068 preservation
-model, as for Word).
+model, as for Word). M87 / D-095 adds what Visio's everyday tools store —
+layers, hyperlinks, comments, containers and swimlanes, background pages,
+print setup, Auto Size, line-jump styles and external data
+([below](#what-m87-carries)).
 
 ## Formats
 
@@ -55,13 +58,12 @@ content hash, so a recovered drawing still saves with its preservation.
 - **Pictures** keep their bytes (PNG, JPEG, GIF, BMP, TIFF). EMF/WMF
   pictures and embedded OLE objects are kept in the file and shown as
   frames; the status bar says how many.
-- **Pages**: names, sizes and drawing scale; background pages show as
-  ordinary pages (and stay background pages on save).
+- **Pages**: names, sizes and drawing scale; background pages are
+  background pages, drawn behind the pages that name them (M87).
 
 The status bar reports what is approximate: metafile pictures, embedded
-objects, shapes kept but not shown (guides, hidden layers, ink), shapes
-whose text has several formats (shown in one until edited), background
-pages.
+objects, shapes kept but not shown (guides, ink), shapes whose text has
+several formats (shown in one until edited).
 
 ## Writing (`visio_write*.cpp`)
 
@@ -88,6 +90,31 @@ style sheets (No Style, Text Only, None, Normal, Guide, Connector), a
 `windows.xml`, document properties and `docProps/custom.xml` with
 `RecalcDocument`, so Visio recomputes what we could not.
 
+## What M87 carries
+
+Each row is read into the model and written from it (`visio_read_m87.cpp`,
+`visio_data.cpp`, `visio_write_m87.cpp`); an item or page whose M87 values
+are as read keeps its source cells as they were (verbatim or merged,
+above), and only a changed value rewrites its cells.
+
+| Feature | Where Visio keeps it | Notes |
+| --- | --- | --- |
+| Layers | PageSheet `Layer` section: a row per layer (`IX` from 0) with all eleven cells — `Name`, `Color` (255 none, 0–23 Visio's palette, else `#rrggbb`), `Status`, `Visible`, `Print`, `Active`, `Lock`, `Snap`, `Glue`, `NameUniv`, `ColorTrans`; a shape's `LayerMember` (`"0;2"`) | Snap is kept, not honoured |
+| Hyperlinks | a shape's `Hyperlink` section, named rows `Row_1` … (`Description`, `Address`, `SubAddress`, `ExtraInfo`, `Frame`, `NewWindow`, `Default`, `Invisible`, `SortKey`) | a page of the drawing is the `SubAddress` |
+| Comments | `visio/comments.xml` (`application/vnd.ms-visio.comments+xml`, related from the document part): `AuthorList`, `CommentList` with `PageID`, `ShapeID`, `Date`, `EditDate`, `Done`, `AutoCommentType` | Visio's comments part has no threads: a reply goes to Visio as a further comment on the same shape and reads back as a comment of its own; Visio 365's threaded comment parts are kept while comments are unchanged and dropped when they are rewritten |
+| Containers, swimlanes, phases | `User.msvStructureType` (`Container`), `User.msvShapeCategories` (`Swimlane`, `Phase`, `CFF Container`; `DoNotContain` on lanes), `User.msvSDContainerResize` (0 none, 1 expand, 2 fit), `User.msvSDContainerMargin` (inches); `Relationships` — `SUM(DEPENDSON(1,Sheet.n!SheetRef(),…))` on a container naming its members, `SUM(DEPENDSON(4,…))` on a member naming its containers | membership stays geometric in the model (D-050); the Relationships are written from it |
+| Background pages | the page's `Background="1"` and `BackPage="<page ID>"` | chains and cycles as in the app |
+| Print setup | PageSheet `OnPage` (1 = fit to `PagesX` × `PagesY` sheets, else `ScaleX` / `ScaleY` is the zoom), `CenterX` / `CenterY`, `PaperKind` (Windows' DMPAPER: letter 1, tabloid 3, legal 5, A3 8, A4 9, A5 11), `PrintPageOrientation` | any other paper writes no `PaperKind` (Visio takes the printer's) |
+| Auto Size | PageSheet `DrawingResizeType` (1 on, 2 off) | |
+| Line jumps | PageSheet `LineJumpCode` (0 none, 1 horizontal, 2 vertical, 3–5 Visio's routing-order rules = last routed) and `LineJumpStyle` (0–1 arc, 2 gap, 3 square) | Visio's many-sided styles (4–9) show as square |
+| External data | `visio/data/recordsets.xml` (`DataRecordSets`: a `DataRecordSet` per table with its `DataColumns`, `PrimaryKey` and `RowMap` rows) and `visio/data/recordsetN.xml` (the rows as an ADO persisted rowset, `_Visio_RowID_` first); a linked shape's values as Shape Data rows `_VisDM_<column>` with `DataLinked` | written without a `DataConnection`: Visio shows the rows and links but refreshes them only once linked to the file again; QindaDiagram keeps the file name and refreshes itself. `RowMap` follows [MS-VSDX] (no public sample has one) |
+
+While the recordsets and links are as read, the package's own data parts
+travel verbatim; any change rewrites them from the model. A fresh drawing
+writes every M87 property the same way, so a drawing made in QindaDiagram
+reaches Visio with its layers, links, comments, pools, background pages,
+print setup and data.
+
 ## Known limits
 
 - One text format per shape (the model's one run); a shape whose text has
@@ -95,8 +122,12 @@ style sheets (No Style, Text Only, None, Normal, Guide, Connector), a
 - Connector routes are recomputed by QindaDiagram's router; Visio's own
   waypoints are not kept on an edited connector.
 - One group level; deeper groups flatten.
-- Layers, hyperlinks and group sheets' data are kept on unchanged and
-  edited shapes but are not shown or editable.
+- Group sheets' data are kept on unchanged and edited shapes but are not
+  shown or editable.
+- M87's limits (D-095): layer Snap is not honoured; many-sided line jumps
+  show as square; replies reach Visio as comments, not threads; recordsets
+  carry no DataConnection; Visio's lists and cross-functional flowchart
+  frames (title band, lane orientation switch) are kept, not modelled.
 - Per-section colours of a multi-geometry shape and glyph fills are not
   written for fresh or edited shapes.
 - Theme effects, gradients and variations are approximated by the theme's
@@ -118,4 +149,10 @@ lists real `.vsdx` files to read, write, re-read and compare — aggregate
 counts only). `tests/office_ooxml/tst_ooxml` covers `xml:space` and braced
 values. `tests/qindadiagram`: `visioDrawingsOpenAndSave` (host) and
 `visioDrawingRenders` (the window; `QQO_VISIO_UI_FILE` swaps in a real
-drawing for a look).
+drawing for a look). M87: `tst_diagram_m87_visio` (Visio's own layer,
+hyperlink, comment, container, background-page, print, Auto Size, jump and
+data parts read; untouched parts byte for byte while an edit rewrites only
+what it touches; a fresh drawing with all of it written, schema-checked
+where the shared OPC rules apply and read back equal; **LibreOffice**
+renders an edited drawing — a lane inserted into the pool, a comment, its
+background page behind it — and `pdftotext` finds the labels).

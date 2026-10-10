@@ -5,6 +5,143 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-095: QindaDiagram: Visio's everyday drawing tools
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart; M87, builds on D-050 and D-073; details in
+[diagram.md](diagram.md#visios-everyday-tools-m87) and
+[visio-interchange.md](visio-interchange.md#what-m87-carries), the survey
+in [plans/office-parity.md](plans/office-parity.md#qindadiagram-against-microsoft-visio-survey-of-2026-10-09-m87))
+
+**Context.** QindaDiagram (D-050) draws Visio's kinds of drawings and since
+M65 (D-073) opens and saves Visio's files, keeping what it does not model.
+Measured against what Visio users do every day, the gaps were behaviour
+more than shapes: containers and swimlanes that neither grew round their
+contents nor stayed stacked, no layers, two of Visio's Re-Layout styles, no
+external data, no AutoConnect, hyperlinks and comments kept from Visio but
+neither shown nor made, background pages shown as ordinary pages, every
+page printed on one sheet, and right-angle routes that crossed a shape when
+none of the quick candidates was clear. Visio keeps all of it in the
+ShapeSheet and the package, so each piece had to travel through `.vsdx` as
+Visio writes it. QindaTK, installed through Portage, was not this
+milestone's to change.
+
+**Decision.**
+
+1. **Membership stays geometric; Visio's container behaviour is a settle
+   pass.** D-050's rule (a shape wholly inside a container and above it is
+   a member) stays, so nothing can go stale. `Ops::settle(page, before)`
+   runs inside every page edit of the service, in the same undo step,
+   against the page as it was: containers expand round (or fit) the
+   members they had and the shapes newly dropped in them — Visio's Expand
+   as needed / Always fit / No automatic resize, with a margin (phases
+   never resize); a **pool** — lanes of one orientation and length stacked
+   edge to edge, found, never stored — stays stacked and equally long when
+   a lane is resized, dragged or made longer, and its phases keep spanning
+   it. A pool still whole after an edit (moved as one, a lane inserted or
+   deleted) is left alone. Delete takes a container's members and closes a
+   pool's gap; Disband removes the container only; Insert ▸ Container wraps
+   the selection; Swimlane and Swimlane Before insert into the pool.
+2. **Layers are per page, Visio's rules in one place.** `Page::layers`
+   (name, visible, print, lock, active, snap, glue, colour) and an item's
+   `layers` (indexes). `layers.h` alone says what shows, prints, edits and
+   takes glue: an item on layers is hidden only when every one is hidden,
+   off paper when none prints, locked when any is locked, glued to when one
+   takes glue; the first coloured layer colours it. New items join the
+   active layers. Snap is kept for Visio, not honoured (below).
+3. **Hyperlinks and comments are item data.** Several links per shape or
+   connector (address, a page of the drawing as sub-address, description),
+   opened with Open Link or Ctrl+click — a page link goes to the page,
+   anything else through `QDesktopServices` (the portal in a QindaQt
+   session). Comments live on the page — on an item or the page, replies by
+   `parentId`, Done for a thread — with markers on the canvas and a
+   Comments pane; the author is named as in Write and Show (D-084).
+4. **Background pages, Auto Size and printing are page properties.**
+   `backgroundPage` / `backPageId` (chains drawn farthest first, cycles
+   refused), Borders & Titles on the background page; Auto Size grows or
+   shrinks the page by whole sheets of its print paper; `PrintSetup`
+   (paper, a print zoom or fit to N × M sheets, centring) drives the paged
+   painter (`print_tiles.h`) and the page breaks on the canvas. The default
+   prints exactly as M50 did (one sheet, turned to fit).
+5. **More Re-Layout styles** (`layout.h`): flowcharts bottom to top and
+   right to left (the layered layout mirrored), Compact Tree, Radial and
+   Circular, with Visio's two spacings (Layout Options). Each keeps the
+   top-left of what it arranges, as the M50 styles do.
+6. **Right-angle routes go round shapes.** When every L/Z/U candidate
+   crosses a shape, a cheapest-path search on the orthogonal visibility grid
+   (length plus bends) finds the route round them (`routing_search.cpp`).
+   Line jumps take Visio's styles (arc, gap, square) and its rule for which
+   line jumps (the last routed, the horizontal or the vertical one), per
+   page.
+7. **External data is a drawing-level recordset.** Link Data to Shapes
+   reads an `.xlsx`/`.xlsm` through calc_io (cached values, numbers as
+   Excel shows them; `.xls` refused with the way round) or a CSV — at most
+   64 MB, 256 columns, 20 000 rows — into a `DataRecordset` kept in the
+   drawing, so the drawing travels with its data. Rows link by a key column
+   (or their position) and write one shape-data field per column; Refresh
+   rewrites exactly those fields and counts the rows that went; Unlink
+   keeps the values. Shapes from rows place the quick shape per row.
+8. **AutoConnect as Visio's.** Arrows round the hovered shape (View ▸
+   AutoConnect) and Add and Connect commands: connect to the nearest shape
+   in line, else add the quick shape (the stencil last chosen) beyond the
+   source, clear of the others, and connect to it.
+9. **Visio carries all of it.** PageSheet: the Layer section (IX rows, all
+   eleven cells), `LineJumpCode` / `LineJumpStyle`, `OnPage`, `ScaleX/Y`,
+   `PagesX/Y`, `CenterX/Y`, `PaperKind`, `PrintPageOrientation`,
+   `DrawingResizeType`; the page's `Background` / `BackPage`; shapes'
+   `LayerMember`, the Hyperlink section (named rows), Visio's container
+   cells (`User.msvStructureType`, `msvShapeCategories`,
+   `msvSDContainerResize`, `msvSDContainerMargin`) and `Relationships`
+   (`DEPENDSON(1, …)` on a container, `DEPENDSON(4, …)` on a member); the
+   comments part (`visio/comments.xml`); DataRecordSets, a rowset per
+   recordset and the `_VisDM_` shape-data rows with `DataLinked`. Each is
+   read back as the same model value; an item whose M87 values are as read
+   is still written verbatim (D-073), and untouched parts travel byte for
+   byte.
+10. **Commands**: 40 new ids — `diagramInsertSwimlaneBeforeAction`,
+    `diagramInsertBackgroundPageAction`, `diagramFollowLinkAction`,
+    `diagramBordersTitlesAction`, `diagramContainer{Fit,Disband,Select,
+    ResizeNone,ResizeExpand,ResizeFit}Action`,
+    `diagramConnect{Up,Right,Down,Left}Action`,
+    `diagramLayout{BottomUp,RightLeft,CompactTree,Radial,Circular,
+    Options}Action`, `diagramLayerPropertiesAction`,
+    `diagramAssignLayerAction`, `diagram{LinkData,ExternalData,
+    RefreshData,UnlinkData}Action`, `diagram{New,Delete,Previous,
+    Next}CommentAction`, `diagramJump{Arc,Gap,Square,LastRouted,
+    Horizontal,Vertical}Action` and the toggles
+    `diagramShowPageBreaksAction`, `diagramAutoConnectAction`,
+    `diagramShowCommentsAction`, `diagramAutoSizeAction` — plus the suite's
+    `insertHyperlinkAction` (Ctrl+K) for Insert ▸ Link. New Comment is
+    Ctrl+Alt+M. New Data and Review menus and ribbon tabs, a contextual
+    Container tab, Edit ▸ Layers, Arrange ▸ Container and AutoConnect.
+
+**Consequences.** QindaDiagram draws cross-functional flowcharts,
+layered drawings and data-linked diagrams the way Visio users make them,
+and the files go back to Visio with what was done. Not done, ranked in
+office-parity.md: floor plans and drawing scale, database and UML
+diagrams, data graphics, several text formats per shape, connector routes
+the user adjusts, custom and Visio stencils, guides, theme variants and
+effects, Org Chart tools, printing headers and footers. `.vsd` stays
+refused: `media-libs/libvisio` (::gentoo) could give a read-only visual
+import (what Visio draws, not glue, masters or data), a milestone of its
+own. Risks: RowMap rows follow [MS-VSDX] only (no public sample has one);
+a recordset written here has no DataConnection, so Visio shows its rows and
+links but refreshes them only after it is linked to its file again; Visio
+365's threaded comments become comments on the same shape; nothing here
+was opened in Visio itself — LibreOffice is the outside reader the gates
+use. QindaTK gaps, reported and not worked round in the toolkit:
+`Tk.LayerTree` needs a `Tk.CanvasDocument`, which QindaDiagram's adapter
+canvas (D-050) is not, so Layer Properties is a dialog of plain controls;
+the canvas has no per-object snap, so a layer's Snap is not honoured;
+`Tk.Toast`'s implicit width leaves out its title and message, so a toast
+anchored to a corner without a width spills past the window's edge
+(QindaDiagram sets one; Base, Books, Mail and Plan anchor theirs the same
+way); `Tk.NumberField` reports a binding loop on `clampedValue` when `from`
+and `to` are both bindings, `decimals` is above 0 and `value` is not 0
+(`from: f ? 0.2 : 0.1; to: f ? 25 : 10; decimals: 2; value: 0.58` shows
+it). Qt's PDF engine writes no link annotations, so links are not
+clickable in an exported PDF.
+
 ## D-094: QindaBase: calculated fields, wizards, union queries, report intervals, data macros, links
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

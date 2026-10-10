@@ -19,3 +19,11 @@ qqo_add_diagram_engine_test(tst_diagram_output)
 qqo_add_diagram_engine_test(tst_diagram_visio_read)
 qqo_add_diagram_engine_test(tst_diagram_visio_write)
 qqo_add_diagram_engine_test(tst_diagram_visio_roundtrip)
+# M87 (D-095): Visio's everyday drawing tools — containers, swimlanes,
+# AutoConnect, layouts and routing; layers, links, comments, background
+# pages, Auto Size and print tiles; external data; and their .vsdx form.
+qqo_add_diagram_engine_test(tst_diagram_m87_structure)
+qqo_add_diagram_engine_test(tst_diagram_m87_review)
+qqo_add_diagram_engine_test(tst_diagram_m87_data)
+target_link_libraries(tst_diagram_m87_data PRIVATE QXlsx::QXlsx) # writes its workbook fixture
+qqo_add_diagram_engine_test(tst_diagram_m87_visio)

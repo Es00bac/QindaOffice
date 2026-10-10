@@ -50,8 +50,10 @@ private slots:
             for (const Protocol::MenuItem &item : snapshot.tree.items) {
                 titles.append(item.text);
             }
+            // M87 (D-095): Visio's Data and Review tabs as menus.
             QCOMPARE(titles, (QStringList{str("File"), str("Edit"), str("View"), str("Insert"), str("Format"),
-                                          str("Arrange"), str("Design"), str("AI"), str("Settings"), str("Help")}));
+                                          str("Arrange"), str("Design"), str("Data"), str("Review"), str("AI"),
+                                          str("Settings"), str("Help")}));
         }
     }
 

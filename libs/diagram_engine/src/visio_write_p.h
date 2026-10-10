@@ -62,6 +62,8 @@ public:
     [[nodiscard]] XmlElementPtr build();
     // Master IDs the written shapes use (the page needs a relationship each).
     [[nodiscard]] QSet<int> mastersUsed() const { return m_masters; }
+    // M87: the Visio ID each model item was written with (comments name them).
+    [[nodiscard]] const QHash<QString, int> &visioIds() const { return m_visioIds; }
 
 private:
     enum class Mode { Verbatim, Merged, Fresh };
@@ -115,6 +117,12 @@ private:
     QHash<QString, int> m_visioIds;       // model id → written Visio ID
     QSet<QString> m_portsNeeded;          // shapes glued by a port they lack
     QSet<int> m_masters;
+    // M87 (D-095): container membership as the page has it now (geometric,
+    // D-050), written as Visio's Relationships cells.
+    QHash<QString, QStringList> m_membersOf;    // container → its members
+    QHash<QString, QStringList> m_containersOf; // shape → the containers it is in
+    void planRelationships();
+    void writeMembership(XmlElement &element, const QString &modelId) const;
 };
 
 // ---- visio_write_shape.cpp ----

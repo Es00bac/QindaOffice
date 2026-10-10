@@ -2,6 +2,7 @@
 #include "painter.h"
 
 #include "geometry.h"
+#include "layers.h"
 #include "shape_path.h"
 #include "stencils.h"
 #include "text_paint.h"
@@ -137,6 +138,65 @@ void paintCustom(QPainter *painter, const Shape &shape)
     for (const ShapePath &p : shape.paths) {
         if (p.stroke) {
             painter->strokePath(scaledPath(p.path, shape.rect.size()), pen);
+        }
+    }
+}
+
+// M87: a layer colour replaces an item's line and text colours.
+Shape inLayerColor(const Shape &shape, const QColor &color)
+{
+    Shape out = shape;
+    if (visible(out.style.line)) {
+        out.style.line = color;
+    }
+    out.textStyle.color = color;
+    return out;
+}
+
+Connector inLayerColor(const Connector &connector, const QColor &color)
+{
+    Connector out = connector;
+    out.line = color;
+    out.textStyle.color = color;
+    return out;
+}
+
+// One page's items (shapes, connectors, captions) by the layer rules.
+void paintItems(QPainter *painter, const Page &page, const PaintOptions &options, bool allowOnly)
+{
+    const auto included = [&](const QString &id, const QList<int> &layers) {
+        if (allowOnly && !options.only.isEmpty() && !options.only.contains(id)) {
+            return false;
+        }
+        return layersVisible(page, layers) && (!options.printing || layersPrint(page, layers));
+    };
+    const auto shapeLook = [&](const Shape &shape) {
+        const QColor color = layersColor(page, shape.layers);
+        return color.isValid() ? inLayerColor(shape, color) : shape;
+    };
+    for (const Shape &shape : page.shapes) {
+        if (included(shape.id, shape.layers)) {
+            paintShape(painter, shapeLook(shape), !options.hideTextOf.contains(shape.id) && !labelBelow(shape));
+        }
+    }
+    QHash<QString, Route> local;
+    if (options.routes == nullptr || !allowOnly) {
+        local = routePage(page);
+    }
+    const QHash<QString, Route> &routes = options.routes != nullptr && allowOnly ? *options.routes : local;
+    const QColor labelBackground = visible(page.background) ? page.background : QColor(Qt::white);
+    for (const Connector &connector : page.connectors) {
+        if (included(connector.id, connector.layers)) {
+            const auto it = routes.constFind(connector.id);
+            const Route route = it != routes.constEnd() ? *it : routeConnector(page, connector);
+            const QColor color = layersColor(page, connector.layers);
+            paintConnector(painter, color.isValid() ? inLayerColor(connector, color) : connector, route, labelBackground,
+                           !options.hideTextOf.contains(connector.id));
+        }
+    }
+    for (const Shape &shape : page.shapes) {
+        if (included(shape.id, shape.layers) && labelBelow(shape) && !options.hideTextOf.contains(shape.id)) {
+            paintBelowLabel(painter, shapeLook(shape), labelBackground);
         }
     }
 }
@@ -302,30 +362,14 @@ void paintPage(QPainter *painter, const Page &page, const PaintOptions &options)
             painter->drawLine(QPointF(0, y), QPointF(paper.width(), y));
         }
     }
-    const auto included = [&](const QString &id) { return options.only.isEmpty() || options.only.contains(id); };
-    for (const Shape &shape : page.shapes) {
-        if (included(shape.id)) {
-            paintShape(painter, shape, !options.hideTextOf.contains(shape.id) && !labelBelow(shape));
+    // M87: the background pages first (a selection export leaves them out),
+    // then this page's own items.
+    if (options.only.isEmpty()) {
+        for (const Page *back : options.backgrounds) {
+            paintItems(painter, *back, options, false);
         }
     }
-    QHash<QString, Route> local;
-    if (options.routes == nullptr) {
-        local = routePage(page);
-    }
-    const QHash<QString, Route> &routes = options.routes != nullptr ? *options.routes : local;
-    const QColor labelBackground = visible(page.background) ? page.background : QColor(Qt::white);
-    for (const Connector &connector : page.connectors) {
-        if (included(connector.id)) {
-            const auto it = routes.constFind(connector.id);
-            const Route route = it != routes.constEnd() ? *it : routeConnector(page, connector);
-            paintConnector(painter, connector, route, labelBackground, !options.hideTextOf.contains(connector.id));
-        }
-    }
-    for (const Shape &shape : page.shapes) {
-        if (included(shape.id) && labelBelow(shape) && !options.hideTextOf.contains(shape.id)) {
-            paintBelowLabel(painter, shape, labelBackground);
-        }
-    }
+    paintItems(painter, page, options, true);
     painter->restore();
 }
 

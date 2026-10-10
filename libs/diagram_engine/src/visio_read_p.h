@@ -41,7 +41,6 @@ struct ReadContext {
     int objects = 0;
     int kept = 0;
     int richText = 0;
-    int backgroundPages = 0;
 };
 
 // One page: shapes (recursively through groups) into the model page, the
@@ -77,7 +76,6 @@ private:
     // `master`/`masterShape`: what the sheet inherits from (null: nothing).
     void record(const XmlElementPtr &element, const QString &key, const Parent &parent, int visioId, bool groupSheet,
                 const MasterInfo *master, int masterShape);
-    [[nodiscard]] bool hiddenByLayer(const Sheet &sheet) const;
     void styleShape(const Lookup &lookup, Shape &shape) const;
     void readData(const Sheet &sheet, QList<DataField> &data) const;
 
@@ -87,12 +85,23 @@ private:
     QTransform m_pageTransform;
     int m_variation;
     QSet<int> m_glueTargets;          // Visio IDs a Connect glues to
-    QSet<int> m_hiddenLayers;         // layer indexes that are not visible
     QHash<int, QString> m_modelIds;   // Visio ID → model shape/connector id
     QHash<QString, QString> m_keyOf;  // model id → item key
     // Connector id → BeginX, BegTrigger, EndX, EndTrigger formulas.
     QHash<QString, QStringList> m_glueFormulas;
 };
+
+// ---- visio_read_m87.cpp (M87, D-095) ----
+
+// The PageSheet's layers, line jumps, print setup and Auto Size.
+void readPageSettings(const DocumentInfo &doc, const Sheet &pageSheet, Page &page);
+// An item's layers (LayerMember) and hyperlinks (the Hyperlink section).
+void readItemExtras(const Sheet &sheet, QList<int> &layers, QList<Hyperlink> &links);
+// Visio's container kind and behaviour (User.msvStructureType …) of a shape.
+void readContainer(const Sheet &sheet, double pxPerInch, Shape &shape);
+// The document's comments part onto the pages and items it names; call
+// once every page is read. Returns how many comments were read.
+int readComments(ReadContext &ctx, const QString &documentPart);
 
 // ---- visio_read_style.cpp: one sheet's cells as model values ----
 

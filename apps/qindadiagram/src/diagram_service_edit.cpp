@@ -187,7 +187,9 @@ bool DiagramService::setText(const QString &id, const QString &text)
 bool DiagramService::deleteSelection()
 {
     const QStringList ids = m_selection;
-    const bool ok = editPage(tr("Delete"), [&](Drawing &, Page &page) { return Ops::removeItems(page, ids) > 0; });
+    // M87: Visio's Delete — a container takes its members, a lane's pool
+    // closes up (Ops::deleteItems).
+    const bool ok = editPage(tr("Delete"), [&](Drawing &, Page &page) { return Ops::deleteItems(page, ids) > 0; });
     if (ok) {
         setSelection({});
     }

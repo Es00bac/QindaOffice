@@ -22,6 +22,15 @@ set(qindadiagram_qml
     qml/PageSetupDialog.qml
     qml/ColorDialog.qml
     qml/ReplaceDialog.qml
+    # M87 (D-095): Visio's layers, links, comments, Re-Layout options, data.
+    qml/LayersDialog.qml
+    qml/AssignLayersDialog.qml
+    qml/LinkDialog.qml
+    qml/LayoutDialog.qml
+    qml/LinkDataDialog.qml
+    qml/ExternalDataDialog.qml
+    qml/CommentsPane.qml
+    qml/CommentEntry.qml
 )
 foreach(qml_file IN LISTS qindadiagram_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -41,10 +50,14 @@ qt_add_qml_module(qindadiagram_app
         src/diagram_host.cpp src/diagram_host.h
         src/diagram_host_actions.cpp
         src/diagram_host_menus.cpp
+        src/diagram_host_m87.cpp
         src/diagram_service.cpp src/diagram_service.h
+        src/diagram_service_data.cpp
         src/diagram_service_edit.cpp
         src/diagram_service_pages.cpp
         src/diagram_service_io.cpp
+        src/diagram_service_review.cpp
+        src/diagram_service_structure.cpp
         src/page_view.cpp src/page_view.h
     QML_FILES ${qindadiagram_qml}
 )

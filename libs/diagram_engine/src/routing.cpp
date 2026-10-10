@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "routing.h"
+#include "routing_p.h"
 
 #include "geometry.h"
 #include "stencils.h"
@@ -91,34 +92,7 @@ End resolve(const Page &page, const Endpoint &end, QPointF aim, Routing routing)
     return out;
 }
 
-// Liang–Barsky: does segment a-b pass through the open rectangle `r`?
-bool segmentHitsRect(QPointF a, QPointF b, const QRectF &r)
-{
-    double t0 = 0;
-    double t1 = 1;
-    const double dx = b.x() - a.x();
-    const double dy = b.y() - a.y();
-    const double p[] = {-dx, dx, -dy, dy};
-    const double q[] = {a.x() - r.left(), r.right() - a.x(), a.y() - r.top(), r.bottom() - a.y()};
-    for (int i = 0; i < 4; ++i) {
-        if (std::abs(p[i]) < 1e-12) {
-            if (q[i] <= 0) {
-                return false;
-            }
-        } else {
-            const double t = q[i] / p[i];
-            if (p[i] < 0) {
-                t0 = std::max(t0, t);
-            } else {
-                t1 = std::min(t1, t);
-            }
-            if (t0 >= t1) {
-                return false;
-            }
-        }
-    }
-    return t1 - t0 > 1e-9;
-}
+using RoutingDetail::segmentHitsRect;
 
 bool obstacle(const Shape &shape)
 {
@@ -251,6 +225,22 @@ QVector<QPointF> orthogonal(const Page &page, const End &a, const End &b)
             best = path;
         }
     }
+    // M87: every quick candidate crosses a shape — search the grid round
+    // them for a clear way (cost() counts a crossing as 5000).
+    if (bestCost >= 5000) {
+        const QVector<QPointF> found = RoutingDetail::searchOrthogonal(a1, da, b1, db, obstacles, kRouteStub / 2, 12);
+        if (!found.isEmpty()) {
+            QVector<QPointF> path{a.point};
+            path += found;
+            path.append(b.point);
+            simplify(path);
+            const double c = cost(path, obstacles);
+            if (c < bestCost) {
+                bestCost = c;
+                best = path;
+            }
+        }
+    }
     if (best.isEmpty()) {
         best = {a.point, a1, QPointF(a1.x(), b1.y()), b1, b.point};
         simplify(best);
@@ -329,47 +319,67 @@ QHash<QString, Route> routePage(const Page &page)
 {
     QHash<QString, Route> routes;
     for (const Connector &connector : page.connectors) {
-        routes.insert(connector.id, routeConnector(page, connector));
+        Route route = routeConnector(page, connector);
+        route.jumpStyle = page.jumpStyle;
+        routes.insert(connector.id, route);
     }
     if (!page.lineJumps) {
         return routes;
     }
-    for (int i = 1; i < page.connectors.size(); ++i) {
-        Route &route = routes[page.connectors.at(i).id];
+    // Which of two crossing segments hops (M87: Visio's "add line jumps
+    // to"): the later connector's, or the horizontal or vertical one —
+    // which, for a pair that is not one of each, falls back to the later.
+    const auto horizontal = [](const QLineF &l) { return std::abs(l.dy()) < 1e-6 && std::abs(l.dx()) > 1e-6; };
+    const auto vertical = [](const QLineF &l) { return std::abs(l.dx()) < 1e-6 && std::abs(l.dy()) > 1e-6; };
+    const auto hops = [&](const QLineF &mine, int i, const QLineF &theirs, int j) {
+        if (page.jumpOn == JumpOn::Horizontal && horizontal(mine) != horizontal(theirs)) {
+            return horizontal(mine);
+        }
+        if (page.jumpOn == JumpOn::Vertical && vertical(mine) != vertical(theirs)) {
+            return vertical(mine);
+        }
+        return j < i;
+    };
+    QHash<QString, QVector<Jump>> found;
+    for (int i = 0; i < page.connectors.size(); ++i) {
+        const Route &route = routes[page.connectors.at(i).id];
         if (route.curved) {
             continue;
         }
         for (int s = 0; s + 1 < route.points.size(); ++s) {
             const QLineF segment(route.points.at(s), route.points.at(s + 1));
-            QVector<double> hops;
-            for (int j = 0; j < i; ++j) {
-                const Route &earlier = routes.value(page.connectors.at(j).id);
-                if (earlier.curved) {
+            QVector<double> distances;
+            for (int j = 0; j < page.connectors.size(); ++j) {
+                const Route &other = routes.value(page.connectors.at(j).id);
+                if (j == i || other.curved) {
                     continue;
                 }
-                for (int t = 0; t + 1 < earlier.points.size(); ++t) {
+                for (int t = 0; t + 1 < other.points.size(); ++t) {
                     QPointF hit;
-                    const QLineF other(earlier.points.at(t), earlier.points.at(t + 1));
-                    if (segment.intersects(other, &hit) != QLineF::BoundedIntersection) {
+                    const QLineF line(other.points.at(t), other.points.at(t + 1));
+                    if (segment.intersects(line, &hit) != QLineF::BoundedIntersection || !hops(segment, i, line, j)) {
                         continue;
                     }
                     const double d = QLineF(segment.p1(), hit).length();
                     // Not at a corner or an end: only true crossings hop.
                     if (d > kJumpRadius * 1.5 && d < segment.length() - kJumpRadius * 1.5
-                        && QLineF(other.p1(), hit).length() > 1 && QLineF(other.p2(), hit).length() > 1) {
-                        hops.append(d);
+                        && QLineF(line.p1(), hit).length() > 1 && QLineF(line.p2(), hit).length() > 1) {
+                        distances.append(d);
                     }
                 }
             }
-            std::sort(hops.begin(), hops.end());
+            std::sort(distances.begin(), distances.end());
             double last = -1e9;
-            for (double d : std::as_const(hops)) {
+            for (double d : std::as_const(distances)) {
                 if (d - last > kJumpRadius * 2.5) {
-                    route.jumps.append({s, d});
+                    found[page.connectors.at(i).id].append({s, d});
                     last = d;
                 }
             }
         }
+    }
+    for (auto it = found.cbegin(); it != found.cend(); ++it) {
+        routes[it.key()].jumps = it.value();
     }
     return routes;
 }
@@ -408,9 +418,24 @@ QPainterPath routePath(const Route &route, double trimStart, double trimEnd)
             const QPointF c = segment.p1() + along * jump.distance;
             const QPointF in = c - along * kJumpRadius;
             const QPointF out = c + along * kJumpRadius;
-            const QPointF lift = normal * (kJumpRadius * 1.33);
             path.lineTo(in);
-            path.cubicTo(in + lift, out + lift, out);
+            switch (route.jumpStyle) {
+            case JumpStyle::Arc: {
+                const QPointF lift = normal * (kJumpRadius * 1.33);
+                path.cubicTo(in + lift, out + lift, out);
+                break;
+            }
+            case JumpStyle::Gap:
+                path.moveTo(out); // M87: the line breaks where it crosses
+                break;
+            case JumpStyle::Square: {
+                const QPointF lift = normal * kJumpRadius;
+                path.lineTo(in + lift);
+                path.lineTo(out + lift);
+                path.lineTo(out);
+                break;
+            }
+            }
         }
         path.lineTo(points.at(s + 1));
     }

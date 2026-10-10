@@ -6,6 +6,7 @@
 
 #include "geometry.h"
 #include "routing.h"
+#include "visio_write_m87.h"
 
 #include <algorithm>
 
@@ -96,6 +97,9 @@ XmlElementPtr PageWriter::writeItem(const QString &modelId, const QTransform &to
         } else if (p.mode == Mode::Merged) {
             updateShape(m_ctx, *element, *shape, *p.item->shape, toParent, p.frame, m_part,
                         m_portsNeeded.contains(modelId), masterOf(*p.item));
+        }
+        if (p.mode != Mode::Verbatim) {
+            writeMembership(*element, modelId); // M87: Visio's container relationships
         }
     } else if (const Connector *c = m_page.connector(modelId)) {
         const Route route = routeConnector(m_page, *c);

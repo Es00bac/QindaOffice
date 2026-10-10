@@ -4,7 +4,7 @@
 # through the desktop's own validator (tst_qindadiagram_menu_export), and
 # the real window with seeded drawings, the ribbon gate and fixtures
 # (tst_qindadiagram_ui). Every test links the app's static QML module.
-foreach(name IN ITEMS tst_qindadiagram_host tst_qindadiagram_menu_export tst_qindadiagram_ui)
+foreach(name IN ITEMS tst_qindadiagram_host tst_qindadiagram_menu_export tst_qindadiagram_ui tst_qindadiagram_m87)
     add_executable(${name} ${name}.cpp diagram_app_test_support.h)
     target_link_libraries(${name} PRIVATE qindadiagram_app qindadiagram_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)

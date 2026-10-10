@@ -3,6 +3,7 @@
 
 #include "diagram_service.h"
 #include "drawing_document.h"
+#include "layers.h"
 #include "routing.h"
 
 #include <qindatk/canvas_geometry.h>
@@ -176,6 +177,11 @@ void DiagramCanvasAdapter::rebuild()
     if (page != nullptr) {
         qint64 z = 0;
         for (const Shape &shape : page->shapes) {
+            // M87: a hidden layer's items are not there to pick; a locked
+            // layer's cannot be picked or moved.
+            if (!layersVisible(*page, shape.layers)) {
+                continue;
+            }
             CanvasObject o;
             o.id = idFor(shape.id);
             o.layer = m_layer.id;
@@ -185,14 +191,18 @@ void DiagramCanvasAdapter::rebuild()
             o.fill = QColor(255, 255, 255); // image proxies are "filled" for picking
             o.image = 1;
             o.z = z++;
-            o.locked = shape.locked;
+            o.locked = shape.locked || layersLocked(*page, shape.layers);
             o.name = shape.text.section(QLatin1Char('\n'), 0, 0).left(40);
             objects << o;
         }
         const QHash<QString, Route> routes = routePage(*page);
         for (const Connector &connector : page->connectors) {
+            if (!layersVisible(*page, connector.layers)) {
+                continue;
+            }
             CanvasObject o;
             o.id = idFor(connector.id);
+            o.locked = layersLocked(*page, connector.layers);
             o.layer = m_layer.id;
             o.shape = QindaTK::CanvasShape::Polyline;
             o.points = routePolyline(routes.value(connector.id));

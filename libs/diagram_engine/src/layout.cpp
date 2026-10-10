@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "layout.h"
+#include "layout_p.h"
 
 #include "geometry.h"
 #include "stencils.h"
@@ -14,16 +15,7 @@
 
 namespace QindaOffice::Diagram {
 
-namespace {
-
-struct Graph {
-    QVector<int> nodes;                // indices into page.shapes
-    QHash<int, int> slot;              // shape index -> position in nodes
-    QVector<QVector<int>> out;         // by slot
-    QVector<QVector<int>> in;          // by slot
-    QVector<int> edgeConnectors;       // connector index per edge
-    QVector<QPair<int, int>> edges;    // (from slot, to slot)
-};
+namespace LayoutDetail {
 
 Graph buildGraph(const Page &page, const QStringList &ids)
 {
@@ -55,6 +47,12 @@ Graph buildGraph(const Page &page, const QStringList &ids)
     }
     return g;
 }
+
+} // namespace LayoutDetail
+
+namespace {
+
+using namespace LayoutDetail;
 
 // Reverses DFS back edges so the graph is acyclic (edges are only reversed
 // for ranking; the connectors keep their direction).
@@ -109,7 +107,11 @@ QVector<int> longestPathRanks(const Graph &g)
     return rank;
 }
 
-void reglue(Page &page, const Graph &g, bool vertical, const QSet<int> &hanging = {})
+} // namespace
+
+namespace LayoutDetail {
+
+void reglue(Page &page, const Graph &g, bool vertical, const QSet<int> &hanging)
 {
     for (int e = 0; e < g.edgeConnectors.size(); ++e) {
         Connector &connector = page.connectors[g.edgeConnectors.at(e)];
@@ -137,6 +139,10 @@ QRectF currentBounds(const Page &page, const Graph &g)
     }
     return bounds;
 }
+
+} // namespace LayoutDetail
+
+namespace {
 
 void layered(Page &page, Graph &g, const LayoutOptions &o)
 {
@@ -333,12 +339,63 @@ bool autoLayout(Page &page, const QStringList &ids, const LayoutOptions &options
         }
         return false;
     }
-    if (options.kind == LayoutKind::Tree) {
-        tree(page, g, options);
-    } else {
-        layered(page, g, options);
+    LayoutOptions o = options;
+    switch (options.kind) {
+    case LayoutKind::Tree:
+        tree(page, g, o);
+        break;
+    case LayoutKind::TopDown:
+    case LayoutKind::LeftRight:
+        layered(page, g, o);
+        break;
+    case LayoutKind::BottomUp:
+    case LayoutKind::RightLeft: {
+        // M87: the layered layout, mirrored along the flow.
+        const bool vertical = options.kind == LayoutKind::BottomUp;
+        o.kind = vertical ? LayoutKind::TopDown : LayoutKind::LeftRight;
+        layered(page, g, o);
+        mirror(page, g, vertical);
+        reglue(page, g, vertical);
+        break;
+    }
+    case LayoutKind::CompactTree:
+        compactTree(page, g, o.rankGap, o.nodeGap);
+        break;
+    case LayoutKind::Radial:
+        radial(page, g, o.rankGap, o.nodeGap);
+        break;
+    case LayoutKind::Circular:
+        circular(page, g, o.nodeGap);
+        break;
     }
     return true;
+}
+
+QString layoutKindName(LayoutKind kind)
+{
+    switch (kind) {
+    case LayoutKind::TopDown: return QStringLiteral("topDown");
+    case LayoutKind::LeftRight: return QStringLiteral("leftRight");
+    case LayoutKind::Tree: return QStringLiteral("tree");
+    case LayoutKind::BottomUp: return QStringLiteral("bottomUp");
+    case LayoutKind::RightLeft: return QStringLiteral("rightLeft");
+    case LayoutKind::CompactTree: return QStringLiteral("compactTree");
+    case LayoutKind::Radial: return QStringLiteral("radial");
+    case LayoutKind::Circular: return QStringLiteral("circular");
+    }
+    return QStringLiteral("topDown");
+}
+
+LayoutKind layoutKindOf(const QString &name, LayoutKind fallback)
+{
+    for (const LayoutKind kind : {LayoutKind::TopDown, LayoutKind::LeftRight, LayoutKind::Tree, LayoutKind::BottomUp,
+                                  LayoutKind::RightLeft, LayoutKind::CompactTree, LayoutKind::Radial,
+                                  LayoutKind::Circular}) {
+        if (layoutKindName(kind) == name) {
+            return kind;
+        }
+    }
+    return fallback;
 }
 
 } // namespace QindaOffice::Diagram

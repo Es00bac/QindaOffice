@@ -3,6 +3,7 @@
 #include "visio_write_cells.h"
 
 #include "geometry.h"
+#include "visio_data.h"
 #include "visio_text.h"
 
 #include <QRegularExpression>
@@ -46,7 +47,7 @@ XmlElement *namedRow(XmlElement &section, const QString &name)
     return nullptr;
 }
 
-void propertyRow(XmlElement &section, const QString &name, const QString &label, const QString &value)
+void propertyRow(XmlElement &section, const QString &name, const QString &label, const QString &value, bool linked)
 {
     XmlElement &row = appendElement(section, QStringLiteral("Row"));
     row.setAttribute({}, QStringLiteral("N"), name);
@@ -58,7 +59,7 @@ void propertyRow(XmlElement &section, const QString &name, const QString &label,
     appendCell(row, QStringLiteral("Type"), kZero);
     appendCell(row, QStringLiteral("Invisible"), kZero);
     appendCell(row, QStringLiteral("Verify"), kZero);
-    appendCell(row, QStringLiteral("DataLinked"), kZero);
+    appendCell(row, QStringLiteral("DataLinked"), linked ? QStringLiteral("1") : kZero); // M87: external data
     appendCell(row, QStringLiteral("LangID"), QStringLiteral("en-US"));
     appendCell(row, QStringLiteral("Calendar"), kZero);
 }
@@ -203,21 +204,23 @@ void writeText(XmlElement &shape, const QString &text, const TextStyle &style, c
     }
 }
 
-XmlElementPtr dataSection(const QList<DataField> &data)
+XmlElementPtr dataSection(const QList<DataField> &data, const QStringList &linked)
 {
     XmlElementPtr section = makeElement(QStringLiteral("Section"));
     section->setAttribute({}, QStringLiteral("N"), QStringLiteral("Property"));
     QSet<QString> taken;
     for (const DataField &field : data) {
-        const QString name = rowNameFor(field.key, taken);
+        // A linked column's row is named the way Visio names it (_VisDM_…).
+        const bool isLinked = linked.contains(field.key);
+        const QString name = isLinked ? linkedRowName(field.key) : rowNameFor(field.key, taken);
         taken.insert(name.toLower());
-        propertyRow(*section, name, field.key, field.value);
+        propertyRow(*section, name, field.key, field.value, isLinked);
     }
     return section;
 }
 
 void updateData(XmlElement &shape, const QList<DataField> &before, const QList<DataField> &after, const Sheet &merged,
-                const Sheet *master)
+                const Sheet *master, const QStringList &linked)
 {
     // The row behind each visible key, the way the reader named them.
     QHash<QString, QString> rows;
@@ -267,10 +270,11 @@ void updateData(XmlElement &shape, const QList<DataField> &before, const QList<D
             continue;
         }
         const QString name = rows.value(field.key.toLower());
+        const bool isLinked = linked.contains(field.key);
         if (name.isEmpty()) {
-            const QString fresh = rowNameFor(field.key, taken);
+            const QString fresh = isLinked ? linkedRowName(field.key) : rowNameFor(field.key, taken);
             taken.insert(fresh.toLower());
-            propertyRow(*section, fresh, field.key, field.value);
+            propertyRow(*section, fresh, field.key, field.value, isLinked);
             continue;
         }
         XmlElement *row = namedRow(*section, name);
@@ -279,6 +283,9 @@ void updateData(XmlElement &shape, const QList<DataField> &before, const QList<D
             row->setAttribute({}, QStringLiteral("N"), name);
         }
         setCell(*row, QStringLiteral("Value"), field.value, {}, QStringLiteral("STR"));
+        if (isLinked) {
+            setCell(*row, QStringLiteral("DataLinked"), QStringLiteral("1"));
+        }
     }
 }
 

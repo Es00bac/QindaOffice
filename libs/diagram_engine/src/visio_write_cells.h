@@ -36,13 +36,14 @@ void writeTextBlock(XmlElement &shape, const QRectF &box, const Placement &p, co
 // <Text>, Character and Paragraph replacing the shape's own.
 void writeText(XmlElement &shape, const QString &text, const TextStyle &style, const QString &family);
 
-// A Property section for `data` (fresh shapes).
-[[nodiscard]] XmlElementPtr dataSection(const QList<DataField> &data);
+// A Property section for `data` (fresh shapes); the fields named in
+// `linked` are external data (M87: rows "_VisDM_…" with DataLinked=1).
+[[nodiscard]] XmlElementPtr dataSection(const QList<DataField> &data, const QStringList &linked = {});
 // Applies the difference between `before` and `after` to the shape's
 // Property rows; `merged` is the source sheet with its master, `master`
 // the master's sheet alone (rows it has are deleted with Del="1").
 void updateData(XmlElement &shape, const QList<DataField> &before, const QList<DataField> &after, const Sheet &merged,
-                const Sheet *master);
+                const Sheet *master, const QStringList &linked = {});
 // A Connection section for normalized points (y down) on a shape of
 // `width` × `height` inches.
 [[nodiscard]] XmlElementPtr connectionSection(const QList<QPointF> &points, double width, double height);

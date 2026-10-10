@@ -173,6 +173,7 @@ Item {
                     previewActive: spatial.active
                     previewFrom: spatial.selectionBounds
                     previewCorners: spatial.previewCorners
+                    showPageBreaks: root.host.pageBreaksVisible
                 }
                 Tk.CanvasView {
                     id: canvas
@@ -197,7 +198,12 @@ Item {
                         spatialTransform: spatial
                         pageView: pageView
                         editing: textEditor.visible
+                        autoConnect: root.host.autoConnectEnabled
                         onTextEditRequested: function(id) { root.beginTextEdit(id) }
+                        onCommentRequested: function(id) {
+                            root.host.commentsPaneVisible = true
+                            root.diagram.activeComment = id
+                        }
                     }
                     Tk.SelectionOverlay {
                         objectName: "diagramSelectionHandles"

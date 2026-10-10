@@ -12,7 +12,10 @@
 //  * a stencil ghost while a shape is dragged in from the Shapes panel;
 //  * connection points of the shape under a connector gesture, the glue
 //    target ring, a pending connector, and a selected connector's end
-//    handles (filled when glued, hollow when free).
+//    handles (filled when glued, hollow when free);
+//  * M87 (D-095): the background pages under the page, the page breaks of
+//    its print setup (View ▸ Page Breaks), a marker on every commented item
+//    and Visio's AutoConnect arrows round `autoConnectShape`.
 // `overview` paints just the page and its items (the minimap).
 //
 // AGENT-GUARD: the item must be exactly the CanvasView's size and position
@@ -67,6 +70,11 @@ class DiagramPageView : public QQuickPaintedItem {
     Q_PROPERTY(QString endDragConnector MEMBER m_endDragConnector NOTIFY configChanged)
     Q_PROPERTY(bool endDragStart MEMBER m_endDragStart NOTIFY configChanged)
     Q_PROPERTY(QPointF endDragPoint MEMBER m_endDragPoint NOTIFY configChanged)
+    // M87: page breaks on screen; the shape showing AutoConnect arrows and
+    // the arrow under the pointer (-1 none, 0 top … 3 left).
+    Q_PROPERTY(bool showPageBreaks MEMBER m_showPageBreaks NOTIFY configChanged)
+    Q_PROPERTY(QString autoConnectShape MEMBER m_autoConnectShape NOTIFY configChanged)
+    Q_PROPERTY(int autoConnectHover MEMBER m_autoConnectHover NOTIFY configChanged)
 public:
     explicit DiagramPageView(QQuickItem *parent = nullptr);
 
@@ -81,6 +89,11 @@ public:
     [[nodiscard]] QindaOffice::Diagram::Page previewPage() const;
     // Page-space end points of a connector (for its handles), [start, end].
     Q_INVOKABLE QVariantList connectorEnds(const QString &connectorId) const;
+    // M87: view-space centres of the AutoConnect arrows (top, right, bottom,
+    // left) round `autoConnectShape`; empty when none show.
+    Q_INVOKABLE QVariantList autoConnectArrows() const;
+    // M87: the comment marker at a view point (its comment id), or "".
+    Q_INVOKABLE QString commentMarkerAt(double x, double y) const;
 
 signals:
     void configChanged();
@@ -89,6 +102,7 @@ private:
     [[nodiscard]] QTransform documentToView() const;
     void paintFeedback(QPainter *painter, const QindaOffice::Diagram::Page &page, const QTransform &toView);
     void paintGuides(QPainter *painter, const QindaOffice::Diagram::Page &page, const QTransform &toView);
+    void paintReview(QPainter *painter, const QindaOffice::Diagram::Page &page, const QTransform &toView);
 
     QPointer<DiagramService> m_service;
     QPointer<QindaTK::CanvasSurface> m_surface;
@@ -113,6 +127,9 @@ private:
     QString m_endDragConnector;
     bool m_endDragStart = false;
     QPointF m_endDragPoint;
+    bool m_showPageBreaks = false;
+    QString m_autoConnectShape;
+    int m_autoConnectHover = -1;
 };
 
 } // namespace QindaOffice::Apps::Diagram

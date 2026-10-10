@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "drawing_io.h"
 
+#include "drawing_io_m87.h"
 #include "routing.h"
 #include "shape_path.h"
 
@@ -224,6 +225,7 @@ QJsonObject shapeToJson(const Shape &s)
         known.insert(QStringLiteral("image"), QString::fromLatin1(s.image.toBase64()));
     }
     customToJson(s, known);
+    FileM87::shapeToJson(s, known);
     return merged(s.extra, known);
 }
 
@@ -254,14 +256,16 @@ Shape shapeFromJson(const QJsonObject &o)
     s.aspectLocked = o.value(QLatin1String("aspectLocked")).toBool();
     s.image = QByteArray::fromBase64(o.value(QLatin1String("image")).toString().toLatin1());
     customFromJson(o, s);
+    FileM87::shapeFromJson(o, s);
     s.extra = unknown(o, {"id", "type", "x", "y", "w", "h", "rotation", "flipX", "flipY", "text", "textStyle", "style",
                           "data", "group", "locked", "aspectLocked", "image", "paths", "textBox", "ports"});
+    FileM87::stripShapeKeys(s.extra);
     return s;
 }
 
 QJsonObject connectorToJson(const Connector &c)
 {
-    return merged(c.extra, {{QStringLiteral("id"), c.id},
+    QJsonObject known{{QStringLiteral("id"), c.id},
                             {QStringLiteral("from"), endpointToJson(c.from)},
                             {QStringLiteral("to"), endpointToJson(c.to)},
                             {QStringLiteral("routing"), nameOf(kRoutings, c.routing)},
@@ -274,7 +278,9 @@ QJsonObject connectorToJson(const Connector &c)
                             {QStringLiteral("textStyle"), textToJson(c.textStyle)},
                             {QStringLiteral("labelPosition"), c.labelPosition},
                             {QStringLiteral("data"), dataToJson(c.data)},
-                            {QStringLiteral("group"), c.groupId}});
+                            {QStringLiteral("group"), c.groupId}};
+    FileM87::connectorToJson(c, known);
+    return merged(c.extra, known);
 }
 
 Connector connectorFromJson(const QJsonObject &o)
@@ -294,8 +300,10 @@ Connector connectorFromJson(const QJsonObject &o)
     c.labelPosition = std::clamp(number(o, "labelPosition", 0.5), 0.0, 1.0);
     c.data = dataFromJson(o.value(QLatin1String("data")));
     c.groupId = o.value(QLatin1String("group")).toString();
+    FileM87::connectorFromJson(o, c);
     c.extra = unknown(o, {"id", "from", "to", "routing", "line", "lineWidth", "pattern", "startArrow", "endArrow",
                           "text", "textStyle", "labelPosition", "data", "group"});
+    FileM87::stripConnectorKeys(c.extra);
     return c;
 }
 
@@ -309,7 +317,7 @@ QJsonObject pageToJson(const Page &p)
     for (const Connector &c : p.connectors) {
         connectors.append(connectorToJson(c));
     }
-    return merged(p.extra, {{QStringLiteral("id"), p.id},
+    QJsonObject known{{QStringLiteral("id"), p.id},
                             {QStringLiteral("name"), p.name},
                             {QStringLiteral("width"), p.size.width()},
                             {QStringLiteral("height"), p.size.height()},
@@ -318,7 +326,9 @@ QJsonObject pageToJson(const Page &p)
                             {QStringLiteral("gridSpacing"), p.gridSpacing},
                             {QStringLiteral("lineJumps"), p.lineJumps},
                             {QStringLiteral("shapes"), shapes},
-                            {QStringLiteral("connectors"), connectors}});
+                            {QStringLiteral("connectors"), connectors}};
+    FileM87::pageToJson(p, known);
+    return merged(p.extra, known);
 }
 
 Page pageFromJson(const QJsonObject &o)
@@ -337,8 +347,10 @@ Page pageFromJson(const QJsonObject &o)
     for (const QJsonValue &v : o.value(QLatin1String("connectors")).toArray()) {
         p.connectors.append(connectorFromJson(v.toObject()));
     }
+    FileM87::pageFromJson(o, p); // after the items: it prunes their layer indexes
     p.extra = unknown(o, {"id", "name", "width", "height", "background", "grid", "gridSpacing", "lineJumps", "shapes",
                           "connectors"});
+    FileM87::stripPageKeys(p.extra);
     return p;
 }
 
@@ -348,13 +360,14 @@ QByteArray drawingToJson(const Drawing &d)
     for (const Page &p : d.pages) {
         pages.append(pageToJson(p));
     }
-    const QJsonObject root = merged(d.extra, {{QStringLiteral("format"), QStringLiteral("qindadiagram")},
-                                              {QStringLiteral("version"), kFormatVersion},
-                                              {QStringLiteral("title"), d.title},
-                                              {QStringLiteral("theme"), d.themeId},
-                                              {QStringLiteral("serial"), d.serial},
-                                              {QStringLiteral("pages"), pages}});
-    return QJsonDocument(root).toJson(QJsonDocument::Indented);
+    QJsonObject known{{QStringLiteral("format"), QStringLiteral("qindadiagram")},
+                      {QStringLiteral("version"), kFormatVersion},
+                      {QStringLiteral("title"), d.title},
+                      {QStringLiteral("theme"), d.themeId},
+                      {QStringLiteral("serial"), d.serial},
+                      {QStringLiteral("pages"), pages}};
+    FileM87::drawingToJson(d, known);
+    return QJsonDocument(merged(d.extra, known)).toJson(QJsonDocument::Indented);
 }
 
 bool drawingFromJson(const QByteArray &bytes, Drawing *drawing, QString *error)
@@ -390,7 +403,9 @@ bool drawingFromJson(const QByteArray &bytes, Drawing *drawing, QString *error)
     for (const QJsonValue &v : root.value(QLatin1String("pages")).toArray()) {
         out.pages.append(pageFromJson(v.toObject()));
     }
+    FileM87::drawingFromJson(root, out);
     out.extra = unknown(root, {"format", "version", "title", "theme", "serial", "pages"});
+    FileM87::stripDrawingKeys(out.extra);
     if (out.pages.isEmpty()) {
         return fail(tr("The drawing has no pages."));
     }

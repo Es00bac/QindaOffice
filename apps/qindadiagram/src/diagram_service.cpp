@@ -4,6 +4,7 @@
 
 #include "drawing_document.h"
 #include "geometry.h"
+#include "layers.h"
 #include "ops.h"
 #include "painter.h"
 #include "routing.h"
@@ -157,7 +158,21 @@ bool DiagramService::editPage(const QString &label, const std::function<bool(Dra
         label,
         [&](Drawing &d) {
             Page *page = d.page(pageId);
-            return page != nullptr && change(d, *page);
+            if (page == nullptr) {
+                return false;
+            }
+            // M87: Visio's containers, pools and Auto Size react to the
+            // edit within the same undo step (diagram_service.h).
+            const Page before = *page;
+            if (!change(d, *page)) {
+                return false;
+            }
+            Page *after = d.page(pageId); // the change may have added pages
+            if (after != nullptr) {
+                Ops::settle(*after, before);
+                Ops::applyAutoSize(*after);
+            }
+            return true;
         },
         mergeKey);
 }
@@ -217,7 +232,26 @@ QVariantMap DiagramService::pageInfo() const
             {QStringLiteral("lineJumps"), page->lineJumps},
             {QStringLiteral("background"), colorName(page->background)},
             {QStringLiteral("shapeCount"), int(page->shapes.size())},
-            {QStringLiteral("connectorCount"), int(page->connectors.size())}};
+            {QStringLiteral("connectorCount"), int(page->connectors.size())},
+            // M87 (D-095)
+            {QStringLiteral("backgroundPage"), page->backgroundPage},
+            {QStringLiteral("backPageId"), page->backPageId},
+            {QStringLiteral("autoSize"), page->autoSize},
+            {QStringLiteral("jumpStyle"), page->jumpStyle == JumpStyle::Gap ? QStringLiteral("gap")
+                                          : page->jumpStyle == JumpStyle::Square ? QStringLiteral("square")
+                                                                                 : QStringLiteral("arc")},
+            {QStringLiteral("jumpOn"), page->jumpOn == JumpOn::Horizontal ? QStringLiteral("horizontal")
+                                       : page->jumpOn == JumpOn::Vertical ? QStringLiteral("vertical")
+                                                                          : QStringLiteral("lastRouted")},
+            {QStringLiteral("print"), QVariantMap{{QStringLiteral("paper"), page->print.paper.isEmpty() ? QString()
+                                                                            : paperNameOf(page->print.paper)},
+                                                  {QStringLiteral("landscape"), page->print.paper.width() > page->print.paper.height()},
+                                                  {QStringLiteral("zoom"), page->print.zoom},
+                                                  {QStringLiteral("across"), page->print.sheetsAcross},
+                                                  {QStringLiteral("down"), page->print.sheetsDown},
+                                                  {QStringLiteral("center"), page->print.center}}},
+            {QStringLiteral("layerCount"), int(page->layers.size())},
+            {QStringLiteral("commentCount"), int(page->comments.size())}};
 }
 
 void DiagramService::pruneSelection()
@@ -316,7 +350,13 @@ QVariantMap DiagramService::itemMap(const QString &id) const
                 {QStringLiteral("shadow"), s->style.shadow},
                 {QStringLiteral("opacity"), s->style.opacity},
                 {QStringLiteral("textStyle"), textMap(s->textStyle)},
-                {QStringLiteral("data"), dataList(s->data)}};
+                {QStringLiteral("data"), dataList(s->data)},
+                // M87 (D-095)
+                {QStringLiteral("lane"), Ops::isLane(*s)},
+                {QStringLiteral("layers"), QVariant::fromValue(QList<int>(s->layers))},
+                {QStringLiteral("linkCount"), int(s->links.size())},
+                {QStringLiteral("dataLinked"), s->dataLink.linked()},
+                {QStringLiteral("recordset"), s->dataLink.recordset}};
     }
     if (const Connector *c = page->connector(id)) {
         const auto title = [&](const Endpoint &e) {
@@ -340,7 +380,9 @@ QVariantMap DiagramService::itemMap(const QString &id) const
                 {QStringLiteral("toTitle"), title(c->to)},
                 {QStringLiteral("groupId"), c->groupId},
                 {QStringLiteral("textStyle"), textMap(c->textStyle)},
-                {QStringLiteral("data"), dataList(c->data)}};
+                {QStringLiteral("data"), dataList(c->data)},
+                {QStringLiteral("layers"), QVariant::fromValue(QList<int>(c->layers))},
+                {QStringLiteral("linkCount"), int(c->links.size())}};
     }
     return {};
 }
