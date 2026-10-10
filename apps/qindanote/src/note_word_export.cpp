@@ -7,11 +7,13 @@
 #include "ink_persistence.h"
 #include "note_blocks.h"
 #include "note_markdown.h"
+#include "note_rich_export.h"
 #include "notebook.h"
 
 #include <QBuffer>
 #include <QFont>
 #include <QImage>
+#include <QJsonObject>
 #include <QPainter>
 #include <QTextBlock>
 #include <QTextCursor>
@@ -109,19 +111,34 @@ bool exportPageAsWord(const NotePage &page, qreal pageWidth, const QString &path
         cursor.insertBlock(QTextBlockFormat(), plain);
         switch (block.kind) {
         case PageBlock::Kind::Markdown:
+            RichExport::insertWordTagIcons(cursor, block.tags, doc, parts);
             insertMarkdown(cursor, block.text, width);
             break;
         case PageBlock::Kind::Text:
-            cursor.insertText(block.text, plain);
+            if (block.rich.isEmpty() && block.tags.isEmpty()) {
+                cursor.insertText(block.text, plain);
+                break;
+            }
+            // M84 (D-093): formatted text as Word runs, styles, lists and
+            // tables; its tags as boxes and icons (note_rich_export.h).
+            RichExport::insertWord(cursor,
+                                   QJsonObject{{QStringLiteral("type"), QStringLiteral("text")},
+                                               {QStringLiteral("text"), block.text},
+                                               {QStringLiteral("rich"), block.rich},
+                                               {QStringLiteral("tags"), block.tags}},
+                                   doc, parts, width);
             break;
         case PageBlock::Kind::Check: {
             QTextBlockFormat item;
             item.setLeftMargin(block.level * 24.0);
             cursor.setBlockFormat(item);
-            cursor.insertText((block.checked ? QStringLiteral("☑ ") : QStringLiteral("☐ ")) + block.text, plain);
+            cursor.insertText(block.checked ? QStringLiteral("☑ ") : QStringLiteral("☐ "), plain);
+            RichExport::insertWordTagIcons(cursor, block.tags, doc, parts);
+            cursor.insertText(block.text, plain);
             break;
         }
         case PageBlock::Kind::Image:
+            RichExport::insertWordTagIcons(cursor, block.tags, doc, parts);
             insertPicture(cursor, parts, doc, block.imageData, width);
             break;
         }

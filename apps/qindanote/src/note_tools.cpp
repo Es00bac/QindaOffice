@@ -5,6 +5,7 @@
 #include "note_host.h"
 #include "note_page_item.h"
 #include "note_evidence.h"
+#include "note_rich_text.h"
 #include "note_agent.h"
 #include "agent_schema.h"
 
@@ -112,7 +113,8 @@ QString NoteTools::operationGuide() const
 {
     return QStringLiteral(
         "Blocks are the [n] entries of the snapshot. Markdown blocks render headings, lists, "
-        "**bold**, ==highlight==, > quotes and - [ ] tasks; text blocks are plain text.\n"
+        "**bold**, ==highlight==, > quotes and - [ ] tasks; text blocks are the user's typed text "
+        "(rewriting one replaces its formatting and tags with plain text).\n"
         "- {\"op\":\"replace_block\",\"block\":2,\"text\":\"…\"} — new text for block 2 "
         "(markdown for a markdown block).\n"
         "- {\"op\":\"delete_block\",\"block\":3}\n"
@@ -190,8 +192,9 @@ Ai::EditOutcome NoteTools::apply(const QJsonArray &edits)
                 entries[at].block.insert(QStringLiteral("checked"), edit.value(QStringLiteral("checked")));
                 outcome.changes.append(QObject::tr("updated checklist item %1").arg(block));
             } else {
-                entries[at].block.insert(QStringLiteral("text"),
-                                         edit.value(QStringLiteral("text")).toString());
+                // A formatted block's runs and paragraph tags do not survive
+                // a plain rewrite (M84, note_rich_text.h).
+                RichBlock::setPlainText(&entries[at].block, edit.value(QStringLiteral("text")).toString());
                 outcome.changes.append(QObject::tr("rewrote block %1").arg(block));
             }
         } else if (op == QLatin1String("insert_block")) {

@@ -5,6 +5,96 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-093: QindaNote: formatted typing, tags, search, import
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart; M84, builds on D-022, D-027, D-057, D-063 and
+D-068; details in [qindanote.md](qindanote.md))
+
+**Context.** QindaNote had OneNote's notebooks, ink and live notes but none
+of what OneNote users do every day with typed text: a text block was plain
+(D-022), there were no tags, Find searched one notebook's titles and text,
+nothing imported, and a new page was always blank. QindaTK, installed
+through Portage and not this milestone's to change, already ships a
+structured rich-text engine — `RichTextDocument` (transactions, lists,
+tables, links, named styles), `RichTextLayout` (continuous flow, a
+QPainter path), `Tk.RichTextEditor` and an HTML importer — and office_docx
+maps `QTextDocument` to and from Word (D-068). Notebooks written before M84
+must open unchanged, and the page file must stay one readable JSON file per
+page.
+
+**Decision.**
+
+1. **A text block is QindaTK rich text.** The block keeps `text` (the
+   plain mirror every older reader, search, the assistant and the agent
+   use) and gains `rich`, the `qindatk.richtext` codec object, only when
+   the text carries formatting or tags. The blocks object gains the page
+   format `version` (2; absent = 1) and `pageColor`. A page that is only
+   read is never rewritten; a block whose `rich` no longer matches its
+   `text` (an older QindaNote edited it) shows its text. Plain blocks are
+   painted exactly as before; formatted ones through `RichTextLayout` in
+   continuous mode — the screen, print and PDF share it (`note_rich_render`),
+   and the editor lays out the same document at the same width, so nothing
+   moves when a block opens or closes.
+2. **One history.** The editor's document runs with `externalUndo`: each
+   transaction it commits is written into the block and pushed as one
+   `RichEditCommand` on the page's QUndoStack, replayed on the live
+   document while its editor is open (the caret survives), else restored
+   from the block snapshot. Typing and deleting runs merge; a host command
+   made of several transactions is one step. Ctrl+Z reaches Edit ▸ Undo.
+3. **OneNote's names and shortcuts, the suite's ids.** Formatting, lists,
+   alignment, links, tables and Cut/Copy/Paste/Select All use the shared
+   rich-text ids of `standard_actions.h`; the rest are new app ids —
+   `noteStyle_<id>`, `noteTag_<id>`, `noteTagMoreAction`,
+   `noteTagCustomizeAction`, `noteTagRemoveAction`, `noteFindTagsAction`,
+   `noteTagSummaryPageAction`, `noteSearchAction` (Ctrl+E),
+   `noteImportAction`, `noteLinkFileAction`, `notePageTemplate_<id>`,
+   `notePageColor_<id>`, `notePageColorAction`, `noteMakeSubpageAction`,
+   `notePromoteSubpageAction`, `noteTableDeleteAction` and four new rule
+   lines (`notePageBackground_ruledNarrow`, `_ruledWide`, `_gridSmall`,
+   `_gridLarge`). Each is in the menu tree (new Insert, Format and Tags
+   menus) and on the ribbon (new Text and Insert tabs, the contextual Table
+   tab). Center has no Ctrl+E: that is Search, as in OneNote. OneNote's
+   Ctrl+- (strikethrough), Ctrl+= / Ctrl+Shift+= (sub/superscript) and
+   Ctrl+0 (remove tag) are the suite's zoom keys, so those commands have
+   none; a test keeps every shortcut in the window unique. It found F9 on
+   both Show Navigator and live notes' This Matters (D-061) — ambiguous, so
+   F9 did nothing while a session listened; Show Navigator moves to
+   Ctrl+Shift+G (OneNote's page-list key).
+4. **Tags belong to paragraphs**, by the rich paragraphs' stable ids; a
+   whole checklist, Markdown or picture block takes a block tag. They are
+   painted in the margin from QindaTK's icon paths (Remember for later and
+   Definition highlight the line, as OneNote's do), listed by Find Tags,
+   searchable by name and carried by every export. A custom tag's look is
+   saved with each use, so notebooks travel.
+5. **Paste and import are sanitised HTML** (`note_rich_import`): scripts,
+   styles, frames, objects, forms, handlers, `javascript:` links, remote and
+   local pictures and CSS `url()`s go before QTextDocument parses anything.
+   Word comes in through office_docx (one page per Heading 1), Markdown and
+   HTML as a page each. OneNote `.one` files are refused with the way round
+   (export to Word or PDF from OneNote): MS-ONESTORE has no open
+   implementation the suite can use.
+6. **Search spans notebooks** without opening them: the current window's,
+   the other QindaNote windows' and the recent ones on disk; every word on
+   the page, grouped by section and page. No OCR exists in the suite, so
+   ink and pictures are not searched.
+
+**Consequences.** QindaNote types, tags, finds and imports like OneNote,
+and its pages still open in older QindaNote releases as plain text. Not
+done: page versions, Dock to Desktop, floating or resizable pictures inside
+formatted text, page colour in Word. QindaTK gaps, reported and not worked
+around in the toolkit: `RichTextArea` does not claim the ShortcutOverride
+of the keys it types with, so a window's one-letter shortcuts (the ink
+tools) stole them — QindaNote filters them back to the editor; under
+`externalUndo` the area's own `edit.undo` is inert, so undo depends on the
+window shortcut; `RichTextFormatState` has no highlight state; there is no
+operation that deletes a whole table (QindaNote applies a `StepBlocks`);
+`RichTextHtml::toFragment` keeps any picture source as it is (no
+sanitising); the editor's colours are theme roles only, so a paper
+document needs bindings over them; `Tk.Ribbon` returns to its first tab when
+a contextual tab goes away; the rich-text model has no per-paragraph user
+data, so tags live beside it.
+
 ## D-091: QindaCalc and QindaShow everyday polish
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: the everyday

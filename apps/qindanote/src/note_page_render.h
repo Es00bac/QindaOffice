@@ -10,8 +10,9 @@
 // is also what a printer needs.
 //
 // Render order (shared with NotePageItem::paint, so the screen and the
-// printer cannot drift): background → image blocks → text/checklist blocks
-// → highlighter strokes → pen strokes. Ink sits above typed text.
+// printer cannot drift): paper (the page colour, M84) → rule lines → image
+// blocks → tag highlights (note_tags.h) → text/markdown/checklist blocks →
+// tag icons → highlighter strokes → pen strokes. Ink sits above typed text.
 
 #include "note_blocks.h"
 #include "notebook.h"
@@ -30,5 +31,7 @@ void paintNoteBackground(QPainter *painter, const QString &background, const QSi
 // Every block of `kind` except `skipIndex` (the one under a live editor).
 void paintNoteBlocks(QPainter *painter, const QList<PageBlock> &blocks, PageBlock::Kind kind,
                      int skipIndex = -1);
+// The page's paper: its page colour (M84), white when it has none.
+[[nodiscard]] QColor notePaper(const QByteArray &blocksJson);
 
 } // namespace QindaOffice::Apps::Notes

@@ -9,6 +9,9 @@
 #include "note_blocks.h"
 #include "note_page_item.h"
 #include "note_page_render.h"
+#include "note_rich_text.h"
+
+#include <qindatk/rich_text_document.h>
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -59,6 +62,18 @@ int replaceInPage(NotePage &page, const QString &needle, const QString &replacem
         QString text = object.value(QStringLiteral("text")).toString();
         const int found = text.count(needle, sensitivity);
         if (found == 0) {
+            continue;
+        }
+        if (object.contains(QStringLiteral("rich"))) {
+            // M84: formatted text keeps its formatting (and paragraph tags).
+            const auto doc = RichBlock::forBlock(object);
+            const int replaced = RichBlock::replaceAll(*doc, needle, replacement, sensitivity);
+            if (replaced > 0) {
+                RichBlock::store(&object, *doc);
+                blocks.replace(i, object);
+                hits += replaced;
+                touched = true;
+            }
             continue;
         }
         text.replace(needle, replacement, sensitivity);

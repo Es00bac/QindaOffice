@@ -47,6 +47,12 @@ set(QINDANOTE_ENGINE_SOURCES
     PARENT_SCOPE)
 
 set(qindanote_qml
+    qml/NoteLinkDialog.qml
+    qml/NoteSearchPanel.qml
+    qml/NoteTableDialog.qml
+    qml/NoteTagsDialog.qml
+    qml/NoteTagsPanel.qml
+    qml/NoteTextSlots.qml
     qml/NoteLivePanel.qml
     qml/NoteLiveSettingsDialog.qml
     qml/NoteLiveSetupDialog.qml
@@ -97,6 +103,19 @@ qt_add_qml_module(qindanote_app
         src/note_agent.h src/note_agent_state.cpp src/note_agent_actions.cpp
         src/note_evidence.h src/note_evidence.cpp src/note_session_drafts.cpp
         src/notebook.cpp src/notebook.h
+        src/note_clipboard.cpp src/note_clipboard.h
+        src/note_host_format.cpp src/note_host_pages.cpp src/note_host_tags.cpp
+        src/note_import.cpp src/note_import.h
+        src/note_page_item_rich.cpp src/note_page_item_tags.cpp
+        src/note_rich_export.h src/note_rich_export_md.cpp src/note_rich_export_word.cpp
+        src/note_rich_import.cpp src/note_rich_import.h
+        src/note_rich_render.cpp src/note_rich_render.h
+        src/note_rich_style.cpp src/note_rich_style.h
+        src/note_rich_text.cpp src/note_rich_text.h
+        src/note_search.cpp src/note_search.h
+        src/note_tag_summary.cpp src/note_tag_summary.h
+        src/note_tags.cpp src/note_tags.h
+        src/note_templates.cpp src/note_templates.h
     QML_FILES ${qindanote_qml}
 )
 target_include_directories(qindanote_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

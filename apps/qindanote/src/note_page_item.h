@@ -16,7 +16,10 @@
 //
 // Files: note_page_item.cpp (state, paint, history glue),
 // note_page_item_ink.cpp (stylus gestures, live eraser, cursor),
-// note_page_item_blocks.cpp (blocks, tap-to-type, the editor contract).
+// note_page_item_blocks.cpp (blocks, tap-to-type, the editor contract),
+// note_page_item_rich.cpp (M84: the formatted-text editor's document, its
+// history and commands), note_page_item_tags.cpp (M84: tags, links, page
+// colour).
 
 #include "note_blocks.h"
 #include "notebook.h"
@@ -28,14 +31,33 @@
 
 #include <QColor>
 #include <QJsonObject>
+#include <QPointer>
 #include <QQuickPaintedItem>
+#include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 
 class QUndoStack;
 
+namespace QindaTK {
+class ClipboardAdapter;
+class RichTextArea;
+class RichTextDocument;
+namespace RichText {
+struct Selection;
+}
+}
+
 namespace QindaOffice::Apps::Notes {
 
 enum class NoteTool { Pen, Highlighter, Eraser, Text };
+
+namespace Tags {
+struct TagDef;
+}
+namespace RichStyle {
+enum class Style;
+enum class TableEdit;
+}
 
 class NotePageItem : public QQuickPaintedItem {
     Q_OBJECT
@@ -69,6 +91,13 @@ class NotePageItem : public QQuickPaintedItem {
     // painted text inset (note_blocks.h kTextPadding), so text does not jump
     // when a block opens or closes.
     Q_PROPERTY(qreal textPadding READ textPadding CONSTANT)
+    // M84 (D-093): the open text block's formatted text — the document the
+    // window's Tk.RichTextEditor edits (null for other kinds and when
+    // nothing is open). The page item owns it and keeps its history.
+    Q_PROPERTY(QindaTK::RichTextDocument *richDocument READ richDocument NOTIFY richDocumentChanged)
+    Q_MOC_INCLUDE(<qindatk/rich_text_document.h>)
+    // The page colour (M84): the paper the item paints.
+    Q_PROPERTY(QColor paperColor READ paperColor NOTIFY pageChanged)
 public:
     explicit NotePageItem(QQuickItem *parent = nullptr);
     ~NotePageItem() override;
@@ -178,6 +207,57 @@ public:
     [[nodiscard]] QFont pageFontValue() const { return pageFont(); }
     [[nodiscard]] qreal textPadding() const { return kTextPadding; }
 
+    // ---- formatted text (note_page_item_rich.cpp, M84) ----
+    [[nodiscard]] QindaTK::RichTextDocument *richDocument() const;
+    [[nodiscard]] QindaTK::RichTextArea *richArea() const;
+    // NotePage.qml hands over its editor's Tk.RichTextArea once.
+    Q_INVOKABLE void attachRichArea(QQuickItem *area);
+    // Puts the editor's caret where the tap that opened the block landed
+    // (or at the end); NotePage.qml calls it once the editor shows.
+    Q_INVOKABLE void placeRichCaret();
+    // A QindaTK command (text.bold, paragraph.bulletList, …) on the open
+    // block's selection; false when no formatted text is open.
+    bool richCommand(const QString &id, const QVariantMap &args = {});
+    [[nodiscard]] QVariantMap richCommandState(const QString &id) const;
+    bool applyRichStyle(RichStyle::Style style);
+    [[nodiscard]] int richStyleAtCaret() const; // RichStyle::Style, or -1
+    bool insertRichLink(const QString &href, const QString &label);
+    bool insertRichTable(int rows, int columns);
+    bool editRichTable(RichStyle::TableEdit edit);
+    [[nodiscard]] bool richCaretInTable() const;
+    [[nodiscard]] QString richSelectedText() const;
+    // The highlight of the selection's first character (invalid: none).
+    [[nodiscard]] QColor richHighlight() const;
+    // OneNote's indent: a list level in a list, the paragraph's indent
+    // (18 pt a step) outside one.
+    bool indentRich(int delta);
+    // Several transactions as ONE undo step (RichEditCommand macro).
+    void beginRichMacro();
+    void endRichMacro();
+    // RichEditCommand's replay (note_page_history.h): true when the live
+    // document took it; false sends the command to its snapshot.
+    bool replayRichEdit(QindaTK::RichTextDocument *document, int block, const QStringList &transactions,
+                        bool undo, const QByteArray &expected, const QByteArray &target);
+
+    // ---- tags, links, page colour (note_page_item_tags.cpp, M84) ----
+    // Toggles `def` on the open block's selected paragraphs (or the open
+    // checklist/markdown block); with nothing open, a new text block with
+    // one tagged paragraph opens. One undo step.
+    bool toggleTag(const Tags::TagDef &def);
+    bool removeTags();
+    // Marks the To Do tag `entry` of block `index` done or not.
+    bool setTagDone(int index, int entry, bool done);
+    // The To Do box under `pos`: {block, entry}, or {-1, -1}.
+    [[nodiscard]] std::pair<int, int> todoBoxAt(const QPointF &pos) const;
+    // Ticks (or unticks) the To Do box under `pos`; false when none is there.
+    Q_INVOKABLE bool toggleTodoBoxAt(const QPointF &pos);
+    // The link under `pos` (page coordinates) in a painted block, or "".
+    Q_INVOKABLE QString linkAt(const QPointF &pos) const;
+    [[nodiscard]] QColor paperColor() const;
+    void setPageColor(const QColor &color);
+    // Puts the editor on block `index`, at paragraph `paragraph` when given.
+    void revealBlock(int index, const QString &paragraph);
+
     // Test seam: the stroke builder's stroke while inking.
     [[nodiscard]] bool isInking() const { return m_inking; }
     [[nodiscard]] bool hasActiveGesture() const { return m_inking || m_erasing; }
@@ -192,6 +272,14 @@ signals:
     void stylusChanged();
     // The editor should take focus (a block was opened).
     void editorRequested();
+    // M84: the open rich text document changed, or its selection's
+    // formatting / caret context did (the host's checked states follow).
+    void richDocumentChanged();
+    void richStateChanged();
+    // Ctrl+click on a link in the editor or on the page.
+    void linkActivated(const QString &href);
+    // Scroll `rect` (page coordinates) into view (a search hit on a picture).
+    void revealRequested(const QRectF &rect);
 
 protected:
     void paint(QPainter *painter) override;
@@ -211,6 +299,13 @@ private:
     void updateCursor();
     [[nodiscard]] QCursor eraserCursor() const;
     void repaintSegment();
+    // note_page_item_rich.cpp
+    void openRichDocument(const QJsonObject &block);
+    void closeRichDocument();
+    [[nodiscard]] QindaTK::RichText::Selection richSelection() const;
+    void updateRichText(const QString &text);
+    void onRichCommitted(const QString &transaction, const QString &label);
+    void carryTodoAcrossSplit(QJsonObject *block, const QStringList &before);
     // note_page_item_blocks.cpp
     void relayoutBlocks();
     void writeBlocks(const QJsonArray &blocks, const QString &undoText, int mergeKey = -1);
@@ -247,6 +342,15 @@ private:
     int m_editingBlock = -1;
     QString m_editingText;
     QByteArray m_editBefore; // blocksJson when the editor opened
+    // M84: the open text block's formatted text and its editor's area.
+    QindaTK::RichTextDocument *m_richDocument = nullptr;
+    QPointer<QindaTK::RichTextArea> m_richArea;
+    QindaTK::ClipboardAdapter *m_clipboard = nullptr;
+    QStringList m_richParagraphs;     // paragraph ids after the last commit
+    std::pair<QString, int> m_pendingCaret{QString(), -1};
+    int m_richMacro = 0;              // the open macro's serial, 0 when none
+    int m_richMacroSerial = 0;
+    bool m_replayingRich = false;
     qreal m_pageWidth = 760;
     qreal m_minPageHeight = 1004; // ~A4 ratio at the fixed width
     static constexpr qreal kMaxPages = 64;

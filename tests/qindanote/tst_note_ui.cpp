@@ -6,6 +6,13 @@
 
 #include <QRegularExpression>
 #include "note_test_support.h"
+#include "note_rich_fixture.h"
+
+#include "qindanote/src/note_blocks.h"
+#include "qindanote/src/note_search.h"
+#include "qindanote/src/note_tag_summary.h"
+
+#include <qindatk/rich_text_area.h>
 
 #include "support/quick_dump.h"
 #include "support/ribbon_gate.h"
@@ -138,6 +145,61 @@ private slots:
         QVERIFY(scene.host.currentPageText().contains(QStringLiteral("from **the** assistant")));
         scene.host.actions()->trigger(QStringLiteral("aiAssistantAction"));
         QTRY_VERIFY(!panel->isVisible());
+    }
+
+    // M84 (D-093): what a reviewer looks at, at a desktop width and
+    // squeezed — a formatted, tagged page (Text tab), the table in a block
+    // being edited (the contextual Table tab), the Find Tags pane and the
+    // search results.
+    void formattedPageScreensAtBothWidths()
+    {
+        for (const int width : {1280, 520}) {
+            Scene scene(QSize(width, 800));
+            QVERIFY2(scene.ready(), qPrintable(scene.error));
+            QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+            // The default dock layout, whatever the last scene left open.
+            QVERIFY(QMetaObject::invokeMethod(findItem(scene.window->contentItem(), QStringLiteral("noteDock")),
+                                              "resetLayout"));
+            QTest::qWait(100);
+            NotePage *page = scene.host.currentPage();
+            page->envelope.blocksJson = withBlocksArray(
+                QByteArray("{}"), QJsonArray{NoteFixture::formattedTextBlock(), NoteFixture::taggedCheckBlock()});
+            scene.page->setPage(page);
+            QQuickItem *ribbon = findItem(scene.window->contentItem(), QStringLiteral("officeRibbon"));
+            QVERIFY(QMetaObject::invokeMethod(ribbon, "activateTab", Q_ARG(QVariant, QStringLiteral("text"))));
+            QTest::qWait(150);
+            QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindanote_m84_formatted_%1").arg(width));
+            // Into the table: the caret in its first cell, the Table tab on.
+            scene.page->setTool(NoteTool::Text);
+            scene.page->beginEdit(0);
+            QTRY_VERIFY(scene.page->richArea() != nullptr && scene.page->richDocument() != nullptr);
+            for (const QindaTK::RichText::Block &block : scene.page->richDocument()->blocks()) {
+                if (block.table) {
+                    const auto *cell = block.table->rows.at(1).cells.at(1).paragraphs.first().get();
+                    scene.page->richArea()->setSelection({{cell->id, 4}, {cell->id, 4}});
+                }
+            }
+            QTRY_VERIFY(scene.host.ribbonContexts().contains(QStringLiteral("noteTable")));
+            QVERIFY(QMetaObject::invokeMethod(ribbon, "activateTab", Q_ARG(QVariant, QStringLiteral("tableTools"))));
+            QTest::qWait(150);
+            QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindanote_m84_table_%1").arg(width));
+            scene.page->commitEdit();
+            // Find Tags over the page.
+            scene.host.actions()->trigger(QStringLiteral("noteFindTagsAction"));
+            QTRY_VERIFY(findItem(scene.window->contentItem(), QStringLiteral("tagsPanel")) != nullptr
+                        && findItem(scene.window->contentItem(), QStringLiteral("tagsPanel"))->isVisible());
+            QTRY_COMPARE(scene.host.tagSummary()->itemCount(), 4);
+            QTest::qWait(150);
+            QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindanote_m84_tags_%1").arg(width));
+            // Search results.
+            scene.host.actions()->trigger(QStringLiteral("noteSearchAction"));
+            scene.host.search()->setQuery(QStringLiteral("bank"));
+            QTRY_VERIFY(findItem(scene.window->contentItem(), QStringLiteral("searchPanel")) != nullptr
+                        && findItem(scene.window->contentItem(), QStringLiteral("searchPanel"))->isVisible());
+            QCOMPARE(scene.host.search()->hitCount(), 1);
+            QTest::qWait(150);
+            QindaOffice::Test::saveGrab(scene.window, QStringLiteral("qindanote_m84_search_%1").arg(width));
+        }
     }
 
     // The window's structure at a desktop width and squeezed to a third,

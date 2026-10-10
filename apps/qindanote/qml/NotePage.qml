@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import QtQuick
+import QtQuick.Templates as T
 import QindaTK as Tk
 import QindaOffice.Note
 
 // The page inside a zoomable viewport: the NotePageItem paints paper, ink
 // and blocks in document units; a Tk.StylusHandler feeds it pen samples
 // (and a finger's, with Draw with Finger on and an ink tool active); the
-// one live editor (a Tk.TextArea for text, a Tk.TextField for a checklist
-// item) sits over the block being edited and scales with the page, so
-// typed text zooms like everything else.
+// one live editor sits over the block being edited and scales with the
+// page, so typed text zooms like everything else. A text block is edited
+// as formatted text (M84, D-093): a Tk.RichTextEditor over the page item's
+// rich document; a checklist item is a Tk.TextField and live-notes
+// Markdown its source in a Tk.TextArea.
 //
 // Touch: two fingers pinch-zoom and pan (Tk.Viewport); one finger inks
 // when the handler takes it, otherwise it pans the page, and a tap with
@@ -25,6 +28,18 @@ Tk.Viewport {
     touchPan: true   // a finger the ink handler does not take scrolls the page
 
     readonly property bool fingerInks: page.touchDrawing && page.tool !== "text"
+
+    // The formatted-text editor closes when focus moves onto the page or
+    // another panel — not into the ribbon, its menus and pickers, or a
+    // dialog (they act on the editor's selection and hand focus back).
+    function focusLeftEditor() {
+        if (!richEditor.visible || richEditor.area.activeFocus || !Window.active) return
+        const overlay = T.Overlay.overlay
+        for (let item = Window.activeFocusItem; item !== null; item = item.parent) {
+            if (item.objectName === "officeRibbon" || item === overlay) return
+        }
+        page.commitEdit()
+    }
 
     NotePageItem {
         id: page
@@ -44,13 +59,19 @@ Tk.Viewport {
                                   | PointerDevice.Generic | PointerDevice.Finger
         }
 
-        // M56: Ctrl+click on a [12:40] in live notes plays the recording there.
+        // Ctrl+click: a link opens (M84), a [12:40] in live notes plays the
+        // recording there (M56).
         TapHandler {
             objectName: "noteTimestampTap"
             acceptedModifiers: Qt.ControlModifier
             acceptedButtons: Qt.LeftButton
             grabPermissions: PointerHandler.CanTakeOverFromAnything
             onTapped: function(eventPoint) {
+                const href = page.linkAt(eventPoint.position)
+                if (href.length > 0) {
+                    viewport.note.openLink(href)
+                    return
+                }
                 const ms = page.timestampAt(eventPoint.position)
                 if (ms >= 0) viewport.note.playRecordingAt(ms)
             }
@@ -67,6 +88,7 @@ Tk.Viewport {
 
         Component.onCompleted: {
             page.stylus = stylus
+            page.attachRichArea(richEditor.area)
             viewport.note.attachPageItem(page)
         }
 
@@ -89,14 +111,16 @@ Tk.Viewport {
             function onAssistantInsertRequested(text) {
                 if (page.editingBlock < 0) {
                     page.addMarkdownBlock(text)
-                    return
+                } else if (page.editingKind === "text") {
+                    richEditor.area.insertText(text)
+                } else {
+                    const editor = page.editingKind === "check" ? checkEditor : textEditor
+                    editor.insert(editor.cursorPosition, text)
                 }
-                const editor = page.editingKind === "check" ? checkEditor : textEditor
-                editor.insert(editor.cursorPosition, text)
             }
             function onAssistantReplaceRequested(text) {
-                if (page.editingBlock < 0) {
-                    onAssistantInsertRequested(text)
+                if (page.editingBlock < 0 || page.editingKind === "text") {
+                    onAssistantInsertRequested(text) // the rich editor replaces its selection
                     return
                 }
                 const editor = page.editingKind === "check" ? checkEditor : textEditor
@@ -105,6 +129,9 @@ Tk.Viewport {
                 }
                 editor.insert(editor.cursorPosition, text)
             }
+            function onEditorFocusRequested() {
+                if (richEditor.visible) richEditor.forceActiveFocus(Qt.OtherFocusReason)
+            }
         }
 
         onEditorRequested: {
@@ -112,24 +139,68 @@ Tk.Viewport {
                 checkEditor.text = page.editingText
                 checkEditor.forceActiveFocus(Qt.OtherFocusReason)
                 checkEditor.cursorPosition = checkEditor.text.length
+            } else if (page.editingKind === "text") {
+                richEditor.forceActiveFocus(Qt.OtherFocusReason)
+                page.placeRichCaret()
             } else {
                 textEditor.text = page.editingText
                 textEditor.forceActiveFocus(Qt.OtherFocusReason)
                 textEditor.cursorPosition = textEditor.text.length
             }
+            viewport.ensureVisible(page.editorRect)
         }
+        onRevealRequested: function(rect) { viewport.ensureVisible(rect) }
 
-        // ---- the live editor ----
+        // ---- the live editors ----
         // AGENT-GUARD: the editors sit ON the paper, so they are paper too
         // (D-004: the document surface is the one allowed literal): no
         // chrome inputBg behind the ink — the theme's dark field under
         // "#202028" ink was black-on-black on every dark theme. The painted
         // block is skipped while it is edited, so the page shows through.
+        Tk.RichTextEditor {
+            id: richEditor
+            objectName: "noteTextEditor"
+            visible: page.editingBlock >= 0 && page.editingKind === "text"
+            document: visible ? page.richDocument : null
+            x: page.editorRect.x
+            y: page.editorRect.y
+            width: page.editorRect.width
+            rows: 1
+            // AGENT-CONTRACT (note_rich_render.h): the painted inset, so a
+            // block's text does not move when it opens or closes.
+            padding: page.textPadding
+            placeholderText: qsTr("Type a note")
+            background: Rectangle {
+                color: "transparent"
+                radius: 2
+                border.width: 1
+                border.color: Tk.Theme.color.focus
+            }
+            onLinkActivated: function(href) { viewport.note.openLink(href) }
+            // Paper colours over the toolkit's theme roles (D-004).
+            Binding { target: richEditor.area; property: "inkColor"; value: "#202028" }
+            Binding { target: richEditor.area; property: "caretColor"; value: "#202028" }
+            Binding { target: richEditor.area; property: "selectionColor"; value: "#b4d2ff" }
+            Binding { target: richEditor.area; property: "selectedTextColor"; value: "#202028" }
+            Binding { target: richEditor.area; property: "linkColor"; value: "#1a5fb4" }
+            Binding { target: richEditor.area; property: "markerColor"; value: "#202028" }
+            Binding { target: richEditor.area; property: "borderColor"; value: "#9a9aa6" }
+            Binding { target: richEditor.area; property: "pageColor"; value: page.paperColor }
+            Connections {
+                target: richEditor.area
+                function onSelectedTextChanged() {
+                    if (richEditor.visible) viewport.note.editorSelection = richEditor.area.selectedText
+                }
+                function onActiveFocusChanged() {
+                    if (!richEditor.area.activeFocus) Qt.callLater(viewport.focusLeftEditor)
+                }
+            }
+        }
         Tk.TextArea {
             id: textEditor
-            objectName: "noteTextEditor"
+            objectName: "noteMarkdownEditor"
             // A markdown block (live notes, D-057) is edited as its source.
-            visible: page.editingBlock >= 0 && (page.editingKind === "text" || page.editingKind === "markdown")
+            visible: page.editingBlock >= 0 && page.editingKind === "markdown"
             x: page.editorRect.x
             y: page.editorRect.y
             width: page.editorRect.width

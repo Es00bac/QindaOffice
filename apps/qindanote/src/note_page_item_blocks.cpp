@@ -12,6 +12,8 @@
 
 #include "note_page_history.h"
 #include "note_markdown.h"
+#include "note_rich_render.h"
+#include "note_rich_text.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -58,16 +60,26 @@ void NotePageItem::applyHistoryBlocks(const QByteArray &blocksJson)
         return;
     }
     if (m_editingBlock >= 0) {
-        // The editor's block may no longer exist after the undo.
-        m_editingBlock = -1;
-        m_editingText.clear();
-        emit editingChanged();
+        // The editor's block may no longer exist after the undo — or may be
+        // the same text with a tag more or less (M84), which keeps it open.
+        const QJsonArray now = blocksArray(m_page->envelope.blocksJson);
+        const QJsonArray next = blocksArray(blocksJson);
+        const bool keep = m_editingBlock < now.size() && m_editingBlock < next.size()
+            && RichBlock::sameEditorContent(now.at(m_editingBlock).toObject(), next.at(m_editingBlock).toObject());
+        if (!keep) {
+            closeRichDocument();
+            m_editingBlock = -1;
+            m_editingText.clear();
+            emit editingChanged();
+        }
     }
     m_page->envelope.blocksJson = blocksJson;
     relayoutBlocks();
     updatePageMetrics();
     update();
+    emit pageChanged(); // the page colour may have come back
     emit pageEdited();
+    emit richStateChanged();
 }
 
 void NotePageItem::appendBlock(const QJsonObject &block, const QString &undoText)
@@ -153,6 +165,10 @@ void NotePageItem::tapAt(const QPointF &pos)
     if (m_page == nullptr || !pageRect().contains(pos)) {
         return;
     }
+    // M84: a To Do box in the margin ticks, whatever block is open.
+    if (toggleTodoBoxAt(pos)) {
+        return;
+    }
     const int index = blockAt(pos);
     if (index >= 0) {
         if (index == m_editingBlock) {
@@ -175,6 +191,11 @@ void NotePageItem::tapAt(const QPointF &pos)
             }
             if (block.kind == PageBlock::Kind::Image) {
                 return; // images have no editor (M24 selects them)
+            }
+            if (!block.rich.isEmpty()) {
+                // The caret goes where the tap landed (placeRichCaret).
+                m_pendingCaret = RichRender::positionAt(block.rich, block.rect.width(),
+                                                        pos - block.rect.topLeft());
             }
             break;
         }
@@ -214,6 +235,10 @@ void NotePageItem::beginEdit(int index)
     m_editingBlock = index;
     m_editingText = target->text;
     m_editBefore = m_page->envelope.blocksJson;
+    if (target->kind == PageBlock::Kind::Text) {
+        // M84 (D-093): a text block is edited as formatted text.
+        openRichDocument(blocksArray(m_page->envelope.blocksJson).at(index).toObject());
+    }
     update(target->rect.toAlignedRect());
     emit editingChanged();
     emit editorRequested();
@@ -222,6 +247,10 @@ void NotePageItem::beginEdit(int index)
 void NotePageItem::updateEdit(const QString &text)
 {
     if (m_page == nullptr || m_editingBlock < 0 || m_editingText == text) {
+        return;
+    }
+    if (m_richDocument != nullptr) {
+        updateRichText(text); // its commit writes the block (onRichCommitted)
         return;
     }
     m_editingText = text;
@@ -253,12 +282,16 @@ void NotePageItem::commitEdit()
     }
     const int index = m_editingBlock;
     const QString text = m_editingText;
+    closeRichDocument();
     m_editingBlock = -1;
     m_editingText.clear();
     QJsonArray blocks = blocksArray(m_page->envelope.blocksJson);
     if (index < blocks.size()) {
         const QJsonObject block = blocks.at(index).toObject();
+        // A tagged empty line (an unticked To Do) or a table of empty cells
+        // is content; only a plain, untagged empty block is litter.
         if (block.value(QStringLiteral("type")).toString() == QLatin1String("text")
+            && !block.contains(QStringLiteral("rich")) && !block.contains(QStringLiteral("tags"))
             && text.trimmed().isEmpty()) {
             // An empty text block is litter: remove it (one undo step with
             // the typing that emptied it, if any).
@@ -284,6 +317,7 @@ void NotePageItem::deleteBlock(int index)
         return;
     }
     if (m_editingBlock == index) {
+        closeRichDocument();
         m_editingBlock = -1;
         m_editingText.clear();
         emit editingChanged();

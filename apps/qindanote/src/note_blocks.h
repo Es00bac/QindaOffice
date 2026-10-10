@@ -5,7 +5,10 @@
 //
 // A page carries typed text, checklist items, images and markdown (the
 // live notes, D-057; note_markdown.h) in the envelope's
-// blocksJson. Where each one SITS has to be computed identically by the
+// blocksJson. Since M84 (D-093) a text block may carry formatted text
+// (`rich`, note_rich_text.h) and any block may carry tags (`tags`,
+// note_tags.h); the blocks object carries the page format `version` and the
+// page colour (`pageColor`). Where each one SITS has to be computed identically by the
 // screen item (which paints it and places the one live editor there) and
 // by the pure page renderer (which prints it) — a layout computed twice is
 // a layout that drifts, and the symptom is typed text printing somewhere
@@ -20,7 +23,9 @@
 // was, and gains a rect the first time it is written back after an edit.
 
 #include <QByteArray>
+#include <QColor>
 #include <QFont>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QList>
 #include <QRectF>
@@ -40,6 +45,10 @@ struct PageBlock {
     QString uid;          // Kind::Markdown: stable id (live notes find their block by it)
     QRectF rect;          // page coordinates
     bool floating = false; // true when the JSON carried a rect
+    // Kind::Text (M84): the formatted text, empty for a plain block or one
+    // whose `rich` no longer matches its `text` (note_rich_text.h).
+    QJsonObject rich;
+    QJsonArray tags;      // note_tags.h: [{p?, tag, done?, name?, icon?, color?}]
 };
 
 // Page-space insets shared by the item and the renderer.
@@ -73,5 +82,11 @@ inline constexpr qreal kTextPadding = 4;
 [[nodiscard]] QByteArray withBlocksArray(const QByteArray &blocksJson, const QJsonArray &blocks);
 // A rect stored as [x, y, w] (height is always computed).
 void setBlockRect(QJsonObject *block, const QRectF &rect);
+
+// The page format (M84): `version` of the blocks object (1 when absent)
+// and the page colour (invalid when the page is white).
+[[nodiscard]] int pageFormatVersion(const QByteArray &blocksJson);
+[[nodiscard]] QColor pageColor(const QByteArray &blocksJson);
+[[nodiscard]] QByteArray withPageColor(const QByteArray &blocksJson, const QColor &color);
 
 } // namespace QindaOffice::Apps::Notes

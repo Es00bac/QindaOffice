@@ -7,6 +7,8 @@
 
 #include "note_host.h"
 #include "note_markdown.h"
+#include "note_rich_export.h"
+#include "note_tags.h"
 #include "note_word_export.h"
 
 #include "navigator_model.h"
@@ -31,8 +33,22 @@ namespace Extras = Ai::LiveNotesExtras;
 
 namespace {
 
+// A block's own tags (not a paragraph's) as Markdown badges.
+QString blockBadges(const QJsonObject &block)
+{
+    QStringList badges;
+    for (const QJsonValue &value : block.value(QStringLiteral("tags")).toArray()) {
+        const Tags::TagDef def = Tags::fromEntry(value.toObject());
+        if (def.isValid() && value.toObject().value(QStringLiteral("p")).toString().isEmpty()) {
+            badges.append(RichExport::badge(def.name));
+        }
+    }
+    return badges.join(QLatin1Char(' '));
+}
+
 // The page's typed content as Markdown: markdown blocks as they are, text
-// blocks as paragraphs, checklist items as task lines.
+// blocks as paragraphs — formatted ones as Markdown with their tags (M84,
+// note_rich_export.h) — and checklist items as task lines.
 QString pageMarkdown(const NotePage &page)
 {
     QStringList parts;
@@ -40,12 +56,15 @@ QString pageMarkdown(const NotePage &page)
         const QJsonObject block = value.toObject();
         const QString type = block.value(QStringLiteral("type")).toString();
         const QString text = block.value(QStringLiteral("text")).toString();
+        const QString badges = blockBadges(block);
         if (type == QLatin1String("check")) {
-            parts.append(QStringLiteral("- [%1] %2")
+            parts.append(QStringLiteral("- [%1] %2%3")
                              .arg(block.value(QStringLiteral("checked")).toBool() ? QLatin1Char('x') : QLatin1Char(' '))
-                             .arg(text));
-        } else if (type == QLatin1String("markdown") || type == QLatin1String("text")) {
-            parts.append(text);
+                             .arg(text, badges.isEmpty() ? QString() : QLatin1Char(' ') + badges));
+        } else if (type == QLatin1String("markdown")) {
+            parts.append(badges.isEmpty() ? text : badges + QLatin1Char('\n') + text);
+        } else if (type == QLatin1String("text")) {
+            parts.append(RichExport::markdown(block));
         }
     }
     return parts.join(QStringLiteral("\n\n"));

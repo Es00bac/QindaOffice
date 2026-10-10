@@ -6,6 +6,10 @@
 #include "note_blocks.h"
 #include "note_page_item.h"
 #include "note_page_render.h"
+#include "note_search.h"
+#include "note_tag_summary.h"
+#include "note_tags.h"
+#include "note_templates.h"
 #include "preferences.h"
 #include "standard_actions.h"
 
@@ -40,17 +44,27 @@ NoteHost::NoteHost()
 
     createInkActions();
     createStructureActions();
+    // M84 (D-093): formatted typing, tags, search, import and page polish.
+    createFormatActions();
+    createTagActions();
+    createPageActions();
+    m_search = new NoteSearchModel(this);
+    NoteSearch::registerHost(this);
     createAssistant();
     insertMenus();
     // After insertMenus: live notes add to the Page menu too.
     createLiveNotes();
     wireEditCommands();
     rebuildNavigator();
+    syncFormatActions();
+    syncTagActions();
+    syncPageActions();
     finalizeHost();
 }
 
 NoteHost::~NoteHost()
 {
+    NoteSearch::unregisterHost(this);
     // AGENT-GUARD: end a running session while this host is still whole —
     // as a QObject child it would be destroyed after ~NoteHost, and its
     // destructor writes the transcript through the host.
@@ -117,12 +131,11 @@ void NoteHost::insertMenus()
          MenuNode::action(QStringLiteral("notePageRename")),
          MenuNode::action(QStringLiteral("noteSectionRename")), MenuNode::separator(),
          MenuNode::action(QStringLiteral("notePageMoveUp")),
-         MenuNode::action(QStringLiteral("notePageMoveDown")), MenuNode::separator(),
-         MenuNode::submenu(QStringLiteral("notePageBackground"), tr("&Background"),
-                           {MenuNode::action(QStringLiteral("notePageBackground_blank")),
-                            MenuNode::action(QStringLiteral("notePageBackground_ruled")),
-                            MenuNode::action(QStringLiteral("notePageBackground_grid")),
-                            MenuNode::action(QStringLiteral("notePageBackground_dotted"))}),
+         MenuNode::action(QStringLiteral("notePageMoveDown")),
+         MenuNode::action(QStringLiteral("noteMakeSubpageAction")),
+         MenuNode::action(QStringLiteral("notePromoteSubpageAction")), MenuNode::separator(),
+         MenuNode::submenu(QStringLiteral("notePageBackground"), tr("&Rule Lines")),
+         MenuNode::submenu(QStringLiteral("notePageColorMenu"), tr("Page Co&lour")),
          MenuNode::separator(), MenuNode::action(QStringLiteral("noteAddTextAction")),
          MenuNode::action(QStringLiteral("noteAddCheckAction")),
          MenuNode::action(QStringLiteral("noteAddImageAction")),
@@ -130,9 +143,73 @@ void NoteHost::insertMenus()
          MenuNode::action(QStringLiteral("notePageDelete")),
          MenuNode::action(QStringLiteral("noteSectionDelete")), MenuNode::separator(),
          MenuNode::action(QStringLiteral("noteExportPdf"))});
+    for (MenuNode &child : page.children) {
+        if (child.id == QLatin1String("notePageBackground")) {
+            for (const QString &background : backgrounds()) {
+                child.children.append(MenuNode::action(QStringLiteral("notePageBackground_") + background));
+            }
+        } else if (child.id == QLatin1String("notePageColorMenu")) {
+            for (const QString &color : pageColorIds()) {
+                child.children.append(MenuNode::action(QStringLiteral("notePageColor_") + color));
+            }
+            child.children += {MenuNode::separator(), MenuNode::action(QStringLiteral("notePageColorAction"))};
+        }
+    }
     menuTree()->insertMenuBefore(QStringLiteral("aiMenu"), page);
     menuTree()->insertInto(QStringLiteral("viewMenu"), QString(),
                            MenuNode::action(QStringLiteral("noteShowNavigatorAction")));
+    insertM84Menus();
+}
+
+// M84 (D-093): File ▸ Import, Edit ▸ Search Notebooks, and the Insert,
+// Format and Tags (with Find Tags) menus before Ink; the Page menu gains
+// templates, page colour, rule lines and subpages (note_host_structure.cpp
+// builds it). Every entry is also on the ribbon (NoteRibbonLayout.qml).
+void NoteHost::insertM84Menus()
+{
+    const auto a = [](const char *id) { return MenuNode::action(QString::fromLatin1(id)); };
+    menuTree()->insertInto(QStringLiteral("fileMenu"), QString::fromLatin1(ActionId::kFileCloseWindow),
+                           a("noteImportAction"));
+    menuTree()->insertInto(QStringLiteral("editMenu"), QString(), MenuNode::separator());
+    menuTree()->insertInto(QStringLiteral("editMenu"), QString(), a("noteSearchAction"));
+    MenuNode table = MenuNode::submenu(
+        QStringLiteral("noteTableMenu"), tr("Ta&ble"),
+        {a(ActionId::kTableInsertRowAbove), a(ActionId::kTableInsertRowBelow), a(ActionId::kTableInsertColumnLeft),
+         a(ActionId::kTableInsertColumnRight), MenuNode::separator(), a(ActionId::kTableDeleteRow),
+         a(ActionId::kTableDeleteColumn), a("noteTableDeleteAction")});
+    MenuNode templates = MenuNode::submenu(QStringLiteral("notePageTemplateMenu"), tr("Page &Templates"));
+    for (const QString &id : Templates::ids()) {
+        templates.children.append(MenuNode::action(QStringLiteral("notePageTemplate_") + id));
+    }
+    menuTree()->insertMenuBefore(
+        QStringLiteral("noteInkMenu"),
+        MenuNode::submenu(QStringLiteral("noteInsertMenu"), tr("&Insert"),
+                          {a(ActionId::kInsertTable), table, MenuNode::separator(), a(ActionId::kInsertHyperlink),
+                           a("noteLinkFileAction"), MenuNode::separator(), templates}));
+    MenuNode styles = MenuNode::submenu(QStringLiteral("noteStyleMenu"), tr("&Styles"));
+    for (const char *id : {"normal", "title", "heading1", "heading2", "heading3", "heading4", "heading5", "heading6",
+                           "quote", "code"}) {
+        styles.children.append(MenuNode::action(QStringLiteral("noteStyle_") + QString::fromLatin1(id)));
+    }
+    menuTree()->insertMenuBefore(
+        QStringLiteral("noteInkMenu"),
+        MenuNode::submenu(QStringLiteral("noteFormatMenu"), tr("F&ormat"),
+                          {a(ActionId::kFormatBold), a(ActionId::kFormatItalic), a(ActionId::kFormatUnderline),
+                           a(ActionId::kFormatStrikeOut), a(ActionId::kFormatSubscript), a(ActionId::kFormatSuperscript),
+                           MenuNode::separator(), a(ActionId::kFormatGrowFont), a(ActionId::kFormatShrinkFont),
+                           a(ActionId::kFormatTextColor), a(ActionId::kFormatHighlight), a(ActionId::kFormatClearFormat),
+                           MenuNode::separator(), styles, MenuNode::separator(), a(ActionId::kFormatListBullet),
+                           a(ActionId::kFormatListNumbered), a(ActionId::kFormatIndentMore),
+                           a(ActionId::kFormatIndentLess), MenuNode::separator(), a(ActionId::kFormatAlignLeft),
+                           a(ActionId::kFormatAlignCenter), a(ActionId::kFormatAlignRight)}));
+    MenuNode tags = MenuNode::submenu(QStringLiteral("noteTagsMenu"), tr("&Tags"));
+    for (const Tags::TagDef &def : Tags::builtIn()) {
+        tags.children.append(MenuNode::action(QStringLiteral("noteTag_") + def.id));
+    }
+    tags.children += {MenuNode::separator(), a("noteTagMoreAction"), a("noteTagCustomizeAction"),
+                      a("noteTagRemoveAction"), MenuNode::separator(), a("noteFindTagsAction"),
+                      a("noteTagSummaryPageAction")};
+    menuTree()->insertMenuBefore(QStringLiteral("noteInkMenu"), tags);
 }
 
 // A notebook loaded or restored: every id the host held is stale.
@@ -147,6 +224,8 @@ void NoteHost::documentReplaced()
         m_pageItem->setPage(nullptr);
     }
     rebuildNavigator();
+    // M84: a search result in this notebook asked for it to be opened.
+    applyPendingNavigation();
 }
 
 void NoteHost::wireEditCommands()
@@ -175,9 +254,10 @@ void NoteHost::wireEditCommands()
                            QString::fromLatin1(ActionId::kEditFindPrevious),
                            QString::fromLatin1(ActionId::kEditReplace)},
                           true);
-    // Cut/Copy/Paste/Select All belong to the live editor (QML handles them
-    // through the focused field); Zoom to the viewport (QML). They are
-    // enabled and routed in NoteWindow.qml.
+    // Cut/Copy/Paste/Select All belong to the live editor: the plain fields
+    // take their own keys, and the formatted-text editor's are routed and
+    // enabled in note_host_format.cpp (M84). Zoom goes to the viewport
+    // (enabled here, routed in NoteWindow.qml).
     actions()->setEnabled({QString::fromLatin1(ActionId::kViewZoomIn),
                            QString::fromLatin1(ActionId::kViewZoomOut),
                            QString::fromLatin1(ActionId::kViewZoomReset)},
@@ -187,8 +267,11 @@ void NoteHost::wireEditCommands()
         emit exportPdfRequested(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
                                 + QLatin1Char('/') + m_document->displayTitle() + QStringLiteral(".pdf"));
     });
+    // AGENT-NOTE (M84, D-093): F9 is live notes' "This Matters" (D-061);
+    // while a session listened, the two were one ambiguous shortcut and F9
+    // did nothing. The navigator takes OneNote's page-list key instead.
     ActionEntry *navigator = actions()->add(QStringLiteral("noteShowNavigatorAction"),
-                                            tr("Show &Navigator"), QKeySequence(Qt::Key_F9),
+                                            tr("Show &Navigator"), QKeySequence(QStringLiteral("Ctrl+Shift+G")),
                                             QStringLiteral("panel-left"));
     navigator->setCheckable(true);
     navigator->setChecked(true);
@@ -206,7 +289,16 @@ void NoteHost::attachPageItem(NotePageItem *item)
         m_document->setDirty(true);
         m_document->notifyContentChanged();
         m_persistTimer->start();
+        m_tagRefresh->start(); // an open Find Tags pane follows edits
     });
+    // M84: the ribbon's checked states and enabled commands follow the open
+    // text; links open in their apps.
+    connect(item, &NotePageItem::richStateChanged, this, [this] { syncFormatActions(); });
+    connect(item, &NotePageItem::editingChanged, this, [this] {
+        syncFormatActions();
+        syncTagActions();
+    });
+    connect(item, &NotePageItem::linkActivated, this, &NoteHost::openLink);
     connect(item, &NotePageItem::historyChanged, this, [this] {
         actions()->setEnabled(QString::fromLatin1(ActionId::kEditUndo), m_pageItem->canUndo());
         actions()->setEnabled(QString::fromLatin1(ActionId::kEditRedo), m_pageItem->canRedo());
@@ -215,7 +307,10 @@ void NoteHost::attachPageItem(NotePageItem *item)
         syncInkChecks();
         updatePageStatus();
     });
-    connect(item, &NotePageItem::pageChanged, this, [this] { syncStructureEnablement(); });
+    connect(item, &NotePageItem::pageChanged, this, [this] {
+        syncStructureEnablement();
+        syncPageActions();
+    });
     connect(item, &NotePageItem::pageTitleChanged, this, [this] {
         m_navigator->rebuild();
         emit currentPageChanged();
@@ -296,6 +391,9 @@ void NoteHost::openPage(const QString &sectionId, const QString &pageId)
     updatePageStatus();
     syncStructureEnablement();
     syncInkChecks();
+    syncFormatActions();
+    syncTagActions();
+    syncPageActions();
 }
 
 NotePage *NoteHost::currentPage() const

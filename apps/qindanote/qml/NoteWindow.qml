@@ -27,8 +27,22 @@ OfficeWindow {
         colorSlot: colorSlot
         widthSlot: widthSlot
         backgroundSlot: backgroundSlot
+        fontSlot: window.textSlots.font
+        sizeSlot: window.textSlots.size
+        textColorSlot: window.textSlots.textColor
+        highlightSlot: window.textSlots.highlight
     }
     ribbonTabs: ribbonLayout.tabs
+    // M84 (D-093): the Text tab's font, size and colour widgets.
+    readonly property NoteTextSlots textSlots: NoteTextSlots {
+        note: window.note
+        onCustomColorRequested: function(target) { window.openColorDialog(target, "#202028") }
+    }
+    function openColorDialog(target, current) {
+        formatColorDialog.target = target
+        formatColorDialog.selectedColor = current
+        formatColorDialog.open()
+    }
 
     Component {
         id: colorSlot
@@ -79,8 +93,10 @@ OfficeWindow {
         Tk.ComboBox {
             objectName: "noteBackgroundCombo"
             small: true
-            implicitWidth: 96
-            model: [qsTr("Blank"), qsTr("Ruled"), qsTr("Grid"), qsTr("Dotted")]
+            implicitWidth: 104
+            // NoteHost.backgrounds order (M84 adds OneNote's rule-line sizes).
+            model: [qsTr("Blank"), qsTr("Narrow ruled"), qsTr("Ruled"), qsTr("Wide ruled"), qsTr("Small grid"),
+                    qsTr("Grid"), qsTr("Large grid"), qsTr("Dotted")]
             currentIndex: pageHost.pageItem !== null ? Math.max(0, window.note.backgrounds.indexOf(pageHost.pageItem.background)) : 0
             onActivated: function(index) { window.note.setBackground(window.note.backgrounds[index]) }
         }
@@ -105,7 +121,7 @@ OfficeWindow {
         // stay reachable through their persistent View/AI commands.
         function showSidePanel(panelId, visible) {
             if (visible && width > 0 && width < Tk.Theme.size.panelMinWidth * 3) {
-                for (const other of ["navigator", "assistant", "live", "session"])
+                for (const other of ["navigator", "assistant", "live", "session", "tags", "search"])
                     if (other !== panelId && !hiddenPanels.includes(other)) hidePanel(other)
             }
             if (visible === hiddenPanels.includes(panelId)) {
@@ -120,7 +136,7 @@ OfficeWindow {
         }
         onWidthChanged: Qt.callLater(function() {
             if (dock.width <= 0 || dock.width >= Tk.Theme.size.panelMinWidth * 3) return
-            for (const panelId of ["session", "live", "assistant"])
+            for (const panelId of ["search", "tags", "session", "live", "assistant"])
                 if (!dock.hiddenPanels.includes(panelId)) { dock.showSidePanel(panelId, true); break }
         })
         canvas: Tk.Stack {
@@ -208,6 +224,29 @@ OfficeWindow {
                 note: window.note
             }
         }
+        // M84 (D-093): Find Tags and Search Notebooks.
+        Tk.DockPanel {
+            panelId: "tags"
+            title: qsTr("Tags")
+            iconName: "list-checks"
+            zone: "right"
+            mode: "hidden"
+            extent: 300
+            minWidth: 240
+            closable: true
+            NoteTagsPanel { objectName: "tagsPanel"; note: window.note }
+        }
+        Tk.DockPanel {
+            panelId: "search"
+            title: qsTr("Search")
+            iconName: "search"
+            zone: "right"
+            mode: "hidden"
+            extent: 320
+            minWidth: 240
+            closable: true
+            NoteSearchPanel { id: searchPanel; objectName: "searchPanel"; note: window.note }
+        }
         // Keeps the two toggles honest when a panel is closed from its own
         // header (the list carries panel ids).
         // Defer action feedback until the model's menu binding has finished.
@@ -218,6 +257,7 @@ OfficeWindow {
             window.host.actions.setChecked("aiAssistantAction", !hidden.includes("assistant"))
             window.host.actions.setChecked("noteLiveNotesAction", !hidden.includes("live"))
             window.host.actions.setChecked("noteSessionPanelAction", !hidden.includes("session"))
+            window.host.actions.setChecked("noteFindTagsAction", !hidden.includes("tags"))
         })
     }
 
@@ -277,6 +317,40 @@ OfficeWindow {
         function onExportPdfRequested(suggestedPath) { exportDialog.selectedFile = "file://" + suggestedPath; exportDialog.open() }
         function onAddImageRequested() { imageDialog.open() }
         function onCustomPenColorRequested(current) { colorDialog.selectedColor = current; colorDialog.open() }
+        // M84 (D-093)
+        function onFindTagsToggleRequested(visible) { dock.showSidePanel("tags", visible) }
+        function onSearchRequested() { dock.showSidePanel("search", true); Qt.callLater(searchPanel.focusField) }
+        function onLinkDialogRequested(selected, address) {
+            linkDialog.selected = selected; linkDialog.address = address; linkDialog.open()
+        }
+        function onTableDialogRequested() { tableDialog.open() }
+        function onTagsDialogRequested(customize) { tagsDialog.customize = customize; tagsDialog.open() }
+        function onFileLinkRequested() { fileLinkDialog.open() }
+        function onImportRequested() { importDialog.open() }
+        function onFormatColorRequested(target, current) { window.openColorDialog(target, current) }
+    }
+    NoteLinkDialog { id: linkDialog; onLinkApplied: function(url, label) { window.note.applyLink(url, label) } }
+    NoteTableDialog { id: tableDialog; onTableApplied: function(rows, columns) { window.note.insertTable(rows, columns) } }
+    NoteTagsDialog { id: tagsDialog; note: window.note }
+    Dialogs.FileDialog {
+        id: importDialog; title: qsTr("Import"); fileMode: Dialogs.FileDialog.OpenFile
+        nameFilters: window.note.importNameFilters
+        onAccepted: window.note.importFile(selectedFile)
+    }
+    Dialogs.FileDialog {
+        id: fileLinkDialog; title: qsTr("Link to File"); fileMode: Dialogs.FileDialog.OpenFile
+        nameFilters: [qsTr("All files (*)")]
+        onAccepted: window.note.linkFile(selectedFile)
+    }
+    Dialogs.ColorDialog {
+        id: formatColorDialog
+        property string target: "text"
+        title: target === "page" ? qsTr("Page colour") : target === "highlight" ? qsTr("Highlight colour") : qsTr("Font colour")
+        onAccepted: {
+            if (target === "page") window.note.applyPageColor(selectedColor)
+            else if (target === "highlight") window.note.applyHighlight(selectedColor)
+            else window.note.applyTextColor(selectedColor)
+        }
     }
 
     NoteLiveSetupDialog { id: liveSetup; session: window.note.live }

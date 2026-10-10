@@ -28,7 +28,7 @@ void NavigatorModel::rebuild()
             QList<Row> pages;
             for (const NotePage &page : section.pages) {
                 if (matches(page.title)) {
-                    pages.append({section.id, page.id, page.title, 0});
+                    pages.append({section.id, page.id, page.title, 0, page.level});
                 }
             }
             // A filter hides sections with no matching page; without a
@@ -36,7 +36,7 @@ void NavigatorModel::rebuild()
             if (!m_filter.isEmpty() && pages.isEmpty()) {
                 continue;
             }
-            m_rows.append({section.id, {}, section.name, int(section.pages.size())});
+            m_rows.append({section.id, {}, section.name, int(section.pages.size()), 0});
             if (!m_collapsed.contains(section.id) || !m_filter.isEmpty()) {
                 m_rows.append(pages);
             }
@@ -79,7 +79,7 @@ QVariant NavigatorModel::data(const QModelIndex &index, int role) const
     case Qt::DisplayRole:
         return row.title;
     case DepthRole:
-        return row.pageId.isEmpty() ? 0 : 1;
+        return row.pageId.isEmpty() ? 0 : 1 + row.level;
     case IsSectionRole:
         return row.pageId.isEmpty();
     case ExpandedRole:

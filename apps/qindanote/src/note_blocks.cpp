@@ -2,6 +2,8 @@
 #include "note_blocks.h"
 
 #include "note_markdown.h"
+#include "note_rich_render.h"
+#include "note_rich_text.h"
 
 #include <QFontMetricsF>
 #include <QGuiApplication>
@@ -64,6 +66,34 @@ QByteArray withBlocksArray(const QByteArray &blocksJson, const QJsonArray &block
 {
     QJsonObject root = QJsonDocument::fromJson(blocksJson).object();
     root.insert(QStringLiteral("blocks"), blocks);
+    // AGENT-CONTRACT (D-093, docs/qindanote.md#page-format): every page
+    // written since M84 says which format it is in. Readers before M84
+    // ignore the member; they still find every block's plain `text`.
+    root.insert(QStringLiteral("version"), RichBlock::kPageFormatVersion);
+    return QJsonDocument(root).toJson(QJsonDocument::Compact);
+}
+
+int pageFormatVersion(const QByteArray &blocksJson)
+{
+    return QJsonDocument::fromJson(blocksJson).object().value(QStringLiteral("version")).toInt(1);
+}
+
+QColor pageColor(const QByteArray &blocksJson)
+{
+    const QString name =
+        QJsonDocument::fromJson(blocksJson).object().value(QStringLiteral("pageColor")).toString();
+    return name.isEmpty() ? QColor() : QColor(name);
+}
+
+QByteArray withPageColor(const QByteArray &blocksJson, const QColor &color)
+{
+    QJsonObject root = QJsonDocument::fromJson(blocksJson).object();
+    if (color.isValid() && color != QColor(Qt::white)) {
+        root.insert(QStringLiteral("pageColor"), color.name(QColor::HexRgb));
+    } else {
+        root.remove(QStringLiteral("pageColor"));
+    }
+    root.insert(QStringLiteral("version"), RichBlock::kPageFormatVersion);
     return QJsonDocument(root).toJson(QJsonDocument::Compact);
 }
 
@@ -113,13 +143,23 @@ QList<PageBlock> layoutBlocks(const QByteArray &blocksJson, qreal pageWidth)
         } else if (type == QLatin1String("text")) {
             block.kind = PageBlock::Kind::Text;
             block.text = object.value(QStringLiteral("text")).toString();
-            height = textBlockHeight(block.text, width);
+            const QJsonObject rich = object.value(QStringLiteral("rich")).toObject();
+            // AGENT-GUARD (note_rich_text.h): formatting whose plain text is
+            // not the block's text was left behind by an older QindaNote that
+            // edited `text`; painting it would show the old words.
+            if (!rich.isEmpty() && RichRender::plainText(rich) == block.text) {
+                block.rich = rich;
+                height = RichRender::height(rich, width);
+            } else {
+                height = textBlockHeight(block.text, width);
+            }
         } else {
             // An unknown block type from a newer version: skip it, but keep
             // its index so nothing else is renumbered when it is written
             // back.
             continue;
         }
+        block.tags = object.value(QStringLiteral("tags")).toArray();
         if (block.floating) {
             block.rect = QRectF(x, rect.at(1).toDouble(), width, height);
         } else {

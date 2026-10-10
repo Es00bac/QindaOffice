@@ -14,7 +14,10 @@
 // Files: note_host.cpp (document, pages, status), note_host_text.cpp
 // (find/replace, Export PDF, print), note_host_live.cpp (live notes),
 // note_host_structure.cpp (the Page menu: new/rename/delete/move,
-// background), note_host_ink.cpp (the Ink menu: tools, pickers, tools.json).
+// background), note_host_ink.cpp (the Ink menu: tools, pickers, tools.json),
+// and M84 (D-093): note_host_format.cpp (formatted typing: Format and
+// Insert commands), note_host_tags.cpp (Tags, Find Tags), note_host_pages.cpp
+// (search, import, page templates, page colour, subpages, links).
 
 #include "assistant_controller.h"
 #include "document_host.h"
@@ -24,6 +27,7 @@
 #include "note_page_item.h"
 
 #include <QColor>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QPointer>
 #include <QtQml/qqmlregistration.h>
@@ -38,6 +42,8 @@ class ProviderSettings;
 namespace QindaOffice::Apps::Notes {
 
 class NavigatorModel;
+class NoteSearchModel;
+class NoteTagSummary;
 
 // AGENT-NOTE: not `final` — QML_ELEMENT derives a creation helper from it.
 class NoteHost : public Quick::DocumentHost {
@@ -69,6 +75,20 @@ class NoteHost : public Quick::DocumentHost {
     // {hasNotes, audioUrl, sections: [{heading, ms}], unclear: [{text,
     // guess, ms}], hasCards}.
     Q_PROPERTY(QVariantMap pageSession READ pageSession NOTIFY sessionChanged)
+    // M84 (D-093): the formatting of the open text's selection for the
+    // ribbon's font, size and colour widgets — {editable, family, size,
+    // color, highlight, inTable}.
+    Q_PROPERTY(QVariantMap textFormat READ textFormat NOTIFY textFormatChanged)
+    // Tags (built-in and the user's custom ones): [{id, name, icon, color,
+    // todo, highlight, custom}].
+    Q_PROPERTY(QVariantList tagCatalog READ tagCatalog NOTIFY tagCatalogChanged)
+    Q_PROPERTY(QStringList customTagIcons READ customTagIcons CONSTANT)
+    Q_PROPERTY(QindaOffice::Apps::Notes::NoteTagSummary *tagSummary READ tagSummary CONSTANT)
+    Q_PROPERTY(QindaOffice::Apps::Notes::NoteSearchModel *search READ search CONSTANT)
+    Q_PROPERTY(QStringList importNameFilters READ importNameFilters CONSTANT)
+    Q_PROPERTY(QStringList pageColorIds READ pageColorIds CONSTANT)
+    Q_MOC_INCLUDE("note_search.h")
+    Q_MOC_INCLUDE("note_tag_summary.h")
 public:
     NoteHost();
     ~NoteHost() override;
@@ -161,6 +181,43 @@ public:
     // Ctrl+click on a [12:40] in the notes, or a section in the panel.
     Q_INVOKABLE void playRecordingAt(qint64 ms) { emit playRecordingRequested(ms); }
 
+    // ---- M84 (D-093): formatted typing, tags, search, import ----
+    [[nodiscard]] QVariantMap textFormat() const;
+    Q_INVOKABLE void applyFontFamily(const QString &family);
+    Q_INVOKABLE void applyFontSize(qreal points);
+    Q_INVOKABLE void applyTextColor(const QColor &color);
+    // An invalid colour clears the highlight.
+    Q_INVOKABLE void applyHighlight(const QColor &color);
+    Q_INVOKABLE void applyLink(const QString &address, const QString &label);
+    Q_INVOKABLE void insertTable(int rows, int columns);
+    Q_INVOKABLE void linkFile(const QUrl &url);
+    // Ctrl+click on a link: web pages and documents open in their apps.
+    Q_INVOKABLE void openLink(const QString &href);
+    // The open editor takes the keyboard back (after a ribbon widget).
+    Q_INVOKABLE void focusEditor() { emit editorFocusRequested(); }
+    [[nodiscard]] QVariantList tagCatalog() const;
+    [[nodiscard]] QStringList customTagIcons() const;
+    Q_INVOKABLE void applyTag(const QString &tagId);
+    Q_INVOKABLE bool addCustomTag(const QString &name, const QString &icon, const QColor &color);
+    Q_INVOKABLE void removeCustomTag(const QString &tagId);
+    [[nodiscard]] NoteTagSummary *tagSummary() const { return m_tagSummary; }
+    [[nodiscard]] NoteSearchModel *search() const { return m_search; }
+    // A To Do tag ticked on any page (the open one through its history).
+    bool setTagDone(const QString &sectionId, const QString &pageId, int block, int entry, bool done);
+    // Opens a page and puts the caret in block `block` (paragraph when given).
+    Q_INVOKABLE void navigateTo(const QString &sectionId, const QString &pageId, int block,
+                                const QString &paragraph = {});
+    [[nodiscard]] QStringList importNameFilters() const;
+    Q_INVOKABLE bool importFile(const QUrl &url);
+    [[nodiscard]] QStringList pageColorIds() const;
+    Q_INVOKABLE void applyPageColor(const QColor &color);
+    // A new page holding `blocks` after page `after` (the open one when
+    // empty) in the open section; returns its id.
+    QString addPageAfterCurrent(const QString &title, const QJsonArray &blocks,
+                                const QString &background = QStringLiteral("blank"),
+                                const QString &after = {});
+    Q_INVOKABLE void createTagSummaryPage();
+
 signals:
     void currentPageChanged();
     // The window opens the matching dialog and answers through the
@@ -195,6 +252,19 @@ signals:
     void exportMarkdownRequested(const QString &suggestedPath);
     void exportWordRequested(const QString &suggestedPath);
     void exportAnkiRequested(const QString &suggestedPath);
+    // M84: the dialogs and panes of formatted typing, tags, search, import.
+    void linkDialogRequested(const QString &selected, const QString &address);
+    void tableDialogRequested();
+    void tagsDialogRequested(bool customize);
+    void fileLinkRequested();
+    void importRequested();
+    // target: "text" | "highlight" | "page"
+    void formatColorRequested(const QString &target, const QColor &current);
+    void findTagsToggleRequested(bool visible);
+    void searchRequested();
+    void editorFocusRequested();
+    void textFormatChanged();
+    void tagCatalogChanged();
 
 protected:
     [[nodiscard]] QString filterString() const override;
@@ -211,6 +281,7 @@ private:
     void updatePageStatus();
     void wireEditCommands();
     void insertMenus();
+    void insertM84Menus();
     // note_host_structure.cpp
     void createStructureActions();
     void syncStructureEnablement();
@@ -225,6 +296,19 @@ private:
     void saveToolState();
     // note_host_ai.cpp
     void createAssistant();
+    // note_host_format.cpp (M84)
+    void createFormatActions();
+    void syncFormatActions();
+    bool richCommand(const QString &id, const QVariantMap &args = {});
+    // note_host_tags.cpp (M84)
+    void createTagActions();
+    void syncTagActions();
+    // note_host_pages.cpp (M84)
+    void createPageActions();
+    void syncPageActions();
+    void newPageFromTemplate(const QString &templateId);
+    void changePageLevel(int delta);
+    void applyPendingNavigation();
     // note_host_live.cpp
     void createLiveNotes();
     void syncLiveActions();
@@ -248,6 +332,12 @@ private:
     LiveNotesSession *m_live = nullptr;
     Ai::ProviderSettings *m_providerSettings = nullptr;
     QTimer *m_sessionTimer = nullptr;
+    // M84
+    NoteTagSummary *m_tagSummary = nullptr;
+    NoteSearchModel *m_search = nullptr;
+    QTimer *m_tagRefresh = nullptr;
+    bool m_syncingFormat = false;
+    QColor m_highlightColor{255, 225, 77};
 };
 
 } // namespace QindaOffice::Apps::Notes

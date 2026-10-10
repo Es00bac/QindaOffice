@@ -55,10 +55,16 @@ void NoteHost::createStructureActions()
     connect(make("notePageMoveDown", tr("Move Page D&own"),
                  QKeySequence(QStringLiteral("Ctrl+Shift+Down")), QStringLiteral("arrow-down")),
             &ActionEntry::triggered, this, [this] { movePage(1); });
+    // OneNote's rule lines (M84 adds the narrow/wide ruling and the small/
+    // large grids; the ids of the first four are M22's and stay).
     for (const auto &[id, text] : QList<std::pair<QString, QString>>{
              {QStringLiteral("blank"), tr("&Blank")},
+             {QStringLiteral("ruledNarrow"), tr("&Narrow Ruled")},
              {QStringLiteral("ruled"), tr("&Ruled")},
+             {QStringLiteral("ruledWide"), tr("&Wide Ruled")},
+             {QStringLiteral("gridSmall"), tr("&Small Grid")},
              {QStringLiteral("grid"), tr("&Grid")},
+             {QStringLiteral("gridLarge"), tr("&Large Grid")},
              {QStringLiteral("dotted"), tr("&Dotted")}}) {
         ActionEntry *entry = model->add(QStringLiteral("notePageBackground_") + id, text);
         entry->setRadioGroup(QStringLiteral("notePageBackground"));
@@ -149,8 +155,9 @@ void NoteHost::syncStructureEnablement()
 
 QStringList NoteHost::backgrounds() const
 {
-    return {QStringLiteral("blank"), QStringLiteral("ruled"), QStringLiteral("grid"),
-            QStringLiteral("dotted")};
+    return {QStringLiteral("blank"),     QStringLiteral("ruledNarrow"), QStringLiteral("ruled"),
+            QStringLiteral("ruledWide"), QStringLiteral("gridSmall"),   QStringLiteral("grid"),
+            QStringLiteral("gridLarge"), QStringLiteral("dotted")};
 }
 
 void NoteHost::setBackground(const QString &background)

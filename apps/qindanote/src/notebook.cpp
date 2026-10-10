@@ -115,12 +115,27 @@ bool Notebook::load(const QString &path, QString *error)
             NotePage page;
             page.id = pageObject.value(QStringLiteral("id")).toString();
             page.title = pageObject.value(QStringLiteral("title")).toString();
+            page.level = qBound(0, pageObject.value(QStringLiteral("level")).toInt(0), 2);
             section.pages.append(page);
         }
         m_sections.append(section);
     }
     return true;
 }
+
+namespace {
+
+// A page's index entry; `level` only for a subpage (older indexes unchanged).
+QJsonObject pageIndexEntry(const NotePage &page)
+{
+    QJsonObject entry{{QStringLiteral("id"), page.id}, {QStringLiteral("title"), page.title}};
+    if (page.level > 0) {
+        entry.insert(QStringLiteral("level"), page.level);
+    }
+    return entry;
+}
+
+} // namespace
 
 bool Notebook::save(QString *error) const
 {
@@ -176,8 +191,7 @@ bool Notebook::save(QString *error) const
     for (const NoteSection &section : m_sections) {
         QJsonArray pages;
         for (const NotePage &page : section.pages) {
-            pages.append(QJsonObject{{QStringLiteral("id"), page.id},
-                                     {QStringLiteral("title"), page.title}});
+            pages.append(pageIndexEntry(page));
         }
         sections.append(QJsonObject{{QStringLiteral("id"), section.id},
                                     {QStringLiteral("name"), section.name},
@@ -347,9 +361,8 @@ QByteArray Notebook::toRecoveryJson() const
     for (const NoteSection &section : m_sections) {
         QJsonArray pages;
         for (const NotePage &page : section.pages) {
-            QJsonObject entry{{QStringLiteral("id"), page.id},
-                              {QStringLiteral("title"), page.title},
-                              {QStringLiteral("loaded"), page.loaded}};
+            QJsonObject entry = pageIndexEntry(page);
+            entry.insert(QStringLiteral("loaded"), page.loaded);
             if (page.loaded) {
                 // Only a loaded page carries content worth recovering; an
                 // unloaded one is still exactly what its file holds.
@@ -397,6 +410,7 @@ bool Notebook::fromRecoveryJson(const QByteArray &json, QString *error)
             NotePage page;
             page.id = pageObject.value(QStringLiteral("id")).toString();
             page.title = pageObject.value(QStringLiteral("title")).toString();
+            page.level = qBound(0, pageObject.value(QStringLiteral("level")).toInt(0), 2);
             page.loaded = pageObject.value(QStringLiteral("loaded")).toBool(false);
             if (page.loaded) {
                 static_cast<void>(Ink::pageFromJson(

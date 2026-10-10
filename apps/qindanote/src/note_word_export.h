@@ -7,6 +7,9 @@
 // colours, callouts and tables come along), checklists as ☐ / ☑ lines,
 // pictures with their own bytes, and the handwriting as one picture of the
 // ink. Blocks follow reading order (top to bottom, then left to right).
+// Since M84 (D-093) formatted text keeps its Word formatting — runs, Title,
+// Heading 1–6, Quote and Code styles, lists, tables, links — and tags come
+// along (To Do as ☐ / ☑, the others as their icons; note_rich_export.h).
 // Written through office_docx, so Microsoft Word opens it as it is.
 
 #include <QString>

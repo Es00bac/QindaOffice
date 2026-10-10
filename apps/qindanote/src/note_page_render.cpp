@@ -2,6 +2,8 @@
 #include "note_page_render.h"
 
 #include "note_markdown.h"
+#include "note_rich_render.h"
+#include "note_tags.h"
 
 #include "ink_persistence.h"
 
@@ -16,15 +18,25 @@ void paintNoteBackground(QPainter *painter, const QString &background, const QSi
     painter->setPen(QPen(QColor(0xc8, 0xc8, 0xd2), 0));
     const qreal w = pageSize.width();
     const qreal h = pageSize.height();
-    if (background == QLatin1String("ruled")) {
-        for (qreal y = 32; y < h; y += 28) {
+    // OneNote's rule lines (M84): narrow, standard and wide ruling; small,
+    // standard and large grids. Unknown names (a newer version) draw none.
+    const qreal ruled = background == QLatin1String("ruledNarrow") ? 20
+        : background == QLatin1String("ruled")                    ? 28
+        : background == QLatin1String("ruledWide")                ? 36
+                                                                   : 0;
+    const qreal grid = background == QLatin1String("gridSmall") ? 14
+        : background == QLatin1String("grid")                   ? 28
+        : background == QLatin1String("gridLarge")               ? 42
+                                                                  : 0;
+    if (ruled > 0) {
+        for (qreal y = 32; y < h; y += ruled) {
             painter->drawLine(QPointF(24, y), QPointF(w - 24, y));
         }
-    } else if (background == QLatin1String("grid")) {
-        for (qreal y = 24; y < h; y += 28) {
+    } else if (grid > 0) {
+        for (qreal y = 24; y < h; y += grid) {
             painter->drawLine(QPointF(24, y), QPointF(w - 24, y));
         }
-        for (qreal x = 24; x < w; x += 28) {
+        for (qreal x = 24; x < w; x += grid) {
             painter->drawLine(QPointF(x, 24), QPointF(x, h - 24));
         }
     } else if (background == QLatin1String("dotted")) {
@@ -55,6 +67,12 @@ void paintNoteBlocks(QPainter *painter, const QList<PageBlock> &blocks, PageBloc
             paintMarkdown(painter, box, block.text);
             break;
         case PageBlock::Kind::Text:
+            if (!block.rich.isEmpty()) {
+                // M84 (D-093): formatted text through the same QindaTK
+                // layout the live editor uses (note_rich_render.h).
+                RichRender::paint(painter, box, block.rich);
+                break;
+            }
             painter->drawText(box.adjusted(kTextPadding, kTextPadding, -kTextPadding, -kTextPadding),
                               Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop, block.text);
             break;
@@ -102,18 +120,26 @@ void paintNoteBlocks(QPainter *painter, const QList<PageBlock> &blocks, PageBloc
     painter->restore();
 }
 
+QColor notePaper(const QByteArray &blocksJson)
+{
+    const QColor color = pageColor(blocksJson);
+    return color.isValid() ? color : QColor(Qt::white);
+}
+
 void renderNotePage(QPainter *painter, const NotePage &page, const QSizeF &pageSize)
 {
     const QRectF rect(QPointF(0, 0), pageSize);
-    painter->fillRect(rect, Qt::white);
+    painter->fillRect(rect, notePaper(page.envelope.blocksJson));
     painter->save();
     painter->setClipRect(rect);
     paintNoteBackground(painter, page.envelope.background, pageSize);
     const QList<PageBlock> blocks = layoutBlocks(page.envelope.blocksJson, pageSize.width());
     paintNoteBlocks(painter, blocks, PageBlock::Kind::Image);
+    Tags::paintBands(painter, blocks);
     paintNoteBlocks(painter, blocks, PageBlock::Kind::Text);
     paintNoteBlocks(painter, blocks, PageBlock::Kind::Markdown);
     paintNoteBlocks(painter, blocks, PageBlock::Kind::Check);
+    Tags::paintIcons(painter, blocks);
     Ink::renderStrokes(painter, page.envelope.ink.strokes());
     painter->restore();
 }

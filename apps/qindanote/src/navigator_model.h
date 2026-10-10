@@ -3,8 +3,9 @@
 
 // The notebook's sections and pages as one flat list for the navigator
 // (a Tk.Scroll of Tk.TreeRows): section rows at depth 0, page rows at
-// depth 1, collapsed sections hide their pages, a filter hides pages whose
-// title does not match (and sections with no visible page).
+// depth 1 (subpages, M84, one deeper per level), collapsed sections hide
+// their pages, a filter hides pages whose title does not match (and
+// sections with no visible page).
 //
 // AGENT-GUARD: rows carry section/page IDS resolved through the Notebook
 // at use time, never pointers — the notebook's vectors reallocate.
@@ -68,6 +69,7 @@ private:
         QString pageId; // empty for a section row
         QString title;
         int pageCount = 0;
+        int level = 0; // a subpage's level (M84)
     };
     [[nodiscard]] bool matches(const QString &title) const;
 

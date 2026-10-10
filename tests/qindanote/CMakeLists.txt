@@ -5,9 +5,13 @@
 # and the panel export through the desktop's own validator
 # (tst_note_menu_export). Every test links the app's static QML module, so
 # a source added to apps/qindanote/CMakeLists.txt is in every test.
+# M84 (D-093): formatted typing (tst_note_rich), the exports
+# (tst_note_export), tags (tst_note_tags), search (tst_note_search) and
+# import (tst_note_import).
 foreach(name IN ITEMS tst_qindanote tst_note_blocks tst_note_input tst_note_ui tst_note_menu_export
-                     tst_note_markdown tst_note_agent tst_note_word)
-    add_executable(${name} ${name}.cpp note_test_support.h)
+                     tst_note_markdown tst_note_agent tst_note_word
+                     tst_note_rich tst_note_export tst_note_tags tst_note_search tst_note_import)
+    add_executable(${name} ${name}.cpp note_test_support.h note_rich_fixture.h)
     target_link_libraries(${name} PRIVATE qindanote_app qindanote_appplugin
         Qt6::Test Qt6::GuiPrivate)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)

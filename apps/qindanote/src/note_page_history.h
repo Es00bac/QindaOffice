@@ -4,8 +4,9 @@
 // QindaNote's ONE page history (plan section 3.6): a QUndoStack owned by
 // NotePageItem. Ink strokes and eraser gestures (InkCommand), block edits
 // (BlocksCommand: old/new blocksJson, consecutive typing on one block
-// merges) and background changes (BackgroundCommand) share it: if it
-// changed the page, Ctrl+Z undoes it.
+// merges), background changes (BackgroundCommand) and, since M84, each edit
+// of formatted text (RichEditCommand) share it: if it changed the page,
+// Ctrl+Z undoes it.
 //
 // AGENT-GUARD: undo and redo are two halves of ONE history. QUndoStack
 // clears the redo branch on every push — a redo stack that survives a
@@ -18,7 +19,12 @@
 
 #include <QByteArray>
 #include <QPointer>
+#include <QStringList>
 #include <QUndoCommand>
+
+namespace QindaTK {
+class RichTextDocument;
+}
 
 namespace QindaOffice::Apps::Notes {
 
@@ -83,6 +89,42 @@ private:
     QByteArray m_before, m_after;
     QString m_oldTitle, m_newTitle;
     QPointer<NotePageItem> m_item;
+    bool m_alreadyApplied = true;
+};
+
+// One edit of a text block's formatted text (M84, D-093): the QindaTK
+// transaction(s) the live editor committed, kept by the page history
+// (RichTextDocument::externalUndo). Consecutive typing or deleting merges
+// into one step, and so does a host command made of several transactions
+// (a "macro", e.g. creating the Quote style and applying it).
+//
+// AGENT-NOTE: undo replays the transactions on the live document while
+// its editor is still open on the block and the page is exactly as this
+// step left it (the caret and selection survive); otherwise the block
+// snapshot is restored, as for every BlocksCommand. Revisions cannot be the
+// test: they only grow, so a state reached again by undo has a new one.
+class RichEditCommand final : public QUndoCommand {
+public:
+    enum { Id = 2 };
+    RichEditCommand(const QString &text, QByteArray before, QByteArray after, NotePageItem *item,
+                    QindaTK::RichTextDocument *document, int block, const QString &transaction,
+                    bool mergeable, int macro);
+    ~RichEditCommand() override;
+    void undo() override;
+    void redo() override;
+    [[nodiscard]] int id() const override { return Id; }
+    bool mergeWith(const QUndoCommand *other) override;
+
+private:
+    QByteArray m_before;
+    QByteArray m_after;
+    QPointer<NotePageItem> m_item;
+    QPointer<QindaTK::RichTextDocument> m_document;
+    int m_block;
+    // Transactions oldest first; mutable: a merge takes the other's.
+    mutable QStringList m_transactions;
+    bool m_mergeable;
+    int m_macro;
     bool m_alreadyApplied = true;
 };
 

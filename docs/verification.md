@@ -33,6 +33,84 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M84 Note gates (D-093)
+
+Qualified on qinda (Portage QindaTK r15, Qt 6.11.1) in one tree built
+with `-O0` and `nice -n 19 ionice -c3`, only the Note scope (office_ink,
+office_speech, office_ai, office_docx, the QindaNote app and their tests):
+`ctest --preset dev -R "note|live_notes|ink" -E "calc_io|write_|show_"` —
+**22/22 passed, 122.24 s** (the regex's three other-app matches,
+`tst_calc_io_links`, `tst_write_endnotes` and `tst_show_chart_notes`, are
+the lead's full-suite run). The five new binaries: `tst_note_rich` 8/8,
+`tst_note_export` 5/5, `tst_note_tags` 6/6, `tst_note_search` 4/4,
+`tst_note_import` 7/7 (QtTest totals, init/cleanup included);
+`tst_note_ui` 9/9, `tst_note_menu_export` 5/5, `tst_note_input` 13/13.
+
+- `tst_note_rich`: every run format (bold, italic, underline, strike,
+  super/subscript, font, size, colour, highlight, link), the Title, Heading
+  2, Quote and Code styles, a bulleted and a numbered list and a table with
+  a header row round-trip through the notebook's files (`"version":2` on
+  disk); a page as M65 wrote it loads unchanged, lays out on the plain path
+  and is saved byte for byte, and a stale `rich` under edited `text` shows
+  the text. Through the real window: typing, Bold, typing are three undo
+  steps with the editor staying open and the redo path back; bullets with
+  Enter/Tab levels; a table in the block with Tab between cells, rows and
+  columns added and deleted from the Table tab, the table deleted; a paste
+  of hostile HTML keeps bold, colour and the https link and drops the
+  script, the handler, the `javascript:` link and the remote picture; Title,
+  Heading 2 (one undo step back to Title), Normal; Link and Link to File;
+  Ctrl+K asks for the link dialog.
+- `tst_note_export`: the formatted, tagged page in Word, read back through
+  `office_docx` — every run format, Heading 2, Word's Title, Quote and Code
+  styles, two lists, the table, ☐ / ☑ and the tag icons as pictures; in
+  PDF, rendered back through Poppler — the text layer, the red run, the
+  highlight and the boxes; in Markdown — the vocabulary, `- [ ]` / `- [x]`,
+  `[#Question]`, a GFM table — and back through Import with its To Do boxes.
+  With `QQO_OOXML_SCHEMA_DIR` the package is schema-validated.
+- `tst_note_tags`: tags toggle on paragraphs (undo keeps the editor open),
+  a tag with nothing open starts a tagged note, a checklist takes a block
+  tag; Ctrl+1 / Ctrl+2 in the window, Enter carries To Do to the next line,
+  the margin box ticks and undoes; Find Tags over three pages in two
+  sections (order, scopes, grouping), a click goes to the line, ticking from
+  the pane, the summary page; custom tags keep their look after removal.
+- `tst_note_search`: titles, text, checklists, live-notes Markdown and tag
+  names; every word on the page; section and page scopes; all notebooks —
+  another open window's untitled notebook and a recent one on disk; Ctrl+E
+  focuses the pane; a hit opens Garden with the caret in its block.
+- `tst_note_import`: a Word report (preamble, two Heading 1s, bold, a
+  picture, Heading 2, a list, a table) becomes three pages with all of it;
+  Markdown (title, To Do boxes, table) and hostile HTML (title, sanitised,
+  no remote picture); `.one` refused with MS-ONESTORE and the way round, in
+  the window's message; pages land after the open one in order; templates,
+  page colour and subpages through the commands and the files.
+- Fixtures regenerated deliberately (`QQO_UPDATE_FIXTURES=1`): the editor
+  is a `RichTextEditor` (and the Markdown editor `noteMarkdownEditor`), the
+  Search and Tags panes, the Text and Insert tabs; nothing else moved.
+- Grabs reviewed (`QQO_GRAB_DIR`, `qindanote_m84_{formatted,table,tags,search}_{1280,520}`,
+  `qindanote_tags`, `qindanote_formatted_pdf`): the formatted page is the
+  same open and closed (no jump), tag icons hang in the margin, the Table
+  tab shows while the caret is in a table, the panes fit at 520 px (the
+  narrow dock hides the navigator), the ribbon wraps its groups at 520 px.
+  The Word export was also rendered through LibreOffice: styles, lists,
+  table, boxes and icons as written.
+- The ribbon gate (every menu command on the ribbon, icons real, every
+  item inside the ribbon at 1280 and 520 px) and the menu-export gate (the
+  desktop validator; File Edit View Insert Format Tags Ink Page AI Settings
+  Help) pass. The new shortcut gate (`noTwoCommandsShareAShortcut`) keeps
+  every key in the window unique; it caught F9 on both Show Navigator and
+  This Matters (now Ctrl+Shift+G for the navigator) and kept OneNote's
+  Ctrl+-, Ctrl+= and Ctrl+0 off the suite's zoom keys.
+
+**Owner's desktop check (QindaQt session, not run here):** type a note and
+format it from the Text tab and the keys (Ctrl+B/I/U, Ctrl+Alt+1–6,
+Ctrl+./Ctrl+/ lists with Tab, Ctrl+K); paste a web page and a Word
+paragraph; insert a table and Tab through it; tag lines with Ctrl+1–9,
+tick a To Do, open Find Tags and click an item; Ctrl+E across two open
+notebooks; import a real Word file (expect one page per Heading 1) and a
+`.one` (expect the explanation); Export as Word Document and open it in
+Word; print a formatted page; dark and light themes (the page stays
+paper); the panel menu's new Insert, Format and Tags menus.
+
 ## M82 polish gates (D-091)
 
 Qualified on qinda (branch `m82-calc-show-polish`, merged with

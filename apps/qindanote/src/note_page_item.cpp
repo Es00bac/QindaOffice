@@ -9,6 +9,7 @@
 #include "ink_persistence.h"
 #include "note_page_history.h"
 #include "note_page_render.h"
+#include "note_tags.h"
 
 #include <QPainter>
 #include <QUndoStack>
@@ -294,7 +295,10 @@ void NotePageItem::applyHistoryLayer(const Ink::StrokeLayer &layer)
 
 void NotePageItem::undo()
 {
-    if (m_editingBlock >= 0) {
+    // A plain editor (a checklist item, markdown source) writes back on
+    // commit; the formatted-text editor stays open — its steps replay on the
+    // live document (RichEditCommand), or the editor closes itself.
+    if (m_editingBlock >= 0 && m_richDocument == nullptr) {
         commitEdit();
     }
     m_history->undo();
@@ -318,22 +322,26 @@ void NotePageItem::paint(QPainter *painter)
     // ink whatever the theme does; the Viewport paints the canvas role
     // around it. Same pin as the print renderer.
     const QRectF page = pageRect();
-    painter->fillRect(page, Qt::white);
+    painter->fillRect(page, paperColor());
     painter->setRenderHint(QPainter::Antialiasing, true);
     if (m_page == nullptr) {
         return;
     }
     // Render order (AGENT-GUARD: identical to renderNotePage, so the
-    // screen and the printer cannot drift): background → image blocks →
-    // text/checklist blocks (minus the one under the editor) → highlighter
-    // strokes → pen strokes → the in-progress stroke.
+    // screen and the printer cannot drift): paper → rule lines → image
+    // blocks → tag highlights → text/markdown/checklist blocks (minus the
+    // one under the editor) → tag icons → highlighter strokes → pen
+    // strokes → the in-progress stroke.
     painter->save();
     painter->setClipRect(page);
     paintNoteBackground(painter, m_page->envelope.background, page.size());
     paintNoteBlocks(painter, m_blocks, PageBlock::Kind::Image, m_editingBlock);
+    Tags::paintBands(painter, m_blocks);
     paintNoteBlocks(painter, m_blocks, PageBlock::Kind::Text, m_editingBlock);
     paintNoteBlocks(painter, m_blocks, PageBlock::Kind::Markdown, m_editingBlock);
     paintNoteBlocks(painter, m_blocks, PageBlock::Kind::Check, m_editingBlock);
+    // Tags sit in the margin, so the open block's are painted too.
+    Tags::paintIcons(painter, m_blocks);
     // Only the strokes touching the dirty region: the spatial grid indexes
     // page coordinates, which are the item's coordinates.
     const QRectF dirty = painter->hasClipping() ? painter->clipBoundingRect() : page;

@@ -42,13 +42,15 @@ private slots:
         const Protocol::ValidationResult result = Protocol::validateMenuTree(snapshot.tree);
         QVERIFY2(result.accepted,
                  qPrintable(QStringLiteral("rejected: %1 at %2").arg(result.reasonCode, result.path)));
-        // File Edit View Ink Page AI Settings Help (mnemonics travel as
-        // mnemonicIndex, not as '&' in the text).
+        // File Edit View Insert Format Tags Ink Page AI Settings Help (M84
+        // adds Insert, Format and Tags; mnemonics travel as mnemonicIndex,
+        // not as '&' in the text).
         QStringList titles;
         for (const Protocol::MenuItem &item : snapshot.tree.items) {
             titles.append(item.text);
         }
         QCOMPARE(titles, (QStringList{QStringLiteral("File"), QStringLiteral("Edit"), QStringLiteral("View"),
+                                      QStringLiteral("Insert"), QStringLiteral("Format"), QStringLiteral("Tags"),
                                       QStringLiteral("Ink"), QStringLiteral("Page"), QStringLiteral("AI"),
                                       QStringLiteral("Settings"), QStringLiteral("Help")}));
     }
@@ -92,6 +94,28 @@ private slots:
         }
         QVERIFY2(unresolved.isEmpty(), qPrintable(unresolved.join(QLatin1Char(' '))));
         QVERIFY(fired > 20);
+    }
+
+    // M84 (D-093): an ambiguous shortcut fires neither command, so no two
+    // commands of the window may share one (OneNote's Ctrl+-, Ctrl+= and
+    // Ctrl+0 were the suite's zoom keys).
+    void noTwoCommandsShareAShortcut()
+    {
+        NoteHost host;
+        QHash<QString, QString> owners;
+        QStringList clashes;
+        for (const QString &id : host.actions()->ids()) {
+            const QKeySequence key = host.actions()->entry(id)->shortcut();
+            if (key.isEmpty()) {
+                continue;
+            }
+            const QString text = key.toString(QKeySequence::PortableText);
+            if (owners.contains(text)) {
+                clashes.append(QStringLiteral("%1: %2 and %3").arg(text, owners.value(text), id));
+            }
+            owners.insert(text, id);
+        }
+        QVERIFY2(clashes.isEmpty(), qPrintable(clashes.join(QLatin1Char('\n'))));
     }
 };
 

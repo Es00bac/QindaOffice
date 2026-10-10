@@ -24,6 +24,11 @@ struct NotePage {
     // True for pages created in memory (addPage) and pages read back by
     // loadPage(); false for index entries whose file has not been read.
     bool loaded = false;
+    // M84 (D-093): OneNote's subpages — 0 a page, 1 a subpage of the page
+    // above, 2 a subpage of that. Kept in notebook.json ("level", written
+    // when above 0); a page is never more than one level below the page
+    // above it (NoteHost::changePageLevel).
+    int level = 0;
 };
 
 struct NoteSection {

@@ -292,7 +292,11 @@ private slots:
         QTRY_VERIFY(scene.page->editingBlock() >= 0);
         QQuickItem *editor = findItem(scene.window->contentItem(), QStringLiteral("noteTextEditor"));
         QVERIFY(editor != nullptr);
-        QTRY_VERIFY(editor->hasActiveFocus());
+        // M84: the text editor is a Tk.RichTextEditor; the keyboard is on
+        // its inner area (QindaTK's contract, objectName richTextEditorArea).
+        QQuickItem *area = findItem(editor, QStringLiteral("richTextEditorArea"));
+        QVERIFY(area != nullptr);
+        QTRY_VERIFY(area->hasActiveFocus());
         for (int i = 0; i < 10; ++i) {
             QTest::keyClick(scene.window, 'W'); // QTest has no keyClicks(QWindow *)
         }

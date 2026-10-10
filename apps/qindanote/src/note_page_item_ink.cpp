@@ -254,6 +254,12 @@ void NotePageItem::onStylusBegan(const QindaTK::StylusSample &sample)
         tapAt(sample.position);
         return;
     }
+    // M84: a To Do box in the margin is a checkbox for every tool but the
+    // eraser — a tap on it ticks it instead of leaving a dot.
+    if (m_tool != NoteTool::Eraser && toggleTodoBoxAt(sample.position)) {
+        restoreTemporaryTool();
+        return;
+    }
     if (m_editingBlock >= 0) {
         commitEdit(); // inking over an open editor closes it first
     }
