@@ -136,10 +136,17 @@ void patchNonVisual(PartWriter &out, XmlElement &e, const Shape &shape, const Sh
             cNvPr->removeAttribute(QString(), u"hidden");
         }
     }
-    if (shape.hyperlink != old.hyperlink) {
+    // M91 (D-099): action settings, each patched only when it changed.
+    if (shape.click != old.click) {
         cNvPr->removeChildren(nsA(), u"hlinkClick");
-        if (XmlElementPtr link = out.hyperlink(shape.hyperlink)) {
+        if (XmlElementPtr link = out.action(shape.click, QStringLiteral("hlinkClick"))) {
             cNvPr->insertElementBefore(link, {u"hlinkHover", u"extLst"});
+        }
+    }
+    if (shape.hover != old.hover) {
+        cNvPr->removeChildren(nsA(), u"hlinkHover");
+        if (XmlElementPtr link = out.action(shape.hover, QStringLiteral("hlinkHover"))) {
+            cNvPr->insertElementBefore(link, {u"extLst"});
         }
     }
 }
@@ -339,6 +346,21 @@ XmlElementPtr patchShape(PartWriter &out, const Shape &shape, const ShapeSource 
         patchShapeProperties(out, spPr, shape, old);
         if (name == u"pic") {
             patchPicture(out, *e, shape, old);
+            if (shape.media.narration != old.media.narration) {
+                auto *nv = e->child(nsP(), u"nvPicPr");
+                if (auto *nvPr = nv != nullptr ? nv->child(nsP(), u"nvPr") : nullptr) {
+                    writeNarration(*nvPr, shape.media.narration);
+                }
+            }
+            // M91 (D-099): an edited trim, fade or bookmark list.
+            const auto edits = [](const MediaInfo &m) {
+                return std::tuple(m.trimStartMs, m.trimEndMs, m.fadeInMs, m.fadeOutMs, m.bookmarks);
+            };
+            if (edits(shape.media) != edits(old.media)) {
+                if (Ooxml::XmlElement *media = p14Media(*e)) {
+                    writeMediaEdits(*media, shape.media);
+                }
+            }
         }
         if (name == u"cxnSp") {
             patchConnector(*e, shape, old);

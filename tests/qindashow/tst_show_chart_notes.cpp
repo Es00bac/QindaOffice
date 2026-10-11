@@ -240,6 +240,17 @@ private slots:
         QVERIFY(findItem(presenter->contentItem(), QStringLiteral("presenterTimer")) != nullptr);
         QQuickItem *end = findItem(presenter->contentItem(), QStringLiteral("presenterEnd"));
         QVERIFY(end != nullptr && !end->isVisible());
+        QQuickItem *current = findItem(presenter->contentItem(), QStringLiteral("presenterCurrent"));
+        QVERIFY(current != nullptr);
+        ShowModel::ShowAction highlight;
+        highlight.highlight = true;
+        QVERIFY(scene.host.player()->runAction(highlight, QRectF(0, 0, 100, 50)));
+        QQuickItem *flash = findItem(presenter->contentItem(), QStringLiteral("showHighlight"));
+        QVERIFY(flash != nullptr);
+        QCOMPARE(flash->width(), 100 * current->property("slideScale").toReal());
+        const QPointF centre = current->mapToItem(presenter->contentItem(), QPointF(current->width() / 2, current->height() / 2));
+        const qreal left = centre.x() - scene.doc->presentation()->slideSize.width() * current->property("slideScale").toReal() / 2;
+        QVERIFY(qAbs(flash->x() - left) < 0.01);
         scene.host.player()->advance(1);
         QTRY_COMPARE(notes->property("text").toString(), QStringLiteral("Then the plan"));
         QTRY_VERIFY(end->isVisible()); // nothing after the last slide

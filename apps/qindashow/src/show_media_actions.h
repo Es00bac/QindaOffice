@@ -19,6 +19,11 @@
 // MediaSurface.qml's interface that plays nothing: playback is then
 // "available" through it, so the show's media logic is tested silently.
 //
+// M91 (D-099): Trim, Fade Duration and bookmarks (p14:trim, p14:fade,
+// p14:bmkLst), edited in one dialog and honoured by the show: a medium
+// plays from its trimmed start to its trimmed end, fading in and out, and
+// Alt+End / Alt+Home jump to its next / previous bookmark (PlayerMedia.qml).
+//
 // AGENT-CONTRACT: the command ids (MediaActionId) are the dbusmenu
 // activation identity (AGENTS.md rule 5): never renamed, never reused.
 
@@ -55,6 +60,8 @@ inline const char kAutomatically[] = "showMediaStartAutomaticallyAction";
 inline const char kLoop[] = "showMediaLoopAction";
 inline const char kHide[] = "showMediaHideAction";
 inline const char kPoster[] = "showMediaPosterAction";
+// M91 (D-099): Trim, Fade Duration and bookmarks (MediaEditDialog.qml).
+inline const char kTrim[] = "showMediaTrimAction";
 } // namespace MediaActionId
 
 class ShowMedia final : public QObject {
@@ -87,12 +94,18 @@ public:
     // The answers of the file dialogs.
     Q_INVOKABLE bool insertFile(const QUrl &url, bool audio);
     Q_INVOKABLE bool setPosterFile(const QUrl &url);
+    // M91 (D-099): the selected medium's {durationMs, trimStartMs, trimEndMs
+    // (cut off the end), fadeInMs, fadeOutMs, bookmarks: [{name, timeMs}]}
+    // for MediaEditDialog.qml, and its answer — ONE undo step.
+    Q_INVOKABLE QVariantMap mediaEdits() const;
+    Q_INVOKABLE bool applyMediaEdits(const QVariantMap &edits);
     // A file URL holding a medium's bytes (or its link).
     [[nodiscard]] QUrl urlFor(const ShowModel::MediaInfo &media) const;
 
 signals:
     void fileRequested(bool audio);
     void posterRequested();
+    void editRequested(); // M91: Trim, Fade and Bookmarks…
     void selectionChanged();
     void playingChanged();
 

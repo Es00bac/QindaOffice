@@ -65,6 +65,7 @@ private:
 };
 
 using Builder = std::function<Outline(const Box &, const Adj &)>;
+[[nodiscard]] Outline actionButtonOutline(const QString &name, const QRectF &rect);
 
 inline QPainterPath polygon(std::initializer_list<QPointF> points)
 {

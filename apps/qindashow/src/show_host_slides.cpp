@@ -325,32 +325,7 @@ int ShowHost::replaceAll(const QString &needle, const QString &replacement)
     return hits;
 }
 
-// ---- the show, dialogs, templates ------------------------------------------------
-
-void ShowHost::startShow()
-{
-    if (slideCount() == 0 || m_player != nullptr) {
-        return;
-    }
-    m_canvas->commitTextEdit(false);
-    m_player = new PresentationController(m_document->presentation(), this);
-    m_player->goTo(qMax(0, m_currentRow));
-    emit playerChanged();
-}
-
-void ShowHost::endShow()
-{
-    if (m_player == nullptr) {
-        return;
-    }
-    // The editor lands on the slide the show ended on.
-    const int row = m_player->slide();
-    m_player->deleteLater();
-    m_player = nullptr;
-    m_presenterView = false;
-    emit playerChanged();
-    selectSlideRow(row);
-}
+// ---- dialogs, templates (the show: show_host_show.cpp) ----------------------------
 
 void ShowHost::insertImageFile(const QUrl &url)
 {

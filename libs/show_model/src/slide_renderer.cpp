@@ -42,24 +42,70 @@ void applyEmphasis(QPainter *painter, const Shape &shape, qreal progress, bool a
     }
 }
 
-bool applyBuildAnimation(QPainter *painter, const Shape &shape, const QSizeF &slideSize,
-                         qreal progress)
+// The part of `box` a wipe from the `direction` edge has revealed at
+// `amount` (0..1).
+QRectF wipedPart(const QRectF &box, int direction, qreal amount)
 {
-    if (isEmphasis(shape.animation)) {
+    switch (direction) {
+    case Direction::Top: return QRectF(box.left(), box.top(), box.width(), box.height() * amount);
+    case Direction::Left: return QRectF(box.left(), box.top(), box.width() * amount, box.height());
+    case Direction::Right: return QRectF(box.right() - box.width() * amount, box.top(), box.width() * amount, box.height());
+    default: return QRectF(box.left(), box.bottom() - box.height() * amount, box.width(), box.height() * amount);
+    }
+}
+
+// Split's four ways (M91): a band opening from the middle (out) or two
+// closing in from the edges (in), vertical or horizontal.
+QPainterPath splitPart(const QRectF &box, int direction, qreal amount)
+{
+    QPainterPath area;
+    const QPointF c = box.center();
+    switch (direction) {
+    case Direction::HorizontalOut:
+        area.addRect(QRectF(box.left(), c.y() - box.height() * amount / 2, box.width(), box.height() * amount));
+        break;
+    case Direction::HorizontalIn:
+        area.addRect(QRectF(box.left(), box.top(), box.width(), box.height() * amount / 2));
+        area.addRect(QRectF(box.left(), box.bottom() - box.height() * amount / 2, box.width(), box.height() * amount / 2));
+        break;
+    case Direction::VerticalIn:
+        area.addRect(QRectF(box.left(), box.top(), box.width() * amount / 2, box.height()));
+        area.addRect(QRectF(box.right() - box.width() * amount / 2, box.top(), box.width() * amount / 2, box.height()));
+        break;
+    default: // vertical out
+        area.addRect(QRectF(c.x() - box.width() * amount / 2, box.top(), box.width() * amount, box.height()));
+        break;
+    }
+    return area;
+}
+
+// An entrance (`in`) or exit effect at `progress` (0..1 of the effect;
+// M91: Effect Options directions, Peek, Float and exits — an exit runs its
+// entrance backwards towards its edge). Returns false when the shape is not
+// drawn at all. The transform is left on the painter for the caller's
+// save/restore pair to undo.
+bool applyEffect(QPainter *painter, const Shape &shape, ShapeAnimation animation, int direction, const QSizeF &slideSize,
+                 qreal progress, bool in)
+{
+    if (isEmphasis(animation) && in) {
         applyEmphasis(painter, shape, qBound(0.0, progress, 1.0), false);
         return true; // on the slide all along
     }
-    if (shape.animation == ShapeAnimation::Appear) {
-        // "Appear" is instantaneous by definition: it is either there or
-        // it is not.
-        return progress > 0.0;
+    if (animation == ShapeAnimation::Appear) {
+        // Appear / Disappear are instantaneous: there or not.
+        return in ? progress > 0.0 : progress <= 0.0;
     }
-    if (progress <= 0.0) {
+    // How much of the shape is there: 0 gone, 1 fully arrived.
+    const qreal there = in ? progress : 1.0 - progress;
+    if (there <= 0.0) {
         return false;
     }
-    const qreal eased = 1.0 - (1.0 - progress) * (1.0 - progress); // out-quad
+    const qreal eased = 1.0 - (1.0 - there) * (1.0 - there); // out-quad
+    const qreal away = 1.0 - eased;
+    const int edge = effectiveDirection(animation, direction);
     const QPointF centre = shape.rect.normalized().center();
-    switch (shape.animation) {
+    const QRectF box = paintedBox(shape);
+    switch (animation) {
     case ShapeAnimation::Fade:
         painter->setOpacity(painter->opacity() * eased);
         break;
@@ -72,39 +118,55 @@ bool applyBuildAnimation(QPainter *painter, const Shape &shape, const QSizeF &sl
         break;
     }
     case ShapeAnimation::FlyInLeft:
-        painter->translate(-slideSize.width() * (1.0 - eased), 0);
-        break;
     case ShapeAnimation::FlyInRight:
-        painter->translate(slideSize.width() * (1.0 - eased), 0);
-        break;
     case ShapeAnimation::FlyInTop:
-        painter->translate(0, -slideSize.height() * (1.0 - eased));
-        break;
-    case ShapeAnimation::FlyInBottom:
-        painter->translate(0, slideSize.height() * (1.0 - eased));
-        break;
-    case ShapeAnimation::Wipe: {
-        // From the bottom: the edge sweeps up over the shape.
-        const QRectF box = paintedBox(shape);
-        painter->setClipRect(QRectF(box.left(), box.bottom() - box.height() * eased, box.width(), box.height() * eased),
-                             Qt::IntersectClip);
+    case ShapeAnimation::FlyInBottom: {
+        // From (to) the edge, corners both ways.
+        const qreal dx = (edge & Direction::Left) != 0 ? -slideSize.width() : (edge & Direction::Right) != 0 ? slideSize.width() : 0.0;
+        const qreal dy = (edge & Direction::Top) != 0 ? -slideSize.height() : (edge & Direction::Bottom) != 0 ? slideSize.height() : 0.0;
+        painter->translate(dx * away, dy * away);
         break;
     }
-    case ShapeAnimation::Split: {
-        // Vertical out: a band opening from the vertical centre line.
-        const QRectF box = paintedBox(shape);
-        painter->setClipRect(QRectF(centre.x() - box.width() * eased / 2, box.top(), box.width() * eased, box.height()),
+    case ShapeAnimation::Wipe:
+        // An entrance sweeps in from its edge; an exit wipes away from it.
+        painter->setClipRect(in ? wipedPart(box, edge, eased) : wipedPart(box, edge == Direction::Top ? Direction::Bottom
+                                                                              : edge == Direction::Bottom ? Direction::Top
+                                                                              : edge == Direction::Left   ? Direction::Right
+                                                                                                          : Direction::Left,
+                                                                           eased),
                              Qt::IntersectClip);
+        break;
+    case ShapeAnimation::Split:
+        painter->setClipPath(splitPart(box, edge, eased), Qt::IntersectClip);
+        break;
+    case ShapeAnimation::Peek: {
+        // Slides in from (out to) its edge, seen only inside its own box.
+        painter->setClipRect(box, Qt::IntersectClip);
+        const qreal dx = edge == Direction::Left ? -box.width() : edge == Direction::Right ? box.width() : 0.0;
+        const qreal dy = edge == Direction::Top ? -box.height() : edge == Direction::Left || edge == Direction::Right ? 0.0 : box.height();
+        painter->translate(dx * away, dy * away);
+        break;
+    }
+    case ShapeAnimation::Float: {
+        // A short glide with a fade, up (Float Up) or down.
+        painter->setOpacity(painter->opacity() * eased);
+        const qreal up = edge == Direction::Bottom ? -1.0 : 1.0;
+        painter->translate(0, (in ? up : -up) * slideSize.height() * 0.1 * away);
         break;
     }
     case ShapeAnimation::Spin:
     case ShapeAnimation::GrowShrink:
-        applyEmphasis(painter, shape, progress, false);
+        painter->setOpacity(painter->opacity() * eased); // an exit of an emphasis kind fades
         break;
     case ShapeAnimation::Appear:
         break;
     }
     return true;
+}
+
+bool applyBuildAnimation(QPainter *painter, const Shape &shape, const QSizeF &slideSize, qreal progress)
+{
+    return applyEffect(painter, shape, shape.animation, shape.animationDirection, slideSize, progress, true);
 }
 
 void applyBackground(SlideBackdrop &backdrop, const Background &background)
@@ -229,6 +291,12 @@ void renderSlide(QPainter *painter, const Slide &slide, const QSizeF &slideSize,
         if (shape.buildStep > buildStep && !isEmphasis(shape.animation)) {
             continue; // appears on a later click
         }
+        // M91: an exit takes the shape off at its click (the editor, the
+        // thumbnails and print draw every shape).
+        const bool exiting = showing && shape.exit.isSet() && shape.exit.step == buildStep;
+        if (showing && shape.exit.isSet() && shape.exit.step < buildStep) {
+            continue;
+        }
         // The master supplies defaults for runs that never chose their own,
         // so restyling a deck is one edit rather than one per text box.
         const bool arriving = shape.buildStep > 0 && shape.buildStep == buildStep;
@@ -236,8 +304,11 @@ void renderSlide(QPainter *painter, const Slide &slide, const QSizeF &slideSize,
         if (showing && !arriving && isEmphasis(shape.animation) && shape.buildStep > 0 && shape.buildStep < buildStep) {
             applyEmphasis(painter, shape, 1.0, true);
         }
-        const bool draw = !arriving
-            || applyBuildAnimation(painter, shape, slideSize, qBound(0.0, buildProgress, 1.0));
+        bool draw = !arriving || applyBuildAnimation(painter, shape, slideSize, qBound(0.0, buildProgress, 1.0));
+        if (draw && exiting && !arriving) {
+            draw = applyEffect(painter, shape, shape.exit.animation, shape.exit.direction, slideSize,
+                               qBound(0.0, buildProgress, 1.0), false);
+        }
         if (draw) {
             Render::paintShape(painter, withMasterDefaults(shape, typeMaster));
         }

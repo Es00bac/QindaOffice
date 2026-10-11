@@ -2,6 +2,7 @@
 #include "pptx_writer.h"
 
 #include "pptx_review.h"
+#include "pptx_show.h"
 #include "pptx_write_masters.h"
 #include "pptx_write_slide.h"
 #include "sections.h"
@@ -213,6 +214,7 @@ std::unique_ptr<Ooxml::PackageWriter> writePptxPackage(const Presentation &deck,
     PartWriter presentation(session, kPresentationPart);
     CommentState comments = prepareComments(session); // M75: the deck's comment kind and authors
     QHash<QString, quint32> sldIdOf;
+    QHash<QString, QString> slideRelationships; // M91: model id → r:id (custom shows)
     for (const Slide &slide : deck.slides) {
         const QString part = session.slideParts.value(slide.id);
         quint32 id = slide.origin ? slide.origin->sldId : 0;
@@ -239,6 +241,7 @@ std::unique_ptr<Ooxml::PackageWriter> writePptxPackage(const Presentation &deck,
         }
         w.addXmlPart(part, *sld, pmlType("slide+xml"));
         slideIds.append({id, presentation.relate(relType("slide"), part)});
+        slideRelationships.insert(slide.id, slideIds.last().second);
     }
 
     // presentation.xml: the source's, with its lists rebuilt; or new.
@@ -290,6 +293,10 @@ std::unique_ptr<Ooxml::PackageWriter> writePptxPackage(const Presentation &deck,
     }
     insertInOrder(*pres, sizeElement("sldSz", deck.slideSize));
     insertInOrder(*pres, sizeElement("notesSz", deck.notesSize));
+    // M91 (D-099): the model's custom shows (the source's list was removed).
+    if (XmlElementPtr shows = customShowsElement(deck.customShows, slideRelationships)) {
+        insertInOrder(*pres, shows);
+    }
     // M75: sections (p14:sectionLst) name the slide ids just written —
     // every slide in one, in deck order, as PowerPoint requires.
     Presentation sectioned;
@@ -308,10 +315,25 @@ std::unique_ptr<Ooxml::PackageWriter> writePptxPackage(const Presentation &deck,
     w.addRelationship(QString(), QString::fromUtf16(Ooxml::RelType::OfficeDocument), kPresentationPart);
 
     // Presentation-level parts: carried, or generated.
+    // M91 (D-099): presProps carries Set Up Slide Show — byte for byte
+    // while the settings are what was read, else the source's part with
+    // the model's p:showPr in place of its own.
     bool haveProps = false;
     if (carry) {
+        const bool settingsKept = deck.showSettings == deckSource->showSettings;
         for (const Ooxml::Relationship &rel : session.source->relationships(deckSource->presentationPart)) {
             const bool viewProps = rel.type == relType("viewProps");
+            if (rel.type == relType("presProps") && !settingsKept) {
+                const QString sourcePart = session.source->targetPart(deckSource->presentationPart, rel);
+                const XmlElementPtr root = session.source->xml(sourcePart);
+                XmlElementPtr props = presentationPropertiesElement(deck.showSettings, root.get());
+                const QString part = QStringLiteral("ppt/presProps.xml");
+                PartWriter(session, part).carry(*props, sourcePart);
+                w.addXmlPart(part, *props, pmlType("presProps+xml"));
+                presentation.relate(relType("presProps"), part);
+                haveProps = true;
+                continue;
+            }
             // Comment authors are writeCommentAuthors()'s (M75).
             if (rel.type == relType("presProps") || rel.type == relType("tableStyles") || rel.type == relType("theme")
                 || (viewProps && session.source->relationships(session.source->targetPart(deckSource->presentationPart, rel)).isEmpty())) {

@@ -77,6 +77,7 @@ QList<MediaEntry> readMedia(const Ooxml::XmlElement *timing)
                 MediaEntry entry;
                 entry.kind = child->name == u"video" ? MediaKind::Video : MediaKind::Audio;
                 entry.shapeId = targetOf(*node);
+                entry.narration = child->attr(u"isNarration") == u"1" || child->attr(u"isNarration") == u"true";
                 entry.volume = qBound(0, int(node->attr(u"vol", QStringLiteral("50000")).toInt() / 1000), 100);
                 entry.hideWhenStopped = node->attr(u"showWhenStopped") == u"0" || node->attr(u"showWhenStopped") == u"false";
                 const Ooxml::XmlElement *cTn = node->child(nsP(), u"cTn");
@@ -169,6 +170,9 @@ void appendMediaNodes(TimingBuilder &b, Ooxml::XmlElement &rootChildren, const Q
     for (const MediaEntry &entry : media) {
         Ooxml::XmlElement &kind = rootChildren.appendElement(
             nsP(), entry.kind == MediaKind::Audio ? QStringLiteral("audio") : QStringLiteral("video"));
+        if (entry.kind == MediaKind::Audio && entry.narration) {
+            set(kind, "isNarration", QStringLiteral("1"));
+        }
         Ooxml::XmlElement &node = kind.appendElement(nsP(), QStringLiteral("cMediaNode"));
         set(node, "vol", QString::number(qBound(0, entry.volume, 100) * 1000));
         if (entry.hideWhenStopped) {

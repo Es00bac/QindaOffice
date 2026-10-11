@@ -38,6 +38,8 @@ OfficeWindow {
         effectIds: window.showHost.design.effectIds
         newSlideIds: window.showHost.layouts.newSlideIds
         layoutIds: window.showHost.layouts.layoutIds
+        customShowMenu: window.showHost.slideShow.customShowMenu
+        actionButtonIds: window.showHost.actionSettings.buttonIds
     }
     ribbonTabs: ribbonLayout.tabs
     ribbonContexts: (shapeContext.enabled ? ["shape"] : []).concat(tableContext.enabled ? ["table"] : [])
@@ -230,9 +232,13 @@ OfficeWindow {
             return null
         }
         active: window.showHost.player !== null && (otherScreen !== null || window.showHost.presenterView)
+        alone: !player.active
         screen: otherScreen !== null ? otherScreen : window.screen
         onEnded: window.showHost.endShow()
     }
+    // M91 (D-099): Action, Link, Custom Shows, Set Up Slide Show, the
+    // rehearsal's question, Create a Video, Export Pictures, Trim and Fade.
+    readonly property SlideShowDialogs showDialogs: SlideShowDialogs { showHost: window.showHost; host: window.contentItem }
 
     Connections { target: window.host.actions.entry("viewZoomInAction"); function onTriggered() { editor.canvasView.zoomIn() } }
     Connections { target: window.host.actions.entry("viewZoomOutAction"); function onTriggered() { editor.canvasView.zoomOut() } }

@@ -32,5 +32,13 @@ namespace QindaOffice::Show::Json {
 // M75: a video's or sound's file and playback.
 [[nodiscard]] QJsonObject media(const MediaInfo &media);
 [[nodiscard]] MediaInfo media(const QJsonObject &object);
+// M91 (D-099, shape_json_actions.cpp): action settings, exit effects, and a
+// medium's trim, fades and bookmarks (added to / read from its object).
+[[nodiscard]] QJsonObject action(const ShowAction &action);
+[[nodiscard]] ShowAction action(const QJsonObject &object);
+[[nodiscard]] QJsonObject exit(const ShapeExit &exit);
+[[nodiscard]] ShapeExit exit(const QJsonObject &object);
+void mediaEdits(QJsonObject &into, const MediaInfo &media);
+void mediaEdits(const QJsonObject &from, MediaInfo &media);
 
 } // namespace QindaOffice::Show::Json

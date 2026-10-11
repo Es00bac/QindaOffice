@@ -72,6 +72,7 @@ Tk.Viewport {
                 item.playing = true
             }
         }
+        CommentPins { showHost: viewport.showHost; width: container.width; height: container.height; z: 4 }
         Connections {
             target: mediaPreview.item
             ignoreUnknownSignals: true

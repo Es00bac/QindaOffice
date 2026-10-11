@@ -38,6 +38,10 @@ const AnimationEntry kAnimations[] = {
     {ShowModel::ShapeAnimation::Split, "showAnimSplit", QT_TR_NOOP("S&plit in")},
     {ShowModel::ShapeAnimation::Spin, "showAnimSpin", QT_TR_NOOP("Spi&n (emphasis)")},
     {ShowModel::ShapeAnimation::GrowShrink, "showAnimGrowShrink", QT_TR_NOOP("&Grow/Shrink (emphasis)")},
+    // M91 (D-099): Peek In and Float In; their directions are Effect
+    // Options (show_effect_options.h).
+    {ShowModel::ShapeAnimation::Peek, "showAnimPeek", QT_TR_NOOP("P&eek in")},
+    {ShowModel::ShapeAnimation::Float, "showAnimFloat", QT_TR_NOOP("F&loat in")},
 };
 
 MenuNode a(const ActionEntry *entry)
@@ -143,6 +147,9 @@ void ShowDesignActions::applyAnimation(ShowModel::ShapeAnimation animation)
             // Emphasis plays longer than an entrance (PowerPoint: 2 s, 0.5 s).
             if (ShowModel::isEmphasis(animation) != ShowModel::isEmphasis(shape.animation)) {
                 shape.animationMs = ShowModel::isEmphasis(animation) ? 2000 : 500;
+            }
+            if (animation != shape.animation) {
+                shape.animationDirection = 0; // M91: a new effect starts at its own default
             }
             shape.animation = animation;
             // An animation only plays when the shape ARRIVES (or, for an

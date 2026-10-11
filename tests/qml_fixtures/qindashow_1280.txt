@@ -18,6 +18,8 @@ QQuickRootItem#ShowWindow
                       MasterPane#masterPane [hidden]
                       SlideSorter#slideSorter
                         Card#slideThumb_0
+                          Badge#slideHidden_0 [hidden]
+                          Caption#slideTiming_0 [hidden]
                           QQuickRectangle#boxFocusRing [hidden]
                           SlideThumbItem#slideThumbImage_0
                   QQuickRectangle#boxFocusRing [hidden]
@@ -43,6 +45,8 @@ QQuickRootItem#ShowWindow
                             QQuickText#comboDisplayText
                           QQuickRectangle#boxFocusRing [hidden]
                         Caption#propertyLabel
+                        CheckBox#slideAdvanceAfter
+                        CheckBox#slideAdvanceOnClick
                         LayoutGallery#layoutGallery
                           Card#layoutCard_1
                             IconButton#layoutNewSlide_1
@@ -68,6 +72,12 @@ QQuickRootItem#ShowWindow
                             IconButton#layoutNewSlide_6
                             QQuickRectangle#boxFocusRing [hidden]
                             SlideThumbItem#layoutThumb_6
+                        NumberField#slideAdvanceSeconds
+                          Caption#numberLabel [hidden]
+                          QQuickItem#numberStepDown [hidden]
+                          QQuickItem#numberStepUp [hidden]
+                          QQuickText#numberMixedPlaceholder [hidden]
+                          QQuickTextInput#numberInput
                   QQuickRectangle#boxFocusRing [hidden]
                 Box#panelHeader
                   IconButton#dockPlacement_slide
@@ -89,6 +99,7 @@ QQuickRootItem#ShowWindow
                     QQuickItem#viewportSurface
                       QQuickItem#viewportContent
                         QQuickItem#slideContainer
+                          CommentPins#commentPins
                           QQuickLoader#editorMediaPreview
                           QQuickTextEdit#shapeTextEditor [hidden]
                           SlideCanvasItem#slideCanvas

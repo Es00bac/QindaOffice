@@ -7,7 +7,9 @@ import QindaOffice.Shell
 // are selected, (M67, D-076) Table Design / Table Layout while a table is
 // and Chart while a chart is, and (M75, D-084) Slide Master while the
 // Slide Master view is open and Playback while a video or audio is
-// selected. Every string is an ActionEntry id (AGENTS.md rule 5); icons
+// selected. M91 (D-099): Insert ▸ Links and Action Buttons, Animations ▸
+// Effect Options and Exit, the Slide Show tab's custom shows, Set Up and
+// exports, Playback ▸ Trim. Every string is an ActionEntry id (AGENTS.md rule 5); icons
 // given here only fill in for entries whose menu rows carry none.
 QtObject {
     property Component fillSlot: null
@@ -23,6 +25,10 @@ QtObject {
     // onto one (ShowSlideLayouts: showNewSlideLayout_<n>, showSlideLayout_<n>).
     property var newSlideIds: []
     property var layoutIds: []
+    // M91 (D-099): the deck's custom shows (ShowSlideShow: showCustomShow_<n>,
+    // then Custom Shows…) and the action buttons (ShowActionSettings).
+    property var customShowMenu: []
+    property var actionButtonIds: []
     readonly property var newSlideMenu: newSlideIds.concat(["|", "slideDuplicateAction", "showReuseSlidesAction"])
 
     readonly property var tableOptionIds: ["showTableHeaderRowAction", "showTableTotalRowAction", "showTableBandedRowsAction",
@@ -54,14 +60,32 @@ QtObject {
                                   "showAisummarize", "showAicontinue", "showAiexplain"]
     readonly property var animationIds: ["showAnimAppear", "showAnimFade", "showAnimFlyLeft", "showAnimFlyRight",
                                          "showAnimFlyTop", "showAnimFlyBottom", "showAnimZoom", "showAnimWipe",
-                                         "showAnimSplit", "|", "showAnimSpin", "showAnimGrowShrink"]
+                                         "showAnimSplit", "showAnimPeek", "showAnimFloat", "|", "showAnimSpin",
+                                         "showAnimGrowShrink"]
+    // M91 (D-099): Effect Options, Exit and Exit Options (ShowEffectOptions).
+    readonly property var effectDirectionIds: ["showEffectFromBottomAction", "showEffectFromLeftAction", "showEffectFromRightAction",
+                                               "showEffectFromTopAction", "|", "showEffectFromBottomLeftAction",
+                                               "showEffectFromBottomRightAction", "showEffectFromTopLeftAction",
+                                               "showEffectFromTopRightAction", "|", "showEffectHorizontalInAction",
+                                               "showEffectHorizontalOutAction", "showEffectVerticalInAction",
+                                               "showEffectVerticalOutAction", "|", "showEffectFloatUpAction", "showEffectFloatDownAction"]
+    readonly property var exitIds: ["showExitNoneAction", "|", "showExitDisappearAction", "showExitFadeAction", "showExitFlyOutAction",
+                                    "showExitWipeAction", "showExitSplitAction", "showExitPeekAction", "showExitFloatAction",
+                                    "showExitZoomAction"]
+    readonly property var exitDirectionIds: ["showExitToBottomAction", "showExitToLeftAction", "showExitToRightAction",
+                                             "showExitToTopAction", "|", "showExitToBottomLeftAction", "showExitToBottomRightAction",
+                                             "showExitToTopLeftAction", "showExitToTopRightAction", "|", "showExitHorizontalInAction",
+                                             "showExitHorizontalOutAction", "showExitVerticalInAction", "showExitVerticalOutAction",
+                                             "|", "showExitFloatUpAction", "showExitFloatDownAction"]
     readonly property var alignIds: ["showAlignLeftAction", "showAlignHCenterAction", "showAlignRightAction", "|",
                                      "showAlignTopAction", "showAlignVCenterAction", "showAlignBottomAction", "|",
                                      "showDistributeHorizontallyAction", "showDistributeVerticallyAction"]
 
     readonly property var tabs: [
         StandardRibbon.fileTab([], ["showTemplate_Pitch", "showTemplate_Weekly_Review"],
-                               [{ action: "showExportPdfAction", iconName: "file-down" }]),
+                               [{ action: "showExportPdfAction", iconName: "file-down" },
+                                { action: "showExportVideoAction", iconName: "film" },
+                                { action: "showExportPicturesAction", iconName: "images" }]),
         { id: "home", label: qsTr("Home"), keyTip: "H", groups: [
             StandardRibbon.historyGroup(),
             StandardRibbon.clipboardGroup(),
@@ -92,7 +116,10 @@ QtObject {
             { id: "images", label: qsTr("Images"), items: [{ action: "showInsertImageAction", size: "large" }] },
             { id: "shapes", label: qsTr("Shapes"), items: [
                 "showInsertRectangleAction", "showInsertEllipseAction",
-                "showInsertLineAction", "showInsertArrowAction"] },
+                "showInsertLineAction", "showInsertArrowAction",
+                { id: "actionButtonsMenu", label: qsTr("Action Buttons"), iconName: "mouse-pointer", menu: actionButtonIds }] },
+            { id: "links", label: qsTr("Links"), items: [
+                { action: "showInsertLinkAction", size: "large" }, { action: "showInsertActionAction", size: "large" }] },
             { id: "textInsert", label: qsTr("Text"), items: [{ action: "showInsertTextBoxAction", size: "large" }] },
             { id: "commentsInsert", label: qsTr("Comments"), items: [{ action: "showNewCommentAction", size: "large" }] },
             { id: "media", label: qsTr("Media"), items: [
@@ -113,13 +140,23 @@ QtObject {
         { id: "animations", label: qsTr("Animations"), keyTip: "A", groups: [
             { id: "build", label: qsTr("Build"), items: [
                 { action: "showAppearOnClickAction", size: "large", iconName: "mouse-pointer-2" },
-                { id: "effects", label: qsTr("Effect"), iconName: "sparkles", menu: animationIds }] }
+                { id: "effects", label: qsTr("Effect"), iconName: "sparkles", menu: animationIds },
+                { id: "effectOptions", label: qsTr("Effect Options"), iconName: "move", menu: effectDirectionIds }] },
+            { id: "exitGroup", label: qsTr("Exit"), items: [
+                { id: "exitEffects", label: qsTr("Exit"), iconName: "eye-off", menu: exitIds },
+                { id: "exitOptions", label: qsTr("Exit Options"), iconName: "move-diagonal-2", menu: exitDirectionIds }] }
         ] },
         { id: "slideShow", label: qsTr("Slide Show"), keyTip: "S", groups: [
-            { id: "start", label: qsTr("Start"), items: [
-                { action: "slideStartShowAction", size: "large" }, { action: "showPresenterViewAction", size: "large" }] },
-            { id: "share", label: qsTr("Share"), items: [
-                { action: "showExportPdfAction", size: "large", iconName: "file-down" }] },
+            { id: "start", label: qsTr("Start Slide Show"), items: [
+                { action: "slideStartShowAction", size: "large" }, { action: "showFromCurrentAction", size: "large" },
+                { action: "showPresenterViewAction", size: "large" },
+                { id: "customShowMenu", label: qsTr("Custom Slide Show"), iconName: "list-ordered", menu: customShowMenu }] },
+            { id: "setUp", label: qsTr("Set Up"), items: [
+                { action: "showSetUpAction", size: "large" }, "showHideSlideAction", "showRehearseTimingsAction",
+                "showUseTimingsAction", "showClearTimingsAction"] },
+            { id: "share", label: qsTr("Export"), items: [
+                { action: "showExportPdfAction", size: "large", iconName: "file-down" },
+                { action: "showExportVideoAction", size: "large" }, "showExportPicturesAction"] },
             StandardRibbon.assistantGroup(aiIds.concat(["|", "showGenerateDeckAction"]))
         ] },
         { id: "review", label: qsTr("Review"), keyTip: "R", groups: [
@@ -147,6 +184,7 @@ QtObject {
         ] },
         { id: "playback", label: qsTr("Playback"), keyTip: "JN", contextId: "media", groups: [
             { id: "preview", label: qsTr("Preview"), items: [{ action: "showMediaPlayAction", size: "large" }] },
+            { id: "mediaEditing", label: qsTr("Editing"), items: [{ action: "showMediaTrimAction", size: "large" }] },
             { id: "mediaOptions", label: qsTr("Options"), items: [
                 "showMediaStartOnClickAction", "showMediaStartAutomaticallyAction",
                 "showMediaLoopAction", "showMediaHideAction"] },

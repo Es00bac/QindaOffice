@@ -44,7 +44,11 @@ XmlElement &nonVisual(PartWriter &out, XmlElement &shape, const char *wrapper, c
     if (model.hidden) {
         set(cNvPr, QStringLiteral("hidden"), QStringLiteral("1"));
     }
-    if (XmlElementPtr link = out.hyperlink(model.hyperlink)) {
+    // M91 (D-099): action settings on click and on mouse-over.
+    if (XmlElementPtr link = out.action(model.click, QStringLiteral("hlinkClick"))) {
+        cNvPr.appendElement(link);
+    }
+    if (XmlElementPtr link = out.action(model.hover, QStringLiteral("hlinkHover"))) {
         cNvPr.appendElement(link);
     }
     XmlElement &specificProps = nv.appendElement(nsP(), QLatin1String(specific));
@@ -109,6 +113,8 @@ void mediaReferences(PartWriter &out, XmlElement &pic, const MediaInfo &media)
     XmlElement &p14 = ext.appendElement(QStringLiteral("http://schemas.microsoft.com/office/powerpoint/2010/main"),
                                          QStringLiteral("media"));
     p14.setAttribute(nsR(), media.data.isEmpty() ? QStringLiteral("link") : QStringLiteral("embed"), mediaRel);
+    writeMediaEdits(p14, media); // M91: trim, fades, bookmarks
+    writeNarration(*nvPr, media.narration);
 }
 
 XmlElementPtr geometryElement(const Shape &shape)

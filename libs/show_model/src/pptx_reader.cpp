@@ -8,6 +8,7 @@
 #include "pptx_read_masters.h"
 #include "pptx_read_text.h"
 #include "pptx_review.h"
+#include "pptx_show.h"
 #include "pptx_timing.h"
 
 #include "ooxml_namespaces.h"
@@ -45,6 +46,8 @@ void refreshPristine(Shape &shape)
         refreshed->pristine.animation = shape.animation;
         refreshed->pristine.animationMs = shape.animationMs;
         refreshed->pristine.media = shape.media;
+        refreshed->pristine.animationDirection = shape.animationDirection; // M91
+        refreshed->pristine.exit = shape.exit;
         shape.origin.source = std::move(refreshed);
     }
 }
@@ -149,6 +152,10 @@ void Reader::readSlide(const QString &part, quint32 sldId, Presentation &deck)
     }
     slide.transition = transitionName(source->transitionXml.get());
     source->transition = slide.transition;
+    // M91 (D-099): Advance Slide — after a rehearsed timing, on a click.
+    readAdvance(source->transitionXml.get(), &slide.advanceAfterMs, &slide.advanceOnClick);
+    source->advanceAfterMs = slide.advanceAfterMs;
+    source->advanceOnClick = slide.advanceOnClick;
     source->builds = readBuilds(source->timingXml.get());
     source->media = readMedia(source->timingXml.get());
     for (Shape &shape : slide.shapes) {
@@ -158,9 +165,14 @@ void Reader::readSlide(const QString &part, quint32 sldId, Presentation &deck)
         bool timed = false;
         for (const BuildEntry &build : std::as_const(source->builds)) {
             if (shape.nvId == build.shapeId && !shape.media.isMedia()) {
-                shape.buildStep = build.step;
-                shape.animation = build.animation;
-                shape.animationMs = build.durationMs > 0 ? qBound(50, build.durationMs, 5000) : 350;
+                if (build.exit) { // M91: the click that takes it off
+                    shape.exit = {build.step, build.animation, build.direction, buildDuration(build)};
+                } else {
+                    shape.buildStep = build.step;
+                    shape.animation = build.animation;
+                    shape.animationMs = buildDuration(build);
+                    shape.animationDirection = build.direction; // M91: Effect Options
+                }
                 timed = true;
             }
         }
@@ -168,6 +180,7 @@ void Reader::readSlide(const QString &part, quint32 sldId, Presentation &deck)
         // click is its build step (it is on the slide before it).
         for (const MediaEntry &entry : std::as_const(source->media)) {
             if (shape.nvId == entry.shapeId && shape.media.isMedia()) {
+                shape.media.narration = shape.media.narration || entry.narration;
                 shape.media.autoPlay = entry.autoPlay;
                 shape.media.loop = entry.loop;
                 shape.media.hideWhenStopped = entry.hideWhenStopped;
@@ -273,6 +286,10 @@ bool Reader::read(Presentation &deck, QString *error)
     }
     // M75: sections, and the comment kind the deck uses.
     deck.sections = readSections(m_state);
+    // M91 (D-099): custom shows and Set Up Slide Show.
+    deck.customShows = readCustomShows(m_state);
+    QString presProps;
+    deck.showSettings = readShowSettings(m_state, &presProps);
     bool legacy = false;
     bool modern = false;
     for (const Slide &slide : std::as_const(deck.slides)) {
@@ -287,6 +304,8 @@ bool Reader::read(Presentation &deck, QString *error)
     source->presentationPart = m_state.main;
     source->presentation = presentation;
     source->slideIds = m_state.slideIds;
+    source->showSettings = deck.showSettings;
+    source->presPropsPart = presProps;
     deck.origin.source = std::move(source);
     return true;
 }

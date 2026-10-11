@@ -90,6 +90,22 @@ add_library(show_model STATIC
     src/pptx_write_text.h
     src/pptx_writer.cpp
     src/pptx_writer.h
+    # M91 (D-099): actions, custom shows, Set Up Slide Show, timings,
+    # effect directions and exits, media trim / fade / bookmarks
+    src/pptx_actions.cpp
+    src/pptx_effects.cpp
+    src/pptx_media_edits.cpp
+    src/pptx_show.cpp
+    src/pptx_show.h
+    src/shape_json_actions.cpp
+    src/show_action.cpp
+    src/show_action.h
+    src/show_settings.cpp
+    src/show_settings.h
+    src/slide_hit.cpp
+    src/slide_hit.h
+    src/video_export.cpp
+    src/video_export.h
     src/pptx_import.cpp
     src/pptx_package_edit.cpp
     src/pptx_package_edit.h
@@ -97,6 +113,7 @@ add_library(show_model STATIC
     src/pptx_slides.h
     src/presentation.cpp
     src/presentation.h
+    src/preset_geometry_actions.cpp
     src/preset_geometry.cpp
     src/preset_geometry.h
     src/preset_geometry_lines.cpp

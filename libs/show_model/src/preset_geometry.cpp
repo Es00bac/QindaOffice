@@ -275,6 +275,9 @@ Outline presetOutline(const QString &name, const QRectF &rect, const Adjustments
     if (rect.isEmpty() && !isOpenPreset(name)) {
         return {};
     }
+    if (name.startsWith(QLatin1String("actionButton"))) {
+        return actionButtonOutline(name, rect.normalized());
+    }
     const auto found = builders().constFind(name);
     if (found == builders().constEnd()) {
         return {};

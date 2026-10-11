@@ -320,6 +320,59 @@ void paintText(QPainter *painter, const QRectF &box, const QList<TextParagraph> 
     painter->restore();
 }
 
+QString hyperlinkAt(const QRectF &box, const QList<TextParagraph> &paragraphs, const TextBodyStyle &style, const QPointF &point)
+{
+    const bool linked = std::any_of(paragraphs.cbegin(), paragraphs.cend(), [](const TextParagraph &p) {
+        return std::any_of(p.runs.cbegin(), p.runs.cend(), [](const TextRun &r) { return !r.hyperlink.isEmpty(); });
+    });
+    if (!linked || isVertical(style.vertical)) {
+        return {};
+    }
+    // AGENT-GUARD: the same layout and placement as paintText(), or a click
+    // lands on another word than the one painted under it.
+    const QRectF inner = box.normalized().adjusted(style.insetLeft, style.insetTop, -style.insetRight, -style.insetBottom);
+    const std::vector<Block> blocks = layoutAll(paragraphs, inner.width(), style);
+    const qreal total = totalHeight(blocks);
+    qreal y = inner.top();
+    if (style.anchor == TextAnchor::Middle || style.anchor == TextAnchor::Distributed) {
+        y += (inner.height() - total) / 2.0;
+    } else if (style.anchor == TextAnchor::Bottom) {
+        y += inner.height() - total;
+    }
+    for (std::size_t i = 0; i < blocks.size(); ++i) {
+        const Block &block = blocks.at(i);
+        if (i > 0) {
+            y += block.spaceBefore;
+        }
+        const QPointF local = point - QPointF(inner.left(), y);
+        for (int l = 0; l < block.layout->lineCount(); ++l) {
+            const QTextLine line = block.layout->lineAt(l);
+            if (local.y() < line.y() || local.y() >= line.y() + line.height()) {
+                continue;
+            }
+            const qreal from = line.cursorToX(line.textStart());
+            const qreal to = line.cursorToX(line.textStart() + line.textLength());
+            if (local.x() < qMin(from, to) || local.x() > qMax(from, to)) {
+                return {};
+            }
+            const int cursor = line.xToCursor(local.x(), QTextLine::CursorOnCharacter);
+            int offset = 0;
+            for (const TextRun &run : paragraphs.at(qsizetype(i)).runs) {
+                if (run.text.isEmpty()) {
+                    continue; // laid out without it (layoutParagraph)
+                }
+                if (cursor < offset + run.text.size()) {
+                    return run.hyperlink;
+                }
+                offset += int(run.text.size());
+            }
+            return {};
+        }
+        y += block.height + block.spaceAfter;
+    }
+    return {};
+}
+
 qreal textHeight(const QList<TextParagraph> &paragraphs, qreal width, const TextBodyStyle &style)
 {
     const qreal inner = qMax<qreal>(1.0, width - style.insetLeft - style.insetRight);

@@ -269,7 +269,7 @@ void PptxWriteTest::editsAreWrittenAndTheRestKept()
         const Shape &a = hiddenBack.shapes.at(s);
         const Shape &b = hiddenWas.shapes.at(s);
         QCOMPARE(a.id, b.id);
-        QCOMPARE(a.hyperlink, b.hyperlink);
+        QCOMPARE(a.click, b.click);
         QCOMPARE(a.rect, b.rect);
         QCOMPARE(a.paragraphs, b.paragraphs);
         QVERIFY2(a == b, qPrintable(QString::number(s)));

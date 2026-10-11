@@ -31,16 +31,9 @@ ShapeAnimation animationFor(int presetId, int subtype)
     case 1:
         return ShapeAnimation::Appear;
     case 2:
-        switch (subtype) {
-        case 1:
-            return ShapeAnimation::FlyInTop;
-        case 2:
-            return ShapeAnimation::FlyInRight;
-        case 8:
-            return ShapeAnimation::FlyInLeft;
-        default:
-            return ShapeAnimation::FlyInBottom;
-        }
+        // Fly In's four edges have their own kinds; a corner keeps its top
+        // or bottom edge's kind and its direction (M91, flyInFor()).
+        return flyInFor(subtype);
     case 23:
     case 53:
         return ShapeAnimation::Zoom;
@@ -48,9 +41,27 @@ ShapeAnimation animationFor(int presetId, int subtype)
         return ShapeAnimation::Wipe;
     case 16:
         return ShapeAnimation::Split;
+    case 12: // M91
+        return ShapeAnimation::Peek;
+    case 42:
+    case 47:
+        return ShapeAnimation::Float;
     default:
         return ShapeAnimation::Fade;
     }
+}
+
+// The Effect Options direction a preset carries beyond its kind (M91): 0
+// when the kind's own direction says it all.
+int directionFor(int presetId, int subtype, ShapeAnimation animation)
+{
+    if (presetId == 42 || presetId == 47) {
+        return presetId == 47 ? Direction::Bottom : 0; // Float Down / Float Up (the way it moves)
+    }
+    if (presetId != 2 && presetId != 22 && presetId != 16 && presetId != 12) {
+        return 0;
+    }
+    return subtype != 0 && subtype != effectiveDirection(animation, 0) ? subtype : 0;
 }
 
 // The emphasis effects the model holds (M67): Spin and Grow/Shrink.
@@ -98,23 +109,32 @@ int longestBehaviour(const Ooxml::XmlElement &effect)
 void collectEntrances(const Ooxml::XmlElement &node, int step, QList<BuildEntry> &out)
 {
     for (const Ooxml::XmlElement *child : node.elements()) {
-        const bool entrance = child->is(nsP(), u"cTn") && child->attr(u"presetClass") == u"entr";
-        const std::optional<ShapeAnimation> emphasis = child->is(nsP(), u"cTn") && child->attr(u"presetClass") == u"emph"
+        const bool timeNode = child->is(nsP(), u"cTn");
+        const QString presetClass = timeNode ? child->attr(u"presetClass") : QString();
+        const bool entrance = presetClass == u"entr";
+        const bool exit = presetClass == u"exit"; // M91
+        const std::optional<ShapeAnimation> emphasis = presetClass == u"emph"
             ? emphasisFor(child->attr(u"presetID").toInt())
             : std::nullopt;
-        if (entrance || emphasis) {
+        if (entrance || exit || emphasis) {
             const Ooxml::XmlElement *target = child->descendant(nsP(), u"spTgt");
             if (target != nullptr) {
                 BuildEntry entry;
                 entry.shapeId = target->attr(u"spid").toUInt();
                 entry.step = step;
-                entry.animation = emphasis ? *emphasis
-                                           : animationFor(child->attr(u"presetID").toInt(), child->attr(u"presetSubtype").toInt());
+                entry.exit = exit;
+                const int preset = child->attr(u"presetID").toInt();
+                const int subtype = child->attr(u"presetSubtype").toInt();
+                entry.animation = emphasis ? *emphasis : animationFor(preset, subtype);
+                entry.direction = emphasis ? 0 : directionFor(preset, subtype, entry.animation);
                 // The longest behaviour is how long the effect plays (the
                 // visibility switch lasts 1 ms).
                 entry.durationMs = longestBehaviour(*child);
-                const bool seen = std::any_of(out.cbegin(), out.cend(),
-                                              [&entry](const BuildEntry &e) { return e.shapeId == entry.shapeId; });
+                // One entrance (or emphasis) and one exit per shape: the
+                // model's build and exit steps.
+                const bool seen = std::any_of(out.cbegin(), out.cend(), [&entry](const BuildEntry &e) {
+                    return e.shapeId == entry.shapeId && e.exit == entry.exit;
+                });
                 if (!seen) {
                     out.append(entry);
                 }
@@ -227,6 +247,70 @@ Ooxml::XmlElementPtr transitionElement(const QString &name)
     return transition;
 }
 
+namespace {
+
+// Every p:transition inside `e` (itself, or the branches of the
+// mc:AlternateContent PowerPoint wraps newer transitions in).
+void transitionsIn(Ooxml::XmlElement &e, QList<Ooxml::XmlElement *> &out)
+{
+    if (e.is(nsP(), u"transition")) {
+        out.append(&e);
+        return;
+    }
+    for (Ooxml::XmlChild &child : e.children) {
+        if (child.element) {
+            transitionsIn(*child.element, out);
+        }
+    }
+}
+
+} // namespace
+
+void readAdvance(const Ooxml::XmlElement *transition, int *advanceAfterMs, bool *advanceOnClick)
+{
+    *advanceAfterMs = -1;
+    *advanceOnClick = true;
+    if (transition != nullptr && transition->is(nsMc(), u"AlternateContent")) {
+        const Ooxml::XmlElement *fallback = transition->child(nsMc(), u"Fallback");
+        const Ooxml::XmlElement *choice = transition->child(nsMc(), u"Choice");
+        transition = fallback != nullptr && fallback->child(nsP(), u"transition") != nullptr ? fallback->child(nsP(), u"transition")
+            : choice != nullptr                                                              ? choice->child(nsP(), u"transition")
+                                                                                             : nullptr;
+    }
+    if (transition == nullptr) {
+        return;
+    }
+    bool ok = false;
+    const int ms = transition->attr(u"advTm").toInt(&ok);
+    *advanceAfterMs = ok && ms >= 0 ? ms : -1;
+    const QString click = transition->attr(u"advClick");
+    *advanceOnClick = !(click == u"0" || click == u"false");
+}
+
+void applyAdvance(Ooxml::XmlElementPtr &transition, int advanceAfterMs, bool advanceOnClick)
+{
+    if (!transition) {
+        if (advanceAfterMs < 0 && advanceOnClick) {
+            return;
+        }
+        transition = std::make_shared<Ooxml::XmlElement>(nsP(), QStringLiteral("transition"));
+    }
+    QList<Ooxml::XmlElement *> all;
+    transitionsIn(*transition, all);
+    for (Ooxml::XmlElement *e : std::as_const(all)) {
+        if (advanceOnClick) {
+            e->removeAttribute(QString(), u"advClick");
+        } else {
+            e->setAttribute(QString(), QStringLiteral("advClick"), QStringLiteral("0"));
+        }
+        if (advanceAfterMs >= 0) {
+            e->setAttribute(QString(), QStringLiteral("advTm"), QString::number(advanceAfterMs));
+        } else {
+            e->removeAttribute(QString(), u"advTm");
+        }
+    }
+}
+
 QList<BuildEntry> readBuilds(const Ooxml::XmlElement *timing)
 {
     QList<BuildEntry> builds;
@@ -264,7 +348,8 @@ bool startsWithSlide(const Ooxml::XmlElement &par)
 QList<int> clickSteps(const Ooxml::XmlElement &clicks)
 {
     const std::function<bool(const Ooxml::XmlElement &)> builds = [&builds](const Ooxml::XmlElement &e) {
-        if (e.is(nsP(), u"cTn") && (e.attr(u"presetClass") == u"entr" || e.attr(u"presetClass") == u"emph")) {
+        if (e.is(nsP(), u"cTn")
+            && (e.attr(u"presetClass") == u"entr" || e.attr(u"presetClass") == u"emph" || e.attr(u"presetClass") == u"exit")) {
             return true;
         }
         const QList<const Ooxml::XmlElement *> children = e.elements();

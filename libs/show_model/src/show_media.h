@@ -17,11 +17,20 @@
 
 #include <QByteArray>
 #include <QImage>
+#include <QList>
 #include <QString>
 
 namespace QindaOffice::Show {
 
 enum class MediaKind { None, Video, Audio };
+
+// A named point in a video or sound (M91, D-099; p14:bmk): the show jumps
+// between them (Alt+End / Alt+Home), as PowerPoint's does.
+struct MediaBookmark {
+    QString name;
+    int timeMs = 0;
+    bool operator==(const MediaBookmark &) const = default;
+};
 
 struct MediaInfo {
     MediaKind kind = MediaKind::None;
@@ -31,10 +40,18 @@ struct MediaInfo {
     QString name;          // the file name it was inserted from (its extension)
     int durationMs = 0;    // 0 = unknown
     // Playback (PowerPoint's Playback tab).
+    bool narration = false;      // p:audio/@isNarration or p15:isNarration
     bool autoPlay = false;        // Start: Automatically (else On Click)
     bool loop = false;            // Loop until Stopped
     bool hideWhenStopped = false; // Hide While Not Playing
     int volume = 80;              // percent; PowerPoint's default is 80 %
+    // ---- M91 (D-099): Trim, Fade Duration and bookmarks (p14:media's
+    // p14:trim, p14:fade and p14:bmkLst), honoured by the show.
+    int trimStartMs = 0;          // played from here
+    int trimEndMs = 0;            // cut this much off the end (p14:trim/@end); 0 = none
+    int fadeInMs = 0;
+    int fadeOutMs = 0;
+    QList<MediaBookmark> bookmarks; // in time order
     bool operator==(const MediaInfo &) const = default;
     [[nodiscard]] bool isMedia() const { return kind != MediaKind::None; }
 };

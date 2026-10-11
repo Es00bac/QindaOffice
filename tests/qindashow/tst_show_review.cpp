@@ -374,6 +374,13 @@ Item {
     property real volume: 0.8
     property bool playing: false
     property bool started: false
+    property int startMs: 0
+    property int endMs: 0
+    property int trimEndMs: 0
+    property int fadeInMs: 0
+    property int fadeOutMs: 0
+    property int position: 0
+    function seek(ms) { position = ms }
     signal finished()
     function stop() { started = false }
     onPlayingChanged: if (playing && String(source).length > 0) started = true
@@ -389,6 +396,18 @@ Item {
     QVERIFY(scene.host.media()->available());
     QCOMPARE(scene.host.media()->surface(), QUrl::fromLocalFile(standIn));
     QVERIFY(openFixture(scene, dir, PptxFixture::edited([](QindaOffice::Ooxml::PackageWriter &w) { PptxFixture::addVideo(w); })));
+    auto edited = *scene.doc->presentation();
+    for (auto &shape : edited.slides[2].shapes) {
+        if (shape.media.kind == ShowModel::MediaKind::Video) {
+            shape.media.durationMs = 5000;
+            shape.media.trimStartMs = 1000;
+            shape.media.trimEndMs = 500;
+            shape.media.fadeInMs = 200;
+            shape.media.fadeOutMs = 300;
+            shape.media.bookmarks = {{QStringLiteral("Cue"), 2000}};
+        }
+    }
+    QVERIFY(scene.host.applyDeckChange(edited, QStringLiteral("Synthetic media edits")));
     // Slide 3: the deck's video (automatic, looping, hidden while stopped)
     // and an inserted sound (On Click), hidden while not playing too.
     scene.host.selectSlideRow(2);
@@ -420,6 +439,14 @@ Item {
     QVERIFY(audioSurface != nullptr);
     QVERIFY(videoSurface->property("playing").toBool()); // with the slide
     QVERIFY(videoSurface->property("loop").toBool());
+    QCOMPARE(videoSurface->property("startMs").toInt(), 1000);
+    QCOMPARE(videoSurface->property("endMs").toInt(), 4500);
+    QCOMPARE(videoSurface->property("fadeInMs").toInt(), 200);
+    QCOMPARE(videoSurface->property("fadeOutMs").toInt(), 300);
+    QVariant bookmark;
+    QVERIFY(QMetaObject::invokeMethod(layer, "jumpBookmark", Q_RETURN_ARG(QVariant, bookmark), Q_ARG(QVariant, 1)));
+    QVERIFY(bookmark.toBool());
+    QCOMPARE(videoSurface->property("position").toInt(), 2000);
     QVERIFY(video->isVisible());
     QVERIFY(!audioSurface->property("playing").toBool()); // not before its click
     QVERIFY(!audio->isVisible());
@@ -441,6 +468,17 @@ Item {
     QVERIFY(QMetaObject::invokeMethod(layer, "toggleAt", Q_RETURN_ARG(QVariant, hit), Q_ARG(QVariant, QVariant(centre.x())),
                                       Q_ARG(QVariant, QVariant(centre.y()))));
     QVERIFY(videoSurface->property("playing").toBool());
+
+    // Action audio has one owner even though both show windows exist.
+    ShowModel::ShowAction chime;
+    chime.sound = ShowModel::builtInSound(QStringLiteral("Chime"));
+    chime.soundName = QStringLiteral("Chime");
+    QVERIFY(scene.host.player()->runAction(chime));
+    QObject *playerSound = player->findChild<QObject *>(QStringLiteral("showActionSound"));
+    QObject *presenterSound = scene.childWindow(QStringLiteral("showPresenter"))->findChild<QObject *>(QStringLiteral("showActionSound"));
+    QVERIFY(playerSound != nullptr && presenterSound != nullptr);
+    QVERIFY(playerSound->property("active").toBool());
+    QVERIFY(!presenterSound->property("active").toBool());
 
     // The next slide: nothing of slide 3 plays on.
     QVERIFY(QMetaObject::invokeMethod(player, "advance", Q_ARG(QVariant, QVariant(1))));

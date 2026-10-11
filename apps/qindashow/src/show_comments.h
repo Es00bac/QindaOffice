@@ -69,6 +69,8 @@ public:
     Q_INVOKABLE QString add(const QString &text);
     Q_INVOKABLE QString reply(const QString &id, const QString &text);
     Q_INVOKABLE bool edit(const QString &id, const QString &text);
+    // Move a thread onto a slide point (clears its shape anchor), one undo step.
+    Q_INVOKABLE bool setPosition(const QString &id, qreal x, qreal y);
     Q_INVOKABLE bool setDone(const QString &id, bool done);
     Q_INVOKABLE bool remove(const QString &id);
     Q_INVOKABLE bool select(const QString &id);

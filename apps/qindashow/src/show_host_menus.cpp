@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// ShowHost's menus: Slide, Insert, Shape and Arrange inserted before the
+// ShowHost's menus: Slide, Slide Show (M91), Insert, Shape and Arrange inserted before the
 // shell's AI menu; the snap toggle appended to View; the inline AI
 // commands and deck generation appended to that one AI menu (never a
 // second "AI"); New from Template; and the canvas context menu.
 
 #include "show_host.h"
 
+#include "show_action_settings.h"
 #include "show_arrange.h"
 #include "show_design_actions.h"
+#include "show_effect_options.h"
+#include "show_export.h"
 #include "show_slide_layouts.h"
+#include "show_slide_show.h"
 #include "show_table_actions.h"
 #include "show_toolbox.h"
 #include "standard_actions.h"
@@ -57,8 +61,10 @@ void ShowHost::insertMenus()
             [this] { duplicateSlide(); });
     connect(make(ActionId::kSlideDelete, tr("Delete slide"), {}, "trash"), &ActionEntry::triggered, this,
             [this] { deleteSlide(); });
-    connect(make(ActionId::kSlideStartShow, tr("Start show"), QKeySequence(Qt::Key_F5), "play"),
-            &ActionEntry::triggered, this, [this] { startShow(); });
+    // M91 (D-099): F5 is PowerPoint's From Beginning — the first slide of
+    // the show Set Up describes; From Current Slide is Shift+F5.
+    connect(make(ActionId::kSlideStartShow, tr("From &Beginning"), QKeySequence(Qt::Key_F5), "play"),
+            &ActionEntry::triggered, this, [this] { startShowFromBeginning(); });
     connect(actions()->add(QStringLiteral("showAppearOnClickAction"), tr("Appear on click")),
             &ActionEntry::triggered, m_canvas, &SlideCanvasItem::toggleBuildSelected);
     connect(actions()->add(QStringLiteral("showExportPdfAction"), tr("Export PDF…")), &ActionEntry::triggered,
@@ -77,19 +83,30 @@ void ShowHost::insertMenus()
     slideItems += m_arrange->slideMenuItems();
     slideItems.append(MenuNode::separator());
     slideItems += m_design->slideMenuItems();
-    slideItems += {MenuNode::separator(), a(ActionId::kSlideStartShow), MenuNode::action(QStringLiteral("showPresenterViewAction")),
-                   MenuNode::separator(), MenuNode::action(QStringLiteral("showExportPdfAction"))};
+    // M91: the show's commands are the Slide Show menu's; the exports stay.
+    slideItems += {MenuNode::separator(), MenuNode::action(QStringLiteral("showExportPdfAction"))};
+    slideItems += m_export->menuItems();
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("showSlideMenu"), tr("&Slide"), slideItems));
+    tree->insertMenuBefore(QStringLiteral("aiMenu"),
+                           MenuNode::submenu(QStringLiteral("showSlideShowMenu"), tr("Slide Sho&w"), m_slideShow->menuItems()));
 
     QList<MenuNode> insertItems = m_toolbox->insertMenuItems();
-    insertItems += {MenuNode::action(QString::fromLatin1(TableActionId::kInsertTable)), MenuNode::separator(),
-                    MenuNode::action(QStringLiteral("showAppearOnClickAction"))};
+    insertItems += {MenuNode::action(QString::fromLatin1(TableActionId::kInsertTable)), MenuNode::separator()};
+    insertItems += m_actionSettings->insertMenuItems(); // M91: Link, Action, Action Buttons
+    insertItems += {MenuNode::separator(), MenuNode::action(QStringLiteral("showAppearOnClickAction"))};
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("showInsertMenu"), tr("&Insert"), insertItems));
 
     QList<MenuNode> shapeItems = m_toolbox->styleMenuItems();
     shapeItems += m_design->shapeMenuItems();
+    // M91: Effect Options, Exit and Exit Options join the Animation menu.
+    for (MenuNode &node : shapeItems) {
+        if (node.id == u"showAnimationMenu") {
+            node.children.append(MenuNode::separator());
+            node.children += m_effects->menuItems();
+        }
+    }
     shapeItems += chartMenuItems();
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("showShapeMenu"), tr("S&hape"), shapeItems));

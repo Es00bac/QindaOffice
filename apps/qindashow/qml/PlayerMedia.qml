@@ -12,6 +12,11 @@ import QindaOffice.Show
 // on a video plays or pauses it (toggleAt, asked by the player's pointer
 // before it advances). Changing slides stops everything.
 //
+// M91 (D-099): a medium plays from its trimmed start to its trimmed end,
+// fading in and out (MediaSurface's startMs / endMs / fadeInMs /
+// fadeOutMs), and jumpBookmark(±1) — Alt+End / Alt+Home in the player —
+// seeks the medium playing to its next or previous bookmark.
+//
 // AGENT-NOTE: without Qt Multimedia (ShowMedia.available false, or
 // QQO_SHOW_MEDIA=off in the tests) nothing loads: the poster frames the
 // renderer paints are the whole show, and the tests stay silent.
@@ -35,6 +40,29 @@ Item {
     readonly property int count: media.count
 
     objectName: "playerMedia"
+
+    // The next (+1) or previous (-1) bookmark of the medium playing; true
+    // when there was one to go to.
+    function jumpBookmark(direction) {
+        for (let i = 0; i < media.count; ++i) {
+            const box = media.itemAt(i)
+            const surface = box !== null ? box.surface : null
+            if (surface === null || !box.started || box.modelData.bookmarks.length === 0 || surface.seek === undefined) continue
+            const here = surface.position !== undefined ? surface.position : 0
+            const marks = box.modelData.bookmarks
+            let target = -1
+            if (direction > 0) {
+                for (let m = 0; m < marks.length && target < 0; ++m) if (marks[m] > here + 250) target = marks[m]
+            } else {
+                for (let m = marks.length - 1; m >= 0 && target < 0; --m) if (marks[m] < here - 1000) target = marks[m]
+            }
+            if (target >= 0) {
+                surface.seek(target)
+                return true
+            }
+        }
+        return false
+    }
 
     // A click at (x, y) on a video plays or pauses it; true when it did.
     function toggleAt(x, y) {
@@ -64,6 +92,7 @@ Item {
             property bool paused: false
             property bool ended: false
             readonly property bool started: loader.item !== null && loader.item.started
+            readonly property var surface: loader.item
 
             function toggle() {
                 if (!due && !clicked) {
@@ -90,10 +119,18 @@ Item {
                 anchors.fill: parent
                 source: stage.showHost.media.surface
                 onLoaded: {
-                    item.source = box.modelData.url
+                    // M91: trim and fades first — the source starts playing.
+                    // (A stand-in surface may not know them: tested before set.)
+                    const m = box.modelData
+                    if ("startMs" in item) item.startMs = m.startMs
+                    if ("endMs" in item) item.endMs = m.endMs
+                    if ("trimEndMs" in item) item.trimEndMs = m.trimEndMs
+                    if ("fadeInMs" in item) item.fadeInMs = m.fadeInMs
+                    if ("fadeOutMs" in item) item.fadeOutMs = m.fadeOutMs
+                    item.source = m.url
                     item.video = box.isVideo
-                    item.loop = box.modelData.loop
-                    item.volume = box.modelData.volume / 100
+                    item.loop = m.loop
+                    item.volume = m.volume / 100
                 }
             }
             Binding {

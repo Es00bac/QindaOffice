@@ -34,4 +34,10 @@ void paintText(QPainter *painter, const QRectF &box, const QList<TextParagraph> 
 // The label of an auto-numbered paragraph ("3.", "c)", "iv.", …).
 [[nodiscard]] QString autoNumberLabel(const QString &scheme, int number);
 
+// M91 (D-099): the hyperlink of the run of text at `point` (slide points)
+// when the paragraphs are painted into `box` exactly as paintText() paints
+// them; empty when no linked text is there (vertical text is not hit).
+[[nodiscard]] QString hyperlinkAt(const QRectF &box, const QList<TextParagraph> &paragraphs, const TextBodyStyle &style,
+                                  const QPointF &point);
+
 } // namespace QindaOffice::Show::Render

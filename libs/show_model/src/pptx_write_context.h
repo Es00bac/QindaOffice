@@ -58,6 +58,11 @@ public:
     void carry(Ooxml::XmlElement &element, const QString &sourcePart);
     // An a:hlinkClick for the model's hyperlink spelling; nullptr for none.
     [[nodiscard]] Ooxml::XmlElementPtr hyperlink(const QString &target);
+    // M91 (D-099, pptx_actions.cpp): action settings as `element`
+    // (hlinkClick, hlinkHover, hlinkMouseOver): the jump, the program /
+    // file / deck a verb names (an external relationship), the ScreenTip,
+    // the highlight and the sound (a WAV part); nullptr for none.
+    [[nodiscard]] Ooxml::XmlElementPtr action(const ShowAction &action, const QString &element);
 
     // Shape ids: the ids shapes read from the deck keep are reserved first
     // (reserveShapeIds); claim() then gives a shape its reserved id once,

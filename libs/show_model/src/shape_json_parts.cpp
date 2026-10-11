@@ -230,16 +230,19 @@ FillStyle fillStyle(const QJsonObject &o)
 
 QJsonObject media(const MediaInfo &m)
 {
-    return {{QStringLiteral("kind"), int(m.kind)},
+    QJsonObject o{{QStringLiteral("kind"), int(m.kind)},
             {QStringLiteral("data"), QString::fromLatin1(m.data.toBase64())},
             {QStringLiteral("mime"), m.mime},
             {QStringLiteral("link"), m.link},
             {QStringLiteral("name"), m.name},
             {QStringLiteral("durationMs"), m.durationMs},
             {QStringLiteral("autoPlay"), m.autoPlay},
+            {QStringLiteral("narration"), m.narration},
             {QStringLiteral("loop"), m.loop},
             {QStringLiteral("hideWhenStopped"), m.hideWhenStopped},
             {QStringLiteral("volume"), m.volume}};
+    mediaEdits(o, m); // M91
+    return o;
 }
 
 MediaInfo media(const QJsonObject &o)
@@ -252,9 +255,11 @@ MediaInfo media(const QJsonObject &o)
     m.name = o.value(QStringLiteral("name")).toString();
     m.durationMs = o.value(QStringLiteral("durationMs")).toInt();
     m.autoPlay = o.value(QStringLiteral("autoPlay")).toBool();
+    m.narration = o.value(QStringLiteral("narration")).toBool();
     m.loop = o.value(QStringLiteral("loop")).toBool();
     m.hideWhenStopped = o.value(QStringLiteral("hideWhenStopped")).toBool();
     m.volume = qBound(0, o.value(QStringLiteral("volume")).toInt(80), 100);
+    mediaEdits(o, m); // M91
     return m;
 }
 

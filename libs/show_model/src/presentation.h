@@ -19,9 +19,11 @@
 // same when their CONTENT is — and the writer emits it verbatim while the
 // content still equals what was read (D-068 rule 3).
 
+#include "show_action.h"
 #include "show_chart.h"
 #include "show_comment.h"
 #include "show_media.h"
+#include "show_settings.h"
 #include "show_style.h"
 #include "show_table.h"
 #include "show_text.h"
@@ -79,12 +81,55 @@ enum class ShapeAnimation {
     Split,
     Spin,
     GrowShrink,
+    // ---- M91 (D-099) ----
+    Peek,  // Peek In / Peek Out (presetID 12): slides in from (out to) an edge, clipped to the shape
+    Float, // Float In / Float Out (presetIDs 42 up, 47 down): a short glide with a fade
 };
 [[nodiscard]] inline bool isEmphasis(ShapeAnimation animation)
 {
     return animation == ShapeAnimation::Spin || animation == ShapeAnimation::GrowShrink;
 }
-inline constexpr ShapeAnimation kLastAnimation = ShapeAnimation::GrowShrink;
+inline constexpr ShapeAnimation kLastAnimation = ShapeAnimation::Float;
+
+// Effect Options directions (M91, D-099), PowerPoint's presetSubtype bits:
+// an entrance names the edge it comes FROM, an exit the edge it leaves TO.
+// 0 is "the effect's default" (ShapeAnimation's FlyIn* values carry their
+// own); Split uses its four combinations (horizontal/vertical, in/out).
+namespace Direction {
+inline constexpr int Top = 1;
+inline constexpr int Right = 2;
+inline constexpr int Bottom = 4;
+inline constexpr int Left = 8;
+inline constexpr int TopRight = 3;
+inline constexpr int BottomRight = 6;
+inline constexpr int TopLeft = 9;
+inline constexpr int BottomLeft = 12;
+inline constexpr int HorizontalIn = 21;
+inline constexpr int VerticalIn = 26;
+inline constexpr int VerticalOut = 37;
+inline constexpr int HorizontalOut = 42;
+} // namespace Direction
+
+// The direction a shape's effect plays in: `direction` when set, else the
+// effect's own (Fly In's from its kind, Wipe from the bottom, Split
+// vertical out, Peek from the bottom, Float up).
+[[nodiscard]] int effectiveDirection(ShapeAnimation animation, int direction);
+// The Fly In kind a direction reads as (a corner keeps its top or bottom
+// edge's kind and the corner in Shape::animationDirection): what the pptx
+// reader makes of presetSubtype and what Effect Options sets, so both agree.
+[[nodiscard]] ShapeAnimation flyInFor(int direction);
+
+// An exit effect (M91, D-099): the click at which the shape leaves the
+// slide, how and where to. `step` 0 = none. Appear means Disappear; the
+// FlyIn* kinds are Fly Out (their own edge unless `direction` says).
+struct ShapeExit {
+    int step = 0;
+    ShapeAnimation animation = ShapeAnimation::Fade;
+    int direction = 0;
+    int durationMs = 500;
+    bool operator==(const ShapeExit &) const = default;
+    [[nodiscard]] bool isSet() const { return step > 0; }
+};
 
 // An Office placeholder (p:ph). Empty type = not a placeholder.
 struct Placeholder {
@@ -194,12 +239,18 @@ struct Shape {
     bool connector = false; // a p:cxnSp (Line/Arrow/AutoShape kind)
     Connection start;
     Connection end;
-    QString hyperlink;      // a click on the shape; same forms as TextRun::hyperlink
     PreservedXml preserved; // Preserved and Chart kinds: the frame as written
     // ---- M75 ----
     // A video or a sound (show_media.h): an Image-kind shape whose picture
     // is the poster frame.
     MediaInfo media;
+    // ---- M91 (D-099) ----
+    // Action settings (show_action.h): a click on the shape (a:hlinkClick;
+    // M62's `hyperlink` is click.link) and the mouse over it (a:hlinkHover).
+    ShowAction click;
+    ShowAction hover;
+    int animationDirection = 0; // the entrance's Effect Options (presetSubtype; 0 = default)
+    ShapeExit exit;
     Provenance<ShapeSource> origin;
 
     [[nodiscard]] QString displayText() const;
@@ -291,6 +342,12 @@ struct Slide {
     bool showMasterShapes = true;
     // ---- M75 ----
     QList<SlideComment> comments; // threads in order, replies after their first comment
+    // ---- M91 (D-099) ----
+    // Advance Slide: after this many milliseconds (p:transition/@advTm;
+    // -1 = no timing, by click only) and on a mouse click (@advClick). The
+    // show follows the timing while ShowSettings::useTimings is on.
+    int advanceAfterMs = -1;
+    bool advanceOnClick = true;
     Provenance<SlideSource> origin;
 
     [[nodiscard]] Shape *findShape(const QString &id);
@@ -324,6 +381,9 @@ struct Presentation {
     // Comments are written as PowerPoint's legacy ones (the kind the deck
     // came with) while none is resolved; modern ones otherwise.
     bool legacyComments = false;
+    // ---- M91 (D-099) ----
+    QList<CustomShow> customShows; // p:custShowLst
+    ShowSettings showSettings;     // p:showPr (presProps.xml)
     Provenance<DeckSource> origin;
 
     [[nodiscard]] Slide &addSlide(const QString &title);
