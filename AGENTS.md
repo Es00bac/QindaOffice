@@ -135,6 +135,7 @@ apps/qinda{write,calc,show,note}  → office_quick → office_core
                                   → office_ai    → office_core
 qindawrite → office_docx → office_ooxml   (Word interchange, D-068)
 apps/qindalauncher (qindaoffice)  → office_quick (theme bridge only)
+office_math → office_ooxml (Qt Core/Gui only)
 qindacalc → calc_io → calc_engine
 qindashow → show_model → office_ooxml   (PowerPoint interchange, D-070)
                         → calc_io       (a chart's embedded workbook, D-076)

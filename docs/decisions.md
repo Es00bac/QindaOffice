@@ -5,6 +5,29 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-100: Office equations through a shared OMML model and OpenType MATH layout
+
+**Date:** 2026-10-10 · **Status:** accepted · **Milestone:** M92.
+
+Keep Office equation content in a Qt Core/Gui library, `office_math`, over
+`office_ooxml`. Its node/argument model retains unknown XML, and its layout
+uses installed fonts' OpenType MATH tables. A shared model lets the writer,
+accessible linear representation, caret geometry and editor refer to the
+same slots. It avoids a separate third-party renderer's conversion model
+and lets both document applications preserve Office extensions.
+
+Plain tree copies share nodes; mutation uses a deep clone. EquationEditor
+owns clones and records one history step per accepted edit. Its positions
+count Unicode code points and structure atoms, and invalid/cross-slot
+selections fail without changing the draft. Read-only library calls do not
+invoke an application, network service or external typesetter.
+
+The library provides OMML interchange, UnicodeMath/LaTeX subsets, structured
+insertion, navigation, undo/redo, painting and high-DPI image output. Missing
+MATH fonts are reported through layout validity. App adapters are separate:
+this milestone alone does not make existing Write/Show equation placeholders
+editable. See [equations.md](equations.md) for API and format limits.
+
 ## D-096: QindaWrite: Word sections — page layout, orientation, headers and numbering per section
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

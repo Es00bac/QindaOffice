@@ -6,6 +6,8 @@ add_subdirectory(office_core)
 add_subdirectory(office_ooxml)
 # Word documents natively (M60, D-068).
 add_subdirectory(office_docx)
+# Office equations: OMML model, OpenType MATH layout, linear formats (M92, D-100).
+add_subdirectory(office_math)
 add_subdirectory(office_quick)
 add_subdirectory(office_ai)
 # Live audio to text for QindaNote's live notes (D-057).
