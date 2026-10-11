@@ -2,6 +2,7 @@
 #include "write_references.h"
 #include "write_reference_edit.h"
 #include "page_text_control.h"
+#include "page_typing_format.h"
 #include "write_document.h"
 #include "menu_tree.h"
 #include <QTextBlock>
@@ -53,13 +54,13 @@ void ReferencesController::request(const QString &kind)
 void ReferencesController::finish(QTextCursor cursor)
 {
     m_control->setTextCursor(cursor);
-    auto format = cursor.charFormat(); Docx::clearReferenceFormat(format); m_control->setCurrentCharFormat(format);
+    auto format = typingFormat(cursor); Docx::clearReferenceFormat(format); m_control->setCurrentCharFormat(format);
     m_document->storyEdited(); clearError(); emit changed();
 }
 void ReferencesController::updateBoundaryFormat()
 {
     const auto cursor = m_control->textCursor(); if (cursor.hasSelection()) return;
-    const int pos = cursor.position(); auto format = m_control->currentCharFormat();
+    const int pos = cursor.position(); auto format = typingFormat(cursor, m_control->currentCharFormat());
     // At an object's right edge, fresh typing must not lengthen its saved
     // field/bookmark result. In the middle of a result editing remains possible.
     QTextCursor right(cursor.document()); right.setPosition(pos);

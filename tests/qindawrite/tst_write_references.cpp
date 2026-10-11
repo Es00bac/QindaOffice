@@ -8,6 +8,9 @@
 #include "office_docx/docx_fixture.h"
 #include "qindawrite/src/pdf_exporter.h"
 #include "docx_reference_fields.h"
+#include "docx_math.h"
+#include "docx_graphics.h"
+#include "qindawrite/src/write_graphics.h"
 #include "office_docx/docx_roundtrip.h"
 #include "support/quick_dump.h"
 #include <QTextBlock>
@@ -36,6 +39,8 @@ private slots:
     void typingAfterCitation();
     void editRenameAndRenumber();
     void preservedLockedAndUnsupported();
+    void referencesBesideInlineObjects_data();
+    void referencesBesideInlineObjects();
     void dialogs_data();
     void dialogs();
 };
@@ -126,6 +131,66 @@ void WriteReferencesTest::preservedLockedAndUnsupported()
     Apps::Write::PageGeometry geometry; QCOMPARE(Apps::Write::updateTableOfContents(&read->body, geometry), -2); QCOMPARE(read->body.toPlainText(), before);
     const auto bytes = Docx::docxBytes(read->body, read->parts); const auto again = Test::readWord(bytes); QVERIFY(again); QCOMPARE(again->body.toPlainText(), before);
     QCOMPARE(Docx::referenceSpans(again->body).size(), 3);
+}
+void WriteReferencesTest::referencesBesideInlineObjects_data()
+{
+    QTest::addColumn<bool>("equation"); QTest::newRow("equation") << true; QTest::newRow("graphic") << false;
+}
+void WriteReferencesTest::referencesBesideInlineObjects()
+{
+    QFETCH(bool, equation);
+    Scene scene; QVERIFY2(scene.ready(), qPrintable(scene.error)); auto *refs = scene.host.referencesController();
+    QVERIFY(refs->saveSource({}, source()));
+    if (equation) {
+        auto c = scene.control()->textCursor();
+        const QString xml = QStringLiteral(R"(<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><m:r><m:t>x+1</m:t></m:r></m:oMath>)");
+        c.insertText(QString(QChar::ObjectReplacementCharacter), Docx::equationFormat(xml, QTextCharFormat()));
+        scene.control()->setTextCursor(c);
+    } else QVERIFY(scene.host.graphicsController()->insert(QStringLiteral("shape")));
+    auto atObjectEnd = [&] { QTextCursor c(scene.doc->textDocument()); c.setPosition(1); scene.control()->setTextCursor(c); };
+    auto ordinary = [](const QTextCharFormat &format) {
+        return format.objectType() == QTextFormat::NoObject && !format.isImageFormat()
+            && !format.hasProperty(Docx::kInlineXml) && !format.hasProperty(Docx::kInlineSerial)
+            && !format.hasProperty(Docx::kGraphicKind) && !format.hasProperty(Docx::kGraphicData);
+    };
+    atObjectEnd(); auto changed = source(); changed.insert(QStringLiteral("title"), QStringLiteral("Updated systems"));
+    QVERIFY(refs->saveSource(QStringLiteral("Rivera2026"), changed));
+    QVERIFY(ordinary(scene.control()->currentCharFormat()));
+    auto chosenStyle = scene.control()->currentCharFormat(); chosenStyle.setFontWeight(QFont::Bold);
+    scene.control()->setCurrentCharFormat(chosenStyle);
+    QVERIFY(QMetaObject::invokeMethod(scene.control(), "cursorPositionChanged"));
+    QCOMPARE(scene.control()->currentCharFormat().fontWeight(), QFont::Bold); // boundary normalization retains chosen text style
+    QKeyEvent firstText(QEvent::KeyPress, 0, Qt::NoModifier, QStringLiteral(" after-source"));
+    QVERIFY(scene.control()->processEvent(&firstText)); QVERIFY(ordinary(scene.control()->textCursor().charFormat()));
+    atObjectEnd(); QVERIFY(refs->insertCitation(QStringLiteral("Rivera2026")));
+    auto citation = Docx::referenceSpans(*scene.doc->textDocument()).first(); QTextCursor selected(scene.doc->textDocument());
+    selected.setPosition(citation.start); selected.setPosition(citation.end, QTextCursor::KeepAnchor);
+    QVERIFY(ordinary(selected.charFormat())); QTextCharFormat citationStyle; citationStyle.setFontItalic(true); selected.mergeCharFormat(citationStyle);
+    scene.control()->setTextCursor(selected); QVERIFY(refs->editCitation(QStringLiteral("Rivera2026"), QStringLiteral("42")));
+    citation = Docx::referenceSpans(*scene.doc->textDocument()).first(); selected.setPosition(citation.start); selected.setPosition(citation.end, QTextCursor::KeepAnchor);
+    QVERIFY(selected.charFormat().fontItalic()); QVERIFY(ordinary(selected.charFormat()));
+    end(scene, true); QVERIFY(refs->insertCaption(QStringLiteral("Figure"), QStringLiteral("Reference target")));
+    const QString bookmark = refs->targets().first().toMap().value(QStringLiteral("bookmark")).toString();
+    const auto captionRange = Docx::bookmarkRanges(*scene.doc->textDocument()).value(bookmark);
+    QTextCursor caption(scene.doc->textDocument()); caption.setPosition(captionRange.start); caption.setPosition(captionRange.start + 1, QTextCursor::KeepAnchor);
+    QVERIFY(caption.charFormat().fontItalic()); QVERIFY(ordinary(caption.charFormat()));
+    atObjectEnd(); QVERIFY(refs->insertCrossReference(bookmark, QStringLiteral("text"), true));
+    QVERIFY(ordinary(scene.control()->currentCharFormat()));
+    QKeyEvent secondText(QEvent::KeyPress, 0, Qt::NoModifier, QStringLiteral(" after-reference"));
+    QVERIFY(scene.control()->processEvent(&secondText)); QVERIFY(ordinary(scene.control()->textCursor().charFormat()));
+    atObjectEnd(); QVERIFY(refs->insertBibliography());
+    for (const auto &span : Docx::referenceSpans(*scene.doc->textDocument())) {
+        QTextCursor result(scene.doc->textDocument()); result.setPosition(span.start); result.setPosition(span.start + 1, QTextCursor::KeepAnchor);
+        QVERIFY(ordinary(result.charFormat()));
+    }
+    const auto bytes = Docx::docxBytes(*scene.doc->textDocument(), scene.doc->parts()); const auto reopened = Test::readWord(bytes); QVERIFY(reopened);
+    const auto text = reopened->body.toPlainText(); QVERIFY(text.contains(QStringLiteral("after-source"))); QVERIFY(text.contains(QStringLiteral("after-reference")));
+    QVERIFY(text.contains(QStringLiteral("(Rivera, 2026, p. 42)"))); QVERIFY(text.contains(QStringLiteral("Updated systems")));
+    QCOMPARE(Docx::referenceSpans(reopened->body).size(), 4);
+    int objects = 0;
+    for (auto block = reopened->body.begin(); block.isValid(); block = block.next()) for (auto it = block.begin(); !it.atEnd(); ++it)
+        if (equation ? Docx::isEquation(it.fragment().charFormat()) : it.fragment().charFormat().hasProperty(Docx::kGraphicKind)) objects += it.fragment().text().count(QChar::ObjectReplacementCharacter);
+    QCOMPARE(objects, 1); QString schemaErrors; QVERIFY2(Test::validates(bytes, &schemaErrors), qPrintable(schemaErrors));
 }
 void WriteReferencesTest::dialogs_data() { QTest::addColumn<int>("width"); QTest::newRow("1280") << 1280; QTest::newRow("520") << 520; }
 void WriteReferencesTest::dialogs()

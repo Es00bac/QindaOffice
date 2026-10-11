@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_reference_edit.h"
+#include "page_typing_format.h"
 #include "ooxml_namespaces.h"
 #include <QAbstractTextDocumentLayout>
 #include <QTextBlock>
@@ -58,6 +59,10 @@ QString bibliographyResult(const QTextDocument &document, const Docx::Bibliograp
 }
 void insertReference(QTextCursor &cursor, const QString &code, const QString &result, QTextCharFormat format)
 {
+    // All newly inserted cached results pass here, including citations,
+    // cross-references, bibliography and the italic caption sequence. Keep
+    // their ordinary style, never a preceding equation/graphic's identity.
+    format = typingFormat(cursor, std::move(format));
     Docx::clearReferenceFormat(format);
     format.setProperty(Docx::kReferenceFields, QVariantList{Docx::referenceField(code)});
     format.setProperty(Docx::kFieldInstruction, code);

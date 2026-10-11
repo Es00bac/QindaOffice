@@ -73,6 +73,14 @@ unknown codes and field locks. These modules remain Core/Gui-only.
 `ReferencesController` and the cohesive `write_reference_edit` helpers own
 window actions and undoable edits. The existing TOC module owns TOC generation.
 
+Reference insertion and command completion use the shared ordinary typing
+format, including when invoked immediately after an equation or graphic.
+New result text cannot retain preserved OMML/drawing identity. Explicit caption
+and citation text styling stays intact, and boundary normalization preserves
+ordinary formatting chosen by the user. Existing cached results are otherwise
+left untouched by this normalization.
+
+
 Synthetic native package/schema, read/write/reopen, source preservation,
 Undo/Redo/recovery, LibreOffice/PDF and real-window 1280/520-pixel checks are in
 `tst_docx_references` and `tst_write_references`. Existing Word reader/writer,

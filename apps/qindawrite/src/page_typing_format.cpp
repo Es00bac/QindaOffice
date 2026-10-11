@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "page_typing_format.h"
 #include "docx_math.h"
+#include "docx_graphics.h"
 #include "docx_properties.h"
 #include "docx_text.h"
 #include <QTextTable>
@@ -11,8 +12,16 @@ namespace QindaOffice::Apps::Write {
 // text typed after it is text (docx_comments.h, write_footnotes.h).
 QTextCharFormat typingFormat(const QTextCursor &cursor)
 {
-    QTextCharFormat format = cursor.charFormat();
-    if (format.isImageFormat()) format = cursor.block().charFormat();
+    return typingFormat(cursor, cursor.charFormat());
+}
+QTextCharFormat typingFormat(const QTextCursor &cursor, QTextCharFormat format)
+{
+    if (format.isImageFormat() || format.hasProperty(Docx::kGraphicKind)) format = cursor.block().charFormat();
+    // AGENT-GUARD: a reference command can be invoked directly beside a
+    // graphic, bypassing the control's pinned typing format. New text must
+    // never carry drawing identity into the native island writer.
+    for (int key : {Docx::kGraphicKind, Docx::kGraphicData, Docx::kGraphicSnapshot, Docx::kGraphicSource})
+        format.clearProperty(key);
     format.clearProperty(Docx::kCommentReference);
     if (format.hasProperty(Docx::kInlineXml)) {
         format.setObjectType(QTextFormat::NoObject);

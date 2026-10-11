@@ -42,6 +42,13 @@ Evidence is retained on qinda in
 JUnit, final focused Qt output and `grabs/`). Source was synchronized with checksum
 rsync before each build; no private corpus was copied or opened.
 
+The integrated `referencesBesideInlineObjects` regression covers both an
+equation and a shape followed by source editing, ordinary typing, citation
+insertion/editing, captions, cross-references and bibliography. It checks clean
+text formats, retained explicit styles, native DOCX save/reopen and exactly one
+original object. This additional mixed-workflow gate must run against the
+combined M92b/M94 integration build.
+
 Manual follow-up: Microsoft Word desktop refresh comparison and live print
 portal/device behavior. Full CSL/style catalogs, online/global source
 libraries, chapter-based caption numbering, indexes and tables of authorities
