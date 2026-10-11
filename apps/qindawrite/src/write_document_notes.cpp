@@ -8,6 +8,7 @@
 #include "write_endnotes.h"
 #include "write_footnotes.h"
 #include "write_pagination.h"
+#include "write_sections.h"
 
 #include <QAbstractUndoItem>
 #include <QTextCursor>
@@ -92,6 +93,7 @@ void WriteDocument::swapNoteTexts(QHash<QString, QString> footnotes, QHash<QStri
     m_parts.footnotes = std::move(footnotes);
     m_parts.endnotes = std::move(endnotes);
     m_endnoteAreaValid = false;
+    m_pageFramesValid = false;
     m_text->setModified(true);
     emit contentChanged();
 }
@@ -108,6 +110,7 @@ void WriteDocument::swapNoteOptions(bool endnote, const Docx::NoteOptions &optio
 {
     (endnote ? m_parts.endnoteOptions : m_parts.footnoteOptions) = options;
     m_endnoteAreaValid = false;
+    m_pageFramesValid = false;
     m_text->setModified(true);
     emit contentChanged();
 }
@@ -117,7 +120,8 @@ std::shared_ptr<const EndnoteArea> WriteDocument::endnoteArea() const
     if (!m_endnoteAreaValid) {
         m_endnoteArea = m_parts.endnotes.isEmpty()
             ? nullptr
-            : layoutEndnotes(*m_text, m_parts.endnotes, m_parts.endnoteOptions);
+            : layoutEndnotes(*m_text, m_parts.endnotes, m_parts.endnoteOptions,
+                             m_sections->padFor(m_sections->count() - 1));
         m_endnoteAreaValid = true;
     }
     return m_endnoteArea;
@@ -138,7 +142,10 @@ void WriteDocument::configureLike(QTextDocument *document) const
     document->setUseDesignMetrics(true);
     document->setDefaultFont(m_text->defaultFont());
     document->setDefaultTextOption(m_text->defaultTextOption());
-    document->setPageSize(m_text->pageSize());
+    // The closing section's page (M88): the canvas may be wider or taller
+    // for another section's sake; a document made from this one is laid out
+    // on one page size.
+    document->setPageSize(m_parts.layout.pageSize);
     document->setDocumentMargin(m_text->documentMargin());
     QTextFrameFormat root = document->rootFrame()->frameFormat();
     const QTextFrameFormat mine = m_text->rootFrame()->frameFormat();
@@ -152,7 +159,8 @@ void WriteDocument::configureLike(QTextDocument *document) const
 void WriteDocument::restoreLayout(const Docx::PageLayout &layout)
 {
     m_parts.layout = layout;
-    m_text->setPageSize(layout.pageSize); // records no undo item (the frame margins do)
+    m_pageFramesValid = false;
+    syncCanvas(); // the page size records no undo item (the frame margins do)
     m_keepRules->schedule(0);
     emit pageSetupChanged();
 }

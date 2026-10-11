@@ -3,6 +3,7 @@
 
 #include "page_text_control.h"
 #include "write_document.h"
+#include "write_sections.h"
 
 #include <QFontMetricsF>
 #include <QPainter>
@@ -49,14 +50,26 @@ QString StoryEditor::label() const
         return {};
     }
     const bool footer = m_kind == Kind::Footer;
+    QString text;
     switch (m_slot) {
     case Docx::HeaderFooterSlot::First:
-        return footer ? tr("First Page Footer") : tr("First Page Header");
+        text = footer ? tr("First Page Footer") : tr("First Page Header");
+        break;
     case Docx::HeaderFooterSlot::Even:
-        return footer ? tr("Even Page Footer") : tr("Even Page Header");
+        text = footer ? tr("Even Page Footer") : tr("Even Page Header");
+        break;
     default:
-        return footer ? tr("Footer") : tr("Header");
+        text = footer ? tr("Footer") : tr("Header");
+        break;
     }
+    // Word's band tab names the section and says when it is linked (M88).
+    if (m_document->sections().count() > 1) {
+        text += tr(" -Section %1-").arg(m_section + 1);
+    }
+    if (m_keeper != m_section) {
+        text += tr("  Same as Previous");
+    }
+    return text;
 }
 
 bool StoryEditor::open(Kind kind, int page)
@@ -66,8 +79,13 @@ bool StoryEditor::open(Kind kind, int page)
     }
     close();
     const bool footer = kind == Kind::Footer;
+    // The page's section's slot; the story is the section's own or the one
+    // it links to (M88: editing a linked header edits the previous one, as
+    // in Word).
+    m_section = m_document->pageFrame(page).section;
     m_slot = m_document->storySlot(page + 1, footer);
-    m_story = m_document->storyDocument(footer, m_slot, true);
+    m_keeper = m_document->storyKeeper(m_section, footer, m_slot);
+    m_story = m_document->storyDocument(m_keeper, footer, m_slot, true);
     if (m_story == nullptr) {
         return false;
     }
@@ -114,7 +132,7 @@ void StoryEditor::prepareStory()
     if (!qFuzzyIsNull(m_story->documentMargin())) {
         m_story->setDocumentMargin(0);
     }
-    m_story->setTextWidth(qMax<qreal>(48, m_document->contentWidth()));
+    m_story->setTextWidth(qMax<qreal>(48, m_document->pageFrame(m_page).layout.contentWidth()));
     if (!undo) {
         m_story->clearUndoRedoStacks(QTextDocument::UndoStack);
     }
@@ -126,23 +144,25 @@ QRectF StoryEditor::bandRect() const
     if (!isOpen()) {
         return {};
     }
-    const Docx::PageLayout &l = m_document->pageLayout();
-    const qreal width = qMax<qreal>(48, m_document->contentWidth());
+    // The band on its page's own section page (M88).
+    const PageFrame frame = m_document->pageFrame(m_page);
+    const Docx::PageLayout &l = frame.layout;
+    const qreal width = qMax<qreal>(48, l.contentWidth());
     const qreal height = qMax(kMinimumBand, m_story->size().height());
     const qreal left = l.margins.left() + l.gutter;
     if (m_kind == Kind::Header) {
         return {left, l.headerDistance, width, height};
     }
-    return {left, l.pageSize.height() - l.footerDistance - height, width, height};
+    return {left, frame.size.height() - l.footerDistance - height, width, height};
 }
 
-StoryEditor::Kind StoryEditor::zoneAt(const QPointF &pagePos) const
+StoryEditor::Kind StoryEditor::zoneAt(int page, const QPointF &pagePos) const
 {
-    const qreal height = m_document->pageLayout().pageSize.height();
-    if (pagePos.y() >= 0 && pagePos.y() < m_document->bodyTop()) {
+    const qreal height = m_document->pageFrame(page).size.height();
+    if (pagePos.y() >= 0 && pagePos.y() < m_document->bodyTop(page)) {
         return Kind::Header;
     }
-    if (pagePos.y() > height - m_document->bodyBottom() && pagePos.y() <= height) {
+    if (pagePos.y() > height - m_document->bodyBottom(page) && pagePos.y() <= height) {
         return Kind::Footer;
     }
     return Kind::None;

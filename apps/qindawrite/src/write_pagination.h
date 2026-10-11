@@ -12,6 +12,16 @@
 // the import snapshot and HTML export never see them), and re-derives them
 // after edits, from the first changed paragraph on.
 //
+// Word sections (M88, D-096; write_pagination_sections.cpp): a section
+// that starts on a new page starts one (a blank page before an odd / even
+// page start whose page would be the wrong one, as Word prints it), and in
+// a section whose pages hold less text than the canvas (a landscape
+// section of a portrait document, write_sections.h) the page breaks where
+// its own text area ends — before a paragraph (a paragraph is not split
+// there), or between two table rows (after the last paragraph of a cell in
+// the row before: a break before the row's own cells would move it two
+// pages, tst_write_probe_sections).
+//
 // Rules, as far as a break before a paragraph can express them:
 // - keep with next: a run of keepNext paragraphs moves to the next page
 //   when its last line and the next paragraph's first line fall on
@@ -31,9 +41,18 @@
 #include <QObject>
 #include <QTimer>
 
+#include <functional>
+
 class QTextDocument;
 
 namespace QindaOffice::Apps::Write {
+
+class SectionLayout;
+namespace detail {
+struct Item;
+class EditScope;
+struct SectionPass;
+} // namespace detail
 
 class KeepRules final : public QObject {
     Q_OBJECT
@@ -50,12 +69,23 @@ public:
     [[nodiscard]] static int count(const QTextDocument *document);
     // Debounce after edits; tests shrink it.
     void setDelay(int milliseconds) { m_timer.setInterval(milliseconds); }
+    // Word sections (M88, write_sections.h): the pads that give each
+    // section its width, its start on a new (odd, even) page and its own
+    // text height; `refresh` reads the sections again first. Both outlive
+    // this (WriteDocument owns them).
+    void setSections(const SectionLayout *sections, std::function<void()> refresh);
 
 private:
     void run();
     void applyFrom(int position);
+    // write_pagination_sections.cpp: the section rules for item `index`
+    // (the first item they moved, or -1); a table's row breaks taken off.
+    qsizetype applySectionRules(detail::SectionPass &pass, qsizetype index, detail::EditScope &edits);
+    static void clearRowBreaks(const detail::Item &item, detail::EditScope &edits);
 
     QTextDocument *m_document;
+    const SectionLayout *m_sections = nullptr;
+    std::function<void()> m_refresh;
     QTimer m_timer;
     int m_from = -1;
     bool m_applying = false;

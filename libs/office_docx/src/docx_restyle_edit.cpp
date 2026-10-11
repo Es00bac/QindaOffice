@@ -13,6 +13,7 @@
 #include "docx_metrics.h"
 #include "docx_paragraph_format.h"
 #include "docx_properties.h"
+#include "docx_sections.h"
 #include "docx_text.h"
 #include "docx_writer_p.h"
 
@@ -163,6 +164,15 @@ void DocumentStyles::restyle(QTextDocument *document, const StyleSheet &before, 
             const QTextBlockFormat newBase = blockFormatFromPPr(m_styles.paragraphProperties(styleId).get(), m_theme);
             QTextBlockFormat f = now;
             for (const int key : kBlockKeys) {
+                if (key == QTextFormat::BlockRightMargin) {
+                    // Compared and set as the paragraph's own (a section's
+                    // display pad on top stays, M88).
+                    if (qFuzzyCompare(1 + ownRightMargin(now), 1 + oldBase.doubleProperty(key))
+                        && oldBase.property(key) != newBase.property(key)) {
+                        setOwnRightMargin(f, newBase.doubleProperty(key));
+                    }
+                    continue;
+                }
                 follow(f, now, oldBase, newBase, key);
             }
             if (block.textList() == nullptr) { // a list item's indents are its level's

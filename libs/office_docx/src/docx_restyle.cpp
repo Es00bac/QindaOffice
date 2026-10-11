@@ -204,7 +204,8 @@ void DocumentStyles::apply(const QTextBlock &block, const QString &styleId) cons
     }
     // Not formatting: list membership (with the list level's indents), a
     // section break, a page break that was a w:br, a TOC paragraph.
-    for (const int key : {int(QTextFormat::ObjectIndex), kSectionXml, kPageBreakRun, kWriteTocBlockProperty}) {
+    for (const int key : {int(QTextFormat::ObjectIndex), kSectionXml, kSectionSettings, kSectionSnapshot, kSectionId,
+                          kPageBreakRun, kWriteTocBlockProperty}) {
         if (old.hasProperty(key)) {
             format.setProperty(key, old.property(key));
         }

@@ -5,8 +5,10 @@
 # pictures, the source package). Formatting is mapped where the text model
 # has it and preserved verbatim where it does not. M77 (D-086): mail merge
 # (settings, data, fields, the merge), envelopes and labels, endnotes,
-# floating pictures. Qt Core/Gui + office_ooxml; no Quick, no desktop
-# archives, so its tests run anywhere.
+# floating pictures. M88 (D-096): Word sections — every w:sectPr mapped,
+# each section's own headers and footers, written back where changed.
+# Qt Core/Gui + office_ooxml; no Quick, no desktop archives, so its tests
+# run anywhere.
 add_library(office_docx STATIC
     src/docx_format.cpp
     src/docx_format.h
@@ -28,6 +30,9 @@ add_library(office_docx STATIC
     src/docx_reader_objects.cpp
     src/docx_reader_p.h
     src/docx_reader_table.cpp
+    src/docx_sections.cpp
+    src/docx_sections.h
+    src/docx_sections_body.cpp
     src/docx_styles.cpp
     src/docx_styles.h
     src/docx_text.cpp

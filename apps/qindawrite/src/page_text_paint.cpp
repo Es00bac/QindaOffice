@@ -93,7 +93,7 @@ void PageTextItem::paintBody(QPainter *painter, const QRectF &pageArea, bool sto
     }
 }
 
-void PageTextItem::paintPage(QPainter *painter, int index, const QRectF &clip)
+void PageTextItem::paintPage(QPainter *painter, int index, const QRectF &clip, const PageDecoration &shown)
 {
     const QRectF page = m_geometry.pageRect(index, width());
     if (!page.intersects(clip)) {
@@ -104,13 +104,20 @@ void PageTextItem::paintPage(QPainter *painter, int index, const QRectF &clip)
     painter->setBrush(Qt::NoBrush);
     painter->drawRect(page.adjusted(0, 0, -1, -1));
 
-    const QSizeF size = m_document->pageSize();
-    PageDecoration decoration = m_document->decoration();
+    // The page's own frame (M88): its size, and where its part of the
+    // layout canvas starts (page_geometry.h).
+    const PageGeometry::Page frame = m_geometry.page(index);
+    const PageFrame decorationFrame = shown.frame(index, m_geometry.pageSize());
+    PageDecoration decoration = shown;
     painter->save();
-    painter->setClipRect(page.intersected(clip));
-    painter->translate(page.topLeft());
-    painter->translate(0, -index * size.height());
-    const QRectF pageArea(0, index * size.height(), size.width(), size.height());
+    QRectF bodyClip = page.intersected(clip);
+    if (m_preview == nullptr && decorationFrame.textBottom > 0) {
+        // A shorter section's page: nothing of the body below its text area.
+        bodyClip = bodyClip.intersected(QRectF(page.topLeft(), QSizeF(page.width(), decorationFrame.textBottom)));
+    }
+    painter->setClipRect(bodyClip);
+    painter->translate(page.topLeft() - frame.origin);
+    const QRectF pageArea(frame.origin, frame.size);
     const bool storyOpen = m_story != nullptr && m_story->isOpen();
     if (m_preview != nullptr) {
         // Preview Results (M77): the merged copy as it prints.
@@ -134,12 +141,13 @@ void PageTextItem::paintPage(QPainter *painter, int index, const QRectF &clip)
     if (m_preview != nullptr) {
         decoration.footnotes.clear(); // the body's notes, not the copy's
         decoration.endnotes = nullptr;
+        decoration.pages.clear(); // the copy's pages are uniform
     }
     const bool storyHere = storyOpen && m_story->page() == index;
     if (!decoration.isEmpty()) {
         painter->save();
         painter->translate(page.topLeft());
-        drawPageDecoration(painter, QRectF(QPointF(0, 0), size), decoration, index + 1, m_pageCount,
+        drawPageDecoration(painter, QRectF(QPointF(0, 0), frame.size), decoration, index + 1, m_pageCount,
                            storyHere ? m_story->story() : nullptr);
         painter->restore();
     }
@@ -155,8 +163,10 @@ void PageTextItem::paint(QPainter *painter)
     }
     painter->setRenderHint(QPainter::TextAntialiasing);
     const QRectF clip(0, 0, width(), height());
+    // One decoration for every page (its footnotes, its page frames).
+    const PageDecoration decoration = m_document->decoration();
     for (int i = 0; i < m_pageCount; ++i) {
-        paintPage(painter, i, clip);
+        paintPage(painter, i, clip, decoration);
     }
 }
 

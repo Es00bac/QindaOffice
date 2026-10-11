@@ -5,6 +5,107 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-096: QindaWrite: Word sections — page layout, orientation, headers and numbering per section
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par
+with its Office counterpart, "nothing missing that somebody would need";
+M88, builds on D-068, D-079 and D-086)
+
+**Context.** QindaWrite had one page layout and one header and footer set
+for the whole document. A multi-section `.docx` kept its sections'
+`w:sectPr` on save but was shown with the first section's layout: a
+landscape page inside a portrait document was drawn portrait, a later
+section's own headers, first-page header and page-number restart were not
+shown, and the reader turned a paragraph's own `w:type` into a page break
+after it — but Word's `w:type` says how the section *starts*, so every
+continuous section break after a section without a type became a page
+break: multi-section documents laid out about 30 % long. Qt's
+`QTextDocumentLayout` paginates a document with one page size.
+
+**Decision.**
+1. **The section model is office_docx's** (`docx_sections.h`): every
+   `w:sectPr` read as `SectionSettings` — page size and orientation, the
+   four margins, gutter, header and footer distances, `w:titlePg`,
+   `w:pgNumType` (start, format, chapter style and separator), `w:cols`
+   (count, space, separator), `w:type`, `w:vAlign`; `w:lnNumType`,
+   `w:docGrid`, page borders and the rest stay in its markup. A section
+   other than the last ends at a paragraph whose block format carries its
+   settings, the settings the reader mapped, its key and its markup
+   (`kSectionSettings` 140, `kSectionSnapshot` 141, `kSectionId` 142,
+   `kSectionXml`); the closing section is `WordParts`' own (`layout`,
+   `differentFirstPage`, `closingFlow`). Of consecutive paragraphs with
+   one key only the last ends the section: Enter copies the break into
+   the new paragraph, and Word keeps it on the paragraph mark that carries
+   it. A section's own headers and footers are `WordParts::sectionStories`
+   under its key; a slot it does not define links to the previous
+   section's (Word's Link to Previous), so the old cover-page workaround
+   goes.
+2. **Written from the markup where unchanged** (D-068 rule 3): a section's
+   `w:sectPr` is its markup — byte for byte apart from relationship ids,
+   its header and footer references kept in their order and their parts
+   copied while its stories are as read — patched element by element
+   where its settings changed, and made from its settings when it has no
+   markup. References are written again from the stories when a story or
+   a link changed; an empty story with Link to Previous off is an empty
+   part. A paragraph that no longer ends a section is written without the
+   `w:sectPr` its preserved `w:pPr` had.
+3. **Laid out on one canvas** (`write_sections.h`). The probe
+   (`tst_write_probe_sections`) showed child `QTextFrame`s honour their
+   own width, paginate and map, but a selection from one frame into the
+   next takes both whole frames (and paged layout lays every child frame
+   out again on each pass), so sections stay in the root frame: the
+   canvas's text column is the widest section's, its text area the
+   tallest's, its margins the closing section's (a one-section document
+   lays out exactly as before, and a section elsewhere only changes the
+   canvas page size, which Qt records no undo item for). A narrower
+   section's paragraphs and tables carry a display-only right-margin pad
+   (`kSectionPad` 143; `ownRightMargin()` is what the writer, the
+   snapshot, the ruler and the Paragraph dialog read). In a shorter
+   section the pagination pass (`write_pagination`) breaks the page where
+   its own text area ends — before a paragraph, or between two table rows
+   by a break after the last paragraph of a cell of the row before (a
+   break before the row's own cells moves it two pages) — and a section
+   that starts on a new page gets a break, with a blank page before an
+   odd or even page start that would land wrong. Display only, joined to
+   the user's undo step, ignored by the writers, like M60's keep rules.
+4. **Every page is its section's**: canvas page *i* is page *i*, shown at
+   its section's size with its text area laid over the canvas's
+   (`PageFrame`: size, canvas origin, margins, header, footer, number).
+   `PageGeometry` stacks pages of different sizes centred; painting,
+   hit-testing, the caret, ensure-visible and the in-place header editor
+   map through the page's own frame; print and PDF set each page's size
+   before `newPage()`; the body is clipped to a shorter section's text
+   area. Page numbers per section: restart and format; PAGE in the
+   section's format (a field's own `\*` switch wins), NUMPAGES the
+   document's pages, SECTIONPAGES the section's.
+5. **Word's commands** (`SectionsController`, `write_section_commands`):
+   Section Break (Next Page / Continuous / Even Page / Odd Page) — the part
+   before the caret becomes a section with the section's markup and its
+   headers, the part after links to them; Orientation per section; Page
+   Setup with "Apply to" (this section / this point forward / whole
+   document) and "Section start"; Link to Previous, Different First Page
+   (per section) and Different Odd & Even Pages (the document's, as in
+   Word); Format Page Numbers…; Backspace / Delete across a break as in
+   Word. Each is a persistent action in the menus and on the ribbon (the
+   Header & Footer contextual tab) and one undo step — block formats, and
+   undo items for the closing section's settings, a story swap and odd /
+   even.
+6. **Columns are kept, not laid out**: `w:cols` is modelled, read and
+   written; Qt's frames have no columns, so a section is laid out in one.
+
+**Consequences.** A landscape section in a portrait document is drawn,
+printed and exported landscape with its own header, numbers and margins,
+and a continuous section break no longer starts a page. Page Setup is now
+one undo step (it was not undoable). Shown approximately: a paragraph
+that runs past a shorter section's page moves whole (Word splits it); a
+row or paragraph taller than such a page is clipped at its foot; a
+continuous break with other left or right margins on the same page shows
+the page's left margin; columns in one column; chapter numbers kept, not
+shown; floating pictures relative to the page or margin use the canvas's
+page; the blank page of an odd / even start is shown (Word's Print Layout
+hides it). QindaTK gaps: none — the dialogs and the contextual tab use
+existing controls.
+
 ## D-095: QindaDiagram: Visio's everyday drawing tools
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

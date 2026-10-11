@@ -434,7 +434,9 @@ void BodyReader::pageBreak(QTextCursor &cursor, InlineState &inl, ContainerState
     f.setTopMargin(0);
     f.setPageBreakPolicy(QTextFormat::PageBreak_AlwaysBefore);
     f.setProperty(kPageBreakRun, true);
-    f.clearProperty(kSectionXml);
+    // AGENT-NOTE (M88): a section break stays on both parts; of the two the
+    // LAST ends the section (sectionEnds, docx_sections.h), where Word's
+    // paragraph mark with the w:sectPr is.
     f.setProperty(kParagraphSnapshot, blockSnapshot(f));
     cursor.insertBlock(f, inl.markFormat);
     inl.blockHasContent = false;

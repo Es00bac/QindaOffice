@@ -8,6 +8,7 @@
 #include "write_endnotes.h"
 #include "write_footnotes.h"
 #include "write_pagination.h"
+#include "write_sections.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QAbstractUndoItem>
@@ -18,8 +19,10 @@ namespace QindaOffice::Apps::Write {
 
 WriteDocument::WriteDocument()
     : m_text(std::make_unique<QTextDocument>())
+    , m_sections(std::make_unique<SectionLayout>(m_text.get(), &m_parts))
     , m_keepRules(std::make_unique<KeepRules>(m_text.get()))
 {
+    m_keepRules->setSections(m_sections.get(), [this] { refreshSections(); });
     // A4 with QindaWrite's historical 1-inch (96 px) margins.
     setupPaged(QSizeF(PageGeometry::kDefaultPageW, PageGeometry::kDefaultPageH), 96);
     // AGENT-NOTE (Qt 6.11 quirk): QTextDocument::setPageSize() records an
@@ -42,10 +45,21 @@ WriteDocument::WriteDocument()
     connect(m_text.get(), &QTextDocument::contentsChange, this, [this] {
         m_commentSpansValid = false;
         m_endnoteAreaValid = false;
+        m_pageFramesValid = false;
+        m_sectionsStale = true;
+        // A section break typed away, pasted, undone or redone: the canvas
+        // page size follows (no undo item), once the edit is through.
+        if (!m_syncQueued) {
+            m_syncQueued = true;
+            QMetaObject::invokeMethod(this, &WriteDocument::syncCanvas, Qt::QueuedConnection);
+        }
     });
-    // Endnotes follow the body's last line (M77): a new layout moves them.
-    connect(m_text->documentLayout(), &QAbstractTextDocumentLayout::documentSizeChanged, this,
-            [this] { m_endnoteAreaValid = false; });
+    // Endnotes follow the body's last line (M77): a new layout moves them,
+    // and the pages with them (M88).
+    connect(m_text->documentLayout(), &QAbstractTextDocumentLayout::documentSizeChanged, this, [this] {
+        m_endnoteAreaValid = false;
+        m_pageFramesValid = false;
+    });
     connect(m_text.get(), &QTextDocument::contentsChange, this,
             [this](int, int charsRemoved, int charsAdded) {
                 if (charsRemoved != 0 || charsAdded != 0) {
@@ -58,41 +72,44 @@ WriteDocument::~WriteDocument() = default;
 
 void WriteDocument::applyLayout()
 {
-    const Docx::PageLayout &l = m_parts.layout;
+    // The canvas the sections need (write_sections.h): the closing
+    // section's page and margins while the document has one page size.
+    m_sections->update();
+    m_sectionsStale = false;
     m_text->setUseDesignMetrics(true);
-    m_text->setPageSize(l.pageSize);
     // AGENT-NOTE: QTextDocument paginates with the ROOT FRAME's four
     // margins; the gutter is binding space on the left, as Word lays out a
     // single-sided document. Equal margins go through setDocumentMargin:
     // Qt's HTML writer wraps a root frame whose margins differ from the
     // document margin in a "-qt-table-type: root" table, which changed what
-    // an HTML round trip of an ordinary document read back.
-    const qreal left = l.margins.left() + l.gutter;
-    // Word's rule: a header taller than the room above the top margin
-    // pushes the body down (and a tall footer pushes it up), instead of
-    // overlapping it. The model keeps the document's own margins.
-    qreal top = l.margins.top();
-    qreal bottom = l.margins.bottom();
-    for (int s = 0; s < Docx::kHeaderFooterSlots; ++s) {
-        if (const auto &h = m_parts.headers[size_t(s)]; h.document) {
-            top = qMax(top, l.headerDistance + Docx::headerFooterHeight(*h.document, l.contentWidth()));
+    // an HTML round trip of an ordinary document read back. Word's rule —
+    // a tall header pushes the body down, a tall footer up — is in the
+    // margins (SectionGeometry::top / bottom); the model keeps its own.
+    const QMarginsF c = m_sections->canvasMargins();
+    auto matches = [&c](const QTextFrameFormat &f) {
+        return qFuzzyCompare(f.leftMargin(), c.left()) && qFuzzyCompare(f.rightMargin(), c.right())
+            && qFuzzyCompare(f.topMargin(), c.top()) && qFuzzyCompare(f.bottomMargin(), c.bottom());
+    };
+    if (!matches(m_text->rootFrame()->frameFormat())) {
+        if (qFuzzyCompare(c.left(), c.right()) && qFuzzyCompare(c.left(), c.top())
+            && qFuzzyCompare(c.left(), c.bottom())) {
+            m_text->setDocumentMargin(c.left());
         }
-        if (const auto &f = m_parts.footers[size_t(s)]; f.document) {
-            bottom = qMax(bottom, l.footerDistance + Docx::headerFooterHeight(*f.document, l.contentWidth()));
+        // setDocumentMargin does nothing when the document margin is that
+        // already (the four margins may still differ from an earlier page).
+        if (QTextFrameFormat root = m_text->rootFrame()->frameFormat(); !matches(root)) {
+            root.setLeftMargin(c.left());
+            root.setRightMargin(c.right());
+            root.setTopMargin(c.top());
+            root.setBottomMargin(c.bottom());
+            m_text->rootFrame()->setFrameFormat(root);
         }
     }
-    m_bodyTop = top;
-    m_bodyBottom = bottom;
-    if (qFuzzyCompare(left, l.margins.right()) && qFuzzyCompare(left, top) && qFuzzyCompare(left, bottom)) {
-        m_text->setDocumentMargin(left);
-    } else {
-        QTextFrameFormat root = m_text->rootFrame()->frameFormat();
-        root.setLeftMargin(left);
-        root.setRightMargin(l.margins.right());
-        root.setTopMargin(top);
-        root.setBottomMargin(bottom);
-        m_text->rootFrame()->setFrameFormat(root);
-    }
+    // After the margins: a load reads with no page size (LayoutPause,
+    // write_document_io.cpp), so this is the one layout it costs.
+    m_text->setPageSize(m_sections->canvasSize());
+    m_endnoteAreaValid = false;
+    m_pageFramesValid = false;
     m_keepRules->schedule(0); // new page height, new breaks
     emit pageSetupChanged();
 }
@@ -141,47 +158,75 @@ QFont headerFont(const QTextDocument &body)
 
 } // namespace
 
-QString WriteDocument::headerText() const
+namespace {
+
+// The story `section` shows in its default slot, kept by it or by the
+// section it links to (-1: the closing section).
+const Docx::HeaderFooter *defaultStory(const Docx::WordParts &parts, const SectionLayout &sections, int section,
+                                       bool footer)
 {
-    const Docx::HeaderFooter &h = m_parts.header(Docx::HeaderFooterSlot::Default);
-    return h.document ? Docx::patternFromHeaderFooter(*h.document) : QString();
+    const int index = section < 0 ? sections.count() - 1 : qMin(section, sections.count() - 1);
+    const int owner = Docx::storyOwner(parts, sections.refs(), index, footer, Docx::HeaderFooterSlot::Default);
+    return owner < 0 ? nullptr
+                     : Docx::sectionStory(parts, sections.refs().at(owner).key, footer, Docx::HeaderFooterSlot::Default);
 }
 
-QString WriteDocument::footerText() const
+} // namespace
+
+QString WriteDocument::headerText(int section) const
 {
-    const Docx::HeaderFooter &f = m_parts.footer(Docx::HeaderFooterSlot::Default);
-    return f.document ? Docx::patternFromHeaderFooter(*f.document) : QString();
+    refreshSections();
+    const Docx::HeaderFooter *h = defaultStory(m_parts, *m_sections, section, false);
+    return h != nullptr && h->document ? Docx::patternFromHeaderFooter(*h->document) : QString();
 }
 
-bool WriteDocument::headerIsSimple() const
+QString WriteDocument::footerText(int section) const
 {
+    refreshSections();
+    const Docx::HeaderFooter *f = defaultStory(m_parts, *m_sections, section, true);
+    return f != nullptr && f->document ? Docx::patternFromHeaderFooter(*f->document) : QString();
+}
+
+bool WriteDocument::headerIsSimple(int section) const
+{
+    refreshSections();
     bool simple = true;
-    if (const auto &h = m_parts.header(Docx::HeaderFooterSlot::Default); h.document) {
-        static_cast<void>(Docx::patternFromHeaderFooter(*h.document, &simple));
+    if (const Docx::HeaderFooter *h = defaultStory(m_parts, *m_sections, section, false); h && h->document) {
+        static_cast<void>(Docx::patternFromHeaderFooter(*h->document, &simple));
     }
     return simple;
 }
 
-bool WriteDocument::footerIsSimple() const
+bool WriteDocument::footerIsSimple(int section) const
 {
+    refreshSections();
     bool simple = true;
-    if (const auto &f = m_parts.footer(Docx::HeaderFooterSlot::Default); f.document) {
-        static_cast<void>(Docx::patternFromHeaderFooter(*f.document, &simple));
+    if (const Docx::HeaderFooter *f = defaultStory(m_parts, *m_sections, section, true); f && f->document) {
+        static_cast<void>(Docx::patternFromHeaderFooter(*f->document, &simple));
     }
     return simple;
 }
 
-void WriteDocument::setHeaderFooter(const QString &header, const QString &footer)
+void WriteDocument::setHeaderFooter(const QString &header, const QString &footer, int section)
 {
-    if (header != headerText() || footer != footerText()) {
+    refreshSections();
+    const int index = section < 0 ? m_sections->count() - 1 : qMin(section, m_sections->count() - 1);
+    const QString oldHeader = headerText(index);
+    const QString oldFooter = footerText(index);
+    if (header != oldHeader || footer != oldFooter) {
         emit storiesAboutToBeReplaced();
     }
     bool changed = false;
-    auto apply = [&](Docx::HeaderFooter &slot, const QString &current, const QString &pattern) {
+    auto apply = [&](bool isFooter, const QString &current, const QString &pattern) {
         if (current == pattern) {
             return; // an unchanged pattern keeps a rich header intact
         }
         changed = true;
+        // The story the section shows: its own, the one it links to, or
+        // (none yet) a new one in the first section that would show it.
+        const int keeper = storyKeeper(index, isFooter, Docx::HeaderFooterSlot::Default);
+        Docx::HeaderFooter &slot = *Docx::sectionStory(m_parts, m_sections->refs().at(keeper).key, isFooter,
+                                                       Docx::HeaderFooterSlot::Default, true);
         if (pattern.isEmpty()) {
             slot.document.reset();
             slot.sourcePart.clear();
@@ -190,8 +235,8 @@ void WriteDocument::setHeaderFooter(const QString &header, const QString &footer
         slot.document = Docx::headerFooterFromPattern(pattern, headerFont(*m_text));
         slot.sourcePart.clear();
     };
-    apply(m_parts.header(Docx::HeaderFooterSlot::Default), headerText(), header);
-    apply(m_parts.footer(Docx::HeaderFooterSlot::Default), footerText(), footer);
+    apply(false, oldHeader, header);
+    apply(true, oldFooter, footer);
     if (!changed) {
         return;
     }
@@ -208,6 +253,8 @@ void WriteDocument::setDifferentFirstPage(bool different)
     }
     emit storiesAboutToBeReplaced(); // page 1 shows another slot now
     m_parts.differentFirstPage = different;
+    m_sectionsStale = true; // the closing section's settings changed (M88)
+    m_pageFramesValid = false;
     m_text->setModified(true);
     emit pageSetupChanged();
 }
@@ -250,10 +297,13 @@ PageDecoration WriteDocument::decoration() const
     }
     out.differentFirstPage = m_parts.differentFirstPage;
     out.differentOddEven = m_parts.differentOddEven;
+    // Every page's own frame (M88): its section's size, margins, header,
+    // footer and number.
+    out.pages = pageFrames();
     if (!m_parts.footnotes.isEmpty()) {
-        // The page lookup uses the document's OWN page size, which is the
-        // same size PageGeometry paints with — zoom does not affect which
-        // page a position falls on.
+        // The page lookup uses the document's OWN (canvas) page size, which
+        // is the same size PageGeometry paginates with — zoom does not
+        // affect which page a position falls on.
         PageGeometry geometry;
         geometry.setPageSize(m_text->pageSize());
         out.footnotes = footnotesByPage(m_text.get(), geometry, m_parts.footnotes);
@@ -290,11 +340,14 @@ void WriteDocument::setActiveComment(const QString &id)
 
 Docx::HeaderFooterSlot WriteDocument::storySlot(int page, bool footer) const
 {
-    const auto &stories = footer ? m_parts.footers : m_parts.headers;
-    if (m_parts.differentFirstPage && page == 1) {
+    // As SectionLayout::pageFrames picks what a page shows (M88).
+    const PageFrame frame = pageFrame(page - 1);
+    const Docx::SectionSettings &settings = sections().sections().at(frame.section).ref.settings;
+    if (settings.titlePage && frame.firstOfSection) {
         return Docx::HeaderFooterSlot::First;
     }
-    if (m_parts.differentOddEven && page % 2 == 0 && stories[size_t(Docx::HeaderFooterSlot::Even)].document) {
+    if (m_parts.differentOddEven && frame.number % 2 == 0
+        && m_sections->story(frame.section, footer, Docx::HeaderFooterSlot::Even) != nullptr) {
         return Docx::HeaderFooterSlot::Even;
     }
     return Docx::HeaderFooterSlot::Default;
@@ -302,15 +355,32 @@ Docx::HeaderFooterSlot WriteDocument::storySlot(int page, bool footer) const
 
 QTextDocument *WriteDocument::storyDocument(bool footer, Docx::HeaderFooterSlot slot, bool create)
 {
-    Docx::HeaderFooter &story = footer ? m_parts.footer(slot) : m_parts.header(slot);
-    if (!story.document && create) {
-        story.document = std::make_unique<QTextDocument>();
-        story.document->setDefaultFont(headerFont(*m_text));
-        story.document->setDocumentMargin(0);
-        story.document->clearUndoRedoStacks();
-        story.document->setModified(false); // empty: nothing to save yet
+    refreshSections();
+    return storyDocument(m_sections->count() - 1, footer, slot, create);
+}
+
+QTextDocument *WriteDocument::storyDocument(int section, bool footer, Docx::HeaderFooterSlot slot, bool create)
+{
+    refreshSections();
+    const int index = qBound(0, section, m_sections->count() - 1);
+    Docx::HeaderFooter *story = Docx::sectionStory(m_parts, m_sections->refs().at(index).key, footer, slot, create);
+    if (story == nullptr) {
+        return nullptr;
     }
-    return story.document.get();
+    if (!story->document && create) {
+        story->document = newStory();
+    }
+    return story->document.get();
+}
+
+std::unique_ptr<QTextDocument> WriteDocument::newStory() const
+{
+    auto story = std::make_unique<QTextDocument>();
+    story->setDefaultFont(headerFont(*m_text));
+    story->setDocumentMargin(0);
+    story->clearUndoRedoStacks();
+    story->setModified(false); // empty: nothing to save yet
+    return story;
 }
 
 void WriteDocument::storyEdited()

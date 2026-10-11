@@ -4,6 +4,8 @@
 
 #include "write_style_draft.h"
 
+#include "docx_sections.h"
+
 #include "docx_format.h"
 #include "docx_paragraph_format.h"
 #include "docx_properties.h"
@@ -152,8 +154,12 @@ void StyleDraft::loadSelection(const QTextCursor &selection)
     // The selection's look: its paragraph's and first run's formatting, as
     // the writer would write them (their own markup and what changed).
     QTextBlockFormat block = selection.block().blockFormat();
+    // Not the paragraph's look: its section break, its section's display
+    // pad (M88: the right indent is its own).
+    Docx::setSectionPad(block, 0);
     for (const int key : {int(QTextFormat::ObjectIndex), int(QTextFormat::ListStyle), Docx::kListHanging,
-                          Docx::kSectionXml, Docx::kPageBreakRun, Docx::kBlockControls, Docx::kSyntheticBreak}) {
+                          Docx::kSectionXml, Docx::kSectionSettings, Docx::kSectionSnapshot, Docx::kSectionId,
+                          Docx::kPageBreakRun, Docx::kBlockControls, Docx::kSyntheticBreak}) {
         block.clearProperty(key);
     }
     QTextCursor first(selection.document());

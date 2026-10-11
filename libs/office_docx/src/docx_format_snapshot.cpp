@@ -6,6 +6,7 @@
 #include "docx_format.h"
 
 #include "docx_properties.h"
+#include "docx_sections.h"
 
 #include <QTextOption>
 
@@ -29,7 +30,7 @@ QVariantMap blockSnapshot(const QTextBlockFormat &f)
     return {
         {QStringLiteral("align"), int(f.alignment() & Qt::AlignHorizontal_Mask)},
         {QStringLiteral("left"), qRound(f.leftMargin() * 100)},
-        {QStringLiteral("right"), qRound(f.rightMargin() * 100)},
+        {QStringLiteral("right"), qRound(ownRightMargin(f) * 100)}, // M88: not the section layout's pad
         {QStringLiteral("indent"), qRound(f.textIndent() * 100)},
         {QStringLiteral("top"), qRound(f.topMargin() * 100)},
         {QStringLiteral("bottom"), qRound(f.bottomMargin() * 100)},

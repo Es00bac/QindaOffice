@@ -5,6 +5,7 @@
 #include "docx_format.h"
 #include "docx_properties.h"
 #include "docx_reader_p.h"
+#include "docx_sections.h"
 #include "docx_text.h"
 #include "ooxml_namespaces.h"
 #include "ooxml_units.h"
@@ -277,11 +278,12 @@ void BodyReader::readParagraph(const XmlElement &p, QTextCursor &cursor, Contain
         state.pageBreakPending = false;
     }
     if (const XmlElement *sectPr = pPr != nullptr ? pPr->child(kW, u"sectPr") : nullptr) {
+        // M88 (D-096): the paragraph ends a section (docx_sections.h). The
+        // page the next section starts on is the layout's to give
+        // (QindaWrite's write_sections.h, from the NEXT section's w:type),
+        // never a page-break flag of this paragraph's.
         m_sections.append(sectPr);
-        bf.setProperty(kSectionXml, Ooxml::serializeFragment(*sectPr));
-        if (childVal(sectPr, u"type", QStringLiteral("nextPage")) != u"continuous") {
-            bf.setPageBreakPolicy(bf.pageBreakPolicy() | QTextFormat::PageBreak_AlwaysAfter);
-        }
+        markSectionEnd(bf, QStringLiteral("r%1").arg(m_sections.size()), Ooxml::serializeFragment(*sectPr));
     }
     const XmlElement *markRPr = pPr != nullptr ? pPr->child(kW, u"rPr") : nullptr;
     QTextCharFormat mark = charFormatFromRPr(mergeProperties(runBase.get(), markRPr).get(), m_env.theme);

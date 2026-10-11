@@ -1,6 +1,37 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Verification
 
+## M88 Write sections gates (D-096)
+
+Qualification resumed on 2026-10-10 from Claude's preserved M88 branch,
+with M86 and M87 retained. The headless gate is
+`ctest --preset dev --output-on-failure -R '^(tst_write_|tst_docx_|tst_ooxml|tst_note_word)'`
+after building every matching test. Results and reviewed captures are
+recorded here before the milestone is integrated.
+
+- `tst_write_probe_sections` records the Qt frame, line and table pagination
+  behavior behind the flat document layout.
+- `tst_docx_sections` covers modeled and preserved section properties,
+  linked stories, edited section markup and schema validation.
+- `tst_write_sections` also proves every source paragraph occurs exactly once
+  in the mixed-orientation PDF. It drives the real window: mixed orientation, section
+  widths, page sizes in PDF, linked and independent headers, number restart,
+  undo, keep rules, and a three-section Word-shaped file.
+- `tst_write_endnotes::editingOnlyNoteTextUpdatesPageFrames` grows an
+  existing note without changing its body marker, then undoes/redoes it;
+  the page inventory follows all three states. Profiling the longer UI
+  gates also exposed repeated font database enumeration in the CONSTANT
+  `fontFamilies` getter; its list is now a window-owned snapshot.
+- `tst_write_ui` and `tst_write_menu_export` cover named commands, ribbon
+  squeeze, structural fixtures and panel export.
+- Review the mixed-orientation and header-editor PNGs at 1280 and 520 px,
+  plus portrait/landscape PDF pages. The remaining desktop checks are
+  physical printer paper changes and opening an edited document in Word.
+
+Columns remain preserved as Word markup but displayed in one column.
+Very tall paragraphs or rows in a shorter section and page-relative
+floating pictures retain the limitations in [word-interchange.md](word-interchange.md#known-limits).
+
 ## Build gates (every milestone)
 
 ```

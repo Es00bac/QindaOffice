@@ -7,7 +7,11 @@ import QindaTK as Tk
 // 96-dpi document px), a different first page, and plain header/footer
 // text ({page} / {pages} become page-number fields). A header read from a
 // Word document can be richer than one line — pictures, tables, formatting —
-// and the dialog says so before typing would replace it.
+// and the dialog says so before typing would replace it. Word sections
+// (M88, D-096): the values are the caret's section's; "Section start" is
+// how that section begins, and "Apply to" is Word's — this section (when
+// there are several), this point forward (a next-page section break at
+// the caret first) or the whole document.
 Tk.Dialog {
     id: dialog
     signal setupApplied(var setup)
@@ -28,6 +32,9 @@ Tk.Dialog {
     property real customHeight: 1056
     property bool headerRich: false
     property bool footerRich: false
+    property int sections: 1
+    readonly property var starts: ["nextPage", "continuous", "evenPage", "oddPage"]
+    readonly property var scopes: sections > 1 ? ["section", "forward", "document"] : ["document", "forward"]
     readonly property real pxPerUnit: units.currentIndex === 0 ? 96 : 96 / 2.54
     readonly property string unitSuffix: units.currentIndex === 0 ? qsTr(" in") : qsTr(" cm")
     objectName: "pageSetupDialog"
@@ -59,6 +66,9 @@ Tk.Dialog {
         footer.text = setup.footer
         headerRich = setup.headerRich
         footerRich = setup.footerRich
+        sections = setup.sections !== undefined ? setup.sections : 1
+        sectionStart.currentIndex = Math.max(0, starts.indexOf(setup.sectionStart))
+        applyTo.currentIndex = 0
     }
     onAccepted: {
         const entry = papers[paper.currentIndex]
@@ -72,7 +82,8 @@ Tk.Dialog {
             left: toPx(left.value), right: toPx(right.value),
             headerDistance: toPx(headerDistance.value), footerDistance: toPx(footerDistance.value),
             differentFirstPage: firstPage.checked,
-            header: header.text, footer: footer.text
+            header: header.text, footer: footer.text,
+            sectionStart: starts[sectionStart.currentIndex], applyTo: scopes[applyTo.currentIndex]
         })
     }
 
@@ -127,6 +138,25 @@ Tk.Dialog {
             }
         }
         Tk.CheckBox { id: firstPage; objectName: "pageFirstDifferent"; text: qsTr("Different first page") }
+        Tk.PropertyRow {
+            label: qsTr("Section start")
+            Tk.ComboBox {
+                id: sectionStart
+                objectName: "pageSectionStart"
+                model: [qsTr("New page"), qsTr("Continuous"), qsTr("Even page"), qsTr("Odd page")]
+            }
+        }
+        Tk.PropertyRow {
+            label: qsTr("Apply to")
+            Tk.ComboBox {
+                id: applyTo
+                objectName: "pageApplyTo"
+                model: dialog.scopes.map(function(s) {
+                    return s === "section" ? qsTr("This section") : s === "forward" ? qsTr("This point forward")
+                                                                                      : qsTr("Whole document")
+                })
+            }
+        }
         Tk.PropertyRow {
             label: qsTr("Header")
             hint: dialog.headerRich ? qsTr("Has pictures or formatting from the document; typing here replaces them.") : ""

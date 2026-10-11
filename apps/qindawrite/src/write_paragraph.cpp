@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_paragraph.h"
 
+#include "docx_sections.h"
+
 #include "docx_format.h"
 #include "docx_metrics.h"
 #include "docx_paragraph_format.h"
@@ -126,7 +128,7 @@ QVariantMap paragraphInfoAt(const QTextCursor &cursor)
     return {{QStringLiteral("alignment"), alignmentName(f.alignment())},
             {QStringLiteral("outline"), Docx::outlineLevel(f)},
             {QStringLiteral("left"), f.leftMargin()},
-            {QStringLiteral("right"), f.rightMargin()},
+            {QStringLiteral("right"), Docx::ownRightMargin(f)}, // not the section's pad (M88)
             {QStringLiteral("special"), indent > 0 ? QStringLiteral("firstLine") : indent < 0 ? QStringLiteral("hanging") : QStringLiteral("none")},
             {QStringLiteral("by"), qAbs(indent)},
             {QStringLiteral("before"), Units::twipsToPt(spacing.before)},
@@ -181,7 +183,7 @@ bool applyParagraphAt(const QTextCursor &cursor, const QVariantMap &answer)
             f.setLeftMargin(value("left").toReal());
         }
         if (has("right")) {
-            f.setRightMargin(value("right").toReal());
+            Docx::setOwnRightMargin(f, value("right").toReal());
         }
         if (has("special") || has("by")) {
             const QString special = has("special") ? value("special").toString()

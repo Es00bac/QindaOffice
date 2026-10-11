@@ -16,6 +16,7 @@
 
 #include "docx_comments.h"
 #include "docx_model.h"
+#include "docx_sections.h"
 #include "document.h"
 #include "page_setup_io.h"
 
@@ -25,6 +26,7 @@
 namespace QindaOffice::Apps::Write {
 
 class KeepRules;
+class SectionLayout;
 struct EndnoteArea;
 
 class WriteDocument final : public Core::Document {
@@ -45,42 +47,96 @@ public:
     [[nodiscard]] qint64 recoveryPayloadLimit() const override;
 
     // ---- page layout -----------------------------------------------------------------
+    // The CLOSING section's page (the whole document's while it has one
+    // section); a section's own is sections() (M88).
     [[nodiscard]] const Docx::PageLayout &pageLayout() const { return m_parts.layout; }
     void setPageLayout(const Docx::PageLayout &layout);
     // Uniform-margin shorthand (M14 callers, tests).
     void setupPaged(const QSizeF &pageSize, qreal margin);
+    // The layout canvas's page size (write_sections.h): the page itself
+    // while the document has one page size.
     [[nodiscard]] QSizeF pageSize() const;
     // The text column's left edge in document px (left margin + gutter):
     // what the ruler is numbered from.
     [[nodiscard]] qreal pageMargin() const;
     [[nodiscard]] qreal contentWidth() const { return m_parts.layout.contentWidth(); }
+    // The text width of the section `position` lies in (new tables, M88).
+    [[nodiscard]] qreal contentWidthAt(int position) const;
+
+    // ---- sections (M88, D-096: write_sections.h, docx_sections.h) ---------------------
+    [[nodiscard]] const SectionLayout &sections() const;
+    [[nodiscard]] int sectionAt(int position) const;
+    // A section's settings, as an undo item of the caller's edit block (a
+    // paragraph's format, or the closing section's in the parts); the
+    // canvas and the pads follow at once.
+    void setSectionSettings(int index, const Docx::SectionSettings &settings);
+    // Restores the closing section's settings without an undo item (that
+    // undo item's own swap).
+    void restoreClosingSection(const Docx::SectionSettings &settings);
+    // The canvas and every paragraph's pad for the sections as they are,
+    // inside the caller's edit block.
+    void applySections();
+    // Every page as it is drawn (cached until the next edit or layout).
+    [[nodiscard]] const QList<PageFrame> &pageFrames() const;
+    [[nodiscard]] PageFrame pageFrame(int index) const;
+    // Word's "Different Odd & Even Pages": the document's, an undo item of
+    // the caller's edit block; swap… sets it without one (the item's own).
+    void setDifferentOddEven(bool different);
+    void swapDifferentOddEven(bool different);
+    [[nodiscard]] bool differentOddEven() const { return m_parts.differentOddEven; }
 
     // ---- headers and footers -----------------------------------------------------------
     // Plain patterns for the default slot; {page}/{pages} become fields.
     // An unchanged pattern leaves a rich (imported) header untouched.
-    void setHeaderFooter(const QString &header, const QString &footer);
-    [[nodiscard]] QString headerText() const;
-    [[nodiscard]] QString footerText() const;
+    // `section` (M88): the story that section shows, kept by it or by the
+    // section it links to; -1 is the closing section.
+    void setHeaderFooter(const QString &header, const QString &footer, int section = -1);
+    [[nodiscard]] QString headerText(int section = -1) const;
+    [[nodiscard]] QString footerText(int section = -1) const;
     // False when the default header/footer is richer than one plain line
     // (pictures, tables, formatting): the dialog then warns before
     // replacing it.
-    [[nodiscard]] bool headerIsSimple() const;
-    [[nodiscard]] bool footerIsSimple() const;
+    [[nodiscard]] bool headerIsSimple(int section = -1) const;
+    [[nodiscard]] bool footerIsSimple(int section = -1) const;
     [[nodiscard]] bool differentFirstPage() const { return m_parts.differentFirstPage; }
     void setDifferentFirstPage(bool different);
     // In-place editing (page_story_editor.h). The slot a (1-based) page
     // shows, resolved as decoration() resolves it.
     [[nodiscard]] Docx::HeaderFooterSlot storySlot(int page, bool footer) const;
+    // The section that keeps the story `section` shows in `slot`: itself,
+    // or the earlier one it links to; with nothing to link to, the first of
+    // the sections that would show it (Word puts a new header there).
+    [[nodiscard]] int storyKeeper(int section, bool footer, Docx::HeaderFooterSlot slot) const;
     // The live header/footer document the writer saves; with `create`, an
     // empty one (the body's header font, no margin) for a slot that has none.
+    // Without a section: the closing section's.
     QTextDocument *storyDocument(bool footer, Docx::HeaderFooterSlot slot, bool create);
+    QTextDocument *storyDocument(int section, bool footer, Docx::HeaderFooterSlot slot, bool create);
+    // Word's Link to Previous for one slot of a section (not the first):
+    // off copies what it showed into a story of its own, on drops its own
+    // and shows the previous section's again — an undo item of the caller's
+    // edit block either way.
+    [[nodiscard]] bool linkedToPrevious(int section, bool footer, Docx::HeaderFooterSlot slot) const;
+    void setLinkedToPrevious(int section, bool footer, Docx::HeaderFooterSlot slot, bool linked);
+    // Swaps a section's story with `document` (the undo item's own step).
+    void swapStory(const QString &key, bool footer, Docx::HeaderFooterSlot slot,
+                   std::unique_ptr<QTextDocument> &document, bool &unlinked);
+    // Hands the stories section `from` defines (every slot, or with
+    // `missingOnly` the ones `to` does not define) to section `to`, as an
+    // undo item of the caller's edit block (keys; empty: the closing
+    // section). A split section keeps its headers in its earlier part; a
+    // deleted break hands what the next section showed through its links
+    // to it.
+    void handOverStories(const QString &from, const QString &to, bool missingOnly);
+    // Trades two sections' stories of one slot (the undo item's own step).
+    void tradeStories(const QString &first, const QString &second, bool footer, Docx::HeaderFooterSlot slot);
     // A header or footer was edited in place: re-lay the page out (a taller
     // header moves the body, Word's rule) and mark the document changed.
     void storyEdited();
-    // Where the body starts and ends on a page (document px): the margins
-    // the layout applied, header and footer push included.
-    [[nodiscard]] qreal bodyTop() const { return m_bodyTop; }
-    [[nodiscard]] qreal bodyBottom() const { return m_bodyBottom; }
+    // Where the body starts and ends on a (0-based) page's section page
+    // (document px): its margins, header and footer push included.
+    [[nodiscard]] qreal bodyTop(int page) const;
+    [[nodiscard]] qreal bodyBottom(int page) const;
 
     // ---- footnotes (write_footnotes.h): texts keyed by the marker's id ----------------
     [[nodiscard]] const QHash<QString, QString> &footnotes() const { return m_parts.footnotes; }
@@ -196,8 +252,23 @@ private:
     bool saveConverted(const QString &path, QString *error) const;
     bool saveHtml(const QString &path, QString *error) const;
 
+    // The canvas page size the sections need (no undo item: Qt records none
+    // for a page size), after an undo, a redo or an edit; the pass adjusts
+    // the rest (write_pagination.h).
+    void syncCanvas();
+    // The sections read again when the text changed since (cheap: the
+    // top-level paragraphs and the headers' cached heights).
+    void refreshSections() const;
+    [[nodiscard]] std::unique_ptr<QTextDocument> newStory() const;
+
     std::unique_ptr<QTextDocument> m_text;
     Docx::WordParts m_parts;
+    // Word sections laid out on the one canvas Qt paginates (M88).
+    std::unique_ptr<SectionLayout> m_sections;
+    mutable QList<PageFrame> m_pageFrames;
+    mutable bool m_pageFramesValid = false;
+    mutable bool m_sectionsStale = false;
+    bool m_syncQueued = false;
     // Word's keep-with-next / widow rules as display-only page breaks.
     std::unique_ptr<KeepRules> m_keepRules;
     QString m_activeComment;
@@ -205,8 +276,6 @@ private:
     mutable bool m_commentSpansValid = false;
     mutable std::shared_ptr<const EndnoteArea> m_endnoteArea;
     mutable bool m_endnoteAreaValid = false;
-    qreal m_bodyTop = 96;
-    qreal m_bodyBottom = 96;
 };
 
 } // namespace QindaOffice::Apps::Write

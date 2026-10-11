@@ -3,6 +3,7 @@
 
 #include "docx_format.h"
 #include "docx_properties.h"
+#include "docx_sections.h"
 #include "docx_table_format.h"
 
 #include <QAbstractTextDocumentLayout>
@@ -168,17 +169,32 @@ QString htmlWithEmbeddedPictures(const QTextDocument &document, const QHash<QStr
 {
     // Display-only page breaks (write_pagination) are not the author's: an
     // exported page must not carry them as page-break-before.
+    // Nor are a section's display-only pads (M88): its paragraphs' own
+    // right indents go out.
     bool synthetic = false;
     for (QTextBlock block = document.begin(); block.isValid() && !synthetic; block = block.next()) {
-        synthetic = block.blockFormat().hasProperty(kSyntheticBreak);
+        synthetic = block.blockFormat().hasProperty(kSyntheticBreak) || block.blockFormat().hasProperty(kSectionPad);
     }
     for (const QTextFrame *frame : document.rootFrame()->childFrames()) {
-        synthetic = synthetic || frame->frameFormat().hasProperty(kSyntheticBreak);
+        synthetic = synthetic || frame->frameFormat().hasProperty(kSyntheticBreak)
+            || frame->frameFormat().hasProperty(kSectionPad);
     }
     std::unique_ptr<QTextDocument> clean;
     if (synthetic) {
         clean.reset(document.clone());
         removeSyntheticBreaks(clean.get());
+        for (QTextBlock block = clean->begin(); block.isValid(); block = block.next()) {
+            if (QTextBlockFormat format = block.blockFormat(); format.hasProperty(kSectionPad)) {
+                setSectionPad(format, 0);
+                QTextCursor(block).setBlockFormat(format);
+            }
+        }
+        for (QTextFrame *frame : clean->rootFrame()->childFrames()) {
+            if (QTextFrameFormat format = frame->frameFormat(); format.hasProperty(kSectionPad)) {
+                setSectionPad(format, 0);
+                frame->setFrameFormat(format);
+            }
+        }
     }
     QString html = (clean ? *clean : document).toHtml();
     for (auto it = media.cbegin(); it != media.cend(); ++it) {
@@ -267,6 +283,11 @@ QString patternFromHeaderFooter(const QTextDocument &document, bool *simple)
 
 std::unique_ptr<QTextDocument> instantiateHeaderFooter(const QTextDocument &document, int page, int pageCount)
 {
+    return instantiateHeaderFooter(document, PageFieldValues{page, QString(), pageCount, pageCount});
+}
+
+std::unique_ptr<QTextDocument> instantiateHeaderFooter(const QTextDocument &document, const PageFieldValues &values)
+{
     std::unique_ptr<QTextDocument> copy(document.clone());
     copyResources(document, copy.get());
     struct Field {
@@ -279,12 +300,20 @@ std::unique_ptr<QTextDocument> instantiateHeaderFooter(const QTextDocument &docu
     for (QTextBlock b = copy->begin(); b.isValid(); b = b.next()) {
         for (auto it = b.begin(); !it.atEnd(); ++it) {
             const QTextFragment fragment = it.fragment();
-            const QString field = fragment.charFormat().stringProperty(kFieldInstruction).trimmed().section(QLatin1Char(' '), 0, 0).toUpper();
+            const QString instruction = fragment.charFormat().stringProperty(kFieldInstruction).trimmed();
+            const QString field = instruction.section(QLatin1Char(' '), 0, 0).toUpper();
+            QString text;
             if (field == u"PAGE") {
-                fields.append({fragment.position(), fragment.length(), QString::number(page), fragment.charFormat()});
-            } else if (field == u"NUMPAGES" || field == u"SECTIONPAGES") {
-                fields.append({fragment.position(), fragment.length(), QString::number(pageCount), fragment.charFormat()});
+                const QString own = fieldNumberFormat(instruction);
+                text = formatPageNumber(values.page, own.isEmpty() ? values.pageFormat : own);
+            } else if (field == u"NUMPAGES") {
+                text = formatPageNumber(values.pages, fieldNumberFormat(instruction));
+            } else if (field == u"SECTIONPAGES") {
+                text = formatPageNumber(values.sectionPages, fieldNumberFormat(instruction));
+            } else {
+                continue;
             }
+            fields.append({fragment.position(), fragment.length(), text, fragment.charFormat()});
         }
     }
     // From the end, so earlier positions stay valid.

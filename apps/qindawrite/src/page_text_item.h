@@ -12,6 +12,7 @@
 // document and the control and hands both over once (attach).
 
 #include "page_geometry.h"
+#include "page_setup_io.h"
 #include "page_text_control.h"
 
 #include <QPointer>
@@ -126,7 +127,7 @@ private:
     void openStory(int kind);
     void updatePageMetrics();
     // page_text_paint.cpp
-    void paintPage(QPainter *painter, int index, const QRectF &clip);
+    void paintPage(QPainter *painter, int index, const QRectF &clip, const PageDecoration &decoration);
     void paintBody(QPainter *painter, const QRectF &pageArea, bool storyOpen, bool overTextPictures);
 
     QPointer<WriteDocument> m_document;

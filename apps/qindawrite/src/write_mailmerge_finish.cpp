@@ -90,7 +90,10 @@ bool MailMergeController::finishToDocument(const QVariantMap &range)
         return false;
     }
     QString error;
-    const QByteArray bytes = Docx::docxBytes(*merged, Docx::cloneWordParts(m_document->parts()), {}, &error);
+    // Each record's section shows the main document's headers (M88).
+    Docx::WordParts parts = Docx::cloneWordParts(m_document->parts());
+    Docx::shareStories(parts, QString::fromUtf16(Docx::kMergeSectionKey));
+    const QByteArray bytes = Docx::docxBytes(*merged, parts, {}, &error);
     if (bytes.isEmpty()) {
         emit message(tr("The merged document could not be made: %1").arg(error));
         return false;
@@ -127,6 +130,7 @@ bool MailMergeController::finishToPdf(const QUrl &url, const QVariantMap &range)
     // The main document's headers and footers on every page; the notes the
     // merged copies carry, numbered in them.
     PageDecoration decoration = m_document->decoration();
+    decoration.pages.clear(); // the copies' pages are uniform (M88)
     PageGeometry geometry;
     geometry.setPageSize(merged->pageSize());
     decoration.footnotes = footnotesByPage(merged.get(), geometry, m_document->footnotes());
@@ -200,7 +204,9 @@ int MailMergeController::sendEmails(const QVariantMap &answer)
             QDir().mkpath(handoff);
             const QString path = handoff + QStringLiteral("/%1-%2.docx").arg(fileSafe(subject.isEmpty() ? tr("Message") : subject)).arg(position + 1);
             QSaveFile file(path);
-            const QByteArray bytes = Docx::docxBytes(*copy, Docx::cloneWordParts(m_document->parts()));
+            Docx::WordParts parts = Docx::cloneWordParts(m_document->parts());
+            Docx::shareStories(parts, QString::fromUtf16(Docx::kMergeSectionKey));
+            const QByteArray bytes = Docx::docxBytes(*copy, parts);
             if (bytes.isEmpty() || !file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
                 continue;
             }

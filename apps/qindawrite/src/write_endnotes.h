@@ -39,10 +39,11 @@ struct EndnoteArea {
 };
 
 // Lays out the endnotes the body references (`texts` by id) after its last
-// line; empty when there are none.
+// line; empty when there are none. `rightPad` narrows them to the last
+// section's text column when the canvas is wider (M88, write_sections.h).
 [[nodiscard]] std::shared_ptr<EndnoteArea> layoutEndnotes(const QTextDocument &body,
                                                           const QHash<QString, QString> &texts,
-                                                          const Docx::NoteOptions &options);
+                                                          const Docx::NoteOptions &options, qreal rightPad = 0);
 
 // Draws the notes that fall on page `pageIndex` (0-based) into `pageRect`
 // (document coordinates of that page, already translated as for headers).

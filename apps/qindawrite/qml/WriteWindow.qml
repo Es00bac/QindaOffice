@@ -35,10 +35,13 @@ OfficeWindow {
     }
     ribbonTabs: ribbonLayout.tabs
     ribbonContexts: (tableContext.enabled ? ["table"] : []).concat(pictureContext.enabled ? ["picture"] : [])
+                    .concat(storyContext.enabled ? ["headerFooter"] : [])
     // Enabled exactly while the cursor is in a table (table_layout.h).
     readonly property ActionEntry tableContext: host.actions.entry("writeTablePropertiesAction")
     // Enabled exactly while a picture is selected (write_float.h, M77).
     readonly property ActionEntry pictureContext: host.actions.entry("writePictureLayoutAction")
+    // Enabled exactly while a header or footer is open (M88).
+    readonly property ActionEntry storyContext: host.actions.entry("writeCloseHeaderFooterAction")
     // Word's formatting (M70, D-079): the border pen, the dialogs' hosts.
     readonly property QtObject borders: window.write.borders
     readonly property QtObject tableLayout: window.write.tableLayout
@@ -421,6 +424,7 @@ OfficeWindow {
     EnvelopesDialog { envelopes: window.write.envelopes }
     LabelsDialog { envelopes: window.write.envelopes }
     NoteOptionsDialog { notes: window.write.notes }
+    PageNumbersDialog { sections: window.write.sections } // M88 (D-096)
     ConvertNotesDialog { notes: window.write.notes }
     PictureLayoutDialog { pictureLayout: window.write.pictureLayout }
     PageSetupDialog {

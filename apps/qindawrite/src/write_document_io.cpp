@@ -88,13 +88,45 @@ bool WriteDocument::load(const QString &path, QString *error)
     return true;
 }
 
+namespace {
+
+// AGENT-NOTE (M88): QTextDocumentLayout lays a paged document out again
+// after every edit; the reader makes one per cell format, run and
+// paragraph, so a long table read into the live document took minutes
+// (each change re-laid the whole table out). With a null page size the
+// layout does nothing until adoptParts() sets the canvas, once.
+class LayoutPause {
+public:
+    explicit LayoutPause(QTextDocument *document)
+        : m_document(document)
+        , m_size(document->pageSize())
+    {
+        m_document->setPageSize(QSizeF(0, 0));
+    }
+    ~LayoutPause()
+    {
+        if (m_document->pageSize().isNull()) {
+            m_document->setPageSize(m_size); // a failed read: as it was
+        }
+    }
+    LayoutPause(const LayoutPause &) = delete;
+    LayoutPause &operator=(const LayoutPause &) = delete;
+
+private:
+    QTextDocument *m_document;
+    QSizeF m_size;
+};
+
+} // namespace
+
 bool WriteDocument::loadWordPackage(const QString &path, QString *error)
 {
     Docx::WordParts parts;
+    LayoutPause pause(m_text.get());
     if (!Docx::readDocx(path, m_text.get(), &parts, error)) {
         return false;
     }
-    adoptParts(std::move(parts));
+    adoptParts(std::move(parts)); // the canvas: laid out once
     return true;
 }
 
@@ -291,10 +323,11 @@ bool WriteDocument::loadRecovery(const QByteArray &snapshot, QString *error)
     if (snapshot.startsWith(kRecoveryTag)) {
         Docx::WordParts parts;
         const auto package = Ooxml::Package::fromData(snapshot.mid(kRecoveryTag.size()), error);
+        LayoutPause pause(m_text.get());
         if (!package || !Docx::readDocx(package, m_text.get(), &parts, error)) {
             return false;
         }
-        adoptParts(std::move(parts));
+        adoptParts(std::move(parts)); // the canvas: laid out once
     } else {
         m_text->setHtml(QString::fromUtf8(snapshot)); // a journal written before D-068
     }

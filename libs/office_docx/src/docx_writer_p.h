@@ -5,6 +5,7 @@
 // and the per-save bookkeeping every part writer shares.
 
 #include "docx_model.h"
+#include "docx_sections.h"
 #include "docx_styles.h"
 #include "ooxml_copier.h"
 #include "ooxml_package.h"
@@ -82,13 +83,16 @@ struct WriteEnv {
     int nextRevision = 1;
     int nextBookmark = 1;
     QSet<QString> writtenControls; // content controls written once (a copy drops its w:id)
-    bool layoutChanged = false;
-    bool headersChanged = false;
+    // M88 (D-096): the body's sections in order (docx_sections.h), the
+    // closing one last, and the index of the section each paragraph that
+    // ends one (by block number in `body`) ends.
+    const QTextDocument *body = nullptr;
+    QList<SectionRef> sections;
+    QHash<int, int> sectionEnds;
     // Applied to every w:sectPr the body writer emits (paragraph-level ones
-    // included): relationship ids, page layout and header references
-    // (docx_writer.cpp). A paragraph-level section whose page differs from
-    // the document's as read keeps its own page (an envelope, a label sheet).
-    std::function<void(Ooxml::XmlElement &, const QString &)> sectionHook;
+    // included) with the index of its section: relationship ids and the
+    // section's header and footer references (docx_writer.cpp).
+    std::function<void(Ooxml::XmlElement &, const QString &, int)> sectionHook;
 
     [[nodiscard]] QString mediaPart(const QByteArray &bytes, const QString &extension);
 };
@@ -189,6 +193,10 @@ NotesWritten writeNotes(WriteEnv &env);
 // even/odd headers, the mail merge (docx_mailmerge.h).
 void writeSettings(WriteEnv &env, const Ooxml::XmlElementPtr &sourceSettings, const QString &sourceSettingsPart,
                    const NotesWritten &notes);
+// The w:sectPr section `index` of the save is written with (M88): its
+// markup patched where its settings changed, or made from its settings
+// (docx_writer.cpp). References and ids are the section hook's.
+[[nodiscard]] Ooxml::XmlElementPtr sectionMarkup(const WriteEnv &env, int index);
 // Footnote/endnote options into a w:sectPr that has its own (or, for the
 // closing section, when the options changed).
 void patchSectionNoteOptions(const WordParts &parts, Ooxml::XmlElement &sectPr, bool closing);

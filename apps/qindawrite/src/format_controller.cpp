@@ -207,7 +207,7 @@ void FormatController::insertTableAtCursor(int rows, int columns)
     columns = qBound(1, columns, 63);
     cursor.beginEditBlock();
     QTextTable *table = cursor.insertTable(qBound(1, rows, 200), columns,
-                                           Docx::newWordTableFormat(columns, m_document->contentWidth()));
+                                           Docx::newWordTableFormat(columns, m_document->contentWidthAt(m_control->textCursor().position())));
     Docx::initWordTable(table);
     cursor.endEditBlock();
     // Leave the cursor inside the first cell so table-scoped commands
@@ -249,7 +249,7 @@ bool FormatController::insertImageFile(const QString &path)
         return false;
     }
     QSizeF size(loaded.width(), loaded.height());
-    const qreal contentWidth = m_document->contentWidth();
+    const qreal contentWidth = m_document->contentWidthAt(m_control->textCursor().position());
     if (size.width() > contentWidth && contentWidth > 0) {
         size = QSizeF(contentWidth, size.height() * contentWidth / size.width());
     }

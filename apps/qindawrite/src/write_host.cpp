@@ -31,6 +31,7 @@
 #include "write_float.h"
 #include "write_mailmerge.h"
 #include "write_notes.h"
+#include "write_section_commands.h"
 
 #include <QClipboard>
 #include <QFontDatabase>
@@ -52,6 +53,7 @@ const int kFontSizes[] = {6,  7,  8,  9,  10, 11, 12, 14, 16, 18, 20, 22, 24, 26
 WriteHost::WriteHost()
     : m_document(new WriteDocument)
     , m_control(new PageTextControl(m_document->textDocument(), this))
+    , m_fontFamilies(QFontDatabase::families())
 {
     installPageTextAccessibility();
     setDocument(m_document);
@@ -79,8 +81,12 @@ WriteHost::WriteHost()
     m_format->setClearFormattingHook([this] { return m_styles->clearFormatting(); });
     m_painter = new FormatPainter(m_control, m_document, actions(), this);
     m_navigation = new NavigationModel(m_control, m_document, actions(), this);
+    // M88 (D-096): Word's sections — breaks, orientation, header options.
+    m_sections = new SectionsController(m_control, m_document, actions(), this);
+    connect(m_sections, &SectionsController::message, this, [this](const QString &text) { showStatusMessage(text, 6000); });
     m_control->setKeyFilter([this](QKeyEvent *event) {
-        return m_painter->handleKey(event) || m_lists->handleKey(event) || m_styles->handleKey(event);
+        return m_painter->handleKey(event) || m_lists->handleKey(event) || m_styles->handleKey(event)
+            || m_sections->handleKey(event);
     });
     connect(m_tableLayout, &TableLayoutController::message, this, [this](const QString &text) { showStatusMessage(text, 6000); });
     connect(m_comments, &WriteComments::message, this, [this](const QString &text) { showStatusMessage(text); });
@@ -134,6 +140,7 @@ void WriteHost::attachPage(PageTextItem *item)
     m_revisions->setInputTarget(item);
     m_pictureLayout->setPictureTool(item->pictures());
     m_mailMerge->setPageItem(item);
+    m_sections->setPageItem(item);
     connect(item, &PageTextItem::pageCountChanged, this, [this] { updateWriteStatus(); });
     connect(item, &PageTextItem::storyChanged, this, [this] { syncStoryActions(); });
     connect(item, &PageTextItem::pictureDialogRequested, this, &WriteHost::pictureDialogRequested);
@@ -203,7 +210,10 @@ void WriteHost::updateWriteStatus()
 
 QStringList WriteHost::fontFamilies() const
 {
-    return QFontDatabase::families();
+    // AGENT-NOTE: this QML property is CONSTANT for the window. QML's
+    // sequence indexOf reads the getter repeatedly; enumerating the font
+    // database on each index made ordinary caret changes take seconds.
+    return m_fontFamilies;
 }
 
 QStringList WriteHost::fontSizes() const
@@ -293,52 +303,6 @@ void WriteHost::applyStyle(int styleId)
     m_document->setDirty(true);
 }
 
-// ---- page setup ---------------------------------------------------------------------
-
-QVariantMap WriteHost::pageSetup() const
-{
-    // Document px throughout; the dialog shows inches or centimetres.
-    const Docx::PageLayout &l = m_document->pageLayout();
-    return {{QStringLiteral("width"), l.pageSize.width()},
-            {QStringLiteral("height"), l.pageSize.height()},
-            {QStringLiteral("left"), l.margins.left()},
-            {QStringLiteral("top"), l.margins.top()},
-            {QStringLiteral("right"), l.margins.right()},
-            {QStringLiteral("bottom"), l.margins.bottom()},
-            {QStringLiteral("headerDistance"), l.headerDistance},
-            {QStringLiteral("footerDistance"), l.footerDistance},
-            {QStringLiteral("landscape"), l.landscape()},
-            {QStringLiteral("differentFirstPage"), m_document->differentFirstPage()},
-            {QStringLiteral("header"), m_document->headerText()},
-            {QStringLiteral("footer"), m_document->footerText()},
-            {QStringLiteral("headerRich"), !m_document->headerIsSimple()},
-            {QStringLiteral("footerRich"), !m_document->footerIsSimple()}};
-}
-
-void WriteHost::applyPageSetup(const QVariantMap &setup)
-{
-    Docx::PageLayout layout = m_document->pageLayout();
-    const qreal width = setup.value(QStringLiteral("width"), layout.pageSize.width()).toReal();
-    const qreal height = setup.value(QStringLiteral("height"), layout.pageSize.height()).toReal();
-    if (width <= 0 || height <= 0) {
-        return;
-    }
-    layout.pageSize = QSizeF(width, height);
-    auto margin = [&](const char *key, qreal current) {
-        return qBound<qreal>(0, setup.value(QString::fromLatin1(key), current).toReal(), qMin(width, height) / 2);
-    };
-    layout.margins = QMarginsF(margin("left", layout.margins.left()), margin("top", layout.margins.top()),
-                               margin("right", layout.margins.right()), margin("bottom", layout.margins.bottom()));
-    layout.headerDistance = margin("headerDistance", layout.headerDistance);
-    layout.footerDistance = margin("footerDistance", layout.footerDistance);
-    m_document->setPageLayout(layout);
-    m_document->setDifferentFirstPage(setup.value(QStringLiteral("differentFirstPage"),
-                                                  m_document->differentFirstPage()).toBool());
-    m_document->setHeaderFooter(setup.value(QStringLiteral("header"), m_document->headerText()).toString(),
-                                setup.value(QStringLiteral("footer"), m_document->footerText()).toString());
-    m_document->setDirty(true);
-}
-
 // ---- hooks --------------------------------------------------------------------------
 
 QString WriteHost::filterString() const
@@ -386,44 +350,6 @@ void WriteHost::documentReplaced()
     if (!warnings.isEmpty()) {
         showStatusMessage(warnings.join(QLatin1Char(' ')), 12000);
     }
-}
-
-Quick::PrintRenderCallback WriteHost::printRenderCallback() const
-{
-    if (m_printOverride) {
-        // A merged document, an envelope or a label sheet (M77): its own
-        // pages; the headers and footers of this document only when it was
-        // made from this document's pages.
-        std::shared_ptr<QTextDocument> other = m_printOverride;
-        PageDecoration decoration;
-        if (other->pageSize() == m_document->pageSize()) {
-            decoration = m_document->decoration();
-            decoration.footnotes.clear();
-            decoration.endnotes = nullptr;
-        }
-        decoration.overTextPictures = true;
-        return [other, decoration](QPrinter *printer, QPainter *painter) {
-            const QSizeF page = other->pageSize();
-            printer->setPageSize(QPageSize(page * 0.75, QPageSize::Point));
-            printer->setPageMargins(QMarginsF(0, 0, 0, 0));
-            renderDocumentPages(painter, QSizeF(printer->width(), printer->height()), other.get(),
-                                [printer] { printer->newPage(); }, decoration);
-        };
-    }
-    const WriteDocument *doc = m_document;
-    return [doc](QPrinter *printer, QPainter *painter) {
-        // WYSIWYG: the paper follows the document's page size, matching the
-        // on-screen and PDF pagination.
-        // Document px → points (×0.75): see the AGENT-GUARD in pdf_exporter.cpp.
-        const QSizeF docPage = doc->pageSize();
-        if (docPage.width() > 0 && docPage.height() > 0) {
-            printer->setPageSize(QPageSize(docPage * 0.75, QPageSize::Point));
-            printer->setPageMargins(QMarginsF(0, 0, 0, 0));
-        }
-        renderDocumentPages(painter, QSizeF(printer->width(), printer->height()),
-                            const_cast<QTextDocument *>(doc->textDocument()),
-                            [printer] { printer->newPage(); }, doc->decoration());
-    };
 }
 
 } // namespace QindaOffice::Apps::Write

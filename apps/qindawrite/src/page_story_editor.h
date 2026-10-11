@@ -48,7 +48,13 @@ public:
     // The 0-based page the open story is edited on.
     [[nodiscard]] int page() const { return m_page; }
     [[nodiscard]] QTextDocument *story() const { return m_story; }
-    // "Header", "First Page Footer", … — the tab on the band.
+    // Word sections (M88): the section of that page, the slot it shows, and
+    // the section that keeps the story (itself, or the one it links to).
+    [[nodiscard]] int section() const { return m_section; }
+    [[nodiscard]] Docx::HeaderFooterSlot slot() const { return m_slot; }
+    [[nodiscard]] int keeper() const { return m_keeper; }
+    // "Header", "First Page Footer -Section 2-", … — the tab on the band;
+    // "Same as Previous" while it shows a previous section's.
     [[nodiscard]] QString label() const;
 
     // Opens the header or footer page `page` (0-based) shows, creating an
@@ -58,9 +64,9 @@ public:
 
     // The open story's band on its page, in page coordinates.
     [[nodiscard]] QRectF bandRect() const;
-    // Whether a page point falls in the margin band where the header (or
-    // footer) lives: above (below) the body.
-    [[nodiscard]] Kind zoneAt(const QPointF &pagePos) const;
+    // Whether a point on (0-based) page `page` falls in the margin band
+    // where the header (or footer) lives: above (below) its body.
+    [[nodiscard]] Kind zoneAt(int page, const QPointF &pagePos) const;
     [[nodiscard]] QPointF pageToStory(const QPointF &pagePos) const;
     [[nodiscard]] QPointF storyToPage(const QPointF &storyPos) const;
 
@@ -83,6 +89,8 @@ private:
     QTextCursor m_bodyCursor;
     Kind m_kind = Kind::None;
     int m_page = 0;
+    int m_section = 0;
+    int m_keeper = 0;
     Docx::HeaderFooterSlot m_slot = Docx::HeaderFooterSlot::Default;
     QTimer m_settle;
 };

@@ -55,6 +55,7 @@ private slots:
     void optionsAndConvert();
     void savedAndReopened();
     void endnotesAtTheEnd();
+    void editingOnlyNoteTextUpdatesPageFrames();
 };
 
 void WriteEndnotesTest::insertEditAndUndo()
@@ -175,6 +176,29 @@ void WriteEndnotesTest::savedAndReopened()
     QVERIFY(scene.host.loadPath(path));
     QCOMPARE(marks(scene, Docx::kEndnoteIdProperty), QStringList({QStringLiteral("i")}));
     QCOMPARE(scene.doc->endnotes().values(), QStringList({QStringLiteral("Its source.")}));
+}
+
+void WriteEndnotesTest::editingOnlyNoteTextUpdatesPageFrames()
+{
+    WriteDocument document;
+    QTextCursor cursor(document.textDocument());
+    cursor.insertText(QStringLiteral("Body"));
+    QTextCharFormat marker;
+    marker.setProperty(Docx::kEndnoteIdProperty, QStringLiteral("n1"));
+    cursor.insertText(QStringLiteral("i"), marker);
+    document.setNoteTexts({}, {{QStringLiteral("n1"), QStringLiteral("Short note.")}});
+    QCOMPARE(document.pageFrames().size(), 1);
+    // The body and its markers stay unchanged. Only the note grows, so
+    // QTextDocument::contentsChange cannot invalidate the page inventory.
+    document.setNoteTexts({}, {{QStringLiteral("n1"), QStringLiteral("A longer endnote with several words. ").repeated(500)}});
+    const auto area = document.endnoteArea();
+    QVERIFY(area != nullptr);
+    QVERIFY(area->lastPage() > 1);
+    QCOMPARE(document.pageFrames().size(), area->lastPage());
+    document.textDocument()->undo();
+    QCOMPARE(document.pageFrames().size(), 1);
+    document.textDocument()->redo();
+    QCOMPARE(document.pageFrames().size(), area->lastPage());
 }
 
 void WriteEndnotesTest::endnotesAtTheEnd()

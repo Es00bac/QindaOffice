@@ -26,6 +26,7 @@
 #include <QTextDocument>
 
 #include <array>
+#include <map>
 #include <memory>
 
 namespace QindaOffice::Docx {
@@ -51,14 +52,62 @@ enum class HeaderFooterSlot { Default = 0, First = 1, Even = 2 };
 inline constexpr int kHeaderFooterSlots = 3;
 
 // One header or footer. `document` is rich content (paragraphs, tables,
-// pictures); PAGE / NUMPAGES fields are runs carrying kFieldInstruction.
-// `sourcePart` names the part it was read from: an UNMODIFIED header is
-// written back by copying that part, byte for byte.
+// pictures); PAGE / NUMPAGES / SECTIONPAGES fields are runs carrying
+// kFieldInstruction. `sourcePart` names the part it was read from: an
+// UNMODIFIED header is written back by copying that part, byte for byte.
 struct HeaderFooter {
     std::unique_ptr<QTextDocument> document;
     QString sourcePart;
+    // M88 (D-096): the section's own even while empty — Link to Previous
+    // was turned off (Word writes a reference to an empty part).
+    bool unlinked = false;
 
     [[nodiscard]] bool isEmpty() const { return !document || document->isEmpty(); }
+    // Whether the section this belongs to has the slot itself (Word: a
+    // w:headerReference / w:footerReference of that type); a slot it does
+    // not define is Word's "Link to Previous": the previous section's.
+    // An empty story nobody typed into (opened and closed again) defines
+    // nothing.
+    [[nodiscard]] bool defines() const
+    {
+        return document && (!document->isEmpty() || !sourcePart.isEmpty() || unlinked);
+    }
+};
+
+// ---- Word sections (M88, D-096; docx_sections.h) -------------------------------------
+// How a section starts after the one before it (w:type).
+enum class SectionStart { NextPage = 0, Continuous = 1, EvenPage = 2, OddPage = 3, NextColumn = 4 };
+
+// w:pgNumType: where the section's page numbers start and how they look.
+struct PageNumbering {
+    int start = -1;           // w:start; -1 continues from the previous section
+    QString format;           // w:fmt as Word names it; empty is decimal
+    int chapterStyle = 0;     // w:chapStyle: chapter numbers from Heading N; 0 none
+    QString chapterSeparator; // w:chapSep: hyphen (Word's default), period, colon, emDash, enDash
+    bool operator==(const PageNumbering &) const = default;
+};
+
+// w:cols: kept and written; QindaWrite lays a section out in one column.
+struct SectionColumns {
+    int count = 1;          // w:num
+    qreal space = 48;       // px between columns (w:space; Word's 0.5 inch)
+    bool separator = false; // w:sep: a line between them
+    bool operator==(const SectionColumns &) const = default;
+};
+
+// What a section says besides its page and its first-page flag.
+struct SectionFlow {
+    SectionStart start = SectionStart::NextPage;
+    PageNumbering numbering;
+    SectionColumns columns;
+    QString verticalAlign; // w:vAlign: empty (top), center, both, bottom
+    bool operator==(const SectionFlow &) const = default;
+};
+
+// A section's own headers and footers (WordParts::sectionStories).
+struct SectionStories {
+    std::array<HeaderFooter, kHeaderFooterSlots> headers;
+    std::array<HeaderFooter, kHeaderFooterSlots> footers;
 };
 
 // A Word comment (docx_comments.h). In the text, its range is the runs whose
@@ -114,10 +163,19 @@ struct ContentControl {
 };
 
 struct WordParts {
+    // The CLOSING section (w:body's own w:sectPr, M88): its page, headers
+    // and footers, title page and the rest of what it says. Every other
+    // section ends at a paragraph that carries its settings
+    // (kSectionSettings) and key (kSectionId) and keeps its headers and
+    // footers in `sectionStories` under that key (docx_sections.h).
     PageLayout layout;
     std::array<HeaderFooter, kHeaderFooterSlots> headers;
     std::array<HeaderFooter, kHeaderFooterSlots> footers;
     bool differentFirstPage = false;
+    SectionFlow closingFlow;
+    std::map<QString, SectionStories> sectionStories;
+    // Word's "Different Odd & Even Pages" is the document's
+    // (w:evenAndOddHeaders in settings.xml), not a section's.
     bool differentOddEven = false;
 
     // Footnote texts keyed by the id on the marker run (QindaWrite's model),
@@ -160,12 +218,14 @@ struct WordParts {
 
     // The package this document was read from, or null for a new one, and
     // what the reader found there: the body's closing w:sectPr and the
-    // layout and first-page flag it produced. The writer keeps the source
-    // markup while layout/differentFirstPage still equal these (D-068 rule 3).
+    // layout, first-page flag and flow it produced. The writer keeps the
+    // source markup while the closing section still says these (D-068
+    // rule 3).
     std::shared_ptr<const Ooxml::Package> source;
     QString sourceSectionXml;
     PageLayout importedLayout;
     bool importedDifferentFirstPage = false;
+    SectionFlow importedClosingFlow;
     Ooxml::CoreProperties properties;
     qreal defaultTabStop = 48.0; // px
     // The document's styles part (w:styles) as QindaWrite's style commands
@@ -195,13 +255,16 @@ struct WordParts {
 
 // A copy of `parts` for another document made from this one (a merged
 // document, M77): the same layout, styles, notes, comments, controls,
-// pictures and source package, the headers and footers cloned
+// pictures and source package, every section's headers and footers cloned
 // (docx_parts.cpp). Merge settings are left behind: a merged document is
 // an ordinary one.
 [[nodiscard]] WordParts cloneWordParts(const WordParts &parts);
+// Gives section `key` a copy of the closing section's headers and footers
+// (a merged document's record sections show the main document's, M88).
+void shareStories(WordParts &parts, const QString &key);
 // The w:sectPr that ends a section of this document: the source's own
-// closing one, or one made from the page layout (a merged record's
-// section break, M77).
+// closing one, or one made from the closing section's settings (a merged
+// record's section break, M77).
 [[nodiscard]] QString sectionPropertiesXml(const WordParts &parts);
 
 } // namespace QindaOffice::Docx

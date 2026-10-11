@@ -27,13 +27,15 @@ bool exportDocumentPdf(QTextDocument *document, const QString &path, QString *er
         }
         return false;
     }
-    // AGENT-GUARD: the PDF page must match the DOCUMENT's page size, which
-    // is in 96-dpi px. QPageSize takes points (72 per inch), so px × 0.75 —
+    // AGENT-GUARD: the PDF page must match the PAGE's size, which is in
+    // 96-dpi px. QPageSize takes points (72 per inch), so px × 0.75 —
     // passing px as points made every A4 export 1.33 × too large (11 × 15.6
-    // in), and the earlier hardcoded A4 distorted Letter documents.
+    // in), and the earlier hardcoded A4 distorted Letter documents. Each
+    // page has its own size (M88: a landscape section in a portrait
+    // document): set before newPage(), as QPdfWriter asks.
     QPdfWriter writer(path);
-    const QSizeF docPage = document->pageSize();
-    writer.setPageSize(QPageSize(docPage * 0.75, QPageSize::Point));
+    const QSizeF first = decoration.frame(0, document->pageSize()).size;
+    writer.setPageSize(QPageSize(first * 0.75, QPageSize::Point));
     writer.setPageMargins(QMarginsF(0, 0, 0, 0));
     writer.setResolution(96);
     writer.setCreator(QStringLiteral("QindaWrite"));
@@ -47,7 +49,14 @@ bool exportDocumentPdf(QTextDocument *document, const QString &path, QString *er
         return false;
     }
     const QSizeF paper = writer.pageLayout().paintRectPixels(96).size();
-    renderDocumentPages(&painter, paper, document, [&writer] { writer.newPage(); }, decoration);
+    renderDocumentPages(
+        &painter, paper, document,
+        [&writer](const QSizeF &next) {
+            writer.setPageSize(QPageSize(next * 0.75, QPageSize::Point));
+            writer.newPage();
+            return QSizeF(writer.pageLayout().paintRectPixels(96).size());
+        },
+        decoration);
     painter.end();
     return true;
 }
@@ -57,12 +66,12 @@ namespace {
 // One header or footer, page fields filled in, laid out across the text
 // column. `top` is where it starts, or (top < 0) `bottom` is where it ends.
 void drawStory(QPainter *painter, const QTextDocument *story, const QRectF &pageRect, const Docx::PageLayout &l,
-               qreal top, qreal bottom, int page, int pageCount)
+               qreal top, qreal bottom, const Docx::PageFieldValues &fields)
 {
     if (story == nullptr || story->isEmpty()) {
         return;
     }
-    const std::unique_ptr<QTextDocument> shown = Docx::instantiateHeaderFooter(*story, page, pageCount);
+    const std::unique_ptr<QTextDocument> shown = Docx::instantiateHeaderFooter(*story, fields);
     const qreal width = qMax<qreal>(48, pageRect.width() - l.margins.left() - l.margins.right() - l.gutter);
     shown->setDocumentMargin(0);
     shown->setTextWidth(width);
@@ -88,12 +97,16 @@ void drawPageDecoration(QPainter *painter, const QRectF &pageRect, const PageDec
     if (decoration.isEmpty()) {
         return;
     }
-    const Docx::PageLayout &l = decoration.layout;
-    if (const QTextDocument *header = decoration.headerFor(pageIndex); header != omit) {
-        drawStory(painter, header, pageRect, l, l.headerDistance, 0, pageIndex, pageCount);
+    // The page's own frame (M88): its section's margins, the header and
+    // footer it shows, its number.
+    const PageFrame frame = decoration.frame(pageIndex - 1, pageRect.size());
+    const Docx::PageLayout &l = frame.layout;
+    const Docx::PageFieldValues fields{frame.number, frame.numberFormat, pageCount, frame.sectionPages};
+    if (frame.header != omit) {
+        drawStory(painter, frame.header, pageRect, l, l.headerDistance, 0, fields);
     }
-    if (const QTextDocument *footer = decoration.footerFor(pageIndex); footer != omit) {
-        drawStory(painter, footer, pageRect, l, -1, pageRect.height() - l.footerDistance, pageIndex, pageCount);
+    if (frame.footer != omit) {
+        drawStory(painter, frame.footer, pageRect, l, -1, pageRect.height() - l.footerDistance, fields);
     }
     if (decoration.endnotes != nullptr) {
         drawEndnotes(painter, *decoration.endnotes, pageIndex - 1, pageRect); // M77
@@ -117,7 +130,7 @@ void drawPageDecoration(QPainter *painter, const QRectF &pageRect, const PageDec
     const qreal band = l.margins.bottom();
     const qreal left = pageRect.x() + l.margins.left() + l.gutter;
     const qreal width = pageRect.width() - l.margins.left() - l.margins.right() - l.gutter;
-    const qreal footerRoom = decoration.footerFor(pageIndex) != nullptr ? lineHeight + 4 + l.footerDistance : 0;
+    const qreal footerRoom = frame.footer != nullptr ? lineHeight + 4 + l.footerDistance : 0;
     const qreal available = band - footerRoom - 8;
     const int maxLines = qMax(1, int(available / lineHeight));
     qreal y = pageRect.bottom() - band + 4;
@@ -136,28 +149,38 @@ void drawPageDecoration(QPainter *painter, const QRectF &pageRect, const PageDec
 }
 
 void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDocument *document,
-                         const std::function<void()> &newPage, const PageDecoration &decoration)
+                         const std::function<QSizeF(const QSizeF &)> &newPage, const PageDecoration &decoration)
 {
-    // Probe-verified pattern (tst_write_probe_pagination): scale once, then
-    // per page translate by -i*pageH, clip, draw; newPage between pages
-    // (the painter transform persists across newPage on QPdfWriter/QPrinter).
-    const QSizeF page = document->pageSize();
-    painter->save();
-    // AGENT-GUARD: a UNIFORM scale (width-derived). Two independent axes
-    // distorted every document whose aspect ratio differed from the target;
-    // height overflow is a page-setup concern, never a licence to stretch.
-    const qreal uniformScale = page.width() > 0 ? targetPixels.width() / page.width() : 1.0;
-    painter->scale(uniformScale, uniformScale);
+    // Probe-verified pattern (tst_write_probe_pagination): per page scale,
+    // move the page's canvas region to the origin, clip, draw; newPage
+    // between pages. Each page is its own frame (M88): a section's page
+    // shows its own part of the canvas page it was laid out on.
+    const QSizeF canvas = document->pageSize();
     const QAbstractTextDocumentLayout *layout = document->documentLayout();
-    const int pages = decoration.pageCount(qMax(1, int(std::ceil(layout->documentSize().height() / page.height()))));
+    const int pages = decoration.pageCount(qMax(1, int(std::ceil(layout->documentSize().height() / canvas.height()))));
+    QSizeF target = targetPixels;
     for (int i = 0; i < pages; ++i) {
+        const PageFrame frame = decoration.frame(i, canvas);
         if (i > 0 && newPage != nullptr) {
-            newPage();
+            const QSizeF next = newPage(frame.size);
+            if (next.isValid() && !next.isEmpty()) {
+                target = next;
+            }
         }
         painter->save();
-        painter->translate(0, -i * page.height());
+        // AGENT-GUARD: a UNIFORM scale (width-derived). Two independent axes
+        // distorted every document whose aspect ratio differed from the
+        // target; height overflow is a page-setup concern, never a licence
+        // to stretch.
+        const qreal scale = frame.size.width() > 0 ? target.width() / frame.size.width() : 1.0;
+        painter->scale(scale, scale);
+        painter->save();
+        if (frame.textBottom > 0) {
+            painter->setClipRect(QRectF(0, 0, frame.size.width(), frame.textBottom));
+        }
+        painter->translate(-frame.origin);
         QAbstractTextDocumentLayout::PaintContext context;
-        context.clip = QRectF(0, i * page.height(), page.width(), page.height());
+        context.clip = QRectF(frame.origin, frame.size);
         // Pictures behind and in front of the text (M77, docx_float.h).
         if (decoration.overTextPictures) {
             Docx::drawFloatingPictures(painter, *document, context.clip, true);
@@ -169,11 +192,10 @@ void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDoc
         Docx::drawParagraphBorders(painter, *document, context.clip);
         Docx::drawTabLeaders(painter, *document, context.clip);
         Docx::drawListMarkers(painter, *document, context.clip);
-        drawPageDecoration(painter, QRectF(0, i * page.height(), page.width(), page.height()), decoration, i + 1,
-                           pages);
+        painter->restore();
+        drawPageDecoration(painter, QRectF(QPointF(0, 0), frame.size), decoration, i + 1, pages);
         painter->restore();
     }
-    painter->restore();
 }
 
 } // namespace QindaOffice::Apps::Write

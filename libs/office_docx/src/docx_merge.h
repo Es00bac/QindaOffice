@@ -37,9 +37,13 @@ struct MergeRequest {
     int last = -1;                       // -1: to the end
     bool singleCopy = false;             // one copy only (Preview Results, one e-mail)
     // The w:sectPr a copy that another follows ends with; empty: a page
-    // break before the next copy instead.
+    // break before the next copy instead. Every such section has the key
+    // kMergeSectionKey (M88): the merged document's parts give it the main
+    // document's last section's headers (shareStories, docx_model.h).
     QString sectionXml;
 };
+
+inline constexpr char16_t kMergeSectionKey[] = u"merge";
 
 struct MergeResult {
     int copies = 0;

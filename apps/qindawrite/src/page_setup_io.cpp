@@ -45,8 +45,36 @@ QString escapeMeta(const QString &text)
 
 } // namespace
 
+PageFrame PageDecoration::frame(int index, const QSizeF &canvas) const
+{
+    if (index >= 0 && index < pages.size()) {
+        return pages.at(index);
+    }
+    PageFrame out;
+    if (!pages.isEmpty()) {
+        // Past the last known page (endnotes running on): the last page's
+        // section, one canvas page further each time.
+        out = pages.last();
+        out.origin.ry() += (index - (pages.size() - 1)) * canvas.height();
+        out.number += int(index - (pages.size() - 1));
+        out.firstOfSection = false;
+        return out;
+    }
+    out.size = canvas;
+    out.origin = QPointF(0, index * canvas.height());
+    out.layout = layout;
+    out.header = headerFor(index + 1);
+    out.footer = footerFor(index + 1);
+    out.number = index + 1;
+    out.firstOfSection = index == 0;
+    return out;
+}
+
 const QTextDocument *PageDecoration::headerFor(int page) const
 {
+    if (page >= 1 && page <= pages.size()) {
+        return pages.at(page - 1).header;
+    }
     if (differentFirstPage && page == 1) {
         return headers[size_t(Docx::HeaderFooterSlot::First)];
     }
@@ -58,6 +86,9 @@ const QTextDocument *PageDecoration::headerFor(int page) const
 
 const QTextDocument *PageDecoration::footerFor(int page) const
 {
+    if (page >= 1 && page <= pages.size()) {
+        return pages.at(page - 1).footer;
+    }
     if (differentFirstPage && page == 1) {
         return footers[size_t(Docx::HeaderFooterSlot::First)];
     }
@@ -69,6 +100,11 @@ const QTextDocument *PageDecoration::footerFor(int page) const
 
 bool PageDecoration::isEmpty() const
 {
+    for (const PageFrame &page : pages) {
+        if ((page.header != nullptr && !page.header->isEmpty()) || (page.footer != nullptr && !page.footer->isEmpty())) {
+            return false;
+        }
+    }
     for (size_t i = 0; i < headers.size(); ++i) {
         if ((headers[i] != nullptr && !headers[i]->isEmpty()) || (footers[i] != nullptr && !footers[i]->isEmpty())) {
             return false;

@@ -31,6 +31,7 @@
 #include "write_typography.h"
 #include "write_float.h"
 #include "write_notes.h"
+#include "write_section_commands.h"
 
 #include "inline_action_flow.h"
 
@@ -164,9 +165,16 @@ void WriteHost::insertMenus()
                                                 : suggested.section(QLatin1Char('.'), 0, -2) + QStringLiteral(".pdf");
                 emit exportPdfRequested(suggested);
             });
+    // M88 (D-096): Word's Layout ▸ Breaks (section breaks) and Orientation,
+    // acting per section.
     tree->insertMenuBefore(QStringLiteral("aiMenu"),
                            MenuNode::submenu(QStringLiteral("pageMenu"), tr("&Page"),
-                                             {a("writePageSetupAction"), a("writeExportPdfAction")}));
+                                             {a("writePageSetupAction"),
+                                              MenuNode::submenu(QStringLiteral("writeBreaksMenu"), tr("&Breaks"),
+                                                                m_sections->breakItems()),
+                                              MenuNode::submenu(QStringLiteral("writeOrientationMenu"),
+                                                                tr("&Orientation"), m_sections->orientationItems()),
+                                              a("writeExportPdfAction")}));
 
     // New from Template: one entry per shipped template, generated ids
     // (writeTemplate_<name>) that stay stable (plan rule 4).
@@ -239,8 +247,13 @@ QList<MenuNode> WriteHost::headerFooterMenuItems()
             m_page->closeStory();
         }
     });
-    return {MenuNode::action(header->id()), MenuNode::action(footer->id()), MenuNode::action(number->id()),
-            MenuNode::action(count->id()), MenuNode::action(m_closeStory->id())};
+    // M88: Format Page Numbers, Different First Page, Different Odd & Even
+    // Pages, Link to Previous (write_section_commands.h).
+    QList<MenuNode> items{MenuNode::action(header->id()), MenuNode::action(footer->id()),
+                          MenuNode::action(number->id()), MenuNode::action(count->id())};
+    items += m_sections->headerFooterItems();
+    items.append(MenuNode::action(m_closeStory->id()));
+    return items;
 }
 
 void WriteHost::insertPageField(bool total)

@@ -2,6 +2,7 @@
 #include "write_footnotes.h"
 
 #include "docx_properties.h"
+#include "docx_sections.h"
 
 static_assert(QindaOffice::Apps::Write::kFootnoteIdProperty == QindaOffice::Docx::kFootnoteIdProperty);
 static_assert(QindaOffice::Apps::Write::kEndnoteIdProperty == QindaOffice::Docx::kEndnoteIdProperty);
@@ -117,6 +118,7 @@ QList<EndnoteRef> collectEndnotes(const QTextDocument *document, const Docx::Not
     }
     const QString format = Docx::noteFormat(options, true);
     int number = options.start;
+    const QList<QTextBlock> ends = Docx::sectionEnds(*document); // M88: real section ends only
     for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
         for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it) {
             const QTextFragment fragment = it.fragment();
@@ -125,7 +127,7 @@ QList<EndnoteRef> collectEndnotes(const QTextDocument *document, const Docx::Not
                              Docx::noteNumber(number++, format), fragment.position()});
             }
         }
-        if (options.restart == u"eachSect" && block.blockFormat().hasProperty(Docx::kSectionXml)) {
+        if (options.restart == u"eachSect" && ends.contains(block)) {
             number = options.start;
         }
     }
@@ -196,6 +198,7 @@ void renumberNoteMarkers(QTextDocument *document, const Docx::NoteOptions &footn
     const QString endFormat = Docx::noteFormat(endnotes, true);
     int footNumber = footnotes.start;
     int endNumber = endnotes.start;
+    const QList<QTextBlock> ends = Docx::sectionEnds(*document); // M88: real section ends only
     for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
         for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it) {
             const QTextFragment fragment = it.fragment();
@@ -213,7 +216,7 @@ void renumberNoteMarkers(QTextDocument *document, const Docx::NoteOptions &footn
                                 Docx::noteNumber(endNumber++, endFormat)});
             }
         }
-        if (block.blockFormat().hasProperty(Docx::kSectionXml)) {
+        if (ends.contains(block)) {
             footNumber = footnotes.restart == u"eachSect" ? footnotes.start : footNumber;
             endNumber = endnotes.restart == u"eachSect" ? endnotes.start : endNumber;
         }

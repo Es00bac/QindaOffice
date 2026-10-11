@@ -3,6 +3,7 @@
 
 #include "docx_borders.h"
 #include "docx_properties.h"
+#include "docx_sections.h"
 #include "docx_table_format.h"
 #include "ooxml_units.h"
 
@@ -155,8 +156,9 @@ void insertEnvelope(QTextCursor &cursor, const EnvelopeSpec &spec, const QString
                      before, first);
     }
     if (!sectionXml.isEmpty()) {
+        // The envelope is a section of its own (M88, docx_sections.h).
         QTextBlockFormat end = cursor.blockFormat();
-        end.setProperty(kSectionXml, sectionXml);
+        markSectionEnd(end, newSectionKey(), sectionXml);
         end.setPageBreakPolicy(end.pageBreakPolicy() | QTextFormat::PageBreak_AlwaysAfter);
         cursor.setBlockFormat(end);
     }

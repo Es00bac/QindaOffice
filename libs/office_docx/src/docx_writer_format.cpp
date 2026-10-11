@@ -139,11 +139,18 @@ void sortChildren(XmlElement &element)
     if (order.isEmpty() || element.ns != kW) {
         return;
     }
-    // Unknown names sort with the known name before them (stable).
+    // Unknown names sort with the known name before them (stable). A
+    // section's header and footer references are one choice group in the
+    // schema: they keep the order they have (M88: an untouched w:sectPr
+    // stays byte for byte).
+    const bool section = element.name == u"sectPr";
     QList<qsizetype> rank;
     qsizetype last = -1;
     for (const XmlChild &child : element.children) {
-        const qsizetype at = child.element && child.element->ns == kW ? order.indexOf(child.element->name) : -1;
+        const bool reference = section && child.element && child.element->name == u"footerReference";
+        const qsizetype at = child.element && child.element->ns == kW
+            ? order.indexOf(reference ? QStringLiteral("headerReference") : child.element->name)
+            : -1;
         last = at >= 0 ? at : last;
         rank.append(at >= 0 ? at : last);
     }
@@ -269,12 +276,13 @@ XmlElementPtr BodyWriter::paragraphProperties(const QTextBlock &block)
     const bool inList = block.textList() != nullptr;
     if (!listIndents && (changed("left") || changed("right") || (changed("indent") && !inList))) {
         const qreal listIndent = inList ? block.textList()->format().indent() * m_document->indentWidth() : 0.0;
-        const bool any = bf.leftMargin() != 0 || bf.rightMargin() != 0 || bf.textIndent() != 0 || listIndent != 0;
+        const qreal right = ownRightMargin(bf); // without the section layout's pad (M88)
+        const bool any = bf.leftMargin() != 0 || right != 0 || bf.textIndent() != 0 || listIndent != 0;
         if (any || imported) {
             XmlElement &ind = wChild(*pPr, QStringLiteral("ind"));
             ind.attributes.clear();
             ind.setAttribute(kW, QStringLiteral("left"), twips(bf.leftMargin() + listIndent));
-            ind.setAttribute(kW, QStringLiteral("right"), twips(bf.rightMargin()));
+            ind.setAttribute(kW, QStringLiteral("right"), twips(right));
             if (inList) {
                 ind.setAttribute(kW, QStringLiteral("hanging"), QStringLiteral("360"));
             } else if (bf.textIndent() < 0) {
@@ -313,12 +321,13 @@ XmlElementPtr BodyWriter::paragraphProperties(const QTextBlock &block)
             pPr->appendElement(mark);
         }
     }
-    // A section break QindaWrite made (a merged record's, an envelope's,
-    // M77): the block carries its w:sectPr; one read from Word has it in
-    // its own w:pPr already.
-    if (pPr->child(kW, u"sectPr") == nullptr && bf.hasProperty(kSectionXml)) {
-        if (XmlElementPtr sectPr = Ooxml::parseFragment(bf.stringProperty(kSectionXml))) {
-            pPr->appendElement(sectPr);
+    // Section breaks (M88, D-096): whatever the preserved w:pPr carried, the
+    // paragraph has the w:sectPr of the section it ends NOW (a break taken
+    // off, or a copy Enter made before the real one, has none).
+    pPr->removeChildren(kW, u"sectPr");
+    if (m_document == m_env.body) {
+        if (const auto at = m_env.sectionEnds.constFind(block.blockNumber()); at != m_env.sectionEnds.constEnd()) {
+            pPr->appendElement(sectionMarkup(m_env, at.value()));
         }
     }
     sortChildren(*pPr);

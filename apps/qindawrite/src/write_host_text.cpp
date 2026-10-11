@@ -6,6 +6,9 @@
 // budget.
 
 #include "write_host.h"
+
+#include "docx_sections.h"
+#include "write_sections.h"
 #include "write_notes.h"
 
 #include "docx_paragraph_format.h"
@@ -185,26 +188,53 @@ void WriteHost::exportPdfTo(const QUrl &url)
 
 // ---- ruler --------------------------------------------------------------------------
 
+namespace {
+
+// The ruler's page (M88): the caret's section's, and where that page's left
+// edge is in the page view (pages of other widths are centred).
+struct RulerPage {
+    qreal margin = 96;      // the text column's left edge (margin + gutter)
+    qreal rightMargin = 96;
+    qreal width = 816;
+    qreal left = 0;         // in the page item, unzoomed
+};
+
+RulerPage rulerPage(const WriteDocument *document, const PageTextControl *control, const PageTextItem *page)
+{
+    const SectionLayout &layout = document->sections();
+    const QTextCursor cursor = control->textCursor();
+    const SectionGeometry &g = layout.sections().at(layout.sectionAt(cursor.position()));
+    RulerPage out{g.left, g.right, g.pageSize().width(), 0};
+    if (page != nullptr && control->document() == document->textDocument()) {
+        const int index = page->geometry().pageForDocY(control->cursorRect().center().y());
+        out.left = page->geometry().pageRect(index, page->width()).x();
+    }
+    return out;
+}
+
+} // namespace
+
 QVariantMap WriteHost::rulerMarkers() const
 {
     const QTextBlockFormat format = m_control->textCursor().blockFormat();
-    const qreal margin = m_document->pageMargin();
-    const qreal rightMargin = m_document->pageLayout().margins.right();
-    const qreal pageWidth = m_document->pageSize().width();
-    const qreal left = margin + format.leftMargin();
-    return {{QStringLiteral("margin"), margin},
-            {QStringLiteral("rightMargin"), rightMargin},
-            {QStringLiteral("pageWidth"), pageWidth},
+    const RulerPage page = rulerPage(m_document, m_control, m_page);
+    const qreal left = page.margin + format.leftMargin();
+    return {{QStringLiteral("margin"), page.margin},
+            {QStringLiteral("rightMargin"), page.rightMargin},
+            {QStringLiteral("pageWidth"), page.width},
+            {QStringLiteral("pageLeft"), page.left},
             {QStringLiteral("left"), left},
             {QStringLiteral("firstLine"), left + format.textIndent()},
-            {QStringLiteral("right"), pageWidth - rightMargin - format.rightMargin()}};
+            // The paragraph's own right indent, not its section's pad (M88).
+            {QStringLiteral("right"), page.width - page.rightMargin - Docx::ownRightMargin(format)}};
 }
 
 void WriteHost::applyRulerMarker(const QString &id, qreal rawDocX)
 {
-    const qreal margin = m_document->pageMargin();
-    const qreal rightMargin = m_document->pageLayout().margins.right();
-    const qreal pageWidth = m_document->pageSize().width();
+    const RulerPage page = rulerPage(m_document, m_control, m_page);
+    const qreal margin = page.margin;
+    const qreal rightMargin = page.rightMargin;
+    const qreal pageWidth = page.width;
     const qreal docX = qBound(margin, rawDocX, pageWidth - rightMargin);
     if (id != QLatin1String("indent-left") && id != QLatin1String("indent-first")
         && id != QLatin1String("indent-right")) {
@@ -225,7 +255,7 @@ void WriteHost::applyRulerMarker(const QString &id, qreal rawDocX)
         } else if (id == QLatin1String("indent-first")) {
             format.setTextIndent(docX - margin - format.leftMargin());
         } else {
-            format.setRightMargin(qMax(0.0, pageWidth - rightMargin - docX));
+            Docx::setOwnRightMargin(format, qMax(0.0, pageWidth - rightMargin - docX)); // the pad stays (M88)
         }
         if (format.hasProperty(Docx::kTabStops)) {
             // Word's tab stops stay where they are on the page; Qt measures

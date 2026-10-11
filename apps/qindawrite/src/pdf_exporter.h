@@ -19,14 +19,17 @@ namespace QindaOffice::Apps::Write {
 [[nodiscard]] bool exportDocumentPdf(QTextDocument *document, const QString &path, QString *error,
                                      const PageDecoration &decoration = {});
 
-// Renders document pages into an already-active painter whose viewport is
-// `targetPixels` (printer paper or PDF page). One call draws every page,
-// calling painter->device()-independent new-page handling through the
-// optional callback. This is THE pagination loop shared by the PDF
-// exporter and the print path, so all outputs match the screen; the
-// optional decoration draws headers/footers into the margins.
+// Renders document pages into an already-active painter whose first page
+// is `targetPixels` (printer paper or PDF page). One call draws every page,
+// asking the device for each next page through the optional callback: it
+// is handed the next page's own size (document px; a Word section's page
+// differs, M88) to set before newPage(), and returns the new page's size in
+// device pixels (an invalid size keeps the last). This is THE pagination
+// loop shared by the PDF exporter and the print path, so all outputs match
+// the screen; the optional decoration draws headers/footers into the
+// margins and gives each page its frame.
 void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDocument *document,
-                         const std::function<void()> &newPage,
+                         const std::function<QSizeF(const QSizeF &)> &newPage,
                          const PageDecoration &decoration = {});
 
 // Draws one page's header/footer into `pageRect` (document coordinates,

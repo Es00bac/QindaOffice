@@ -3,7 +3,6 @@
 
 #include "docx_comments.h"
 #include "docx_controls.h"
-#include "docx_envelopes.h"
 #include "docx_format.h"
 #include "docx_list_labels.h"
 #include "docx_mailmerge.h"
@@ -11,6 +10,7 @@
 #include "docx_notes.h"
 #include "docx_properties.h"
 #include "docx_reader_p.h"
+#include "docx_sections.h"
 #include "ooxml_namespaces.h"
 #include "ooxml_units.h"
 
@@ -41,51 +41,6 @@ XmlElementPtr relatedXml(const Ooxml::Package &package, const QString &source, c
         *partName = part;
     }
     return part.isEmpty() ? nullptr : package.xml(part);
-}
-
-void readLayout(const XmlElement *sectPr, PageLayout &layout)
-{
-    if (sectPr == nullptr) {
-        return;
-    }
-    if (const XmlElement *pgSz = sectPr->child(kW, u"pgSz")) {
-        const qreal w = Units::parseTwips(wAttr(pgSz, u"w"), 12240);
-        const qreal h = Units::parseTwips(wAttr(pgSz, u"h"), 15840);
-        if (w > 0 && h > 0) {
-            layout.pageSize = QSizeF(Units::twipsToPx(w), Units::twipsToPx(h));
-        }
-    }
-    if (const XmlElement *pgMar = sectPr->child(kW, u"pgMar")) {
-        auto px = [pgMar](QStringView name, qreal fallback) {
-            return Units::twipsToPx(qAbs(Units::parseTwips(wAttr(pgMar, name), fallback)));
-        };
-        layout.margins = QMarginsF(px(u"left", 1440), px(u"top", 1440), px(u"right", 1440), px(u"bottom", 1440));
-        layout.headerDistance = px(u"header", 720);
-        layout.footerDistance = px(u"footer", 720);
-        layout.gutter = px(u"gutter", 0);
-    }
-}
-
-// A section whose page is an envelope (Word's envelope paper codes, or an
-// envelope size of docx_envelopes.h on its side).
-bool isEnvelopeSection(const XmlElement &sectPr)
-{
-    const XmlElement *size = sectPr.child(kW, u"pgSz");
-    if (size == nullptr) {
-        return false;
-    }
-    const int code = wAttr(size, u"code").toInt();
-    if (code >= 19 && code <= 38) {
-        return true;
-    }
-    const QSizeF page(Units::twipsToPx(Units::parseTwips(wAttr(size, u"w"), 0)),
-                      Units::twipsToPx(Units::parseTwips(wAttr(size, u"h"), 0)));
-    for (const EnvelopeSize &envelope : envelopeSizes()) {
-        if (qAbs(page.width() - envelope.size.width()) < 2 && qAbs(page.height() - envelope.size.height()) < 2) {
-            return true;
-        }
-    }
-    return false;
 }
 
 QString describe(const QMap<QString, int> &approximations)
@@ -248,26 +203,24 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
 
     insertLeadingSpace(body);
 
-    // Page layout and headers come from the first section; a later section
-    // that names a header slot the first one lacks lends it (Word inherits
-    // header slots section to section).
-    const QList<const XmlElement *> &sections = reader.sections();
-    if (!sections.isEmpty()) {
-        // An envelope added to a document is its first section (M77): the
-        // document's own page is the one after it.
-        qsizetype first = 0;
-        while (first + 1 < sections.size() && isEnvelopeSection(*sections.at(first))) {
-            ++first;
-        }
-        readLayout(sections.at(first), parts->layout);
-        parts->differentFirstPage = onOff(sections.at(first), u"titlePg");
-        if (const XmlElement *closing = bodyElement->child(kW, u"sectPr")) {
-            parts->sourceSectionXml = Ooxml::serializeFragment(*closing);
-        }
+    // Sections (M88, D-096, docx_sections.h): every paragraph-level
+    // w:sectPr marked its paragraph; the body's closing one is WordParts'
+    // own. Each section's header and footer references are its own
+    // stories; a slot it does not reference is linked to the section
+    // before (Word's "Link to Previous"), so a cover section without
+    // references shows nothing and a later one inherits.
+    setClosingSettings(*parts, readSectionSettings(closingSection));
+    if (closingSection != nullptr) {
+        parts->sourceSectionXml = Ooxml::serializeFragment(*closingSection);
     }
     parts->importedLayout = parts->layout;
     parts->importedDifferentFirstPage = parts->differentFirstPage;
-    for (const XmlElement *sectPr : sections) {
+    parts->importedClosingFlow = parts->closingFlow;
+    const QList<const XmlElement *> &sections = reader.sections();
+    for (qsizetype i = 0; i < sections.size(); ++i) {
+        const XmlElement *sectPr = sections.at(i);
+        // AGENT-CONTRACT: the key docx_reader_body.cpp gave the paragraph.
+        const QString key = sectPr == closingSection ? QString() : QStringLiteral("r%1").arg(i + 1);
         for (const XmlElement *ref : sectPr->elements()) {
             const bool isHeader = ref->name == u"headerReference";
             if (!isHeader && ref->name != u"footerReference") {
@@ -277,7 +230,7 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
             const HeaderFooterSlot slot = type == u"first" ? HeaderFooterSlot::First
                 : type == u"even"                          ? HeaderFooterSlot::Even
                                                            : HeaderFooterSlot::Default;
-            HeaderFooter &target = isHeader ? parts->header(slot) : parts->footer(slot);
+            HeaderFooter &target = *sectionStory(*parts, key, !isHeader, slot, true);
             if (target.document) {
                 continue;
             }
@@ -295,23 +248,6 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
             target.document->setUndoRedoEnabled(true);
             target.document->setModified(false);
             target.sourcePart = part;
-        }
-    }
-    // A first section with no header or footer at all, followed by one that
-    // has them, is a cover page: Word shows nothing there. Write has one set
-    // of headers for the document, so the cover becomes a different first
-    // page with empty slots (unchanged on save: the source sections stay).
-    if (sections.size() > 1) {
-        bool coverHasNone = true;
-        for (const XmlElement *e : sections.first()->elements()) {
-            coverHasNone = coverHasNone && e->name != u"headerReference" && e->name != u"footerReference";
-        }
-        const bool laterHas = parts->header(HeaderFooterSlot::Default).document
-            || parts->footer(HeaderFooterSlot::Default).document;
-        if (coverHasNone && laterHas && !parts->differentFirstPage) {
-            parts->differentFirstPage = true;
-            parts->header(HeaderFooterSlot::First).document = std::make_unique<QTextDocument>();
-            parts->footer(HeaderFooterSlot::First).document = std::make_unique<QTextDocument>();
         }
     }
     if (!env.approximations.isEmpty()) {
@@ -338,29 +274,19 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
     };
     if (!parts->contentControls.isEmpty()) {
         noteControlTexts(*body);
-        for (auto *stories : {&parts->headers, &parts->footers}) {
-            for (const HeaderFooter &story : *stories) {
-                if (story.document) {
-                    noteControlTexts(*story.document);
-                }
-            }
-        }
+        forEachStory(*parts, [&](HeaderFooter &story) { noteControlTexts(*story.document); });
     }
     // Word's line height (docx_metrics.h) and the first lines of list
     // paragraphs after their numbers (docx_list_labels.h): display only,
     // before undo is on.
     applyWordLineMetrics(body);
     layoutListText(body, parts->defaultTabStop);
-    for (auto *stories : {&parts->headers, &parts->footers}) {
-        for (HeaderFooter &story : *stories) {
-            if (story.document) {
-                const bool modified = story.document->isModified();
-                applyWordLineMetrics(story.document.get());
-                layoutListText(story.document.get(), parts->defaultTabStop);
-                story.document->setModified(modified); // untouched: still copied byte for byte
-            }
-        }
-    }
+    forEachStory(*parts, [&](HeaderFooter &story) {
+        const bool modified = story.document->isModified();
+        applyWordLineMetrics(story.document.get());
+        layoutListText(story.document.get(), parts->defaultTabStop);
+        story.document->setModified(modified); // untouched: still copied byte for byte
+    });
     body->setUndoRedoEnabled(undo);
     body->setModified(false);
     return true;

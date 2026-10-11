@@ -3,6 +3,8 @@
 #include "docx_comments.h"
 
 #include "docx_properties.h"
+#include "docx_sections.h"
+#include "docx_styles.h"
 #include "docx_writer_p.h"
 #include "ooxml_namespaces.h"
 #include "ooxml_properties.h"
@@ -86,6 +88,31 @@ void markIgnorable(XmlElement &root)
     }
 }
 
+XmlElementPtr sectionMarkup(const WriteEnv &env, int index)
+{
+    const SectionRef &section = env.sections.at(index);
+    const WordParts &parts = *env.parts;
+    QString markup;
+    SectionSettings was;
+    if (section.closing()) {
+        markup = parts.sourceSectionXml;
+        was = importedClosingSettings(parts);
+    } else {
+        const QTextBlockFormat format = section.end.blockFormat();
+        markup = format.stringProperty(kSectionXml);
+        const QVariantMap snapshot = format.property(kSectionSnapshot).toMap();
+        was = snapshot.isEmpty() ? sectionSettings(format) : SectionSettings::fromMap(snapshot);
+    }
+    XmlElementPtr sectPr = Ooxml::parseFragment(markup);
+    if (!sectPr) {
+        return newSectionElement(section.settings);
+    }
+    if (!(section.settings == was)) {
+        writeSectionSettings(*sectPr, section.settings, was);
+    }
+    return sectPr;
+}
+
 } // namespace detail
 
 using detail::markIgnorable;
@@ -120,108 +147,90 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
         env.sourceStyles = StyleSheet::parse(sourceStyles.get());
     }
     env.numbering = std::make_unique<detail::NumberingBuilder>(sourceNumbering);
-    env.layoutChanged = !source || parts.sourceSectionXml.isEmpty() || !(parts.layout == parts.importedLayout);
-    env.headersChanged = !source || parts.differentFirstPage != parts.importedDifferentFirstPage;
-    for (const auto *list : {&parts.headers, &parts.footers}) {
-        for (const HeaderFooter &hf : *list) {
-            if (hf.document && (hf.document->isModified() || hf.sourcePart.isEmpty())) {
-                env.headersChanged = true;
+    // Sections (M88, D-096): each section's w:sectPr is its own markup,
+    // patched where its settings changed (sectionMarkup), with its own
+    // header and footer references. A section whose stories are as read
+    // keeps its references (the copier carries their parts byte for byte);
+    // otherwise they are written again from its stories, a slot it does not
+    // define left out (Word's Link to Previous).
+    env.body = &body;
+    env.sections = documentSections(body, parts);
+    for (qsizetype i = 0; i + 1 < env.sections.size(); ++i) {
+        env.sectionEnds.insert(env.sections.at(i).end.blockNumber(), int(i));
+    }
+    static const char *kSlots[] = {"default", "first", "even"};
+    auto storiesChanged = [&](int index) {
+        if (!env.copier) {
+            return true;
+        }
+        const SectionRef &section = env.sections.at(index);
+        const XmlElementPtr markup = Ooxml::parseFragment(
+            section.closing() ? parts.sourceSectionXml : section.end.blockFormat().stringProperty(kSectionXml));
+        if (!markup) {
+            return true;
+        }
+        QSet<QString> referenced;
+        for (const XmlElement *ref : markup->elements()) {
+            if (ref->name == u"headerReference" || ref->name == u"footerReference") {
+                referenced.insert(ref->name + wAttr(ref, u"type", QStringLiteral("default")));
             }
         }
-    }
-
-    // Headers and footers first, so the section hook can point at them.
-    struct Reference {
-        bool header;
-        QString slot;
-        QString id;
-    };
-    QList<Reference> references;
-    if (env.headersChanged) {
-        static const char *kSlots[] = {"default", "first", "even"};
         for (int s = 0; s < kHeaderFooterSlots; ++s) {
-            for (const bool header : {true, false}) {
-                const HeaderFooter &hf = header ? parts.headers[size_t(s)] : parts.footers[size_t(s)];
-                if (!hf.document || (hf.document->isEmpty() && hf.sourcePart.isEmpty())) {
-                    continue;
+            for (const bool footer : {false, true}) {
+                const HeaderFooter *story = sectionStory(parts, section.key, footer, HeaderFooterSlot(s));
+                const bool defines = story != nullptr && story->defines();
+                const QString name = (footer ? QStringLiteral("footerReference") : QStringLiteral("headerReference"))
+                    + QString::fromLatin1(kSlots[s]);
+                if (defines != referenced.contains(name)
+                    || (defines && (story->document->isModified() || story->sourcePart.isEmpty()))) {
+                    return true;
                 }
-                QString partName;
-                if (!hf.document->isModified() && !hf.sourcePart.isEmpty() && env.copier) {
-                    partName = env.copier->copyPart(hf.sourcePart);
-                } else {
-                    partName = env.writer.uniquePartName(header ? QStringLiteral("word/header")
-                                                                : QStringLiteral("word/footer"),
-                                                         QStringLiteral(".xml"));
-                    XmlElement root(kW, header ? QStringLiteral("hdr") : QStringLiteral("ftr"));
-                    detail::BodyWriter(env, hf.document.get(), partName).writeFrame(hf.document->rootFrame(), root);
-                    markIgnorable(root);
-                    env.writer.addXmlPart(partName, root, type(header ? "header+xml" : "footer+xml"));
-                }
-                const QString rel = env.writer.addRelationship(
-                    kMain, QString::fromUtf16(header ? Ooxml::RelType::Header : Ooxml::RelType::Footer), partName);
-                references.append({header, QString::fromLatin1(kSlots[s]), rel});
             }
         }
-    }
-    // A paragraph-level section whose page is not the document's as read
-    // has a page of its own (an envelope before a letter, a label sheet,
-    // M77): a new page layout leaves it alone.
-    bool closingSection = false;
-    auto ownPage = [&](const XmlElement &sectPr) {
-        const XmlElement *size = sectPr.child(kW, u"pgSz");
-        if (closingSection || size == nullptr) {
-            return false;
-        }
-        const qreal w = Ooxml::Units::twipsToPx(Ooxml::Units::parseTwips(wAttr(size, u"w"), 0));
-        const qreal h = Ooxml::Units::twipsToPx(Ooxml::Units::parseTwips(wAttr(size, u"h"), 0));
-        return qAbs(w - parts.importedLayout.pageSize.width()) > 1 || qAbs(h - parts.importedLayout.pageSize.height()) > 1;
+        return false;
     };
-    env.sectionHook = [&](XmlElement &sectPr, const QString &part) {
-        if (env.copier) {
-            if (env.headersChanged) {
-                sectPr.removeChildren(kW, u"headerReference");
-                sectPr.removeChildren(kW, u"footerReference");
-            }
-            env.copier->rewrite(sectPr, env.sourceMain, part);
+    // The part a story is written as (or copied from the source).
+    auto storyPart = [&](const HeaderFooter &story, bool footer) {
+        if (!story.document->isModified() && !story.sourcePart.isEmpty() && env.copier) {
+            return env.copier->copyPart(story.sourcePart);
         }
-        if (env.headersChanged) {
+        const QString partName = env.writer.uniquePartName(footer ? QStringLiteral("word/footer")
+                                                                  : QStringLiteral("word/header"),
+                                                           QStringLiteral(".xml"));
+        XmlElement root(kW, footer ? QStringLiteral("ftr") : QStringLiteral("hdr"));
+        detail::BodyWriter(env, story.document.get(), partName).writeFrame(story.document->rootFrame(), root);
+        markIgnorable(root);
+        env.writer.addXmlPart(partName, root, type(footer ? "footer+xml" : "header+xml"));
+        return partName;
+    };
+    env.sectionHook = [&](XmlElement &sectPr, const QString &part, int index) {
+        const SectionRef &section = env.sections.at(index);
+        const bool rebuild = storiesChanged(index);
+        if (rebuild) {
             sectPr.removeChildren(kW, u"headerReference");
             sectPr.removeChildren(kW, u"footerReference");
-            for (const Reference &ref : std::as_const(references)) {
-                XmlElement &e = sectPr.appendElement(kW, ref.header ? QStringLiteral("headerReference")
-                                                                    : QStringLiteral("footerReference"));
-                e.setAttribute(kW, QStringLiteral("type"), ref.slot);
-                e.setAttribute(kR, QStringLiteral("id"), ref.id);
-            }
-            sectPr.removeChildren(kW, u"titlePg");
-            if (parts.differentFirstPage) {
-                sectPr.appendElement(kW, QStringLiteral("titlePg"));
+        }
+        if (env.copier) {
+            env.copier->rewrite(sectPr, env.sourceMain, part);
+        }
+        if (rebuild) {
+            for (const bool footer : {false, true}) {
+                for (int s = 0; s < kHeaderFooterSlots; ++s) {
+                    const HeaderFooter *story = sectionStory(parts, section.key, footer, HeaderFooterSlot(s));
+                    if (story == nullptr || !story->defines()) {
+                        continue;
+                    }
+                    const QString rel = env.writer.addRelationship(
+                        kMain, QString::fromUtf16(footer ? Ooxml::RelType::Footer : Ooxml::RelType::Header),
+                        storyPart(*story, footer));
+                    XmlElement &e = sectPr.appendElement(kW, footer ? QStringLiteral("footerReference")
+                                                                    : QStringLiteral("headerReference"));
+                    e.setAttribute(kW, QStringLiteral("type"), QString::fromLatin1(kSlots[s]));
+                    e.setAttribute(kR, QStringLiteral("id"), rel);
+                }
             }
         }
-        if (env.layoutChanged && !ownPage(sectPr)) {
-            const PageLayout &l = parts.layout;
-            XmlElement &size = detail::wChild(sectPr, QStringLiteral("pgSz"));
-            const QString code = size.attribute(kW, u"code");
-            size.attributes.clear();
-            size.setAttribute(kW, QStringLiteral("w"), detail::twips(l.pageSize.width()));
-            size.setAttribute(kW, QStringLiteral("h"), detail::twips(l.pageSize.height()));
-            if (l.landscape()) {
-                size.setAttribute(kW, QStringLiteral("orient"), QStringLiteral("landscape"));
-            }
-            if (!code.isEmpty() && l.pageSize == parts.importedLayout.pageSize) {
-                size.setAttribute(kW, QStringLiteral("code"), code);
-            }
-            XmlElement &margin = detail::wChild(sectPr, QStringLiteral("pgMar"));
-            margin.attributes.clear();
-            margin.setAttribute(kW, QStringLiteral("top"), detail::twips(l.margins.top()));
-            margin.setAttribute(kW, QStringLiteral("right"), detail::twips(l.margins.right()));
-            margin.setAttribute(kW, QStringLiteral("bottom"), detail::twips(l.margins.bottom()));
-            margin.setAttribute(kW, QStringLiteral("left"), detail::twips(l.margins.left()));
-            margin.setAttribute(kW, QStringLiteral("header"), detail::twips(l.headerDistance));
-            margin.setAttribute(kW, QStringLiteral("footer"), detail::twips(l.footerDistance));
-            margin.setAttribute(kW, QStringLiteral("gutter"), detail::twips(l.gutter));
-        }
-        detail::patchSectionNoteOptions(parts, sectPr, closingSection);
+        detail::patchSectionNoteOptions(parts, sectPr, section.closing());
         detail::sortChildren(sectPr);
     };
 
@@ -232,16 +241,9 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
     detail::BodyWriter bodyWriter(env, &body, kMain);
     bodyWriter.writeFrame(body.rootFrame(), bodyElement);
     bodyWriter.closeComments(bodyElement);
-    XmlElementPtr sectPr = Ooxml::parseFragment(parts.sourceSectionXml);
-    if (!sectPr) {
-        sectPr = std::make_shared<XmlElement>(kW, QStringLiteral("sectPr"));
-        XmlElement &cols = sectPr->appendElement(kW, QStringLiteral("cols"));
-        cols.setAttribute(kW, QStringLiteral("space"), QStringLiteral("720"));
-        sectPr->appendElement(kW, QStringLiteral("docGrid"))
-            .setAttribute(kW, QStringLiteral("linePitch"), QStringLiteral("360"));
-    }
-    closingSection = true;
-    env.sectionHook(*sectPr, kMain);
+    const int closingIndex = int(env.sections.size()) - 1;
+    XmlElementPtr sectPr = detail::sectionMarkup(env, closingIndex);
+    env.sectionHook(*sectPr, kMain, closingIndex);
     bodyElement.appendElement(sectPr);
 
     // Footnotes and endnotes the body references (docx_writer_notes.cpp).

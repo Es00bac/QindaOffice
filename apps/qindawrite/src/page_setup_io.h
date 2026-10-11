@@ -17,6 +17,8 @@
 #include "docx_model.h"
 
 #include <QHash>
+#include <QList>
+#include <QPointF>
 #include <QSizeF>
 #include <QString>
 #include <QStringList>
@@ -30,7 +32,31 @@ namespace QindaOffice::Apps::Write {
 
 struct EndnoteArea;
 
+// One page as the screen, print and PDF draw it (M88, D-096): its section's
+// page and margins, the header and footer it shows (its slot, links to
+// previous sections followed) and what its page fields say.
+struct PageFrame {
+    QSizeF size;             // the page's own size (document px)
+    QPointF origin;          // its top-left on the layout canvas (page_geometry.h)
+    Docx::PageLayout layout; // its section's margins and header / footer distances
+    const QTextDocument *header = nullptr;
+    const QTextDocument *footer = nullptr;
+    int section = 0;          // 0-based, in document order
+    int number = 1;           // the page number it shows (restarts applied)
+    QString numberFormat;     // its section's w:fmt; empty is 1, 2, 3
+    int sectionPages = 1;     // SECTIONPAGES
+    bool firstOfSection = false;
+    // Where the body's text ends on the page when its section's pages hold
+    // less than the canvas (page px; 0: no limit): the body is clipped
+    // there, so a table row Qt stretched to the canvas page's foot, or a
+    // paragraph taller than the page, does not run into the footer.
+    qreal textBottom = 0;
+};
+
 struct PageDecoration {
+    // The uniform page (documents laid out without sections: a merged
+    // copy, an envelope, a label sheet), and with `pages` empty its
+    // header / footer slots below.
     Docx::PageLayout layout;
     // Borrowed from the WriteDocument; valid while it lives and its
     // headers are not replaced (a decoration is used right after it is made).
@@ -46,9 +72,15 @@ struct PageDecoration {
     // Pictures behind and in front of the text are drawn with the body
     // (docx_float.h); the decoration only says whether there are any.
     bool overTextPictures = false;
+    // Every page's own frame (M88, WriteDocument with its sections); empty:
+    // every page is `layout` on the document's page size.
+    QList<PageFrame> pages;
 
     // The pages to draw: the body's, or as many as the endnotes reach.
     [[nodiscard]] int pageCount(int bodyPages) const;
+    // Page `index` (0-based): its own frame, or the uniform one for a
+    // document whose canvas page size is `canvas`.
+    [[nodiscard]] PageFrame frame(int index, const QSizeF &canvas) const;
 
     // The header/footer Word would show on 1-based `page`.
     [[nodiscard]] const QTextDocument *headerFor(int page) const;

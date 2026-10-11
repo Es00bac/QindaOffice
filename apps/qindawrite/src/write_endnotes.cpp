@@ -24,7 +24,7 @@ constexpr qreal kNotePoints = 10;    // Word's Endnote Text
 } // namespace
 
 std::shared_ptr<EndnoteArea> layoutEndnotes(const QTextDocument &body, const QHash<QString, QString> &texts,
-                                            const Docx::NoteOptions &options)
+                                            const Docx::NoteOptions &options, qreal rightPad)
 {
     const QList<EndnoteRef> refs = collectEndnotes(&body, options);
     const QSizeF page = body.pageSize();
@@ -53,7 +53,7 @@ std::shared_ptr<EndnoteArea> layoutEndnotes(const QTextDocument &body, const QHa
     notes->setPageSize(page);
     QTextFrameFormat frame = notes->rootFrame()->frameFormat();
     frame.setLeftMargin(root.leftMargin());
-    frame.setRightMargin(root.rightMargin());
+    frame.setRightMargin(root.rightMargin() + qMax<qreal>(0, rightPad));
     frame.setTopMargin(root.topMargin());
     frame.setBottomMargin(root.bottomMargin());
     notes->rootFrame()->setFrameFormat(frame);

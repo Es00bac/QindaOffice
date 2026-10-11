@@ -13,6 +13,7 @@
 #include "docx_lists.h"
 #include "docx_paragraph_format.h"
 #include "docx_properties.h"
+#include "docx_sections.h"
 #include "docx_writer_p.h"
 #include "ooxml_namespaces.h"
 #include "ooxml_units.h"
@@ -242,7 +243,7 @@ bool BodyWriter::listProperties(XmlElement &pPr, const QTextBlock &block, const 
         const NumberingLevel &level = listDefinition(lf.stringProperty(kListDefinition))->levels[size_t(qBound(0, ref.ilvl, 8))];
         const int left = qRound(Units::pxToTwips(bf.leftMargin()));
         const int hanging = qRound(Units::pxToTwips(bf.doubleProperty(kListHanging)));
-        const int right = qRound(Units::pxToTwips(bf.rightMargin()));
+        const int right = qRound(Units::pxToTwips(ownRightMargin(bf))); // without a section pad (M88)
         pPr.removeChildren(kW, u"ind");
         if (qAbs(left - levelLeft(level)) > 1 || qAbs(hanging - levelHanging(level)) > 1 || right != 0) {
             XmlElement &ind = wChild(pPr, QStringLiteral("ind"));

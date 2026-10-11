@@ -68,6 +68,17 @@ int removeSyntheticBreaks(QTextDocument *document);
 // `pageCount` (pictures included).
 [[nodiscard]] std::unique_ptr<QTextDocument> instantiateHeaderFooter(const QTextDocument &document, int page,
                                                                     int pageCount);
+// What a page's fields show (M88, D-096): PAGE its number in its section's
+// format (a field's own \* switch wins), NUMPAGES the document's pages,
+// SECTIONPAGES its section's.
+struct PageFieldValues {
+    int page = 1;
+    QString pageFormat; // w:pgNumType/@w:fmt; empty is 1, 2, 3
+    int pages = 1;
+    int sectionPages = 1;
+};
+[[nodiscard]] std::unique_ptr<QTextDocument> instantiateHeaderFooter(const QTextDocument &document,
+                                                                    const PageFieldValues &values);
 
 // Paints Word paragraph borders (kParagraphBorders) of the document's
 // top-level paragraphs that meet `clip` (document coordinates; the painter

@@ -2,6 +2,7 @@
 #include "docx_merge.h"
 
 #include "docx_properties.h"
+#include "docx_sections.h"
 #include "docx_table_format.h"
 
 #include <QAbstractTextDocumentLayout>
@@ -190,7 +191,10 @@ MergeResult mergeDocument(QTextDocument *out, const MergeRequest &request)
             QTextCursor mark(out->findBlock(previousEnd));
             QTextBlockFormat format = mark.blockFormat();
             if (!request.sectionXml.isEmpty()) {
-                format.setProperty(kSectionXml, request.sectionXml);
+                // A section of its own (M88, docx_sections.h); the break
+                // flag shows the merged copy paged where no section
+                // layout runs (Preview Results, Merge to PDF).
+                markSectionEnd(format, QString::fromUtf16(kMergeSectionKey), request.sectionXml);
             }
             format.setPageBreakPolicy(format.pageBreakPolicy() | QTextFormat::PageBreak_AlwaysAfter);
             mark.setBlockFormat(format);

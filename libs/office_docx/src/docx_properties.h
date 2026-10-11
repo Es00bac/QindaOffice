@@ -3,8 +3,9 @@
 
 // QTextFormat properties that carry WordprocessingML semantics on a
 // QTextDocument (D-068). Offsets are never reused: append new ones at the
-// end of the M73 block (85 is the last taken) or of the M77 block, which
-// starts at 120 (123 is its last); 86–119 are left to other milestones.
+// end of the M73 block (85 is the last taken), of the M77 block, which
+// starts at 120 (123 is its last), or of the M88 block, which starts at
+// 140 (143 is its last); 86–119 and 124–139 are left to other milestones.
 //
 // Two groups:
 //
@@ -190,6 +191,32 @@ inline constexpr int kPictureFloatSnapshot = kDocxBase + 122; // QVariantMap
 // top of a cell, so a vertically centred (or bottom) cell stays centred in
 // a row Word gives a height (docx_table_format.h refreshRowHeights).
 inline constexpr int kRowPadTop = kDocxBase + 123; // qreal px
+
+// ---- M88 (D-096): Word sections ---------------------------------------------------------
+// Block formats. A paragraph that ends a section (every section but the
+// last: the body's closing w:sectPr is WordParts' own) carries the
+// section's settings (SectionSettings::toMap(), docx_sections.h), the
+// settings the reader mapped (while both are equal the writer keeps the
+// kSectionXml markup, D-068 rule 3) and the section's key, which names its
+// own headers and footers in WordParts::sectionStories. A section made in
+// QindaWrite has a key and settings, and the markup of the section it was
+// split from with that section's settings as its snapshot.
+// AGENT-GUARD: Enter copies a paragraph's format, these three included,
+// into the new paragraph. Of consecutive paragraphs with one key only the
+// LAST ends the section (sectionEnds(), docx_sections.h), which is where
+// Word keeps the break: the paragraph mark that carries it.
+inline constexpr int kSectionSettings = kDocxBase + 140; // QVariantMap
+inline constexpr int kSectionSnapshot = kDocxBase + 141; // QVariantMap
+inline constexpr int kSectionId = kDocxBase + 142;       // QString
+// Display only (QindaWrite's section layout): what a top-level paragraph's
+// (or table's) right margin has on top of its own, so its lines wrap at its
+// section's text width when the page is narrower than the widest section's
+// — {pad px, the right margin that gave}. A right margin that no longer
+// equals the second value was set by a command and is the paragraph's own.
+// AGENT-CONTRACT: ownRightMargin() (docx_sections.h) is what the writer,
+// the snapshot and QindaWrite's ruler and Paragraph dialog read;
+// apps/qindawrite/src/write_sections.cpp sets and clears the pad.
+inline constexpr int kSectionPad = kDocxBase + 143; // QVariantList{qreal, qreal}
 
 // How QindaWrite shows a tracked change: blue underlined insertions, red
 // struck deletions — content colours, the same on screen, paper and PDF.

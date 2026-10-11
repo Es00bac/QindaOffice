@@ -19,6 +19,7 @@ set(qindawrite_qml
     qml/MergeRuleDialog.qml
     qml/NewListDialog.qml
     qml/NoteOptionsDialog.qml
+    qml/PageNumbersDialog.qml
     qml/PeopleDialog.qml
     qml/PictureLayoutDialog.qml
     qml/RecipientListDialog.qml
@@ -92,7 +93,7 @@ qt_add_qml_module(qindawrite_app
         src/write_selection.h
         src/write_actions.cpp src/write_actions.h
         src/write_document.cpp src/write_document.h
-        src/write_document_io.cpp src/write_document_notes.cpp
+        src/write_document_io.cpp src/write_document_notes.cpp src/write_document_sections.cpp
         src/write_endnotes.cpp src/write_endnotes.h
         src/write_envelopes.cpp src/write_envelopes.h
         src/write_float.cpp src/write_float.h
@@ -108,7 +109,10 @@ qt_add_qml_module(qindawrite_app
         src/write_host_menus.cpp
         src/write_host_m77.cpp
         src/write_host_text.cpp
-        src/write_pagination.cpp src/write_pagination.h
+        src/write_host_page.cpp
+        src/write_pagination.cpp src/write_pagination.h src/write_pagination_p.h src/write_pagination_sections.cpp
+        src/write_section_commands.cpp src/write_section_commands.h
+        src/write_sections.cpp src/write_sections.h
         src/write_review_actions.cpp src/write_review_actions.h
         src/write_revisions.cpp src/write_revisions.h
         src/write_toc.cpp src/write_toc.h

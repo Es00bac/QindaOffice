@@ -18,7 +18,9 @@ Tk.Ruler {
     // rulerMarkers carries the left (margin) and right (rightMargin) page
     // margins separately: Word documents rarely have equal ones.
     readonly property real pxPerCm: 96 / 2.54
-    function viewX(docX) { return page.fromContent(Qt.point(docX, 0)).x }
+    // The caret's page: its section's width and margins (M88), left edge
+    // where the view centres it among wider pages.
+    function viewX(docX) { return page.fromContent(Qt.point((m.pageLeft || 0) + docX, 0)).x }
     objectName: "writeRuler"
     width: page.width
     origin: viewX(m.margin)
@@ -32,5 +34,5 @@ Tk.Ruler {
         { id: "indent-left", position: viewX(m.left), kind: "indent-left", draggable: true },
         { id: "indent-right", position: viewX(m.right), kind: "indent-right", draggable: true }
     ]
-    onMarkerMoved: function(id, position) { write.applyRulerMarker(id, page.toContent(Qt.point(position, 0)).x) }
+    onMarkerMoved: function(id, position) { write.applyRulerMarker(id, page.toContent(Qt.point(position, 0)).x - (m.pageLeft || 0)) }
 }

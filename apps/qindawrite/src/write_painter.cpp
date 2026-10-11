@@ -4,6 +4,8 @@
 
 #include "write_painter.h"
 
+#include "docx_sections.h"
+
 #include "docx_format.h"
 #include "docx_metrics.h"
 #include "docx_paragraph_format.h"
@@ -150,6 +152,9 @@ bool FormatPainter::paste()
             for (const int key : kBlockKeys) {
                 take(f, m_block, key);
             }
+            // The own right indent, not the copied paragraph's section pad (M88).
+            f.setProperty(Docx::kSectionPad, block.blockFormat().property(Docx::kSectionPad));
+            Docx::setOwnRightMargin(f, Docx::ownRightMargin(m_block));
             if (block.textList() == nullptr) { // a list item's indents are its level's
                 for (const int key : {int(QTextFormat::BlockLeftMargin), int(QTextFormat::TextIndent)}) {
                     take(f, m_block, key);

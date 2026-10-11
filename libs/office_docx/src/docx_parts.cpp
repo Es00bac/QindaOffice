@@ -2,28 +2,44 @@
 #include "docx_model.h"
 
 #include "docx_float.h"
-#include "ooxml_units.h"
+#include "docx_sections.h"
 
 namespace QindaOffice::Docx {
+
+namespace {
+
+void cloneStory(const HeaderFooter &from, HeaderFooter &to)
+{
+    to.unlinked = from.unlinked;
+    if (from.document) {
+        to.document.reset(from.document->clone());
+        if (hasFloatingPictures(*to.document)) {
+            installPictureHandler(to.document.get());
+        }
+        // A copy is new content: written from its text, not copied as a part.
+        to.document->setModified(true);
+    }
+}
+
+} // namespace
 
 WordParts cloneWordParts(const WordParts &parts)
 {
     WordParts out;
     out.layout = parts.layout;
     for (int s = 0; s < kHeaderFooterSlots; ++s) {
-        for (const bool header : {true, false}) {
-            const HeaderFooter &from = header ? parts.headers[size_t(s)] : parts.footers[size_t(s)];
-            HeaderFooter &to = header ? out.headers[size_t(s)] : out.footers[size_t(s)];
-            if (from.document) {
-                to.document.reset(from.document->clone());
-                if (hasFloatingPictures(*to.document)) {
-                    installPictureHandler(to.document.get());
-                }
-                // A copy is new content: written from its text, not copied as a part.
-                to.document->setModified(true);
-            }
+        cloneStory(parts.headers[size_t(s)], out.headers[size_t(s)]);
+        cloneStory(parts.footers[size_t(s)], out.footers[size_t(s)]);
+    }
+    for (const auto &[key, stories] : parts.sectionStories) {
+        SectionStories &copy = out.sectionStories[key];
+        for (int s = 0; s < kHeaderFooterSlots; ++s) {
+            cloneStory(stories.headers[size_t(s)], copy.headers[size_t(s)]);
+            cloneStory(stories.footers[size_t(s)], copy.footers[size_t(s)]);
         }
     }
+    out.closingFlow = parts.closingFlow;
+    out.importedClosingFlow = parts.importedClosingFlow;
     out.differentFirstPage = parts.differentFirstPage;
     out.differentOddEven = parts.differentOddEven;
     out.footnotes = parts.footnotes;
@@ -52,22 +68,28 @@ WordParts cloneWordParts(const WordParts &parts)
     return out;
 }
 
+void shareStories(WordParts &parts, const QString &key)
+{
+    SectionStories &stories = parts.sectionStories[key];
+    for (int s = 0; s < kHeaderFooterSlots; ++s) {
+        cloneStory(parts.headers[size_t(s)], stories.headers[size_t(s)]);
+        cloneStory(parts.footers[size_t(s)], stories.footers[size_t(s)]);
+    }
+}
+
 QString sectionPropertiesXml(const WordParts &parts)
 {
-    if (!parts.sourceSectionXml.isEmpty()) {
-        return parts.sourceSectionXml;
+    // The source's own, saying what the closing section says now (M88).
+    if (const Ooxml::XmlElementPtr source = Ooxml::parseFragment(parts.sourceSectionXml)) {
+        const SectionSettings now = closingSettings(parts);
+        const SectionSettings was = importedClosingSettings(parts);
+        if (now == was) {
+            return parts.sourceSectionXml;
+        }
+        writeSectionSettings(*source, now, was);
+        return Ooxml::serializeFragment(*source);
     }
-    const PageLayout &l = parts.layout;
-    auto twips = [](qreal px) { return QString::number(qRound(Ooxml::Units::pxToTwips(px))); };
-    return QStringLiteral("<w:sectPr xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">"
-                          "<w:pgSz w:w=\"%1\" w:h=\"%2\"%3/>"
-                          "<w:pgMar w:top=\"%4\" w:right=\"%5\" w:bottom=\"%6\" w:left=\"%7\" w:header=\"%8\""
-                          " w:footer=\"%9\" w:gutter=\"%10\"/><w:cols w:space=\"720\"/></w:sectPr>")
-        .arg(twips(l.pageSize.width()), twips(l.pageSize.height()),
-             l.landscape() ? QStringLiteral(" w:orient=\"landscape\"") : QString(), twips(l.margins.top()),
-             twips(l.margins.right()), twips(l.margins.bottom()), twips(l.margins.left()), twips(l.headerDistance),
-             twips(l.footerDistance))
-        .arg(twips(l.gutter));
+    return Ooxml::serializeFragment(*newSectionElement(closingSettings(parts)));
 }
 
 } // namespace QindaOffice::Docx

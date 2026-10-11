@@ -44,7 +44,6 @@ void PageTextItem::attach(WriteDocument *document, PageTextControl *control)
 {
     m_document = document;
     m_control = control;
-    m_geometry.setPageSize(document->pageSize());
     m_story = std::make_unique<StoryEditor>(document, control);
     m_pictures = std::make_unique<PictureTool>(control);
     connect(m_story.get(), &StoryEditor::openChanged, this, [this] {
@@ -64,10 +63,7 @@ void PageTextItem::attach(WriteDocument *document, PageTextControl *control)
     connect(document->textDocument()->documentLayout(),
             &QAbstractTextDocumentLayout::documentSizeChanged, this,
             [this](const QSizeF &) { updatePageMetrics(); });
-    connect(document, &WriteDocument::pageSetupChanged, this, [this] {
-        m_geometry.setPageSize(m_document->pageSize());
-        updatePageMetrics();
-    });
+    connect(document, &WriteDocument::pageSetupChanged, this, [this] { updatePageMetrics(); });
     connect(document, &WriteDocument::contentChanged, this, [this] { updatePageMetrics(); });
     connect(document, &WriteDocument::commentsChanged, this, [this] { update(); });
     connect(document, &WriteDocument::activeCommentChanged, this, [this] { update(); });
@@ -85,15 +81,29 @@ void PageTextItem::updatePageMetrics()
     if (m_document == nullptr) {
         return;
     }
-    // Preview Results shows a merged copy (M77); the body's endnotes may
-    // run past its last page (write_endnotes.h).
-    const QTextDocument *shown = m_preview != nullptr ? m_preview.data() : m_document->textDocument();
-    int pages = m_geometry.pageCount(shown->documentLayout()->documentSize().height());
-    if (m_preview == nullptr) {
-        pages = m_document->decoration().pageCount(pages);
+    // Preview Results shows a merged copy (M77) on uniform pages; the body
+    // shows every page at its own section's size (M88), its endnotes
+    // running on past its last page (write_endnotes.h).
+    int pages = 1;
+    if (m_preview != nullptr) {
+        m_geometry.setPageSize(m_preview->pageSize());
+        m_geometry.setPages({});
+        pages = m_geometry.pageCount(m_preview->documentLayout()->documentSize().height());
+    } else {
+        m_geometry.setPageSize(m_document->pageSize());
+        const QList<PageFrame> &frames = m_document->pageFrames();
+        QList<PageGeometry::Page> shown;
+        bool uniform = true;
+        for (qsizetype i = 0; i < frames.size(); ++i) {
+            shown.append({frames.at(i).size, frames.at(i).origin});
+            uniform = uniform && frames.at(i).size == m_document->pageSize()
+                && frames.at(i).origin == QPointF(0, i * m_document->pageSize().height());
+        }
+        m_geometry.setPages(uniform ? QList<PageGeometry::Page>() : shown);
+        pages = qMax(1, int(frames.size()));
     }
-    setImplicitWidth(m_geometry.pageSize().width());
-    setImplicitHeight(m_geometry.documentHeight(pages * m_geometry.pageHeight()));
+    setImplicitWidth(m_geometry.stackWidth(pages));
+    setImplicitHeight(m_geometry.stackHeight(pages));
     if (pages != m_pageCount) {
         m_pageCount = pages;
         emit pageCountChanged();
@@ -242,7 +252,7 @@ bool PageTextItem::openStoryAt(QMouseEvent *event)
 {
     QPointF pagePos;
     const int index = pageAt(event->position(), &pagePos);
-    const StoryEditor::Kind zone = index >= 0 ? m_story->zoneAt(pagePos) : StoryEditor::Kind::None;
+    const StoryEditor::Kind zone = index >= 0 ? m_story->zoneAt(index, pagePos) : StoryEditor::Kind::None;
     if (zone == StoryEditor::Kind::None || !m_story->open(zone, index)) {
         return false;
     }

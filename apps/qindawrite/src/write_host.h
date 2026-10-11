@@ -55,6 +55,7 @@ class EnvelopesController;
 class MailMergeController;
 class NotesController;
 class PictureLayoutController;
+class SectionsController;
 
 class WriteHost : public Quick::DocumentHost {
     Q_OBJECT
@@ -70,7 +71,8 @@ class WriteHost : public Quick::DocumentHost {
     Q_PROPERTY(QVariantMap rulerMarkers READ rulerMarkers NOTIFY rulerChanged)
     // {width, height, left, top, right, bottom, headerDistance,
     // footerDistance, landscape, differentFirstPage, header, footer,
-    // headerRich, footerRich}
+    // headerRich, footerRich} of the caret's section, plus (M88) its
+    // sectionStart, section (1-based) and the document's sections
     Q_PROPERTY(QVariantMap pageSetup READ pageSetup NOTIFY pageSetupChanged)
     Q_PROPERTY(QUrl preferencesPageUrl READ preferencesPage WRITE setPreferencesPage NOTIFY preferencesPageChanged)
     Q_PROPERTY(QindaOffice::Ai::AssistantController *assistant READ assistant CONSTANT)
@@ -98,6 +100,10 @@ class WriteHost : public Quick::DocumentHost {
     Q_PROPERTY(QObject *envelopes READ envelopesObject CONSTANT)
     Q_PROPERTY(QObject *notes READ notesObject CONSTANT)
     Q_PROPERTY(QObject *pictureLayout READ pictureLayoutObject CONSTANT)
+    // Word sections (M88, D-096): breaks, orientation, Link to Previous,
+    // Different First Page / Odd & Even, Format Page Numbers
+    // (write_section_commands.h).
+    Q_PROPERTY(QObject *sections READ sectionsObject CONSTANT)
 public:
     WriteHost();
     ~WriteHost() override;
@@ -124,6 +130,7 @@ public:
     [[nodiscard]] EnvelopesController *envelopesController() const { return m_envelopes; }
     [[nodiscard]] NotesController *notesController() const { return m_notes; }
     [[nodiscard]] PictureLayoutController *pictureLayoutController() const { return m_pictureLayout; }
+    [[nodiscard]] SectionsController *sectionsController() const { return m_sections; }
     // A Word package opened in a window of its own, untitled and unsaved
     // (a merged document, an envelope, a label sheet — M77): the next
     // QindaWrite window this process creates adopts it (write_host_m77.cpp).
@@ -157,7 +164,10 @@ public:
     [[nodiscard]] QVariantMap pageSetup() const;
     // {width, height, left, top, right, bottom, headerDistance,
     // footerDistance} in document px, plus differentFirstPage, header,
-    // footer (plain patterns; {page}/{pages}).
+    // footer (plain patterns; {page}/{pages}); M88: applyTo ("section",
+    // "forward", "document"; the whole document by default) and
+    // sectionStart ("nextPage", "continuous", "evenPage", "oddPage").
+    // One undo step.
     Q_INVOKABLE void applyPageSetup(const QVariantMap &setup);
     // The selected picture for the Picture dialog: width/height and its
     // natural size (document px), alt text; empty without a picture.
@@ -223,6 +233,9 @@ protected:
     void applyPreferences() override;
     void documentReplaced() override;
     [[nodiscard]] Quick::PrintRenderCallback printRenderCallback() const override;
+    // The first page's paper (M88: each later page sets its own).
+    [[nodiscard]] bool printPrefersLandscape() const override;
+    [[nodiscard]] std::optional<QPageLayout> printPageLayout() const override;
 
 private:
     // write_host.cpp
@@ -252,6 +265,7 @@ private:
     [[nodiscard]] QObject *envelopesObject() const;
     [[nodiscard]] QObject *notesObject() const;
     [[nodiscard]] QObject *pictureLayoutObject() const;
+    [[nodiscard]] QObject *sectionsObject() const;
     void insertPageField(bool total);
     void syncStoryActions();
     void createSpellingEntries();
@@ -265,6 +279,7 @@ private:
 
     WriteDocument *m_document = nullptr;
     PageTextControl *m_control = nullptr;
+    const QStringList m_fontFamilies;
     QPointer<PageTextItem> m_page;
     FormatController *m_format = nullptr;
     TableController *m_tables = nullptr;
@@ -284,6 +299,7 @@ private:
     EnvelopesController *m_envelopes = nullptr;
     NotesController *m_notes = nullptr;
     PictureLayoutController *m_pictureLayout = nullptr;
+    SectionsController *m_sections = nullptr;
     std::shared_ptr<QTextDocument> m_printOverride;
     WriteReviewActions *m_review = nullptr;
     SpellChecker *m_spell = nullptr;

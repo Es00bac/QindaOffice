@@ -5,8 +5,11 @@ import QindaOffice.Shell
 // QindaWrite's ribbon (D-041): File · Home · Insert · Layout · References ·
 // Mailings · Review · View, plus the contextual Table Design and Table
 // Layout tabs while the cursor is in a table (M70, D-079: Word's shading,
-// borders and pen, cell size, alignment, data and properties) and Picture
-// Format while a picture is selected (M77, D-086: Wrap Text, Position). Every string is an ActionEntry id
+// borders and pen, cell size, alignment, data and properties), Picture
+// Format while a picture is selected (M77, D-086: Wrap Text, Position) and
+// Header & Footer while one is open (M88, D-096: page numbers, Different
+// First Page, Different Odd & Even Pages, Link to Previous; Layout has
+// Orientation and Breaks per section). Every string is an ActionEntry id
 // (AGENTS.md rule 5); icons given here only fill in for entries whose menu
 // rows carry none. The slots are the window's font, size and colour
 // widgets, and the border pen and shading pickers.
@@ -57,6 +60,12 @@ QtObject {
                                     "writeWrapThroughAction", "writeWrapTopBottomAction", "writeWrapBehindAction",
                                     "writeWrapFrontAction", "|", "writeMoveWithTextAction", "writeFixPositionAction", "|",
                                     "writePictureLayoutAction"]
+
+    // Word sections (M88, D-096).
+    readonly property var breakIds: ["insertPageBreakAction", "|", "writeSectionBreakNextPageAction",
+                                     "writeSectionBreakContinuousAction", "writeSectionBreakEvenPageAction",
+                                     "writeSectionBreakOddPageAction"]
+    readonly property var orientationIds: ["writeOrientationPortraitAction", "writeOrientationLandscapeAction"]
 
     readonly property var aiIds: ["writeAirewrite", "writeAishorten", "writeAiexpand", "writeAigrammar",
                                   "writeAisummarize", "writeAicontinue", "writeAiexplain"]
@@ -120,6 +129,7 @@ QtObject {
                 { action: "writeEditFooterAction", iconName: "panel-bottom" },
                 { action: "writeInsertPageNumberAction", iconName: "hash" },
                 { action: "writeInsertPageCountAction", iconName: "sigma" },
+                { action: "writePageNumberFormatAction", iconName: "list-ordered" },
                 { action: "writeCloseHeaderFooterAction", iconName: "x" }] },
             { id: "tables", label: qsTr("Tables"), items: [{ action: "insertTableAction", size: "large" },
                                                           { action: "writeTextToTableAction", iconName: "table-2" }] },
@@ -138,6 +148,8 @@ QtObject {
         { id: "layout", label: qsTr("Layout"), keyTip: "L", groups: [
             { id: "pageSetup", label: qsTr("Page"), items: [
                 { action: "writePageSetupAction", size: "large", iconName: "file-text" },
+                { id: "orientation", label: qsTr("Orientation"), iconName: "rotate-cw", menu: orientationIds },
+                { id: "breaks", label: qsTr("Breaks"), iconName: "separator-horizontal", menu: breakIds },
                 "insertColumnsAction"] },
             { id: "spacing", label: qsTr("Spacing"), items: [
                 { action: "formatLineSpacingSingleAction", iconName: "rows-2" },
@@ -215,6 +227,21 @@ QtObject {
             { action: "writeNavigationPaneAction", size: "large", iconName: "navigation" },
             { action: "writeStylesPaneAction", iconName: "palette" },
             { action: "writeShowCommentsAction", iconName: "message-square" }] }]),
+        { id: "headerFooterTools", label: qsTr("Header & Footer"), keyTip: "JH", contextId: "headerFooter", groups: [
+            { id: "headerFooterInsert", label: qsTr("Insert"), items: [
+                { action: "writeInsertPageNumberAction", size: "large", iconName: "hash" },
+                { action: "writeInsertPageCountAction", iconName: "sigma" },
+                { action: "writePageNumberFormatAction", iconName: "list-ordered" }] },
+            { id: "headerFooterOptions", label: qsTr("Options"), items: [
+                { action: "writeDifferentFirstPageAction", iconName: "file-text" },
+                // AGENT-NOTE: QindaTK's RibbonSlot hands RibbonButton the
+                // action's plainText, which strips '&' once more: a literal
+                // '&' needs this label (with Qt's "&&").
+                { action: "writeDifferentOddEvenAction", iconName: "book-open", label: qsTr("Different Odd && Even Pages") },
+                { action: "writeLinkToPreviousAction", iconName: "link" }] },
+            { id: "headerFooterClose", label: qsTr("Close"), items: [
+                { action: "writeCloseHeaderFooterAction", size: "large", iconName: "x" }] }
+        ] },
         { id: "pictureFormat", label: qsTr("Picture Format"), keyTip: "JP", contextId: "picture", groups: [
             { id: "pictureArrange", label: qsTr("Arrange"), items: [
                 { id: "wrapText", label: qsTr("Wrap Text"), iconName: "wrap-text", size: "large", menu: wrapIds },

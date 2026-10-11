@@ -264,7 +264,7 @@ void TableLayoutController::autoFit(int mode)
     if (QTextTable *t = table()) {
         QTextCursor edit = m_control->textCursor();
         edit.beginEditBlock();
-        Docx::autoFit(t, Docx::AutoFit(mode), m_document->contentWidth());
+        Docx::autoFit(t, Docx::AutoFit(mode), m_document->contentWidthAt(m_control->textCursor().position()));
         edit.endEditBlock();
         m_document->setDirty(true);
     }
@@ -285,7 +285,7 @@ void TableLayoutController::distribute(bool rows)
     if (rows) {
         Docx::distributeRows(t, range);
     } else {
-        Docx::distributeColumns(t, range, m_document->contentWidth());
+        Docx::distributeColumns(t, range, m_document->contentWidthAt(m_control->textCursor().position()));
     }
     edit.endEditBlock();
     m_document->setDirty(true);
@@ -348,7 +348,7 @@ QVariantMap TableLayoutController::propertiesInfo() const
     const Docx::CellRange range = Docx::selectedCells(m_control->textCursor());
     const Docx::TableProperties p = Docx::tableProperties(t);
     const Docx::RowProperties row = Docx::rowProperties(t, range.row);
-    const QList<int> widths = Docx::columnWidths(t, m_document->contentWidth());
+    const QList<int> widths = Docx::columnWidths(t, m_document->contentWidthAt(m_control->textCursor().position()));
     const QTextTableCellFormat cell = t->cellAt(range.row, range.column).format().toTableCellFormat();
     const Docx::CellMargins own = Docx::cellMargins(t, range.row, range.column);
     const Qt::Alignment a = p.alignment;
@@ -402,7 +402,7 @@ bool TableLayoutController::applyProperties(const QVariantMap &answer)
         p.indent = m.value(QStringLiteral("indent")).toInt();
         p.layout = m.value(QStringLiteral("layout")).toString() == u"fixed" ? QStringLiteral("fixed") : QStringLiteral("autofit");
         p.margins = marginsOf(m.value(QStringLiteral("margins")).toMap());
-        Docx::setTableProperties(t, p, m_document->contentWidth());
+        Docx::setTableProperties(t, p, m_document->contentWidthAt(m_control->textCursor().position()));
     }
     if (changed.contains(u"row")) {
         const QVariantMap m = answer.value(QStringLiteral("row")).toMap();
@@ -419,7 +419,7 @@ bool TableLayoutController::applyProperties(const QVariantMap &answer)
     if (changed.contains(u"column")) {
         const int width = answer.value(QStringLiteral("column")).toMap().value(QStringLiteral("width")).toInt();
         for (int c = range.column; c < range.column + range.columns && width > 0; ++c) {
-            Docx::setColumnWidth(t, c, width, m_document->contentWidth());
+            Docx::setColumnWidth(t, c, width, m_document->contentWidthAt(m_control->textCursor().position()));
         }
     }
     if (changed.contains(u"cell")) {
@@ -511,7 +511,7 @@ bool TableLayoutController::applyTextToTable(const QVariantMap &answer)
     QTextCursor cursor = m_control->textCursor();
     QTextCursor edit(m_control->document());
     edit.beginEditBlock();
-    QTextTable *made = textToTable(cursor, answer.value(QStringLiteral("columns"), 1).toInt(), s, m_document->contentWidth());
+    QTextTable *made = textToTable(cursor, answer.value(QStringLiteral("columns"), 1).toInt(), s, m_document->contentWidthAt(m_control->textCursor().position()));
     edit.endEditBlock();
     if (made == nullptr) {
         return false;

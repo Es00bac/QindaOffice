@@ -9,10 +9,12 @@
 # and Word's lists and styles (M73: tst_docx_lists, tst_docx_styles), and
 # M77 (D-086): mail merge, envelopes and labels, endnotes and floating
 # pictures (tst_docx_mailmerge, tst_docx_envelopes, tst_docx_notes,
-# tst_docx_floats; each renders a sample through LibreOffice when present).
+# tst_docx_floats; each renders a sample through LibreOffice when present), and
+# M88 (D-096): Word sections (tst_docx_sections: the section model, linked
+# headers, untouched sections kept, LibreOffice's page size per page).
 foreach(name IN ITEMS tst_docx_corpus tst_docx_read tst_docx_write tst_docx_restyle tst_docx_comments
                       tst_docx_tables tst_docx_paragraphs tst_docx_controls tst_docx_lists tst_docx_styles
-                      tst_docx_mailmerge tst_docx_envelopes tst_docx_notes tst_docx_floats)
+                      tst_docx_mailmerge tst_docx_envelopes tst_docx_notes tst_docx_floats tst_docx_sections)
     add_executable(${name} ${name}.cpp docx_fixture.h docx_roundtrip.h)
     target_link_libraries(${name} PRIVATE office_docx office_ooxml Qt6::Test Qt6::Gui)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/tests)

@@ -174,7 +174,7 @@ void BodyWriter::writeBlock(const QTextBlock &block, XmlElement &container, bool
     XmlElement &p = container.appendElement(kW, QStringLiteral("p"));
     if (XmlElementPtr pPr = paragraphProperties(block)) {
         if (XmlElement *sectPr = pPr->child(kW, u"sectPr")) {
-            m_env.sectionHook(*sectPr, m_part);
+            m_env.sectionHook(*sectPr, m_part, m_env.sectionEnds.value(block.blockNumber()));
         }
         p.appendElement(pPr);
     }

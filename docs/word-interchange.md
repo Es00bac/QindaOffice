@@ -28,20 +28,29 @@ and the status bar says "Too large for crash recovery … save often".
 The body is a `QTextDocument`; `Docx::WordParts` (`docx_model.h`) holds the
 rest and `WriteDocument` owns both:
 
-- **Page layout** — paper size, orientation, four margins, header and footer
-  distances, gutter. Layout ▸ Page Setup edits all of it (Letter, Legal,
-  Tabloid, Executive, A3–A5, B5, #10 envelope or custom; inches or cm).
+- **Sections** (M88, D-096; `docx_sections.h`, below) — every `w:sectPr`:
+  page size and orientation, four margins, gutter, header and footer
+  distances, Different First Page (`w:titlePg`), page numbering
+  (`w:pgNumType`: restart, format, chapter style), columns (`w:cols`), how
+  the section starts (`w:type`), vertical alignment; what is not modelled
+  (`w:lnNumType`, `w:docGrid`, page borders, paper source) stays in its
+  markup. Layout ▸ Page Setup edits a section's page (Letter, Legal,
+  Tabloid, Executive, A3–A5, B5, #10 envelope or custom; inches or cm)
+  with Word's "Apply to": this section, this point forward, whole document.
 - **Headers and footers** — rich `QTextDocument`s per slot (default, first
-  page, even pages) with pictures and PAGE / NUMPAGES fields; "different
-  first page" in Page Setup. An untouched header is copied back byte for
-  byte. They are edited in place as in Word (`page_story_editor.h`):
-  double-click the top or bottom margin band, or Insert ▸ Edit Header /
-  Edit Footer; the page's own slot opens (first page, even page), every
-  formatting command, Undo and the clipboard work on it, Page Number and
-  Number of Pages insert fields, and Esc, Close Header and Footer or a
-  double-click on the text return. The Page Setup text fields still edit
-  the default slot as a plain pattern (`{page}` / `{pages}`) and warn when
-  that would replace a richer header.
+  page, even pages) and per section, with pictures and PAGE / NUMPAGES /
+  SECTIONPAGES fields. A slot a section does not have is linked to the
+  previous section's (Word's Link to Previous). An untouched header is
+  copied back byte for byte. They are edited in place as in Word
+  (`page_story_editor.h`): double-click the top or bottom margin band, or
+  Insert ▸ Edit Header / Edit Footer; the page's own section and slot open
+  (first page, even page) — a linked one edits the previous section's, as
+  the band's "Same as Previous" says — every formatting command, Undo and
+  the clipboard work on it, Page Number and Number of Pages insert fields,
+  and Esc, Close Header and Footer or a double-click on the text return.
+  The Page Setup text fields edit the caret's section's default slot as a
+  plain pattern (`{page}` / `{pages}`) and warn when that would replace a
+  richer header.
 - **Footnotes and endnotes** — Write's markers and note texts; an unedited
   note keeps Word's own markup, and an endnotes part whose notes are all
   still referenced and unchanged is copied byte for byte (M77, below).
@@ -106,6 +115,62 @@ rest and `WriteDocument` owns both:
   fonts, the endnotes part while its notes are unchanged, custom XML,
   glossary, people, VBA (macro kinds only), and the comment parts while no
   comment changed.
+
+## Sections (M88, D-096)
+
+Word's sections, under Word's names, on Word's model:
+
+- **Layout ▸ Breaks ▸ Section Break** (Next Page, Continuous, Even Page,
+  Odd Page; also Page ▸ Breaks): the paragraph splits at the caret and the
+  part before it becomes a section of its own — the section's settings
+  and markup, and its headers and footers; the part after starts at the
+  break (its page numbers continue) and links its headers to them ("Same
+  as Previous"). Backspace at the start of a section, or Delete before its
+  break, takes the break away as in Word: the section joins the next one
+  and takes its settings, and the headers the next one showed through its
+  links go to it; joining two paragraphs keeps the second one's break.
+- **Layout ▸ Orientation** (Portrait, Landscape; Page ▸ Orientation) turns
+  the caret's section's paper and its margins with it; **Page Setup** acts
+  on this section, this point forward (a next-page break at the caret
+  first) or the whole document, and sets how the section starts.
+- **Header & Footer** (Insert, and Word's contextual tab while one is
+  open): **Link to Previous** for the open slot of a section (off copies
+  what it showed into a story of its own; on drops it), **Different First
+  Page** per section, **Different Odd & Even Pages** (the document's, as
+  in Word), **Format Page Numbers…** (1, 2, 3 / - 1 - / a, b, c / A, B, C /
+  i, ii, iii / I, II, III; continue from the previous section or start at
+  a number). PAGE shows the page's number in its section's format (a
+  field's own `\* roman` wins), NUMPAGES the document's pages,
+  SECTIONPAGES the section's.
+- **Each page is its section's** (`write_sections.h`): its size and
+  orientation, margins, header and footer, number, on screen (pages of
+  different sizes stacked and centred, as Word's Print Layout), on paper
+  and in PDF (each page's size set before the next page starts). The
+  ruler follows the caret's section.
+
+How it is laid out: Qt paginates a document with one page size, so the
+body is laid out on a canvas whose text column is the widest section's
+and whose text area is the tallest's (its margins the last section's, so
+a one-section document lays out as before). A narrower section's
+paragraphs and tables carry a display-only right-margin pad
+(`kSectionPad`), so their lines wrap at its own width; in a shorter
+section the pagination pass breaks the page where its own text area ends
+— before a paragraph, or between two table rows (Qt repeats the header
+rows) — and a section that starts on a new page gets a page break, with
+a blank page before an odd or even page start that would land on the
+wrong page. Each page shows its section's part of the canvas page it was
+laid out on. Child `QTextFrame`s would give a section its width, but a
+selection across two of them takes both whole frames
+(`tst_write_probe_sections`), so sections are not frames.
+
+Every command is a persistent action (`writeSectionBreakNextPageAction`,
+`writeSectionBreakContinuousAction`, `writeSectionBreakEvenPageAction`,
+`writeSectionBreakOddPageAction`, `writeOrientationPortraitAction`,
+`writeOrientationLandscapeAction`, `writeLinkToPreviousAction`,
+`writeDifferentFirstPageAction`, `writeDifferentOddEvenAction`,
+`writePageNumberFormatAction`) in the menus (Page ▸ Breaks, Page ▸
+Orientation, Insert) and on the ribbon (Layout ▸ Page, Insert ▸ Header &
+Footer, the Header & Footer contextual tab), and one undo step.
 
 ## Styles in a Word document
 
@@ -440,7 +505,8 @@ closed with state the writer ignores (D-068):
 | keeps a row's `trHeight` minimum | has no row heights | the row's first cell is padded (top and bottom alike when its text is centred, so it stays centred), again after a merge or Update Labels (`refreshRowHeights`, M77) |
 | draws paragraph borders | has none | `drawParagraphBorders` paints them |
 | pushes the body below a tall header | overlaps | the root frame margin grows |
-| shows no header on a header-less cover section | one header set | different first page with empty slots |
+| lays each section out on its own page size and margins (M88) | one page size | a canvas as wide as the widest section's text and as tall as the tallest's; a narrower section's paragraphs and tables get a right-margin pad (`kSectionPad`), a shorter section's pages break where its text area ends (before a paragraph, between two table rows); each page shows its section's part of the canvas (`write_sections.h`) |
+| starts a section on the next, an even or an odd page (`w:type` of the section that starts) | — | a page break before its first paragraph or table, and a blank page before an odd / even start that would land on the wrong page (`write_pagination`) |
 | spaces paragraphs marked for HTML autospacing (`w:beforeAutospacing` / `w:afterAutospacing`) by HTML's rules: 14 pt, none between items of one list or at a table cell's edges, adjacent spaces collapsing to the larger | uses the spacing values stored beside the flag | the reader computes Word's gap and folds it like the first row |
 | keeps a keep-with-next paragraph (headings) on the page of the next one | breaks anywhere | a page break before the run (`write_pagination`) |
 | keeps a table's keep-with-next leading rows together | splits between any rows | a page break before the table |
@@ -448,9 +514,11 @@ closed with state the writer ignores (D-068):
 | sets a single line from the font's Windows metrics (OS/2 win ascent + descent, plus the hhea gap beyond them) | ascent + descent + leading, rounded up | a LineDistanceHeight of the difference (`docx_metrics.h`; the paragraph's own spacing kept in `kLineSpacingOwn`) |
 
 The pagination breaks (`Docx::kSyntheticBreak`, which keeps the block's own
-break flags) are laid out again after edits from the first changed
-paragraph on, joined to the user's last undo step so Undo, Redo and the
-modified flag never show them; the `.docx` and HTML writers ignore them.
+break flags; a table row's on the last paragraph of a cell of the row
+before) and the section pads are laid out again after edits from the
+first changed paragraph on (from the start when a pad changed), joined to
+the user's last undo step so Undo, Redo and the modified flag never show
+them; the `.docx` and HTML writers ignore them.
 
 ## Writing (`docx_writer*`)
 
@@ -465,6 +533,19 @@ above). The styles part is the edited one once a style command ran.
 New content gets complete definitions: built-in styles mirroring
 `StyleCatalog` (and Word's other built-ins on first use), nine-level
 numbering, `Table Grid`, footnote styles.
+
+Sections (M88): each section's `w:sectPr` is written from its markup
+while its settings are as read — byte for byte apart from relationship
+ids, its header and footer references in their order, their parts copied —
+and patched element by element where they changed (`w:pgSz` keeps its
+paper code when the paper only turned, `w:cols` its column list while the
+count is the same); a section made in Write starts from the markup of the
+section it was split from. A section whose headers or footers changed, or
+whose links did, gets its references written again from its stories, a
+slot it does not define left out (Word's Link to Previous); an empty
+story with Link to Previous off is written as an empty part. A paragraph
+that no longer ends a section (its break taken away, or a copy Enter made
+before the real one) is written without the `w:sectPr` its markup had.
 
 The output is ECMA-376 Transitional with Word's prefixes; Microsoft
 extension namespaces are declared `mc:Ignorable`; package parts use the
@@ -485,8 +566,26 @@ Session Review panel) and *Open in QindaWrite* write a page through
 
 ## Known limits
 
-- One set of headers/footers and one page layout for the whole document;
-  a multi-section document keeps its sections on save while untouched.
+- Sections (M88): a paragraph that would run past a shorter section's page
+  (a landscape section of a portrait document) moves to the next page
+  whole — a page break before a paragraph cannot split it, Word splits it
+  — so such pages can end a few lines early; a table row or a paragraph
+  taller than a shorter section's page runs past it and is clipped at its
+  foot. A continuous section break with other left or right margins on
+  the same page is shown with that page's left margin (its width is its
+  own). Columns (`w:cols`) are kept and written but laid out in one column
+  (Qt's text layout has none). Chapter numbers in page numbers
+  (`w:chapStyle`) are kept, not shown. Floating pictures placed relative to
+  the page or a margin use the widest and tallest section's page. A
+  section's page-number restart applies on its first page of its own (a
+  continuous section starting mid-page restarts on the next page). Odd /
+  even page section starts go by the physical page; even-page headers by
+  the page number shown. A paragraph pasted into the middle of a section's
+  last paragraph can leave the break before the pasted text's last
+  paragraph; deleting a selection across a section break keeps the break
+  at the joined paragraph (Backspace and Delete across one take it away
+  as Word does). The blank page an odd / even section start leaves is
+  shown in the view (Word's Print Layout hides it; both print it).
 - Pagination follows Word's keep rules and line metrics (above), read from
   the font actually drawn: install the metric-compatible clones of Office's
   fonts (`media-fonts/crosextrafonts-carlito` for Calibri,
@@ -499,8 +598,8 @@ Session Review panel) and *Open in QindaWrite* write a page through
   page breaks agree with it): 156 exact (74 %), 198 within one page (94 %).
   What is left is mostly fonts: Aptos, Office's default since 2023, has no
   metric-compatible free clone, so Aptos documents lay out about 13 %
-  shorter; documents with several sections (one page layout in Write) run
-  longer.
+  shorter. Since M88 each section is laid out on its own page, and a
+  continuous section break no longer starts a page.
 - A widow (a paragraph's last line alone at a page top) is left alone when
   the paragraph has three lines or more: a block format cannot break inside
   a paragraph. Keep rules inside a table apply to its leading rows only.
@@ -577,9 +676,14 @@ patched check box / list / date / bound text, a copy without its id),
 `tst_docx_comments` (ranges, replies, resolved state; untouched set copied,
 edited / new / deleted comments written, header-only comments kept),
 `tst_docx_corpus` (`QQO_DOCX_CORPUS` lists real documents: read, write,
-re-read, compare; aggregate counts only), and M77's `tst_docx_mailmerge`,
+re-read, compare; aggregate counts only), M77's `tst_docx_mailmerge`,
 `tst_docx_envelopes`, `tst_docx_notes` and `tst_docx_floats` (below and in
-verification.md). `tests/qindawrite/tst_write_docx`
+verification.md), and M88's `tst_docx_sections` (a portrait / landscape /
+portrait document with its own margins, headers, a page-number restart and
+two columns read, written, schema-valid and read back equal; untouched
+sections byte for byte; sections made in code with linked and unlinked
+headers; odd and even page breaks; LibreOffice renders each page at its
+section's size). `tests/qindawrite/tst_write_docx`
 covers WriteDocument (layout, headers, pictures, recovery, HTML, legacy
 formats through LibreOffice), `tst_write_comments` the Comments pane and
 its commands through the real window, `tst_write_mailings`,
@@ -589,7 +693,12 @@ and floating pictures through the real window, `tst_write_tables` and
 real window (M70), `tst_write_lists` and `tst_write_styles` the list
 libraries, dialogs and keys, the Styles pane, gallery, New / Modify /
 Update / Delete Style, Clear Formatting, the Format Painter and the
-Navigation pane through the real window (M73), `tst_write_controls` filling in a
+Navigation pane through the real window (M73), `tst_write_sections` and
+`tst_write_probe_sections` (M88: Qt's frame facts; a section break and a
+landscape section with Undo, each page's size on screen and in PDF,
+headers with Link to Previous, a roman page-number restart, keep rules in
+a shorter section, a Word document with three sections, grabs),
+`tst_write_controls` filling in a
 form (check box, list, calendar, placeholder) through the real window and renders listed documents to PDF for
 review (`QQO_WRITE_RENDER_DOCX` + `QQO_GRAB_DIR`). `tests/qindanote/tst_note_word`
 exports a page with every block kind and ink, validates it, reads it back
