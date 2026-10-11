@@ -42,6 +42,8 @@ See [equations.md](equations.md) for the editor and interchange contract.
 Double-click editing selects only the object at the reported character;
 menu/keyboard editing may also inspect the character before the caret.
 This keeps adjacent graphic clicks from opening the equation editor.
+The text control resolves the painted object span before WordUnderCursor,
+which otherwise groups adjacent object replacements into one selection.
 Equation insertion uses the surrounding typing format; replacing a graphic
 must not carry its drawing identity into the math object or DOCX writer.
 

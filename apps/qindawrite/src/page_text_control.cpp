@@ -401,12 +401,33 @@ bool PageTextControl::mouse(QMouseEvent *event)
         if (event->button() != Qt::LeftButton) {
             return false;
         }
+        const int hit = cursorForPosition(pos).position();
+        // AGENT-GUARD: WordUnderCursor groups adjacent object-replacement
+        // characters as one word. Resolve the painted character span first,
+        // or a double-click edits the wrong inline object (or neither).
+        for (const int at : {hit, hit - 1}) {
+            if (at < 0 || at >= m_document->characterCount() - 1) continue;
+            QTextCursor object(m_document); object.setPosition(at);
+            const QRectF startRect = cursorRect(object);
+            object.setPosition(at + 1, QTextCursor::KeepAnchor);
+            if (object.selectedText() != QString(QChar::ObjectReplacementCharacter)) continue;
+            QTextCursor end(m_document); end.setPosition(at + 1);
+            const qreal x1 = cursorRect(end).x();
+            if (pos.y() < startRect.top() || pos.y() > startRect.bottom()
+                || pos.x() < qMin(startRect.x(), x1) || pos.x() >= qMax(startRect.x(), x1)) continue;
+            m_cursor = object;
+            m_dragging = false;
+            m_formatPinned = false;
+            cursorSettled(false);
+            emit doubleClicked(at);
+            return true;
+        }
         m_cursor = cursorForPosition(pos);
         m_cursor.select(QTextCursor::WordUnderCursor);
         m_dragging = false;
         m_formatPinned = false;
         cursorSettled(false);
-        emit doubleClicked(m_cursor.position());
+        emit doubleClicked(hit);
         return true;
     }
     if (event->type() == QEvent::MouseMove) {

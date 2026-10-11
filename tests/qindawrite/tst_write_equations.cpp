@@ -18,6 +18,7 @@
 #include <QAbstractTextDocumentLayout>
 #include <QTextBlock>
 #include <QTextLayout>
+#include <QMouseEvent>
 #include <poppler-qt6.h>
 using namespace QindaOffice;
 using WriteTest::Scene;
@@ -65,7 +66,14 @@ private slots:
         QVERIFY(graphics->insert(QStringLiteral("shape")));
         QCOMPARE(scene.doc->textDocument()->toPlainText().size(), 2);
         QSignalSpy graphicEditor(graphics, &Apps::Write::GraphicsController::dialogRequested);
-        scene.control()->doubleClicked(1);
+        QTextCursor afterGraphic(scene.doc->textDocument()); afterGraphic.setPosition(2);
+        const QRectF left = scene.control()->cursorRect(afterEquation);
+        const QRectF right = scene.control()->cursorRect(afterGraphic);
+        QVERIFY(right.x() > left.x());
+        const QPointF point((left.x() + right.x()) / 2, left.center().y());
+        QMouseEvent doubleClick(QEvent::MouseButtonDblClick, point, point,
+                                Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QVERIFY(scene.control()->processEvent(&doubleClick));
         QCOMPARE(graphicEditor.size(), 1);
         QVERIFY(!scene.host.equations()->active());
     }
