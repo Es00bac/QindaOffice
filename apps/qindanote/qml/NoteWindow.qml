@@ -324,6 +324,7 @@ OfficeWindow {
             linkDialog.selected = selected; linkDialog.address = address; linkDialog.open()
         }
         function onTableDialogRequested() { tableDialog.open() }
+        function onPageVersionsRequested() { versionsDialog.open() }
         function onTagsDialogRequested(customize) { tagsDialog.customize = customize; tagsDialog.open() }
         function onFileLinkRequested() { fileLinkDialog.open() }
         function onImportRequested() { importDialog.open() }
@@ -332,6 +333,7 @@ OfficeWindow {
     NoteLinkDialog { id: linkDialog; onLinkApplied: function(url, label) { window.note.applyLink(url, label) } }
     NoteTableDialog { id: tableDialog; onTableApplied: function(rows, columns) { window.note.insertTable(rows, columns) } }
     NoteTagsDialog { id: tagsDialog; note: window.note }
+    NoteVersionsDialog { id: versionsDialog; note: window.note }
     Dialogs.FileDialog {
         id: importDialog; title: qsTr("Import"); fileMode: Dialogs.FileDialog.OpenFile
         nameFilters: window.note.importNameFilters

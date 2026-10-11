@@ -5,6 +5,27 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-104: Retain bounded QindaNote page versions (M96)
+
+**Date:** 2026-10-10 · **Status:** accepted.
+
+Before replacing a changed saved page, keep its previous envelope in the
+notebook's `sections/<section>/versions/<page>/` directory. Timed captures
+coalesce to five-minute intervals, retain at most 32 versions and 256 MiB
+per page, and reject any single version above 64 MiB. Manual captures
+bypass the interval and unchanged snapshots deduplicate. Independent atomic
+JSON files carry timestamps, the entire page and a SHA-256 integrity check.
+This history travels with the notebook; it is separate from crash recovery.
+
+Page Versions previews the first sheet with the print renderer. Restore
+captures current content first and applies title, paper, blocks and ink as
+one command on the page's existing Undo stack. Save As copies assets and
+versions, refuses unreadable source pages, and also handles sibling target
+directories. Automatic retention can be disabled per notebook without
+removing retained versions. Deleting a version requires explicit UI
+confirmation. Errors remain visible and never silently replace a failed
+snapshot or apply a damaged retained page.
+
 ## D-100: Office equations through a shared OMML model and OpenType MATH layout
 
 **Date:** 2026-10-10 · **Status:** accepted · **Milestone:** M92.

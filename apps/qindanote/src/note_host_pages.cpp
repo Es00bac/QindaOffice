@@ -58,6 +58,8 @@ QColor colorOf(const PaperColor &paper)
 void NoteHost::createPageActions()
 {
     Quick::ActionModel *model = actions();
+    connect(model->add(QStringLiteral("notePageVersionsAction"), tr("Page &Versions…"), {}, QStringLiteral("history")),
+            &ActionEntry::triggered, this, &NoteHost::pageVersionsRequested);
     connect(model->add(QStringLiteral("noteSearchAction"), tr("Searc&h Notebooks…"),
                        QKeySequence(QStringLiteral("Ctrl+E")), QStringLiteral("search")),
             &ActionEntry::triggered, this, [this] { emit searchRequested(); });
@@ -97,6 +99,7 @@ void NoteHost::syncPageActions()
 {
     Quick::ActionModel *model = actions();
     const NotePage *page = currentPage();
+    model->setEnabled(QStringLiteral("notePageVersionsAction"), page != nullptr);
     const NoteSection *section = currentSection();
     int index = -1;
     if (section != nullptr) {

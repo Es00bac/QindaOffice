@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "notebook.h"
+#include "note_versions.h"
+#include "notebook_storage_p.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -13,41 +15,7 @@
 
 namespace QindaOffice::Apps::Notes {
 
-namespace {
-
-// AGENT-GUARD: ids come from notebook.json and are interpolated into file
-// paths. A hostile notebook with "../.." in an id must never escape the
-// notebook directory; reject anything but the safe identifier shape.
-bool idIsSafe(const QString &id)
-{
-    if (id.isEmpty() || id.size() > 64) {
-        return false;
-    }
-    static const QRegularExpression safe(QStringLiteral("^[A-Za-z0-9_-]+$"));
-    return safe.match(id).hasMatch();
-}
-
-// Atomic write: the earlier release truncate-wrote notebook.json and page
-// payloads, so a crash or full disk mid-save destroyed the previous content.
-bool writeJsonAtomically(const QString &path, const QByteArray &payload, QString *error)
-{
-    QSaveFile file(path);
-    if (!file.open(QIODevice::WriteOnly)) {
-        if (error != nullptr) {
-            *error = file.errorString();
-        }
-        return false;
-    }
-    if (file.write(payload) != payload.size() || !file.commit()) {
-        if (error != nullptr) {
-            *error = file.errorString();
-        }
-        return false;
-    }
-    return true;
-}
-
-} // namespace
+using namespace NotebookStorage;
 
 QString Notebook::newId()
 {
@@ -104,6 +72,7 @@ bool Notebook::load(const QString &path, QString *error)
     m_dir = dir;
     m_open = true;
     m_name = root.value(QStringLiteral("name")).toString();
+    m_versionsEnabled = root.value(QStringLiteral("keepPageVersions")).toBool(true);
     m_sections.clear();
     for (const QJsonValue &value : root.value(QStringLiteral("sections")).toArray()) {
         const QJsonObject object = value.toObject();
@@ -166,14 +135,7 @@ bool Notebook::save(QString *error) const
             if (!page.loaded) {
                 continue;
             }
-            const QString dirPath = QStringLiteral("sections/%1/pages").arg(section.id);
-            if (!m_dir.mkpath(dirPath)) {
-                lastError = QStringLiteral("cannot create %1").arg(dirPath);
-                continue;
-            }
-            if (!writeJsonAtomically(
-                    m_dir.filePath(dirPath + QStringLiteral("/%1.json").arg(page.id)),
-                    Ink::pageToJson(page.envelope), &lastError)) {
+            if (!persistPage(section, page, &lastError)) {
                 continue;
             }
         }
@@ -200,6 +162,7 @@ bool Notebook::save(QString *error) const
     return writeJsonAtomically(
         m_dir.filePath(QStringLiteral("notebook.json")),
         QJsonDocument(QJsonObject{{QStringLiteral("name"), m_name},
+                                  {QStringLiteral("keepPageVersions"), m_versionsEnabled},
                                   {QStringLiteral("sections"), sections}})
             .toJson(),
         error);
@@ -230,62 +193,6 @@ NotePage &Notebook::addPage(NoteSection &section, const QString &title)
         }
     }
     return section.pages.last();
-}
-
-bool Notebook::persistPage(const NoteSection &section, const NotePage &page, QString *error) const
-{
-    // AGENT-GUARD: an untitled notebook has no directory. QDir()'s path is
-    // ".", so this used to write sections/<id>/pages/<id>.json into whatever
-    // directory the process was launched from. In-memory content is covered
-    // by the recovery journal until the first real save.
-    if (!m_open) {
-        if (error != nullptr) {
-            *error = QStringLiteral("notebook has no directory yet");
-        }
-        return false;
-    }
-    if (!idIsSafe(section.id) || !idIsSafe(page.id)) {
-        if (error != nullptr) {
-            *error = QStringLiteral("unsafe notebook id");
-        }
-        return false;
-    }
-    const QString dirPath = QStringLiteral("sections/%1/pages").arg(section.id);
-    if (!m_dir.mkpath(dirPath)) {
-        if (error != nullptr) {
-            *error = QStringLiteral("cannot create %1").arg(dirPath);
-        }
-        return false;
-    }
-    // Atomic and checked, like every other document write (decisions D-010).
-    return writeJsonAtomically(m_dir.filePath(dirPath + QStringLiteral("/%1.json").arg(page.id)),
-                               Ink::pageToJson(page.envelope), error);
-}
-
-bool Notebook::loadPage(NoteSection &section, NotePage &page, QString *error) const
-{
-    if (!m_open || !idIsSafe(section.id) || !idIsSafe(page.id)) {
-        if (error != nullptr) {
-            *error = QStringLiteral("notebook has no directory yet");
-        }
-        return false;
-    }
-    QFile file(m_dir.filePath(
-        QStringLiteral("sections/%1/pages/%2.json").arg(section.id, page.id)));
-    if (!file.open(QIODevice::ReadOnly)) {
-        if (error != nullptr) {
-            *error = file.errorString();
-        }
-        return false;
-    }
-    if (!Ink::pageFromJson(file.readAll(), &page.envelope)) {
-        if (error != nullptr) {
-            *error = QStringLiteral("page %1 is not valid JSON").arg(page.id);
-        }
-        return false;
-    }
-    page.loaded = true;
-    return true;
 }
 
 NoteSection *Notebook::sectionById(const QString &id)
@@ -333,9 +240,17 @@ bool Notebook::copyStructure(const QString &targetPath, QString *error)
     // user happened to look at.
     if (m_open) {
         for (NoteSection &section : replica.m_sections) {
+            if (!idIsSafe(section.id)) {
+                if (error) *error = QStringLiteral("Unsafe notebook section id.");
+                return false;
+            }
             for (NotePage &page : section.pages) {
+                if (!idIsSafe(page.id)) {
+                    if (error) *error = QStringLiteral("Unsafe notebook page id.");
+                    return false;
+                }
                 if (!page.loaded) {
-                    static_cast<void>(loadPage(section, page, nullptr));
+                    if (!loadPage(section, page, error)) return false;
                 }
             }
         }
@@ -347,6 +262,14 @@ bool Notebook::copyStructure(const QString &targetPath, QString *error)
             *error = QStringLiteral("cannot create %1/assets").arg(targetPath);
         }
         return false;
+    }
+    if (m_open) {
+        if (!Versions::copyTree(m_dir.filePath(QStringLiteral("assets")),
+                                replica.m_dir.filePath(QStringLiteral("assets")), error)) return false;
+        for (const NoteSection &section : m_sections) {
+            const QString relative = QStringLiteral("sections/%1/versions").arg(section.id);
+            if (!Versions::copyTree(m_dir.filePath(relative), replica.m_dir.filePath(relative), error)) return false;
+        }
     }
     if (!replica.save(error)) {
         return false;
@@ -378,6 +301,7 @@ QByteArray Notebook::toRecoveryJson() const
     return QJsonDocument(QJsonObject{
                              {QStringLiteral("version"), 1},
                              {QStringLiteral("name"), m_name},
+                             {QStringLiteral("keepPageVersions"), m_versionsEnabled},
                              {QStringLiteral("dir"), m_open ? m_dir.path() : QString()},
                              {QStringLiteral("sections"), sections}})
         .toJson(QJsonDocument::Compact);
@@ -426,6 +350,7 @@ bool Notebook::fromRecoveryJson(const QByteArray &json, QString *error)
         return fail(QStringLiteral("recovery payload has no sections"));
     }
     m_name = root.value(QStringLiteral("name")).toString();
+    m_versionsEnabled = root.value(QStringLiteral("keepPageVersions")).toBool(true);
     m_sections = std::move(restored);
     // Re-attach to the source directory when it is still there, so pages the
     // session never opened lazily load from disk instead of coming back
@@ -439,6 +364,7 @@ bool Notebook::fromRecoveryJson(const QByteArray &json, QString *error)
 
 bool Notebook::removePage(const QString &sectionId, const QString &pageId)
 {
+    if (!idIsSafe(sectionId) || !idIsSafe(pageId)) return false;
     for (NoteSection &section : m_sections) {
         if (section.id != sectionId) {
             continue;
@@ -453,6 +379,7 @@ bool Notebook::removePage(const QString &sectionId, const QString &pageId)
                 // save()/load() pair can resurrect.
                 m_dir.remove(QStringLiteral("sections/%1/pages/%2.json")
                                  .arg(sectionId, pageId));
+                QDir(m_dir.filePath(QStringLiteral("sections/%1/versions/%2").arg(sectionId, pageId))).removeRecursively();
             }
             section.pages.removeAt(i);
             return true;

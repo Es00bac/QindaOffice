@@ -49,6 +49,8 @@ public:
     // must refuse rather than fall back to QDir()'s "." (which scattered
     // sections/<id>/pages/<id>.json into the process's working directory).
     [[nodiscard]] bool isOpen() const { return m_open; }
+    [[nodiscard]] bool versionsEnabled() const { return m_versionsEnabled; }
+    void setVersionsEnabled(bool enabled) { m_versionsEnabled = enabled; }
 
     [[nodiscard]] bool create(const QString &path, QString *error = nullptr);
     [[nodiscard]] bool load(const QString &path, QString *error = nullptr);
@@ -93,6 +95,7 @@ public:
 private:
     QDir m_dir;
     bool m_open = false;
+    bool m_versionsEnabled = true;
     QString m_name;
     QVector<NoteSection> m_sections;
 };

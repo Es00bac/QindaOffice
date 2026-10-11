@@ -163,6 +163,8 @@ public:
     void applyHistoryBlocks(const QByteArray &blocksJson);
     void applyHistoryBackground(const QString &background);
     void applyHistoryContent(const QByteArray &blocksJson, const QString &title);
+    void applyHistoryEnvelope(const Ink::PageEnvelope &envelope);
+    bool restoreEnvelope(const Ink::PageEnvelope &envelope);
 
     // ---- blocks (note_page_item_blocks.cpp) ----
     [[nodiscard]] const QList<PageBlock> &blocks() const { return m_blocks; }

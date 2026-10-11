@@ -1,6 +1,30 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Verification
 
+## M96 page-version gates (D-104)
+
+`tst_note_versions` covers deduplication, five-minute capture coalescing,
+retention, complete-envelope round trips, invalid paths, integrity failures,
+prior content on autosave, Save As to a sibling directory with assets and
+history, lazy pages, and the persisted retention preference. The real window
+at 1280 and 520 px opens the dialog and restores through a mouse click:
+current content is retained and Restore/Undo/Redo replay the entire page.
+Qualification on qinda against frozen QindaTK `e6837dc5` passed all **18
+Note CTest targets** across the suite run and final reruns. The first full
+run passed 17 targets; only the structural fixtures needed the toolkit's
+new named drag/drop and colour-clear items. After reviewing both default
+windows and updating those fixtures, all three UI, menu-export and version
+targets passed without fixture-update mode (30.82 s). The final version
+integrity rerun passed **9 Qt checks, zero failures or skips** (4.18 s),
+including a corrupted matching snapshot before forced capture.
+
+The default window and Page Versions dialog were inspected at 1280 and
+520 px: history, first-sheet preview and restore controls remain contained.
+The mouse-driven restore gate also exercises QindaTK's corrected canvas
+pointer-grab boundary so the ink handler cannot steal dialog buttons.
+Evidence is retained in `~/scratch/qqo/m96-final-{qualification,ui,integrity-tests}.log`
+and `/mnt/archive/qindaoffice-validation-20261010/m96/` on qinda.
+
 ## M92 equation library gates (D-100)
 
 Resumed from the preserved M92 source on 2026-10-10. `tst_math_omml`,

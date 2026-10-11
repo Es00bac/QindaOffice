@@ -119,6 +119,7 @@ QtObject {
                 "notePageDelete"] },
             { id: "pageMove", label: qsTr("Navigate"), items: [
                 "notePagePrevious", "notePageNext", "notePageMoveUp", "notePageMoveDown"] },
+            { id: "pageHistory", label: qsTr("History"), items: ["notePageVersionsAction"] },
             { id: "subpages", label: qsTr("Subpages"), items: ["noteMakeSubpageAction", "notePromoteSubpageAction"] },
             { id: "sections", label: qsTr("Sections"), items: [
                 { action: "noteSectionNew", size: "large" },
