@@ -297,7 +297,7 @@ inline ExcelWorkbook tableSourceBook()
 }
 
 // E: a calculated field (Margin = Sales*0.1) — kept as read, read-only.
-inline ExcelWorkbook calculatedFieldBook()
+inline ExcelWorkbook calculatedFieldBook(bool supported = true)
 {
     ExcelWorkbook wb = regionsByProductBook();
     for (ExcelPart &part : wb.parts) {
@@ -305,6 +305,7 @@ inline ExcelWorkbook calculatedFieldBook()
             part.data.replace("<cacheFields count=\"5\">", "<cacheFields count=\"6\">");
             part.data.replace("</cacheFields>", "<cacheField name=\"Margin\" numFmtId=\"0\" formula=\"Sales*0.1\""
                                                 " databaseField=\"0\"/></cacheFields>");
+            if (!supported) part.data.replace("Sales*0.1", "UNSUPPORTED(Sales)");
         } else if (part.name.endsWith(QLatin1String("pivotTable1.xml"))) {
             part.data.replace("<pivotFields count=\"5\">", "<pivotFields count=\"6\">");
             part.data.replace("</pivotFields>", "<pivotField showAll=\"0\"/></pivotFields>");

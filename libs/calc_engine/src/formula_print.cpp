@@ -337,4 +337,15 @@ NodePtr shiftNode(const NodePtr &node, qint32 dr, qint32 dc)
     return node;
 }
 
+QString nameBodyText(const NodePtr &node)
+{
+    // AGENT-NOTE (M90, D-098): Excel writes a multi-area name without
+    // brackets ("Sheet1!$A$1:$B$2,Sheet1!$D$4"), and Excel's Solver reads
+    // its solver_adj that way; nodeText brackets every union.
+    if (node && node->kind == Node::Kind::Binary && node->op == Op::Union) {
+        return nameBodyText(node->left) + QLatin1Char(',') + nameBodyText(node->right);
+    }
+    return nodeText(node);
+}
+
 } // namespace QindaOffice::Calc

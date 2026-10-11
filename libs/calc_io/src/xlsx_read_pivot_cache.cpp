@@ -6,6 +6,7 @@
 // Excel writes inline for fields without shared items.
 
 #include "xlsx_read_pivot.h"
+#include "pivot_calculated.h"
 
 #include "xlsx_parts.h"
 #include "xlsx_pivot_names.h"
@@ -254,7 +255,8 @@ PivotCache readPivotCachePart(const Ooxml::Package &package, const QString &part
         field.numberFormat = pivotNumberFormat(element->attr(u"numFmtId", QStringLiteral("0")).toInt(), numberFormats);
         field.database = flag(*element, u"databaseField", true);
         if (element->hasAttribute(QStringView(), u"formula")) {
-            refuse(QObject::tr("has calculated fields"));
+            field.formula = decodeXString(element->attr(u"formula"));
+            field.database = false;
         }
         if (const Ooxml::XmlElement *items = element->child(sml(), u"sharedItems")) {
             for (const Ooxml::XmlElement *item : items->elements()) {
@@ -269,10 +271,14 @@ PivotCache readPivotCachePart(const Ooxml::Package &package, const QString &part
         }
         if (field.database) {
             database.append(self);
-        } else if (!field.grouped()) {
+        } else if (!field.grouped() && field.formula.isEmpty()) {
             refuse(QObject::tr("has a field QindaCalc cannot read"));
         }
         cache.fields.append(field);
+    }
+    for (qsizetype f = 0; f < cache.fields.size(); ++f) {
+        if (!cache.fields.at(f).formula.isEmpty() && !pivotCalculatedProblem(cache, qint32(f)).isEmpty())
+            refuse(QObject::tr("has unsupported calculated fields"));
     }
     cache.recordCount = root->attr(u"recordCount").toInt();
     QString records;

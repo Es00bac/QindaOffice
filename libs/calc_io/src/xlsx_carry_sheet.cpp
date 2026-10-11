@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Carry phase 3 (xlsx_carry_phases.h, M66, D-075): per sheet, the elements
 // the writer never writes (the controls and OLE objects, a background
-// picture, the extLst entries of slicers, timelines and sparklines; the
+// picture, the extLst entries of slicers and timelines (M90: sparklines are
+// modelled, xlsx_sparklines.h); the
 // printer settings link of the page setup — M78 models the rest of it),
 // threaded comments, and query tables.
 
@@ -280,11 +281,7 @@ void carryElements(Context &ctx, const CarryState &state, const DestSheet &dest,
             QList<Ooxml::XmlChild> kept;
             for (const Ooxml::XmlChild &ext : copy->children) {
                 bool positional = false;
-                if (!ext.element || !sheetExtCarried(ext.element->attr(u"uri"), &positional)) {
-                    continue;
-                }
-                if (positional && !steps.isEmpty()) {
-                    ctx.warn(QObject::tr("Sparklines on “%1” were not kept: rows or columns were inserted or deleted there.").arg(dest.name));
+                if (!ext.element || !sheetExtCarried(ext.element->attr(u"uri"), &positional) || (positional && !steps.isEmpty())) {
                     continue;
                 }
                 if (!allRelsKept(ctx, state, sourceSheet, *ext.element)) {

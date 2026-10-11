@@ -47,6 +47,19 @@ set(qindacalc_qml
     qml/CalcViewWindows.qml
     qml/CustomViewAddDialog.qml
     qml/CustomViewsDialog.qml
+    # M90 (D-098): Solver.
+    qml/CalcSolverDialogs.qml
+    qml/SolverConstraintDialog.qml
+    qml/SolverDialog.qml
+    qml/SolverOptionsDialog.qml
+    qml/SolverProgressDialog.qml
+    qml/SolverResultsDialog.qml
+    # M90 (D-098): sparklines, Table Design.
+    qml/CalcSparklineDialogs.qml
+        qml/PivotCalculatedDialog.qml
+    qml/SparklineColorsDialog.qml
+    qml/SparklineCreateDialog.qml
+    qml/SparklineHiddenDialog.qml
 )
 foreach(qml_file IN LISTS qindacalc_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -110,13 +123,23 @@ qt_add_qml_module(qindacalc_app
         src/spreadsheet_item_overlay.cpp
         # M82 (D-091): Excel's text overflow on screen and paper, panes and Split
         src/calc_text_overflow.cpp src/calc_text_overflow.h
-        src/calc_print_cells.cpp src/calc_print_internal.h
+        src/calc_print_cells.cpp
+    src/calc_print_notes.cpp src/calc_print_internal.h
         src/spreadsheet_item_cells.cpp
         src/spreadsheet_item_panes.cpp
         src/calc_host_views.cpp
         # M82 (D-091): Custom Views
         src/calc_recovery_views.cpp src/calc_recovery_views.h
         src/spreadsheet_item_views.cpp
+        # M90 (D-098): Solver, sparklines, table design, calculated fields
+        src/calc_host_m90.cpp
+    src/calc_pivot_calculated.cpp
+        src/calc_solver.cpp src/calc_solver.h
+        src/calc_m90_ops.cpp
+        src/calc_recovery_sparklines.cpp src/calc_recovery_sparklines.h
+        src/calc_sparkline_look.cpp src/calc_sparkline_look.h
+        src/calc_sparklines.cpp src/calc_sparklines.h
+        src/calc_sparklines_edit.cpp
     QML_FILES ${qindacalc_qml}
 )
 target_include_directories(qindacalc_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

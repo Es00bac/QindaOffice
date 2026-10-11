@@ -76,3 +76,12 @@ qqo_add_calc_io_test(tst_calc_io_kept)
 # M82 (D-091): Excel's Custom Views read, written schema-valid in their
 # schema slots and read back equal.
 qqo_add_calc_io_test(tst_calc_io_views)
+# M90 (D-098): Excel's Solver model as its hidden solver_* names — read from
+# an Excel-shaped package, written back schema-valid, made here as Excel's set.
+qqo_add_calc_io_test(tst_calc_io_solver)
+# M90 (D-098): sparklines as Excel writes them (x14:sparklineGroups) read
+# into the model, written back schema-valid after the x14 rules, moved by
+# structural edits, and made here as Excel's.
+qqo_add_calc_io_test(tst_calc_io_sparklines)
+
+qqo_add_calc_io_test(tst_calc_io_pivot_m90)

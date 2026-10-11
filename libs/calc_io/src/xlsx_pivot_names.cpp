@@ -2,6 +2,7 @@
 // Excel's PivotTable spellings (xlsx_pivot_names.h; M74, D-083).
 
 #include "xlsx_pivot_names.h"
+#include "pivot_dates.h"
 
 #include "functions/functions.h"
 
@@ -203,6 +204,7 @@ PivotGroupBy groupByFrom(const QString &name)
 
 QString filterType(const PivotFilter &filter)
 {
+    if (filter.kind == PivotFilter::Kind::Date) return filter.dateType;
     for (const FilterNames &names : kFilters) {
         if (names.kind == filter.kind
             && (filter.kind == PivotFilter::Kind::Top ? names.topBy == filter.topBy : names.op == filter.op)) {
@@ -214,6 +216,12 @@ QString filterType(const PivotFilter &filter)
 
 std::optional<PivotFilter> filterFrom(const QString &type)
 {
+    if (pivotDateTypes().contains(type)) {
+        PivotFilter filter;
+        filter.kind = PivotFilter::Kind::Date;
+        filter.dateType = type;
+        return filter;
+    }
     for (const FilterNames &names : kFilters) {
         if (type == QLatin1String(names.type)) {
             PivotFilter filter;

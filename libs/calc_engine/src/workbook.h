@@ -33,7 +33,7 @@ struct DefinedName {
 // What the package a workbook was opened from carried that the engine does
 // not model but a save must give back (D-069, D-068 rule 2): the theme part
 // verbatim and the document properties. calc_io fills it on read and writes
-// it on save; nothing in the engine interprets it. It is document state: the
+// it on save; theme_colors resolves document colours from it. Document state: the
 // app's undo snapshots and recovery payload carry it like the sheets.
 struct WorkbookSource {
     QByteArray themeXml; // xl/theme/theme1.xml as read; empty = not from a package
@@ -180,6 +180,8 @@ public:
     [[nodiscard]] NodePtr nameFormula(const QString &name, qint32 sheet) const override;
     // EvalHost: the formula text of a cell (ISFORMULA, FORMULATEXT).
     [[nodiscard]] QString cellFormula(qint32 sheet, qint32 row, qint32 col) const override;
+
+    [[nodiscard]] bool rowExcluded(qint32 sheet, qint32 row, bool includeHidden) const override;
 
     // EvalHost implementation.
     [[nodiscard]] Value cellValue(qint32 sheet, qint32 row, qint32 col) const override;

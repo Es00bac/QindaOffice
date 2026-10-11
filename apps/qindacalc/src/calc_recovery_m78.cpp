@@ -251,7 +251,7 @@ QJsonArray keptRulesToJson(const QList<KeptRule> &rules)
         }
         out.append(QJsonObject{{QStringLiteral("kind"), int(rule.kind)}, {QStringLiteral("ranges"), rangesJson(rule.ranges)},
                                {QStringLiteral("xml"), rule.xml}, {QStringLiteral("priorities"), priorities},
-                               {QStringLiteral("reason"), rule.reason}});
+                               {QStringLiteral("reason"), rule.reason}, {QStringLiteral("staleFormulas"), rule.staleFormulas}});
     }
     return out;
 }
@@ -269,6 +269,7 @@ QList<KeptRule> keptRulesFromJson(const QJsonArray &array)
             rule.priorities.append(priority.toInt());
         }
         rule.reason = o.value(QStringLiteral("reason")).toString();
+        rule.staleFormulas = o.value(QStringLiteral("staleFormulas")).toBool();
         if (!rule.xml.isEmpty()) {
             out.append(rule);
         }

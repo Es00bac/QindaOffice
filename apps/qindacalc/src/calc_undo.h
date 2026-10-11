@@ -59,6 +59,7 @@ struct SheetSnapshot {
     QList<CalcEng::DataTableSpec> dataTables;
     QList<CalcEng::KeptRule> keptRules;
     QList<CalcEng::Sheet::CustomView> customViews; // M82 (D-091): its part of each Custom View
+    QList<CalcEng::SparklineGroup> sparklines;      // M90 (D-098)
 };
 
 struct WorkbookSnapshot {

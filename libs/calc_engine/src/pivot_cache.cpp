@@ -249,7 +249,7 @@ QByteArray pivotCacheFingerprint(const PivotCache &cache)
     out << cache.source.sheet << cache.source.name << cache.recordCount << qint32(cache.fields.size());
     writeRange(out, cache.source.range);
     for (const PivotCacheField &f : cache.fields) {
-        out << f.name << f.numberFormat << f.database << f.records << qint32(f.items.size());
+        out << f.name << f.formula << f.numberFormat << f.database << f.records << qint32(f.items.size());
         for (const Value &item : f.items) {
             writeValue(out, item);
         }
@@ -274,7 +274,7 @@ QByteArray pivotTableFingerprint(const PivotTable &pivot)
             out << qint32(fn);
         }
         for (const PivotFilter &filter : f.filters) {
-            out << qint32(filter.kind) << qint32(filter.op) << filter.text1 << filter.text2 << filter.value1
+            out << filter.dateType << qint32(filter.kind) << qint32(filter.op) << filter.text1 << filter.text2 << filter.value1
                 << filter.value2 << filter.dataField << filter.top << qint32(filter.topBy);
         }
     }

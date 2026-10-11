@@ -70,6 +70,7 @@ Tk.Dialog {
             Tk.ComboBox {
                 id: summarize
                 objectName: "pivotValueFunction"
+                enabled: !dialog.state.calculated
                 width: Tk.Theme.size.fieldWidth * 2
                 model: dialog.state.functions || []
                 tooltip: qsTr("The type of calculation that summarizes the field")

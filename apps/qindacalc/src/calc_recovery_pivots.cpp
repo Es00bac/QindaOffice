@@ -90,7 +90,7 @@ QByteArray fromBytes(const QJsonValue &value)
 
 QJsonObject filterToJson(const PivotFilter &f)
 {
-    return {{QStringLiteral("kind"), int(f.kind)}, {QStringLiteral("op"), int(f.op)},
+    return {{QStringLiteral("dateType"), f.dateType}, {QStringLiteral("kind"), int(f.kind)}, {QStringLiteral("op"), int(f.op)},
             {QStringLiteral("text1"), f.text1},    {QStringLiteral("text2"), f.text2},
             {QStringLiteral("value1"), f.value1},  {QStringLiteral("value2"), f.value2},
             {QStringLiteral("data"), f.dataField}, {QStringLiteral("top"), f.top},
@@ -100,6 +100,7 @@ QJsonObject filterToJson(const PivotFilter &f)
 PivotFilter filterFromJson(const QJsonObject &o)
 {
     PivotFilter f;
+    f.dateType = o.value(QStringLiteral("dateType")).toString();
     f.kind = PivotFilter::Kind(o.value(QStringLiteral("kind")).toInt());
     f.op = PivotFilter::Op(o.value(QStringLiteral("op")).toInt());
     f.text1 = o.value(QStringLiteral("text1")).toString();
@@ -302,7 +303,7 @@ QJsonArray pivotCachesToJson(const QList<PivotCache> &caches)
             fields.append(QJsonObject{
                 {QStringLiteral("name"), f.name},
                 {QStringLiteral("format"), f.numberFormat},
-                {QStringLiteral("database"), f.database},
+                {QStringLiteral("formula"), f.formula}, {QStringLiteral("database"), f.database},
                 {QStringLiteral("items"), items},
                 {QStringLiteral("records"), ints(f.records)},
                 {QStringLiteral("group"), QJsonObject{{QStringLiteral("by"), int(g.by)}, {QStringLiteral("base"), g.base},
@@ -343,6 +344,7 @@ QList<PivotCache> pivotCachesFromJson(const QJsonArray &array)
             PivotCacheField f;
             f.name = fo.value(QStringLiteral("name")).toString();
             f.numberFormat = fo.value(QStringLiteral("format")).toString();
+            f.formula = fo.value(QStringLiteral("formula")).toString();
             f.database = fo.value(QStringLiteral("database")).toBool(true);
             for (const QJsonValue &item : fo.value(QStringLiteral("items")).toArray()) {
                 f.items.append(valueFromJson(item.toObject()));

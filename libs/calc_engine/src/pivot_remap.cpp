@@ -71,6 +71,7 @@ PivotCache pivotRegroup(const PivotCache &old, PivotCache fresh)
     fresh.refreshOnLoad = false;
     for (qsizetype index = 0; index < old.fields.size(); ++index) {
         const PivotCacheField &field = old.fields.at(index);
+        if (!field.formula.isEmpty()) { fresh.fields.append(field); continue; }
         if (!field.grouped()) {
             continue;
         }
@@ -220,7 +221,7 @@ void pivotFieldRemoved(PivotTable &pivot, qint32 removed)
                                                                                          : -1;
         QList<PivotFilter> filters;
         for (PivotFilter filter : settings.filters) {
-            if (filter.kind != PivotFilter::Kind::Label) {
+            if (filter.kind == PivotFilter::Kind::Value || filter.kind == PivotFilter::Kind::Top) {
                 if (filter.dataField < 0 || filter.dataField >= dataMap.size() || dataMap.at(filter.dataField) < 0) {
                     continue;
                 }

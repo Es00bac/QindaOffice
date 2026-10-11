@@ -55,3 +55,17 @@ qqo_add_calc_test(tst_calc_views)
 # M89 (D-097): the formula bar's completion — functions with their
 # arguments, names, tables and columns.
 qqo_add_calc_test(tst_calc_completion)
+
+# M90 (D-098): Data ▸ Solver — textbook LPs, branch and bound, GRG
+# Nonlinear, Evolutionary, Excel's statuses and refusals, the model as
+# Excel's solver_* names and the Answer Report.
+qqo_add_calc_test(tst_calc_solver)
+qqo_add_calc_test(tst_calc_solver_model)
+# M90 (D-098): sparklines (ranges, values, axes, theme colours, structural
+# edits), Table Design's rename and resize, kept rules' formulas through
+# structural edits.
+qqo_add_calc_test(tst_calc_sparklines)
+
+qqo_add_calc_test(tst_calc_aggregate_visibility)
+
+qqo_add_calc_test(tst_calc_pivot_m90)

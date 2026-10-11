@@ -227,6 +227,10 @@ CellRange printUsedRange(const Workbook &book, qint32 sheetIndex)
             take(keyAddr(it.key()));
         }
     }
+    for (const auto &group : sheet.sparklineGroups())
+        for (const auto &line : group.sparklines) take(line.location);
+    if (sheet.pageSetup().cellComments != 0)
+        for (auto it = sheet.comments().cbegin(); it != sheet.comments().cend(); ++it) take(keyAddr(it.key()));
     for (const CellRange &merge : sheet.merges()) {
         take(merge.topLeft);
         take(merge.bottomRight);

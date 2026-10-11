@@ -48,6 +48,7 @@ bool dateFormat(const QString &code)
 bool numbersOnly(const PivotCache &cache, qint32 field)
 {
     const PivotCacheField &f = cache.fields.at(field);
+    if (!f.formula.isEmpty()) return true;
     if (f.grouped() || !f.database) {
         return false;
     }
@@ -73,7 +74,7 @@ void remapDataIndexes(PivotTable &pivot, const QVector<qint32> &map)
         }
         QList<PivotFilter> filters;
         for (PivotFilter filter : std::as_const(settings.filters)) {
-            if (filter.kind != PivotFilter::Kind::Label) {
+            if (filter.kind == PivotFilter::Kind::Value || filter.kind == PivotFilter::Kind::Top) {
                 filter.dataField = filter.dataField >= 0 && filter.dataField < map.size() ? map.at(filter.dataField) : -1;
                 if (filter.dataField < 0) {
                     continue;
@@ -101,7 +102,7 @@ void insertDataField(PivotTable &pivot, const PivotCache &cache, qint32 field, q
 {
     PivotDataField data;
     data.field = field;
-    data.function = numbersOnly(cache, field) ? PivotFunction::Sum : PivotFunction::Count;
+    data.function = (!cache.fields.at(field).formula.isEmpty() || numbersOnly(cache, field)) ? PivotFunction::Sum : PivotFunction::Count;
     data.name = pivotDefaultDataName(cache, pivot, field, data.function);
     const qsizetype at = position < 0 || position > pivot.dataFields.size() ? pivot.dataFields.size() : position;
     QVector<qint32> map(pivot.dataFields.size());
@@ -178,6 +179,7 @@ void pivotNormalize(PivotTable &pivot, const PivotCache &cache)
     // A base field and item only where Show Values As reads them (the file
     // writes 0 for "none", so the model keeps -1 for it).
     for (PivotDataField &data : pivot.dataFields) {
+        if (!cache.fields.at(data.field).formula.isEmpty()) data.function = PivotFunction::Sum;
         const PivotShowAs as = data.showAs;
         const bool item = as == PivotShowAs::PercentOf || as == PivotShowAs::Difference
             || as == PivotShowAs::PercentDifference;
@@ -209,6 +211,7 @@ bool pivotPlaceField(PivotTable &pivot, const PivotCache &cache, qint32 field, P
     if (field < 0 || field >= cache.fields.size()) {
         return false;
     }
+    if (area != PivotArea::Values && !cache.fields.at(field).formula.isEmpty()) return false;
     if (area == PivotArea::Values) {
         insertDataField(pivot, cache, field, position);
         pivotNormalize(pivot, cache);
@@ -274,6 +277,7 @@ bool pivotMoveField(PivotTable &pivot, const PivotCache &cache, PivotArea from, 
             return false;
         }
         const qint32 field = pivot.dataFields.at(fromPosition).field;
+        if (!cache.fields.at(field).formula.isEmpty()) return false;
         removeDataField(pivot, fromPosition);
         return pivotPlaceField(pivot, cache, field, to, toPosition);
     }

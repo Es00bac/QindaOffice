@@ -162,6 +162,7 @@ void SpreadsheetDocument::groupLines(CalcEng::OutlineAxis axis, qint32 first, qi
     }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     sheet.setOutline(outline);
+    m_workbook.recalcAll(); // Visibility changes SUBTOTAL and AGGREGATE (D-098).
     pushUndo(before, group ? tr("Group") : tr("Ungroup"));
     setDirty(true);
     emit contentChanged();
@@ -191,6 +192,7 @@ void SpreadsheetDocument::setGroupShown(CalcEng::OutlineAxis axis, const CalcEng
     }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     sheet.setOutline(outline);
+    m_workbook.recalcAll(); // Visibility changes SUBTOTAL and AGGREGATE (D-098).
     pushUndo(before, shown ? tr("Show detail") : tr("Hide detail"));
     setDirty(true);
     emit contentChanged();
@@ -206,6 +208,7 @@ void SpreadsheetDocument::showOutlineLevel(CalcEng::OutlineAxis axis, int level)
     }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     sheet.setOutline(outline);
+    m_workbook.recalcAll(); // Visibility changes SUBTOTAL and AGGREGATE (D-098).
     pushUndo(before, tr("Show outline level %1").arg(level));
     setDirty(true);
     emit contentChanged();
@@ -226,6 +229,7 @@ void SpreadsheetDocument::setLinesHidden(CalcEng::OutlineAxis axis, qint32 first
     }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     sheet.setOutline(outline);
+    m_workbook.recalcAll(); // Visibility changes SUBTOTAL and AGGREGATE (D-098).
     pushUndo(before, hidden ? (rows ? tr("Hide rows") : tr("Hide columns")) : (rows ? tr("Unhide rows") : tr("Unhide columns")));
     setDirty(true);
     emit contentChanged();

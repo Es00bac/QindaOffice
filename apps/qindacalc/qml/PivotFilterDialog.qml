@@ -23,6 +23,11 @@ Tk.Dialog {
     // The value filter offers the comparisons (PivotFilter::Op's first six and the two between).
     readonly property var valueOps: [0, 1, 2, 3, 4, 5, 12, 13]
 
+    readonly property var dateTypes: ["dateBetween", "dateOlderThan", "dateNewerThan", "thisMonth", "lastMonth", "nextMonth",
+        "thisQuarter", "lastQuarter", "nextQuarter", "thisYear", "lastYear", "nextYear", "yearToDate"]
+    readonly property var dateLabels: [qsTr("Between"), qsTr("Before"), qsTr("After"), qsTr("This month"), qsTr("Last month"),
+        qsTr("Next month"), qsTr("This quarter"), qsTr("Last quarter"), qsTr("Next quarter"), qsTr("This year"),
+        qsTr("Last year"), qsTr("Next year"), qsTr("Year to date")]
     objectName: "pivotFilterDialog"
     title: qsTr("Filter “%1”").arg(dialog.state.name || "")
     dialogWidth: Tk.Theme.size.dialogWidth
@@ -34,6 +39,7 @@ Tk.Dialog {
         dialog.state = dialog.host.pivotFilterState(index)
         dialog.items = (dialog.state.items || []).map(function(entry) { return Object.assign({}, entry) })
         kind.currentIndex = dialog.state.kind || 0
+        dateOp.currentIndex = Math.max(0, dialog.dateTypes.indexOf(dialog.state.dateType))
         search.text = ""
         const op = dialog.state.op || 0
         labelOp.currentIndex = op
@@ -56,6 +62,7 @@ Tk.Dialog {
                                                              text2: text2.text, dataField: dataField.currentIndex })
         if (kind.currentIndex === 3) Object.assign(choice, { top: topOrBottom.currentIndex === 0, text1: count.text,
                                                              topBy: topBy.currentIndex, dataField: dataField.currentIndex })
+        if (kind.currentIndex === 4) Object.assign(choice, { dateType: dialog.dateTypes[dateOp.currentIndex], text1: text1.text, text2: text2.text })
         dialog.host.applyPivotFilter(dialog.field, choice)
     }
     onTertiary: {
@@ -70,7 +77,7 @@ Tk.Dialog {
         Tk.Segmented {
             id: kind
             objectName: "pivotFilterKind"
-            model: dialog.state.page ? [qsTr("Items")] : [qsTr("Items"), qsTr("Label"), qsTr("Value"), qsTr("Top 10")]
+            model: dialog.state.page ? [qsTr("Items")] : [qsTr("Items"), qsTr("Label"), qsTr("Value"), qsTr("Top 10"), qsTr("Date")]
             tooltip: qsTr("What the filter keeps")
         }
         // ---- the item list ----
@@ -113,7 +120,12 @@ Tk.Dialog {
                 }
             }
         }
-        // ---- label, value and Top 10 filters ----
+        Tk.PropertyRow {
+            visible: kind.currentIndex === 4
+            label: qsTr("Show dates")
+            Tk.ComboBox { id: dateOp; objectName: "pivotFilterDateOp"; model: dialog.dateLabels }
+        }
+        // ---- label, value, date and Top 10 filters ----
         Tk.PropertyRow {
             visible: kind.currentIndex === 2 || kind.currentIndex === 3
             label: qsTr("Data field")
@@ -135,12 +147,12 @@ Tk.Dialog {
             }
         }
         Tk.PropertyRow {
-            visible: kind.currentIndex === 1 || kind.currentIndex === 2
-            label: qsTr("Value")
+            visible: kind.currentIndex === 1 || kind.currentIndex === 2 || (kind.currentIndex === 4 && dateOp.currentIndex < 3)
+            label: kind.currentIndex === 4 ? qsTr("Date (YYYY-MM-DD)") : qsTr("Value")
             Tk.TextField { id: text1; objectName: "pivotFilterText1"; width: Tk.Theme.size.fieldWidth * 2; placeholderText: qsTr("Use ? and * as wildcards") }
         }
         Tk.PropertyRow {
-            visible: (kind.currentIndex === 1 && labelOp.currentIndex >= 12) || (kind.currentIndex === 2 && valueOp.currentIndex >= 6)
+            visible: (kind.currentIndex === 1 && labelOp.currentIndex >= 12) || (kind.currentIndex === 2 && valueOp.currentIndex >= 6) || (kind.currentIndex === 4 && dateOp.currentIndex === 0)
             label: qsTr("and")
             Tk.TextField { id: text2; objectName: "pivotFilterText2"; width: Tk.Theme.size.fieldWidth * 2 }
         }

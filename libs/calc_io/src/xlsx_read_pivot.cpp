@@ -86,7 +86,9 @@ void readFilter(const Ooxml::XmlElement &element, ReadPivot &read)
             }
             if (const Ooxml::XmlElement *custom = column->child(sml(), u"customFilters")) {
                 for (const Ooxml::XmlElement *one : custom->elements(sml(), u"customFilter")) {
-                    operands.append(one->attr(u"val").toDouble());
+                    const QString operand = one->attr(u"val");
+                    operands.append(filter->kind == PivotFilter::Kind::Date
+                        ? PivotNames::serialFromIso(operand).value_or(operand.toDouble()) : operand.toDouble());
                 }
             }
         }

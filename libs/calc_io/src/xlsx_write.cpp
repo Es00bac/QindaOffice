@@ -21,6 +21,7 @@
 #include "xlsx_post.h"
 #include "xlsx_print.h"
 #include "xlsx_rules.h"
+#include "xlsx_sparklines.h"
 #include "xlsx_style.h"
 #include "xlsx_text.h"
 #include "xlsx_views.h"
@@ -386,6 +387,7 @@ std::unique_ptr<QXlsx::Document> buildXlsx(const Workbook &wb, PatchManifest *ma
         patch.customViewsXml = customSheetViewsXml(wb, s); // M82 (D-091)
         fillSheetFeatures(wb, sheet, &patch); // links, outline, protection, source (M66)
         fillWhatIfPatch(wb, s, &patch);       // scenarios and data tables (M78)
+        fillSparklinePatch(wb, s, &patch);    // sparklines, after the x14 rules (M90)
         if (manifest != nullptr) {
             // Every sheet: the carry stage and the features need each one.
             manifest->dynamicArrays = manifest->dynamicArrays || !patch.arrayRefs.isEmpty();

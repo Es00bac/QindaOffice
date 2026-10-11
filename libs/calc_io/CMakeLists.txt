@@ -21,6 +21,8 @@
 # scenarios and data tables. Qt Core+Gui + KArchive.
 add_library(calc_io STATIC
     src/xlsx_bridge.h
+    src/xlsx_print_assets.cpp
+    src/xlsx_print_assets.h
     src/xlsx_carry.h
     src/xlsx_carry_book.cpp
     src/xlsx_carry_chartsheet.cpp
@@ -68,6 +70,8 @@ add_library(calc_io STATIC
     src/xlsx_read_pivot_cache.cpp
     src/xlsx_read_xml.cpp
     src/xlsx_read_xml.h
+    src/xlsx_sparklines.cpp
+    src/xlsx_sparklines.h
     src/xlsx_style.cpp
     src/xlsx_style.h
     src/xlsx_text.cpp

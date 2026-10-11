@@ -5,8 +5,7 @@
 // xlsx_style.*. Since M61 (D-069) literal values come typed straight from
 // the package (xlsx_read_cells), formulas lose Excel's _xlfn. prefixes on
 // the way in (xlsx_formula), a formula the engine cannot parse stays a
-// formula, and the workbook-level parts — defined names, the theme, the
-// document properties — are read by xlsx_read_book.
+// formula; xlsx_read_book reads workbook names, theme and properties.
 
 #include "xlsx_bridge.h"
 
@@ -15,6 +14,7 @@
 #include "xlsx_parts.h"
 #include "xlsx_read_cells.h"
 #include "xlsx_read_features.h"
+#include "xlsx_sparklines.h"
 #include "xlsx_carry.h"
 #include "xlsx_read_pivot.h"
 #include "xlsx_read_xml.h"
@@ -83,8 +83,7 @@ private:
 
 QtMessageHandler QXlsxNoiseFilter::s_previous = nullptr;
 
-// QXlsx measures column widths in character units (~7 px + 5 padding per
-// the plan) and row heights in points.
+// QXlsx geometry uses character widths and point heights.
 qreal charWidthToPx(qreal chars)
 {
     return chars * 7.0 + 5.0;
@@ -415,6 +414,7 @@ bool readXlsxImpl(QXlsx::Document &doc, Workbook *out, const ThemePalette &palet
             readSheetDrawings(packagePath, out, sheetIndex);
             if (!sheetParts.value(sheetIndex).isEmpty()) {
                 readSheetFeatures(*package, sheetParts.value(sheetIndex), &sheet); // M66
+                readSparklines(*package, sheetParts.value(sheetIndex), &sheet);     // M90
             }
             markDynamicArrays(out, sheetIndex, scan, dynamicCms);
         }

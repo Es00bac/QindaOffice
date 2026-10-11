@@ -266,7 +266,8 @@ QByteArray pivotCacheDefinitionXml(const PivotCache &cache, const QSet<qint32> &
     const QHash<qint32, qint32> par = parents(cache);
     for (qsizetype f = 0; f < cache.fields.size(); ++f) {
         const PivotCacheField &field = cache.fields.at(f);
-        xml += QByteArrayLiteral("<cacheField") + attr("name", field.name) + " numFmtId=\""
+        xml += QByteArrayLiteral("<cacheField") + attr("name", field.name)
+            + (field.formula.isEmpty() ? QByteArray() : attr("formula", field.formula.startsWith(QLatin1Char('=')) ? field.formula.mid(1) : field.formula)) + " numFmtId=\""
             + QByteArray::number(formatId(field.numberFormat)) + '"'
             + (field.database ? QByteArray() : QByteArrayLiteral(" databaseField=\"0\"")) + '>';
         if (field.database) {

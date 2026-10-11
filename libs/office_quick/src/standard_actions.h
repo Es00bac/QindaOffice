@@ -254,6 +254,43 @@ inline const char kCalcCondFormatClearSheet[] = "calcCondFormatClearSheetAction"
 inline const char kCalcViewSplit[] = "calcViewSplitAction";
 inline const char kCalcViewNewWindow[] = "calcViewNewWindowAction";
 inline const char kCalcCustomViews[] = "calcCustomViewsAction";
+// M90 (D-098): Data ▸ Analyze ▸ Solver; Insert ▸ Sparklines and the
+// contextual Sparkline tab; Table Design's Rename and Resize Table;
+// PivotTable Analyze ▸ Fields, Items & Sets ▸ Calculated Field.
+inline const char kCalcSolver[] = "calcSolverAction";
+inline const char kCalcInsertSparklineLine[] = "calcInsertSparklineLineAction";
+inline const char kCalcInsertSparklineColumn[] = "calcInsertSparklineColumnAction";
+inline const char kCalcInsertSparklineWinLoss[] = "calcInsertSparklineWinLossAction";
+inline const char kCalcSparklineEditData[] = "calcSparklineEditDataAction";
+inline const char kCalcSparklineEditSingle[] = "calcSparklineEditSingleAction";
+inline const char kCalcSparklineHiddenEmpty[] = "calcSparklineHiddenEmptyAction";
+inline const char kCalcSparklineTypeLine[] = "calcSparklineTypeLineAction";
+inline const char kCalcSparklineTypeColumn[] = "calcSparklineTypeColumnAction";
+inline const char kCalcSparklineTypeWinLoss[] = "calcSparklineTypeWinLossAction";
+inline const char kCalcSparklineHighPoint[] = "calcSparklineHighPointAction";
+inline const char kCalcSparklineLowPoint[] = "calcSparklineLowPointAction";
+inline const char kCalcSparklineNegativePoints[] = "calcSparklineNegativePointsAction";
+inline const char kCalcSparklineFirstPoint[] = "calcSparklineFirstPointAction";
+inline const char kCalcSparklineLastPoint[] = "calcSparklineLastPointAction";
+inline const char kCalcSparklineMarkers[] = "calcSparklineMarkersAction";
+inline const char kCalcSparklineColors[] = "calcSparklineColorsAction";
+inline const char kCalcSparklineAxisGeneral[] = "calcSparklineAxisGeneralAction";
+inline const char kCalcSparklineAxisDate[] = "calcSparklineAxisDateAction";
+inline const char kCalcSparklineAxisShow[] = "calcSparklineAxisShowAction";
+inline const char kCalcSparklineAxisRightToLeft[] = "calcSparklineAxisRightToLeftAction";
+inline const char kCalcSparklineMinAuto[] = "calcSparklineMinAutoAction";
+inline const char kCalcSparklineMinSame[] = "calcSparklineMinSameAction";
+inline const char kCalcSparklineMinCustom[] = "calcSparklineMinCustomAction";
+inline const char kCalcSparklineMaxAuto[] = "calcSparklineMaxAutoAction";
+inline const char kCalcSparklineMaxSame[] = "calcSparklineMaxSameAction";
+inline const char kCalcSparklineMaxCustom[] = "calcSparklineMaxCustomAction";
+inline const char kCalcSparklineGroup[] = "calcSparklineGroupAction";
+inline const char kCalcSparklineUngroup[] = "calcSparklineUngroupAction";
+inline const char kCalcSparklineClear[] = "calcSparklineClearAction";
+inline const char kCalcSparklineClearGroup[] = "calcSparklineClearGroupAction";
+inline const char kCalcTableRename[] = "calcTableRenameAction";
+inline const char kCalcTableResize[] = "calcTableResizeAction";
+inline const char kCalcPivotCalculatedField[] = "calcPivotCalculatedFieldAction";
 
 // QindaShow commands.
 inline const char kShowFillColor[] = "showFillColorAction";

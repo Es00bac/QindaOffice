@@ -147,6 +147,12 @@ void moveRuleFormulas(Workbook &book, const StructureEdit &edit);
 // titles and manual page breaks, and the ranges of the rules it keeps as
 // written (KeptRule). Called by moveSheetContents.
 void moveSheetPrintAndKept(Sheet &sheet, const StructureEdit &edit);
+// M90 (D-098), structure_kept.cpp: the formulas inside the rules kept as
+// Excel wrote them (KeptRule::xml — <formula>, <formula1>/<formula2>,
+// <xm:f>, a cfvo's formula) through the edit, like moveRuleFormulas does
+// for modelled rules, on every sheet. Called BEFORE the cells move (and
+// before moveSheetPrintAndKept moves their sqref).
+void moveKeptRuleFormulas(Workbook &book, const StructureEdit &edit);
 // M82 (D-091), custom_view.cpp: the edited sheet's parts of the Custom
 // Views — hidden lines, filter range, print area, titles and breaks, the
 // cells shown — move with the cells.

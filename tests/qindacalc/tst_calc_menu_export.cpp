@@ -64,6 +64,14 @@ private slots:
         QVERIFY2(unresolved.isEmpty(), qPrintable(unresolved.join(QLatin1Char(' '))));
         // The generated template ids are in the tree and stable.
         QVERIFY(ids.filter(QStringLiteral("calcTemplate_")).size() >= 1);
+        // M90 commands keep the same stable identity on the panel and ribbon.
+        for (const char *id : {"calcSolverAction", "calcInsertSparklineLineAction", "calcInsertSparklineColumnAction",
+                               "calcInsertSparklineWinLossAction", "calcSparklineEditDataAction", "calcSparklineHighPointAction",
+                               "calcSparklineColorsAction", "calcSparklineAxisDateAction", "calcSparklineGroupAction",
+                               "calcSparklineUngroupAction", "calcSparklineClearGroupAction", "calcTableRenameAction",
+                               "calcTableResizeAction", "calcPivotCalculatedFieldAction"}) {
+            QVERIFY2(ids.contains(QString::fromLatin1(id)), id);
+        }
         // Every M66 command is exported for the panel.
         for (const char *id : {"insertHyperlinkAction", "calcEditHyperlinkAction", "calcOpenHyperlinkAction",
                                "calcRemoveHyperlinkAction", "calcGroupAction", "calcUngroupAction",

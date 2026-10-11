@@ -344,8 +344,9 @@ struct ValidationRule {
 // a custom icon, a rule kind Excel may add, a formula the parser cannot
 // read — kept as the file wrote it, so a save gives it back byte for byte
 // instead of dropping it. Its ranges are moved by structural edits like
-// every rule (the writer then rewrites only the sqref); the formulas inside
-// it are not.
+// every rule (the writer then rewrites only the sqref); since M90 (D-098)
+// the formulas inside it move too (structure_kept.cpp), except one the
+// engine cannot parse (`staleFormulas`, which the save reports).
 struct KeptRule {
     enum class Kind {
         CondFormat,     // a <conditionalFormatting> element (its kept cfRules)
@@ -358,6 +359,7 @@ struct KeptRule {
     QString xml;             // the element as read (its sqref inside)
     QList<int> priorities;   // conditional formats: its rules' priorities, in order
     QString reason;          // what QindaCalc lacks to model it (reports, open notes)
+    bool staleFormulas = false; // M90: a formula in it could not follow a structural edit
     bool operator==(const KeptRule &) const = default;
 };
 

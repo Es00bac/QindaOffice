@@ -7,6 +7,7 @@
 #include "calc_recovery_pivots.h"
 #include "calc_recovery_rules.h"
 #include "calc_recovery_views.h"
+#include "calc_recovery_sparklines.h"
 
 #include "eval.h"
 #include "parser.h"
@@ -373,6 +374,7 @@ QByteArray snapshotToJson(const WorkbookSnapshot &snapshot)
         out.insert(QStringLiteral("dataTables"), dataTablesToJson(sheet.dataTables));
         out.insert(QStringLiteral("keptRules"), keptRulesToJson(sheet.keptRules));
         out.insert(QStringLiteral("customViews"), sheetCustomViewsToJson(sheet.customViews)); // M82
+        out.insert(QStringLiteral("sparklines"), sparklineGroupsToJson(sheet.sparklines));    // M90
         sheets.append(out);
     }
     root.insert(QStringLiteral("sheets"), sheets);
@@ -514,6 +516,7 @@ bool snapshotFromJson(const QByteArray &json, WorkbookSnapshot *out, QString *er
         sheet.dataTables = dataTablesFromJson(object.value(QStringLiteral("dataTables")).toArray());
         sheet.keptRules = keptRulesFromJson(object.value(QStringLiteral("keptRules")).toArray());
         sheet.customViews = sheetCustomViewsFromJson(object.value(QStringLiteral("customViews")).toArray()); // M82
+        sheet.sparklines = sparklineGroupsFromJson(object.value(QStringLiteral("sparklines")).toArray());    // M90
         snapshot.sheets.append(sheet);
     }
     snapshot.activeSheet = qBound(0, snapshot.activeSheet, snapshot.sheets.size() - 1);

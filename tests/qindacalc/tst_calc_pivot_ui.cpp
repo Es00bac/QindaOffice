@@ -390,7 +390,7 @@ private slots:
         const QString path = dir.filePath(QStringLiteral("calculated.xlsx"));
         QFile file(path);
         QVERIFY(file.open(QIODevice::WriteOnly));
-        file.write(QindaOffice::Test::calculatedFieldBook().build());
+        file.write(QindaOffice::Test::calculatedFieldBook(false).build());
         file.close();
         Scene scene(QSize(1280, 800));
         QVERIFY2(scene.ready(), qPrintable(scene.error));

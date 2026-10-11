@@ -77,6 +77,9 @@ add_library(calc_engine STATIC
     src/pivot_edit.h
     src/pivot_edit_internal.h
     src/pivot_filters.cpp
+    src/pivot_dates.cpp
+    src/pivot_calculated.cpp
+    src/pivot_acc.cpp
     src/pivot_group.cpp
     src/pivot_remap.cpp
     src/pivot_layout.cpp
@@ -146,6 +149,32 @@ add_library(calc_engine STATIC
     src/validation_eval.cpp
     src/what_if_cells.cpp
     src/what_if_internal.h
+    # M90 (D-098): Data ▸ Solver — the model in Excel's names, Simplex LP,
+    # GRG Nonlinear, Evolutionary, branch and bound, the Answer Report.
+    src/solver.cpp
+    src/solver_status.cpp
+    src/row_visibility.cpp
+    src/solver.h
+    src/solver_bnb.cpp
+    src/solver_cells.cpp
+    src/solver_evolve.cpp
+    src/solver_internal.h
+    src/solver_lp.cpp
+    src/solver_math.h
+    src/solver_model.cpp
+    src/solver_model.h
+    src/solver_nlp.cpp
+    src/solver_report.cpp
+    # M90 (D-098): sparklines, the theme's colours, kept rules' formulas
+    # through structural edits.
+    src/sparkline.cpp
+    src/sparkline.h
+    src/sparkline_values.cpp
+    src/structure_kept.cpp
+    src/table_design.cpp
+    src/table_design.h
+    src/theme_colors.cpp
+    src/theme_colors.h
 )
 
 target_include_directories(calc_engine

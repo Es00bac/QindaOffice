@@ -16,6 +16,7 @@
 #include "calc_print_internal.h"
 
 #include "calc_cell_look.h"
+#include "calc_sparkline_look.h"
 #include "calc_text_overflow.h"
 
 #include "number_format.h"
@@ -237,7 +238,8 @@ void paintPageCells(const Canvas &canvas, const PrintContext &ctx, const QList<S
         }
     }
 
-    // Pass 1: fills and data bars.
+    // Pass 1: fills, data bars and (M90) sparklines.
+    const SparklinePainter sparklines(*ctx.book, ctx.sheet);
     for (const PrintedCell &cell : std::as_const(cells)) {
         const qint32 styleId = sheet.styleIdAt(cell.addr);
         const CellStyle *style = styleId != 0 ? ctx.book->style(styleId) : nullptr;
@@ -251,6 +253,7 @@ void paintPageCells(const Canvas &canvas, const PrintContext &ctx, const QList<S
         if (conditional.dataBar) {
             paintDataBar(p, device, *conditional.dataBar);
         }
+        sparklines.paint(p, cell.addr, device, device.height() / qMax(qreal(1e-9), qreal(cell.rect.height())));
     }
 
     // The texts, the page's own and those running in from another page.

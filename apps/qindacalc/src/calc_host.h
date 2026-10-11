@@ -18,6 +18,8 @@
 // calc_host_tables.cpp (Excel tables and the chart sheet view, M69).
 
 #include "assistant_controller.h"
+#include "calc_solver.h"
+#include "calc_sparklines.h"
 #include "document_host.h"
 #include "spreadsheet_document.h"
 #include "spreadsheet_item.h"
@@ -70,6 +72,11 @@ class CalcHost : public Quick::DocumentHost {
     // fitToHeight, scale} for the ribbon's slots.
     Q_PROPERTY(QStringList paperSizeIds READ paperSizeIds CONSTANT)
     Q_PROPERTY(QVariantMap scaling READ scaling NOTIFY pageLayoutChanged)
+    // M90 (D-098): Data ▸ Solver (calc_solver.h), sparklines (calc_sparklines.h).
+    Q_PROPERTY(QindaOffice::Apps::QindaCalc::CalcSolver *solver READ solver CONSTANT)
+    Q_PROPERTY(QindaOffice::Apps::QindaCalc::CalcSparklines *sparklines READ sparklines CONSTANT)
+    // M90: Table Design's Table Name for the table under the cursor ("" outside one).
+    Q_PROPERTY(QString tableName READ tableName NOTIFY cursorChanged)
 public:
     CalcHost();
     ~CalcHost() override;
@@ -164,6 +171,15 @@ public:
     [[nodiscard]] QVariantMap chartSheetData() const;
 
     [[nodiscard]] Ai::AssistantController *assistant() const { return m_assistant; }
+    [[nodiscard]] CalcSolver *solver() const { return m_solver; }
+    [[nodiscard]] CalcSparklines *sparklines() const { return m_sparklines; }
+    // ---- M90: Table Design (calc_host_m90.cpp): "" or Excel's message ----
+    [[nodiscard]] QString tableName() const;
+    Q_INVOKABLE QVariantList pivotCalculatedFields() const;
+    Q_INVOKABLE QString applyPivotCalculatedField(const QString &name, const QString &formula);
+    Q_INVOKABLE QString renameTableTo(const QString &name);
+    Q_INVOKABLE QString resizeTableTo(const QString &range);
+    Q_INVOKABLE QString tableRangeText() const;
 
     // ---- links, outline, protection (calc_host_features.cpp, M66) ----
     // The Link dialog's state for the cursor: {address, location, display,
@@ -349,6 +365,9 @@ signals:
     void inputQuestioned(const QString &title, const QString &message, bool warning);
     void pageLayoutChanged();
     void customViewsRequested(); // M82
+    void tableRenameRequested();
+    void pivotCalculatedRequested(); // M90: Table Design ▸ Rename / Resize Table
+    void tableResizeRequested();
     void viewWindowRequested();  // M82: View ▸ New Window
 
 protected:
@@ -446,6 +465,13 @@ private:
     // active sheet; invalid when it is not one.
     [[nodiscard]] CalcEng::CellAddr cellFromText(const QString &text) const;
     [[nodiscard]] QList<CalcEng::CellAddr> cellsFromText(const QString &text) const;
+    // calc_host_m90.cpp (M90, D-098): Solver, sparklines, table design,
+    // calculated fields — their commands, menus and enabled state.
+    friend class CalcSolver;
+    friend class CalcSparklines;
+    void createM90Actions();
+    void insertM90Menus();
+    void syncM90FromCursor();
 
     SpreadsheetDocument *m_document = nullptr;
     QPointer<SpreadsheetItem> m_grid;
@@ -464,6 +490,8 @@ private:
     std::shared_ptr<WorkbookSnapshot> m_goalSeekBefore;
     bool m_circlesOn = false;
     QString m_condPreset; // the rule kind a gallery command opens the rule dialog on
+    CalcSolver *m_solver = nullptr;         // M90: Data ▸ Solver
+    CalcSparklines *m_sparklines = nullptr; // M90: Insert ▸ Sparklines, the Sparkline tab
 };
 
 } // namespace QindaOffice::Apps::QindaCalc

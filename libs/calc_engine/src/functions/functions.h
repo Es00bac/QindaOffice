@@ -84,6 +84,15 @@ public:
         Q_UNUSED(col);
         return {};
     }
+    // Visibility affects SUBTOTAL/AGGREGATE (D-098); synthetic hosts default
+    // to visible rows. The workbook implementation reads filters and outlines.
+    [[nodiscard]] virtual bool rowExcluded(qint32 sheet, qint32 row, bool includeHidden) const
+    {
+        Q_UNUSED(sheet);
+        Q_UNUSED(row);
+        Q_UNUSED(includeHidden);
+        return false;
+    }
     // Excel tables (M69, D-078) for structured references: a table by name
     // (case-insensitive; `sheet` receives its sheet) and the table holding a
     // cell; nullptr when there is none. Borrowed: valid until the next

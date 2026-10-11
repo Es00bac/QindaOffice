@@ -13,6 +13,8 @@
 #include "spreadsheet_document.h"
 
 #include "header_footer.h"
+#include "xlsx_print_assets.h"
+#include "calc_print_notes.h"
 #include "number_format.h"
 #include "page_layout.h"
 #include "sheet.h"
@@ -36,7 +38,7 @@ namespace {
 
 // The header or footer of a page: three sections on one band.
 void paintHeaderFooter(const Canvas &canvas, const QString &code, bool header, const Sheet::PageSetup &setup,
-                       const PrintLayout &layout, const HeaderFooterContext &context, const QFont &base)
+                       const PrintLayout &layout, const HeaderFooterContext &context, const QFont &base, const IO::LegacyPrintAssets &assets, const QString &variant)
 {
     if (code.isEmpty()) {
         return;
@@ -46,7 +48,7 @@ void paintHeaderFooter(const Canvas &canvas, const QString &code, bool header, c
     const qreal left = setup.alignWithMargins ? setup.marginLeft * 72 : 18;
     const qreal right = layout.paperPt.width() - (setup.alignWithMargins ? setup.marginRight * 72 : 18);
     QPainter &p = *canvas.p;
-    const auto paintSection = [&](const HeaderFooterSection &section, Qt::Alignment align) {
+    const auto paintSection = [&](const HeaderFooterSection &section, Qt::Alignment align, const QString &position) {
         if (section.isEmpty()) {
             return;
         }
@@ -56,6 +58,8 @@ void paintHeaderFooter(const Canvas &canvas, const QString &code, bool header, c
             QString text;
             QFont font;
             QColor colour;
+            QImage image;
+            QSizeF size;
         };
         QList<QList<Piece>> lines{QList<Piece>()};
         for (const HeaderFooterRun &run : section.runs) {
@@ -69,12 +73,28 @@ void paintHeaderFooter(const Canvas &canvas, const QString &code, bool header, c
             font.setUnderline(run.underline || run.doubleUnderline);
             font.setStrikeOut(run.strikeout);
             const QColor colour = run.color && !setup.blackAndWhite ? QColor(run.color->r, run.color->g, run.color->b) : kInk;
+            if (run.field == HeaderFooterRun::Field::Picture) {
+                const auto picture = assets.pictures.value(position + variant, assets.pictures.value(position));
+                QImage image = QImage::fromData(picture.bytes);
+                if (!image.isNull()) {
+                    const auto crop = picture.crop;
+                    if (crop.left() + crop.right() >= 1 || crop.top() + crop.bottom() >= 1) continue;
+                    if (crop.left() + crop.right() < 1 && crop.top() + crop.bottom() < 1 && !crop.isNull())
+                        image = image.copy(QRectF(image.width() * crop.left(), image.height() * crop.top(),
+                                                 image.width() * (1 - crop.left() - crop.right()),
+                                                 image.height() * (1 - crop.top() - crop.bottom())).toRect());
+                    if (setup.blackAndWhite) image = image.convertToFormat(QImage::Format_Grayscale8);
+                    const QSizeF size = picture.points.isEmpty() ? QSizeF(image.size()) * 0.75 : picture.points;
+                    lines.last().append(Piece{{}, font, colour, image, size * scale});
+                }
+                continue;
+            }
             const QStringList parts = headerFooterRunText(run, context).split(QLatin1Char('\n'));
             for (qsizetype i = 0; i < parts.size(); ++i) {
                 if (i > 0) {
                     lines.append(QList<Piece>());
                 }
-                lines.last().append(Piece{parts.at(i), font, colour});
+                lines.last().append(Piece{parts.at(i), font, colour, {}, {}});
             }
         }
         qreal y = header ? setup.marginHeader * 72 : 0;
@@ -83,7 +103,7 @@ void paintHeaderFooter(const Canvas &canvas, const QString &code, bool header, c
         for (const QList<Piece> &line : std::as_const(lines)) {
             qreal height = base.pointSizeF() * scale * 1.2;
             for (const Piece &piece : line) {
-                height = qMax(height, QFontMetricsF(piece.font, p.device()).height() / canvas.dpp);
+                height = qMax(height, piece.image.isNull() ? QFontMetricsF(piece.font, p.device()).height() / canvas.dpp : piece.size.height());
             }
             heights.append(height);
             total += height;
@@ -94,11 +114,16 @@ void paintHeaderFooter(const Canvas &canvas, const QString &code, bool header, c
         for (qsizetype l = 0; l < lines.size(); ++l) {
             qreal width = 0;
             for (const Piece &piece : lines.at(l)) {
-                width += QFontMetricsF(piece.font, p.device()).horizontalAdvance(piece.text) / canvas.dpp;
+                width += piece.image.isNull() ? QFontMetricsF(piece.font, p.device()).horizontalAdvance(piece.text) / canvas.dpp : piece.size.width();
             }
             qreal x = align == Qt::AlignLeft ? left : align == Qt::AlignRight ? right - width
                                                                               : (layout.paperPt.width() - width) / 2;
             for (const Piece &piece : lines.at(l)) {
+                if (!piece.image.isNull()) {
+                    p.drawImage(canvas.rect(QRectF(QPointF(x, y), piece.size)), piece.image);
+                    x += piece.size.width();
+                    continue;
+                }
                 p.setFont(piece.font);
                 p.setPen(piece.colour);
                 const qreal advance = QFontMetricsF(piece.font, p.device()).horizontalAdvance(piece.text) / canvas.dpp;
@@ -109,9 +134,9 @@ void paintHeaderFooter(const Canvas &canvas, const QString &code, bool header, c
             y += heights.at(l);
         }
     };
-    paintSection(text.left, Qt::AlignLeft);
-    paintSection(text.center, Qt::AlignHCenter);
-    paintSection(text.right, Qt::AlignRight);
+    paintSection(text.left, Qt::AlignLeft, header ? QStringLiteral("LH") : QStringLiteral("LF"));
+    paintSection(text.center, Qt::AlignHCenter, header ? QStringLiteral("CH") : QStringLiteral("CF"));
+    paintSection(text.right, Qt::AlignRight, header ? QStringLiteral("RH") : QStringLiteral("RF"));
 }
 
 // Which header and footer a page takes (Different First Page, Different
@@ -127,7 +152,7 @@ QPair<QString, QString> headerFooterFor(const Sheet::PageSetup &setup, int index
     return {setup.oddHeader, setup.oddFooter};
 }
 
-void paintPage(const Canvas &canvas, const PrintContext &ctx, const PrintLayout &layout, const PrintPage &page)
+void paintPage(const Canvas &canvas, const PrintContext &ctx, const PrintLayout &layout, const PrintPage &page, const IO::LegacyPrintAssets &assets)
 {
     const Sheet &sheet = ctx.book->sheetAt(ctx.sheet);
     const Sheet::PageSetup &setup = *ctx.setup;
@@ -209,6 +234,7 @@ void paintPage(const Canvas &canvas, const PrintContext &ctx, const PrintLayout 
     };
     paintPageCells(canvas, ctx, segments(rows, ys, titleRowCount, page.titleRows, true, area),
                    segments(cols, xs, titleColCount, page.titleCols, false, area));
+    if (setup.cellComments == 2) paintDisplayedNotes(canvas, ctx, rows, cols, xs, ys, assets);
     // Pictures anchored on the page's cells (not in draft quality).
     for (const ImageSpec &image : ctx.book->images) {
         if (setup.draft || image.sheet != ctx.sheet || !image.isValid()) {
@@ -246,6 +272,7 @@ Quick::PrintRenderCallback sheetPrintRender(const SpreadsheetDocument *document,
         }
         const Workbook &book = *document->workbook();
         const PrintLayout layout = layoutPrintPages(book, sheet);
+        const auto assets = IO::legacyPrintAssets(book, sheet);
         if (layout.pages.isEmpty()) {
             return;
         }
@@ -263,7 +290,8 @@ Quick::PrintRenderCallback sheetPrintRender(const SpreadsheetDocument *document,
         ctx.base = context.baseFont;
         ctx.scale = layout.scale;
         HeaderFooterContext fields;
-        fields.pages = int(layout.pages.size());
+        const auto notePages = endNotePages(canvas, ctx, layout);
+        fields.pages = int(layout.pages.size() + notePages.size());
         fields.date = QDate::currentDate();
         fields.time = QTime::currentTime();
         fields.fileName = context.fileName;
@@ -274,11 +302,22 @@ Quick::PrintRenderCallback sheetPrintRender(const SpreadsheetDocument *document,
                 printer->newPage();
             }
             const PrintPage &page = layout.pages.at(i);
-            paintPage(canvas, ctx, layout, page);
+            paintPage(canvas, ctx, layout, page, assets);
             fields.page = page.number;
             const auto [header, footer] = headerFooterFor(setup, int(i), page.number);
-            paintHeaderFooter(canvas, header, true, setup, layout, fields, context.baseFont);
-            paintHeaderFooter(canvas, footer, false, setup, layout, fields, context.baseFont);
+            const QString variant = setup.differentFirst && i == 0 ? QStringLiteral("F")
+                : setup.differentOddEven && page.number % 2 == 0 ? QStringLiteral("E") : QString();
+            paintHeaderFooter(canvas, header, true, setup, layout, fields, context.baseFont, assets, variant);
+            paintHeaderFooter(canvas, footer, false, setup, layout, fields, context.baseFont, assets, variant);
+        }
+        for (qsizetype n = 0; n < notePages.size(); ++n) {
+            printer->newPage();
+            paintEndNotes(canvas, ctx, layout, notePages.at(n));
+            fields.page = layout.pages.last().number + int(n) + 1;
+            const auto [header, footer] = headerFooterFor(setup, int(layout.pages.size() + n), fields.page);
+            const QString variant = setup.differentOddEven && fields.page % 2 == 0 ? QStringLiteral("E") : QString();
+            paintHeaderFooter(canvas, header, true, setup, layout, fields, context.baseFont, assets, variant);
+            paintHeaderFooter(canvas, footer, false, setup, layout, fields, context.baseFont, assets, variant);
         }
     };
 }
