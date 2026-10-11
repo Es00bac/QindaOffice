@@ -237,7 +237,10 @@ private slots:
         QVERIFY(provider.readVacation(QStringLiteral("bad")));
         QVariantMap result = waitFor(spy, QStringLiteral("bad"));
         QCOMPARE(result.value(QStringLiteral("state")).toString(), QStringLiteral("rejected"));
-        QVERIFY(result.value(QStringLiteral("error")).toString().contains(QStringLiteral("AUTHENTICATE failed")));
+        const QString signInError = result.value(QStringLiteral("error")).toString();
+        QVERIFY2(signInError.contains(QStringLiteral("Authentication failed"), Qt::CaseInsensitive),
+                 qPrintable(signInError));
+        QVERIFY(!signInError.contains(QStringLiteral("wrong"))); // never echo the supplied password
 
         // A server without the vacation extension: not available, said plainly.
         FakeManageSieveServer plain("pw");

@@ -30,6 +30,8 @@ struct Command {
 // Folder) is the suite's Print Preview, so that one has none here.
 // tst_qindamail_host checks every shortcut is unique.
 constexpr Command kOrganizerCommands[] = {
+    {"mailQuickStepsAction", QT_TRANSLATE_NOOP("QindaOffice::Apps::Mail::MailHost", "Manage Quick &Steps…"), "", "zap"},
+    {"mailRunQuickStepAction", QT_TRANSLATE_NOOP("QindaOffice::Apps::Mail::MailHost", "Run Quick S&tep…"), "", "play"},
     {"mailRulesAction", QT_TRANSLATE_NOOP("QindaOffice::Apps::Mail::MailHost", "Manage &Rules && Alerts…"), "", "wand"},
     {"mailCreateRuleAction", QT_TRANSLATE_NOOP("QindaOffice::Apps::Mail::MailHost", "Create R&ule…"), "", "wand-sparkles"},
     {"mailRunRulesAction", QT_TRANSLATE_NOOP("QindaOffice::Apps::Mail::MailHost", "Run Rules &Now…"), "", "play"},
@@ -98,6 +100,8 @@ void MailHost::createOrganizerCommands()
         connect(action(QString::fromLatin1(id)), &ActionEntry::triggered, this, std::forward<decltype(slot)>(slot));
     };
     MailOrganizer *organizer = m_service->organizer();
+    on("mailQuickStepsAction", [this] { emit quickStepsRequested(currentAccountId(),selectedIds(),false); });
+    on("mailRunQuickStepAction", [this] { emit quickStepsRequested(currentAccountId(),selectedIds(),true); });
     on("mailRulesAction", [this] { emit rulesRequested(); });
     on("mailCreateRuleAction", [this, organizer] {
         const QVariantMap made = organizer->ruleFromMessage(m_service->selectedMessageId());
@@ -156,6 +160,9 @@ void MailHost::insertOrganizerMenus()
     tree->insertInto(message, archive,
                      MenuNode::submenu(QStringLiteral("mailRulesMenu"), tr("R&ules"),
                                        {a("mailCreateRuleAction"), a("mailRulesAction"), a("mailRunRulesAction")}));
+    tree->insertInto(message, archive,
+                     MenuNode::submenu(QStringLiteral("mailQuickStepsMenu"), tr("Quick &Steps"),
+                                       {a("mailRunQuickStepAction"),a("mailQuickStepsAction")}));
     tree->insertInto(message, archive, MenuNode::separator());
     tree->insertInto(message, archive, a("mailCleanUpAction"));
     tree->insertInto(message, archive, a("mailIgnoreAction"));
@@ -172,7 +179,7 @@ void MailHost::syncOrganizerState()
     const QVariantMap message = m_service->selectedMessage();
     const bool mail = m_view == QLatin1String("mail");
     const bool real = mail && !message.isEmpty() && !message.value(QStringLiteral("isDraft")).toBool();
-    QStringList onMessage{QStringLiteral("mailCreateRuleAction"), QStringLiteral("mailFlagCustomAction"),
+    QStringList onMessage{QStringLiteral("mailRunQuickStepAction"),QStringLiteral("mailCreateRuleAction"), QStringLiteral("mailFlagCustomAction"),
                           QStringLiteral("mailCleanUpAction"), QStringLiteral("mailIgnoreAction")};
     for (const auto &[id, preset] : flagPresets()) onMessage.append(QString::fromLatin1(id));
     actions()->setEnabled(onMessage, real);

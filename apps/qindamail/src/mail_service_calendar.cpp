@@ -294,6 +294,12 @@ QString MailService::updateEvent(const QVariantMap &event)
     }
     QVariantMap result;
     const QString occurrence = event.value(QStringLiteral("occurrenceId")).toString();
+    const QString scope = event.value(QStringLiteral("scope"), QStringLiteral("series")).toString();
+    if ((scope != QLatin1String("series") && scope != QLatin1String("occurrence"))
+        || (scope == QLatin1String("occurrence") && (occurrence.isEmpty() || eventOccurrence(id, occurrence).isEmpty()))) {
+        finishEventChange(requestId, QStringLiteral("rejected"), tr("Choose a valid occurrence or the entire series"));
+        return requestId;
+    }
     if (!occurrence.isEmpty() && event.value(QStringLiteral("scope")).toString() == QLatin1String("occurrence")) {
         QVariantMap fields;
         for (const char *key : {"title", "description", "location", "startLocal", "endLocal"}) {
@@ -313,9 +319,15 @@ QString MailService::updateEvent(const QVariantMap &event)
         record.insert(QStringLiteral("startLocal"), start);
         record.insert(QStringLiteral("endLocal"), end);
         record.insert(QStringLiteral("allDay"), start.size() == 10);
-        result = m_store->upsert(QStringLiteral("events"), record);
-        if (result.value(QStringLiteral("ok")).toBool() && event.contains(QStringLiteral("recurrenceRule")))
-            result = m_store->setEventRecurrence(id, event.value(QStringLiteral("recurrenceRule")).toMap());
+        if (event.contains(QStringLiteral("recurrenceRule"))) {
+            // Validate and normalize in a temporary store before changing the
+            // live event. An invalid rule must not leave half an edit behind.
+            QindaTK::LocalProductivityStore candidate;
+            result = candidate.upsert(QStringLiteral("events"), record);
+            if (result.value(QStringLiteral("ok")).toBool()) result = candidate.setEventRecurrence(id, event.value(QStringLiteral("recurrenceRule")).toMap());
+            if (result.value(QStringLiteral("ok")).toBool()) record = candidate.events().first().toMap();
+        }
+        if (result.isEmpty() || result.value(QStringLiteral("ok")).toBool()) result = m_store->upsert(QStringLiteral("events"), record);
     }
     QString error = result.value(QStringLiteral("error")).toString();
     if (!result.value(QStringLiteral("ok")).toBool() || !saveStore(&error)) {
@@ -337,6 +349,11 @@ QString MailService::deleteEvent(const QString &eventId, const QString &occurren
         return requestId;
     }
     const bool recurring = !record.value(QStringLiteral("recurrenceRule")).toMap().isEmpty();
+    if ((scope != QLatin1String("series") && scope != QLatin1String("occurrence") && scope != QLatin1String("following"))
+        || (scope != QLatin1String("series") && (occurrenceId.isEmpty() || eventOccurrence(eventId, occurrenceId).isEmpty()))) {
+        finishEventChange(requestId, QStringLiteral("rejected"), tr("Choose a valid occurrence or the entire series"));
+        return requestId;
+    }
     const QString local = occurrenceId.mid(eventId.size() + 1);
     const QDate day = QDate::fromString(local.left(10), Qt::ISODate);
     const QDate first = QDate::fromString(record.value(QStringLiteral("startLocal")).toString().left(10), Qt::ISODate);

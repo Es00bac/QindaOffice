@@ -6,10 +6,7 @@
 // remembers its iCalendar UID, invitees and SEQUENCE, so a later change goes
 // out as an update of the same meeting.
 //
-// AGENT-NOTE (toolkit follow-up in D-072): as for replies
-// (mail_service_meetings.cpp), the toolkit's SmtpMailProvider attaches the
-// request as an `invite.ics` file; it cannot write the inline
-// `text/calendar; method=REQUEST` part iMIP prefers.
+// M95: CalendarMail writes the MIME part; queued drafts retain calendar bytes.
 #include "mail_service.h"
 
 #include "contact.h"
@@ -63,12 +60,17 @@ QByteArray withoutItipLines(const QByteArray &ics)
 
 } // namespace
 
-QString MailService::sendInvitations(const QString &eventId, const QStringList &invitees)
+QString MailService::sendInvitations(const QString &eventId, const QStringList &invitees, const QString &occurrenceId)
 {
     const QString requestId = ProviderCalls::newRequestId(QStringLiteral("invite"));
     QVariantMap event;
     for (const QVariant &value : m_store->events()) {
         if (value.toMap().value(QStringLiteral("id")).toString() == eventId) event = value.toMap();
+    }
+    QVariantMap master=event;
+    if(!occurrenceId.isEmpty()) {
+        event=eventOccurrence(eventId,occurrenceId);
+        for(const char *key:{"recurrenceRule","recurrenceRaw","exceptions","overrides"})event.remove(QLatin1String(key));
     }
     QString error;
     const QList<QindaTK::Mime::Address> people = QindaTK::Mime::parseAddressList(invitees.join(QStringLiteral(", ")), &error);
@@ -95,6 +97,15 @@ QString MailService::sendInvitations(const QString &eventId, const QStringList &
     const qsizetype begin = ics.indexOf("BEGIN:VCALENDAR\r\n");
     if (begin >= 0) ics.insert(begin + 17, "METHOD:REQUEST\r\n");
     QByteArray lines;
+    if(!occurrenceId.isEmpty()) {
+        QString local=occurrenceId.mid(eventId.size()+1);
+        const bool allDay=local.size()==10;
+        local.remove(QLatin1Char('-'));local.remove(QLatin1Char(':'));
+        const QString zone=event.value(QStringLiteral("zone")).toString();
+        const QString parameter=allDay?QStringLiteral(";VALUE=DATE"):(zone==QLatin1String("UTC")?QString():QStringLiteral(";TZID=")+zone);
+        lines+=QindaTK::ICal::foldLine(QStringLiteral("RECURRENCE-ID")+parameter+QLatin1Char(':')+local
+            +(!allDay&&zone==QLatin1String("UTC")?QStringLiteral("Z"):QString()));
+    }
     lines += QindaTK::ICal::foldLine(QStringLiteral("SEQUENCE:") + QString::number(sequence));
     lines += personLine("ORGANIZER", QString(), organizerName, organizer);
     QVariantList stored;
@@ -112,9 +123,6 @@ QString MailService::sendInvitations(const QString &eventId, const QStringList &
     ics.insert(end, lines);
 
     QVariantMap draft = newDraft(rt->id());
-    const QString draftId = draft.value(QStringLiteral("id")).toString();
-    const QVariantMap file = m_attachments->importBytes(draftId + QStringLiteral("/invite"), QStringLiteral("invite.ics"),
-                                                        QStringLiteral("text/calendar"), ics);
     QStringList to;
     for (const QindaTK::Mime::Address &person : people) to.append(QindaOffice::Mail::formatMailbox(person.name, person.address));
     const QString title = event.value(QStringLiteral("title")).toString();
@@ -127,12 +135,9 @@ QString MailService::sendInvitations(const QString &eventId, const QStringList &
     if (!event.value(QStringLiteral("location")).toString().isEmpty())
         body += QLatin1Char('\n') + tr("Where: %1").arg(event.value(QStringLiteral("location")).toString());
     draft.insert(QStringLiteral("body"), body);
-    if (file.value(QStringLiteral("ok")).toBool()) {
-        draft.insert(QStringLiteral("attachments"), QVariantList{QVariantMap{
-            {QStringLiteral("id"), file.value(QStringLiteral("id"))}, {QStringLiteral("name"), QStringLiteral("invite.ics")},
-            {QStringLiteral("mimeType"), QStringLiteral("text/calendar")}, {QStringLiteral("size"), ics.size()},
-            {QStringLiteral("state"), QStringLiteral("local")}}});
-    }
+    draft.insert(QStringLiteral("calendarText"),QString::fromUtf8(ics));
+    draft.insert(QStringLiteral("calendarMethod"),QStringLiteral("REQUEST"));
+    event=master;
     event.insert(QStringLiteral("meetingUid"), uid);
     event.insert(QStringLiteral("meetingSequence"), sequence);
     event.insert(QStringLiteral("organizer"), organizer);

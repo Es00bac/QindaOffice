@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Automatic replies through ManageSieve (managesieve_provider.h).
 #include "managesieve_provider.h"
+#include "managesieve_toolkit.h"
 
 #include "managesieve_session.h"
 #include "sieve_script.h"
@@ -203,6 +204,22 @@ bool ManageSieveProvider::start(const QString &requestId, bool write, const Auto
     job.reply = reply;
     job.addresses = addresses;
     job.zone = QTimeZone::systemTimeZone();
+    // The toolkit currently owns PLAIN. Keep the existing LOGIN/XOAUTH2
+    // compatibility path until its public client exposes those mechanisms.
+    if (m_mechanism != "login"_L1 && m_mechanism != "xoauth2"_L1) {
+        startToolkitVacation(this,m_server,m_secret,write,reply,addresses,[this,requestId,job](QVariantMap result) {
+            const QString sasl=result.value(u"capabilities"_s).toMap().value(u"SASL"_s).toString().toUpper();
+            if(job.credentials.mechanism=="auto"_L1&&!result.value(u"ok"_s).toBool()
+                &&!sasl.contains(u"PLAIN"_s)&&sasl.contains(u"LOGIN"_s)) {
+                QindaTK::Protocol::startWorker(this,[job]{return run(job);},[this,requestId](QVariantMap fallback){
+                    fallback.insert(u"requestId"_s,requestId);emit vacationFinished(requestId,fallback);
+                });
+                return;
+            }
+            result.insert(u"requestId"_s,requestId);emit vacationFinished(requestId,result);
+        });
+        return true;
+    }
     QindaTK::Protocol::startWorker(this, [job] { return run(job); }, [this, requestId](const QVariantMap &done) {
         QVariantMap result = done;
         result.insert(u"requestId"_s, requestId);

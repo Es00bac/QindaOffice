@@ -77,7 +77,7 @@ qt_add_qml_module(office_mail
         src/msg_properties.cpp src/msg_properties.h
         src/msg_reader.cpp src/msg_reader.h
         src/outlook_items.h
-        src/outlook_calendar.cpp
+        src/outlook_calendar.cpp src/outlook_recurrence.cpp
         src/outlook_contact.cpp
         src/pst_crypt.cpp src/pst_crypt.h
         src/pst_ltp.cpp src/pst_ltp.h
@@ -118,6 +118,7 @@ qt_add_qml_module(office_mail
         src/mail_criteria.cpp src/mail_criteria.h
         src/mail_rules.cpp src/mail_rules.h
         src/managesieve_provider.cpp src/managesieve_provider.h
+        src/managesieve_toolkit.cpp src/managesieve_toolkit.h
         src/managesieve_session.cpp src/managesieve_session.h
         src/search_folders.cpp src/search_folders.h
         src/sieve_script.cpp src/sieve_script.h

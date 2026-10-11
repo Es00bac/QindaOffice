@@ -5,10 +5,12 @@
 #include "account_store.h"
 #include "autoconfig.h"
 #include "contact_store.h"
+#include "desktop_notifier.h"
 #include "folder_model.h"
 #include "json_settings.h"
 #include "mail_secrets.h"
 #include "mail_organizer.h"
+#include "mail_quick_steps.h"
 #include "message_list_model.h"
 #include "paths.h"
 #include "provider_calls.h"
@@ -73,6 +75,7 @@ MailService &MailService::shared()
 
 void MailService::initialize(const Options &options)
 {
+    QindaOffice::Mail::DesktopNotifier::prepare();
     m_calls = new ProviderCalls(this);
     m_autoSync = options.autoSync;
     m_dataDir = options.dataDir.isEmpty()
@@ -133,6 +136,7 @@ void MailService::initialize(const Options &options)
     m_outlookImport = new PstImporter(this);
     // M81: rules, categories, flags, search folders, automatic replies.
     m_organizer = new MailOrganizer(this, QFileInfo(settingsPath).absolutePath() + QStringLiteral("/organizer.json"), this);
+    m_quickSteps = new MailQuickSteps(this, QFileInfo(settingsPath).absolutePath() + QStringLiteral("/quick_steps.json"), this);
 
     m_folderModel = new FolderModel(this);
     m_messageModel = new MessageListModel(this);

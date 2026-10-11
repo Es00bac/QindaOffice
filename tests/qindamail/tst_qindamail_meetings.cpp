@@ -12,7 +12,9 @@
 #include "fake_mail_server.h"
 #include "mail_test_support.h"
 
+#include <qindatk/calendar_mail.h>
 #include <qindatk/local_productivity_store.h>
+#include <qindatk/mail_mime.h>
 
 using namespace QindaOffice::Apps::Mail;
 
@@ -103,11 +105,12 @@ private slots:
         const QByteArray reply = smtp.delivered.first();
         QVERIFY(reply.contains("Subject: Accepted: Quarterly planning"));
         QVERIFY(smtp.recipients.join(' ').contains("grace@example.org"));
-        // The reply.ics travels base64-encoded; decode and check it.
-        const qsizetype at = reply.indexOf("reply.ics");
-        QVERIFY(at > 0);
-        const qsizetype bodyStart = reply.indexOf("\r\n\r\n", at) + 4;
-        const QByteArray ics = QByteArray::fromBase64(reply.mid(bodyStart, reply.indexOf("--", bodyStart) - bodyStart));
+        // The toolkit sends iTIP as a text/calendar MIME alternative.
+        const auto replyMime = QindaTK::Mime::parse(reply);
+        QCOMPARE(replyMime.calendarMethod, QStringLiteral("REPLY"));
+        const QByteArray ics = replyMime.calendar.toUtf8();
+        QindaTK::CalendarMail calendarCodec;
+        QVERIFY2(calendarCodec.parse(reply).value(QStringLiteral("ok")).toBool(), ics.constData());
         QVERIFY2(ics.contains("METHOD:REPLY"), ics.constData());
         QVERIFY(ics.contains("UID:planning-42@example.org"));
         QVERIFY(ics.contains("SEQUENCE:1"));
@@ -155,11 +158,12 @@ private slots:
         QVERIFY(mail.contains("Subject: Invitation: Planning"));
         const QByteArray rcpt = smtp.recipients.join(' ');
         QVERIFY(rcpt.contains("grace@example.org") && rcpt.contains("alan@example.org"));
-        const qsizetype at = mail.indexOf("invite.ics");
-        const qsizetype bodyStart = mail.indexOf("\r\n\r\n", at) + 4;
-        QByteArray ics = QByteArray::fromBase64(mail.mid(bodyStart, mail.indexOf("--", bodyStart) - bodyStart));
-        QVERIFY(ics.contains("\r\n "));                    // long lines are folded (RFC 5545 §3.1)…
-        ics.replace("\r\n ", "");                          // …and checked unfolded
+        const auto requestMime = QindaTK::Mime::parse(mail);
+        QCOMPARE(requestMime.calendarMethod, QStringLiteral("REQUEST"));
+        QByteArray ics = requestMime.calendar.toUtf8();
+        QindaTK::CalendarMail calendarCodec;
+        QVERIFY2(calendarCodec.parse(mail).value(QStringLiteral("ok")).toBool(), ics.constData());
+        ics.replace("\r\n ", ""); // inspect unfolded properties
         QVERIFY2(ics.contains("METHOD:REQUEST"), ics.constData());
         QVERIFY(ics.contains("UID:plan-7@qindamail"));
         QVERIFY(ics.contains("SEQUENCE:0"));
@@ -181,6 +185,56 @@ private slots:
                  QStringLiteral("rejected"));
         QCOMPARE(MailTest::waitState(finished, service->sendInvitations(QStringLiteral("event:none"), invitees)).first,
                  QStringLiteral("rejected"));
+    }
+
+    void changedOccurrenceKeepsItsSeriesAndInvitationIdentity()
+    {
+        MailTest::Env env;
+        MailService *service = env.service.get();
+        MailTest::FakeImapServer imap("pw");
+        MailTest::FakeMailServer smtp(MailTest::FakeMailServer::Kind::Smtp, "pw");
+        const QVariantMap added = service->addAccount({{QStringLiteral("kind"), QStringLiteral("imap")},
+                                                       {QStringLiteral("displayName"), QStringLiteral("Work")},
+                                                       {QStringLiteral("emailAddress"), QStringLiteral("ada@work.example")},
+                                                       {QStringLiteral("incoming"), server(imap.port(), "imap")},
+                                                       {QStringLiteral("outgoing"), server(smtp.port(), nullptr)}},
+                                                      QStringLiteral("pw"));
+        QVERIFY2(added.value(QStringLiteral("ok")).toBool(), qPrintable(added.value(QStringLiteral("error")).toString()));
+        const QString id = QStringLiteral("event:weekly-review");
+        const QString occurrence = id + QStringLiteral("/2026-10-19T09:00:00");
+        QSignalSpy changes(service, &MailService::eventChangeFinished);
+        const QVariantMap rule{{QStringLiteral("frequency"), QStringLiteral("weekly")},
+                               {QStringLiteral("interval"), 1},
+                               {QStringLiteral("weekdays"), QVariantList{1}},
+                               {QStringLiteral("endMode"), QStringLiteral("never")}};
+        QCOMPARE(MailTest::waitState(changes, service->createEvent({
+                     {QStringLiteral("id"), id}, {QStringLiteral("title"), QStringLiteral("Weekly review")},
+                     {QStringLiteral("startLocal"), QStringLiteral("2026-10-12T09:00:00")},
+                     {QStringLiteral("endLocal"), QStringLiteral("2026-10-12T10:00:00")},
+                     {QStringLiteral("zone"), QStringLiteral("Europe/Berlin")},
+                     {QStringLiteral("recurrenceRule"), rule}})).first, QStringLiteral("accepted"));
+        QCOMPARE(MailTest::waitState(changes, service->updateEvent({
+                     {QStringLiteral("id"), id}, {QStringLiteral("scope"), QStringLiteral("occurrence")},
+                     {QStringLiteral("occurrenceId"), occurrence},
+                     {QStringLiteral("title"), QStringLiteral("Rescheduled review")},
+                     {QStringLiteral("startLocal"), QStringLiteral("2026-10-19T11:00:00")},
+                     {QStringLiteral("endLocal"), QStringLiteral("2026-10-19T12:00:00")}})).first,
+                 QStringLiteral("accepted"));
+        QVERIFY(!service->eventById(id).value(QStringLiteral("recurrenceRule")).toMap().isEmpty());
+        QSignalSpy sent(service, &MailService::operationFinished);
+        QCOMPARE(MailTest::waitState(sent, service->sendInvitations(
+                     id, {QStringLiteral("grace@example.org")}, occurrence), 20000).first,
+                 QStringLiteral("accepted"));
+        QTRY_COMPARE(smtp.delivered.size(), 1);
+        const auto mime = QindaTK::Mime::parse(smtp.delivered.first());
+        QCOMPARE(mime.calendarMethod, QStringLiteral("REQUEST"));
+        const QByteArray calendar = mime.calendar.toUtf8();
+        QVERIFY(calendar.contains("RECURRENCE-ID;TZID=Europe/Berlin:20261019T090000"));
+        QVERIFY(calendar.contains("SUMMARY:Rescheduled review"));
+        QVERIFY(!calendar.contains("RRULE:"));
+        QindaTK::CalendarMail codec;
+        QVERIFY2(codec.parse(smtp.delivered.first()).value(QStringLiteral("ok")).toBool(), calendar.constData());
+        QVERIFY(!service->eventById(id).value(QStringLiteral("recurrenceRule")).toMap().isEmpty());
     }
 
     void invitationFromAFileUpdatesTheCalendarOnly()

@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// Process-wide engine shared by MailHost windows (D-042). Owns the local
-// store ($XDG_DATA_HOME/qindaoffice/mail/store.json), attachments, accounts,
-// keyring and one AccountRuntime per account. Built-in account `local`
-// ("On this computer") never enters accounts.json. Exposes folders, messages,
-// selection, drafts, sending, calendars and tasks to QML.
+// Process-wide MailHost engine (D-042): store, attachments, accounts,
+// keyring and one AccountRuntime per account. Built-in `local` stays out of
+// accounts.json; folders, drafts, messages, calendar and tasks are QML APIs.
 //
 // AGENT-CONTRACT (the app lead's QML, docs/mail.md#qindamail-app): the
 // property, invokable, signal and role names below are the QML API; rename
@@ -16,10 +14,7 @@
 // AGENT-GUARD: no property, result, status text or log line carries a
 // password or token (AccountRuntime is the only code that handles them).
 //
-// Implementations: mail_service.cpp (lifecycle), _folders, _messages, _sync,
-// _compose, _accounts, _calendar, _tasks; M64 (D-072): _source (RFC 5322),
-// _files (.eml/.msg/.mbox), _contacts, _meetings (iMIP). M81 (D-090): rules,
-// categories, flags, search folders and replies are in mail_organizer.h.
+// Implementations are split by service; mail_organizer.h owns M81 workflows.
 
 #include "account_runtime.h"
 #include "account_store.h"
@@ -70,11 +65,13 @@ class QNetworkAccessManager;
 namespace QindaOffice::Apps::Mail {
 
 class MailOrganizer;
+class MailQuickSteps;
 class ProviderCalls;
 class PstImporter;
 
 Q_MOC_INCLUDE("pst_import.h")
 Q_MOC_INCLUDE("mail_organizer.h")
+Q_MOC_INCLUDE("mail_quick_steps.h")
 
 inline constexpr const char kLocalAccountId[] = "local";
 inline constexpr const char kLocalCalendarId[] = "local";
@@ -118,6 +115,7 @@ class MailService : public QObject {
     Q_PROPERTY(QindaOffice::Mail::ContactStore *contacts READ contacts CONSTANT)
     // ---- Outlook data files (M76, pst_import.h) ----
     Q_PROPERTY(QindaOffice::Apps::Mail::PstImporter *outlookImport READ outlookImport CONSTANT)
+    Q_PROPERTY(QindaOffice::Apps::Mail::MailQuickSteps *quickSteps READ quickSteps CONSTANT)
     Q_PROPERTY(QindaOffice::Apps::Mail::MailOrganizer *organizer READ organizer CONSTANT)   // M81
 
 public:
@@ -231,9 +229,7 @@ public:
     // ---- message sources and files (M64: _source, _files) ----
     // The RFC 5322 source when this computer has it (never the network).
     [[nodiscard]] QByteArray storedSource(const QString &messageId) const;
-    // The source, first downloaded whole from the IMAP server when needed
-    // (ImapSourceFetcher) and kept; done(source, error) runs on a later turn.
-    // Empty source: show the record.
+    // Fetch/cache IMAP source; done(source,error) runs later. Empty: show the record.
     void loadSource(const QString &messageId, std::function<void(const QByteArray &, const QString &)> done);
     // What the reading pane and the printer show: the parsed source when this
     // computer has it, else a message built from the stored record.
@@ -258,6 +254,7 @@ public:
     [[nodiscard]] QindaOffice::Mail::ContactStore *contacts() const { return m_contacts; }
     [[nodiscard]] PstImporter *outlookImport() const { return m_outlookImport; }
     [[nodiscard]] MailOrganizer *organizer() const { return m_organizer; }
+    [[nodiscard]] MailQuickSteps *quickSteps() const { return m_quickSteps; }
     // "Add sender to contacts": {ok, id, existed, error}.
     Q_INVOKABLE QVariantMap addSenderToContacts(const QString &messageId);
     // Recipient autocomplete: contacts first, then addresses seen in mail,
@@ -280,7 +277,7 @@ public:
     Q_INVOKABLE QString respondToMeeting(const QString &messageId, const QString &response);
     // The event as a METHOD:REQUEST to `invitees` ("Name <addr>" each) through
     // a sending account (_invitations); the event keeps uid, invitees, SEQUENCE.
-    Q_INVOKABLE QString sendInvitations(const QString &eventId, const QStringList &invitees);
+    Q_INVOKABLE QString sendInvitations(const QString &eventId, const QStringList &invitees, const QString &occurrenceId = {});
 
     // ---- sync (_sync) ----
     Q_INVOKABLE QString syncAll();
@@ -318,6 +315,7 @@ public:
     // minutes, scope, occurrenceId}.
     Q_INVOKABLE void applyChange(const QString &requestId, const QString &eventId, const QVariantMap &proposal);
     Q_INVOKABLE QVariantMap eventById(const QString &eventId) const;
+    Q_INVOKABLE QVariantMap eventOccurrence(const QString &eventId, const QString &occurrenceId) const;
     Q_INVOKABLE QString importIcs(const QUrl &url, const QString &calendarId = {});
     // The file's VTODOs as tasks on the board; returns how many (M56).
     int importIcsTasks(const QString &path);
@@ -456,7 +454,7 @@ private:
     void deliver(const QString &requestId, const QVariantMap &draft);
     void fileSentCopy(AccountRuntime *runtime, const QVariantMap &draft, const QVariantMap &sendResult,
                       const QString &requestId);
-    void storeLocalSentCopy(const QVariantMap &draft, const QString &fromAddress, const QString &fromName);
+    void storeLocalSentCopy(const QVariantMap &draft, const QString &fromAddress, const QString &fromName, const QByteArray &source = {});
     void finishSend(const QString &requestId, QVariantMap result);
     // _calendar
     void rebuildEvents();
@@ -512,6 +510,7 @@ private:
     QindaOffice::Mail::ContactStore *m_contacts = nullptr;
     PstImporter *m_outlookImport = nullptr;
     MailOrganizer *m_organizer = nullptr;
+    MailQuickSteps *m_quickSteps = nullptr;
     bool m_bulkSources = false;
     QHash<QString, QList<std::function<void(const QByteArray &, const QString &)>>> m_sourceWaiters;
     mutable QHash<QString, std::shared_ptr<const QindaOffice::Mail::MessageContent>> m_contentCache;

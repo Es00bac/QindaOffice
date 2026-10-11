@@ -473,6 +473,21 @@ QQuickRootItem#MailWindow
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
                   QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_quickSteps
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_mailQuickStepsAction
+                RibbonButton#ribbonAction_mailQuickStepsAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_mailRunQuickStepAction
+                RibbonButton#ribbonAction_mailRunQuickStepAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
             RibbonGroup#ribbonGroup_respond
               Overline#ribbonGroupCaption
               QQuickRectangle#ribbonGroupCard

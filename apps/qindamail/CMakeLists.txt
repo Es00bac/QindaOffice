@@ -45,6 +45,8 @@ set(qindamail_qml
     qml/RunRulesDialog.qml
     qml/SearchFolderDialog.qml
     qml/TaskDialog.qml
+    qml/QuickStepActions.qml
+    qml/QuickStepsDialog.qml
 )
 foreach(qml_file IN LISTS qindamail_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -69,6 +71,7 @@ qt_add_qml_module(qindamail_app
         src/mail_service.cpp src/mail_service.h
         src/mail_service_accounts.cpp
         src/mail_service_calendar.cpp
+        src/mail_service_occurrences.cpp
         src/mail_service_compose.cpp
         src/mail_service_ical.cpp
         src/ics_tasks.cpp src/ics_tasks.h
@@ -93,6 +96,7 @@ qt_add_qml_module(qindamail_app
         # M81 (D-090): rules, categories, flags, search folders, automatic replies
         src/imap_extras.cpp src/imap_extras.h
         src/mail_host_organizer.cpp
+        src/mail_quick_steps.cpp src/mail_quick_steps.h src/mail_quick_steps_run.cpp
         src/mail_organizer.cpp src/mail_organizer.h
         src/mail_organizer_actions.cpp
         src/mail_organizer_board.cpp

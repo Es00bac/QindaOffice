@@ -342,6 +342,8 @@ styles — each kept in `.qdiagram` and carried through `.vsdx`.
 
 | **M93** Write native charts, SmartArt and shapes (D-101) | Insert/edit/Undo/save/reopen/recovery/print/PDF; chart data and plot type with embedded xlsx; SmartArt cached drawing and node text; basic drawing shapes with source preservation | Synthetic semantic/schema and embedded-workbook checks, real-window wide/narrow editor and ribbon/menu gates; [Word graphics](../word-graphics.md) and [verification](../verification.md). Desktop Office comparison remains manual. |
 
+| **M95** Mail everyday workflows (D-103) | Mailbox-scoped Quick Steps for ordered flag/read/category/copy/move and reviewed reply/forward drafts; recurring occurrence edits and invitations; Outlook recurrence exceptions; toolkit calendar MIME, notifications, ManageSieve and CalDAV category adapters | Fake-provider action ordering and refusal, recurrence identity and iTIP MIME, real-window Quick Steps at 1280/520, fixtures/grabs; see [verification.md](../verification.md#m95-mail-workflow-gates-d-103). Open: arbitrary server-side rule editing, audience-specific Sieve vacation replies, manual provider checks. |
+
 Every milestone follows AGENTS.md: ≤ 500 lines per file, tests headless,
 docs in the same commit, a `docs/decisions.md` entry, fixtures and grabs
 looked at, the desktop launch only with the owner's consent.

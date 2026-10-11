@@ -69,6 +69,31 @@ pointer-grab boundary so the ink handler cannot steal dialog buttons.
 Evidence is retained in `~/scratch/qqo/m96-final-{qualification,ui,integrity-tests}.log`
 and `/mnt/archive/qindaoffice-validation-20261010/m96/` on qinda.
 
+## M95 Mail workflow gates (D-103)
+
+Headless qinda qualification with the frozen QindaTK r18 development SDK:
+The four focused CTests passed (4/4, zero failures); the standalone
+`structuralFixtures` case passed at both widths.
+
+- `tst_qindamail_quick_steps` checks persistence, validation, cancellation,
+  ordered fake-IMAP provider calls and resulting read/flag/category/folder
+  state. Draft steps save without sending.
+- `tst_qindamail_meetings` checks an edited recurring occurrence keeps its
+  master series and sends a parseable calendar MIME invitation with
+  `RECURRENCE-ID`, matching UID and no occurrence `RRULE`.
+- `tst_mail_sieve` checks the toolkit-backed ManageSieve refusal, including
+  that a rejected secret is never echoed. The adjacent Mail PST, calendar,
+  organizer and account gates run against the same SDK.
+- `tst_qindamail_organizer_ui` opens the real Quick Steps dialog at 1280 and
+  520 px, saves and runs a step, and grabs both sizes for review. The Mail
+  structural fixtures were regenerated after adding the ribbon command and
+  checked at both widths. The 520 px dialog and ribbon remain usable.
+
+The on-desktop pass still needs a real IMAP/SMTP/CalDAV account, including a
+provider refusal after an earlier Quick Step action, a recurring meeting
+round trip with an external calendar, and dark/light density checks. Do not
+open QindaMail in the owner's live session without consent.
+
 ## M93 Write graphic gates (D-101)
 
 Qualified on qinda on 2026-10-10 from `finish/m93-write-graphics`, based on

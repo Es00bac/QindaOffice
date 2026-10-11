@@ -15,6 +15,7 @@
 
 #include "qindamail/src/mail_host.h"
 #include "qindamail/src/mail_organizer.h"
+#include "qindamail/src/mail_quick_steps.h"
 
 #include "support/quick_dump.h"
 #include "support/ribbon_gate.h"
@@ -122,6 +123,36 @@ struct Scene {
 class TestOrganizerUi : public QObject {
     Q_OBJECT
 private slots:
+    void quickStepsDialog_data()
+    {
+        QTest::addColumn<int>("width");
+        QTest::newRow("1280") << 1280;
+        QTest::newRow("520") << 520;
+    }
+
+    void quickStepsDialog()
+    {
+        QFETCH(int, width);
+        Scene scene(width);
+        QVERIFY2(scene.window != nullptr, qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        scene.env.service->setMarkReadDelayMs(-1);
+        scene.env.service->setSelectedMessageId(scene.first);
+        QVERIFY(scene.host->actions()->trigger(QStringLiteral("mailQuickStepsAction")));
+        QObject *dialog = scene.window->findChild<QObject *>(QStringLiteral("quickStepsDialog"));
+        QTRY_VERIFY(dialog != nullptr && dialog->property("opened").toBool());
+        QQuickItem *name = scene.in("quickStepsDialog", QStringLiteral("quickStepName"));
+        QVERIFY(name != nullptr && name->isVisible());
+        QCOMPARE(name->property("text").toString(), QStringLiteral("New Quick Step"));
+        QVERIFY(scene.click(scene.in("quickStepsDialog", QStringLiteral("quickStepSave"))));
+        auto *steps = scene.env.service->quickSteps();
+        QTRY_COMPARE(steps->forMailbox(QStringLiteral("local")).size(), 1);
+        scene.grab(QStringLiteral("qindamail_quick_steps_%1").arg(width));
+        QVERIFY(scene.click(scene.in("quickStepsDialog", QStringLiteral("quickStepRun"))));
+        QTRY_COMPARE(steps->outcome().value(QStringLiteral("state")).toString(), QStringLiteral("accepted"));
+        QVERIFY(!scene.env.service->messageById(scene.first).value(QStringLiteral("unread")).toBool());
+    }
+
     void rulesDialogAndEditor_data()
     {
         QTest::addColumn<int>("width");

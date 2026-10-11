@@ -129,6 +129,7 @@ signals:
     // M81: the rules, category, follow-up, search folder and automatic
     // reply dialogs; ruleEditRequested carries Create Rule's prefilled rule.
     void rulesRequested();
+    void quickStepsRequested(const QString &accountId, const QStringList &messageIds, bool runOnly);
     void ruleEditRequested(const QVariantMap &rule, const QVariantMap &suggestions);
     void runRulesRequested();
     void categorizeRequested(const QString &kind, const QStringList &ids, const QString &accountId);

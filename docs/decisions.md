@@ -80,6 +80,39 @@ removing retained versions. Deleting a version requires explicit UI
 confirmation. Errors remain visible and never silently replace a failed
 snapshot or apply a damaged retained page.
 
+## D-103: QindaMail keeps everyday actions and calendar invitations with their mailbox
+
+**Date:** 2026-10-10 · **Status:** accepted · **Milestone:** M95.
+
+QindaMail had rules for arriving mail, but no reusable sequence of actions
+for mail already selected. A recurring event could be edited as an occurrence
+yet its invitation could lose that occurrence identity. The app also carried
+parallel notification, ManageSieve and calendar-message implementations after
+QindaTK acquired those providers.
+
+Quick Steps belong to an account identity (or the local mailbox), persist in
+`quicksteps.json` with a versioned schema, and run at most 16 ordered actions
+over at most 1,000 selected messages. A move is last; every provider result is
+checked before the next action. Cancellation stops after the current operation
+returns. Completed operations remain applied, and reply/forward actions save a
+draft for review rather than sending mail. The service reports one final result
+for each request, including partial completion. At most 32 steps per mailbox
+and 256 overall are stored; an unknown newer schema is read-only.
+
+Occurrence edits retain the master's recurrence rule and store a keyed
+override. An invitation for that occurrence has the original local start as
+`RECURRENCE-ID`, omits the series rule, and retains the meeting UID and
+sequence. Meeting mail uses QindaTK's calendar MIME writer/parser, with a
+`text/calendar` alternative under RFC 6047. Calendar event/task categories
+travel through the toolkit's CalDAV records. Desktop notifications and
+ManageSieve use toolkit providers while the app keeps its user-facing policy.
+
+This leaves provider-specific limits visible: a server can reject a step after
+earlier actions have succeeded; POP3 and local mail cannot promise IMAP folder
+operations. Quick Steps do not send messages, and this milestone does not add
+an editor for arbitrary server-side mail rules or separate Sieve replies by
+audience. See [mail.md](mail.md#everyday-mail-and-calendar-workflows-m95).
+
 ## D-101: Native Word graphics reuse the shared DrawingML model
 
 **Date:** 2026-10-10 · **Status:** accepted · **Milestone:** M93.

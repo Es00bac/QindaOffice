@@ -59,6 +59,7 @@ struct OutlookRecurrence {
     QDate startDate;
     QDate endDate;
     int count = 0;
+    QVariantList overrides;  // recurrenceId/startLocal/endLocal and optional title/location, floating wall time
     QList<QDate> deletedDates; // occurrences deleted from the series (original dates)
 };
 
@@ -113,6 +114,7 @@ bool readOutlookMsg(const QByteArray &file, OutlookItem *out, QString *error);
 namespace OutlookDetail {
 bool readContact(Mapi::Message &message, Contact *out, QString *error);
 bool readDistList(Mapi::Message &message, Contact *group, QList<DistListMember> *members, QString *error);
+bool parseOutlookRecurrence(const QByteArray &blob, int codePage, OutlookRecurrence *out);
 bool readAppointment(Mapi::Message &message, OutlookAppointment *out, QString *error);
 bool readTask(Mapi::Message &message, OutlookTask *out, QString *error);
 // The date a "local midnight stored as UTC" value means: the UTC date of the

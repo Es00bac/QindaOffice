@@ -9,6 +9,8 @@
 // computer ▸ Sent". The draft record goes only after that decision; a send
 // that is not accepted never loses the draft or its attachment bytes.
 #include "mail_service.h"
+#include <qindatk/calendar_mail.h>
+#include <qindatk/mail_mime.h>
 
 #include "draft_builder.h"
 #include "mail_organizer.h"
@@ -264,14 +266,42 @@ void MailService::deliver(const QString &requestId, const QVariantMap &draft)
         reject(QStringLiteral("offline"), tr("You are offline; the message waits in the Outbox"));
         return;
     }
+    QByteArray prepared;
+    QStringList recipients;
+    if (!draft.value(QStringLiteral("calendarText")).toString().isEmpty()) {
+        QVariantMap outgoing=draft;
+        outgoing.insert(QStringLiteral("from"),rt->account().emailAddress);
+        QindaTK::CalendarMail codec;
+        const auto composed=codec.compose(draft.value(QStringLiteral("calendarMethod")).toString(),
+            draft.value(QStringLiteral("calendarText")).toString().toUtf8(),outgoing);
+        if(!composed.value(QStringLiteral("ok")).toBool()) { reject(QStringLiteral("rejected"),composed.value(QStringLiteral("error")).toString());return; }
+        prepared=composed.value(QStringLiteral("message")).toByteArray();
+        QString addressError;
+        for (const char *field : {"to", "cc", "bcc"}) {
+            const auto addresses = QindaTK::Mime::parseAddressList(
+                draft.value(QLatin1String(field)).toString(), &addressError);
+            if (!addressError.isEmpty()) {
+                reject(QStringLiteral("rejected"), addressError);
+                return;
+            }
+            for (const auto &address : addresses) recipients.append(address.address);
+        }
+        if (recipients.isEmpty()) {
+            reject(QStringLiteral("rejected"), tr("Add people to invite"));
+            return;
+        }
+    }
     m_sending.insert(draftId);
     refreshBusy();
     QindaTK::SmtpMailProvider *smtp = rt->smtp();
     QPointer<AccountRuntime> guard(rt);
-    rt->run(QStringLiteral("smtp"), smtp, [smtp, draft](const QString &rid) { return smtp->send(rid, draft); },
-            [this, guard, draft, draftId, requestId, queue](const QVariantMap &sent) {
+    rt->run(QStringLiteral("smtp"), smtp, [smtp, draft, prepared, recipients, from=rt->account().emailAddress](const QString &rid) {
+                return prepared.isEmpty()?smtp->send(rid,draft):smtp->sendPrepared(rid,prepared,from,recipients);
+            },
+            [this, guard, draft, draftId, requestId, queue, prepared](const QVariantMap &sent) {
                 m_sending.remove(draftId);
                 QVariantMap result = sent;
+                if(!prepared.isEmpty())result.insert(QStringLiteral("preparedMessage"),prepared);
                 result.insert(QStringLiteral("requestId"), requestId);
                 result.insert(QStringLiteral("draftId"), draftId);
                 const QString state = sent.value(QStringLiteral("state")).toString();
@@ -311,13 +341,15 @@ void MailService::fileSentCopy(AccountRuntime *runtime, const QVariantMap &draft
         return;
     }
     if (!runtime->isImap()) {
-        storeLocalSentCopy(draft, fromAddress, fromName);
+        storeLocalSentCopy(draft, fromAddress, fromName, sendResult.value(QStringLiteral("preparedMessage")).toByteArray());
         finish(sendResult, QStringLiteral("local"));
         return;
     }
     QString sent = runtime->specialMailbox(QStringLiteral("sent"));
     if (sent.isEmpty()) sent = QStringLiteral("Sent");
-    const QByteArray bytes = runtime->smtp()->composeMessage(draft).value(QStringLiteral("message")).toByteArray();
+    const QByteArray bytes = sendResult.contains(QStringLiteral("preparedMessage"))
+        ? sendResult.value(QStringLiteral("preparedMessage")).toByteArray()
+        : runtime->smtp()->composeMessage(draft).value(QStringLiteral("message")).toByteArray();
     QindaTK::ImapMailProvider *provider = runtime->imap(sent);
     runtime->run(QStringLiteral("imap"), provider,
                  [provider, sent, bytes](const QString &rid) {
@@ -329,7 +361,7 @@ void MailService::fileSentCopy(AccountRuntime *runtime, const QVariantMap &draft
                          return;
                      }
                      // Delivered but not filed: keep the copy here and say so.
-                     storeLocalSentCopy(draft, fromAddress, fromName);
+                     storeLocalSentCopy(draft, fromAddress, fromName, sendResult.value(QStringLiteral("preparedMessage")).toByteArray());
                      QVariantMap result = sendResult;
                      result.insert(QStringLiteral("sentCopyError"), appended.value(QStringLiteral("error")));
                      emit notify(tr("Sent, but not filed on the server"),
@@ -338,7 +370,7 @@ void MailService::fileSentCopy(AccountRuntime *runtime, const QVariantMap &draft
                  });
 }
 
-void MailService::storeLocalSentCopy(const QVariantMap &draft, const QString &fromAddress, const QString &fromName)
+void MailService::storeLocalSentCopy(const QVariantMap &draft, const QString &fromAddress, const QString &fromName, const QByteArray &source)
 {
     const QString id = newId(QStringLiteral("local:sent:"));
     const QString body = draft.value(QStringLiteral("body")).toString();
@@ -367,6 +399,7 @@ void MailService::storeLocalSentCopy(const QVariantMap &draft, const QString &fr
         {QStringLiteral("attachments"), draft.value(QStringLiteral("attachments")).toList()},
     };
     static_cast<void>(m_store->upsert(QStringLiteral("messages"), record));
+    if(!source.isEmpty()) { QString error;static_cast<void>(writeSource(id,source,&error)); }
     static_cast<void>(saveStore());
 }
 

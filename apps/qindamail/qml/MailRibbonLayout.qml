@@ -57,6 +57,8 @@ QtObject {
             { action: "mailMoveAction", size: "large" },
             { id: "rules", label: qsTr("Rules"), iconName: "wand",
               menu: ["mailCreateRuleAction", "mailRulesAction", "mailRunRulesAction"] }] },
+        { id: "quickSteps", label: qsTr("Quick Steps"), items: [
+            { action: "mailRunQuickStepAction", size: "large" }, "mailQuickStepsAction"] },
         { id: "find", label: qsTr("Find"), items: [
             { action: "mailSearchAction", size: "large" }, "mailSyncAction"] }
     ] }

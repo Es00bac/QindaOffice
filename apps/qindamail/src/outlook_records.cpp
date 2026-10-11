@@ -91,6 +91,14 @@ bool eventRecord(const OutlookAppointment &a, const QString &id, QVariantMap *ou
                                        : QDateTime(date, startTime).toString(QStringLiteral("yyyy-MM-ddTHH:mm:ss")));
         }
         r.insert(QStringLiteral("exceptions"), exceptions);
+        QVariantList overrides;
+        for (const auto &value:o.overrides) {
+            auto entry=value.toMap();
+            if (a.allDay) for (const char *key:{"recurrenceId","startLocal","endLocal"})
+                entry.insert(QLatin1String(key),entry.value(QLatin1String(key)).toString().left(10));
+            overrides.append(entry);
+        }
+        r.insert(QStringLiteral("overrides"),overrides);
     }
     if (!a.uid.isEmpty()) r.insert(QStringLiteral("meetingUid"), a.uid);
     if (!a.organizer.isEmpty()) r.insert(QStringLiteral("organizer"), a.organizer);

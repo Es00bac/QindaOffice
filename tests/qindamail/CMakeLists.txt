@@ -16,7 +16,7 @@
 # tst_qindamail_organizer_ui (the dialogs through the window). Every test links the
 # app's static QML module, so a source added to apps/qindamail is in every
 # test.
-foreach(name IN ITEMS tst_qindamail_drafts tst_qindamail_service tst_qindamail_accounts
+foreach(name IN ITEMS tst_qindamail_quick_steps tst_qindamail_drafts tst_qindamail_service tst_qindamail_accounts
                       tst_qindamail_calendar tst_qindamail_host tst_qindamail_flow tst_qindamail_ui
                       tst_qindamail_files tst_qindamail_people tst_qindamail_meetings tst_qindamail_pst
                       tst_qindamail_carddav tst_qindamail_rules tst_qindamail_organize tst_qindamail_organizer_ui)

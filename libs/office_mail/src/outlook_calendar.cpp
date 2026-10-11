@@ -64,128 +64,6 @@ enum : quint32 {
     LidTaskComplete = 0x811C,
 };
 
-constexpr int kMaxListedDates = 10000;
-
-class Cursor {
-public:
-    explicit Cursor(const QByteArray &bytes) : m_bytes(bytes) {}
-    bool u16(quint16 *out)
-    {
-        if (m_at + 2 > m_bytes.size()) return false;
-        *out = quint16(uchar(m_bytes.at(m_at)) | (uchar(m_bytes.at(m_at + 1)) << 8));
-        m_at += 2;
-        return true;
-    }
-    bool u32(quint32 *out)
-    {
-        quint16 low = 0, high = 0;
-        if (!u16(&low) || !u16(&high)) return false;
-        *out = quint32(low) | (quint32(high) << 16);
-        return true;
-    }
-
-private:
-    const QByteArray &m_bytes;
-    qsizetype m_at = 0;
-};
-
-QDate minutesToDate(quint32 minutes)
-{
-    return QDate(1601, 1, 1).addDays(minutes / 1440);
-}
-
-QList<int> daysFromMask(quint32 mask)
-{
-    QList<int> days;
-    for (int bit = 1; bit <= 6; ++bit) {
-        if (mask & (1u << bit)) days.append(bit);   // Monday … Saturday
-    }
-    if (mask & 1u) days.append(7);                  // Sunday
-    return days;
-}
-
-// MS-OXOCAL 2.2.1.44.1 RecurrencePattern (the start of AppointmentRecurrencePattern).
-bool parseRecurrence(const QByteArray &blob, OutlookRecurrence *out)
-{
-    Cursor c(blob);
-    quint16 reader = 0, writer = 0, frequency = 0, pattern = 0, calendar = 0;
-    quint32 firstDateTime = 0, period = 0, sliding = 0, day = 0, mask = 0, nth = 0;
-    if (!c.u16(&reader) || !c.u16(&writer) || !c.u16(&frequency) || !c.u16(&pattern) || !c.u16(&calendar)
-        || !c.u32(&firstDateTime) || !c.u32(&period) || !c.u32(&sliding))
-        return false;
-    if (reader != 0x3004 || (calendar != 0 && calendar != 1)) return false;   // Gregorian only
-    if (pattern == 1 && !c.u32(&mask)) return false;
-    if ((pattern == 2 || pattern == 4) && !c.u32(&day)) return false;
-    if (pattern == 3 && (!c.u32(&mask) || !c.u32(&nth))) return false;
-    if (pattern > 4) return false;   // Hijri patterns
-    quint32 endType = 0, count = 0, firstDay = 0, deleted = 0, modified = 0, startDate = 0, endDate = 0;
-    if (!c.u32(&endType) || !c.u32(&count) || !c.u32(&firstDay) || !c.u32(&deleted) || deleted > kMaxListedDates)
-        return false;
-    QList<QDate> deletedDates;
-    for (quint32 i = 0; i < deleted; ++i) {
-        quint32 minutes = 0;
-        if (!c.u32(&minutes)) return false;
-        deletedDates.append(minutesToDate(minutes));
-    }
-    if (!c.u32(&modified) || modified > kMaxListedDates) return false;
-    QList<QDate> modifiedDates;
-    for (quint32 i = 0; i < modified; ++i) {
-        quint32 minutes = 0;
-        if (!c.u32(&minutes)) return false;
-        modifiedDates.append(minutesToDate(minutes));
-    }
-    if (!c.u32(&startDate) || !c.u32(&endDate)) return false;
-
-    OutlookRecurrence r;
-    r.startDate = minutesToDate(startDate);
-    static const char *const kIndexes[] = {"first", "second", "third", "fourth", "last"};
-    static const char *const kDays[] = {"sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"};
-    r.index = nth >= 1 && nth <= 5 ? QString::fromLatin1(kIndexes[nth - 1]) : QString();
-    r.firstDayOfWeek = firstDay <= 6 ? QString::fromLatin1(kDays[firstDay]) : QString();
-    if (frequency == 0x200A && pattern == 0) {
-        r.type = QStringLiteral("daily");
-        r.interval = int(qMax<quint32>(1, period / 1440));
-    } else if ((frequency == 0x200A || frequency == 0x200B) && pattern == 1) {
-        r.type = QStringLiteral("weekly");   // a daily "every weekday" is a weekly Mon–Fri
-        r.interval = int(qMax<quint32>(1, period));
-        r.days = daysFromMask(mask);
-    } else if (frequency == 0x200C && (pattern == 2 || pattern == 4)) {
-        r.type = QStringLiteral("absoluteMonthly");
-        r.interval = int(qMax<quint32>(1, period));
-        r.dayOfMonth = pattern == 4 ? 31 : int(day);
-    } else if (frequency == 0x200C && pattern == 3) {
-        r.type = QStringLiteral("relativeMonthly");
-        r.interval = int(qMax<quint32>(1, period));
-        r.days = daysFromMask(mask);
-    } else if (frequency == 0x200D && (pattern == 2 || pattern == 4)) {
-        r.type = QStringLiteral("absoluteYearly");
-        r.interval = int(qMax<quint32>(1, period / 12));
-        r.dayOfMonth = pattern == 4 ? 31 : int(day);
-        r.month = r.startDate.month();
-    } else if (frequency == 0x200D && pattern == 3) {
-        r.type = QStringLiteral("relativeYearly");
-        r.interval = int(qMax<quint32>(1, period / 12));
-        r.days = daysFromMask(mask);
-        r.month = r.startDate.month();
-    } else {
-        return false;
-    }
-    if (endType == 0x2021) {
-        r.range = QStringLiteral("endDate");
-        r.endDate = minutesToDate(endDate);
-    } else if (endType == 0x2022) {
-        r.range = QStringLiteral("numbered");
-        r.count = int(qMin<quint32>(count, 999));
-    }
-    // A changed occurrence is listed as deleted AND modified on its date;
-    // it stays in the series (with the series' values) rather than vanish.
-    for (const QDate &date : std::as_const(deletedDates)) {
-        if (!modifiedDates.contains(date)) r.deletedDates.append(date);
-    }
-    *out = r;
-    return true;
-}
-
 // MS-OXOCAL 2.2.1.41 TZDEFINITION: the Windows zone's key name.
 QString zoneKeyName(const QByteArray &definition)
 {
@@ -244,8 +122,13 @@ bool readAppointment(Mapi::Message &message, OutlookAppointment *out, QString *e
         a.categories = message.strings(*keywords);
     const auto recurring = id(LidRecurring);
     const auto pattern = id(LidAppointmentRecur);
-    if (recurring && message.boolValue(*recurring) && pattern)
-        a.recurring = parseRecurrence(message.binary(*pattern), &a.recurrence);
+    if (recurring && message.boolValue(*recurring) && pattern) {
+        if (!parseOutlookRecurrence(message.binary(*pattern), message.string8CodePage(), &a.recurrence)) {
+            if (error) *error = QStringLiteral("The appointment recurrence or exception data is invalid or unsupported");
+            return false;
+        }
+        a.recurring = true;
+    }
     if (message.failed()) {
         if (error) *error = message.error();
         return false;

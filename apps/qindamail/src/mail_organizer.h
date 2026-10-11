@@ -147,6 +147,10 @@ public:
     Q_INVOKABLE QString writeAutoReplies(const QString &accountId, const QVariantMap &settings);
     Q_INVOKABLE void refreshServerRules();
 
+    // Shared explicit copy primitive for rules and Quick Steps. The callback
+    // runs on this object's thread; local copies may complete synchronously.
+    void copyMessage(const QString &messageId, const QString &folderKey, Done done);
+
     // ---- C++ (MailService) ----
     // A sync of `mailbox` answered: rules run on its new messages, and the
     // server's tags come back into the records.
@@ -213,7 +217,6 @@ private:
     void carryOut(const QString &messageId, const QindaOffice::Mail::RulePlan &plan, Done done);
     void forward(const QString &messageId, const QString &recipients);
     void redirect(const QString &messageId, const QString &recipients, Done done);
-    void copyMessage(const QString &messageId, const QString &folderKey, Done done);
     void dispose(const QString &messageId, const QindaOffice::Mail::RulePlan &plan, Done done);
     // _tags.cpp
     void pushMessageTags(const QString &messageId, bool categories, bool flag, Done done);

@@ -238,6 +238,7 @@ OfficeWindow {
         nameFilters: [qsTr("PDF (*.pdf)")]
         onAccepted: window.mail.exportMessagePdf(selectedFile)
     }
+    QuickStepsDialog { id:quickStepsDialog; service:window.service; onDraftRequested:draft=>window.openComposer(draft) }
     function toastFor(title, text, variant) { toast.title = title; toast.message = text; toast.variant = variant; toast.show() }
     Tk.PromptDialog {
         id: subscribeDialog
@@ -251,6 +252,7 @@ OfficeWindow {
 
     Connections {
         target: window.mail
+        function onQuickStepsRequested(accountId,messageIds,runOnly) { quickStepsDialog.openFor(accountId,messageIds,runOnly) }
         function onComposeRequested(draft) { window.openComposer(draft) }
         function onAccountDialogRequested(accountId) { accountDialog.openFor(accountId) }
         function onEventDialogRequested() { eventDialog.openNew("", "", false) }

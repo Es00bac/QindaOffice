@@ -983,3 +983,31 @@ Tests: `tst_mail_rules`, `tst_mail_organize`, `tst_mail_sieve`
 (`office_mail`), `tst_mail_exchange_mailbox`, `tst_qindamail_rules`,
 `tst_qindamail_organize`, `tst_qindamail_organizer_ui`; gates in
 [verification.md](verification.md#m81-mail-gates-d-090).
+
+## Everyday mail and calendar workflows (M95)
+
+[D-103](decisions.md#d-103-qindamail-keeps-everyday-actions-and-calendar-invitations-with-their-mailbox)
+adds **Quick Steps** to Home. A step is saved per mailbox with an ordered list
+of Mark Read/Unread, Follow Up, Categorize, Copy, Move, Reply Draft and Forward
+Draft actions. A move must be last. The manager applies each action to each
+selected received message in order, checks the provider's result, and stops on
+failure or after the user cancels. It reports the completed actions so partial
+server work is never presented as an all-or-nothing change. Draft actions
+save a draft for review; they never send. The versioned `quicksteps.json` has
+limits of 32 steps per mailbox, 256 overall, 16 actions per step and 1,000
+messages per run. A newer schema opens read-only.
+
+The event editor can change one occurrence without replacing its recurring
+series. The original local start identifies the occurrence; an override keeps
+its changed time, title, description or location. Sending an invitation for
+that occurrence writes `RECURRENCE-ID` and the series' meeting UID/sequence,
+without sending its `RRULE` as a new series. Meeting mail uses QindaTK's
+calendar MIME alternative and parser. The app now uses QindaTK's desktop
+notification and ManageSieve providers; CalDAV event/task categories use the
+toolkit's calendar records. Outlook recurrence exceptions imported from
+`.msg` or `.pst` are translated to the same keyed occurrence model.
+
+Folder actions require a provider that supports the target mailbox. Failed
+steps stop with their completed operations shown. POP3 and local messages do
+not gain server-side IMAP actions. The arbitrary server-rule editor and
+separate inside/outside Sieve vacation replies remain outside M95.

@@ -144,8 +144,10 @@ QString MailOrganizer::applyCategories(const QString &kind, const QStringList &i
                                       updated.value(u"error"_s).toString()));
         } else if (kind == "task"_L1) {
             const bool ok = editRecord(u"tasks"_s, id, {{u"categories"_s, names}}, &error);
-            if (ok) m_service->rebuildTasks();
-            one(ProviderCalls::result({}, ok ? u"accepted"_s : u"rejected"_s, error));
+            if (ok) {
+                m_service->rebuildTasks();
+                expect(m_service->updateTask({{u"id"_s,id},{u"categories"_s,names}}),one);
+            } else one(ProviderCalls::result({},u"rejected"_s,error));
         } else if (kind == "event"_L1) {
             if (!editRecord(u"events"_s, id, {{u"categories"_s, names}}, &error)) one(ProviderCalls::result({}, u"rejected"_s, error));
             else pushEventCategories(id, one);
@@ -313,10 +315,18 @@ void MailOrganizer::pushEventCategories(const QString &eventId, Done done)
         if (text(value.toMap(), "id") == eventId) event = value.toMap();
     AccountRuntime *rt = m_service->runtime(text(event, "remoteAccount"));
     const CalendarBinding *binding = rt != nullptr ? rt->calendar(text(event, "calendarId")) : nullptr;
+    if (binding && binding->service == "caldav"_L1 && binding->provider) {
+        QObject *provider = binding->provider;
+        rt->run(u"caldav"_s,provider,[provider](const QString &rid) {
+            bool started=false;
+            QMetaObject::invokeMethod(provider,"sync",Q_RETURN_ARG(bool,started),Q_ARG(QString,rid));
+            return started;
+        },std::move(done));
+        return;
+    }
     QindaOffice::Mail::ExchangeMailbox *box = rt != nullptr ? rt->mailbox() : nullptr;
     if (binding == nullptr || box == nullptr || (binding->service != "graph"_L1 && binding->service != "ews"_L1)) {
-        // CalDAV, a feed or this computer: kept here (QindaTK's VEVENT
-        // mapping has no CATEGORIES yet, D-090).
+        // A feed or this computer has no writable remote category endpoint.
         done(ProviderCalls::result({}, u"accepted"_s));
         return;
     }

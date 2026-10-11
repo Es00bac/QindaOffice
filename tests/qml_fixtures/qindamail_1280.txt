@@ -442,10 +442,10 @@ QQuickRootItem#MailWindow
               QQuickRectangle#ribbonGroupCard
               RibbonSlot#ribbonItem_mailSearchAction
                 RibbonButton#ribbonAction_mailSearchAction
-                  Icon#ribbonButtonIcon
+                  Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel
+                  QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_mailSyncAction
                 RibbonButton#ribbonAction_mailSyncAction
                   Icon#ribbonButtonIcon [hidden]
@@ -457,10 +457,10 @@ QQuickRootItem#MailWindow
               QQuickRectangle#ribbonGroupCard
               RibbonSlot#ribbonItem_mailMoveAction
                 RibbonButton#ribbonAction_mailMoveAction
-                  Icon#ribbonButtonIcon
+                  Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
-                  QQuickText#ribbonButtonLabel
+                  QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_rules
                 RibbonButton#ribbonAction_rules
                   Icon#ribbonButtonIcon [hidden]
@@ -487,6 +487,21 @@ QQuickRootItem#MailWindow
                   QQuickText#ribbonButtonLabel [hidden]
               RibbonSlot#ribbonItem_mailShowPicturesAction
                 RibbonButton#ribbonAction_mailShowPicturesAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+            RibbonGroup#ribbonGroup_quickSteps
+              Overline#ribbonGroupCaption
+              QQuickRectangle#ribbonGroupCard
+              RibbonSlot#ribbonItem_mailQuickStepsAction
+                RibbonButton#ribbonAction_mailQuickStepsAction
+                  Icon#ribbonButtonIcon [hidden]
+                  QQuickItem#ribbonButtonMenuArea [hidden]
+                  QQuickRectangle#ribbonButtonBackground
+                  QQuickText#ribbonButtonLabel [hidden]
+              RibbonSlot#ribbonItem_mailRunQuickStepAction
+                RibbonButton#ribbonAction_mailRunQuickStepAction
                   Icon#ribbonButtonIcon [hidden]
                   QQuickItem#ribbonButtonMenuArea [hidden]
                   QQuickRectangle#ribbonButtonBackground
