@@ -162,7 +162,11 @@ Every test is headless: `QT_QPA_PLATFORM=offscreen` and, for QtQuick,
 `QT_QUICK_BACKEND=software` (pinned per-test via ctest `ENVIRONMENT` and
 defensively in each test's `main`). A build against a QindaTK development
 prefix needs `-DCMAKE_PREFIX_PATH=<QindaTK>/install`; the tests find the
-toolkit's QML through `QQO_QINDATK_QML_ROOT`.
+toolkit's QML through `QQO_QINDATK_QML_ROOT`. Since M89 (D-097) the suite
+needs QindaTK 8e402c7 (its M85 controls) or later: until r18 reaches
+Portage, build against the dev prefix (on qinda
+`-DCMAKE_PREFIX_PATH=/home/cabewse/scratch/qtk-dev/install`) and check that
+the configure cache's `QindaTK_DIR` names it, not `/usr`.
 
 ## Verification is headless first
 

@@ -200,23 +200,10 @@ bool editTable(QindaTK::RichTextDocument &doc, const Position &caret, TableEdit 
                                                                  : derivedColumnId(table->id, column);
         return doc.removeTableColumn(tableId, columnId.toString(QUuid::WithoutBraces));
     }
-    case TableEdit::DeleteTable: {
-        // The whole table goes as one body step; the body still ends with
-        // the paragraph that follows it.
-        const int index = table->blockIndex;
-        if (index < 0 || index >= doc.blocks().size()) {
-            return false;
-        }
-        const QVector<Block> whole{doc.blocks().at(index)};
-        if (!doc.beginTransaction(tr("Delete Table"))) {
-            return false;
-        }
-        if (doc.apply(StepBlocks{ContainerSpec{}, index, whole, doc.objectsIn(whole), false})) {
-            doc.cancelTransaction();
-            return false;
-        }
-        return doc.commitTransaction();
-    }
+    case TableEdit::DeleteTable:
+        // The whole table as one step (QindaTK D-322; M84 applied its own
+        // StepBlocks before the toolkit had the operation).
+        return doc.deleteTable(table->id).has_value();
     }
     return false;
 }

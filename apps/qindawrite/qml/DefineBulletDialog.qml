@@ -7,7 +7,9 @@ import QindaTK as Tk
 // character typed or pasted in any installed font — its colour and its
 // alignment at the number position. Answered through ListController
 // (write_lists.h): on a bulleted list it changes the list's bullet, on
-// other paragraphs it makes a new list.
+// other paragraphs it makes a new list. M89 (D-097): Symbol… opens QindaTK's
+// CharacterMap (D-327) in the bullet's font, as Word's button opens its
+// Symbol dialog; typing or pasting a character still works.
 Tk.Dialog {
     id: dialog
     required property QtObject lists
@@ -43,6 +45,13 @@ Tk.Dialog {
         alignment.currentIndex = Math.max(0, justifications.indexOf(info.justification))
         colorButton.color = color.length > 0 ? color : "#000000"
     }
+    // A character from the map, in the font the bullet is set in.
+    function chooseCharacter(text) {
+        glyph = text
+        shown = text
+        recent = [text].concat(recent.filter(function(c) { return c !== text })).slice(0, 12)
+    }
+    property var recent: []
     function pick(symbol) {
         glyph = symbol.glyph; bulletFont = symbol.font; shown = symbol.shown
         fontCombo.currentIndex = Math.max(0, fontCombo.model.indexOf(bulletFont.length > 0 ? bulletFont : qsTr("(paragraph font)")))
@@ -78,11 +87,39 @@ Tk.Dialog {
         }
         Tk.PropertyRow {
             label: qsTr("Character")
-            Tk.TextField {
-                id: character
-                objectName: "bulletCharacter"
-                placeholderText: qsTr("Type or paste any character")
-                onTextEdited: if (text.length > 0) { dialog.glyph = text.slice(0, text.codePointAt(0) > 0xFFFF ? 2 : 1); dialog.shown = dialog.glyph }
+            Tk.Flex {
+                gap: Tk.Theme.space.sm
+                align: Tk.Flex.Center
+                Tk.TextField {
+                    id: character
+                    objectName: "bulletCharacter"
+                    placeholderText: qsTr("Type or paste any character")
+                    Tk.Flex.grow: 1
+                    onTextEdited: if (text.length > 0) { dialog.glyph = text.slice(0, text.codePointAt(0) > 0xFFFF ? 2 : 1); dialog.shown = dialog.glyph }
+                }
+                Tk.Button {
+                    id: symbolMore
+                    objectName: "bulletSymbolMore"
+                    text: qsTr("Symbol…")
+                    iconName: "omega"
+                    tooltip: qsTr("Choose any character from the character map")
+                    onClicked: symbolPopover.open()
+                }
+            }
+        }
+        Tk.Popover {
+            id: symbolPopover
+            objectName: "bulletSymbolPopover"
+            anchorItem: symbolMore
+            Tk.CharacterMap {
+                objectName: "bulletCharacterMap"
+                fontFamily: dialog.bulletFont.length > 0 ? dialog.bulletFont : Tk.Theme.font.family
+                recent: dialog.recent
+                tooltip: qsTr("Bullet character")
+                onCharacterChosen: function(text) {
+                    dialog.chooseCharacter(text)
+                    symbolPopover.close()
+                }
             }
         }
         Tk.PropertyRow {

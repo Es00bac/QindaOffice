@@ -10,6 +10,9 @@ import QindaOffice.Plan.App
 // rows in the same order at the same row height; their vertical scrolling
 // is kept in step both ways and the header heights match, so a task's row
 // lines up with its bar. One selection (PlanService.selection) drives both.
+// M89 (D-097): the chart draws what the printout did — slack and free
+// slack, deadlines, split pieces, the second baseline, progress lines —
+// and Group By's bands, whose chevrons the sheet and the chart share.
 Item {
     id: workspace
 
@@ -82,6 +85,8 @@ Item {
                 pixelsPerDay: workspace.plan !== null && workspace.host !== null
                               ? workspace.plan.dayScale * Tk.Theme.size.control * workspace.host.zoom : Tk.Theme.size.control
                 markers: workspace.plan !== null ? workspace.plan.markers : []
+                progressLines: workspace.plan !== null ? workspace.plan.progressLines : []
+                onGroupToggled: function(taskId, collapsed) { workspace.plan.setGroupCollapsed(taskId, collapsed) }
                 onContentYChanged: if (Math.abs(sheet.scrollY - contentY) > 0.5) sheet.scrollY = contentY
                 onTaskActivated: function(taskId) {
                     workspace.plan.currentTaskId = taskId

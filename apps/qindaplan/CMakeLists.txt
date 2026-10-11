@@ -67,6 +67,7 @@ qt_add_qml_module(qindaplan_app
         src/plan_gantt_adapter.cpp src/plan_gantt_adapter.h
         src/plan_host.cpp src/plan_host.h
         src/plan_host_actions.cpp
+        src/plan_host_groups.cpp
         src/plan_host_menus.cpp
         src/plan_host_schedule.cpp
         src/plan_host_views.cpp
@@ -75,6 +76,7 @@ qt_add_qml_module(qindaplan_app
         src/plan_service_columns.cpp
         src/plan_service_display.cpp
         src/plan_service_fields.cpp
+        src/plan_service_groups.cpp
         src/plan_service_output.cpp
         src/plan_service_project.cpp
         src/plan_service_resources.cpp

@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// Form controls beyond QindaTK's FormDesigner (M80, D-089 §4): subforms (a
-// relationship's child records under the form's record), command buttons
-// (Access's On Click: an embedded macro or a named one) and, for lookup
-// fields, combo or list boxes.
+// M80's form controls (D-089 §4), as forms saved before M89 keep them:
+// subforms (a relationship's child records under the form's record),
+// command buttons (Access's On Click: an embedded macro or a named one) and,
+// for lookup fields, the choice of a combo or a list box. Since M89 (D-097)
+// a form is laid out with QindaTK's positioned controls; base_form_layout.h
+// turns these into them when such a form opens, and this file only reads
+// and checks the old shape (templates still write it).
 //
-// AGENT-CONTRACT (with apps/qindabase base_service_forms.cpp,
-// FormView.qml and FormControls.qml):
+// AGENT-CONTRACT (with base_form_layout.cpp, which migrates them, and
+// base_templates.cpp, which writes them):
 //  * A form's definition keeps "controls": [{"kind":"subform", "id",
 //    "caption", "table", "linkChild", "linkParent"} | {"kind":"button",
 //    "id", "caption", "macro"} | {"kind":"button", "id", "caption",
@@ -17,10 +20,8 @@
 //  * A subform shows the records of `table` whose `linkChild` equals the
 //    form record's `linkParent`: one of the relationships whose parent is
 //    the form's table (subformChoices). Its new records get the link value.
-//  * QindaTK's FormDesigner draws text fields and check boxes only, so
-//    lookup fields are not in the designer's mirror (base_snapshot.h); the
-//    window shows them as combo or list boxes beside it. A toolkit gap,
-//    reported in D-089.
+//  * The window no longer shows these beside the designer: the form opens
+//    with them laid out as positioned controls (base_form_layout.h).
 
 #include "base_file.h"
 #include "base_macro.h"

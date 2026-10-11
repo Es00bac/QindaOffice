@@ -62,6 +62,9 @@ struct PstImporter::Job {
     QList<Contact> contacts;
     QHash<QString, int> taskOrder;         // existing task id → its order
     QHash<QString, int> nextOrder;         // status → next free order
+    // M89 (D-097): this slice's records, written as ONE store change per
+    // collection (LocalProductivityStore::upsertMany, QindaTK D-324).
+    QVariantList pendingMessages, pendingEvents, pendingTasks;
     int folders = 0, messages = 0, people = 0, groups = 0, events = 0, tasks = 0, skipped = 0;
     QStringList warnings;
     bool cancelled = false;
@@ -237,6 +240,7 @@ void PstImporter::importStep()
         ++job.next;
         ++m_processed;
     } while (slice.elapsed() < m_sliceMs);
+    flush();
     if (job.next < job.items.size()) m_currentFolder = job.items.at(job.next).folder.section(QLatin1Char('/'), -1);
     emit progressChanged();
     if (job.next >= job.items.size()) {
@@ -263,11 +267,12 @@ void PstImporter::importItem(quint32 index)
     case OutlookItemKind::Mail: {
         const QVariantMap extra{{QStringLiteral("unread"), item.unread}, {QStringLiteral("flagged"), item.flagged},
                                 {QStringLiteral("importedFrom"), QStringLiteral("outlook")}};
-        if (m_service->importRawMessage(writeRfc822(item.mail), work.folder, QString(), &error, extra).isEmpty()) {
+        const QVariantMap record = m_service->rawMessageRecord(writeRfc822(item.mail), work.folder, QString(), &error, extra);
+        if (record.isEmpty()) {
             ++job.skipped;
             job.warn(tr("A message could not be kept: %1").arg(error));
         } else {
-            ++job.messages;
+            job.pendingMessages.append(record); // counted when the slice is written (flush)
         }
         break;
     }
@@ -284,12 +289,11 @@ void PstImporter::importItem(quint32 index)
         break;
     case OutlookItemKind::Appointment: {
         QVariantMap record;
-        if (!OutlookRecords::eventRecord(item.appointment, key, &record)
-            || !m_service->store()->upsert(QStringLiteral("events"), record).value(QStringLiteral("ok")).toBool()) {
+        if (!OutlookRecords::eventRecord(item.appointment, key, &record)) {
             ++job.skipped;
             job.warn(tr("“%1” has no date and was not imported").arg(item.appointment.subject));
         } else {
-            ++job.events;
+            job.pendingEvents.append(record);
         }
         break;
     }
@@ -297,11 +301,7 @@ void PstImporter::importItem(quint32 index)
         const QString id = QStringLiteral("task:") + key;
         const QString status = OutlookRecords::taskStatus(item.task);
         const int order = job.taskOrder.contains(id) ? job.taskOrder.value(id) : job.nextOrder[status]++;
-        if (m_service->store()->upsert(QStringLiteral("tasks"), OutlookRecords::taskRecord(item.task, id, order))
-                .value(QStringLiteral("ok")).toBool())
-            ++job.tasks;
-        else
-            ++job.skipped;
+        job.pendingTasks.append(OutlookRecords::taskRecord(item.task, id, order));
         break;
     }
     case OutlookItemKind::Other:
@@ -312,9 +312,36 @@ void PstImporter::importItem(quint32 index)
     }
 }
 
+void PstImporter::flush()
+{
+    if (m_job == nullptr) return;
+    Job &job = *m_job;
+    // One store change per collection and slice: the toolkit store indexes
+    // the ids once and emits one dataChanged, where a write per record
+    // scanned the whole list and re-ran every binding each time (D-085).
+    QString error;
+    const int messages = m_service->storeMessages(job.pendingMessages, &error);
+    job.messages += messages;
+    if (messages < job.pendingMessages.size()) {
+        job.skipped += int(job.pendingMessages.size()) - messages;
+        job.warn(tr("Messages could not be kept: %1").arg(error));
+    }
+    const auto write = [this, &job](const QString &collection, const QVariantList &records, int *count) {
+        if (records.isEmpty()) return;
+        if (m_service->store()->upsertMany(collection, records).value(QStringLiteral("ok")).toBool()) *count += int(records.size());
+        else job.skipped += int(records.size());
+    };
+    write(QStringLiteral("events"), job.pendingEvents, &job.events);
+    write(QStringLiteral("tasks"), job.pendingTasks, &job.tasks);
+    job.pendingMessages.clear();
+    job.pendingEvents.clear();
+    job.pendingTasks.clear();
+}
+
 void PstImporter::finish(const QString &state, const QString &error)
 {
     if (m_job == nullptr) return;
+    flush(); // what a cancel or a failure left of the slice
     Job &job = *m_job;
     QString finalState = state;
     QString finalError = error;

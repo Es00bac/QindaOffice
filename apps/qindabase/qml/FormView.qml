@@ -11,10 +11,17 @@ import QindaTK as Tk
 // designer shows the engine's refusals as its validation messages. File
 // fields (M65) are not in the designer's mirror: each shows as a
 // FileFieldPanel under the form, and the File commands act on the one
-// last used (the first by default). M80 (D-089 §4): lookup fields are
-// combo or list boxes above the designer (FormLookups.qml), command buttons
-// and subforms sit under the record (FormControls.qml), and a macro's
-// ApplyFilter narrows the records the navigator walks.
+// last used (the first by default).
+//
+// M89 (D-097): the form is laid out with the designer's positioned
+// controls — labels, text boxes (bound, or calculated through
+// `expressionEvaluator`), combo and list boxes (a lookup's items are the
+// related records, FormDesignBridge.qml), check boxes, subforms by form
+// name (FormSubform.qml), command buttons running a macro action
+// (runCommand), tab controls, images, lines and rectangles. The designer
+// is on its host-owned path; FormDesignBridge turns each finished gesture
+// into one design-document command. A macro's ApplyFilter narrows the
+// records the navigator walks.
 Item {
     id: view
 
@@ -34,12 +41,24 @@ Item {
     property var fileFields: []      // the table's file fields [{name, caption}]
     property string fileField: ""    // the one the File commands act on
     property var fileHas: ({})       // file field → holds a file (the panels report it)
-    property var lookups: []         // M80: [{name, label, control, hidden, required, related}]
-    property var lookupChoices: ({}) // field → [{value, text}]
-    property var lookupValues: ({})  // the record's stored keys
-    property var pendingLookups: ({})// a new record's choices, saved with it
-    property var controls: []        // M80: subforms and buttons (base_form_controls.h)
+    property var stored: ({})        // the record's storage values (subform links)
     property string filter: ""       // M80: ApplyFilter's where condition
+    readonly property FormDesignBridge bridge: FormDesignBridge { view: view }
+    readonly property var subforms: (bridge.presented.controls || []).filter(function(c) { return c.type === "subform" })
+    // The width the laid-out form needs (design units are logical pixels):
+    // its controls' right edge, the canvas margin and the card's padding,
+    // and in Design the property sheet beside it. A narrower window
+    // scrolls sideways, as Access does, instead of cutting controls off.
+    readonly property real formWidth: {
+        let right = 0
+        for (const c of (bridge.presented.controls || [])) right = Math.max(right, (Number(c.x) || 0) + (Number(c.width) || 0))
+        return right + Tk.Theme.space.xl + Tk.Theme.space.lg * 2
+               + (designing ? Tk.Theme.size.panelMinWidth + Tk.Theme.space.md : 0)
+    }
+    // AGENT-GUARD: use the allocated view width, not the Scroll viewport,
+    // whose size depends on this card's overflow and would form a loop.
+    readonly property real cardWidth: Math.max(formWidth, Math.min(view.width - Tk.Theme.space.lg * 2,
+                                                                   Tk.Theme.size.fieldWidth * (designing ? 6 : 4)))
     readonly property var fileTarget: fileField.length === 0 || position < 0 ? ({})
         : { table: table, rowid: Number(rowIds[position]), field: fileField, hasFile: fileHas[fileField] === true }
     onFileTargetChanged: if (window !== null && visible) window.baseHost.fileTarget = fileTarget
@@ -58,53 +77,43 @@ Item {
         notice = r.notice || ""
         fileFields = base.tableFields(table).filter(function(f) { return f.type === "file" })
         fileField = fileFields.length > 0 ? fileFields[0].name : ""
+        designer.selectControl("")
         designer.mode = mode === "design" ? "design" : "edit"
         filter = ""
-        loadControls()
+        bridge.refreshLookups()
         reloadRows(0)
         syncHost()
         return true
     }
-    function loadControls() {
-        const c = base.formControls(formName)
-        lookups = c.ok ? c.lookups : []
-        controls = c.ok ? c.controls : []
-        const choices = ({})
-        for (const l of lookups) choices[l.name] = base.lookupChoices(table, l.name)
-        lookupChoices = choices
+    // The designer's API, for Add Subform and Add Button (one undo step).
+    function addControl(type, properties) {
+        if (designDocument === null) return ""
+        return designer.addControl(type, properties)
     }
-    function saveControls(nextControls, nextLookups) {
-        const r = base.saveFormControls(formName, nextControls, nextLookups)
-        if (!r.ok) { window.notify(qsTr("Form not changed"), r.error, "danger"); return false }
-        loadControls()
-        goTo(position)
-        return true
+    function subformIndex(controlId) {
+        for (let i = 0; i < subforms.length; ++i) if (String(subforms[i].id) === String(controlId)) return i < 4 ? i : -1
+        return -1
     }
-    function addControl(control) { return saveControls(controls.concat([control]), lookups) }
-    function removeControl(id) { return saveControls(controls.filter(function(c) { return c.id !== id }), lookups) }
-    function setLookupControl(name, control, hidden) {
-        saveControls(controls, lookups.map(function(l) {
-            return l.name === name ? Object.assign({}, l, { control: control, hidden: hidden }) : l
-        }))
+    // A command button (QindaTK's controlCommandRequested): its action id is
+    // one of the macro actions run with the button's arguments, "runMacro"
+    // (arguments.macro), or a saved macro's name; M80's embedded macros of
+    // several steps run their `actions`.
+    function runCommand(controlId, actionId) {
+        const control = bridge.controlById(designDocument !== null ? (designDocument.form.controls || []) : [], controlId) || ({})
+        const runner = window.commands.macroRunner
+        const caption = String(control.caption || control.name || qsTr("The button"))
+        const args = control.arguments || ({})
+        if (Array.isArray(control.actions) && control.actions.length > 0) runner.run(control.actions, caption)
+        else if (actionId === "runMacro") runner.runNamed(String(args.macro || ""))
+        else if (actionId.length === 0)
+            window.notify(qsTr("%1 does nothing yet").arg(caption), qsTr("Choose what it does: Design ▸ Properties ▸ Action."), "info")
+        else if (base.macroActions.some(function(a) { return a.id === actionId })) runner.run([{ action: actionId, arguments: args }], caption)
+        else if (base.macroNames.indexOf(actionId) >= 0) runner.runNamed(actionId)
+        else window.notify(qsTr("%1 did not run").arg(caption), qsTr("QindaBase has no action or macro named %1.").arg(actionId), "warning")
     }
-    function lookupValue(name) { return position < 0 ? pendingLookups[name] : lookupValues[name] }
-    function setLookup(name, value) {
-        if (designing) return
-        if (position < 0) {
-            const next = Object.assign({}, pendingLookups)
-            next[name] = value
-            pendingLookups = next
-            return
-        }
-        const changes = ({})
-        changes[name] = value === null || value === undefined ? "" : value
-        const r = base.saveFormRecord(table, Number(rowIds[position]), changes)
-        if (!r.ok) { window.notify(qsTr("Not saved"), r.error, "warning"); return }
-        goTo(position)
-    }
-    function runButton(control) {
-        if (control.macro) window.commands.macroRunner.runNamed(control.macro)
-        else window.commands.macroRunner.run(control.actions || [], control.caption)
+    function evaluate(expression, record) {
+        const r = base.evaluateFormExpression(table, expression, bridge.toStored(record))
+        return r.ok ? r.text : "#Error"
     }
     // A macro's ApplyFilter / ShowAllRecords: {ok, error}.
     function applyFilter(where) {
@@ -125,12 +134,14 @@ Item {
         else if (which === "next") goTo(Math.min(last, position + 1))
         else goTo(Math.max(0, position - 1))
     }
-    function openSubforms(record) {
-        const subforms = controls.filter(function(c) { return c.kind === "subform" })
-        for (let i = 0; i < subforms.length; ++i) {
-            const link = subforms[i].linkParent
-            const key = position < 0 ? null : (record[link] !== undefined ? record[link] : lookupValues[link])
-            base.subformSheet(i).openLinked(subforms[i].table, subforms[i].linkChild, key === undefined ? null : key)
+    // Each subform's datasheet: the records linked to this one.
+    function openSubforms() {
+        for (let i = 0; i < subforms.length && i < 4; ++i) {
+            const target = base.subformTable(String(subforms[i].formName || ""))
+            const child = String(subforms[i].linkChildFields || "").split(";")[0].trim()
+            const master = String(subforms[i].linkMasterFields || "").split(";")[0].trim()
+            const key = position < 0 || master.length === 0 || stored[master] === undefined ? null : stored[master]
+            if (target.ok) base.subformSheet(i).openLinked(target.table, child, key)
         }
     }
     function closeSession() {
@@ -147,6 +158,7 @@ Item {
     onDesignDirtyChanged: syncHost()
     onDesigningChanged: syncHost()
     onVisibleChanged: if (visible) { syncHost(); if (table.length) reloadRows(position); window.baseHost.fileTarget = fileTarget }
+    onSubformsChanged: openSubforms()
 
     function reloadRows(at) {
         const filtered = filter.length > 0 ? base.whereRowIds(table, filter) : null
@@ -158,23 +170,12 @@ Item {
         const r = base.formRecord(table, index >= 0 ? Number(rowIds[index]) : 0)
         designer.recordId = r.recordId || ""
         designer.record = r.record || ({})
-        lookupValues = r.lookups || ({})
-        pendingLookups = ({})
-        openSubforms(r.record || ({}))
+        stored = r.stored || ({})
+        openSubforms()
     }
     function newRecord() { if (!designing) goTo(-1) }
-    function refresh() { loadControls(); reloadRows(position) }
-    function saveRecord() {
-        if (designer.mode !== "edit") return
-        const requested = designer.requestRecordSave()
-        // Only the lookups were chosen: the designer has nothing to send.
-        if (!requested && position < 0 && designer.requestState === "idle" && Object.keys(pendingLookups).length > 0) {
-            const r = base.saveFormRecord(table, 0, pendingLookups)
-            if (!r.ok) { window.notify(qsTr("Record not saved"), r.error, "warning"); return }
-            rowIds = base.formRowIds(table)
-            goTo(Math.max(0, rowIds.map(Number).indexOf(Number(r.rowid))))
-        }
-    }
+    function refresh() { bridge.refreshLookups(); reloadRows(position) }
+    function saveRecord() { if (designer.mode === "edit") designer.requestRecordSave() }
     function deleteRecord() {
         if (position < 0) { goTo(rowIds.length ? 0 : -1); return }
         window.confirmDialog.ask(qsTr("Delete this record?"), qsTr("Undo brings it back."), "danger", qsTr("Delete"), function() {
@@ -201,6 +202,10 @@ Item {
         target: view.designDocument
         function onHistoryChanged() { view.syncHost() }
     }
+    Component {
+        id: subformComponent
+        FormSubform { view: view }
+    }
 
     Tk.Flex {
         anchors.fill: parent
@@ -222,6 +227,18 @@ Item {
                 Tk.Icon { name: "layout-template"; size: Tk.Theme.size.icon; color: Tk.Theme.color.accent }
                 Tk.Heading { objectName: "formName"; level: 3; text: view.formName; Tk.Flex.shrink: 0 }
                 Tk.Caption { text: qsTr("records of %1").arg(view.table); Tk.Flex.shrink: 0 }
+                // The title the form shows (the designer edits it only with a
+                // design document of its own; FormDesignBridge holds that).
+                Tk.TextField {
+                    objectName: "formTitleField"
+                    visible: view.designing
+                    small: true
+                    text: view.bridge.presented.title || ""
+                    placeholderText: qsTr("Form title")
+                    tooltip: qsTr("The title the form shows")
+                    Tk.Flex.basis: Tk.Theme.size.fieldWidth * 1.5
+                    onEditingFinished: if (text !== (view.bridge.presented.title || "")) view.bridge.applyChange("", { title: text })
+                }
                 Tk.Spacer { }
                 Tk.Badge {
                     visible: view.designDirty
@@ -244,34 +261,37 @@ Item {
             id: body
             Tk.Flex.grow: 1
             Tk.Flex.basis: 0
+            overflowX: Tk.Scroll.Auto
             accessibleName: view.formName
             Tk.Flex {
-                width: body.width
+                // QindaTK D-316: the implicit width assigned here is what the
+                // Scroll measures, so a wide form scrolls sideways.
+                implicitWidth: view.cardWidth + Tk.Theme.space.lg * 2
+                width: Math.max(body.viewportWidth, implicitWidth)
                 direction: Tk.Flex.Column
                 align: Tk.Flex.Center
                 padding: Tk.Theme.space.lg
                 Tk.Card {
-                    width: Math.min(body.width - Tk.Theme.space.lg * 2, Tk.Theme.size.fieldWidth * 4)
+                    // Design shows the property sheet beside the controls.
+                    width: view.cardWidth
                     padding: Tk.Theme.space.lg
                     Tk.Flex {
                         direction: Tk.Flex.Column
                         gap: Tk.Theme.space.md
-                        FormLookups {
-                            objectName: "formLookups"
-                            visible: view.lookups.length > 0
-                            view: view
-                        }
                         Tk.FormDesigner {
                             id: designer
                             objectName: "baseFormDesigner"
                             provider: mirror
-                            designDocument: view.designDocument
                             tableName: view.table
+                            design: view.bridge.presented
+                            controlsEnabled: true
+                            subformComponent: subformComponent
+                            expressionEvaluator: function(expression, record) { return view.evaluate(expression, record) }
                             tooltip: view.title
+                            onDesignChangeRequested: function(fieldName, value) { view.bridge.applyChange(fieldName, value) }
+                            onControlCommandRequested: function(controlId, actionId) { view.runCommand(controlId, actionId) }
                             onRecordSaveRequested: function(requestId, tableName, recordId, changes) {
-                                // A new record takes its lookup choices along.
-                                const all = Object.assign({}, recordId ? ({}) : view.pendingLookups, changes)
-                                const r = view.base.saveFormRecord(tableName, Number(recordId) || 0, all)
+                                const r = view.base.saveFormRecord(tableName, Number(recordId) || 0, view.bridge.toStored(changes))
                                 designer.acknowledge(requestId, r.ok ? "accepted" : "rejected", r.ok ? qsTr("Saved") : r.error)
                                 if (r.ok) {
                                     view.rowIds = view.base.formRowIds(view.table)
@@ -285,24 +305,10 @@ Item {
                         }
                     }
                 }
-                // A plain Item gives the controls the card's width (Tk.Flex
-                // sizes its children by their implicit size).
-                Item {
-                    objectName: "formControlsHost"
-                    visible: view.controls.length > 0
-                    implicitWidth: Math.min(body.width - Tk.Theme.space.lg * 2, Tk.Theme.size.fieldWidth * 4)
-                    implicitHeight: formControls.implicitHeight
-                    FormControls {
-                        id: formControls
-                        objectName: "formControls"
-                        width: parent.width
-                        view: view
-                    }
-                }
                 Tk.Flex {
                     objectName: "formFiles"
                     visible: view.fileFields.length > 0 && !view.designing
-                    width: Math.min(body.width - Tk.Theme.space.lg * 2, Tk.Theme.size.fieldWidth * 4)
+                    width: Math.min(body.viewportWidth - Tk.Theme.space.lg * 2, Tk.Theme.size.fieldWidth * 4)
                     direction: Tk.Flex.Row
                     wrap: Tk.Flex.Wrap
                     gap: Tk.Theme.space.sm
@@ -357,7 +363,7 @@ Item {
                 Tk.IconButton { objectName: "formDelete"; iconName: "list-minus"; small: true; tooltip: qsTr("Delete record"); enabled: view.position >= 0 && !view.designing; onClicked: view.deleteRecord() }
                 Tk.Spacer { }
                 Tk.Caption {
-                    text: view.designing ? qsTr("Design: labels, order and which fields show")
+                    text: view.designing ? qsTr("Design: add controls, drag and size them; Properties edits the selected one")
                                          : qsTr("Changes are saved with Save record, each one undoable")
                     Tk.Flex.shrink: 1
                     elide: Text.ElideRight

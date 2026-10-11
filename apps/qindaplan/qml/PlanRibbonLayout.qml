@@ -12,7 +12,8 @@ import QindaOffice.Shell
 // Leveling Options, the Cost and Work Overview dashboards. M83 (D-092): Task
 // Type and Effort Driven, Split Task, Recurring Task, Custom Fields and their
 // table, filter and sort, Reschedule Uncompleted Work, progress lines,
-// Import Tasks from Excel or CSV.
+// Import Tasks from Excel or CSV. M89 (D-097): Group By and Highlight (View
+// ▸ Data) and the Second Baseline (Gantt Chart Format ▸ Bar styles).
 QtObject {
     readonly property var views: ["planViewGanttAction", "planViewTrackingGanttAction", "planViewLevelingGanttAction",
                                   "planViewNetworkAction", "planViewTaskSheetAction", "planViewTaskUsageAction", "|",
@@ -28,6 +29,19 @@ QtObject {
                                     "planFilterRelatedSummariesAction"]
     readonly property var sorts: ["planSortIdAction", "planSortStartAction", "planSortFinishAction",
                                   "planSortPriorityAction", "planSortCostAction", "planSortCustomAction"]
+    readonly property var groups: ["planGroupNoneAction", "|", "planGroupCompleteAction", "planGroupConstraintAction",
+                                   "planGroupCriticalAction", "planGroupDurationAction", "planGroupMilestonesAction",
+                                   "planGroupPriorityAction", "planGroupResourceAction", "planGroupStatusAction",
+                                   "planGroupModeAction", "planGroupActiveAction", "|", "planGroupCustomAction"]
+    readonly property var highlights: ["planHighlightNoneAction", "|", "planHighlightCriticalAction",
+                                       "planHighlightIncompleteAction", "planHighlightCompletedAction",
+                                       "planHighlightLateAction", "planHighlightSlippingAction",
+                                       "planHighlightMilestonesAction", "planHighlightSummaryAction",
+                                       "planHighlightDeadlinesAction"]
+    readonly property var baselines2Shown: ["planBaseline2Shown0Action", "planBaseline2Shown1Action", "planBaseline2Shown2Action",
+                                            "planBaseline2Shown3Action", "planBaseline2Shown4Action", "planBaseline2Shown5Action",
+                                            "planBaseline2Shown6Action", "planBaseline2Shown7Action", "planBaseline2Shown8Action",
+                                            "planBaseline2Shown9Action", "planBaseline2Shown10Action"]
     readonly property var baselinesShown: ["planBaselineShown0Action", "planBaselineShown1Action", "planBaselineShown2Action",
                                            "planBaselineShown3Action", "planBaselineShown4Action", "planBaselineShown5Action",
                                            "planBaselineShown6Action", "planBaselineShown7Action", "planBaselineShown8Action",
@@ -116,7 +130,9 @@ QtObject {
             { id: "data", label: qsTr("Data"), items: [
                 { id: "planTables", label: qsTr("Tables"), iconName: "table", size: "large", menu: tables },
                 { id: "planFilter", label: qsTr("Filter"), iconName: "funnel", menu: filters },
-                { id: "planSort", label: qsTr("Sort"), iconName: "arrow-up-down", menu: sorts }] },
+                { id: "planSort", label: qsTr("Sort"), iconName: "arrow-up-down", menu: sorts },
+                { id: "planGroupBy", label: qsTr("Group By"), iconName: "group", menu: groups },
+                { id: "planHighlight", label: qsTr("Highlight"), iconName: "highlighter", menu: highlights }] },
             { id: "timescale", label: qsTr("Timescale"), items: [
                 { id: "planTimescale", label: qsTr("Timescale"), iconName: "calendar-range", size: "large",
                   menu: ["planTimescaleDaysAction", "planTimescaleWeeksAction", "planTimescaleMonthsAction"] },
@@ -129,7 +145,8 @@ QtObject {
         { id: "ganttFormat", label: qsTr("Gantt Chart Format"), keyTip: "G", contextId: "ganttFormat", groups: [
             { id: "barStyles", label: qsTr("Bar styles"), items: [
                 { action: "planShowCriticalAction", size: "large" }, "planShowSlackAction", "planShowProgressLinesAction",
-                { action: "planShowBaselineAction", split: true, menu: baselinesShown }, "planShowBarTextAction"] },
+                { action: "planShowBaselineAction", split: true, menu: baselinesShown },
+                { action: "planShowBaseline2Action", split: true, menu: baselines2Shown }, "planShowBarTextAction"] },
             { id: "formatTimescale", label: qsTr("Timescale"), items: [
                 { action: "planTimescaleWeeksAction", size: "large" }, "planTimescaleDaysAction",
                 "planTimescaleMonthsAction", "viewZoomInAction", "viewZoomOutAction"] },

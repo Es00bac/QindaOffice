@@ -90,9 +90,6 @@ void ShowSlideLayouts::rebuild()
     }
     const bool changed = choices != m_choices || builtIn != m_builtIn;
     const bool counted = choices.size() != m_choices.size();
-    if (counted) {
-        emit idsAboutToChange();
-    }
     m_choices = choices;
     m_builtIn = builtIn;
     Quick::ActionModel *model = m_host->actions();

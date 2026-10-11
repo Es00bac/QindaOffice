@@ -143,26 +143,23 @@ M::MessageFacts MailOrganizer::factsOf(const QVariantMap &r, const QString &head
 
 bool MailOrganizer::editRecord(const QString &collection, const QString &id, const QVariantMap &changes, QString *error)
 {
+    // M89: the store's id index finds the record (QindaTK D-324), not a scan.
     QindaTK::LocalProductivityStore *store = m_service->store();
-    const QVariantList rows = collection == "events"_L1 ? store->events()
-                            : collection == "tasks"_L1  ? store->tasks()
-                                                        : store->messages();
-    for (const QVariant &value : rows) {
-        QVariantMap row = value.toMap();
-        if (text(row, "id") != id) continue;
-        for (auto it = changes.cbegin(); it != changes.cend(); ++it) {
-            if (it.value().isNull()) row.remove(it.key());
-            else row.insert(it.key(), it.value());
-        }
-        const QVariantMap upserted = store->upsert(collection, row);
-        if (!upserted.value(u"ok"_s).toBool()) {
-            if (error != nullptr) *error = upserted.value(u"error"_s).toString();
-            return false;
-        }
-        return m_service->saveStore(error);
+    QVariantMap row = store->record(collection, id);
+    if (row.isEmpty()) {
+        if (error != nullptr) *error = tr("The item no longer exists");
+        return false;
     }
-    if (error != nullptr) *error = tr("The item no longer exists");
-    return false;
+    for (auto it = changes.cbegin(); it != changes.cend(); ++it) {
+        if (it.value().isNull()) row.remove(it.key());
+        else row.insert(it.key(), it.value());
+    }
+    const QVariantMap upserted = store->upsert(collection, row);
+    if (!upserted.value(u"ok"_s).toBool()) {
+        if (error != nullptr) *error = upserted.value(u"error"_s).toString();
+        return false;
+    }
+    return m_service->saveStore(error);
 }
 
 void MailOrganizer::answerLater(const char *signal, const QString &requestId, const QVariantMap &result)
@@ -295,14 +292,16 @@ QVariantMap MailOrganizer::updateCategory(const QString &accountId, const QStrin
         const QList<QPair<QString, QVariantList>> collections{
             {u"messages"_s, store->messages()}, {u"events"_s, store->events()}, {u"tasks"_s, store->tasks()}};
         for (const auto &[collection, rows] : collections) {
+            QVariantList batch; // M89: one store change per collection (upsertMany)
             for (const QVariant &value : rows) {
                 QVariantMap row = value.toMap();
                 const QStringList names = renamed(row.value(u"categories"_s).toStringList());
                 if (names.isEmpty()) continue;
                 if (collection == "messages"_L1 && listKeyFor(m_service->ownerAccountOf(row)) != "local"_L1) continue;
                 row.insert(u"categories"_s, names);
-                static_cast<void>(store->upsert(collection, row));
+                batch.append(row);
             }
+            if (!batch.isEmpty()) static_cast<void>(store->upsertMany(collection, batch));
         }
         static_cast<void>(m_service->saveStore());
         for (const QVariant &value : m_service->contacts()->search(QString(), 100000)) {

@@ -8,7 +8,12 @@ import QindaTK as Tk
 // all caps, hidden); Advanced — character spacing expanded or condensed by
 // points, scale, position raised or lowered, kerning from a size up. Only
 // what the user touches is applied (`changed`); the host (write_font.h)
-// applies it run by run, so a mixed selection keeps the rest.
+// applies it run by run, so a mixed selection keeps the rest. M89 (D-097):
+// the colours' "Automatic" is QindaTK ColorButton's own entry (D-318), the
+// colour "" — a mode no colour value can say — instead of a button beside
+// it. AGENT-NOTE: the buttons follow the dialog's colours through Binding
+// elements, which a pick inside the button (it writes its own color and
+// colorMode) does not break, so load() and the custom colour picker show.
 Tk.Dialog {
     id: dialog
     signal fontApplied(var answer)
@@ -113,18 +118,21 @@ Tk.Dialog {
             }
             Tk.PropertyRow {
                 label: qsTr("Font colour")
-                Tk.Flex {
-                    gap: Tk.Theme.space.sm
-                    Tk.ColorButton {
-                        objectName: "fontColor"
-                        ghost: false
-                        tooltip: qsTr("Font colour")
-                        color: dialog.color.length > 0 ? dialog.color : "#000000"
-                        colors: ["#000000", "#7f7f7f", "#1f4e79", "#2f5496", "#4472c4", "#c00000", "#ed7d31", "#70ad47", "#7030a0"]
-                        onColorSelected: function(c) { dialog.color = String(c); dialog.mark("color") }
-                        onCustomRequested: dialog.customColorRequested("font")
-                    }
-                    Tk.Button { objectName: "fontColorAuto"; text: qsTr("Automatic"); onClicked: { dialog.color = ""; dialog.mark("color") } }
+                Tk.ColorButton {
+                    id: fontColor
+                    objectName: "fontColor"
+                    ghost: false
+                    tooltip: qsTr("Font colour")
+                    // Word's automatic text colour is the paper's ink (D-004).
+                    automaticEntry: true
+                    automaticText: qsTr("Automatic")
+                    automaticColor: "#000000"
+                    Binding on colorMode { value: dialog.color.length > 0 ? "color" : "automatic" }
+                    Binding on color { value: dialog.color.length > 0 ? dialog.color : "#000000" }
+                    colors: ["#000000", "#7f7f7f", "#1f4e79", "#2f5496", "#4472c4", "#c00000", "#ed7d31", "#70ad47", "#7030a0"]
+                    onColorSelected: function(c) { dialog.color = String(c); dialog.mark("color") }
+                    onAutomaticSelected: { dialog.color = ""; dialog.mark("color") }
+                    onCustomRequested: dialog.customColorRequested("font")
                 }
             }
             Tk.PropertyRow {
@@ -139,13 +147,19 @@ Tk.Dialog {
                         onActivated: dialog.mark("underline")
                     }
                     Tk.ColorButton {
+                        id: fontUnderlineColor
                         objectName: "fontUnderlineColor"
                         ghost: false
                         enabled: underline.currentIndex > 0
                         tooltip: qsTr("Underline colour")
-                        color: dialog.underlineColor.length > 0 ? dialog.underlineColor : "#000000"
+                        automaticEntry: true // the text's own colour
+                        automaticText: qsTr("Automatic")
+                        automaticColor: dialog.color.length > 0 ? dialog.color : "#000000"
+                        Binding on colorMode { value: dialog.underlineColor.length > 0 ? "color" : "automatic" }
+                        Binding on color { value: dialog.underlineColor.length > 0 ? dialog.underlineColor : "#000000" }
                         colors: ["#000000", "#7f7f7f", "#2f5496", "#c00000", "#ed7d31", "#70ad47"]
                         onColorSelected: function(c) { dialog.underlineColor = String(c); dialog.mark("underlineColor") }
+                        onAutomaticSelected: { dialog.underlineColor = ""; dialog.mark("underlineColor") }
                         onCustomRequested: dialog.customColorRequested("underline")
                     }
                 }

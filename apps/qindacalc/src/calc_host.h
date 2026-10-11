@@ -107,6 +107,10 @@ public:
     [[nodiscard]] QString formulaText() const;
     Q_INVOKABLE void commitFormulaBar(const QString &text);
     Q_INVOKABLE void commitNameBox(const QString &text);
+    // M89 (D-097, calc_host_completion.cpp): Formula AutoComplete for the
+    // formula bar — {from, to, entries: [{label, detail, iconName, insert,
+    // kind}]} for the name at text position `position` (formula_completion.h).
+    Q_INVOKABLE QVariantMap formulaCompletions(const QString &text, int position) const;
 
     // ---- format strip (calc_host_format.cpp) ----
     [[nodiscard]] QStringList fontFamilies() const;

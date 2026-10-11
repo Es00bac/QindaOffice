@@ -5,10 +5,12 @@
 //
 // AGENT-CONTRACT (docs/mail-interchange.md): every import becomes RFC 5322
 // source first (an Outlook .msg through msg_reader + rfc822_writer) and goes
-// through importRawMessage: ONE record shape (MailRecord::fromParsed, like
+// through rawMessageRecord: ONE record shape (MailRecord::fromParsed, like
 // the toolkit providers write) with `localSource: true` and the bytes kept
 // in <dataDir>/sources. The record id is "local:eml:" + the source's
-// SHA-256, so the same message imported twice is one message.
+// SHA-256, so the same message imported twice is one message. One message
+// is written with importRawMessage; an mbox or a .pst writes each slice of
+// records as ONE store change (storeMessages → upsertMany, M89).
 #include "mail_service.h"
 
 #include "mbox.h"
@@ -84,6 +86,30 @@ struct MailService::MboxJob {
 QString MailService::importRawMessage(const QByteArray &raw, const QString &mailbox, const QString &origin,
                                       QString *error, const QVariantMap &extra)
 {
+    const QVariantMap record = rawMessageRecord(raw, mailbox, origin, error, extra);
+    if (record.isEmpty()) return {};
+    const QVariantMap upserted = m_store->upsert(QStringLiteral("messages"), record);
+    if (!upserted.value(QStringLiteral("ok")).toBool()) {
+        if (error != nullptr) *error = upserted.value(QStringLiteral("error")).toString();
+        return {};
+    }
+    return record.value(QStringLiteral("id")).toString();
+}
+
+int MailService::storeMessages(const QVariantList &records, QString *error)
+{
+    if (records.isEmpty()) return 0;
+    const QVariantMap stored = m_store->upsertMany(QStringLiteral("messages"), records);
+    if (!stored.value(QStringLiteral("ok")).toBool()) {
+        if (error != nullptr) *error = stored.value(QStringLiteral("error")).toString();
+        return 0;
+    }
+    return int(records.size());
+}
+
+QVariantMap MailService::rawMessageRecord(const QByteArray &raw, const QString &mailbox, const QString &origin,
+                                          QString *error, const QVariantMap &extra)
+{
     const QString id = QStringLiteral("local:eml:")
         + QString::fromLatin1(QCryptographicHash::hash(raw, QCryptographicHash::Sha256).toHex().left(24));
     const QindaTK::Mime::Parsed parsed = QindaTK::Mime::parse(raw);
@@ -104,12 +130,7 @@ QString MailService::importRawMessage(const QByteArray &raw, const QString &mail
     for (auto it = extra.cbegin(); it != extra.cend(); ++it) record.insert(it.key(), it.value());
     if (!writeSource(id, raw, error)) return {};
     m_contentCache.remove(id);
-    const QVariantMap upserted = m_store->upsert(QStringLiteral("messages"), record);
-    if (!upserted.value(QStringLiteral("ok")).toBool()) {
-        if (error != nullptr) *error = upserted.value(QStringLiteral("error")).toString();
-        return {};
-    }
-    return id;
+    return record;
 }
 
 QString MailService::importMessageFile(const QString &path)
@@ -218,14 +239,22 @@ void MailService::importMailboxStep(const QString &requestId)
     slice.start();
     QByteArray raw;
     bool more = true;
+    QVariantList batch; // M89: one store change per slice (upsertMany)
     while (slice.elapsed() < 40) {
         if (!job->reader.next(&raw)) {
             more = false;
             break;
         }
         QString error;
-        if (importRawMessage(raw, job->folder, QString(), &error).isEmpty()) ++job->failed;
-        else ++job->imported;
+        const QVariantMap record = rawMessageRecord(raw, job->folder, QString(), &error);
+        if (record.isEmpty()) ++job->failed;
+        else batch.append(record);
+    }
+    {
+        QString error;
+        const int stored = storeMessages(batch, &error);
+        job->imported += stored;
+        job->failed += int(batch.size()) - stored;
     }
     if (more) {
         // AGENT-NOTE: the views refresh once at the end, not after every

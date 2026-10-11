@@ -30,3 +30,15 @@ endforeach()
 target_link_libraries(tst_write_view PRIVATE ${POPPLER_QT6_LIBRARIES})
 target_include_directories(tst_write_view PRIVATE ${POPPLER_QT6_INCLUDE_DIRS})
 target_compile_options(tst_write_view PRIVATE ${POPPLER_QT6_CFLAGS_OTHER})
+
+# M89 (D-097): the dialogs on QindaTK's M85 controls — ColorButton's
+# Automatic and No Color modes, the CharacterMap — through the window.
+add_executable(tst_write_m89_dialogs tst_write_m89_dialogs.cpp write_test_support.h)
+target_link_libraries(tst_write_m89_dialogs PRIVATE qindawrite_app qindawrite_appplugin Qt6::Test)
+target_include_directories(tst_write_m89_dialogs PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)
+target_compile_definitions(tst_write_m89_dialogs PRIVATE QQO_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/qml_fixtures")
+qqo_set_strict_warnings(tst_write_m89_dialogs)
+qqo_desktop_runtime(tst_write_m89_dialogs)
+add_test(NAME tst_write_m89_dialogs COMMAND tst_write_m89_dialogs)
+set_tests_properties(tst_write_m89_dialogs PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")

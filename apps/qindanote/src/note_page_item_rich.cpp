@@ -8,8 +8,10 @@
 // (RichBlock::store) and pushed as ONE RichEditCommand on the page's
 // QUndoStack, which replays it on the live document or restores the block
 // snapshot. The document's own undo stays empty: Ctrl+Z inside the editor
-// reaches Edit ▸ Undo (the area does not take the shortcut), so ink, blocks
-// and typing undo in the order they happened.
+// reaches Edit ▸ Undo (the area leaves Ctrl chords to the window), and the
+// area's own Undo and Redo (its commands, QindaTK D-321) ask the page's
+// history through undoRequested/redoRequested, so ink, blocks and typing
+// undo in the order they happened.
 
 #include "note_page_item.h"
 
@@ -25,7 +27,6 @@
 #include <qindatk/rich_text_spans.h>
 
 #include <QJsonArray>
-#include <QKeyEvent>
 #include <QUndoStack>
 
 namespace QindaOffice::Apps::Notes {
@@ -33,39 +34,6 @@ namespace QindaOffice::Apps::Notes {
 using namespace QindaTK::RichText;
 
 namespace {
-
-// AGENT-NOTE (QindaTK gap, D-093): Tk.RichTextArea does not claim the
-// ShortcutOverride of the keys it types with, so the window's one-letter
-// shortcuts (P, H, E, T — the ink tools) fired instead of typing the
-// letter, and switched the tool under the editor. QtQuick's TextEdit claims
-// them; this filter does the same for the rich editor: printable keys and
-// the editing keys without Ctrl, Alt or Meta stay with the editor.
-class TypingKeys final : public QObject {
-public:
-    using QObject::QObject;
-
-protected:
-    bool eventFilter(QObject *watched, QEvent *event) override
-    {
-        if (event->type() != QEvent::ShortcutOverride) {
-            return QObject::eventFilter(watched, event);
-        }
-        auto *key = static_cast<QKeyEvent *>(event);
-        if (key->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier)) {
-            return false;
-        }
-        static const QList<int> editing{Qt::Key_Backspace, Qt::Key_Delete, Qt::Key_Return, Qt::Key_Enter,
-                                        Qt::Key_Tab,       Qt::Key_Backtab, Qt::Key_Left,  Qt::Key_Right,
-                                        Qt::Key_Up,        Qt::Key_Down,    Qt::Key_Home,  Qt::Key_End,
-                                        Qt::Key_PageUp,    Qt::Key_PageDown};
-        const QString text = key->text();
-        if ((!text.isEmpty() && (text.at(0).isPrint() || text.at(0).isSurrogate())) || editing.contains(key->key())) {
-            event->accept();
-            return true;
-        }
-        return false;
-    }
-};
 
 // Consecutive typing or deleting is one step, as the old plain editor's was.
 bool continuesTyping(const QString &label)
@@ -105,7 +73,9 @@ void NotePageItem::attachRichArea(QQuickItem *item)
         m_clipboard = new NoteClipboard(this);
     }
     area->setClipboardAdapter(m_clipboard);
-    area->installEventFilter(new TypingKeys(area));
+    // (M89: the area claims its typing keys' ShortcutOverride itself since
+    // QindaTK D-320, so the ink tools' one-letter shortcuts no longer steal
+    // them; QindaNote's own filter for that is gone.)
     connect(area->formatState(), &QindaTK::RichTextFormatState::changed, this, &NotePageItem::richStateChanged);
     connect(area, &QindaTK::RichTextArea::caretChanged, this, &NotePageItem::richStateChanged);
     connect(area, &QindaTK::RichTextArea::linkActivated, this, &NotePageItem::linkActivated);
@@ -120,6 +90,9 @@ void NotePageItem::openRichDocument(const QJsonObject &block)
     m_richDocument->setExternalUndo(true);
     m_richParagraphs = RichBlock::paragraphIds(*m_richDocument);
     connect(m_richDocument, &QindaTK::RichTextDocument::committed, this, &NotePageItem::onRichCommitted);
+    // M89 (QindaTK D-321): the area's Undo/Redo step the page's history.
+    connect(m_richDocument, &QindaTK::RichTextDocument::undoRequested, this, &NotePageItem::undo);
+    connect(m_richDocument, &QindaTK::RichTextDocument::redoRequested, this, &NotePageItem::redo);
     emit richDocumentChanged();
 }
 
@@ -366,19 +339,12 @@ QString NotePageItem::richSelectedText() const
 
 QColor NotePageItem::richHighlight() const
 {
-    if (m_richDocument == nullptr) {
+    // M89 (QindaTK D-322): the area's format state reports the highlight
+    // (invalid for none or a mixed selection).
+    if (m_richDocument == nullptr || m_richArea == nullptr || m_richArea->document() != m_richDocument) {
         return {};
     }
-    const Selection selection = richSelection();
-    const Position first =
-        m_richDocument->compare(selection.anchor, selection.focus) <= 0 ? selection.anchor : selection.focus;
-    const Paragraph *p = m_richDocument->paragraph(first.paragraph);
-    if (p == nullptr || p->text.isEmpty()) {
-        return {};
-    }
-    // A caret reads the character before it, as typing would continue it.
-    const int offset = qBound(0, selection.isCollapsed() ? first.offset - 1 : first.offset, int(p->text.size()) - 1);
-    return m_richDocument->charFormat(Spans::formatAt(p->spans, offset)).background;
+    return m_richArea->formatState()->highlight();
 }
 
 bool NotePageItem::indentRich(int delta)

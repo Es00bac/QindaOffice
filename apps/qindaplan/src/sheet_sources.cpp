@@ -96,12 +96,18 @@ QVariantMap TaskSheetSource::cellStyle(const QString &rowId, const QString &colu
     if (t.summary) {
         style.insert(QStringLiteral("bold"), true);
     }
+    // M89 (D-097): View ▸ Highlight marks the filter's tasks (the fill is
+    // the theme's, handed in by the window).
+    if (m_service->isHighlighted(row) && m_service->highlightFill().isValid()) {
+        style.insert(QStringLiteral("fillColor"), m_service->highlightFill().name());
+    }
     if (!t.effectiveActive) {
         style.insert(QStringLiteral("strikeout"), true);
         style.insert(QStringLiteral("italic"), true);
     }
     if (columnId == QLatin1String("name")) {
-        style.insert(QStringLiteral("indent"), qMax(0, t.outlineLevel - 1));
+        // Grouped (M89), a task sits one level under its band's header.
+        style.insert(QStringLiteral("indent"), m_service->groupBy() != QLatin1String("none") ? 1 : qMax(0, t.outlineLevel - 1));
         if (t.summary) {
             // The disclosure: ▾ open, ▸ collapsed (Lucide chevrons).
             style.insert(QStringLiteral("icon"), m_service->isCollapsed(t.uid) ? QStringLiteral("chevron-right")

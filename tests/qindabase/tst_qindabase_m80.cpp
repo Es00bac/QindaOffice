@@ -2,9 +2,10 @@
 // M80 (D-089) through BaseService over the seeded Donors & Donations
 // starter: the Access SQL view both ways, the template's crosstab and a
 // make-table run undone through the document; Test Validation Rules,
-// masks and rules where people type; macros and where conditions; form
-// lookups, controls and a subform's linked datasheet; reports evaluated
-// by the engine with exact totals; mailing labels; Access's XML.
+// masks and rules where people type; macros and where conditions; reports
+// evaluated by the engine with exact totals; mailing labels; Access's XML.
+// (M80's form lookups, controls and subforms are M89's now:
+// tst_qindabase_m89.)
 
 #include "base_app_test_support.h"
 
@@ -169,51 +170,6 @@ private slots:
         QVERIFY(!sheet->filters().isEmpty());
         sheet->clearFilters();
         QCOMPARE(sheet->recordCount(), 40);
-    }
-
-    void formLookupsControlsAndSubforms()
-    {
-        Fixture f;
-        const QVariantMap entry = f.service.formControls(str("Donation Entry"));
-        QVERIFY(ok(entry));
-        QVariantList lookups = entry.value(str("lookups")).toList();
-        QCOMPARE(names(lookups), (QStringList{str("donor_id"), str("campaign_id")}));
-        QCOMPARE(lookups.first().toMap().value(str("control")).toString(), str("combo"));
-        const QVariantMap donor = f.service.formControls(str("Donor"));
-        QCOMPARE(names(donor.value(str("controls")).toList(), "id"), (QStringList{str("subform1"), str("button1")}));
-        QCOMPARE(donor.value(str("subformChoices")).toList().size(), 1);
-        // A list box for the campaign and a button, as one undo step.
-        QVariantMap campaign = lookups.at(1).toMap();
-        campaign.insert(str("control"), str("list"));
-        lookups[1] = campaign;
-        const QVariantList controls{QVariantMap{
-            {str("kind"), str("button")}, {str("caption"), str("Totals")},
-            {str("actions"), QVariantList{QVariantMap{{str("action"), str("openQuery")},
-                                                      {str("arguments"), QVariantMap{{str("query"), str("Totals by Donor")}}}}}}}};
-        const QVariantMap saved = f.service.saveFormControls(str("Donation Entry"), controls, lookups);
-        QVERIFY2(ok(saved), qPrintable(saved.value(str("error")).toString()));
-        QVariantMap again = f.service.formControls(str("Donation Entry"));
-        QCOMPARE(again.value(str("lookups")).toList().at(1).toMap().value(str("control")).toString(), str("list"));
-        QCOMPARE(names(again.value(str("controls")).toList(), "id"), QStringList{str("button1")});
-        const QVariantList nowhere{QVariantMap{{str("kind"), str("subform")}, {str("caption"), str("X")},
-                                               {str("table"), str("nowhere")}, {str("linkChild"), str("a")},
-                                               {str("linkParent"), str("id")}}};
-        QVERIFY(!ok(f.service.saveFormControls(str("Donation Entry"), nowhere, lookups)));
-        f.undo()->undo();
-        QVERIFY(f.service.formControls(str("Donation Entry")).value(str("controls")).toList().isEmpty());
-        // The subform's datasheet: one donor's gifts, and new ones join them.
-        DatasheetModel *gifts = f.service.subformSheet(0);
-        QVERIFY(gifts->openLinked(str("donations"), str("donor_id"), 1));
-        const int ada = f.scalar(str("SELECT count(*) FROM donations WHERE donor_id = 1")).toInt();
-        QCOMPARE(gifts->recordCount(), ada);
-        QCOMPARE(gifts->grid()->columnIndex(str("donor_id")), -1); // the link is not shown
-        QVERIFY(ok(gifts->setCell(str("new"), str("amount"), str("12.50"))));
-        QCOMPARE(gifts->recordCount(), ada + 1);
-        QCOMPARE(f.scalar(str("SELECT count(*) FROM donations WHERE donor_id = 1")).toInt(), ada + 1);
-        QVERIFY(gifts->openLinked(str("donations"), str("donor_id"), QVariant()));
-        QCOMPARE(gifts->recordCount(), 0);
-        QVERIFY(!gifts->editable());
-        QVERIFY(f.service.subformSheet(4) == nullptr);
     }
 
     void reportsTotalExactlyAndLabelsPlace()

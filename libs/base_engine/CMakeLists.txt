@@ -144,3 +144,11 @@ target_link_libraries(base_engine PUBLIC Qt6::Core PRIVATE SQLite::SQLite3)
 target_compile_definitions(base_engine PRIVATE QT_NO_CAST_FROM_ASCII)
 
 qqo_set_strict_warnings(base_engine)
+
+# M89 (D-097): a form's positioned controls — the stacked layout of a form
+# saved before M89, lookup labels and keys, calculated controls
+# (QindaTK FormDesigner, D-311).
+target_sources(base_engine PRIVATE
+    src/base_form_layout.cpp
+    src/base_form_layout.h
+)

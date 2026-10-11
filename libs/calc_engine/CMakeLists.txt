@@ -158,3 +158,16 @@ target_link_libraries(calc_engine PUBLIC Qt6::Core)
 
 qqo_set_strict_warnings(calc_engine)
 
+
+# M89 (D-097): the formula bar's completion — functions with Excel's
+# argument names (data/function_signatures.txt, a resource), defined names,
+# tables and their columns.
+target_sources(calc_engine PRIVATE
+    src/formula_completion.cpp
+    src/formula_completion.h
+)
+qt_add_resources(calc_engine calc_function_signatures
+    PREFIX /qindaoffice/calc
+    BASE data
+    FILES data/function_signatures.txt
+)

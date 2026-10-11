@@ -423,10 +423,8 @@ void PlanService::rebuildGanttCalendar()
 
 void PlanService::rebuildSheets()
 {
-    QStringList rows;
-    for (int i : std::as_const(m_visible)) {
-        rows.append(idOfRow(i));
-    }
+    // M89: the shown rows, a group's header before its tasks (displayRowIds).
+    QStringList rows = displayRowIds();
     rows.append(QStringLiteral("new"));
     const QStringList fields = tableFields();
     bool same = m_sheet->columns() == fields.size();

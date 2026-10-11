@@ -129,8 +129,11 @@ Word's commands, under Word's names, on Word's model:
 - **Bullets** (Home ▸ Paragraph, Format ▸ Bullets): the library ● ○ ■ ◆ ➢
   ✓ – in Word's own fonts (Symbol, Courier New, Wingdings), No Bullets and
   **Define New Bullet** — any symbol (Word's, or any character typed or
-  pasted in any installed font), its colour and alignment. The Bullets
-  button applies the last bullet picked, or takes the bullets off.
+  pasted in any installed font, or — M89 — picked from QindaTK's character
+  map under Symbol… in the bullet's font), its colour and alignment. The
+  Bullets button applies the last bullet picked, or takes the bullets off.
+  **Insert ▸ Special Character** is the same character map (Unicode blocks,
+  recent characters, the code point; it stays open for the next one).
 - **Numbering**: the library 1. 1) I. A. a) a. i., No Numbering and
   **Define New Number Format** — number style (1, I, i, A, a, 1st, One,
   First, 01, none), the text around the number ("Step %1:"; on a level
@@ -261,13 +264,17 @@ Word's own commands, under Word's names, on Word's model:
 - **Format ▸ Borders and Shading**: the selected paragraphs (`w:pBdr`,
   `w:shd`) or, in a table, the selected cells or the whole table — a
   setting (none, box, all, grid, custom), style, colour, width, each edge,
-  and the fill.
+  and the fill. Since M89 (D-097) the border colour's **Automatic** and the
+  fill's **No Color** are entries of the colour button itself (QindaTK
+  D-318; Word's `auto` and no `w:shd` fill), and an automatic border can be
+  chosen again after a colour.
 - **Format ▸ Font** (Ctrl+D): family, style, size, colour, underline style
   (single, words, double, thick, dotted, dash, dot-dash, dot-dot-dash, wave)
   and colour, strikethrough and double strikethrough, superscript,
   subscript, small caps, all caps, hidden; spacing expanded or condensed
   (`w:spacing`), scale (`w:w`), position raised or lowered (`w:position`),
-  kerning (`w:kern`). **Change Case** (Shift+F3 cycles lowercase →
+  kerning (`w:kern`). The font and underline colours' **Automatic** is the
+  colour button's own entry (M89, D-318). **Change Case** (Shift+F3 cycles lowercase →
   UPPERCASE → Capitalize Each Word → Sentence case) keeps each letter's
   formatting.
 

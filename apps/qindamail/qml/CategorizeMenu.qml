@@ -12,6 +12,12 @@ import QindaOffice.Mail.App
 // AGENT-NOTE: the categories are user data, so they are menu rows here, not
 // ActionEntries — the menu tree and the panel export carry the fixed
 // commands (Categorize, All Categories, Clear All Categories) only.
+// AGENT-NOTE (M89, QindaTK D-323): a checkable Tk.MenuItem keeps its icon
+// and frames it when checked, so every category shows its tag and the
+// assigned ones are framed (before M85 the check mark replaced the icon).
+// The tag is drawn in theme colours: Tk.MenuItem has no per-item icon
+// colour, so the category's own colour shows in its chips and in Color
+// Categories, not here (a QindaTK gap, reported in D-097).
 Tk.Menu {
     id: menu
 

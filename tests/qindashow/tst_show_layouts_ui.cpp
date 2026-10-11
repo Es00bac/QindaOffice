@@ -250,8 +250,18 @@ private slots:
         QCOMPARE(deck->masters.last().name, QStringLiteral("Template Master"));
         scene.doc->undoStack()->undo();
         QCOMPARE(int(deck->masters.size()), 1);
-        // Apply to All: the deck's master gives way to the template's.
+        // Apply to All: the deck's master gives way to the template's. The
+        // layout menus' ids change with the count (the ribbon's tab list is
+        // rebuilt): the ribbon keeps its tab (QindaTK D-317, M89 — the
+        // window no longer puts it back itself).
+        QQuickItem *ribbon = scene.item(QStringLiteral("officeRibbon"));
+        QVERIFY(ribbon != nullptr);
+        QVariant designShown;
+        QMetaObject::invokeMethod(ribbon, "activateTab", Q_RETURN_ARG(QVariant, designShown), Q_ARG(QVariant, QStringLiteral("design")));
+        QTRY_COMPARE(ribbon->property("currentTabId").toString(), QStringLiteral("design"));
         QVERIFY(scene.host.slideLayouts()->applyTemplate(QUrl::fromLocalFile(potx), true));
+        QTest::qWait(100);
+        QCOMPARE(ribbon->property("currentTabId").toString(), QStringLiteral("design"));
         QCOMPARE(int(deck->masters.size()), 1);
         QCOMPARE(deck->masters.first().name, QStringLiteral("Template Master"));
         QCOMPARE(scene.host.slideLayouts()->gallery().size(), 2);

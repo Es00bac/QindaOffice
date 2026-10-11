@@ -13,7 +13,9 @@
 //          "fields":[{"name","label","hidden","control"}], "design":
 //          <QindaTK local-data-design map, once the designer has saved
 //          it>, "controls":[…] (M80: subforms and command buttons,
-//          base_form_controls.h)}
+//          base_form_controls.h), "positioned": true (M89: the design's
+//          form.controls are the layout; M80's "controls" are gone and
+//          nothing is laid out again — base_form_layout.h)}
 //  report {"version":1, "source":{"kind":"table"|"query","name":…},
 //          "title":…, "columns":[{"field","label"}], "groups":[{"field",
 //          "label","pageBreakBefore","totals":[{"field","function"}]}],

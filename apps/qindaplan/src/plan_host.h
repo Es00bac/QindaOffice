@@ -142,6 +142,10 @@ private:
     // plan_host_schedule.cpp (M83)
     void createScheduleActions();
     void syncScheduleState();
+    // plan_host_groups.cpp (M89): Group By, Highlight, Second Baseline
+    void createGroupActions();
+    [[nodiscard]] QList<Quick::MenuNode> groupMenuNodes() const;
+    void syncGroupChecks();
     [[nodiscard]] static QString viewActionId(const QString &view);
     [[nodiscard]] bool isGanttView() const;
     void switchTable(const QString &from, const QString &to);

@@ -9,9 +9,9 @@
 //  * a FORM MIRROR: the table's columns with no rows, where currency keeps
 //    its CURRENCY type (the form passes it as text, which the engine
 //    parses exactly); file fields are left out (the app shows them beside
-//    the form), and (M80, D-089 §4) so are lookup fields, which the app
-//    shows as combo or list boxes (the toolkit designer draws text fields
-//    and check boxes only — base_form_controls.h);
+//    the form); lookup fields are TEXT (M89, D-097: the combo or list box
+//    bound to one shows the related records' labels, base_form_layout.h —
+//    M80 had left them out while the designer drew no combo boxes);
 //  * a REPORT SNAPSHOT: the rows of a table or a saved select query, with
 //    lookup fields as their display text, currency as REAL units and file
 //    fields as their display text ("PNG image · 24 KB").

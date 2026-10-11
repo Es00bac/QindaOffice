@@ -61,7 +61,11 @@ contact of kind `group` whose members are `urn:uuid:<uid>` (a contact) or
 groups to a depth of 8 with cycles ignored, each address once; a member
 whose contact was deleted is shown as "Not in your contacts" and skipped.
 In the composer a group is suggested as "Name (group)"; picking it, or
-typing its name, puts its members in that field.
+typing its name, puts its members in that field. Since M89 (D-097) a picked
+group is known by the suggestion chosen — QindaTK's two-argument token
+validator hands the entry over (D-314), the token becomes
+`group:<contactId>` and that group's members replace it — so two groups of
+one name, or a contact named like a group, are never confused.
 
 **Recipient autocomplete**: the composer's To / Cc / Bcc fields suggest as you
 type — contacts first (name, nickname, e-mail; every word must start a word),

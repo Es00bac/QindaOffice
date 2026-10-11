@@ -6,7 +6,10 @@ import QindaOffice.Plan.App
 // The task sheet: Tk.EditableGrid over PlanService's task grid model (rows
 // are task GUIDs plus the blank "new" row; columns the current table's
 // fields). Edits go to the engine through the grid's domain source as one
-// undo step each; the selection follows the grid's ranges.
+// undo step each; the selection follows the grid's ranges. M89 (D-097):
+// with View ▸ Group By, a band's header row (QindaTK D-312) comes before its
+// tasks, with the band's rollups in their columns; its chevron (or Return,
+// Space) shows or hides them — the same rows as the Gantt beside it.
 Tk.EditableGrid {
     id: sheet
     objectName: "planTaskSheet"
@@ -26,6 +29,19 @@ Tk.EditableGrid {
     columnLabel: function(id, index) { return sheet.titles[id] !== undefined ? sheet.titles[id] : id }
     rowLabel: function(id, index) {
         return id === "new" || sheet.plan === null ? "" : sheet.plan.taskFieldText(id, "id")
+    }
+    groupHeader: function(rowId, index) {
+        if (sheet.plan === null) return null
+        void sheet.plan.revision // re-read the bands when the plan changes
+        return sheet.plan.groupHeader(rowId)
+    }
+    onGroupToggled: function(rowId, collapsed) { if (sheet.plan !== null) sheet.plan.setGroupCollapsed(rowId, collapsed) }
+    // View ▸ Highlight's fill: a theme tint, never a literal (rule 3).
+    Binding {
+        target: sheet.plan
+        when: sheet.plan !== null
+        property: "highlightFill"
+        value: Tk.Theme.mix(Tk.Theme.color.panel, Tk.Theme.color.warning, Tk.Theme.opacity.tintStrong)
     }
 
     // Scrolls the row into view and makes it current.
