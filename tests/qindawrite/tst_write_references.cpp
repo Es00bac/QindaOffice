@@ -143,7 +143,7 @@ void WriteReferencesTest::referencesBesideInlineObjects()
     QVERIFY(refs->saveSource({}, source()));
     if (equation) {
         auto c = scene.control()->textCursor();
-        const QString xml = QStringLiteral(R"(<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><m:r><m:t>x+1</m:t></m:r></m:oMath>)");
+        const QString xml = QStringLiteral("<m:oMath xmlns:m=\"http://schemas.openxmlformats.org/officeDocument/2006/math\"><m:r><m:t>x+1</m:t></m:r></m:oMath>");
         c.insertText(QString(QChar::ObjectReplacementCharacter), Docx::equationFormat(xml, QTextCharFormat()));
         scene.control()->setTextCursor(c);
     } else QVERIFY(scene.host.graphicsController()->insert(QStringLiteral("shape")));
