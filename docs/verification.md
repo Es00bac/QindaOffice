@@ -140,8 +140,9 @@ non-cut transitions; [QindaShow](qindashow.md) documents the remaining limits.
 ## M89 toolkit adoption gates (D-097)
 
 Qualification resumed on 2026-10-10 with M86/M87 retained. Build with the
-QindaTK M85 development prefix until the coordinated toolkit release:
-`cmake --preset dev -DCMAKE_PREFIX_PATH=/home/cabewse/scratch/qtk-dev/install`.
+frozen QindaTK `e6837dc5` build-tree package until the coordinated release:
+`cmake --preset dev -DQindaTK_DIR=/home/cabewse/scratch/qtk-m98b/build/dev/cmake-build`.
+This uses matching headers, library and QML without installing a home prefix.
 The final suite also runs against the released toolkit before delivery.
 
 The new gates exercise positioned forms and typed lookup keys (including
@@ -151,7 +152,12 @@ Every affected app requires menu/ribbon checks and inspected 1280/520
 captures; toolkit structural fixture changes are accepted only after their
 diff is reviewed. Existing Mail contact/PST and Note rich-text tests cover
 removed workarounds. Final counts and remaining limitations are recorded
-here before integration.
+here before integration. Final focused qualification passed **9/9 CTest
+targets, 54 Qt checks, zero failures or skips** (92.40 s). Evidence is
+`~/scratch/qqo/m89-newtoolkit-tests2.log`; captures are retained under
+`~/scratch/qqo/m89-final-grabs/`. The grouped Plan chart was reviewed again
+at 1280 and 520 px after the toolkit repair: the chart-side collapse
+chevron remains visible with a zero-width label column.
 
 Resume fixes: accepting a formula completion closes its suggestion list;
 Escape then reaches the editor. Form lookup arrays are copied from Qt's
@@ -159,8 +165,8 @@ sequence wrappers before adding the optional empty item, so every later
 design gesture validates. Form width follows its allocated view rather than
 the scroll viewport, eliminating the sizing loop. Focused reruns pass both
 completion widths, both Base service/UI targets, and the grouped Plan
-service. The Gantt mouse gate needs the toolkit's label-column-free chevron
-repair and is rechecked with that build. The Plan preview uses an unstarted
+service. The Gantt mouse gate passes with the toolkit's label-column-free
+chevron repair. The Plan preview uses an unstarted
 task: moving actual work remains correctly refused.
 
 ## Build gates (every milestone)
