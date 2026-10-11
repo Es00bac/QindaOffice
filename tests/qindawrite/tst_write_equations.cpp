@@ -83,6 +83,9 @@ private slots:
         auto *graphics = scene.host.graphicsController(); QVERIFY(graphics);
         QVERIFY(graphics->insert(QStringLiteral("shape")));
         QCOMPARE(scene.doc->textDocument()->toPlainText().size(), 2);
+        // QTextCursor tracks insertion at its position; reset to the
+        // equation/graphic boundary before measuring their separate spans.
+        afterEquation.setPosition(1);
         QTextCursor beforeEquation(scene.doc->textDocument());
         const QRectF mathLeft = scene.control()->cursorRect(beforeEquation);
         const QRectF mathRight = scene.control()->cursorRect(afterEquation);
