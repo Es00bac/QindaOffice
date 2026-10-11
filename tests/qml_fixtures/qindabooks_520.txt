@@ -8,9 +8,6 @@ QQuickRootItem#BooksWindow
             Button#accountsBudgets [hidden]
             Button#accountsNew [hidden]
             Button#accountsPayTax [hidden]
-            Button#dashNewExpense
-            Button#dashNewInvoice
-            Button#dashReceivePayment
             Button#expensesCreateBill [hidden]
             Button#expensesNew [hidden]
             Button#expensesNewBill [hidden]
@@ -248,6 +245,11 @@ QQuickRootItem#BooksWindow
                     QQuickRectangle#headerFocusRing_total [hidden]
                   QQuickRectangle#boxFocusRing [hidden]
                 Scroll#tableBody [hidden]
+            Flex#dashHeader
+              Button#dashNewExpense
+              Button#dashNewInvoice
+              Button#dashReceivePayment
+              Heading#dashCompanyHeading
             Grid#dashKpis
               KpiCard#kpiBills
                 Heading#kpiValue

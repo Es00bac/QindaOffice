@@ -60,15 +60,20 @@ and runs at 1280 and 520 px. After stacking the two tables at 520 px,
 the affected service and dialog targets passed again **2/2**. The final
 `qindabooks_iif_time_preview_{1280,520}.png` grabs were inspected: the
 list names, counts, status, and Import control are readable at both widths.
-Default-window fixtures did not change. The test data are synthetic; no
-private company file was copied or changed.
+The import dialog did not alter the default-window structure. The later
+compact dashboard header correction deliberately updates both 1280/520
+fixtures to name the header/title and nest the three shortcuts there. The
+test data are synthetic; no private company file was copied or changed.
 
 The 520 px dashboard behind the import dialog is also a visual gate: its
 company heading and New invoice, Receive payment and New expense shortcuts
 must wrap without painting over each other. Review the unshaded dashboard
 grab as well as the modal grab when qualifying the integrated release.
 `tst_qindabooks_ui` checks that all four named items have positive, contained
-and disjoint rectangles at 1280 and 520 px.
+and disjoint rectangles at 1280 and 520 px. Its fixture update and no-update
+rerun each passed **3/3 Qt checks** on qinda. I inspected both unobscured
+dashboard grabs: at 520 px the heading and New invoice share the first line;
+Receive payment and New expense wrap below it without overlap.
 
 The remaining manual gate is a real QuickBooks Desktop employee/time IIF
 export, plus an explicit decision on how to handle already-billed and
