@@ -56,6 +56,8 @@ QString wordprocessingType(const char *suffix)
 void markIgnorable(XmlElement &root)
 {
     static const QStringList kExtensions{
+        QString::fromUtf16(Ooxml::Ns::WPS), QString::fromUtf16(Ooxml::Ns::WPG),
+        QString::fromUtf16(Ooxml::Ns::WPC), QString::fromUtf16(Ooxml::Ns::WPI),
         QString::fromUtf16(Ooxml::Ns::W14), QString::fromUtf16(Ooxml::Ns::W15), QString::fromUtf16(Ooxml::Ns::WP14),
         QStringLiteral("http://schemas.microsoft.com/office/word/2015/wordml/symex"),
         QStringLiteral("http://schemas.microsoft.com/office/word/2016/wordml/cid"),
@@ -353,6 +355,10 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
         properties.created = properties.modified;
     }
     Ooxml::writeProperties(env.writer, properties, options.application, options.pageCount, options.wordCount);
+    if (!env.graphicError.isEmpty()) {
+        if (error) *error = env.graphicError;
+        return {};
+    }
     return env.writer.toZip(error);
 }
 

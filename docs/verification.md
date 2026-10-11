@@ -69,6 +69,56 @@ pointer-grab boundary so the ink handler cannot steal dialog buttons.
 Evidence is retained in `~/scratch/qqo/m96-final-{qualification,ui,integrity-tests}.log`
 and `/mnt/archive/qindaoffice-validation-20261010/m96/` on qinda.
 
+## M93 Write graphic gates (D-101)
+
+Qualified on qinda on 2026-10-10 from `finish/m93-write-graphics`, based on
+integration `8e8b84c`. Builds used `~/scratch/qqo/qq-build`, unchanged
+system parallelism, checksum source sync, archive-backed build storage and
+`QindaTK_DIR=/home/cabewse/scratch/qtk-m98b/build/dev/cmake-build` after the
+toolkit freeze. Tests used nice 19 / idle I/O, offscreen Qt and the software
+Quick backend. No live desktop or owner's documents were opened.
+
+The new final suites passed **35/35 QtTest cases, no failures or skips**:
+`tst_docx_graphics` 28/28 and `tst_write_graphics` 7/7. All fourteen chart
+kinds insert/write/schema-check/reopen; edited chart values also match the
+embedded workbook read through `calc_io`. Diagram schemas now join the
+ECMA package validator. SmartArt data and cached drawing text, multiline
+nodes, untouched part bytes, one edited reference beside an untouched twin,
+resize without rewriting chart data, shape geometry, Undo resources and
+invalid-edit atomicity are covered.
+
+The real Write window passes at 1280 and 520 pixels: insertion, chart data,
+per-node SmartArt text, shape appearance, validation, stale-dialog rejection,
+Undo/Redo, normal typing after graphics, save/reopen and crash recovery.
+The normal PDF path produces visible coloured graphics when read by Poppler.
+An independent headless LibreOffice conversion also retains the synthetic
+chart's categories, SmartArt node text and shape text; its pixels show the
+chart bars and all three graphic kinds. That gate caught and fixed the
+cached-diagram relationship id needing to resolve from both story and data
+part, and new chart series requiring explicit colours without a theme.
+
+Existing `tst_docx_read`, `tst_docx_write`, `tst_pptx_charts`,
+`tst_pptx_chart_combo`, `tst_write_control`, `tst_write_picture`,
+`tst_write_wrap`, `tst_write_ui` and `tst_write_menu_export` passed during
+qualification. The ribbon's coverage/icon/squeeze validator and the
+desktop menu validator pass. The two default structural fixtures were
+regenerated deliberately for the final toolkit's No Color marker items.
+Unchanged suites were not repeated after changes confined to new graphics.
+
+Reviewed twelve PNGs: the default window at both widths; Chart, SmartArt
+and Shape editors at both widths; the finished graphic document at both
+widths; Write's PDF page; and the LibreOffice PDF page. Evidence is in
+`~/scratch/qqo/m93-grabs/` on qinda, including `word_graphics_interop.docx`
+and its independently rendered PDF. Final new-suite log:
+`/tmp/m93-interop-tests.log`; prior regression logs:
+`/tmp/m93-second-gates.log`, `/tmp/m93-final-tests.log`.
+
+Manual work remains: Microsoft Word desktop regeneration of SmartArt,
+actual printing and floating-object comparisons. SmartArt topology/layout
+selection, legacy VML editing, grouped/custom drawing adjustment handles,
+ChartEx and unsupported chart kinds retain the limits documented in
+[word-graphics.md](word-graphics.md). External workbook links are preserved;
+QindaWrite never modifies the outside workbook.
 ## M92 equation library gates (D-100)
 
 Resumed from the preserved M92 source on 2026-10-10. `tst_math_omml`,

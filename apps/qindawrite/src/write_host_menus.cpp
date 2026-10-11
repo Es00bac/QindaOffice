@@ -6,6 +6,7 @@
 // with spelling suggestions for the word under the pointer.
 
 #include "write_host.h"
+#include "write_graphics.h"
 
 #include "docx_text.h"
 #include "page_text_item.h"
@@ -88,6 +89,7 @@ void WriteHost::insertMenus()
     formatItems += m_lists->menuItems();
     formatItems.append(MenuNode::separator());
     formatItems += m_painter->menuItems();
+    formatItems.append(MenuNode::action(QStringLiteral("writeEditGraphicAction")));
     // Format > Picture: size and alternative text of the selected picture.
     m_picture = actions()->add(QStringLiteral("writePictureAction"), tr("&Picture…"), {}, QStringLiteral("image"));
     m_picture->setEnabled(false);
@@ -115,6 +117,7 @@ void WriteHost::insertMenus()
                            MenuNode::submenu(QStringLiteral("tableMenu"), tr("&Table"), tableItems));
 
     QList<MenuNode> insertItems = m_format->insertMenuItems();
+    insertItems += m_graphics->insertItems();
     insertItems.append(MenuNode::action(m_tableLayout->textToTableId()));
     insertItems.append(MenuNode::separator());
     insertItems += m_typography->insertMenuItems();

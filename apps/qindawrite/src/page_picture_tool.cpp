@@ -23,6 +23,9 @@ const QColor kHandleEdge(0x2f, 0x6f, 0xd6);
 constexpr qreal kHandle = 8;
 constexpr qreal kMinimum = 8; // a picture never shrinks to nothing
 
+// A default QTextImageFormat is technically valid but names no image.
+// Callers test name(), so preserved/native graphics cannot enter Picture
+// commands that would discard their drawing semantics (D-101).
 QTextImageFormat imageAt(const QTextDocument *document, int position)
 {
     if (position < 0 || position >= document->characterCount()
@@ -53,7 +56,7 @@ QTextDocument *PictureTool::document() const
 QSizeF PictureTool::naturalSize(int position) const
 {
     const QTextImageFormat image = imageAt(document(), position);
-    if (!image.isValid()) {
+    if (image.name().isEmpty()) {
         return {};
     }
     const QVariant resource = document()->resource(QTextDocument::ImageResource, QUrl(image.name()));
@@ -65,7 +68,7 @@ QSizeF PictureTool::naturalSize(int position) const
 QSizeF PictureTool::pictureSize(int position) const
 {
     const QTextImageFormat image = imageAt(document(), position);
-    if (!image.isValid()) {
+    if (image.name().isEmpty()) {
         return {};
     }
     QSizeF size(image.width(), image.height());
@@ -88,7 +91,7 @@ QString PictureTool::altText(int position) const
 QRectF PictureTool::pictureRect(int position) const
 {
     // Inline, in a floating frame, or over the text (docx_float.h).
-    return imageAt(document(), position).isValid() ? Docx::floatingPictureRect(*document(), position) : QRectF();
+    return !imageAt(document(), position).name().isEmpty() ? Docx::floatingPictureRect(*document(), position) : QRectF();
 }
 
 QList<int> PictureTool::floatingPictures() const
@@ -113,7 +116,7 @@ int PictureTool::pictureAt(const QPointF &docPos) const
     // only where no text is under the pointer (Word's rule).
     int behind = -1;
     for (const int position : floatingPictures()) {
-        if (!imageAt(document(), position).isValid() || !pictureRect(position).contains(docPos)) {
+        if (imageAt(document(), position).name().isEmpty() || !pictureRect(position).contains(docPos)) {
             continue;
         }
         if (Docx::pictureFloat(imageAt(document(), position)).wrap == u"behind") {
@@ -125,7 +128,7 @@ int PictureTool::pictureAt(const QPointF &docPos) const
     const int near = m_control->cursorForPosition(docPos).position();
     for (const int position : {near, near - 1}) {
         const QTextImageFormat image = imageAt(document(), position);
-        if (image.isValid() && !Docx::pictureFloat(image).isFloating() && pictureRect(position).contains(docPos)) {
+        if (!image.name().isEmpty() && !Docx::pictureFloat(image).isFloating() && pictureRect(position).contains(docPos)) {
             return position;
         }
     }
@@ -157,7 +160,7 @@ bool PictureTool::beginMove(const QPointF &docPos)
 
 bool PictureTool::movePicture(int position, const QPointF &delta)
 {
-    if (!imageAt(document(), position).isValid() || delta.isNull()) {
+    if (imageAt(document(), position).name().isEmpty() || delta.isNull()) {
         return false;
     }
     const Docx::PictureFloat moved = Docx::movedPictureFloat(*document(), position, delta);
@@ -175,7 +178,7 @@ int PictureTool::selected() const
 {
     const QTextCursor cursor = m_control->textCursor();
     const int start = cursor.selectionStart();
-    if (cursor.selectionEnd() - start != 1 || !imageAt(document(), start).isValid()) {
+    if (cursor.selectionEnd() - start != 1 || imageAt(document(), start).name().isEmpty()) {
         return -1;
     }
     return start;
@@ -285,7 +288,7 @@ bool PictureTool::finishDrag()
 bool PictureTool::setPicture(int position, const QSizeF &size, const QString &altText)
 {
     QTextImageFormat image = imageAt(document(), position);
-    if (!image.isValid() || size.width() < 1 || size.height() < 1) {
+    if (image.name().isEmpty() || size.width() < 1 || size.height() < 1) {
         return false;
     }
     image.setWidth(qRound(size.width() * 10) / 10.0);

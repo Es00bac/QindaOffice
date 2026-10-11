@@ -431,6 +431,7 @@ OfficeWindow {
         id: pageSetup
         onSetupApplied: function(setup) { window.write.applyPageSetup(setup) }
     }
+    GraphicDialog { graphics: window.write.graphics }
     PictureDialog { id: pictureDialog; onPictureApplied: function(picture) { window.write.applyPicture(picture) } }
     Tk.MessageDialog { id: wordCount; objectName: "wordCountDialog"; title: qsTr("Word Count"); variant: "info"; primaryText: qsTr("OK"); secondaryText: "" }
     Ai.ProposalDialog {

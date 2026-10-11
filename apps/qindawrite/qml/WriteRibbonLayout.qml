@@ -134,7 +134,11 @@ QtObject {
             { id: "tables", label: qsTr("Tables"), items: [{ action: "insertTableAction", size: "large" },
                                                           { action: "writeTextToTableAction", iconName: "table-2" }] },
             { id: "illustrations", label: qsTr("Illustrations"), items: [
-                { action: "insertImageAction", size: "large" }, { action: "writePictureAction", iconName: "image" }] },
+                { action: "insertImageAction", size: "large" }, { action: "writePictureAction", iconName: "image" },
+                { action: "writeInsertChartAction", iconName: "chart-column" },
+                { action: "writeInsertSmartArtAction", iconName: "workflow" },
+                { action: "writeInsertShapeAction", iconName: "shapes" },
+                { action: "writeEditGraphicAction", iconName: "pencil" }] },
             { id: "links", label: qsTr("Links"), items: [{ action: "insertHyperlinkAction", size: "large" }] },
             { id: "text", label: qsTr("Text"), items: [
                 "insertColumnsAction", { action: "insertHorizontalRuleAction", iconName: "minus" },

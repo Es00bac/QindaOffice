@@ -32,6 +32,7 @@
 #include "write_mailmerge.h"
 #include "write_notes.h"
 #include "write_section_commands.h"
+#include "write_graphics.h"
 
 #include <QClipboard>
 #include <QFontDatabase>
@@ -82,6 +83,8 @@ WriteHost::WriteHost()
     m_painter = new FormatPainter(m_control, m_document, actions(), this);
     m_navigation = new NavigationModel(m_control, m_document, actions(), this);
     // M88 (D-096): Word's sections — breaks, orientation, header options.
+    m_graphics = new GraphicsController(m_control, m_document, actions(), this);
+    connect(m_graphics, &GraphicsController::message, this, [this](const QString &text) { showStatusMessage(text, 6000); });
     m_sections = new SectionsController(m_control, m_document, actions(), this);
     connect(m_sections, &SectionsController::message, this, [this](const QString &text) { showStatusMessage(text, 6000); });
     m_control->setKeyFilter([this](QKeyEvent *event) {
@@ -105,7 +108,7 @@ WriteHost::WriteHost()
             [this](const QString &text) { showStatusMessage(text, 6000); });
     connect(m_control, &PageTextControl::cursorPositionChanged, this, [this] { emit rulerChanged(); });
     connect(m_control, &PageTextControl::doubleClicked, this, [this](int position) {
-        static_cast<void>(m_review->editFootnoteAt(position) || m_notes->editEndnoteAt(position));
+        static_cast<void>(m_graphics->editAt(position) || m_review->editFootnoteAt(position) || m_notes->editEndnoteAt(position));
     });
     connect(m_document, &WriteDocument::pageSetupChanged, this, [this] {
         emit pageSetupChanged();
@@ -121,6 +124,8 @@ WriteHost::WriteHost()
     updateWriteStatus();
     adoptPendingDocument();
 }
+
+QObject *WriteHost::graphicsObject() const { return m_graphics; }
 
 WriteHost::~WriteHost()
 {

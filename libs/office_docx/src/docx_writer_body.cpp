@@ -9,6 +9,7 @@
 #include "docx_merge_fields.h"
 #include "docx_properties.h"
 #include "docx_writer_p.h"
+#include "docx_graphics.h"
 #include "ooxml_namespaces.h"
 #include "ooxml_units.h"
 
@@ -411,11 +412,13 @@ XmlElementPtr BodyWriter::runFor(const QTextFragment &fragment, const QString &t
 
 XmlElementPtr BodyWriter::preservedElement(const QTextCharFormat &format)
 {
-    XmlElementPtr element = Ooxml::parseFragment(format.stringProperty(kInlineXml));
+    XmlElementPtr element = writeGraphic(format, *m_env.parts, m_env.writer, m_part, &m_env.graphicError);
+    const bool graphicWritten = bool(element);
+    if (!element) element = Ooxml::parseFragment(format.stringProperty(kInlineXml));
     if (!element) {
         return nullptr;
     }
-    if (m_env.copier) {
+    if (!graphicWritten && m_env.copier) {
         m_env.copier->rewrite(*element, format.stringProperty(kInlineSourcePart), m_part);
     }
     // Drawing ids must stay unique across the document.

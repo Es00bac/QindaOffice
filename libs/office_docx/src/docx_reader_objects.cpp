@@ -2,11 +2,12 @@
 // Pictures and everything else that lives inside a run: DrawingML
 // pictures (inline, and floating with their wrap and position — M77,
 // docx_float.h), VML pictures and text boxes, charts,
-// SmartArt, shapes, OLE objects and equations. Pictures become real images
-// with their original bytes kept; the rest is preserved verbatim (D-068)
-// and shown as a labelled box, or as its own preview picture when it has one.
+// SmartArt, shapes, OLE objects and equations. Pictures keep their bytes;
+// M93 graphics carry native editable content and their original markup.
+// Unsupported objects remain preserved verbatim with a preview (D-068).
 
 #include "docx_float.h"
+#include "docx_graphics.h"
 #include "docx_properties.h"
 #include "docx_reader_p.h"
 #include "docx_styles.h"
@@ -132,6 +133,9 @@ bool BodyReader::readObject(const XmlElement &run, const XmlElement &object, QTe
     QSizeF size(96, 48);
     QByteArray pictureBytes;
     QString pictureName;
+    bool nativeGraphic = false;
+    QTextImageFormat graphicFormat;
+    QImage graphicImage;
     bool isPlainPicture = false; // a DrawingML picture we can own outright
     const XmlElement *drawing = nullptr;
     PictureFloat layout;         // a wp:anchor's wrap and position
@@ -178,6 +182,13 @@ bool BodyReader::readObject(const XmlElement &run, const XmlElement &object, QTe
             size = QSizeF(Units::emuToPx(Units::parseEmu(extent->attr(u"cx"))),
                           Units::emuToPx(Units::parseEmu(extent->attr(u"cy"))));
         }
+        graphicFormat.setWidth(size.width());
+        graphicFormat.setHeight(size.height());
+        nativeGraphic = readGraphic(*frame, m_env.package, m_part, m_env.theme, graphicFormat, graphicImage);
+        if (nativeGraphic && anchored) layout = readPictureFloat(*frame);
+        if (nativeGraphic && graphicFormat.stringProperty(kGraphicKind) == u"smartArt"
+            && graphicFormat.property(kGraphicData).toMap().value(QStringLiteral("drawingXml")).toString().isEmpty())
+            m_env.approximations[QStringLiteral("SmartArt layout")] += 1;
         const XmlElement *data = frame->descendant(kA, u"graphicData");
         const QString uri = data != nullptr ? data->attr(u"uri") : QString();
         if (uri.endsWith(u"/picture")) {
@@ -191,14 +202,14 @@ bool BodyReader::readObject(const XmlElement &run, const XmlElement &object, QTe
             }
         } else if (uri.endsWith(u"/chart") || uri.contains(u"chartex")) {
             label = QStringLiteral("Chart");
-            m_env.approximations[QStringLiteral("chart")] += 1;
+            if (!nativeGraphic) m_env.approximations[QStringLiteral("chart")] += 1;
         } else if (uri.endsWith(u"/diagram")) {
             label = QStringLiteral("SmartArt graphic");
-            m_env.approximations[QStringLiteral("SmartArt graphic")] += 1;
+            if (!nativeGraphic) m_env.approximations[QStringLiteral("SmartArt graphic")] += 1;
         } else {
             body = paragraphText(*frame);
             label = body.isEmpty() ? QStringLiteral("Shape") : QStringLiteral("Text box");
-            m_env.approximations[body.isEmpty() ? QStringLiteral("shape") : QStringLiteral("text box")] += 1;
+            if (!nativeGraphic) m_env.approximations[body.isEmpty() ? QStringLiteral("shape") : QStringLiteral("text box")] += 1;
         }
     } else if (shown->ns == kW && (shown->name == u"pict" || shown->name == u"object")) {
         const XmlElement *shape = shown->descendant(kV, u"shape");
@@ -237,7 +248,8 @@ bool BodyReader::readObject(const XmlElement &run, const XmlElement &object, QTe
 
     QTextImageFormat image;
     image.merge(format);
-    QImage decoded;
+    QImage decoded = graphicImage;
+    if (nativeGraphic) image.merge(graphicFormat);
     if (!pictureBytes.isEmpty()) {
         decoded = QImage::fromData(pictureBytes);
     }
@@ -287,7 +299,9 @@ bool BodyReader::readObject(const XmlElement &run, const XmlElement &object, QTe
     image.setName(resource);
     image.setWidth(size.width());
     image.setHeight(size.height());
-    if (isPlainPicture && layout.isFloating()) {
+    if ((isPlainPicture || nativeGraphic) && layout.isFloating()) {
+        image.setProperty(kPictureFloat, layout.toMap());
+        image.setProperty(kPictureFloatSnapshot, layout.toMap());
         insertPicture(cursor, image, inl, state);
     } else {
         insertObject(cursor, image, inl, state);

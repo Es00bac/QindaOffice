@@ -4,6 +4,7 @@
 # STATIC library with the app's QML module (URI QindaOffice.Write) so the
 # tests instantiate the real window; the executable is main.cpp over it.
 set(qindawrite_qml
+    qml/GraphicDialog.qml
     qml/AddressBlockDialog.qml
     qml/ConvertNotesDialog.qml
     qml/DuplicatesDialog.qml
@@ -82,6 +83,7 @@ qt_add_qml_module(qindawrite_app
         src/table_actions.cpp src/table_actions.h
         src/table_data.cpp src/table_data.h
         src/table_layout.cpp src/table_layout.h
+        src/write_graphics.cpp src/write_graphics.h
         src/write_borders.cpp src/write_borders.h
         src/write_font.cpp src/write_font.h
         src/write_lists.cpp src/write_lists.h src/write_lists_dialogs.cpp

@@ -70,6 +70,9 @@ inline QString schemaForRoot(const Ooxml::XmlElement &root)
     if (root.ns == u"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing") {
         return QStringLiteral("dml-spreadsheetDrawing.xsd");
     }
+    if (root.ns == QStringView(Ns::DGM)) {
+        return QStringLiteral("dml-diagram.xsd");
+    }
     if (root.ns == QStringView(Ns::EP)) {
         return QStringLiteral("shared-documentPropertiesExtended.xsd");
     }

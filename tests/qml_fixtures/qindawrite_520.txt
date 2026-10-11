@@ -350,9 +350,11 @@ QQuickRootItem#WriteWindow
               RibbonSlot#ribbonItem_highlight
                 ColorButton#highlightButton
                   QQuickRectangle#colorButtonSwatch
+                    QQuickRectangle#colorButtonNoColorMark [hidden]
               RibbonSlot#ribbonItem_textColor
                 ColorButton#textColorButton
                   QQuickRectangle#colorButtonSwatch
+                    QQuickRectangle#colorButtonNoColorMark [hidden]
               RibbonSlot#ribbonItem_writeFontAction
                 RibbonButton#ribbonAction_writeFontAction
                   Icon#ribbonButtonIcon [hidden]

@@ -340,6 +340,8 @@ styles — each kept in `.qdiagram` and carried through `.vsdx`.
 
 | **M97** Base form events — **done (D-105)** | named form/control events, conditional macro flow, draft SetValue, typed TempVars, Before Update cancellation | typed engine cases and real-window lifecycle/Undo/save-reopen/squeeze gates |
 
+| **M93** Write native charts, SmartArt and shapes (D-101) | Insert/edit/Undo/save/reopen/recovery/print/PDF; chart data and plot type with embedded xlsx; SmartArt cached drawing and node text; basic drawing shapes with source preservation | Synthetic semantic/schema and embedded-workbook checks, real-window wide/narrow editor and ribbon/menu gates; [Word graphics](../word-graphics.md) and [verification](../verification.md). Desktop Office comparison remains manual. |
+
 Every milestone follows AGENTS.md: ≤ 500 lines per file, tests headless,
 docs in the same commit, a `docs/decisions.md` entry, fixtures and grabs
 looked at, the desktop launch only with the owner's consent.

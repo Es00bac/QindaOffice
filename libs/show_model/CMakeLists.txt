@@ -17,6 +17,11 @@
 # the written package (pptx_package_edit.h, pptx_import.cpp). Qt Core/Gui +
 # KArchive + office_ooxml + calc_io; no Quick, no desktop archives.
 add_library(show_model STATIC
+    src/drawing_interchange.h
+    src/drawing_interchange.cpp
+    src/chart_interchange.h
+    src/chart_interchange.cpp
+    src/chart_interchange_write.cpp
     src/chart_edit.cpp
     src/chart_edit.h
     src/chart_painter.cpp

@@ -64,6 +64,7 @@ struct WriteEnv {
     std::unique_ptr<Ooxml::RelationshipCopier> copier;
     StyleSheet sourceStyles;
     std::unique_ptr<NumberingBuilder> numbering;
+    QString graphicError; // fail a save if edited graphics cannot be written
     QString sourceMain;         // main part of the source package, if any
     QString sourceFootnotesPart;
     QString sourceEndnotesPart;

@@ -80,6 +80,36 @@ removing retained versions. Deleting a version requires explicit UI
 confirmation. Errors remain visible and never silently replace a failed
 snapshot or apply a damaged retained page.
 
+## D-101: Native Word graphics reuse the shared DrawingML model
+
+**Date:** 2026-10-10 · **Status:** accepted · **Milestone:** M93.
+
+Word charts and SmartArt need the same cached-data renderer, chart edits,
+and embedded spreadsheet writer already used by Show. Expose a cohesive
+Core/Gui `chart_interchange` and `drawing_interchange` boundary in
+`show_model`; `office_docx` consumes those public APIs. The existing Show
+writer delegates to the shared chart writer. This introduces no application
+dependency or cycle: `show_model` depends on `office_ooxml` and `calc_io`,
+which depends on `calc_engine`. Extracting these internals into another
+library can be done later without changing Word's public boundary.
+
+A Word graphic remains one text-document object. Immutable format data and
+an imported snapshot record its content; images use content-derived URLs,
+so Undo cannot display the pixels of a later edit. The document's normal
+Undo, clone, recovery and print paths remain responsible for object lifetime.
+Unchanged DrawingML runs and related parts use the preservation copier.
+Edited chart caches/formulas and the embedded xlsx are updated together;
+SmartArt edits patch both node data and its cached drawing, carrying the
+producer's layout/style/colour parts. An edited reference gets independent
+parts, so it cannot change an untouched second reference to the same chart.
+A failed chart save fails the document save instead of dropping its workbook.
+
+New SmartArt is a simple native vertical list with data, layout, style,
+colours and cached DrawingML. Imported layouts retain their structure;
+this milestone edits node text, not diagram topology. Basic Wordprocessing
+DrawingML shapes patch only edited properties. Unknown drawing content
+stays on the existing preserved-object path. Limits and gates are in
+[word-graphics.md](word-graphics.md) and [verification.md](verification.md).
 ## D-100: Office equations through a shared OMML model and OpenType MATH layout
 
 **Date:** 2026-10-10 · **Status:** accepted · **Milestone:** M92.

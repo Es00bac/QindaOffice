@@ -33,6 +33,7 @@ namespace {
 QTextCharFormat typingFormat(const QTextCursor &cursor)
 {
     QTextCharFormat format = cursor.charFormat();
+    if (format.isImageFormat()) format = cursor.block().charFormat(); // drawings are not typed text (D-101)
     format.clearProperty(Docx::kCommentReference);
     // AGENT-NOTE (M70, D-079): at the start of a table cell Qt hands out
     // the CELL's format (the character before the caret is the cell's

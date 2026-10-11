@@ -494,11 +494,24 @@ multi-paragraph fields keep their result as text and links.
 Tracked changes become Write's revision marks (blue insertions, red
 struck deletions) and are written back as `w:ins` / `w:del`.
 
+### Native charts, SmartArt and shapes (M93, D-101)
+
+Insert ▸ Chart / SmartArt / Shape creates an editable DrawingML object.
+Format ▸ Edit Graphic (also on the Insert ribbon, or double-click) edits
+chart data and plot type, each SmartArt node's text, or a shape's text,
+preset, fill and outline. Apply is one Undo step; Cancel keeps the current
+object. Size, save/reopen, recovery, print and PDF use the same content.
+See [Word graphics](word-graphics.md) for the supported chart kinds,
+embedded-workbook contract, SmartArt preservation and remaining limits.
+
 ### Preserved, shown approximately
 
 Kept verbatim and written back unchanged; the status bar says so on open:
-text boxes and shapes (a box with their text), charts, SmartArt, OLE
-objects, ink, equations (shown as their linear text). Floating pictures
+unsupported chart types, legacy VML text boxes/shapes, unsupported drawing
+groups, OLE objects, ink and equations (shown as their linear text).
+DrawingML shapes, supported charts and SmartArt cached drawings are native
+since M93; a SmartArt file without its cached drawing uses a simple list
+preview while retaining its original layout. Floating pictures
 and endnotes are modelled since M77 (below).
 
 ### Layout adjustments (display only, never written)
@@ -612,7 +625,8 @@ Session Review panel) and *Open in QindaWrite* write a page through
 - A widow (a paragraph's last line alone at a page top) is left alone when
   the paragraph has three lines or more: a block format cannot break inside
   a paragraph. Keep rules inside a table apply to its leading rows only.
-- Text boxes and shapes are not editable as objects. Floating pictures
+- Basic DrawingML shapes and text boxes are editable since M93; legacy VML,
+  grouped/custom drawing structures and advanced geometry remain preserved. Floating pictures
   (M77): Qt floats a picture at its anchor line, at the column's left or
   right; one centred in the column has text on one side only, one above
   its anchor line or at a fixed place on the page is shown at its line

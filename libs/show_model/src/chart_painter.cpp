@@ -389,7 +389,8 @@ void paintScatter(QPainter *painter, const QRectF &area, const ChartData &chart)
         painter->setBrush(seriesColor(chart, s));
         for (int i = 0; i < series.values.size(); ++i) {
             const qreal x = i < series.xValues.size() ? series.xValues.at(i) : i + 1;
-            painter->drawEllipse(map(x, valueAt(series, i)), 3, 3);
+            const qreal y = i < series.values.size() ? series.values.at(i) : qQNaN();
+            if (std::isfinite(x) && std::isfinite(y)) painter->drawEllipse(map(x, y), 3, 3);
         }
     }
 }

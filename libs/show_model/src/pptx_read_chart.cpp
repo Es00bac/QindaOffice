@@ -29,6 +29,8 @@ QStringList cachedStrings(const Ooxml::XmlElement *holder)
     if (cache == nullptr) {
         cache = holder->descendant(nsC(), u"numCache");
     }
+    if (cache == nullptr) cache = holder->child(nsC(), u"strLit");
+    if (cache == nullptr) cache = holder->child(nsC(), u"numLit");
     if (cache == nullptr) {
         // c:multiLvlStrCache: the innermost level names the categories.
         if (const Ooxml::XmlElement *multi = holder->descendant(nsC(), u"multiLvlStrCache")) {

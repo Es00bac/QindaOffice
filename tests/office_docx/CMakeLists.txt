@@ -12,7 +12,7 @@
 # tst_docx_floats; each renders a sample through LibreOffice when present), and
 # M88 (D-096): Word sections (tst_docx_sections: the section model, linked
 # headers, untouched sections kept, LibreOffice's page size per page).
-foreach(name IN ITEMS tst_docx_corpus tst_docx_read tst_docx_write tst_docx_restyle tst_docx_comments
+foreach(name IN ITEMS tst_docx_graphics tst_docx_corpus tst_docx_read tst_docx_write tst_docx_restyle tst_docx_comments
                       tst_docx_tables tst_docx_paragraphs tst_docx_controls tst_docx_lists tst_docx_styles
                       tst_docx_mailmerge tst_docx_envelopes tst_docx_notes tst_docx_floats tst_docx_sections)
     add_executable(${name} ${name}.cpp docx_fixture.h docx_roundtrip.h)
@@ -22,3 +22,6 @@ foreach(name IN ITEMS tst_docx_corpus tst_docx_read tst_docx_write tst_docx_rest
     add_test(NAME ${name} COMMAND ${name})
     set_tests_properties(${name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endforeach()
+
+# Graphics check the edited embedded workbook through calc_io.
+target_link_libraries(tst_docx_graphics PRIVATE calc_io)

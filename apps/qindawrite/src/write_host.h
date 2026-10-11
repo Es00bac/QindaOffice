@@ -56,6 +56,7 @@ class MailMergeController;
 class NotesController;
 class PictureLayoutController;
 class SectionsController;
+class GraphicsController;
 
 class WriteHost : public Quick::DocumentHost {
     Q_OBJECT
@@ -104,6 +105,7 @@ class WriteHost : public Quick::DocumentHost {
     // Different First Page / Odd & Even, Format Page Numbers
     // (write_section_commands.h).
     Q_PROPERTY(QObject *sections READ sectionsObject CONSTANT)
+    Q_PROPERTY(QObject *graphics READ graphicsObject CONSTANT)
 public:
     WriteHost();
     ~WriteHost() override;
@@ -130,6 +132,7 @@ public:
     [[nodiscard]] EnvelopesController *envelopesController() const { return m_envelopes; }
     [[nodiscard]] NotesController *notesController() const { return m_notes; }
     [[nodiscard]] PictureLayoutController *pictureLayoutController() const { return m_pictureLayout; }
+    [[nodiscard]] GraphicsController *graphicsController() const { return m_graphics; }
     [[nodiscard]] SectionsController *sectionsController() const { return m_sections; }
     // A Word package opened in a window of its own, untitled and unsaved
     // (a merged document, an envelope, a label sheet — M77): the next
@@ -266,6 +269,7 @@ private:
     [[nodiscard]] QObject *notesObject() const;
     [[nodiscard]] QObject *pictureLayoutObject() const;
     [[nodiscard]] QObject *sectionsObject() const;
+    [[nodiscard]] QObject *graphicsObject() const;
     void insertPageField(bool total);
     void syncStoryActions();
     void createSpellingEntries();
@@ -300,6 +304,7 @@ private:
     NotesController *m_notes = nullptr;
     PictureLayoutController *m_pictureLayout = nullptr;
     SectionsController *m_sections = nullptr;
+    GraphicsController *m_graphics = nullptr;
     std::shared_ptr<QTextDocument> m_printOverride;
     WriteReviewActions *m_review = nullptr;
     SpellChecker *m_spell = nullptr;

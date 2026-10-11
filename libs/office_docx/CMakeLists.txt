@@ -7,9 +7,19 @@
 # (settings, data, fields, the merge), envelopes and labels, endnotes,
 # floating pictures. M88 (D-096): Word sections — every w:sectPr mapped,
 # each section's own headers and footers, written back where changed.
-# Qt Core/Gui + office_ooxml; no Quick, no desktop archives, so its tests
+# M93 (D-101): native Word graphics through show_model's public chart
+# and drawing interoperability API, sharing its calc_io workbook writer.
+# Qt Core/Gui + office_ooxml + show_model; no Quick, no desktop archives, so its tests
 # run anywhere.
 add_library(office_docx STATIC
+    src/docx_graphics.h
+    src/docx_graphics_p.h
+    src/docx_graphics.cpp
+    src/docx_graphics_edit.cpp
+    src/docx_graphics_shape.cpp
+    src/docx_graphics_diagram.cpp
+    src/docx_graphics_diagram_new.cpp
+    src/docx_graphics_write.cpp
     src/docx_format.cpp
     src/docx_format.h
     src/docx_list_edit.cpp
@@ -92,6 +102,6 @@ target_include_directories(office_docx
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 )
 
-target_link_libraries(office_docx PUBLIC office_ooxml Qt6::Core Qt6::Gui)
+target_link_libraries(office_docx PUBLIC office_ooxml show_model Qt6::Core Qt6::Gui)
 
 qqo_set_strict_warnings(office_docx)
