@@ -134,7 +134,7 @@ void AccessiblePageTextItem::scrollToSubstring(int startIndex, int endIndex)
 {
     Q_UNUSED(endIndex);
     const QRectF rect = m_item->control()->cursorRect(cursorForPosition(startIndex));
-    emit m_item->ensureVisibleRequested(m_item->docToView(rect));
+    emit m_item->ensureVisibleRequested(m_item->docToView(rect).translated(0, m_item->y()));
 }
 
 QString AccessiblePageTextItem::attributes(int offset, int *startOffset, int *endOffset) const

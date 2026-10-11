@@ -20,6 +20,7 @@
 #include <QHoverEvent>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QQuickWindow>
 #include <QTextDocument>
 
 namespace QindaOffice::Apps::Write {
@@ -36,6 +37,14 @@ PageTextItem::PageTextItem(QQuickItem *parent)
     setRenderTarget(QQuickPaintedItem::FramebufferObject);
     setImplicitWidth(PageGeometry::kDefaultPageW);
     setImplicitHeight(m_geometry.documentHeight(0));
+    connect(this, &QQuickItem::windowChanged, this, [this] {
+        disconnect(m_screenConnection);
+        if (window() != nullptr) {
+            m_screenConnection = connect(window(), &QQuickWindow::screenChanged, this,
+                                         [this] { emit maxPaintHeightChanged(); });
+        }
+        emit maxPaintHeightChanged();
+    });
 }
 
 PageTextItem::~PageTextItem() = default;
@@ -55,7 +64,8 @@ void PageTextItem::attach(WriteDocument *document, PageTextControl *control)
     connect(control, &PageTextControl::updateRequest, this, [this] { update(); });
     connect(control, &PageTextControl::visibilityRequest, this, [this](const QRectF &rect) {
         const QRectF view = m_story->isOpen() ? storyToView(rect) : docToView(rect);
-        emit ensureVisibleRequested(view.adjusted(-8, -40, 8, 40));
+        // Tk.Viewport scrolls the whole document, not this moving paint tile.
+        emit ensureVisibleRequested(view.translated(0, y()).adjusted(-8, -40, 8, 40));
     });
     connect(control, &PageTextControl::microFocusChanged, this,
             [this] { updateInputMethod(Qt::ImQueryInput); });
@@ -74,6 +84,13 @@ void PageTextItem::attach(WriteDocument *document, PageTextControl *control)
 int PageTextItem::pageCount() const
 {
     return m_pageCount;
+}
+
+qreal PageTextItem::maxPaintHeight() const
+{
+    // Keep the FBO below common hardware texture limits, including HiDPI.
+    const qreal scale = window() != nullptr ? qMax<qreal>(1, window()->devicePixelRatio()) : 1;
+    return qMin<qreal>(8192, 12000 / scale);
 }
 
 void PageTextItem::updatePageMetrics()
@@ -124,17 +141,17 @@ void PageTextItem::setViewZoom(qreal zoom)
 
 QPointF PageTextItem::viewToDoc(const QPointF &viewPos) const
 {
-    return m_geometry.viewToDoc(viewPos, width());
+    return m_geometry.viewToDoc(viewPos + QPointF(0, y()), width());
 }
 
 QPointF PageTextItem::docToView(const QPointF &docPos) const
 {
-    return m_geometry.docToView(docPos, width());
+    return m_geometry.docToView(docPos, width()) - QPointF(0, y());
 }
 
 QRectF PageTextItem::docToView(const QRectF &docRect) const
 {
-    return m_geometry.docToView(docRect, width());
+    return m_geometry.docToView(docRect, width()).translated(0, -y());
 }
 
 QRectF PageTextItem::cursorViewRect() const
@@ -148,17 +165,18 @@ QRectF PageTextItem::cursorViewRect() const
 
 QRectF PageTextItem::storyToView(const QRectF &storyRect) const
 {
-    const QPointF page = m_geometry.pageRect(m_story->page(), width()).topLeft();
+    const QPointF page = m_geometry.pageRect(m_story->page(), width()).topLeft() - QPointF(0, y());
     return storyRect.translated(m_story->storyToPage(QPointF(0, 0)) + page);
 }
 
 int PageTextItem::pageAt(const QPointF &viewPos, QPointF *pagePos) const
 {
+    const QPointF full = viewPos + QPointF(0, y());
     for (int i = 0; i < m_pageCount; ++i) {
         const QRectF page = m_geometry.pageRect(i, width());
-        if (viewPos.y() >= page.top() && viewPos.y() <= page.bottom()) {
+        if (full.y() >= page.top() && full.y() <= page.bottom()) {
             if (pagePos != nullptr) {
-                *pagePos = viewPos - page.topLeft();
+                *pagePos = full - page.topLeft();
             }
             return i;
         }
@@ -195,7 +213,8 @@ void PageTextItem::openStory(int kind)
     const int page = m_story->isOpen() ? m_story->page() : caretPage();
     if (m_story->open(StoryEditor::Kind(kind), page)) {
         forceActiveFocus(Qt::OtherFocusReason);
-        emit ensureVisibleRequested(storyToView(QRectF(QPointF(0, 0), m_story->bandRect().size())));
+        emit ensureVisibleRequested(
+            storyToView(QRectF(QPointF(0, 0), m_story->bandRect().size())).translated(0, y()));
     }
 }
 
@@ -241,7 +260,8 @@ bool PageTextItem::forwardStoryMouse(QMouseEvent *event)
         return false;
     }
     // Drags may leave the band: map against the story's own page.
-    const QPointF onStoryPage = event->position() - m_geometry.pageRect(m_story->page(), width()).topLeft();
+    const QPointF onStoryPage = event->position() + QPointF(0, y())
+        - m_geometry.pageRect(m_story->page(), width()).topLeft();
     QMouseEvent copy(event->type(), m_story->pageToStory(onStoryPage), event->globalPosition(), event->button(),
                      event->buttons(), event->modifiers());
     event->setAccepted(m_control->processEvent(&copy));

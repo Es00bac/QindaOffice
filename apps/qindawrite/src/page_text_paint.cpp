@@ -161,8 +161,11 @@ void PageTextItem::paint(QPainter *painter)
     if (m_document == nullptr || m_control == nullptr) {
         return;
     }
+    // This item is a bounded moving tile inside the full-height document
+    // spacer. PageGeometry stays in document coordinates for every page.
+    painter->translate(0, -y());
     painter->setRenderHint(QPainter::TextAntialiasing);
-    const QRectF clip(0, 0, width(), height());
+    const QRectF clip(0, y(), width(), height());
     // One decoration for every page (its footnotes, its page frames).
     const PageDecoration decoration = m_document->decoration();
     for (int i = 0; i < m_pageCount; ++i) {

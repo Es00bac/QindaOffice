@@ -4,6 +4,8 @@
 M60 / D-068. QindaWrite opens and saves Microsoft Word documents natively —
 no LibreOffice, no HTML in between — and a saved file opens in Word with the
 document's own styles, numbering, theme and everything Write does not edit.
+Long documents retain their full page stack while the screen paints only a
+bounded visible tile (D-109); this does not change the saved Word file.
 
 ## Formats
 

@@ -16,16 +16,37 @@ Tk.Viewport {
     objectName: "writeViewport"
     fitMode: "none"
     contentPadding: Tk.Theme.space.md
+    // One painted FBO cannot span a long document: keep the visible tile
+    // within the GPU limit even at the viewport's lowest usable zoom.
+    minZoom: Math.max(0.1, (viewport.viewportHeight + viewport.contentPadding * 2)
+                      / Math.max(1, page.maxPaintHeight))
+    onMinZoomChanged: if (zoom < minZoom) setZoom(minZoom)
     focus: true
-    PageTextItem {
-        id: page
-        objectName: "writePage"
-        viewZoom: viewport.zoom
-        focus: true
-        Component.onCompleted: viewport.write.attachPage(page)
-        onEnsureVisibleRequested: function(rect) { viewport.ensureVisible(rect) }
-        // A Word form field's list or calendar, at the click (D-080).
-        FormFieldPopup { objectName: "formFieldPopup"; controls: viewport.write.controls }
+    Item {
+        id: surface
+        objectName: "writeDocumentSurface"
+        implicitWidth: page.implicitWidth
+        implicitHeight: page.implicitHeight
+        readonly property real tileHeight: Math.min(page.implicitHeight, page.maxPaintHeight)
+        readonly property real visibleTop: Math.max(0, (viewport.scrollItem.contentY
+                                                          - viewport.contentOriginY()) / viewport.zoom)
+        readonly property real tileTop: Math.max(0, Math.min(page.implicitHeight - tileHeight,
+            Math.max(visibleTop + viewport.viewportHeight / viewport.zoom - tileHeight,
+                     Math.floor(Math.max(0, visibleTop - viewport.contentPadding / viewport.zoom) / 128) * 128)))
+        PageTextItem {
+            id: page
+            objectName: "writePage"
+            width: surface.width
+            height: surface.tileHeight
+            y: surface.tileTop
+            onYChanged: update()
+            viewZoom: viewport.zoom
+            focus: true
+            Component.onCompleted: viewport.write.attachPage(page)
+            onEnsureVisibleRequested: function(rect) { viewport.ensureVisible(rect) }
+            // A Word form field's list or calendar, at the click (D-080).
+            FormFieldPopup { objectName: "formFieldPopup"; controls: viewport.write.controls }
+        }
     }
     MenuFromNode {
         id: contextMenu

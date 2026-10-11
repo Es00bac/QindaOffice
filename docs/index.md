@@ -18,7 +18,7 @@ lists what exists today.
   M70 formatting, M73 lists, numbering and styles, M77 mail merge,
   envelopes and labels, endnotes and floating pictures; M88/D-096 Word
   sections (page size, orientation, margins, headers and page numbers per
-  section, section breaks).
+  section, section breaks); D-109 bounded rendering for long documents.
 - [Mail essentials](mail-interchange.md) — M64/D-072: QindaMail's People and
   vCard/CSV, recipient autocomplete, safe HTML reading with blocked remote
   pictures, printing, and .eml / .mbox / Outlook .msg files; M76/D-085:

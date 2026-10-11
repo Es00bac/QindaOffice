@@ -5,6 +5,33 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-109: Paint long Word documents in a bounded viewport tile
+
+**Date:** 2026-10-10 · **Status:** accepted (QindaWrite large-document
+display repair)
+
+**Context.** The QindaWrite page item was also the full document's scroll
+surface. A long contractor packet exceeded 16,384 logical pixels, but
+`QQuickPaintedItem` rendered that entire height into one framebuffer object.
+The desktop GPU reports a 16,384-pixel maximum image dimension; the document
+opened to a dark, empty canvas although its Word package was valid.
+
+**Decision.** `WritePage.qml` keeps a full-height document surface for
+`Tk.Viewport` and moves a bounded `PageTextItem` over the visible region as
+the viewport scrolls. Its paint height is at most 8,192 logical pixels and
+12,000 physical pixels according to the window's device pixel ratio, with
+the minimum zoom high enough to cover the whole viewport. Page geometry,
+scroll extent and caret requests remain in full-document coordinates;
+painting, hit testing, input methods and accessibility map through the
+tile's vertical offset. Screen changes recalculate the safe paint height.
+
+**Consequences.** A long document can scroll through every page without a
+single oversized GPU image. The real-window offscreen gate exercises both
+widths, a 35-page synthetic file, the affected private file, later-page
+caret scrolling and pixel grabs. The GPU path still needs an on-desktop
+reopen after the updated package is installed; the headless backend is
+software.
+
 ## D-105: Form events and bounded macro control flow in QindaBase (M97)
 
 **Date:** 2026-10-10 · **Status:** accepted.
@@ -75,7 +102,6 @@ insertion, navigation, undo/redo, painting and high-DPI image output. Missing
 MATH fonts are reported through layout validity. App adapters are separate:
 this milestone alone does not make existing Write/Show equation placeholders
 editable. See [equations.md](equations.md) for API and format limits.
-
 ## D-096: QindaWrite: Word sections — page layout, orientation, headers and numbering per section
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

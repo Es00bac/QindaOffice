@@ -17,6 +17,7 @@
 
 #include <QPointer>
 #include <QQuickPaintedItem>
+#include <QMetaObject>
 #include <QtQml/qqmlregistration.h>
 
 #include <memory>
@@ -31,6 +32,7 @@ class PageTextItem : public QQuickPaintedItem {
     Q_OBJECT
     QML_ELEMENT
     Q_PROPERTY(int pageCount READ pageCount NOTIFY pageCountChanged)
+    Q_PROPERTY(qreal maxPaintHeight READ maxPaintHeight NOTIFY maxPaintHeightChanged)
     // The hosting viewport's zoom, for the status line only.
     Q_PROPERTY(qreal viewZoom READ viewZoom WRITE setViewZoom NOTIFY viewZoomChanged)
     Q_PROPERTY(bool attached READ isAttached NOTIFY attachedChanged)
@@ -49,6 +51,7 @@ public:
     [[nodiscard]] const PageGeometry &geometry() const { return m_geometry; }
 
     [[nodiscard]] int pageCount() const;
+    [[nodiscard]] qreal maxPaintHeight() const;
     [[nodiscard]] qreal viewZoom() const { return m_viewZoom; }
     void setViewZoom(qreal zoom);
 
@@ -82,9 +85,12 @@ public:
 
 signals:
     void pageCountChanged();
+    void maxPaintHeightChanged();
     void viewZoomChanged();
     void attachedChanged();
-    // `viewRect` is in item coordinates; the viewport scrolls it in.
+    // AGENT-CONTRACT: this rectangle is in the full document surface's
+    // coordinates, while docToView() and storyToView() return paint-tile
+    // coordinates. The QML viewport scrolls the full surface.
     void ensureVisibleRequested(const QRectF &viewRect);
     // A right press at item (x, y); docPos is where it landed in the text.
     void contextMenuRequested(qreal x, qreal y, const QPointF &docPos);
@@ -113,6 +119,7 @@ protected:
     void hoverMoveEvent(QHoverEvent *event) override;
 
 private:
+    QMetaObject::Connection m_screenConnection;
     void forwardMouse(QMouseEvent *event);
     // The open story's events (story coordinates); false when a press fell
     // outside its band.

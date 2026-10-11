@@ -1,6 +1,23 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Verification
 
+## QindaWrite long-document display (D-109)
+
+`tst_write_long_pages` opens a 35-page synthetic document at 1280 and
+520 px, checks the full scroll extent against the bounded paint tile, scrolls
+to later pages, round-trips document coordinates, verifies the caret's
+full-document scroll request and samples the rendered paper pixels. With
+`QQO_PRIVATE_DOCX_PATH` set, it also opens the affected Word document in
+both widths; the test never writes that file. Review all four PNGs via
+`QQO_GRAB_DIR`, and run `tst_write_ui` for the updated structural fixtures.
+Because these tests use the software backend, reopen the file on the QindaQt
+desktop after installing the updated Portage package to verify the GPU path.
+On qinda with installed QindaTK r17, `tst_write_ui` and
+`tst_write_long_pages` passed (2/2); the adjacent story, picture, form
+control and section tests passed (4/4). The 1280- and 520-pixel synthetic
+and private-document grabs were reviewed: paper and later-page content are
+visible at both widths. The private file stayed unmodified.
+
 ## M97 form-event gates (D-105)
 
 The focused seven-target gate passed, including the shared OfficeWindow
@@ -73,7 +90,6 @@ insertion templates against the Office math schema, font MATH metrics,
 fraction/script placement, growing brackets, matrix alignment, caret hit
 testing, 72 text round trips, Unicode deletion, selection wrapping, owned
 snapshots and undo/redo. Captures must be checked at both 1× and 2×.
-
 ## M88 Write sections gates (D-096)
 
 Qualification resumed on 2026-10-10 from Claude's preserved M88 branch,
