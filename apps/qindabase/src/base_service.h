@@ -171,6 +171,9 @@ public:
     Q_INVOKABLE QVariantMap newMacroDesign() const;
     // {ok, problems} — what keeps the macro from running.
     Q_INVOKABLE QVariantMap checkMacro(const QVariantMap &macro, const QString &name = {}) const;
+    Q_INVOKABLE QVariantMap evaluateMacroValue(const QString &table, const QString &expression,
+                                               const QVariantMap &record, const QVariantMap &temporaryValues,
+                                               const QString &targetField = {}) const;
     Q_INVOKABLE QVariantMap saveMacro(const QString &name, const QVariantMap &macro);
     // The rowids of `table` meeting an Access where condition (OpenForm,
     // ApplyFilter): {ok, rowIds} or {ok:false, error}.

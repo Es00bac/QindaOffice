@@ -19,6 +19,7 @@ QtObject {
     readonly property var base: window !== null ? window.base : null
     // M80: runs macros and form buttons through the commands below.
     property MacroRunner macroRunner: MacroRunner { window: commands.window }
+    property var macroTemporaryValues: ({})
 
     // The designer shown now (it has save(), discard(), undo(), redo()).
     function activeDesigner() {
@@ -52,8 +53,13 @@ QtObject {
     }
 
     // Runs `next` once a dirty designer is saved or discarded (or at once).
-    function leave(next) {
-        if (!host.designDirty) { next(); return }
+    function leave(next, failed) {
+        const proceed = function() {
+            if (host.currentView === "form" && window.formView.recordEditing)
+                window.formView.events.run("close", "", next, failed)
+            else next()
+        }
+        if (!host.designDirty) { proceed(); return }
         const designer = activeDesigner()
         window.confirmDialog.ask(qsTr("Save changes?"),
                                  qsTr("%1 has changes that are not saved yet.").arg(host.currentName || qsTr("The design")),
@@ -61,8 +67,8 @@ QtObject {
             if (choice === "primary" && designer !== null && !designer.save()) return
             if (choice === "tertiary" && designer !== null) designer.discard()
             host.designDirty = false
-            next()
-        }, qsTr("Discard"))
+            proceed()
+        }, qsTr("Discard"), function() { if (failed) failed(qsTr("The object change was cancelled.")) })
     }
 
     function openObject(kind, name) {
@@ -73,7 +79,10 @@ QtObject {
             } else if (kind === "query") {
                 runQuery(name, ({}), ({}))
             } else if (kind === "form") {
-                if (window.formView.open(name, "edit")) show("form", kind, name)
+                if (window.formView.open(name, "edit")) {
+                    show("form", kind, name)
+                    window.formView.finishOpen()
+                }
             } else if (kind === "report") {
                 openReportFor(name, "preview", null, null)
             } else if (kind === "macro") {
@@ -120,8 +129,8 @@ QtObject {
                 if (!r.ok) { if (failed) failed(r.error); return }
             }
             if (dataMode === "add") window.formView.newRecord()
-            if (done) done()
-        })
+            window.formView.finishOpen(done, failed)
+        }, failed)
     }
     function openReportFor(name, view, done, failed) {
         leave(function() {
@@ -133,14 +142,14 @@ QtObject {
                 if (view === "print") window.trigger("filePrintAction")
                 if (done) done()
             })
-        })
+        }, failed)
     }
     function openTableFor(name, done, failed) {
         leave(function() {
             if (!base.datasheet.openTable(name)) { if (failed) failed(base.datasheet.error); return }
             show("datasheet", "table", name)
             if (done) done()
-        })
+        }, failed)
     }
     function applyFilter(where) {
         if (host.currentView === "form") return window.formView.applyFilter(where)
@@ -159,8 +168,8 @@ QtObject {
         window.datasheetView.findText(text)
         return { ok: true }
     }
-    function closeObject(done) {
-        leave(function() { show("start", "", ""); if (done) done() })
+    function closeObject(done, failed) {
+        leave(function() { show("start", "", ""); if (done) done() }, failed)
     }
 
     // Asks for parameter values first when there are any.
@@ -292,6 +301,7 @@ QtObject {
         case "baseDeleteObjectAction": if (sel.name) deleteObject(sel.kind, sel.name); break
         case "baseNewRecordAction": recordTarget().newRecord(); break
         case "baseSaveRecordAction": recordTarget().saveRecord(); break
+        case "baseFormEventsAction": window.formEventsDialog.openFor(window.formView); break
         case "baseDeleteRecordAction": recordTarget().deleteRecord(); break
         case "baseRefreshAction":
             if (host.currentView === "report") window.reportView.rebuild()

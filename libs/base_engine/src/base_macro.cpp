@@ -3,6 +3,7 @@
 // before it runs, and the where conditions OpenForm and ApplyFilter carry.
 // See base_macro.h for the contract.
 #include "base_macro.h"
+#include "base_macro_flow.h"
 
 #include "base_expression.h"
 #include "base_objects.h"
@@ -62,9 +63,9 @@ QList<MacroActionInfo> macroActions()
 {
     // AGENT-NOTE: Access's everyday macro actions (the ones its Command
     // Button Wizard and the "Open … / Go to … / Apply Filter" macros use).
-    // RunSQL, SetValue and the VBA bridge actions are deliberately absent:
-    // a macro changes data only through a saved query, which previews its
-    // count and is one undo step.
+    // M97 SetValue changes the open form's draft; saving still passes the
+    // normal record validation and BeforeUpdate event. RunSQL and VBA stay
+    // absent: bulk data changes use a saved query with preview and Undo.
     static const QList<MacroActionInfo> actions{
         {s("openForm"), s("OpenForm"), s("Opens a form, on the records a condition picks or on a new record."),
          {arg("form", "Form name", "form", true), arg("where", "Where condition", "where"),
@@ -90,6 +91,18 @@ QList<MacroActionInfo> macroActions()
          {arg("message", "Message", "text", true), arg("title", "Title", "text")}},
         {s("runMacro"), s("RunMacro"), s("Runs another macro."), {arg("macro", "Macro name", "macro", true)}},
         {s("stopMacro"), s("StopMacro"), s("Stops the macro here."), {}},
+        {s("if"), s("If"), s("Runs the following actions when the expression is true."),
+         {arg("condition", "Condition", "value", true)}},
+        {s("else"), s("Else"), s("Runs this branch when the matching If is false."), {}},
+        {s("endIf"), s("EndIf"), s("Ends the matching If block."), {}},
+        {s("setValue"), s("SetValue"), s("Changes a field in the open form's draft record."),
+         {arg("field", "Field name", "text", true), arg("expression", "Value expression", "value", true)}},
+        {s("setTempVar"), s("SetTempVar"), s("Keeps a temporary value in this database window."),
+         {arg("name", "Name", "text", true), arg("expression", "Value expression", "value", true)}},
+        {s("removeTempVar"), s("RemoveTempVar"), s("Removes a temporary window value."),
+         {arg("name", "Name", "text", true)}},
+        {s("cancelEvent"), s("CancelEvent"), s("Cancels the form event without saving its record."),
+         {arg("message", "Reason", "text")}},
     };
     return actions;
 }
@@ -136,7 +149,7 @@ Macro Macro::fromMap(const QVariantMap &map)
 
 QStringList checkMacro(const BaseFile &file, const Macro &macro, const QString &self)
 {
-    QStringList problems;
+    QStringList problems = checkMacroFlow(macro);
     for (int i = 0; i < macro.steps.size(); ++i) {
         const MacroStep &step = macro.steps.at(i);
         const MacroActionInfo *info = macroAction(step.action);

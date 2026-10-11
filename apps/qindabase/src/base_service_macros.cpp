@@ -5,6 +5,7 @@
 // (MacroRunner.qml); nothing here runs one.
 #include "base_document.h"
 #include "base_macro.h"
+#include "base_macro_flow.h"
 #include "base_objects.h"
 #include "base_service.h"
 
@@ -35,6 +36,17 @@ QStringList BaseService::macroNames() const
         }
     }
     return out;
+}
+
+QVariantMap BaseService::evaluateMacroValue(const QString &table, const QString &expression,
+                                           const QVariantMap &record, const QVariantMap &temporaryValues,
+                                           const QString &targetField) const
+{
+    if (!file()) return failed(tr("No database is open."));
+    const Engine::MacroValue value = Engine::evaluateMacroValue(*file(), table, expression, record,
+                                                               temporaryValues, targetField);
+    return {{s("ok"), value.ok}, {s("value"), value.value}, {s("input"), value.input},
+            {s("type"), Engine::typeId(value.type)}, {s("text"), value.text}, {s("error"), value.error}};
 }
 
 QStringList BaseService::formNames() const

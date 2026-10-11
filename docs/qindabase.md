@@ -630,3 +630,25 @@ M86's 18 in `base_host_actions_access.cpp`); the host announces them as
 hasFile}) names the file field the File commands act on, and (M86)
 `BaseHost.hyperlinkTarget` ({rowId, field, label, text, editable}) the
 hyperlink cell.
+
+## Form events and macro flow (M97, D-105; in qualification)
+
+In a form's Design view, Form & Report ▸ Form Events assigns named macros
+to the form or a positioned control. Apply is one design Undo step; saving
+the form retains its bindings. Form Open and Current run on opening a form,
+Current follows record navigation, Before Update can reject a save, and
+After Update follows a committed record. Close runs when closing or leaving
+the form object. Control Change follows an edited draft value, button Click
+can override its original command, and control Before/After Record Update
+run for changed bound fields. Events are disabled in Design and Preview.
+
+Macros support If/Else/EndIf, SetValue, SetTempVar, RemoveTempVar and
+CancelEvent. Values are Access expressions over the form's current draft;
+TempVars use [TempVars].[Name] and live only in the database window. Currency
+values retain their exact minor-unit representation and type. SetValue edits
+the draft and normal validation still runs before saving. CancelEvent
+rejects the pending operation. Macros cannot execute arbitrary SQL: saved
+action queries retain their preview and Undo behavior. A run is bounded
+to 1024 actions, 20 nested calls and 128 temporary variables. Distinct nested
+form events use separate continuations; an event cannot recursively invoke
+itself. Only 20 event runners are retained per window.

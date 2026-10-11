@@ -35,15 +35,19 @@ Item {
     property var session: null
     property string savedRevision: ""
     property string notice: ""
+    property bool opening: false
     readonly property var designDocument: session !== null ? session.model : null
     readonly property bool designDirty: designDocument !== null && designDocument.revision !== savedRevision
     readonly property bool designing: designer.mode === "design"
+    readonly property bool recordEditing: designer.mode === "edit"
+    property alias formDesigner: designer
     property var fileFields: []      // the table's file fields [{name, caption}]
     property string fileField: ""    // the one the File commands act on
     property var fileHas: ({})       // file field → holds a file (the panels report it)
     property var stored: ({})        // the record's storage values (subform links)
     property string filter: ""       // M80: ApplyFilter's where condition
     readonly property FormDesignBridge bridge: FormDesignBridge { view: view }
+    readonly property FormEventBridge events: FormEventBridge { view: view }
     readonly property var subforms: (bridge.presented.controls || []).filter(function(c) { return c.type === "subform" })
     // The width the laid-out form needs (design units are logical pixels):
     // its controls' right edge, the canvas margin and the card's padding,
@@ -67,6 +71,7 @@ Item {
         const r = base.openForm(name)
         if (!r.ok) { window.notify(qsTr("Cannot open %1").arg(name), r.error, "danger"); return false }
         closeSession()
+        opening = true
         mirror.open(r.mirrorPath)
         session = manager.openDocument(r.designPath)
         if (session === null) { window.notify(qsTr("Cannot open %1").arg(name), manager.lastError, "danger"); return false }
@@ -85,6 +90,14 @@ Item {
         syncHost()
         return true
     }
+    function finishOpen(done, failed) {
+        opening = false
+        events.runMany([{ event: "open", control: "" }, { event: "current", control: "" }], done, function(error) {
+            window.commands.show("start", "", "")
+            if (failed) failed(error)
+            else events.problem(error)
+        })
+    }
     // The designer's API, for Add Subform and Add Button (one undo step).
     function addControl(type, properties) {
         if (designDocument === null) return ""
@@ -99,6 +112,8 @@ Item {
     // (arguments.macro), or a saved macro's name; M80's embedded macros of
     // several steps run their `actions`.
     function runCommand(controlId, actionId) {
+        if (!recordEditing) return
+        if (events.name("click", controlId).length) { events.run("click", controlId); return }
         const control = bridge.controlById(designDocument !== null ? (designDocument.form.controls || []) : [], controlId) || ({})
         const runner = window.commands.macroRunner
         const caption = String(control.caption || control.name || qsTr("The button"))
@@ -145,6 +160,7 @@ Item {
         }
     }
     function closeSession() {
+        events.cancel()
         if (session !== null) manager.closeDocument(session.documentId, Tk.DocumentManager.Discard)
         session = null
     }
@@ -165,17 +181,44 @@ Item {
         rowIds = filtered !== null && filtered.ok ? filtered.rowIds : base.formRowIds(table)
         goTo(rowIds.length === 0 ? -1 : Math.max(0, Math.min(at, rowIds.length - 1)))
     }
-    function goTo(index) {
+    function goTo(index, skipEvents) {
+        ++events.recordSerial
+        events.loading = true
         position = index
         const r = base.formRecord(table, index >= 0 ? Number(rowIds[index]) : 0)
         designer.recordId = r.recordId || ""
         designer.record = r.record || ({})
         stored = r.stored || ({})
+        events.previousRecord = Object.assign({}, designer.workingRecord)
+        events.loading = false
         openSubforms()
+        if (!skipEvents && !opening) events.run("current", "")
     }
     function newRecord() { if (!designing) goTo(-1) }
     function refresh() { bridge.refreshLookups(); reloadRows(position) }
-    function saveRecord() { if (designer.mode === "edit") designer.requestRecordSave() }
+    function saveRecord(done, failed) {
+        if (recordEditing) events.requestSave(done, failed)
+        else if (failed) failed(qsTr("Switch to Edit Record before saving."))
+    }
+    function macroRecord() { return bridge.toStored(designer.workingRecord) }
+    function setMacroValue(field, input, raw) {
+        const lookup = bridge.lookups[field]
+        let shown = input
+        if (lookup !== undefined) {
+            const at = lookup.keys.findIndex(function(key) { return String(key) === String(raw) })
+            if (at >= 0) shown = lookup.items[at]
+        }
+        events.applying = true
+        const ok = designer.setFieldValue(field, shown)
+        events.applying = false
+        return { ok: ok, error: ok ? "" : (designer.requestMessage || qsTr("The field could not be changed.")) }
+    }
+    function setEventBindings(bindings) {
+        const next = Object.assign({}, designDocument.design)
+        next.form = Object.assign({}, designDocument.form, { events: bindings })
+        const ok = designDocument.setDesign(next)
+        return { ok: ok, error: ok ? "" : designDocument.lastError }
+    }
     function deleteRecord() {
         if (position < 0) { goTo(rowIds.length ? 0 : -1); return }
         window.confirmDialog.ask(qsTr("Delete this record?"), qsTr("Undo brings it back."), "danger", qsTr("Delete"), function() {
@@ -290,13 +333,14 @@ Item {
                             tooltip: view.title
                             onDesignChangeRequested: function(fieldName, value) { view.bridge.applyChange(fieldName, value) }
                             onControlCommandRequested: function(controlId, actionId) { view.runCommand(controlId, actionId) }
+                            onWorkingRecordChanged: {
+                                if (view.window !== null) view.window.resetClosePreparation()
+                                const before = view.events.previousRecord
+                                view.events.previousRecord = Object.assign({}, workingRecord)
+                                view.events.changed(before, workingRecord)
+                            }
                             onRecordSaveRequested: function(requestId, tableName, recordId, changes) {
-                                const r = view.base.saveFormRecord(tableName, Number(recordId) || 0, view.bridge.toStored(changes))
-                                designer.acknowledge(requestId, r.ok ? "accepted" : "rejected", r.ok ? qsTr("Saved") : r.error)
-                                if (r.ok) {
-                                    view.rowIds = view.base.formRowIds(view.table)
-                                    view.goTo(Math.max(0, view.rowIds.map(Number).indexOf(Number(r.rowid))))
-                                }
+                                view.events.save(requestId, tableName, recordId, changes)
                             }
                             onDesignSaveRequested: function(requestId, design) {
                                 const ok = view.save()

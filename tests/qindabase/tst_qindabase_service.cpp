@@ -203,16 +203,16 @@ private slots:
         const QVariantList ids = f.service.formRowIds(str("donations"));
         QCOMPARE(ids.size(), 120);
         const QVariantMap first = f.service.formRecord(str("donations"), ids.first().toLongLong());
-        // M80: a lookup is a combo box beside the designer: its stored key
-        // comes apart from the designer's record, the choices name it.
-        QVERIFY(!first.value(str("record")).toMap().contains(str("donor_id")));
+        // M89: the positioned control's draft holds its visible label;
+        // lookups separately retains the exact source key for typed macros.
+        const QString donorLabel = first.value(str("record")).toMap().value(str("donor_id")).toString();
         const QVariant donor = first.value(str("lookups")).toMap().value(str("donor_id"));
         QVERIFY(donor.toLongLong() > 0);
         const QVariantList choices = f.service.lookupChoices(str("donations"), str("donor_id"));
         QCOMPARE(choices.size(), 40);
         QVERIFY(std::any_of(choices.cbegin(), choices.cend(), [&](const QVariant &c) {
             return c.toMap().value(str("value")).toLongLong() == donor.toLongLong()
-                   && c.toMap().value(str("text")).toString().contains(QLatin1Char(' '));
+                   && c.toMap().value(str("text")).toString() == donorLabel;
         }));
         const QVariantMap added = f.service.saveFormRecord(str("donations"), 0,
                                                           {{str("donor_id"), str("Ada Lovelace")}, {str("amount"), str("42.50")},

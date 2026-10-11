@@ -338,6 +338,8 @@ styles — each kept in `.qdiagram` and carried through `.vsdx`.
 | **M90** Calc: Solver, sparklines and everyday features (D-098) | Solver methods, constraints, asynchronous results and Answer Report with Excel names; sparkline model/edit/paint/print/interchange; hidden/filter-aware SUBTOTAL and AGGREGATE; table rename/resize; kept-rule formulas through structural edits; calculated pivot fields and date filters; header/footer pictures and printed notes | Synthetic engine, package/schema and real-window gates in [verification.md](../verification.md); open: manual Excel comparison, modern threaded comments, calculated items/OLAP/Data Model, optional legacy `@` display |
 | **M96** Note page versions — **done (D-104)** | bounded prior-page snapshots, manual capture, preview, full-envelope restore with Undo, history/asset copying on Save As | retention, corruption, persistence, sibling Save As, and real-window 1280/520 restore gates |
 
+| **M97** Base form events — **done (D-105)** | named form/control events, conditional macro flow, draft SetValue, typed TempVars, Before Update cancellation | typed engine cases and real-window lifecycle/Undo/save-reopen/squeeze gates |
+
 Every milestone follows AGENTS.md: ≤ 500 lines per file, tests headless,
 docs in the same commit, a `docs/decisions.md` entry, fixtures and grabs
 looked at, the desktop launch only with the owner's consent.

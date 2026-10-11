@@ -21,6 +21,12 @@ Tk.AppWindow {
     id: window
 
     required property DocumentHost host
+    // Optional app lifecycle gate. It calls done(true/false) when ready;
+    // ordinary per-document Save/Discard/Cancel still runs afterward.
+    property var beforeClose: null
+    property bool closePreparationPending: false
+    property bool closePrepared: false
+    function resetClosePreparation() { closePrepared = false }
 
     title: host.windowTitle
     toolBarsVisible: host.toolBarsVisible
@@ -121,6 +127,20 @@ Tk.AppWindow {
 
     // ---- close consent (ADR-0110: per document, never per process) ----
     onClosing: function(close) {
+        if (window.beforeClose !== null && !window.closePrepared) {
+            close.accepted = false
+            if (!window.closePreparationPending) {
+                window.closePreparationPending = true
+                window.beforeClose(function(ready) {
+                    window.closePreparationPending = false
+                    if (ready) {
+                        window.closePrepared = true
+                        Qt.callLater(window.close)
+                    }
+                })
+            }
+            return
+        }
         close.accepted = window.host.requestClose()
     }
     Connections {
@@ -184,7 +204,7 @@ Tk.AppWindow {
         objectName: "closeConsent"
         onAccepted: window.host.resolveClose("save")
         onTertiary: window.host.resolveClose("discard")
-        onRejected: window.host.resolveClose("cancel")
+        onRejected: { window.resetClosePreparation(); window.host.resolveClose("cancel") }
     }
 
     Dialogs.FileDialog {

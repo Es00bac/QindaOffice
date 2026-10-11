@@ -16,7 +16,9 @@
 //  * The action ids are Access's macro actions, lower camel case:
 //    openForm, openReport, openQuery, openTable, applyFilter,
 //    showAllRecords, goToRecord, saveRecord, requery, findRecord,
-//    closeWindow, messageBox, runMacro, stopMacro. macroActions() lists
+//    closeWindow, messageBox, runMacro, stopMacro; M97 adds if, else,
+//    endIf, setValue, setTempVar, removeTempVar and cancelEvent.
+//    macroActions() lists
 //    them with their arguments; the window runs them, the engine only
 //    checks them (checkMacro) — a macro never runs SQL of its own.
 //  * Where conditions are Access expressions over one table's fields

@@ -21,6 +21,15 @@ OfficeWindow {
     readonly property BaseHost baseHost: host as BaseHost
     readonly property BaseService base: baseHost !== null ? baseHost.base : null
     readonly property string view: baseHost !== null ? baseHost.currentView : "start"
+    onViewChanged: resetClosePreparation()
+    beforeClose: function(done) {
+        if (window.view === "form" && window.formView.recordEditing)
+            window.formView.events.run("close", "", function() { done(true) }, function(error) {
+                window.formView.events.problem(error)
+                done(false)
+            })
+        else done(true)
+    }
     readonly property bool hasDatabase: base !== null && base.hasDatabase
     property alias commands: commands_
     property alias datasheetView: datasheetView_
@@ -110,6 +119,7 @@ OfficeWindow {
     ReportWizardDialog { id: reportWizard_; window: window }
     LabelWizardDialog { id: labelWizard_; window: window }
     FormControlDialog { id: formControlDialog_; window: window }
+    FormEventsDialog { id: formEventsDialog_; window: window }
     // M86 (D-094)
     QueryWizardDialog { id: queryWizard_; objectName: "queryWizardDialog"; window: window }
     HyperlinkDialog { id: hyperlinkDialog_; objectName: "hyperlinkDialog"; window: window }
@@ -124,6 +134,7 @@ OfficeWindow {
     property alias reportWizard: reportWizard_
     property alias labelWizard: labelWizard_
     property alias formControlDialog: formControlDialog_
+    property alias formEventsDialog: formEventsDialog_
     property alias queryWizard: queryWizard_
     property alias hyperlinkDialog: hyperlinkDialog_
     property alias linkTableDialog: linkTableDialog_
