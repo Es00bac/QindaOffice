@@ -13,8 +13,10 @@
 
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
+#include <QList>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QRectF>
 
 using namespace BooksAppTest;
 using QindaOffice::Test::findNamed;
@@ -198,6 +200,20 @@ private slots:
             QVERIFY2(scene.window != nullptr, qPrintable(scene.error));
             QVERIFY(QTest::qWaitForWindowExposed(scene.window));
             QTest::qWait(200);
+            QQuickItem *header = scene.item(str("dashHeader"));
+            QVERIFY(header != nullptr);
+            QList<QRectF> occupied;
+            for (const char *name : {"dashCompanyHeading", "dashNewInvoice", "dashReceivePayment", "dashNewExpense"}) {
+                QQuickItem *item = scene.item(str(name));
+                QVERIFY2(item != nullptr, name);
+                const QRectF bounds = item->mapRectToItem(header, item->boundingRect());
+                QVERIFY2(bounds.width() > 0 && bounds.height() > 0, name);
+                QVERIFY2(bounds.left() >= -1 && bounds.top() >= -1
+                             && bounds.right() <= header->width() + 1 && bounds.bottom() <= header->height() + 1, name);
+                for (const QRectF &other : occupied) QVERIFY2(!bounds.intersects(other), name);
+                occupied.append(bounds);
+            }
+            QindaOffice::Test::saveGrab(scene.window, str("qindabooks_dashboard_header_%1").arg(width));
             QString diff;
             const QString path = QStringLiteral(QQO_FIXTURE_DIR "/qindabooks_%1.txt").arg(width);
             QVERIFY2(QindaOffice::Test::matchesFixture(scene.window, path, &diff), qPrintable(diff));

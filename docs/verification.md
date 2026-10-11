@@ -67,6 +67,8 @@ The 520 px dashboard behind the import dialog is also a visual gate: its
 company heading and New invoice, Receive payment and New expense shortcuts
 must wrap without painting over each other. Review the unshaded dashboard
 grab as well as the modal grab when qualifying the integrated release.
+`tst_qindabooks_ui` checks that all four named items have positive, contained
+and disjoint rectangles at 1280 and 520 px.
 
 The remaining manual gate is a real QuickBooks Desktop employee/time IIF
 export, plus an explicit decision on how to handle already-billed and

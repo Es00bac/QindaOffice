@@ -40,6 +40,7 @@ Tk.Scroll {
         padding: Tk.Theme.space.xl
 
         Tk.Flex {
+            objectName: "dashHeader"
             direction: Tk.Flex.Row
             wrap: Tk.Flex.Wrap
             align: Tk.Flex.Center
@@ -47,7 +48,7 @@ Tk.Scroll {
             Tk.Flex {
                 direction: Tk.Flex.Column
                 Tk.Flex.grow: 1
-                Tk.Heading { level: 1; text: view.books !== null ? view.books.companyName : "" }
+                Tk.Heading { objectName: "dashCompanyHeading"; level: 1; text: view.books !== null ? view.books.companyName : "" }
                 Tk.Caption { text: qsTr("As of %1").arg(view.books !== null ? view.books.today : "") }
             }
             Tk.Button { objectName: "dashNewInvoice"; variant: "accent"; iconName: "receipt"; text: qsTr("New invoice"); onClicked: view.host.actions.trigger("booksNewInvoiceAction") }
