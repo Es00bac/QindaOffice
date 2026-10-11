@@ -28,8 +28,26 @@ snapshots and undo/redo. Captures must be checked at both 1× and 2×.
 Qualification resumed on 2026-10-10 from Claude's preserved M88 branch,
 with M86 and M87 retained. The headless gate is
 `ctest --preset dev --output-on-failure -R '^(tst_write_|tst_docx_|tst_ooxml|tst_note_word)'`
-after building every matching test. Results and reviewed captures are
-recorded here before the milestone is integrated.
+after building every matching test. Final source qualification passed
+**42/42 CTest targets**, **334 Qt checks**, with three optional corpus cases
+skipped in that run. Schemas were enabled. Mixed-orientation and header
+editor captures at 1280 and 520 px were inspected, and the PDF gate confirms
+every source paragraph appears exactly once on its correctly oriented page.
+
+The separate real-document run on 2026-10-10 passed **596/596 reads, writes
+and rereads**, with no changed text, table counts or picture counts and
+**zero schema-invalid saved packages**. It covered 137,691 paragraphs,
+8,836 tables, 553 pictures, 12,652 list items and 505 preserved objects.
+Inputs were copied privately to qinda's archive drive for validation;
+originals were not modified and their contents are absent from the repo.
+The run took 1,216.9 seconds.
+
+The nine multi-section inputs include eight with a Microsoft Word page
+count. Before and after M88, the same comparison gives two exact, three off
+by one and three longer by at least two pages: 143 pages recorded by Word,
+186 by Write, with no unreadable inputs. Section layout is improved, but
+this corpus does not demonstrate aggregate page-count parity. Physical
+printing and a final check in Word remain manual gates.
 
 - `tst_write_probe_sections` records the Qt frame, line and table pagination
   behavior behind the flat document layout.
@@ -46,7 +64,7 @@ recorded here before the milestone is integrated.
   `fontFamilies` getter; its list is now a window-owned snapshot.
 - `tst_write_ui` and `tst_write_menu_export` cover named commands, ribbon
   squeeze, structural fixtures and panel export.
-- Review the mixed-orientation and header-editor PNGs at 1280 and 520 px,
+- Reviewed the mixed-orientation and header-editor PNGs at 1280 and 520 px,
   plus portrait/landscape PDF pages. The remaining desktop checks are
   physical printer paper changes and opening an edited document in Word.
 
