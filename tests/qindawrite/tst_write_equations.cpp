@@ -65,12 +65,22 @@ private slots:
         auto *graphics = scene.host.graphicsController(); QVERIFY(graphics);
         QVERIFY(graphics->insert(QStringLiteral("shape")));
         QCOMPARE(scene.doc->textDocument()->toPlainText().size(), 2);
+        QTextCursor beforeEquation(scene.doc->textDocument());
+        const QRectF mathLeft = scene.control()->cursorRect(beforeEquation);
+        const QRectF mathRight = scene.control()->cursorRect(afterEquation);
+        QVERIFY(mathRight.x() > mathLeft.x());
+        const QPointF mathPoint(mathLeft.x() + (mathRight.x() - mathLeft.x()) * 0.75, mathLeft.center().y());
+        QMouseEvent mathDoubleClick(QEvent::MouseButtonDblClick, mathPoint, mathPoint,
+                                    Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QVERIFY(scene.control()->processEvent(&mathDoubleClick));
+        QVERIFY(scene.host.equations()->active());
+        scene.host.equations()->cancel();
         QSignalSpy graphicEditor(graphics, &Apps::Write::GraphicsController::dialogRequested);
         QTextCursor afterGraphic(scene.doc->textDocument()); afterGraphic.setPosition(2);
         const QRectF left = scene.control()->cursorRect(afterEquation);
         const QRectF right = scene.control()->cursorRect(afterGraphic);
         QVERIFY(right.x() > left.x());
-        const QPointF point((left.x() + right.x()) / 2, left.center().y());
+        const QPointF point(left.x() + (right.x() - left.x()) * 0.75, left.center().y());
         QMouseEvent doubleClick(QEvent::MouseButtonDblClick, point, point,
                                 Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
         QVERIFY(scene.control()->processEvent(&doubleClick));
