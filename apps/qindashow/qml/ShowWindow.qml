@@ -288,40 +288,20 @@ OfficeWindow {
         function onRenameRequested(current) { layoutPrompt.text = current; layoutPrompt.open() }
         function onTextStylesRequested(visible) { window.setPanel("textStyles", visible) }
         // PowerPoint shows the Slide Master tab while the view is open, and
-        // the tab one was on again after it closes.
-        property string tabBefore: ""
+        // the tab one was on again after it closes — Tk.Ribbon does that
+        // itself since M85 (QindaTK D-317: a closing contextual tab returns
+        // to the tab that was current before it appeared).
         function onActiveChanged() {
-            if (window.showHost.masterView.active) {
-                tabBefore = window.ribbon.currentTabId
-                Qt.callLater(function() { window.ribbon.activateTab("slideMaster") })
-            } else {
-                window.setPanel("textStyles", false)
-                if (tabBefore.length > 0) Qt.callLater(function(tab) { window.ribbon.activateTab(tab) }, tabBefore)
-            }
+            if (window.showHost.masterView.active) Qt.callLater(function() { window.ribbon.activateTab("slideMaster") })
+            else window.setPanel("textStyles", false)
         }
     }
     // M82 (D-091): Reuse Slides, and a template's masters for all or one slide.
     Connections {
         target: window.showHost.layouts
-        // AGENT-GUARD: Tk.Ribbon goes back to its first tab whenever its tab
-        // list changes (ensureCurrent compares the new tabs with a stale
-        // visibleTabs — a QindaTK gap); the New Slide and Layout menus change
-        // that list when the deck's layouts do, so the tab is put back.
-        property string keptTab: ""
-        function onIdsAboutToChange() { if (keptTab.length === 0) keptTab = window.ribbon.currentTabId }
-        function onIdsChanged() {
-            // At once when the ribbon has settled (anything that reads the
-            // tab next must see it), else once it has.
-            const tab = keptTab
-            if (tab.length === 0 || window.ribbon.currentTabId === tab || window.ribbon.activateTab(tab)) {
-                keptTab = ""
-                return
-            }
-            Qt.callLater(function() {
-                if (window.ribbon.currentTabId !== tab) window.ribbon.activateTab(tab)
-                keptTab = ""
-            })
-        }
+        // (The New Slide and Layout menus rebuild the ribbon's tabs when the
+        // deck's layouts change; Tk.Ribbon keeps the current tab by id since
+        // M85, QindaTK D-317, so nothing here puts it back any more.)
         function onReuseFileRequested() { reuseFileDialog.open() }
         function onReuseDialogRequested() { reuseDialog.open() }
     }

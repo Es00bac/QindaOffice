@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// QindaMail's process-wide engine (D-042): ONE per process, shared by every
-// main window (MailHost.service in QML). It owns the local store
-// ($XDG_DATA_HOME/qindaoffice/mail/store.json), the attachment store, the
-// account list and keyring, one AccountRuntime per configured account and
-// the built-in "On this computer" account (id `local`, never in
-// accounts.json), and exposes folders, the message list, the selection,
-// drafts and sending, calendars and tasks to QML.
+// Process-wide engine shared by MailHost windows (D-042). Owns the local
+// store ($XDG_DATA_HOME/qindaoffice/mail/store.json), attachments, accounts,
+// keyring and one AccountRuntime per account. Built-in account `local`
+// ("On this computer") never enters accounts.json. Exposes folders, messages,
+// selection, drafts, sending, calendars and tasks to QML.
 //
 // AGENT-CONTRACT (the app lead's QML, docs/mail.md#qindamail-app): the
 // property, invokable, signal and role names below are the QML API; rename
@@ -18,13 +16,10 @@
 // AGENT-GUARD: no property, result, status text or log line carries a
 // password or token (AccountRuntime is the only code that handles them).
 //
-// Files: mail_service.cpp (lifecycle, accounts, status), _folders (tree,
-// list, selection), _messages (actions, attachments), _sync (sync, mailbox
-// lists, timers), _compose (drafts, send, mailto), _accounts, _calendar,
-// _tasks; M64 (D-072): _source (RFC 5322 sources, content, attachment
-// bytes), _files (.eml/.msg/.mbox in, .eml out), _contacts (address book,
-// suggestions, pictures, links), _meetings (iMIP). M81 (D-090): rules,
-// categories, flags, search folders, automatic replies — mail_organizer.h.
+// Implementations: mail_service.cpp (lifecycle), _folders, _messages, _sync,
+// _compose, _accounts, _calendar, _tasks; M64 (D-072): _source (RFC 5322),
+// _files (.eml/.msg/.mbox), _contacts, _meetings (iMIP). M81 (D-090): rules,
+// categories, flags, search folders and replies are in mail_organizer.h.
 
 #include "account_runtime.h"
 #include "account_store.h"
@@ -438,6 +433,14 @@ private:
     // `extra` fields go onto the record last (M76: unread, flagged, importedFrom).
     QString importRawMessage(const QByteArray &raw, const QString &mailbox, const QString &origin, QString *error,
                              const QVariantMap &extra = {});
+    // M89 (D-097): the same message's record, its source kept, NOT yet in
+    // the store — importers collect a slice of them and write it with ONE
+    // LocalProductivityStore::upsertMany (QindaTK D-324); {} with `error`.
+    QVariantMap rawMessageRecord(const QByteArray &raw, const QString &mailbox, const QString &origin, QString *error,
+                                 const QVariantMap &extra = {});
+    // Writes a batch of message records as one store change: how many it
+    // took (0 with `error` when the store refused the batch).
+    int storeMessages(const QVariantList &records, QString *error);
 
     [[nodiscard]] QStringList localMailboxes() const;
     void importMailboxStep(const QString &requestId);

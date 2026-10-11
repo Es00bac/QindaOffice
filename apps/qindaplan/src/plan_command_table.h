@@ -176,6 +176,43 @@ inline std::span<const PlanCommand> planCommands()
         {"planShowProgressLinesAction", QT_TRANSLATE_NOOP("PlanHost", "&Progress Lines"), "", "chart-line", ""},
         // File ▸ Import and Export: Project's Import Wizard for tasks.
         {"planImportTasksAction", QT_TRANSLATE_NOOP("PlanHost", "Import &Tasks from Excel or CSV…"), "", "import", nullptr},
+        // ---- M89 (D-097): QindaTK's group rows and planning bars ----
+        // View ▸ Group By (plan_groups.h ids; Custom Field… asks first).
+        {"planGroupNoneAction", QT_TRANSLATE_NOOP("PlanHost", "&No Group"), "", "list", "planGroup"},
+        {"planGroupCompleteAction", QT_TRANSLATE_NOOP("PlanHost", "&Complete and Incomplete Tasks"), "", "circle-check", "planGroup"},
+        {"planGroupConstraintAction", QT_TRANSLATE_NOOP("PlanHost", "Constraint &Type"), "", "calendar-clock", "planGroup"},
+        {"planGroupCriticalAction", QT_TRANSLATE_NOOP("PlanHost", "C&ritical"), "", "waypoints", "planGroup"},
+        {"planGroupDurationAction", QT_TRANSLATE_NOOP("PlanHost", "&Duration"), "", "clock", "planGroup"},
+        {"planGroupMilestonesAction", QT_TRANSLATE_NOOP("PlanHost", "&Milestones"), "", "diamond", "planGroup"},
+        {"planGroupPriorityAction", QT_TRANSLATE_NOOP("PlanHost", "&Priority"), "", "star", "planGroup"},
+        {"planGroupResourceAction", QT_TRANSLATE_NOOP("PlanHost", "&Resource Names"), "", "users", "planGroup"},
+        {"planGroupStatusAction", QT_TRANSLATE_NOOP("PlanHost", "&Status"), "", "activity", "planGroup"},
+        {"planGroupModeAction", QT_TRANSLATE_NOOP("PlanHost", "&Auto v. Manually Scheduled"), "", "pin", "planGroup"},
+        {"planGroupActiveAction", QT_TRANSLATE_NOOP("PlanHost", "Active v. &Inactive"), "", "circle-off", "planGroup"},
+        {"planGroupCustomAction", QT_TRANSLATE_NOOP("PlanHost", "Custom &Field…"), "", "tag", "planGroup"},
+        // View ▸ Highlight: the filter's tasks marked, the others kept.
+        {"planHighlightNoneAction", QT_TRANSLATE_NOOP("PlanHost", "&No Highlight"), "", "list", "planHighlight"},
+        {"planHighlightCriticalAction", QT_TRANSLATE_NOOP("PlanHost", "&Critical"), "", "waypoints", "planHighlight"},
+        {"planHighlightIncompleteAction", QT_TRANSLATE_NOOP("PlanHost", "&Incomplete Tasks"), "", "circle-dot", "planHighlight"},
+        {"planHighlightCompletedAction", QT_TRANSLATE_NOOP("PlanHost", "C&ompleted Tasks"), "", "circle-check", "planHighlight"},
+        {"planHighlightLateAction", QT_TRANSLATE_NOOP("PlanHost", "&Late Tasks"), "", "timer", "planHighlight"},
+        {"planHighlightSlippingAction", QT_TRANSLATE_NOOP("PlanHost", "&Slipping Tasks"), "", "trending-down", "planHighlight"},
+        {"planHighlightMilestonesAction", QT_TRANSLATE_NOOP("PlanHost", "&Milestones"), "", "diamond", "planHighlight"},
+        {"planHighlightSummaryAction", QT_TRANSLATE_NOOP("PlanHost", "S&ummary Tasks"), "", "list-tree", "planHighlight"},
+        {"planHighlightDeadlinesAction", QT_TRANSLATE_NOOP("PlanHost", "Tasks With &Deadlines"), "", "flag", "planHighlight"},
+        // Gantt Chart Format ▸ a second baseline lane under the first.
+        {"planShowBaseline2Action", QT_TRANSLATE_NOOP("PlanHost", "&Second Baseline"), "", "baseline", ""},
+        {"planBaseline2Shown0Action", QT_TRANSLATE_NOOP("PlanHost", "&Baseline"), "", "baseline", "planBaseline2Shown"},
+        {"planBaseline2Shown1Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &1"), "", "baseline", "planBaseline2Shown"},
+        {"planBaseline2Shown2Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &2"), "", "baseline", "planBaseline2Shown"},
+        {"planBaseline2Shown3Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &3"), "", "baseline", "planBaseline2Shown"},
+        {"planBaseline2Shown4Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &4"), "", "baseline", "planBaseline2Shown"},
+        {"planBaseline2Shown5Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &5"), "", "baseline", "planBaseline2Shown"},
+        {"planBaseline2Shown6Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &6"), "", "baseline", "planBaseline2Shown"},
+        {"planBaseline2Shown7Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &7"), "", "baseline", "planBaseline2Shown"},
+        {"planBaseline2Shown8Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &8"), "", "baseline", "planBaseline2Shown"},
+        {"planBaseline2Shown9Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline &9"), "", "baseline", "planBaseline2Shown"},
+        {"planBaseline2Shown10Action", QT_TRANSLATE_NOOP("PlanHost", "Baseline 1&0"), "", "baseline", "planBaseline2Shown"},
     };
     return kCommands;
 }

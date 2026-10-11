@@ -157,6 +157,140 @@ No new toolkit controls or installation paths are introduced. Headless UI gates
 exercise the real dialogs and narrow ribbon; desktop playback, URL handlers and
 a PowerPoint desktop round trip remain manual gates.
 
+## D-097: Adopt QindaTK's M85 controls; QindaOffice builds against QindaTK 8e402c7 (dev prefix until r18 is released)
+
+**Date:** 2026-10-09 · **Status:** accepted (owner request: remove the
+workarounds earlier milestones built around missing toolkit controls; M89,
+builds on D-089, D-090, D-082, D-085, D-088, D-091, D-092 and D-093;
+QindaTK decisions D-311…D-327)
+
+**Context.** M70–M84 reported toolkit gaps and worked around them in the
+apps: QindaBase drew lookups, subforms and buttons beside QindaTK's
+FormDesigner (D-089 §6); QindaPlan had no group rows and drew slack,
+deadlines, split bars, progress lines and a second baseline only on paper
+(D-088, D-092); QindaCalc's formula bar had no completion (D-078); QindaMail
+expanded contact groups by their label, could not show a category's icon in
+a checkable menu item, wrote a 10,000-message `.pst` one record at a time
+and set its address-book section's `collapsed` imperatively (D-085, D-090);
+QindaWrite put "Automatic" and "No Color" beside its colour buttons and had
+no character map (D-079, D-082); QindaShow and QindaNote put the ribbon's
+tab back themselves (D-091, D-093), and QindaNote filtered its typing keys
+back to the editor, applied its own table deletion and computed the
+highlight it showed (D-093). QindaTK's M85 batch (commit 8e402c7) added the
+controls. It changed C++ class layouts, so it is not installed system-wide
+until the coordinated r18 release: it lives in a development prefix.
+
+**Decision.**
+
+1. **Build against the dev prefix.** Configure with
+   `-DCMAKE_PREFIX_PATH=<prefix>` (on qinda
+   `/home/cabewse/scratch/qtk-dev/install`, QindaTK 8e402c7); the tests
+   find its QML through `QQO_QINDATK_QML_ROOT`, the binaries its library
+   through the rpath. The configure cache must name the prefix's
+   `QindaTK_DIR`, never `/usr`'s. Nothing in the tree pins the commit; the
+   ebuild moves to r18 with the release.
+2. **QindaBase forms are positioned controls** (`base_form_layout.h`,
+   `base_service_form_layout.cpp`, `FormDesignBridge.qml`,
+   `FormSubform.qml`). A form is QindaTK's FormDesigner with
+   `form.controls`: labels, text boxes (bound, or calculated — the
+   designer's `expressionEvaluator` is the engine's Access expression over
+   the record, `evaluateControlExpression`), combo and list boxes (on a
+   lookup field their items are the related records' labels, a duplicated
+   name followed by its key, and the record saves the key), check boxes,
+   subforms by form name (the form's table — or a table named so — as the
+   linked datasheet of M80, child to master field), command buttons whose
+   action id is one of M80's macro actions with its `arguments`
+   (`runMacro` runs a saved macro), tab controls, images, lines and
+   rectangles. The designer runs on its **host-owned path**: the window
+   fills what is not design data (a lookup box's items) and turns each
+   change it asks for into ONE design-document command (`addFormControl`,
+   `setFormControl`, `removeFormControl`, else `setFormControls`), so a
+   gesture is one undo step and today's related records are never saved
+   into the form. The form mirror holds lookup fields again, as TEXT. A
+   form saved before M89 (its fields and M80's subforms, buttons and
+   combo/list choices) is laid out once as it opens, in Access's stacked
+   layout; saving the layout marks the definition `positioned` and drops
+   M80's `controls` list, so nothing is laid out again. Add Subform and
+   Add Button add designer controls. `FormLookups.qml`, `FormControls.qml`,
+   `formControls()` and `saveFormControls()` are gone.
+3. **QindaPlan: Group By, Highlight and the planning bars**
+   (`plan_groups.h`, `plan_service_groups.cpp`, `plan_host_groups.cpp`).
+   View ▸ Group By — Complete and Incomplete Tasks, Constraint Type,
+   Critical, Duration, Milestones, Priority, Resource Names, Status, Auto
+   v. Manually Scheduled, Active v. Inactive and Custom Field… — bands the
+   view's tasks (summary tasks left out) as QindaTK group header rows
+   (D-312) the sheet and the Gantt share, each with its rollups (start,
+   finish, duration, work, cost, % complete) and a chevron that hides its
+   tasks in both views. A band's row id is a name-based UUID (the Gantt's
+   ids are UUIDs), and a bar preview keeps the committed bands.
+   View ▸ Highlight marks the filter's tasks in the sheet with a theme tint
+   and hides nothing. The Gantt draws what the printout did (D-313): total
+   and free slack, deadlines (always), the progress point and the progress
+   line (at the status date, else today — the printout draws it only with a
+   status date), a split task's pieces and a second baseline lane
+   (Gantt Chart Format ▸ Second Baseline, Baseline 1 by default).
+4. **QindaCalc's formula bar completes** (`formula_completion.h`,
+   `data/function_signatures.txt`): through QindaTK's TextField suggestions
+   (D-314), the functions, names and tables that begin with the name at the
+   cursor — functions with Excel's argument names, inserted with "(" — and
+   inside a structured reference the table's columns and special items
+   (`Table1[`, `[@`, `[@[`), closing the reference. Nothing is offered in a
+   string, a quoted sheet name or after a sheet qualifier; Escape closes
+   the list before it cancels the edit.
+5. **QindaMail**: the composer's fields use the two-argument validator
+   (D-314), so a picked group becomes the token `group:<contactId>` and is
+   expanded by that id (`RecipientCompleter::expandGroup`) — never by its
+   label; a typed group name still expands. The `.pst` and mbox importers
+   collect each ~40 ms slice and write it with ONE
+   `LocalProductivityStore::upsertMany` per collection (D-324,
+   `MailService::rawMessageRecord`/`storeMessages`); the organizer finds a
+   record by the store's id index and renames a category on every item in
+   one change. The address book section binds `collapsed` and answers
+   `FormGroup.toggled` (D-317). The Categorize menu keeps its tags visible
+   and framed when assigned (D-323).
+6. **QindaWrite's dialogs**: Font's colours and Borders and Shading's border
+   take "Automatic" from ColorButton's own entry, the fill "No Color"
+   (D-318; a border colour can be made automatic again);
+   Insert ▸ Special Character is a CharacterMap with recent characters and
+   stays open for the next one; Define New Bullet's Symbol… opens one in
+   the bullet's font (D-327).
+7. **Workarounds removed where M85 fixed the cause**: QindaShow's ribbon
+   tab bookkeeping (`idsAboutToChange`, the kept tab, the tab before Slide
+   Master — D-317); QindaNote's typing-key filter (D-320), its own table
+   deletion (`deleteTable`, D-322) and highlight reading (the format
+   state's `highlight`, D-322); its editor's Undo and Redo reach the page
+   history (`undoRequested`, D-321).
+8. **The local menu bar overflows into "»"** at narrow widths (D-315);
+   the panel export is built from the MenuTree and lists every menu
+   whatever the bar shows (`tst_office_window`).
+9. **Commands** (rule 5): 35 new QindaPlan ids — `planGroup{None,
+   Complete, Constraint, Critical, Duration, Milestones, Priority,
+   Resource, Status, Mode, Active, Custom}Action`, `planHighlight{None,
+   Critical, Incomplete, Completed, Late, Slipping, Milestones, Summary,
+   Deadlines}Action`, `planShowBaseline2Action`,
+   `planBaseline2Shown0…10Action` — each in the menu tree (View ▸ Group By,
+   Highlight, Second Baseline Shown) and on the ribbon (View ▸ Data, Gantt
+   Chart Format ▸ Bar styles). QindaBase's Add Subform and Add Button keep
+   their ids with their new meaning; no id was renamed or reused.
+
+**Consequences.** QindaOffice needs QindaTK 8e402c7 or later; until r18 is
+in Portage the suite builds only against the dev prefix. Forms open laid out
+like Access's; a form saved by M89 opens unchanged in M89 and is laid out
+again only if its definition loses the `positioned` mark. A grouped Plan
+view leaves summary tasks out and prints its tasks band by band without the
+bands. The structural fixtures moved with the toolkit (named parts it
+added: TreeRow drop areas, ColorButton's marks, the planning lanes). Not
+done, with the reason: the Categorize menu shows no colour swatch
+(Tk.MenuItem draws its icon in theme colours only — a QindaTK gap); a Write
+style gallery (it is the ribbon's Styles group, and QindaWrite's ribbon was
+left to its sections milestone); dragging sections in Write's Navigation
+pane (TreeRow drag, D-326 — the same reason); QindaNote's tags stay beside
+the rich text by paragraph id (moving them into D-325's paragraph data
+changes the page format); QindaNote's HTML sanitizer stays (it does more
+than D-319: scripts, handlers, CSS URLs, links, picture sizes); CardDAV
+sync writes the address book's JSON store, not LocalProductivityStore, so
+`upsertMany` has nothing to batch there. QindaBooks is unchanged.
+
 ## D-095: QindaDiagram: Visio's everyday drawing tools
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

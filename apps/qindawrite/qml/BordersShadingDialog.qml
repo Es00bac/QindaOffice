@@ -8,7 +8,11 @@ import QindaTK as Tk
 // the line style, colour and width, the edges toggled one by one, and a
 // preview; Shading: the fill colour (theme-independent RGB, as Word writes
 // w:shd w:fill). The host (write_borders.h) applies only the edges the user
-// touched, so a mixed selection keeps the rest.
+// touched, so a mixed selection keeps the rest. M89 (D-097): the border's
+// "Automatic" and the fill's "No Color" are QindaTK ColorButton's own
+// entries (D-318) — a colour mode, not a colour — where a separate No
+// Color button stood and a border colour, once picked, could not be made
+// automatic again.
 Tk.Dialog {
     id: dialog
     signal bordersApplied(var answer)
@@ -118,12 +122,21 @@ Tk.Dialog {
                 Tk.Flex {
                     gap: Tk.Theme.space.sm
                     Tk.ColorButton {
+                        id: bordersColor
                         objectName: "bordersColor"
                         ghost: false
                         tooltip: qsTr("Border colour")
-                        color: dialog.penColor
+                        automaticEntry: true // Word's "auto": the paper's ink (D-004)
+                        automaticText: qsTr("Automatic")
+                        automaticColor: "#000000"
+                        // AGENT-NOTE: Binding elements, which a pick inside
+                        // the button does not break (it writes its own color
+                        // and colorMode), so load() and the custom picker show.
+                        Binding on colorMode { value: dialog.penAuto ? "automatic" : "color" }
+                        Binding on color { value: dialog.penColor }
                         colors: ["#000000", "#7f7f7f", "#1f4e79", "#2f5496", "#4472c4", "#c00000", "#ed7d31", "#70ad47", "#ffc000", "#ffffff"]
                         onColorSelected: function(c) { dialog.penColor = c; dialog.penAuto = false }
+                        onAutomaticSelected: dialog.penAuto = true
                         onCustomRequested: dialog.customColorRequested("border")
                     }
                     Tk.ComboBox {
@@ -182,22 +195,19 @@ Tk.Dialog {
             gap: Tk.Theme.space.sm
             Tk.PropertyRow {
                 label: qsTr("Fill")
-                Tk.Flex {
-                    gap: Tk.Theme.space.sm
-                    Tk.ColorButton {
-                        objectName: "shadingFill"
-                        ghost: false
-                        tooltip: qsTr("Fill colour")
-                        color: dialog.fill.length > 0 ? dialog.fill : "transparent"
-                        colors: ["#d9e2f3", "#deeaf6", "#e2efd9", "#fff2cc", "#fbe4d5", "#ededed", "#1f4e79", "#c00000", "#ffffff"]
-                        onColorSelected: function(c) { dialog.fill = String(c); dialog.fillChanged = true }
-                        onCustomRequested: dialog.customColorRequested("fill")
-                    }
-                    Tk.Button {
-                        objectName: "shadingNoColor"
-                        text: qsTr("No Color")
-                        onClicked: { dialog.fill = ""; dialog.fillChanged = true }
-                    }
+                Tk.ColorButton {
+                    id: shadingFill
+                    objectName: "shadingFill"
+                    ghost: false
+                    tooltip: qsTr("Fill colour")
+                    noColorEntry: true
+                    noColorText: qsTr("No Color")
+                    Binding on colorMode { value: dialog.fill.length > 0 ? "color" : "none" }
+                    Binding on color { value: dialog.fill.length > 0 ? dialog.fill : "#ffffff" }
+                    colors: ["#d9e2f3", "#deeaf6", "#e2efd9", "#fff2cc", "#fbe4d5", "#ededed", "#1f4e79", "#c00000", "#ffffff"]
+                    onColorSelected: function(c) { dialog.fill = String(c); dialog.fillChanged = true }
+                    onNoColorSelected: { dialog.fill = ""; dialog.fillChanged = true }
+                    onCustomRequested: dialog.customColorRequested("fill")
                 }
             }
         }

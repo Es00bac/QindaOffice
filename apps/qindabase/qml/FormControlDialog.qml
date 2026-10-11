@@ -3,10 +3,12 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QindaTK as Tk
 
-// Form & Report ▸ Add Subform / Add Button (M80, D-089 §4): a subform from
-// one of the relationships whose parent is the form's table, or a command
-// button that runs a saved macro or one action (Access's Command Button
-// Wizard). The form saves the new control as one undo step.
+// Form & Report ▸ Add Subform / Add Button (M80, D-089 §4; M89, D-097): a
+// subform control showing one of the relationships whose parent is the
+// form's table (by the form over the child table, or the table itself), or
+// a command button whose action id is a macro action with its arguments —
+// or "runMacro" with a saved macro (Access's Command Button Wizard). The
+// designer adds it as a positioned control under the others: one undo step.
 Tk.Dialog {
     id: dialog
 
@@ -31,8 +33,7 @@ Tk.Dialog {
     function openFor(newKind, formView) {
         kind = newKind
         form = formView
-        const c = base.formControls(formView.formName)
-        choices = c.ok ? c.subformChoices : []
+        choices = base.subformChoices(formView.formName)
         choice = 0
         caption = kind === "subform" && choices.length > 0 ? choices[0].caption : ""
         runs = "action"
@@ -40,16 +41,22 @@ Tk.Dialog {
         step = { action: "openForm", arguments: ({}) }
         open()
     }
+    // AGENT-NOTE: widths and heights here are design units — the form's
+    // document geometry, as base_form_layout.h's FormLayoutUnits lays a form
+    // out (a subform spans both columns) — not chrome sizes.
     onAccepted: {
-        let control
         if (kind === "subform") {
-            control = Object.assign({}, choices[choice], { kind: "subform", id: "", caption: caption.trim() || choices[choice].caption })
+            const c = choices[choice]
+            form.addControl("subform", { name: caption.trim() || c.caption, formName: c.formName,
+                                         linkMasterFields: c.linkParent, linkChildFields: c.linkChild,
+                                         width: 368, height: 160 })
         } else if (runs === "macro") {
-            control = { kind: "button", id: "", caption: caption.trim(), macro: macroName, actions: [] }
+            form.addControl("commandButton", { name: caption.trim(), caption: caption.trim(), actionId: "runMacro",
+                                               arguments: { macro: macroName }, width: 120 })
         } else {
-            control = { kind: "button", id: "", caption: caption.trim(), macro: "", actions: [step] }
+            form.addControl("commandButton", { name: caption.trim(), caption: caption.trim(), actionId: step.action,
+                                               arguments: step.arguments || ({}), width: 120 })
         }
-        form.addControl(control)
     }
 
     Tk.Flex {

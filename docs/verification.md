@@ -95,6 +95,32 @@ audible media, URL/file handlers and multiple physical screens remain manual
 checks. Video export uses poster frames for embedded video and cross-fades for
 non-cut transitions; [QindaShow](qindashow.md) documents the remaining limits.
 
+## M89 toolkit adoption gates (D-097)
+
+Qualification resumed on 2026-10-10 with M86/M87 retained. Build with the
+QindaTK M85 development prefix until the coordinated toolkit release:
+`cmake --preset dev -DCMAKE_PREFIX_PATH=/home/cabewse/scratch/qtk-dev/install`.
+The final suite also runs against the released toolkit before delivery.
+
+The new gates exercise positioned forms and typed lookup keys (including
+M86 Value Lists), one gesture per undo step, grouped Plan rows and Gantt
+markers, Calc formula completions and the Write color/symbol dialogs.
+Every affected app requires menu/ribbon checks and inspected 1280/520
+captures; toolkit structural fixture changes are accepted only after their
+diff is reviewed. Existing Mail contact/PST and Note rich-text tests cover
+removed workarounds. Final counts and remaining limitations are recorded
+here before integration.
+
+Resume fixes: accepting a formula completion closes its suggestion list;
+Escape then reaches the editor. Form lookup arrays are copied from Qt's
+sequence wrappers before adding the optional empty item, so every later
+design gesture validates. Form width follows its allocated view rather than
+the scroll viewport, eliminating the sizing loop. Focused reruns pass both
+completion widths, both Base service/UI targets, and the grouped Plan
+service. The Gantt mouse gate needs the toolkit's label-column-free chevron
+repair and is rechecked with that build. The Plan preview uses an unstarted
+task: moving actual work remains correctly refused.
+
 ## Build gates (every milestone)
 
 ```

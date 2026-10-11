@@ -252,17 +252,19 @@ M83 (`tracking.h`, `plan_field_work.cpp`):
 - **Split Task** (Task ▸ Split Task…, the selected task: where the work
   stops and when it resumes) and **Remove Splits**. A split is working time
   on the task's calendar, so it moves with the task; usage, overallocation,
-  costs and the printout leave it out. QindaTK's GanttView draws a split
-  task as one bar (a toolkit gap); the indicators column shows it.
+  costs and the printout leave it out. The Gantt draws its pieces joined
+  by the gap (M89, QindaTK D-313); the indicators column shows it too.
 - **Reschedule Uncompleted Work** to start after a date (Project ▸
   Reschedule Uncompleted Work…, Update Project's second choice; all tasks
   or the selection): an in-progress task is split where its actual
   duration ends and resumes at the date (Project's Stop / Resume); a task
   that should have started and has not gets Start No Earlier Than the date.
-- **The progress line** (View ▸ Progress Lines, printed on the Gantt):
-  at the status date it joins each task's progress point — start plus
-  actual duration — for tasks in progress or that should have started, so
-  it bends left where work is behind and right where it is ahead.
+- **The progress line** (View ▸ Progress Lines, on the Gantt since M89 and
+  printed): at the status date it joins each task's progress point — start
+  plus actual duration — for tasks in progress or that should have started,
+  so it bends left where work is behind and right where it is ahead. On
+  screen it falls on today when the project has no status date; the
+  printout draws it only with one.
 - **Recurring tasks** (`recurring_tasks.h`; Task ▸ Insert ▸ Recurring
   Task…): a summary flagged recurring whose subtasks are the occurrences —
   daily (every N days, or working days), weekly on days, monthly or yearly
@@ -309,6 +311,38 @@ the field's kind) and **by Custom Field…** sorts by one (ascending or
 descending, the outline kept). The rows they leave — without what a collapsed summary hides —
 are the rows of the task sheet, the Gantt views, the Network Diagram, Task
 Usage and the printout; the Calendar takes the filter.
+
+## Group By, Highlight and the planning bars (`plan_groups.h`, M89)
+
+View ▸ **Group By** bands the view's tasks by a field's value, as Project's
+groups do ([D-097](decisions.md#d-097-adopt-qindatks-m85-controls-qindaoffice-builds-against-qindatk-8e402c7-dev-prefix-until-r18-is-released)):
+Complete and Incomplete Tasks (not started, in progress, complete),
+Constraint Type, Critical, Duration, Milestones, Priority (highest first),
+Resource Names, Status (Complete, On Schedule, Late, Future Task against the
+status date), Auto v. Manually Scheduled, Active v. Inactive and **Custom
+Field…** (a custom field's value, tasks without one last). Bands come in
+their value's order and keep the sort and filter inside; summary tasks are
+left out while grouped. Each band is a group header row (QindaTK D-312) in
+the task sheet and the Gantt alike — its name, the number of tasks, and in
+the sheet its rollups (earliest start, latest finish, the working time
+between them, work, cost, % complete weighted by duration); its chevron
+(or Return, Space, Left/Right) hides or shows its tasks in both. Grouping
+and collapsing are view state: not undoable, not saved; No Group returns
+to the outline. The Network Diagram, Task Usage and the printout list the
+grouped tasks band by band, without the bands.
+
+View ▸ **Highlight** marks the tasks a filter would keep (Critical,
+Incomplete, Completed, Late, Slipping, Milestones, Summary Tasks, Tasks With
+Deadlines) with a tint in the sheet and hides nothing; No Highlight clears
+it.
+
+**On the Gantt (M89, QindaTK D-313)**, as on paper: deadlines as arrows
+(green, red once the task finishes after its deadline); with Gantt Chart
+Format ▸ Slack, total slack to the late finish and free slack after the
+bar; the progress point inside an in-progress bar and View ▸ Progress
+Lines; a split task's pieces; and Gantt Chart Format ▸ **Second Baseline**,
+a lane under the first showing a second baseline (Baseline 1 unless another
+is picked) — Project's Multiple Baselines Gantt.
 
 ## Network Diagram (`network_layout.h`, `network_print.h`, M79)
 
@@ -530,9 +564,10 @@ duration, work, finish, resources and % complete come from its subtasks.
   **Leveling Gantt** (the Delay table; pre-leveled bars; the delay after
   the bar), the **Network Diagram** and **Task Usage** (hours per task and
   per assignment, by day or week). Each sheet view keeps its own table, as
-  in Project. QindaTK's GanttView draws no slack bars or deadline markers:
-  with Slack on, the window writes the total slack after the bar; the
-  printout draws both.
+  in Project. Since M89 the Gantt draws slack and free slack (with Slack
+  on, and the total slack written after the bar), deadline markers, split
+  pieces, the progress point and line and a second baseline lane, as the
+  printout does; with Group By its bands lead their tasks (above).
 - **Ribbon**: File · Task · Resource · Report · Project · View and the
   contextual Gantt Chart Format tab (for the three Gantt views).
 - **Printing**: Print, Print Preview and Export PDF render the Gantt
@@ -577,7 +612,12 @@ duration, work, finish, resources and % complete come from its subtasks.
   `planRecurringInfoAction`; `planCustomFieldsAction`,
   `planRescheduleWorkAction`; view `planTableCustomAction`,
   `planFilterCustomAction`, `planSortCustomAction`,
-  `planShowProgressLinesAction`; files `planImportTasksAction`.
+  `planShowProgressLinesAction`; files `planImportTasksAction`. M89:
+  Group By `planGroup{None,Complete,Constraint,Critical,Duration,Milestones,Priority,Resource,Status,Mode,Active,Custom}Action`
+  (radio), Highlight
+  `planHighlight{None,Critical,Incomplete,Completed,Late,Slipping,Milestones,Summary,Deadlines}Action`
+  (radio), `planShowBaseline2Action` and `planBaseline2Shown0Action` …
+  `planBaseline2Shown10Action` (radio).
 - **M83 dialogs**: Task Information has six pages (General, Predecessors,
   Resources — each assignment's units and work —, Advanced — task type,
   effort driven —, Notes, Custom Fields); Custom Fields (`CustomFieldsDialog.qml`:

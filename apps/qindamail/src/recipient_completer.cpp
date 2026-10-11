@@ -38,10 +38,9 @@ QString RecipientCompleter::request(const QString &query)
         for (QVariant &value : candidates) {
             QVariantMap candidate = value.toMap();
             if (!candidate.value(QStringLiteral("group")).toBool()) continue;
-            const QString label = tr("%1 (group)").arg(candidate.value(QStringLiteral("name")).toString());
-            if (m_groups.size() > 512) m_groups.clear();
-            m_groups.insert(label.simplified(), candidate.value(QStringLiteral("contactId")).toString());
-            candidate.insert(QStringLiteral("label"), label);
+            // The entry keeps its contactId: the composer's validator gets
+            // the chosen entry itself (QindaTK D-314).
+            candidate.insert(QStringLiteral("label"), tr("%1 (group)").arg(candidate.value(QStringLiteral("name")).toString()));
             value = candidate;
         }
         emit finished(id, {{QStringLiteral("candidates"), candidates}});
@@ -53,8 +52,6 @@ QString RecipientCompleter::groupIdFor(const QString &text) const
 {
     if (m_service == nullptr) return {};
     const QString wanted = text.simplified();
-    const QString id = m_groups.value(wanted);
-    if (!id.isEmpty()) return id;
     for (const QVariant &value : m_service->contacts()->search(wanted, 50)) {
         const QVariantMap contact = value.toMap();
         if (contact.value(QStringLiteral("isGroup")).toBool()
@@ -64,12 +61,16 @@ QString RecipientCompleter::groupIdFor(const QString &text) const
     return {};
 }
 
-QVariantList RecipientCompleter::expand(const QString &text)
+QVariantList RecipientCompleter::expand(const QString &text) const
 {
-    const QString id = groupIdFor(text);
-    if (id.isEmpty()) return {};
+    return expandGroup(groupIdFor(text));
+}
+
+QVariantList RecipientCompleter::expandGroup(const QString &contactId) const
+{
+    if (m_service == nullptr || contactId.isEmpty()) return {};
     QVariantList out;
-    for (const QString &recipient : m_service->contacts()->expandGroup(id).value(QStringLiteral("recipients")).toStringList())
+    for (const QString &recipient : m_service->contacts()->expandGroup(contactId).value(QStringLiteral("recipients")).toStringList())
         out.append(QVariantMap{{QStringLiteral("label"), recipient}, {QStringLiteral("valid"), true}});
     return out;
 }

@@ -109,9 +109,6 @@ public:
 
 signals:
     void galleryChanged();
-    // idsAboutToChange comes first: the window keeps the ribbon's tab across
-    // the change (ShowWindow.qml says why).
-    void idsAboutToChange();
     void idsChanged();
     void reuseChanged();
     void reuseFileRequested();

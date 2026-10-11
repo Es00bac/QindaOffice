@@ -31,14 +31,18 @@ Tk.FormGroup {
     readonly property bool enabled_: section.forced || syncSwitch.checked
     readonly property string password: passwordField.text
 
+    // The user's choice: the header's toggle, and load() for an account.
+    property bool folded: true
+
     objectName: "addressBookSection"
     title: qsTr("Contacts (CardDAV)")
     collapsible: !section.forced
-    // AGENT-GUARD: set imperatively (load(), onForcedChanged), never bound:
-    // the header writes `collapsed` back when it is clicked, which would
-    // silently drop a binding and leave a carddav account's fields hidden.
-    collapsed: true
-    onForcedChanged: if (section.forced) section.collapsed = false
+    // M89 (QindaTK D-317): `collapsed` stays bound — the header offers its
+    // toggle through `toggled` first and writes nothing while the binding
+    // answers it — so a carddav account's fields always show (M76 set it
+    // imperatively because the header wrote it back over the binding).
+    collapsed: !section.forced && section.folded
+    onToggled: function(collapsed) { section.folded = collapsed }
 
     function load(contacts, address) {
         const c = contacts || {}
@@ -51,7 +55,7 @@ Tk.FormGroup {
         section.status = section.found.length > 0 ? qsTr("%n address book(s)", "", section.found.length) : ""
         section.failed = false
         section.discoverId = ""
-        section.collapsed = !section.enabled_
+        section.folded = !section.enabled_
     }
     function suggestUrl() {
         if (urlField.text.trim().length === 0 && section.service !== null && section.emailAddress.indexOf("@") > 0)

@@ -15,7 +15,9 @@ import QindaOffice.Mail.App
 // request id is acknowledged with the result's state. To / Cc / Bcc suggest
 // recipients from the address book and from mail (RecipientCompleter, M64).
 // M76 (D-085): a contact group picked from the suggestions, or its name
-// typed, becomes its members in that field (RecipientCompleter.expand).
+// typed, becomes its members in that field. M89 (D-097): the fields take
+// QindaTK's two-argument validator (D-314), so a picked group is known by
+// the suggestion chosen (its contact id), never by its label.
 Tk.AppWindow {
     id: composerWindow
 
@@ -39,15 +41,27 @@ Tk.AppWindow {
     function uuid() {
         return "att-xxxxxxxx-xxxx".replace(/x/g, function() { return (Math.random() * 16 | 0).toString(16) })
     }
-    // AGENT-NOTE: the field's address validator turns a group suggestion into
-    // one invalid token (a group has no address); it is replaced here, on a
-    // later turn, never inside the field's own edit.
+    // The fields' validator (QindaTK D-314: declaring two parameters, it gets
+    // the chosen suggestion, `{label}` for typed text): a group suggestion
+    // becomes one token "group:<contactId>"; anything else is an address,
+    // as the composer's own validator reads it.
+    function checkRecipient(label, suggestion) {
+        if (suggestion && suggestion.group === true && String(suggestion.contactId || "").length > 0)
+            return { label: String(suggestion.label || label), value: "group:" + suggestion.contactId, valid: false,
+                     error: qsTr("A contact group: its members take its place") }
+        return composer.checkRecipient(label)
+    }
+    // AGENT-NOTE: a group's token has no address (an invalid token); it is
+    // replaced here, on a later turn, never inside the field's own edit —
+    // by the id the validator kept, or a typed group name.
     function expandGroups() {
         for (const field of [composer.toField, composer.ccField, composer.bccField]) {
             const tokens = field.tokens || []
             for (let i = 0; i < tokens.length; ++i) {
                 if (tokens[i].valid !== false) continue
-                const members = composerWindow.completer.expand(String(tokens[i].label || ""))
+                const value = String(tokens[i].value || "")
+                const members = value.indexOf("group:") === 0 ? composerWindow.completer.expandGroup(value.slice(6))
+                                                              : composerWindow.completer.expand(String(tokens[i].label || ""))
                 if (members.length === 0) continue
                 field.removeAt(i)
                 field.appendCandidates(members)
@@ -129,9 +143,10 @@ Tk.AppWindow {
                                          saved && saved.ok !== false ? qsTr("Draft saved") : String(saved ? saved.error : ""))
                 }
                 Component.onCompleted: {
-                    toField.completionProvider = composerWindow.completer
-                    ccField.completionProvider = composerWindow.completer
-                    bccField.completionProvider = composerWindow.completer
+                    for (const field of [toField, ccField, bccField]) {
+                        field.completionProvider = composerWindow.completer
+                        field.validator = composerWindow.checkRecipient // two arguments (M89)
+                    }
                 }
                 onAttachmentAddRequested: function(requestId) { attachDialog.requestId = requestId; attachDialog.open() }
                 onAttachmentRemoveRequested: function(requestId, attachmentId) {

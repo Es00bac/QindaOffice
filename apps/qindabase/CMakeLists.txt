@@ -39,8 +39,8 @@ set(qindabase_qml
     qml/MacroActionRow.qml
     qml/MacroRunner.qml
     qml/FormView.qml
-    qml/FormLookups.qml
-    qml/FormControls.qml
+    qml/FormDesignBridge.qml
+    qml/FormSubform.qml
     qml/FormControlDialog.qml
     qml/ReportView.qml
     qml/ReportHeaderBar.qml
@@ -88,6 +88,7 @@ qt_add_qml_module(qindabase_app
         src/base_service_access_tools.cpp
         src/base_service_files.cpp
         src/base_service_form_controls.cpp
+        src/base_service_form_layout.cpp
         src/base_service_forms.cpp
         src/base_service_import.cpp
         src/base_service_io.cpp

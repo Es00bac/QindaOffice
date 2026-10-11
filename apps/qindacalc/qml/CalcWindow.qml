@@ -158,10 +158,32 @@ OfficeWindow {
                     Tk.TextField {
                         id: formulaField
                         objectName: "formulaField"
+                        // M89 (D-097): Formula AutoComplete — the functions
+                        // (with their arguments), names, tables and columns
+                        // for the name at the cursor (CalcHost
+                        // formulaCompletions); a choice replaces that name.
+                        property var completion: ({ from: -1, to: -1, entries: [] })
+                        function complete() { completion = window.calc.formulaCompletions(text, cursorPosition) }
                         small: true
                         mono: true
                         Tk.Flex.grow: 1
                         text: window.calc.formulaText
+                        suggestions: activeFocus ? completion.entries : []
+                        onTextEdited: complete()
+                        onCursorPositionChanged: if (activeFocus) complete()
+                        onActiveFocusChanged: if (!activeFocus) completion = ({ from: -1, to: -1, entries: [] })
+                        onSuggestionChosen: function(entry) {
+                            const from = completion.from
+                            if (from < 0) return
+                            text = text.slice(0, from) + entry.insert + text.slice(completion.to)
+                            cursorPosition = from + String(entry.insert).length
+                            // A chosen name may still match itself. Leave
+                            // the list closed until the next edit so Escape
+                            // cancels the formula rather than dismissing that
+                            // same completion for a second time.
+                            completion = ({ from: -1, to: -1, entries: [] })
+                            closeSuggestions()
+                        }
                         onAccepted: { window.calc.commitFormulaBar(text); gridHost.grid.forceActiveFocus() }
                         // Ctrl+Shift+Enter: an array formula (M69, D-078).
                         Keys.onPressed: function(event) {
@@ -172,7 +194,20 @@ OfficeWindow {
                                 event.accepted = true
                             }
                         }
-                        Keys.onEscapePressed: { text = window.calc.formulaText; gridHost.grid.forceActiveFocus() }
+                        // Escape closes the list first, as Excel's does; then cancels.
+                        // AGENT-NOTE: QindaTK's TextField answers Escape too, and its
+                        // handler runs first and has already closed the list, so the
+                        // list's entries (cleared here) say whether one was showing.
+                        Keys.onEscapePressed: function(event) {
+                            event.accepted = true
+                            if (suggestionCount > 0) {
+                                completion = ({ from: -1, to: -1, entries: [] })
+                                closeSuggestions()
+                                return
+                            }
+                            text = window.calc.formulaText
+                            gridHost.grid.forceActiveFocus()
+                        }
                         Connections { target: window.calc; function onCursorChanged() { if (!formulaField.activeFocus) formulaField.text = window.calc.formulaText } }
                     }
                 }

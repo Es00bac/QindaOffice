@@ -117,6 +117,7 @@ void PlanService::rebuildVisible()
     const Engine::Minutes reference = Engine::reportReference(p, m_today);
     m_visible = Engine::filterRows(p, open, m_filter, reference, m_relatedSummaries);
     m_filtered = Engine::filterRows(p, order, m_filter, reference, m_relatedSummaries);
+    rebuildGroups(); // M89: Group By and Highlight (plan_service_groups.cpp)
 }
 
 void PlanService::rebuildNetwork()

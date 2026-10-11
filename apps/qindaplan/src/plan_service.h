@@ -29,16 +29,21 @@
 // plan_service_fields.cpp (M83: task types, assignments' units and work,
 // custom fields with their filter and sort), plan_service_schedule.cpp
 // (M83: splits, recurring tasks, Reschedule Uncompleted Work, the import,
-// recurring calendar exceptions and work weeks).
+// recurring calendar exceptions and work weeks), plan_service_groups.cpp
+// (M89: Group By and Highlight, the rows the sheet and the Gantt share).
 //
 // AGENT-CONTRACT (M79, the rows a view shows): `visibleRows()` is the
 // project's tasks in the sort order (outline kept), without those under a
 // collapsed summary, through the filter (with their summary rows when
 // relatedSummaries) — the sheet, the Gantt, the Network Diagram, Task Usage
 // and the printout all show exactly these. The Calendar view takes the
-// filter but not the collapse (it has no outline).
+// filter but not the collapse (it has no outline). M89 (D-097): with a
+// group (groupBy), summary tasks are left out, the tasks come band by band
+// (plan_groups.h) and a collapsed band's tasks are not visible; the sheet
+// and the Gantt add each band's header row before its tasks.
 
 #include "network_layout.h"
+#include "plan_groups.h"
 #include "plan_types.h"
 #include "plan_views.h"
 
@@ -48,6 +53,7 @@
 #include <qindatk/resource_plan_model.h>
 #include <qindatk/selection_model.h>
 
+#include <QColor>
 #include <QDate>
 #include <QLocale>
 #include <QObject>
@@ -111,8 +117,19 @@ class PlanService : public QObject {
     Q_PROPERTY(QString ganttStyle READ ganttStyle WRITE setGanttStyle NOTIFY viewChanged)
     Q_PROPERTY(int ganttBaseline READ ganttBaseline WRITE setGanttBaseline NOTIFY viewChanged)
     Q_PROPERTY(bool showSlack READ showSlack WRITE setShowSlack NOTIFY viewChanged)
-    // M83: Project's progress lines (paper: QindaTK's GanttView draws none).
+    // M83: Project's progress lines; M89 (D-097) drawn on screen too, at the
+    // status date (else today): `progressLines` is GanttView's list.
     Q_PROPERTY(bool showProgressLines READ showProgressLines WRITE setShowProgressLines NOTIFY viewChanged)
+    Q_PROPERTY(QVariantList progressLines READ progressLines NOTIFY changed)
+    // M89 (D-097): Group By (plan_groups.h ids), Highlight (filter ids;
+    // `highlightFill` is the theme colour QML hands in for the marked rows)
+    // and the second baseline lane.
+    Q_PROPERTY(QString groupBy READ groupBy WRITE setGroupBy NOTIFY viewChanged)
+    Q_PROPERTY(QString groupTitle READ groupTitle NOTIFY viewChanged)
+    Q_PROPERTY(QString highlight READ highlight NOTIFY viewChanged)
+    Q_PROPERTY(QColor highlightFill READ highlightFill WRITE setHighlightFill NOTIFY viewChanged)
+    Q_PROPERTY(bool showBaseline2 READ showBaseline2 WRITE setShowBaseline2 NOTIFY viewChanged)
+    Q_PROPERTY(int ganttBaseline2 READ ganttBaseline2 WRITE setGanttBaseline2 NOTIFY viewChanged)
     Q_PROPERTY(QindaTK::ResourcePlanModel *taskUsageModel READ taskUsageModel CONSTANT)
     Q_PROPERTY(QVariantList taskUsageRows READ taskUsageRows NOTIFY changed)
     Q_PROPERTY(QSizeF networkSize READ networkSize NOTIFY changed)
@@ -203,6 +220,31 @@ public:
     Q_INVOKABLE int visibleRowCount() const { return int(m_visible.size()); }
     Q_INVOKABLE QString networkTaskAt(double x, double y) const;
     Q_INVOKABLE QRectF networkBoxOf(const QString &taskId) const;
+
+    // ---- M89 (D-097): Group By, Highlight, planning bars
+    // (plan_service_groups.cpp). The sheet and the Gantt show the same
+    // rows: with a group, each band's header row ("group:<key>", QindaTK
+    // D-312) then, unless it is collapsed, its tasks. View state only. ----
+    [[nodiscard]] QString groupBy() const { return m_groupBy; }
+    void setGroupBy(const QString &id);
+    [[nodiscard]] QString groupTitle() const;
+    // Group ▸ Custom Field…: bands by a custom field's value.
+    Q_INVOKABLE QVariantMap setCustomGroup(const QString &field);
+    // A group header row of the sheet (EditableGrid.groupHeader): {label,
+    // summary, collapsed, level, values: {column: text}}, null otherwise.
+    Q_INVOKABLE QVariant groupHeader(const QString &rowId) const;
+    // The chevron of either view (groupToggled): the band shows or hides its tasks.
+    Q_INVOKABLE void setGroupCollapsed(const QString &groupId, bool collapsed);
+    [[nodiscard]] QString highlight() const { return m_highlight; }
+    Q_INVOKABLE QVariantMap applyHighlight(const QString &id); // "none" or a filter id without a question
+    [[nodiscard]] bool isHighlighted(int row) const { return m_highlighted.contains(row); }
+    [[nodiscard]] QColor highlightFill() const { return m_highlightFill; }
+    void setHighlightFill(const QColor &fill);
+    [[nodiscard]] bool showBaseline2() const { return m_showBaseline2; }
+    void setShowBaseline2(bool on);
+    [[nodiscard]] int ganttBaseline2() const { return m_ganttBaseline2; }
+    void setGanttBaseline2(int number); // 0–10
+    [[nodiscard]] QVariantList progressLines() const;
 
     [[nodiscard]] QString currentTaskId() const;
     void setCurrentTaskId(const QString &taskId);
@@ -402,6 +444,14 @@ private:
     void rebuildNetwork();
     [[nodiscard]] QVariantMap ganttRow(const Engine::Project &p, int index, const QSet<int> &shown,
                                        const QHash<int, QString> &guidByUid) const;
+    // plan_service_groups.cpp (M89): the bands of the visible rows and the
+    // sheet/Gantt rows they make; a band's Gantt row from `p`'s tasks.
+    void rebuildGroups();
+    [[nodiscard]] QStringList displayRowIds() const;
+    [[nodiscard]] QVariantMap groupGanttRow(const Engine::Project &p, int group) const;
+    // M89: the planning bars of a task row (QindaTK D-313): slack, deadline,
+    // progress point, split pieces, the second baseline.
+    void addPlanningBars(QVariantMap *row, const Engine::Project &p, int index) const;
     // A leveling run's outcome as text and a toast (plan_service_resources.cpp).
     QVariantMap leveled(const QVariantMap &applied, const Engine::LevelingResult &result);
 
@@ -439,6 +489,22 @@ private:
     bool m_showSlack = false;
     bool m_showProgressLines = false; // M83
     QList<int> m_filtered; // filter only (the Calendar view)
+    // M89 (D-097): the rows the sheet and the Gantt show — a task, or a
+    // band's header (task -1) — the bands, which are collapsed, Highlight.
+    struct DisplayRow {
+        int task = -1;
+        int group = -1;
+    };
+    QList<DisplayRow> m_display;
+    QList<Engine::TaskGroup> m_groups;
+    QString m_groupBy = QStringLiteral("none");
+    QSet<QString> m_collapsedGroups;
+    QHash<QString, int> m_groupRows; // a band's row id → its index in m_groups
+    QString m_highlight = QStringLiteral("none"); // a filter id (plan_views.h) or "none"
+    QSet<int> m_highlighted;
+    QColor m_highlightFill;
+    bool m_showBaseline2 = false;
+    int m_ganttBaseline2 = 1;
     QindaTK::ResourcePlanModel *m_taskUsage = nullptr;
     QVariantList m_taskUsageRows;
     Engine::NetworkLayout m_network;

@@ -329,27 +329,45 @@ step and opened — or opened in the designer.
 ## Forms
 
 A form is a single-record view of one table on QindaTK's `FormDesigner`:
-labels, order and shown fields are the design (one undoable step each in
-the designer; Save Layout stores it). QindaBase hands the designer a
-*form mirror* — an empty scratch table with the same columns where lookup
-fields are text, so the form shows and accepts the related record's name —
+its positioned controls (M89, below), field labels, order and shown fields
+are the design (one undoable step each; Save Layout stores it). QindaBase
+hands the designer a *form mirror* — an empty scratch table with the same
+columns where lookup fields are text, so the form shows and accepts the
+related record's name —
 and saves records through the engine (typed, validated, one undo step):
 the designer shows the engine's refusals as its validation messages. The
 record bar moves first / previous / n of N / next / last, adds and
 deletes. The **form wizard** picks the table, fields and title.
 
-**M80** (`base_form_controls.h`): **lookup fields are combo boxes** of the
-related records — or **list boxes**, chosen in Design with whether each
-shows — above the designer's fields (QindaTK's FormDesigner draws text
-fields and check boxes only); a choice on a saved record is saved at once
-(one undo step), on a new record it is saved with it. **Subforms** (Form &
-Report ▸ Add Subform) show the records related to this one through a
-relationship whose parent is the form's table, as an editable datasheet
-under the record: its link field is hidden and set on new records; a form
-shows up to four. **Command buttons** (Add Button) run a saved macro or one
-action (open a form, report, query or table, apply a filter, go to a
-record, …) — Access's On Click. A macro's ApplyFilter narrows the records
-the navigator walks (a "Filtered" chip clears it).
+**M89** ([D-097](decisions.md#d-097-adopt-qindatks-m85-controls-qindaoffice-builds-against-qindatk-8e402c7-dev-prefix-until-r18-is-released),
+`base_form_layout.h`, `base_service_form_layout.cpp`, `FormDesignBridge.qml`,
+`FormSubform.qml`): **a form is laid out with positioned controls**, as in
+Access — QindaTK's FormDesigner (D-311) with a toolbox, a canvas (select,
+drag, eight resize handles, arrow-key nudges, snapped to the grid) and a
+property sheet. The controls: **labels**; **text boxes**, bound to a field
+or **calculated** (`=[amount] * 2`: an Access expression over the record,
+evaluated by the engine — `#Error` when it does not compile or totals);
+**combo and list boxes** — on a lookup field they list the related records
+(a name two records share is followed by its key) and the record stores the
+key, otherwise the Items typed in Properties (Row source is kept but not
+read); **check
+boxes**; **subforms** naming a form (its table's records, or a table's of
+that name, as an editable datasheet linked child field to master field —
+new rows join the record; a form shows up to four); **command buttons**
+whose Action is one of the macro actions below with its arguments, or
+`runMacro` with a saved macro (Access's On Click); **tab controls** (a
+control's "On page" puts it on a page); **images** (a `file:` or `data:`
+picture); **lines** and **rectangles**. Form & Report ▸ Add Subform (from a
+relationship) and Add Button (one action or a macro) add them too. Every
+finished gesture or committed property is **one undo step** of the layout;
+Save Layout stores it. A form saved before M89 — its shown fields in form
+order, M80's combo or list boxes, subforms and buttons — is **laid out
+once as it opens** in Access's stacked layout (a label column, a control
+column, subforms with their caption and buttons below); saving the layout
+marks the form `positioned` and drops M80's list, so nothing is laid out
+again. The form mirror holds lookup fields as text (the box shows the
+related record's label). A macro's ApplyFilter narrows the records the
+navigator walks (a "Filtered" chip clears it).
 
 ## Macros (M80)
 
@@ -586,8 +604,9 @@ every call returns a map with `ok` and `error`. Groups: database
 `deleteFormRecord`, `createReport`, `reportParameters`, `openReport`,
 `saveReportDesign`, `sourceFields`), M80 (`testValidationRules`,
 `accessSql`, `parseAccessSql`, `runMakeTable`, `macroDesign`,
-`newMacroDesign`, `checkMacro`, `saveMacro`, `whereRowIds`, `formControls`,
-`saveFormControls`, `lookupChoices`, `subformSheet`, `buildReport`,
+`newMacroDesign`, `checkMacro`, `saveMacro`, `whereRowIds`,
+`lookupChoices`, `subformSheet`, `buildReport`, M89's `lookupItems`,
+`evaluateFormExpression`, `subformChoices`, `subformTable`,
 `createLabels`, `previewLabels`, `openLabels`, `reportInfo`; the catalogs
 `inputMaskPresets`, `macroActions`, `labelProducts`, `parameterTypes`; the
 `labels` sheet), import (`csvProposal`, `importCsv`,

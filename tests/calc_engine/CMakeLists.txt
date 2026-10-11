@@ -52,3 +52,6 @@ qqo_add_calc_test(tst_calc_validation)
 # M82 (D-091): Excel's Custom Views — Add, Show, Delete, the table refusal
 # and structural edits.
 qqo_add_calc_test(tst_calc_views)
+# M89 (D-097): the formula bar's completion — functions with their
+# arguments, names, tables and columns.
+qqo_add_calc_test(tst_calc_completion)

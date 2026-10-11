@@ -10,8 +10,10 @@
 // The job streams: it scans the folder tree a few folders per event-loop
 // turn, then imports items in slices of ~40 ms (the mbox importer's rule),
 // reporting `progress`, `counts` and `currentFolder` as it goes; cancel()
-// stops at the next slice and keeps what was imported. Contacts are merged
-// into the address book once, at the end (one write of contacts.json).
+// stops at the next slice and keeps what was imported. Each slice's mail,
+// events and tasks go into the store as one change per collection
+// (LocalProductivityStore::upsertMany, M89). Contacts are merged into the
+// address book once, at the end (one write of contacts.json).
 //
 // AGENT-CONTRACT (PstImportDialog.qml, tst_qindamail_pst): start(url) → a
 // request id ("" when an import is already running, with lastError);
@@ -90,6 +92,8 @@ private:
     void scanStep();
     void importStep();
     void importItem(quint32 nid);
+    // M89: writes the slice's records, one store change per collection.
+    void flush();
     void finish(const QString &state, const QString &error);
     void setPhase(const QString &phase);
     [[nodiscard]] QString rootFolderFor(const QByteArray &recordKey, const QString &baseName) const;

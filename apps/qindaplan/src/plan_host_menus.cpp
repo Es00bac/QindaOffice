@@ -107,6 +107,7 @@ void PlanHost::insertMenus()
     view.append(MenuNode::submenu(QStringLiteral("planSortMenu"), tr("S&ort"),
                                   nodes({"planSortIdAction", "planSortStartAction", "planSortFinishAction",
                                            "planSortPriorityAction", "planSortCostAction", "planSortCustomAction"})));
+    view.append(groupMenuNodes()); // M89: Group By, Highlight, Second Baseline
     view.append(MenuNode::submenu(QStringLiteral("planTimescaleMenu"), tr("Time&scale"),
                                   nodes({"planTimescaleDaysAction", "planTimescaleWeeksAction",
                                            "planTimescaleMonthsAction", nullptr, "planGoToTodayAction"})));
@@ -207,6 +208,7 @@ void PlanHost::syncChecks()
     }
     action(QStringLiteral("planShowSlackAction"))->setChecked(m_service->showSlack());
     syncScheduleState(); // M83 (plan_host_schedule.cpp)
+    syncGroupChecks();   // M89 (plan_host_groups.cpp)
 }
 
 } // namespace QindaOffice::Apps::Plan

@@ -53,7 +53,12 @@ the text does not move when the editor opens or closes.
   picture.
 - **Undo** is per edit, on the page's one history: a run of typing, one
   format command, a paste, a table edit, a tag. Ctrl+Z inside the editor
-  keeps the editor open and the caret where it was.
+  keeps the editor open and the caret where it was; the editor's own Undo
+  and Redo reach the same history (M89: QindaTK's `undoRequested`, D-321).
+- Since M89 (D-097) the editor itself keeps its typing keys from the ink
+  tools' one-letter shortcuts (QindaTK D-320), deletes a whole table as one
+  step (D-322) and reports the highlight under the caret (D-322) — the app's
+  own key filter, table step and highlight reading are gone.
 - With nothing open, **Insert Table**, **Link** and every tag start a new
   note holding them, as OneNote does; the formatting commands are off.
 - Keys never clash: OneNote's keys that are the suite's zoom keys are left

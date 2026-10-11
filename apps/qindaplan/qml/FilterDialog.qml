@@ -8,7 +8,8 @@ import QindaOffice.Plan.App
 // M83 (D-092) Custom Field… (a custom field tested against a value) and
 // Sort ▸ by Custom Field… (ascending or descending, tasks without a value
 // last). Apply shows only those tasks (with their summary rows unless View ▸
-// Filter ▸ Show Related Summary Rows is off); All Tasks lifts it.
+// Filter ▸ Show Related Summary Rows is off); All Tasks lifts it. M89
+// (D-097): Group By ▸ Custom Field… (bands by a custom field's value).
 Tk.Dialog {
     id: dialog
 
@@ -17,13 +18,14 @@ Tk.Dialog {
     property var resources: []
     property var fields: []
     readonly property var tests: ["equals", "notEquals", "contains", "greater", "less", "isSet", "notSet"]
-    readonly property bool custom: filterId === "custom" || filterId === "customSort"
+    readonly property bool custom: filterId === "custom" || filterId === "customSort" || filterId === "customGroup"
     readonly property string test: tests[testBox.currentIndex] || "equals"
 
     objectName: "filterDialog"
     title: filterId === "resource" ? qsTr("Using Resource") : filterId === "dateRange" ? qsTr("Date Range")
-         : filterId === "custom" ? qsTr("Custom Field Filter") : qsTr("Sort by Custom Field")
-    primaryText: filterId === "customSort" ? qsTr("Sort") : qsTr("Apply")
+         : filterId === "custom" ? qsTr("Custom Field Filter") : filterId === "customGroup" ? qsTr("Group by Custom Field")
+         : qsTr("Sort by Custom Field")
+    primaryText: filterId === "customSort" ? qsTr("Sort") : filterId === "customGroup" ? qsTr("Group") : qsTr("Apply")
     secondaryText: qsTr("Cancel")
 
     function openFor(id) {
@@ -47,6 +49,7 @@ Tk.Dialog {
         const r = filterId === "resource" ? plan.applyFilter(filterId, { resourceUid: resources.length > 0 ? resources[resourceBox.currentIndex].uid : 0 })
                 : filterId === "dateRange" ? plan.applyFilter(filterId, { from: fromField.text, to: toField.text })
                 : filterId === "custom" ? plan.applyCustomFilter(field, test, valueField.text)
+                : filterId === "customGroup" ? plan.setCustomGroup(field)
                 : plan.setCustomSort(field, descendingSwitch.checked)
         if (!r.ok) {
             error.text = String(r.error || "")

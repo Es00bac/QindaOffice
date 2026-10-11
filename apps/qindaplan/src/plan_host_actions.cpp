@@ -57,6 +57,7 @@ void PlanHost::createActions()
     };
     // Views, tables, filters, sorts, baselines shown (plan_host_views.cpp).
     createViewActions();
+    createGroupActions(); // M89: Group By, Highlight, Second Baseline
     const QList<std::pair<const char *, const char *>> scales{{"planTimescaleDaysAction", "days"},
                                                               {"planTimescaleWeeksAction", "weeks"},
                                                               {"planTimescaleMonthsAction", "months"}};

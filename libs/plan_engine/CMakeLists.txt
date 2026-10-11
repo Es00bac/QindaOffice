@@ -66,6 +66,8 @@ add_library(plan_engine STATIC
     src/plan_reports.h
     src/plan_reports_costs.cpp
     src/plan_reports_p.h
+    src/plan_groups.cpp
+    src/plan_groups.h
     src/plan_resource_fields.cpp
     src/plan_time.cpp
     src/plan_time.h

@@ -25,10 +25,12 @@ QString guidOf(const Engine::Task &t)
 
 QVariantList PlanService::ganttRows(const Engine::Project &p) const
 {
-    // The view's rows (plan_service.h, M79: sorted, filtered, collapsed).
+    // The view's rows (plan_service.h, M79: sorted, filtered, collapsed;
+    // M89: grouped, a band's header row before its tasks).
     // AGENT-GUARD: a preview copy (a bar drag) has the committed project's
     // tasks in the same order, so the same indices give the same ids —
-    // GanttTaskModel requires that of a preview.
+    // GanttTaskModel requires that of a preview. The bands are the
+    // committed ones too (only their spans come from `p`).
     QSet<int> shown;
     for (int i : m_visible) {
         if (i < p.tasks.size()) {
@@ -39,10 +41,17 @@ QVariantList PlanService::ganttRows(const Engine::Project &p) const
     for (const Engine::Task &t : p.tasks) {
         guidByUid.insert(t.uid, guidOf(t));
     }
+    const bool grouped = m_groupBy != QLatin1String("none");
     QVariantList out;
-    for (int i : m_visible) {
-        if (i < p.tasks.size()) {
-            out.append(ganttRow(p, i, shown, guidByUid));
+    for (const DisplayRow &r : m_display) {
+        if (r.task < 0) {
+            out.append(groupGanttRow(p, r.group));
+        } else if (r.task < p.tasks.size()) {
+            QVariantMap row = ganttRow(p, r.task, shown, guidByUid);
+            if (grouped) {
+                row.insert(QStringLiteral("outlineLevel"), 1); // under its band
+            }
+            out.append(row);
         }
     }
     return out;
@@ -82,10 +91,11 @@ QVariantMap PlanService::ganttRow(const Engine::Project &p, int i, const QSet<in
                     {QStringLiteral("outlineLevel"), qMax(0, t.outlineLevel - 1)}};
     // M79: what Project's Gantt views write after a bar — resources (Gantt
     // Chart), % complete (Tracking Gantt), the leveling delay (Leveling
-    // Gantt) — and, with Slack on, the total slack (QindaTK's GanttView
-    // draws no slack bar; the printout does, gantt_print_extras.cpp).
+    // Gantt) — and, with Slack on, the total slack as text beside the bar
+    // the GanttView draws since M89 (addPlanningBars).
     const bool tracking = m_ganttStyle == QLatin1String("tracking");
     const bool leveling = m_ganttStyle == QLatin1String("leveling");
+    addPlanningBars(&row, p, i); // M89 (D-097): QindaTK D-313's bars
     if (m_showBarText || m_showSlack) {
         QString text;
         if (m_showBarText) {

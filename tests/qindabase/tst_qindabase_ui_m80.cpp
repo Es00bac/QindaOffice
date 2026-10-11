@@ -2,8 +2,8 @@
 // M80 (D-089) through the real window, on the Donors & Donations starter
 // seeded with 40 donors and 120 donations: the query designer's crosstab,
 // Access SQL view, parameters and make-table plan; validation and masks in
-// the table designer; the macro designer and a macro run; a form's lookup
-// combo boxes, subform and command button; Group, Sort and Total with the
+// the table designer; the macro designer and a macro run (a form's
+// controls are M89's: tst_qindabase_ui_m89); Group, Sort and Total with the
 // engine's exact totals and a PDF; mailing labels and their wizard. At
 // 1280 and 520 px; QQO_GRAB_DIR saves PNGs.
 
@@ -255,54 +255,6 @@ private slots:
             QObject *form = scene.view("formView");
             QCOMPARE(form->property("formName").toString(), str("Donation Entry"));
             QTRY_COMPARE(form->property("position").toInt(), -1);
-        }
-    }
-
-    void formLookupsSubformAndButton()
-    {
-        for (const int width : {1280, 520}) {
-            SCENE(width);
-            scene.open("form", "Donor");
-            scene.settle(400);
-            QVERIFY(scene.visible("formSubform_subform1"));
-            QVERIFY(scene.visible("formButton_button1"));
-            const int gifts = scene.host.base()->file()->db().scalar(str("SELECT count(*) FROM donations WHERE donor_id = 1")).toInt();
-            QCOMPARE(scene.host.base()->subformSheet(0)->recordCount(), gifts);
-            QindaOffice::Test::saveGrab(scene.window, str("qindabase_formcontrols_%1").arg(width));
-            scene.open("form", "Donation Entry");
-            scene.settle(400);
-            QVERIFY(scene.visible("formCombo_donor_id"));
-            QVERIFY(scene.item(str("formCombo_donor_id"))->property("currentText").toString().contains(QLatin1Char(' ')));
-            QindaOffice::Test::saveGrab(scene.window, str("qindabase_formlookups_%1").arg(width));
-            if (width != 1280) {
-                continue;
-            }
-            // A combo box choice is saved at once, one undo step.
-            QObject *form = scene.view("formView");
-            const QVariantList choices = scene.host.base()->lookupChoices(str("donations"), str("donor_id"));
-            const qint64 rowid = form->property("rowIds").toList().first().toLongLong();
-            scene.call(form, "setLookup", str("donor_id"), choices.last().toMap().value(str("value")));
-            QCOMPARE(scene.host.base()->file()->db().scalar(str("SELECT donor_id FROM donations WHERE id = ?"), {rowid}),
-                     choices.last().toMap().value(str("value")));
-            // The Donor form's button runs its macro.
-            scene.open("form", "Donor");
-            scene.settle(300);
-            QMetaObject::invokeMethod(scene.item(str("formButton_button1")), "clicked");
-            QTRY_COMPARE(form->property("formName").toString(), str("Donation Entry"));
-            QTRY_COMPARE(form->property("position").toInt(), -1);
-            // Add Button: the dialog, then one undo step.
-            scene.open("form", "Donor");
-            scene.settle(300);
-            QVERIFY(scene.trigger("baseFormAddButtonAction"));
-            QObject *dialog = scene.view("formControlDialog");
-            QTRY_VERIFY(dialog->property("opened").toBool());
-            dialog->setProperty("caption", str("All donations"));
-            dialog->setProperty("step", QVariantMap{{str("action"), str("openTable")},
-                                                    {str("arguments"), QVariantMap{{str("table"), str("donations")}}}});
-            scene.settle(300);
-            QindaOffice::Test::saveGrab(scene.window, str("qindabase_formbuttondialog_1280"));
-            QMetaObject::invokeMethod(dialog, "accept");
-            QTRY_COMPARE(form->property("controls").toList().size(), 3);
         }
     }
 

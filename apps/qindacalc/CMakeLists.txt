@@ -63,6 +63,7 @@ qt_add_qml_module(qindacalc_app
         src/calc_clipboard.cpp src/calc_clipboard.h
         src/calc_host.cpp src/calc_host.h
         src/calc_host_ai.cpp
+        src/calc_host_completion.cpp
         src/calc_tools.cpp src/calc_tools.h
         src/calc_agent.h src/calc_agent_state.cpp src/calc_agent_actions.cpp
         src/calc_host_format.cpp

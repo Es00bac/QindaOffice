@@ -192,18 +192,27 @@ public:
     Q_INVOKABLE QVariantMap saveReportDesign(const QString &name, const QVariantMap &design);
     Q_INVOKABLE QVariantList sourceFields(const QString &kind, const QString &name) const;
 
-    // ---- M80 form controls (base_service_form_controls.cpp) ----
-    // {ok, table, controls, lookups:[{name, label, control, hidden}],
-    // subformChoices, buttonChoices}
-    Q_INVOKABLE QVariantMap formControls(const QString &form) const;
-    // Saves the form's subforms and buttons and its lookups' controls
-    // (combo or list, shown) as one undo step, after checking them.
-    Q_INVOKABLE QVariantMap saveFormControls(const QString &form, const QVariantList &controls,
-                                             const QVariantList &lookups);
+    // ---- form controls (M80 base_service_form_controls.cpp; M89, D-097,
+    // base_service_form_layout.cpp: QindaTK's positioned controls) ----
     // A lookup field's choices [{value, text}] (the related records).
     Q_INVOKABLE QVariantList lookupChoices(const QString &table, const QString &field) const;
     // The datasheet a form's subform `index` (0..3) shows (owned here).
     Q_INVOKABLE QindaOffice::Apps::Base::DatasheetModel *subformSheet(int index);
+    // A combo or list box's items on a lookup field: {ok, items (labels,
+    // base_form_layout.h lookupLabel), keys, lookup (false: not a lookup)}.
+    Q_INVOKABLE QVariantMap lookupItems(const QString &table, const QString &field) const;
+    // Every lookup field of `table` at once: {field: {items, keys, required}}.
+    Q_INVOKABLE QVariantMap formLookups(const QString &table) const;
+    // A calculated control's value over a record as the form shows it:
+    // {ok, text} or {ok:false, error}.
+    Q_INVOKABLE QVariantMap evaluateFormExpression(const QString &table, const QString &expression,
+                                                   const QVariantMap &record) const;
+    // Add Subform's choices: one per relationship whose parent is the
+    // form's table, [{caption, table, formName, linkChild, linkParent}].
+    Q_INVOKABLE QVariantList subformChoices(const QString &form) const;
+    // The table a subform control's form name shows: {ok, table} — a form's
+    // source table, or a table of that name.
+    Q_INVOKABLE QVariantMap subformTable(const QString &formName) const;
 
     // ---- M80 report output (base_service_report_output.cpp) ----
     // Evaluates the report map (QindaTK's design report) over the records

@@ -115,10 +115,11 @@ Result writeFormMirror(const BaseFile &file, const QString &path, const QString 
         if (c.type == FieldType::File) {
             continue; // the form shows files beside the designer (FileFieldPanel.qml), not in it
         }
-        if ((c.lookup.isSet() && !c.lookup.displayField.isEmpty()) || c.lookup.isValueList()) {
-            continue; // M80: a lookup (M86: a value list too) is a combo or list box beside the designer (FormLookups.qml)
-        }
-        QString sql = quoteIdentifier(c.name) + QLatin1Char(' ') + declaredType(c.type);
+        // M89 (D-097): a lookup is a combo or list box ON the form, bound to
+        // the field; the mirror holds it as TEXT so the box's label (the
+        // related record's name) is a valid value (base_form_layout.h).
+        const bool lookup = (c.lookup.isSet() && !c.lookup.displayField.isEmpty()) || c.lookup.isValueList();
+        QString sql = quoteIdentifier(c.name) + QLatin1Char(' ') + (lookup ? QStringLiteral("TEXT") : declaredType(c.type));
         if (c.primaryKey && def->primaryKey().size() == 1) {
             sql += QStringLiteral(" PRIMARY KEY");
         } else if (c.required) {

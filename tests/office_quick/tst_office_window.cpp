@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "desktop_appearance.h"
 #include "document_host.h"
+#include "menu_source.h"
 #include "standard_actions.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
+#include <QQmlContext>
+#include <QQmlExpression>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QPointer>
@@ -164,6 +167,62 @@ OfficeWindow {
         host.actions()->trigger(QString::fromLatin1(ActionId::kViewShowMenuBar));
         QTRY_VERIFY(!host.localMenuVisible());
         QTRY_VERIFY(!menuBar->isVisible());
+        delete window;
+    }
+
+    // M89 (D-097, QindaTK D-315): a narrow window's local bar moves its
+    // trailing menus into "»" — every menu still reachable there, in the
+    // tree's order, and back when the window widens — while the panel's
+    // export, built from the tree, lists every menu whatever the bar shows.
+    void narrowMenuBarOverflowsAndTheExportKeepsEveryMenu()
+    {
+        QQmlApplicationEngine engine;
+        engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_ROOT));
+        DocumentHost host;
+        for (const char *id : {"one", "two", "three", "four", "five", "six"}) {
+            host.menuTree()->insertMenuBefore(
+                QStringLiteral("aiMenu"),
+                MenuNode::submenu(QStringLiteral("%1Menu").arg(QLatin1String(id)), QStringLiteral("Menu &%1").arg(QLatin1String(id)),
+                                  {MenuNode::action(QString::fromLatin1(ActionId::kFileNew))}));
+        }
+        QQmlComponent component(&engine);
+        component.setData(R"qml(
+import QtQuick
+import QindaOffice.Shell
+OfficeWindow { width: 1280; height: 400
+    Rectangle { objectName: "content"; color: "white" } }
+)qml", QUrl(QStringLiteral("inline.qml")));
+        QVERIFY2(!component.isError(), qPrintable(component.errorString()));
+        QObject *object = component.createWithInitialProperties({{QStringLiteral("host"), QVariant::fromValue(&host)}});
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *window = qobject_cast<QQuickWindow *>(object);
+        host.attachWindow(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QQuickItem *bar = findItem(window->contentItem(), QStringLiteral("officeMenuBar"));
+        QVERIFY(bar != nullptr);
+        const int menus = int(host.menuTree()->menus().size());
+        QTRY_COMPARE(bar->property("count").toInt(), menus);
+        QCOMPARE(bar->property("overflowCount").toInt(), 0);
+
+        window->resize(520, 400);
+        QTRY_VERIFY(bar->property("overflowCount").toInt() > 0);
+        // Shown: the leading menus and "»" last; moved: the rest, in order.
+        const int shown = bar->property("count").toInt() - 1;
+        QCOMPARE(shown + bar->property("overflowCount").toInt(), menus);
+        QVERIFY(bar->property("overflowMenu").value<QObject *>() != nullptr);
+        QQmlExpression lastIsOverflow(qmlContext(bar), bar, QStringLiteral("menuAt(count - 1) === overflowMenu"));
+        QVERIFY(lastIsOverflow.evaluate().toBool());
+        const QVariantList moved = bar->property("overflowMenus").toList();
+        QCOMPARE(moved.last().value<QObject *>()->objectName(), QStringLiteral("menu_helpMenu"));
+        // The export lists every top-level menu of the tree all the same.
+        ActionModelMenuSource source(host.menuTree(), host.actions(), QUuid::createUuid());
+        const auto snapshot = source.snapshot();
+        QVERIFY2(snapshot.complete, qPrintable(snapshot.defectCode));
+        QCOMPARE(int(snapshot.tree.items.size()), menus);
+
+        window->resize(1280, 400);
+        QTRY_COMPARE(bar->property("overflowCount").toInt(), 0);
+        QCOMPARE(bar->property("count").toInt(), menus);
         delete window;
     }
 

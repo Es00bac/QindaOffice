@@ -13,15 +13,24 @@ namespace QindaTK {
 class LocalDatabaseProvider;
 }
 
+namespace QindaOffice::Base {
+class BaseFile;
+}
+
 namespace QindaOffice::Apps::Base {
 
 // Validates `design` against the provider's schema first; false with
 // `error` when the design no longer fits or the file cannot be written.
 bool writeDesignFile(const QString &path, const QVariantMap &design, QindaTK::LocalDatabaseProvider *provider,
                      QString *error);
-// M80: `design` without `fields` in its binding and form layout — a form
-// saved before its lookups left the designer's mirror (base_snapshot.h)
-// still opens with its labels and order (base_service_form_controls.cpp).
-[[nodiscard]] QVariantMap designWithoutFields(const QVariantMap &design, const QStringList &fields);
+// M89 (D-097, base_service_form_layout.cpp): the design the form object
+// `definition` over `table` opens with, bound to every column of `mirror`
+// (its form mirror): its saved design brought to the table as it is now,
+// laid out with positioned controls once when it was saved before M89
+// (base_form_layout.h). `notice` says what had to change; {} with `error`
+// when the table cannot be bound.
+[[nodiscard]] QVariantMap formDesignFor(const QindaOffice::Base::BaseFile &file, const QVariantMap &definition,
+                                        const QString &table, QindaTK::LocalDatabaseProvider *mirror,
+                                        QString *notice, QString *error);
 
 } // namespace QindaOffice::Apps::Base
