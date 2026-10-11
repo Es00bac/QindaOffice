@@ -175,6 +175,14 @@ The four focused CTests passed (4/4, zero failures); the standalone
   structural fixtures were regenerated after adding the ribbon command and
   checked at both widths. The 520 px dialog and ribbon remain usable.
 
+The broader isolated r18 integration gate qualifies all 37 Mail targets across
+its initial run and the corrected host rerun. `tst_qindamail_host` now expects
+66 window commands and includes the shipped `zap` icon used by Manage Quick
+Steps; the old 64-command assertion predated M95. The complete corrected host
+target passes 10 Qt checks, including unique shortcuts, selection state,
+validated panel export and real window creation. The application command
+catalogue is unchanged by this test correction.
+
 The on-desktop pass still needs a real IMAP/SMTP/CalDAV account, including a
 provider refusal after an earlier Quick Step action, a recurring meeting
 round trip with an external calendar, and dark/light density checks. Do not

@@ -63,7 +63,9 @@ class TestMailHost : public QObject {
                 QStringLiteral("sliders-horizontal"), QStringLiteral("eraser"), QStringLiteral("calendar-plus"),
                 QStringLiteral("check-check"), QStringLiteral("circle-x"), QStringLiteral("folder-plus"),
                 QStringLiteral("settings-2"), QStringLiteral("trash"), QStringLiteral("message-square"),
-                QStringLiteral("sparkles"), QStringLiteral("mail-x")};
+                QStringLiteral("sparkles"), QStringLiteral("mail-x"),
+                // M95 (D-103): Manage Quick Steps.
+                QStringLiteral("zap")};
     }
 
 private slots:
@@ -72,7 +74,7 @@ private slots:
         MailTest::Env env;
         MailHost host(env.service.get());
         const QStringList ids = MailHost::commandIds();
-        QCOMPARE(ids.size(), 64);                                   // M81 added 20
+        QCOMPARE(ids.size(), 66); // M81 added 20; M95 adds two Quick Step commands.
         for (const QString &id : ids) {
             ActionEntry *entry = host.actions()->entry(id);
             QVERIFY2(entry != nullptr, qPrintable(id));
