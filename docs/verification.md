@@ -78,6 +78,13 @@ system parallelism, checksum source sync, archive-backed build storage and
 toolkit freeze. Tests used nice 19 / idle I/O, offscreen Qt and the software
 Quick backend. No live desktop or owner's documents were opened.
 
+Resumed qualification on **2026-10-11 UTC** checksum-verified source
+`5bb83b1`, rebuilt/relinked the application and all eleven focused targets,
+and passed **11/11 CTest targets, 112 QtTest checks, zero failures and zero
+skips** in 82.59 seconds. This completed the interrupted shared Show chart
+relink. The installed toolkit was still r17; the tested build deliberately
+used the frozen build-tree package above. No packages were installed.
+
 The new final suites passed **35/35 QtTest cases, no failures or skips**:
 `tst_docx_graphics` 28/28 and `tst_write_graphics` 7/7. All fourteen chart
 kinds insert/write/schema-check/reopen; edited chart values also match the
@@ -103,15 +110,19 @@ Existing `tst_docx_read`, `tst_docx_write`, `tst_pptx_charts`,
 qualification. The ribbon's coverage/icon/squeeze validator and the
 desktop menu validator pass. The two default structural fixtures were
 regenerated deliberately for the final toolkit's No Color marker items.
-Unchanged suites were not repeated after changes confined to new graphics.
+They passed unchanged in the resumed run.
 
 Reviewed twelve PNGs: the default window at both widths; Chart, SmartArt
 and Shape editors at both widths; the finished graphic document at both
-widths; Write's PDF page; and the LibreOffice PDF page. Evidence is in
-`~/scratch/qqo/m93-grabs/` on qinda, including `word_graphics_interop.docx`
-and its independently rendered PDF. Final new-suite log:
-`/tmp/m93-interop-tests.log`; prior regression logs:
-`/tmp/m93-second-gates.log`, `/tmp/m93-final-tests.log`.
+widths; Write's PDF page; and the LibreOffice PDF page. All twelve were
+reviewed again after resumption. Fresh evidence is in
+`~/scratch/qqo/m93-resume-grabs/` on qinda, including the synthetic
+`word_graphics_interop.docx` and its independently rendered PDF. Logs:
+`/tmp/m93-resume-build.log`, `/tmp/m93-resume-tests.log`,
+`/tmp/m93-resume-details.log`; machine-readable results:
+`/tmp/m93-resume-junit.xml`. No private corpus was copied or opened. M88's
+separate 596-document corpus remains baseline Word-interchange evidence,
+not an M93 graphics corpus claim.
 
 Manual work remains: Microsoft Word desktop regeneration of SmartArt,
 actual printing and floating-object comparisons. SmartArt topology/layout
