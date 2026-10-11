@@ -63,6 +63,11 @@ list names, counts, status, and Import control are readable at both widths.
 Default-window fixtures did not change. The test data are synthetic; no
 private company file was copied or changed.
 
+The 520 px dashboard behind the import dialog is also a visual gate: its
+company heading and New invoice, Receive payment and New expense shortcuts
+must wrap without painting over each other. Review the unshaded dashboard
+grab as well as the modal grab when qualifying the integrated release.
+
 The remaining manual gate is a real QuickBooks Desktop employee/time IIF
 export, plus an explicit decision on how to handle already-billed and
 payroll-transferred rows from that file. The importer refuses those rows

@@ -41,12 +41,12 @@ Tk.Scroll {
 
         Tk.Flex {
             direction: Tk.Flex.Row
+            wrap: Tk.Flex.Wrap
             align: Tk.Flex.Center
             gap: Tk.Theme.space.sm
             Tk.Flex {
                 direction: Tk.Flex.Column
                 Tk.Flex.grow: 1
-                Tk.Flex.basis: 0
                 Tk.Heading { level: 1; text: view.books !== null ? view.books.companyName : "" }
                 Tk.Caption { text: qsTr("As of %1").arg(view.books !== null ? view.books.today : "") }
             }
