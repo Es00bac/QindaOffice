@@ -4,6 +4,7 @@
 // the same contract — mutate in place, then reindex and recalculate.
 
 #include "structure.h"
+#include "sparkline.h"
 
 #include "chart_spec.h"
 #include "pivot_edit.h"
@@ -66,6 +67,7 @@ namespace {
 
 void requalifyWorkbook(Workbook &book, const QString &from, const QString &to)
 {
+    requalifySparklines(book, from, to); // M90: their data, by sheet name
     for (qint32 s = 0; s < book.sheetCount(); ++s) {
         Sheet &sheet = book.sheetAt(s);
         QHash<quint64, Cell> cells = sheet.cells();
@@ -125,7 +127,7 @@ void requalifyWorkbook(Workbook &book, const QString &from, const QString &to)
         const NodePtr adjusted = requalify(entry.ast, from, to);
         if (adjusted != entry.ast) {
             entry.ast = adjusted;
-            entry.formula = nodeText(adjusted);
+            entry.formula = nameBodyText(adjusted);
             touched = true;
         }
     }

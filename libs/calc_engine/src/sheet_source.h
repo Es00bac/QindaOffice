@@ -12,7 +12,7 @@
 // edit of a sourced sheet here (structure.cpp); calc_io maps source
 // positions through the steps at save time.
 //
-// AGENT-CONTRACT: calc_io's carry stage (xlsx_carry*) is the only reader;
+// AGENT-CONTRACT: calc_io's carry and legacy-print readers consume this;
 // structure.cpp is the only writer of `steps`. Undo snapshots and the
 // recovery payload carry the whole struct, so an undone insert un-moves
 // the carried parts too.

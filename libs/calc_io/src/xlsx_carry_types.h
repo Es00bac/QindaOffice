@@ -89,15 +89,17 @@ inline constexpr CarriedElement kCarriedSheetElements[] = {
 };
 
 // extLst entries of a worksheet that are carried, by uri: slicer lists,
-// timeline references, sparklines (positional), web extensions.
+// timeline references, web extensions. M90 (D-098): sparklines are no
+// longer carried — the model holds them (xlsx_sparklines.h) — so nothing
+// carried here is positional any more.
 inline bool sheetExtCarried(const QString &uri, bool *positional)
 {
     static const QSet<QString> fixed{QStringLiteral("{A8765BA9-456A-4dab-B4F3-ACF838C121DE}"),
                                      QStringLiteral("{3A4CF648-6AED-40f4-86FF-DC5316D8AED3}"),
                                      QStringLiteral("{7E03D99C-DC04-49d9-9315-930204A7B6E9}"),
                                      QStringLiteral("{F7C9EE02-42E1-4005-9D12-6889AFFD525C}")};
-    *positional = uri.compare(QLatin1String("{05C60535-1F16-4fd2-B633-F4F36F0B64E0}"), Qt::CaseInsensitive) == 0;
-    return *positional || fixed.contains(uri) || fixed.contains(uri.toUpper());
+    *positional = false;
+    return fixed.contains(uri) || fixed.contains(uri.toUpper());
 }
 
 } // namespace QindaOffice::Calc::IO::Carry

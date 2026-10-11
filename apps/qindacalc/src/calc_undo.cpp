@@ -51,6 +51,7 @@ WorkbookSnapshot takeSnapshot(const CalcEng::Workbook &workbook, qint32 activeSh
         ss.dataTables = sheet.dataTables();
         ss.keptRules = sheet.keptRules();
         ss.customViews = sheet.customViews();
+        ss.sparklines = sheet.sparklineGroups();
         snap.sheets.append(ss);
     }
     // The style table is indexed by position; copy through the public
@@ -119,6 +120,7 @@ void restoreSnapshot(CalcEng::Workbook *workbook, const WorkbookSnapshot &snapsh
         sheet.setDataTables(ss.dataTables);
         sheet.setKeptRules(ss.keptRules);
         sheet.setCustomViews(ss.customViews);
+        sheet.setSparklineGroups(ss.sparklines);
     }
     for (const CalcEng::CellStyle &style : snapshot.styles) {
         fresh.addStyle(style);

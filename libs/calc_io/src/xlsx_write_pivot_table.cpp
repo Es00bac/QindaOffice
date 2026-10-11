@@ -12,6 +12,7 @@
 #include "xlsx_write_pivot.h"
 
 #include "xlsx_pivot_names.h"
+#include "pivot_dates.h"
 #include "xlsx_text.h"
 #include "xlsx_xml.h"
 
@@ -260,12 +261,12 @@ QByteArray filtersXml(const PivotTable &pivot)
                 continue;
             }
             xml += QByteArrayLiteral("<filter") + num("fld", f) + attr("type", type) + " evalOrder=\"-1\"" + num("id", ++id);
-            if (filter.kind != PivotFilter::Kind::Label) {
+            if (filter.kind == PivotFilter::Kind::Value || filter.kind == PivotFilter::Kind::Top) {
                 xml += num("iMeasureFld", filter.dataField);
             }
-            if (filter.kind == PivotFilter::Kind::Label) {
+            if (filter.kind == PivotFilter::Kind::Label || filter.kind == PivotFilter::Kind::Date) {
                 xml += attr("stringValue1", filter.text1);
-                if (filter.op == PivotFilter::Op::Between || filter.op == PivotFilter::Op::NotBetween) {
+                if (filter.op == PivotFilter::Op::Between || filter.op == PivotFilter::Op::NotBetween || filter.kind == PivotFilter::Kind::Date) {
                     xml += attr("stringValue2", filter.text2);
                 }
             }
@@ -274,6 +275,23 @@ QByteArray filtersXml(const PivotTable &pivot)
                 xml += "<top10" + QByteArray(filter.top ? "" : " top=\"0\"")
                     + QByteArray(filter.topBy == PivotFilter::TopBy::Percent ? " percent=\"1\"" : "") + " val=\""
                     + number(filter.value1) + "\" filterVal=\"" + number(filter.value1) + "\"/>";
+            } else if (filter.kind == PivotFilter::Kind::Date) {
+                if (!filter.dateType.startsWith(QLatin1String("date"))) {
+                    xml += "<dynamicFilter" + attr("type", filter.dateType) + "/>";
+                } else {
+                    PivotFilter dates = filter;
+                    const QString &type = filter.dateType;
+                    dates.value1 = PivotNames::serialFromIso(filter.text1).value_or(filter.value1);
+                    dates.value2 = PivotNames::serialFromIso(filter.text2).value_or(filter.value2);
+                    dates.op = type == QLatin1String("dateBetween") ? PivotFilter::Op::Between
+                        : type == QLatin1String("dateNotBetween") ? PivotFilter::Op::NotBetween
+                        : type == QLatin1String("dateOlderThan") ? PivotFilter::Op::Less
+                        : type == QLatin1String("dateOlderThanOrEqual") ? PivotFilter::Op::LessOrEqual
+                        : type == QLatin1String("dateNewerThan") ? PivotFilter::Op::Greater
+                        : type == QLatin1String("dateNewerThanOrEqual") ? PivotFilter::Op::GreaterOrEqual
+                        : type == QLatin1String("dateNotEqual") ? PivotFilter::Op::NotEqual : PivotFilter::Op::Equal;
+                    xml += customFiltersXml(dates);
+                }
             } else {
                 xml += customFiltersXml(filter);
             }

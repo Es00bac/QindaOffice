@@ -365,6 +365,8 @@ OfficeWindow {
     CondFormatDialog { id: condFormat; host: window.calc; onRuleRequested: function(index) { tools.openRule(index) } }
     // M78 (D-087): Page Setup, what-if, data tools, rule editing.
     CalcToolDialogs { id: tools; host: window.calc; hostItem: window.contentItem; manager: condFormat }
+    CalcSolverDialogs { host: window.calc; hostItem: window.contentItem } // M90: Data ▸ Solver
+    CalcSparklineDialogs { host: window.calc; hostItem: window.contentItem } // M90: sparklines, Table Design
     ValidationDialog { id: validation; host: window.calc }
     CommentDialog { id: commentDialog; onCommentApplied: function(text) { window.calc.setCommentText(text) } }
     FilterPopover { id: filterPopover; onFilterApplied: function(column, kept) { window.calc.applyFilterValues(column, kept) } }

@@ -63,6 +63,7 @@ void SpreadsheetDocument::setAutoFilter(const CalcEng::AutoFilter &filter)
     }
     const WorkbookSnapshot before = takeSnapshot(m_workbook, m_activeSheet);
     sheet.setAutoFilter(filter);
+    m_workbook.recalcAll(); // Visibility changes SUBTOTAL and AGGREGATE (D-098).
     pushUndo(before, tr("Filter"));
     setDirty(true);
     emit contentChanged();

@@ -81,6 +81,10 @@ struct ParseResult {
 // reconstruction). Storages form: ',' separators, '.' decimals.
 [[nodiscard]] QString nodeText(const NodePtr &node);
 
+// A defined name's body as Excel writes it: like nodeText, but a top-level
+// union without its brackets ("A1:B2,D4") — M90, D-098.
+[[nodiscard]] QString nameBodyText(const NodePtr &node);
+
 // Relative references shifted by (dr, dc); absolute axes stay put. Used to
 // reconstruct shared-formula dependents (plan section 7.2).
 [[nodiscard]] NodePtr shiftNode(const NodePtr &node, qint32 dr, qint32 dc);

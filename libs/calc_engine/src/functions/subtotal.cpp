@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "functions.h"
+#include "aggregate_refs.h"
 
 namespace QindaOffice::Calc {
 
@@ -13,15 +14,12 @@ void registerSubtotalFunctions(QHash<QString, FunctionSpec> &r)
 r.insert(QStringLiteral("RANK.EQ"), r.value(QStringLiteral("RANK")));
 r.insert(QStringLiteral("FORECAST.LINEAR"), r.value(QStringLiteral("FORECAST")));
 // SUBTOTAL(code, range…): the aggregate the code names, over the
-// ranges (1xx variants ignore hidden rows, which the engine does not
-// model: they aggregate the same cells).
+// ranges, omitting filtered rows and nested totals; 101–111 omit hidden rows.
 r.insert(QStringLiteral("SUBTOTAL"),
          FunctionSpec{2, 255, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Arg {
-                          const Value codeValue = std::holds_alternative<Value>(args.at(0))
-                              ? std::get<Value>(args.at(0))
-                              : Value(Err::Value);
+                          const Value codeValue = scalarOrValue(args.at(0));
                           const auto code = toNumber(codeValue);
-                          if (!code.has_value()) return Err::Value;
+                          if (!code.has_value() || *code < 1 || *code > 111 || (*code > 11 && *code < 101)) return Err::Value;
                           static const QHash<int, QString> names{
                               {1, QStringLiteral("AVERAGE")}, {2, QStringLiteral("COUNT")},
                               {3, QStringLiteral("COUNTA")},  {4, QStringLiteral("MAX")},
@@ -34,12 +32,24 @@ r.insert(QStringLiteral("SUBTOTAL"),
                           if (name == names.constEnd()) return Err::Value;
                           const auto spec = functionRegistry().constFind(name.value());
                           if (spec == functionRegistry().constEnd()) return Err::Name;
-                          const QVector<Arg> rest = args.mid(1);
+                          QVector<Arg> rest;
+                          for (qsizetype i = 1; i < args.size(); ++i) {
+                              if (const auto *view = std::get_if<RangeView>(&args.at(i))) {
+                                  ArrayValue kept{1, 0, {}};
+                                  // Sparse iteration keeps whole-column totals bounded.
+                                  for (const auto &[cell, value] : ctx.host->nonBlankCellsIn(view->sheet, view->range)) {
+                                      if (!ctx.host->rowExcluded(view->sheet, cell.row, *code >= 101)
+                                          && !nestedSubtotal(*ctx.host, view->sheet, cell)) kept.cells.append(value);
+                                  }
+                                  kept.cols = qint32(kept.cells.size());
+                                  rest.append(kept.cells.isEmpty() ? Arg(Value()) : Arg(kept));
+                              } else rest.append(args.at(i));
+                          }
                           if (rest.size() < spec->minArgs || rest.size() > spec->maxArgs) {
                               return Err::Value;
                           }
                           return spec->fn(ctx, rest);
-                      }});
+                      }, true});
 }
 
 } // namespace QindaOffice::Calc

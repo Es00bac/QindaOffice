@@ -18,6 +18,7 @@
 #include "spreadsheet_item.h"
 
 #include "calc_cell_look.h"
+#include "calc_sparkline_look.h"
 #include "calc_text_overflow.h"
 #include "spreadsheet_document.h"
 
@@ -221,6 +222,13 @@ void SpreadsheetItem::paintPaneCells(QPainter &p, const QVector<Band> &rows, con
         }
         if (look.conditional.dataBar.has_value()) {
             paintDataBar(p, look.rect, *look.conditional.dataBar); // under the text (M78)
+        }
+    }
+    // M90 (D-098): sparklines, over the fills and under the text.
+    if (!sheet.sparklineGroups().isEmpty()) {
+        const SparklinePainter sparklines(wb, shownSheet);
+        for (const CellLook &look : std::as_const(looks)) {
+            sparklines.paint(p, look.addr, look.rect, m_zoom * 96.0 / 72.0);
         }
     }
 

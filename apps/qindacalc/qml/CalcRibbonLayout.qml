@@ -69,6 +69,18 @@ QtObject {
         }
     }
 
+    // M90 (D-098): Table Design's Table Name box — Enter renames the table
+    // (every reference follows); Excel's refusal shows in the status bar.
+    property Component tableNameSlot: Component {
+        Tk.TextField {
+            objectName: "tableNameField"
+            implicitWidth: 120
+            tooltip: qsTr("Table Name")
+            text: layout.host !== null ? layout.host.tableName : ""
+            onAccepted: if (layout.host !== null && text !== layout.host.tableName) layout.host.renameTableTo(text)
+        }
+    }
+
     readonly property var tabs: [
         StandardRibbon.fileTab([], ["calcTemplate_Budget", "calcTemplate_Invoice"], []),
         { id: "home", label: qsTr("Home"), keyTip: "H", groups: [
@@ -122,6 +134,11 @@ QtObject {
             { id: "charts", label: qsTr("Charts"), items: [{ action: "insertChartAction", size: "large" }] },
             { id: "illustrations", label: qsTr("Illustrations"), items: [
                 { action: "insertImageAction", size: "large", iconName: "image" }] },
+            // M90 (D-098): Excel's Sparklines group.
+            { id: "sparklines", label: qsTr("Sparklines"), items: [
+                { action: "calcInsertSparklineLineAction", label: qsTr("Line") },
+                { action: "calcInsertSparklineColumnAction", label: qsTr("Column") },
+                { action: "calcInsertSparklineWinLossAction", label: qsTr("Win/Loss") }] },
             { id: "links", label: qsTr("Links"), items: [
                 { action: "insertHyperlinkAction", size: "large" },
                 "calcEditHyperlinkAction", "calcOpenHyperlinkAction", "calcRemoveHyperlinkAction"] },
@@ -174,7 +191,9 @@ QtObject {
             { id: "outline", label: qsTr("Outline"), items: [
                 { action: "calcGroupAction", size: "large" },
                 { action: "calcUngroupAction", size: "large" },
-                "calcShowDetailAction", "calcHideDetailAction"] }
+                "calcShowDetailAction", "calcHideDetailAction"] },
+            // M90 (D-098): Excel's Analyze group (the Solver add-in).
+            { id: "analyze", label: qsTr("Analyze"), items: [{ action: "calcSolverAction", size: "large" }] }
         ] },
         { id: "review", label: qsTr("Review"), keyTip: "R", groups: [
             { id: "reviewNotes", label: qsTr("Notes"), items: [
@@ -211,6 +230,37 @@ QtObject {
                 "calcViewSplitAction", "calcViewNewWindowAction"] },
             StandardRibbon.assistantGroup([])
         ]),
+        // ---- M90 (D-098): Excel's contextual Sparkline and Table Design tabs ----
+        { id: "sparkline", label: qsTr("Sparkline"), keyTip: "JS", contextId: "sparkline", groups: [
+            { id: "sparklineEdit", label: qsTr("Sparkline"), items: [
+                { id: "sparklineEditData", action: "calcSparklineEditDataAction", split: true, size: "large",
+                  label: qsTr("Edit Data"), iconName: "square-pen",
+                  menu: ["calcSparklineEditDataAction", "calcSparklineEditSingleAction", "|",
+                         "calcSparklineHiddenEmptyAction"] }] },
+            { id: "sparklineType", label: qsTr("Type"), items: [
+                "calcSparklineTypeLineAction", "calcSparklineTypeColumnAction", "calcSparklineTypeWinLossAction"] },
+            { id: "sparklineShow", label: qsTr("Show"), rows: [
+                ["calcSparklineHighPointAction", "calcSparklineLowPointAction", "calcSparklineNegativePointsAction"],
+                ["calcSparklineFirstPointAction", "calcSparklineLastPointAction", "calcSparklineMarkersAction"]] },
+            { id: "sparklineStyle", label: qsTr("Style"), items: [
+                { action: "calcSparklineColorsAction", size: "large", label: qsTr("Colors") }] },
+            { id: "sparklineGroup", label: qsTr("Group"), items: [
+                { id: "sparklineAxis", label: qsTr("Axis"), iconName: "ruler", size: "large",
+                  menu: ["calcSparklineAxisGeneralAction", "calcSparklineAxisDateAction", "calcSparklineAxisShowAction",
+                         "calcSparklineAxisRightToLeftAction", "|", "calcSparklineMinAutoAction",
+                         "calcSparklineMinSameAction", "calcSparklineMinCustomAction", "|",
+                         "calcSparklineMaxAutoAction", "calcSparklineMaxSameAction", "calcSparklineMaxCustomAction"] },
+                "calcSparklineGroupAction", "calcSparklineUngroupAction",
+                { id: "sparklineClear", label: qsTr("Clear"), iconName: "eraser",
+                  menu: ["calcSparklineClearAction", "calcSparklineClearGroupAction"] }] }
+        ] },
+        { id: "tableDesign", label: qsTr("Table Design"), keyTip: "JT", contextId: "table", groups: [
+            { id: "tableProperties", label: qsTr("Properties"), rows: [
+                [{ id: "tableName", component: tableNameSlot }],
+                ["calcTableRenameAction", "calcTableResizeAction"]] },
+            { id: "tableStyleOptions", label: qsTr("Table Style Options"), items: [
+                { action: "calcTableTotalRowAction", iconName: "sigma" }] }
+        ] },
         // ---- PivotTables (M74, D-083): Excel's two contextual tabs ----
         { id: "pivotAnalyze", label: qsTr("PivotTable Analyze"), keyTip: "JT", contextId: "pivot", groups: [
             { id: "pivotTable", label: qsTr("PivotTable"), items: [
@@ -218,6 +268,7 @@ QtObject {
             { id: "pivotActiveField", label: qsTr("Active Field"), items: [
                 { action: "calcPivotFieldSettingsAction", label: qsTr("Field Settings") },
                 { action: "calcPivotValueFieldSettingsAction", label: qsTr("Value Field Settings") }] },
+            { id: "pivotCalculations", label: qsTr("Calculations"), items: ["calcPivotCalculatedFieldAction"] },
             { id: "pivotGroup", label: qsTr("Group"), items: ["calcPivotGroupAction", "calcPivotUngroupAction"] },
             { id: "pivotSortFilter", label: qsTr("Sort & Filter"), items: [
                 "calcPivotSortAscendingAction", "calcPivotSortDescendingAction",

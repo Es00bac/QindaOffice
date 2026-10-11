@@ -72,6 +72,7 @@ struct PivotGroup {
 
 struct PivotCacheField {
     QString name;
+    QString formula;          // calculated field; evaluated over each pivot cell's source sums
     QString numberFormat;     // the source column's format (cacheField numFmtId)
     QList<Value> items;       // shared items in cache order; records point here
     QVector<qint32> records;  // per record: index into items (database fields)
@@ -95,7 +96,7 @@ struct PivotCache {
     qint32 recordCount = 0;
     bool refreshOnLoad = false;
     // false: a cache the engine does not model (OLAP, external, consolidation,
-    // calculated fields) — its parts are carried as they were (D-075).
+    // calculated items) — its parts are carried as they were (D-075).
     bool modelled = true;
     // ---- file round trip (calc_io) ----
     QString sourcePart;         // the cache definition part it was read from
@@ -125,7 +126,7 @@ inline constexpr qint32 kPivotNextItem = 1048829;     // Excel's baseItem (next)
 // * and ? wildcards); value filters and Top 10 compare a data field's
 // totals per item.
 struct PivotFilter {
-    enum class Kind : quint8 { Label, Value, Top };
+    enum class Kind : quint8 { Label, Value, Top, Date };
     enum class Op : quint8 {
         Equal, NotEqual, Greater, GreaterOrEqual, Less, LessOrEqual, BeginsWith, NotBeginsWith,
         EndsWith, NotEndsWith, Contains, NotContains, Between, NotBetween
@@ -133,7 +134,8 @@ struct PivotFilter {
     enum class TopBy : quint8 { Items, Percent, Sum };
     Kind kind = Kind::Label;
     Op op = Op::Equal;
-    QString text1;          // label filters
+    QString dateType;       // Excel ST_PivotFilterType for Date, e.g. thisMonth
+    QString text1;          // label/date filters
     QString text2;
     double value1 = 0;      // value filters; Top: the count, percent or sum
     double value2 = 0;

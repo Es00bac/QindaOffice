@@ -8,6 +8,7 @@
 // documentation (tests/fixtures/functions/functions_m69.tsv).
 
 #include "functions.h"
+#include "aggregate_refs.h"
 
 #include "../eval_array.h"
 
@@ -135,7 +136,7 @@ FunctionSpec percentRankSpec(bool exclusive)
 // AGGREGATE(function, options, ref1, …) / AGGREGATE(14..19, options,
 // array, k): the named aggregate over the arguments, leaving out nested
 // SUBTOTAL/AGGREGATE cells (options 0–3) and error values (2, 3, 6, 7).
-// Hidden rows (1, 3, 5, 7) are not known to formulas here: they count.
+// Filtered rows are omitted; options 1, 3, 5, 7 also omit manually hidden rows.
 Arg aggregate(EvalContext &ctx, const QVector<Arg> &args)
 {
     static const char *const kNames[] = {"AVERAGE", "COUNT", "COUNTA", "MAX", "MIN", "PRODUCT", "STDEV.S",
@@ -168,16 +169,10 @@ Arg aggregate(EvalContext &ctx, const QVector<Arg> &args)
             return std::nullopt;
         };
         if (const auto *view = std::get_if<RangeView>(&args.at(i))) {
-            for (qint32 r = view->range.topLeft.row; r <= view->range.bottomRight.row; ++r) {
-                for (qint32 c = view->range.topLeft.col; c <= view->range.bottomRight.col; ++c) {
-                    const QString formula = skipNested ? ctx.host->cellFormula(view->sheet, r, c).toUpper() : QString();
-                    if (formula.contains(QLatin1String("SUBTOTAL(")) || formula.contains(QLatin1String("AGGREGATE("))) {
-                        continue;
-                    }
-                    if (const auto err = keep(ctx.host->cellValue(view->sheet, r, c))) {
-                        return *err;
-                    }
-                }
+            for (const auto &[cell, value] : ctx.host->nonBlankCellsIn(view->sheet, view->range)) {
+                if (ctx.host->rowExcluded(view->sheet, cell.row, option % 2 == 1)
+                    || (skipNested && nestedSubtotal(*ctx.host, view->sheet, cell))) continue;
+                if (const auto err = keep(value)) return *err;
             }
             continue;
         }
@@ -213,7 +208,7 @@ Arg aggregate(EvalContext &ctx, const QVector<Arg> &args)
 
 void registerStatisticalM69Functions(QHash<QString, FunctionSpec> &r)
 {
-    r.insert(QStringLiteral("AGGREGATE"), FunctionSpec{3, 255, false, aggregate});
+    r.insert(QStringLiteral("AGGREGATE"), FunctionSpec{3, 255, false, aggregate, true});
     r.insert(QStringLiteral("FREQUENCY"),
              FunctionSpec{2, 2, false, [](EvalContext &ctx, const QVector<Arg> &args) -> Arg {
                               QVector<double> data;

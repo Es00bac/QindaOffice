@@ -226,8 +226,18 @@ public:
     // result in the grid); OK makes it one undo step from `before`, Cancel
     // puts `before` back without one.
     [[nodiscard]] std::shared_ptr<WorkbookSnapshot> snapshotNow() const;
-    void commitSnapshotStep(const WorkbookSnapshot &before, const QString &undoText);
+    // M90 (D-098): `sheetsChanged` when the step added a sheet (Solver's
+    // Answer Report) — the windows rebuild their tabs.
+    void commitSnapshotStep(const WorkbookSnapshot &before, const QString &undoText, bool sheetsChanged = false);
     void restoreWithoutUndo(const WorkbookSnapshot &before);
+    // ---- M90 (D-098): calc_m90_ops.cpp. One undo step each. ----
+    // The sheet's sparkline groups, replaced wholesale.
+    void setSparklineGroups(qint32 sheet, const QList<CalcEng::SparklineGroup> &groups, const QString &undoText);
+    // Table Design: rename the table at `addr` (every reference follows) or
+    // resize it; false, with editRefused saying why (Excel's messages).
+    bool setPivotCalculatedField(const CalcEng::PivotRef &ref, const QString &name, const QString &formula);
+    bool renameTable(const CalcEng::CellAddr &addr, const QString &name);
+    bool resizeTable(const CalcEng::CellAddr &addr, const CalcEng::CellRange &range);
     // Text to Columns: the converted cells (an empty input clears).
     bool applyTextColumns(const QList<CalcEng::TextColumnCell> &cells, const CalcEng::CellRange &block);
     // Remove Duplicates over `range` (calc_engine's data_tools.h).

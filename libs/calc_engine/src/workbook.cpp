@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "workbook.h"
+#include "row_visibility.h"
 
 namespace QindaOffice::Calc {
 
@@ -314,6 +315,9 @@ void Workbook::recalc(const QSet<CellKey> &edited)
         recalcPass(spillChanged, false, &next);
         spillChanged = std::move(next);
     }
+    const auto totals = rowVisibilityTotals(*this);
+    QSet<CellKey> visibilityChanged;
+    if (!totals.isEmpty()) recalcPass(totals, true, &visibilityChanged);
     // M78 (D-087): data tables follow what their formulas read.
     if (!m_computingTables) {
         recomputeDataTables();

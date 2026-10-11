@@ -321,21 +321,21 @@ void fillRulesPatch(const Workbook &wb, const Sheet &sheet, DxfTable *dxfs, Hidd
 {
     fillFormats(sheet, dxfs, patch);
     fillValidationPatch(wb, sheet, lists, patch, warnings);
-    // A kept rule's formulas stay as written: after rows or columns moved
-    // on its sheet, say so (its sqref did move with its cells).
-    if (warnings == nullptr || sheet.source().steps.isEmpty()) {
+    // M90 (D-098): a kept rule's formulas follow structural edits like
+    // cell formulas (structure_kept.cpp); one the engine could not parse
+    // stays as written — say so.
+    if (warnings == nullptr) {
         return;
     }
-    int withFormulas = 0;
-    static const QRegularExpression formula(QStringLiteral("<(?:[\\w.-]+:)?(?:formula[12]?|f)>"));
+    int stale = 0;
     for (const KeptRule &rule : sheet.keptRules()) {
-        withFormulas += rule.xml.contains(formula) ? 1 : 0;
+        stale += rule.staleFormulas ? 1 : 0;
     }
-    if (withFormulas > 0) {
+    if (stale > 0) {
         const QString message = QObject::tr("%n conditional-format or validation rule(s) on “%1” that QindaCalc keeps as "
-                                            "Excel wrote them still name the cells they named before rows or columns "
-                                            "were inserted or deleted there.",
-                                            nullptr, withFormulas)
+                                            "Excel wrote them hold a formula QindaCalc cannot read; it still names the "
+                                            "cells it named before rows or columns were inserted or deleted.",
+                                            nullptr, stale)
                                     .arg(sheet.name());
         if (!warnings->contains(message)) {
             warnings->append(message);

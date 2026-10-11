@@ -6,7 +6,7 @@
 // byte for byte (refreshOnLoad only after its data changed); an edited or
 // new one is written from the model and read back equal (its own Excel
 // formats left out with a save warning); a PivotChart stays a PivotChart;
-// a pivot with a calculated field stays read-only and carried. Every saved
+// an unsupported calculated-field formula stays read-only and carried. Every saved
 // package is schema-valid with every relationship resolving.
 
 #include "xlsx_bridge.h"
@@ -387,11 +387,11 @@ private slots:
         Q_UNUSED(automatic);
     }
 
-    void calculatedFieldsStayReadOnlyAndCarried()
+    void unsupportedCalculatedFieldsStayReadOnlyAndCarried()
     {
         Workbook wb;
         QStringList warnings;
-        QVERIFY(open(calculatedFieldBook(), QStringLiteral("calculated.xlsx"), &wb, &warnings));
+        QVERIFY(open(calculatedFieldBook(false), QStringLiteral("calculated.xlsx"), &wb, &warnings));
         QVERIFY(!only(wb).modelled);
         QVERIFY2(only(wb).note.contains(QStringLiteral("calculated")), qPrintable(only(wb).note));
         QCOMPARE(warnings.size(), 1);
@@ -402,7 +402,7 @@ private slots:
         QVERIFY(saved);
         const QStringList parts = pivotParts(*saved, QStringLiteral("Pivot"));
         QCOMPARE(parts.size(), 3);
-        QVERIFY(saved->data(parts.at(1)).contains("formula=\"Sales*0.1\""));
+        QVERIFY(saved->data(parts.at(1)).contains("formula=\"UNSUPPORTED(Sales)\""));
         QCOMPARE(saved->xml(parts.at(1))->attr(u"refreshOnLoad"), QStringLiteral("1")); // as before M74
     }
 

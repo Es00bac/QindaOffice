@@ -5,6 +5,44 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-098: Solver, sparklines and Excel's remaining everyday features in QindaCalc (M90)
+
+**Date:** 2026-10-10 · **Status:** accepted. See [QindaCalc](qindacalc.md).
+
+Solver runs against a private workbook on a worker thread. The GUI applies
+an offered solution only to its originating revision; Keep, the model's
+hidden sheet-scoped `solver_*` defined names, and an optional Answer Report
+form one undo step. Simplex checks sampled linearity, integer models use
+branch and bound, and the nonlinear method uses a bounded augmented
+Lagrangian with projected BFGS. The optional evolutionary method uses
+seeded differential evolution. These are QindaCalc implementations, not
+Microsoft's licensed Solver engines; nonlinear answers are local solutions.
+
+Sparklines are document state, including theme colours, group axes, dates,
+empty-cell policy and hidden data. The grid and printer use the same
+renderer; `x14:sparklineGroups`, structural edits, undo and recovery carry
+the same model. Table renaming rewrites structured references and names;
+resizing validates the destination before mutating it. Kept rule XML has
+its formula references rewritten; unsupported formulas stay intact and
+produce the existing honest save warning.
+
+Row visibility is an evaluator input. SUBTOTAL and AGGREGATE omit filtered
+rows, optionally omit hidden rows, and recognize nested calls through the
+AST. Visibility edits recalculate formulas before their undo snapshot.
+Sparse reference enumeration keeps whole-column totals bounded.
+
+Calculated PivotTable fields evaluate over source-field sums at each
+output cell, including totals. A change updates every pivot sharing its
+cache atomically. Their formulas use `cacheField@formula`; unsupported
+references and cycles are refused. Date filters retain Excel's filter
+type and calendar semantics. Retained VML supplies header/footer images
+and visible legacy notes for printing; no external image is fetched.
+End-of-sheet notes wrap and paginate without truncation.
+
+Manual Excel comparison and the remaining print-position limitations are
+listed in [QindaCalc](qindacalc.md); headless evidence is recorded in
+[verification](verification.md).
+
 ## D-095: QindaDiagram: Visio's everyday drawing tools
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

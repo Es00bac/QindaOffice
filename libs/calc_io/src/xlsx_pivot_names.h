@@ -38,7 +38,7 @@ inline constexpr quint32 kValuesFieldUnsigned = 4294967294u;
 [[nodiscard]] PivotGroupBy groupByFrom(const QString &name);
 
 // A filter's type attribute (captionBeginsWith, valueGreaterThan, count,
-// percent, sum); nullopt for the ones QindaCalc does not model (dates).
+// percent, sum, date periods); nullopt for filter types not modelled.
 [[nodiscard]] QString filterType(const PivotFilter &filter);
 [[nodiscard]] std::optional<PivotFilter> filterFrom(const QString &type);
 

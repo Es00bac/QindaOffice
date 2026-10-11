@@ -213,6 +213,7 @@ bool showCustomView(Workbook &wb, const QString &guid, qint32 *activeSheet)
             sheet.setPageSetup(part->pageSetup);
         }
     }
+    wb.recalcAll(); // A restored view changes hidden/filter-aware totals.
     if (activeSheet != nullptr) {
         *activeSheet = wb.sheetIndex(spec->activeSheet);
     }

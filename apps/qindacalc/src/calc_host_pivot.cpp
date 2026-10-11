@@ -389,7 +389,13 @@ void CalcHost::syncPivotFromCursor()
         model->setChecked(styleId(o.style.name), true);
     }
     m_syncing = false;
-    setRibbonContexts(active ? QStringList{QStringLiteral("pivot")} : QStringList{});
+    // M90 (D-098): other contextual tabs (sparkline, table) stay as they are.
+    QStringList contexts = ribbonContexts();
+    contexts.removeAll(QStringLiteral("pivot"));
+    if (active) {
+        contexts.prepend(QStringLiteral("pivot"));
+    }
+    setRibbonContexts(contexts);
     // A pivot QindaCalc keeps as read says why it is read-only, once per visit.
     if (pivot != nullptr && !pivot->modelled && m_readOnlyPivotNoted != ref) {
         showStatusMessage(tr("PivotTable “%1” %2; QindaCalc keeps it as it is, read-only.").arg(pivot->name, pivot->note),

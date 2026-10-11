@@ -132,11 +132,14 @@ std::shared_ptr<WorkbookSnapshot> SpreadsheetDocument::snapshotNow() const
     return std::make_shared<WorkbookSnapshot>(takeSnapshot(m_workbook, m_activeSheet));
 }
 
-void SpreadsheetDocument::commitSnapshotStep(const WorkbookSnapshot &before, const QString &undoText)
+void SpreadsheetDocument::commitSnapshotStep(const WorkbookSnapshot &before, const QString &undoText, bool sheetsChanged)
 {
     pushUndo(before, undoText);
     setDirty(true);
     emit contentChanged();
+    if (sheetsChanged) {
+        emit structureChanged();
+    }
 }
 
 void SpreadsheetDocument::restoreWithoutUndo(const WorkbookSnapshot &before)

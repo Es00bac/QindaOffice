@@ -13,6 +13,8 @@
 // option). Sorting comes last and never changes a number.
 
 #include "pivot_compute.h"
+#include "pivot_dates.h"
+#include "pivot_calculated.h"
 
 #include "number_format.h"
 
@@ -101,6 +103,8 @@ struct Builder {
     void aggregate()
     {
         result.accs.clear();
+        QHash<quint64, QVector<PivotAcc>> sourceSums;
+        const bool calculated = std::any_of(cache.fields.begin(), cache.fields.end(), [](const auto &f) { return !f.formula.isEmpty(); });
         const qsizetype dataCount = pivot.dataFields.size();
         for (qint32 r = 0; r < cache.recordCount; ++r) {
             if (!result.included.at(r)) {
@@ -108,13 +112,31 @@ struct Builder {
             }
             for (qint32 ra = rowLeaf.at(r); ra >= 0; ra = result.rows.nodes.at(ra).parent) {
                 for (qint32 ca = colLeaf.at(r); ca >= 0; ca = result.cols.nodes.at(ca).parent) {
-                    QVector<PivotAcc> &accs = result.accs[PivotResult::key(ra, ca)];
+                    const quint64 key = PivotResult::key(ra, ca);
+                    if (calculated) {
+                        auto &sums = sourceSums[key];
+                        sums.resize(cache.fields.size());
+                        for (qsizetype f = 0; f < cache.fields.size(); ++f) {
+                            const auto &field = cache.fields.at(f);
+                            if (field.database) sums[f].add(field.items.value(field.records.value(r, -1)));
+                        }
+                    }
+                    QVector<PivotAcc> &accs = result.accs[key];
                     if (accs.size() != dataCount) {
                         accs.resize(dataCount);
                     }
                     for (qsizetype d = 0; d < dataCount; ++d) {
                         accs[d].add(dataValue(d, r));
                     }
+                }
+            }
+        }
+        for (const auto &[key, sums] : sourceSums.asKeyValueRange()) {
+            for (qsizetype d = 0; d < dataCount; ++d) {
+                const qint32 field = pivot.dataFields.at(d).field;
+                if (field >= 0 && field < cache.fields.size() && !cache.fields.at(field).formula.isEmpty()) {
+                    result.accs[key][d] = PivotAcc{};
+                    result.accs[key][d].add(pivotCalculatedValue(cache, field, sums));
                 }
             }
         }
@@ -304,59 +326,6 @@ void setupAxis(const QList<qint32> &fields, qint32 dataCount, qsizetype fieldCou
 
 } // namespace
 
-void PivotAcc::add(const Value &value)
-{
-    if (isBlank(value)) {
-        return;
-    }
-    ++count;
-    if (const auto *e = std::get_if<Err>(&value)) {
-        if (!hasError) {
-            hasError = true;
-            error = *e;
-        }
-        return;
-    }
-    const auto *n = std::get_if<double>(&value);
-    if (n == nullptr) {
-        return; // text and booleans are counted, never summed
-    }
-    ++nums;
-    sum += *n;
-    product *= *n;
-    min = nums == 1 ? *n : qMin(min, *n);
-    max = nums == 1 ? *n : qMax(max, *n);
-    const double delta = *n - mean;
-    mean += delta / double(nums);
-    m2 += delta * (*n - mean);
-}
-
-Value pivotFinalize(const PivotAcc &acc, PivotFunction function)
-{
-    if (function == PivotFunction::Count) {
-        return double(acc.count);
-    }
-    if (function == PivotFunction::CountNums) {
-        return double(acc.nums);
-    }
-    if (acc.hasError) {
-        return acc.error;
-    }
-    const double n = double(acc.nums);
-    switch (function) {
-    case PivotFunction::Sum: return acc.sum;
-    case PivotFunction::Average: return acc.nums == 0 ? Value(Err::Div0) : Value(acc.sum / n);
-    case PivotFunction::Max: return acc.nums == 0 ? 0.0 : acc.max;
-    case PivotFunction::Min: return acc.nums == 0 ? 0.0 : acc.min;
-    case PivotFunction::Product: return acc.nums == 0 ? 0.0 : acc.product;
-    case PivotFunction::StdDev: return acc.nums < 2 ? Value(Err::Div0) : Value(std::sqrt(acc.m2 / (n - 1)));
-    case PivotFunction::StdDevP: return acc.nums < 1 ? Value(Err::Div0) : Value(std::sqrt(acc.m2 / n));
-    case PivotFunction::Var: return acc.nums < 2 ? Value(Err::Div0) : Value(acc.m2 / (n - 1));
-    case PivotFunction::VarP: return acc.nums < 1 ? Value(Err::Div0) : Value(acc.m2 / n);
-    default: return acc.sum;
-    }
-}
-
 PivotResult computePivot(const PivotCache &cache, const PivotTable &pivot)
 {
     PivotResult result;
@@ -410,11 +379,12 @@ PivotResult computePivot(const PivotCache &cache, const PivotTable &pivot)
         QSet<qint32> dropped = settings.hidden;
         const QList<Value> items = pivotDisplayItems(cache, f);
         for (const PivotFilter &filter : settings.filters) {
-            if (filter.kind != PivotFilter::Kind::Label) {
+            if (filter.kind != PivotFilter::Kind::Label && filter.kind != PivotFilter::Kind::Date) {
                 continue;
             }
             for (qsizetype i = 0; i < items.size(); ++i) {
-                if (!pivotLabelAccepts(filter, items.at(i), pivotItemCaption(cache, f, qint32(i)))) {
+                if (!(filter.kind == PivotFilter::Kind::Date ? pivotDateAccepts(filter, items.at(i))
+                        : pivotLabelAccepts(filter, items.at(i), pivotItemCaption(cache, f, qint32(i))))) {
                     dropped.insert(qint32(i));
                 }
             }
@@ -433,7 +403,7 @@ PivotResult computePivot(const PivotCache &cache, const PivotTable &pivot)
         const QList<qint32> fields = axis.fields;
         for (qsizetype level = 0; level < fields.size(); ++level) {
             for (const PivotFilter &filter : pivot.fields.at(fields.at(level)).filters) {
-                if (filter.kind != PivotFilter::Kind::Label && builder.applyValueFilter(rowsAxis, qint32(level), filter)) {
+                if ((filter.kind == PivotFilter::Kind::Value || filter.kind == PivotFilter::Kind::Top) && builder.applyValueFilter(rowsAxis, qint32(level), filter)) {
                     rebuild();
                 }
             }

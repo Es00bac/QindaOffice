@@ -8,8 +8,8 @@
 // is computed and must agree with them (location, header rows, every
 // value), or the pivot is kept as read — read-only, carried by the save as
 // before (D-075) — with a note saying why. OLAP and Data Model pivots,
-// external and consolidation sources, calculated fields and items,
-// collapsed items and date filters are kept that way. A cache marked
+// external and consolidation sources, unsupported calculated formulas/items
+// and collapsed items are kept that way. A cache marked
 // refreshOnLoad is refreshed from its source, as Excel does on open.
 //
 // AGENT-CONTRACT: runs after the cell walk (readXlsxImpl), on the same

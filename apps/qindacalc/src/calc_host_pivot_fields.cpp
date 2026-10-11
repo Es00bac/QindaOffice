@@ -12,6 +12,7 @@
 
 #include "number_format.h"
 #include "pivot_cache.h"
+#include "pivot_dates.h"
 #include "sheet.h"
 
 #include <cmath>
@@ -88,7 +89,8 @@ QVariantMap CalcHost::pivotValueFieldState(int dataIndex) const
     } else if (d.baseItem >= 0 && d.baseField >= 0) {
         baseItem = 2 + int(pivot->fields.at(d.baseField).order.indexOf(d.baseItem));
     }
-    return {{QStringLiteral("index"), dataIndex},
+    return {{QStringLiteral("calculated"), d.field >= 0 && d.field < cache->fields.size() && !cache->fields.at(d.field).formula.isEmpty()},
+            {QStringLiteral("index"), dataIndex},
             {QStringLiteral("source"), d.field >= 0 && d.field < cache->fields.size() ? cache->fields.at(d.field).name : QString()},
             {QStringLiteral("name"), d.name},
             {QStringLiteral("function"), int(d.function)},
@@ -231,9 +233,14 @@ QVariantMap CalcHost::pivotFilterState(int field) const
                     {QStringLiteral("dataFields"), dataNames(*pivot)}};
     for (const PivotFilter &f : s.filters) {
         out.insert(QStringLiteral("kind"), int(f.kind) + 1);
+        out.insert(QStringLiteral("dateType"), f.dateType);
         out.insert(QStringLiteral("op"), int(f.op));
-        out.insert(QStringLiteral("text1"), f.kind == PivotFilter::Kind::Label ? f.text1 : QString::number(f.value1));
-        out.insert(QStringLiteral("text2"), f.kind == PivotFilter::Kind::Label ? f.text2 : QString::number(f.value2));
+        out.insert(QStringLiteral("text1"), (f.kind == PivotFilter::Kind::Label || f.kind == PivotFilter::Kind::Date) ? f.text1 : QString::number(f.value1));
+        out.insert(QStringLiteral("text2"), (f.kind == PivotFilter::Kind::Label || f.kind == PivotFilter::Kind::Date) ? f.text2 : QString::number(f.value2));
+        if (f.kind == PivotFilter::Kind::Date && f.dateType.startsWith(QLatin1String("date"))) {
+            if (f.text1.isEmpty()) out.insert(QStringLiteral("text1"), formatWithCode(f.value1, QStringLiteral("yyyy-mm-dd")).text);
+            if (f.text2.isEmpty()) out.insert(QStringLiteral("text2"), formatWithCode(f.value2, QStringLiteral("yyyy-mm-dd")).text);
+        }
         out.insert(QStringLiteral("dataField"), f.dataField);
         out.insert(QStringLiteral("top"), f.top);
         out.insert(QStringLiteral("topBy"), int(f.topBy));
@@ -243,6 +250,16 @@ QVariantMap CalcHost::pivotFilterState(int field) const
 
 void CalcHost::applyPivotFilter(int field, const QVariantMap &filter)
 {
+    if (filter.value(QStringLiteral("kind")).toInt() == 4) {
+        const QString type = filter.value(QStringLiteral("dateType")).toString();
+        const bool first = QDate::fromString(filter.value(QStringLiteral("text1")).toString(), Qt::ISODate).isValid();
+        const bool second = QDate::fromString(filter.value(QStringLiteral("text2")).toString(), Qt::ISODate).isValid();
+        if (!pivotDateTypes().contains(type) || (type.startsWith(QLatin1String("date"))
+            && (!first || (type.endsWith(QLatin1String("Between")) && !second)))) {
+            showStatusMessage(tr("Enter dates as YYYY-MM-DD."), 6000);
+            return;
+        }
+    }
     changeCurrentPivot(
         [field, filter](PivotTable &p, const PivotCache &) {
             if (field < 0 || field >= p.fields.size()) {
@@ -276,8 +293,9 @@ void CalcHost::applyPivotFilter(int field, const QVariantMap &filter)
                 return;
             }
             PivotFilter f;
-            f.kind = PivotFilter::Kind(qBound(0, kind - 1, 2));
+            f.kind = PivotFilter::Kind(qBound(0, kind - 1, 3));
             f.op = PivotFilter::Op(qBound(0, filter.value(QStringLiteral("op")).toInt(), 13));
+            f.dateType = filter.value(QStringLiteral("dateType"), QStringLiteral("dateBetween")).toString();
             f.text1 = filter.value(QStringLiteral("text1")).toString();
             f.text2 = filter.value(QStringLiteral("text2")).toString();
             f.value1 = f.text1.toDouble();

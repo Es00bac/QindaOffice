@@ -10,6 +10,7 @@
 #include "scenario.h"
 #include "sheet_rules.h"
 #include "sheet_source.h"
+#include "sparkline.h"
 
 #include <QSet>
 
@@ -244,6 +245,10 @@ public:
     // as the file wrote them (sheet_rules.h, KeptRule).
     [[nodiscard]] const QList<KeptRule> &keptRules() const { return m_keptRules; }
     void setKeptRules(QList<KeptRule> rules) { m_keptRules = std::move(rules); }
+    // M90 (D-098): the sheet's sparkline groups (sparkline.h) — moved by
+    // structural edits, carried by undo and recovery, x14:sparklineGroups.
+    [[nodiscard]] const QList<SparklineGroup> &sparklineGroups() const { return m_sparklines; }
+    void setSparklineGroups(QList<SparklineGroup> groups) { m_sparklines = std::move(groups); }
 
     // --- M66 (D-075): hyperlinks, outlines and hidden lines, protection,
     // and the sheet's tie to its source package. Range-addressed state
@@ -321,6 +326,7 @@ private:
     QList<DataTableSpec> m_dataTables; // M78
     QList<KeptRule> m_keptRules;       // M78
     QList<CustomView> m_customViews;   // M82
+    QList<SparklineGroup> m_sparklines; // M90
 };
 
 } // namespace QindaOffice::Calc

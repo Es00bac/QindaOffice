@@ -3,6 +3,7 @@
 
 #include "chart_spec.h"
 #include "pivot_edit.h"
+#include "sparkline.h"
 #include "structure_internal.h"
 #include "sheet.h"
 #include "workbook.h"
@@ -118,7 +119,7 @@ void rewriteNames(Workbook &book, const StructureEdit &edit)
         const NodePtr adjusted = adjustNode(entry.ast, edit, entry.sheet == edit.sheet, editedSheetName);
         if (adjusted != entry.ast) {
             entry.ast = adjusted;
-            entry.formula = nodeText(adjusted);
+            entry.formula = nameBodyText(adjusted);
             touched = true;
         }
     }
@@ -419,6 +420,8 @@ void applyStructureEdit(Workbook &book, const StructureEdit &edit)
     moveSheetFeatures(book, edit); // links, outline, source journal (M66)
     movePivotsForEdit(book, edit); // PivotTables and their sources (M74)
     moveWhatIfForEdit(book, edit); // scenarios and data tables (M78)
+    moveSparklinesForEdit(book, edit); // sparklines' cells and data (M90)
+    moveKeptRuleFormulas(book, edit);  // formulas inside the rules kept as written (M90)
     moveSheetContents(book.sheetAt(edit.sheet), edit);
     // Inserted table columns are named and inserted table rows filled with
     // the calculated columns (M69); endBulkLoad then reindexes once.

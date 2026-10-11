@@ -191,9 +191,9 @@ void CalcIoKeptTest::keptRulesFollowAnInsertedRow()
     QString validation = QString::fromUtf8(Kept::kKeptValidation);
     validation.replace(QStringLiteral("E1:E5"), QStringLiteral("E3:E7"));
     QVERIFY(xml.contains(validation));
-    // Their formulas did not move, and the save says so.
+    // Space-intersection formulas are still unsupported: preserve them and warn.
     QVERIFY(std::any_of(warnings.begin(), warnings.end(),
-                        [](const QString &note) { return note.contains(QLatin1String("still name the cells")); }));
+                        [](const QString &note) { return note.contains(QLatin1String("cannot read")) && note.contains(QLatin1String("still names the")); }));
     // The modelled rules moved with their cells.
     QVERIFY(xml.contains(QStringLiteral("<conditionalFormatting sqref=\"C3:C12\">")));
 }

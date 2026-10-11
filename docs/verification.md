@@ -33,6 +33,73 @@ it with `QQO_GRAB_DIR=~/.local/share/qindaoffice-validation-gallery/inbox
 QQO_GRAB_PREFIX=M40-`; captures are archived by content hash, so later
 runs never overwrite earlier evidence.
 
+## M90 Calc gates (D-098)
+
+Qualified on qinda on 2026-10-10 with Portage QindaTK 0.1.0-r17 and
+Qt 6.11.1. All builds used the existing `dev` preset (`-O0`) through
+`~/scratch/qqo/qq-build`, preserving configured parallelism; all tests ran
+at nice 19 / idle I/O. No software was installed and no live desktop app
+was launched.
+
+- **74 CTest targets qualified:** 27 calc_engine, 27 calc_io, 19 QindaCalc,
+  plus `calc_agent_process`. The final parallel run passed 73/74 in
+  222.97 seconds; the existing three-second recalculation benchmark took
+  3.446 seconds under concurrent load, then passed alone in 1.92 seconds.
+  Its threshold was unchanged. Earlier overlapping-build launch failures
+  and obsolete expectations were corrected before this run.
+- A final recovery audit added persistence for the stale-kept-formula warning
+  flag. The rebuilt `tst_calc_m90_ui`, `tst_calc_condformat_ui` and
+  `tst_calc_whatif_ui` all passed (**3/3**, 30.00 seconds), including the new
+  recovery regression. Only source-comment/whitespace corrections followed compilation.
+- The schema gate was active throughout:
+  `QQO_OOXML_SCHEMA_DIR=/home/cabewse/scratch/qqo/ecma-xsd`. New packages
+  include hidden Solver names, Excel-shaped sparkline groups and calculated
+  pivot fields with date filters; saved files pass ECMA schemas and reopen.
+- Public QXlsx corpus: **482/482** vendored workbooks read, written and
+  re-read in **157.211 seconds** (`data03.xlsx` excluded per D-078).
+  **Zero** changed cells/formula texts, lost charts/pictures, changed print
+  settings, lost rules or schema-invalid outputs. All 271 charts and 48
+  pictures survived; 47 sheets retained print settings. The existing empty
+  relationships-part count difference remains in one public fixture.
+- Solver: known product-mix, transportation, diet, binary knapsack,
+  all-different, bounded Rosenbrock and constrained quadratic results;
+  evolutionary search, infeasible/unbounded/nonlinear-LP refusals and stop.
+  Real-window gates check constraints/options, Keep/Restore, Answer Report,
+  one undo step, recovery, and discarding a worker result after a newer edit.
+- Sparklines: ranges, gaps/zero/connect, hidden and filtered data, date axes,
+  group/custom limits, theme tints, structural edits and Excel interchange.
+  Real-window insertion, type/highlight commands, contextual tab, clear,
+  undo and recovery pass at 1280 and 520 pixels. Empty sparkline locations
+  extend the printable used range.
+- Totals: every AGGREGATE option, nested-call detection, sparse whole-column
+  SUBTOTAL, hidden/filtered rows, and recalculation after filter-input edits.
+  Table rename/resize and kept-rule structural edits have engine/window
+  coverage. Unsupported kept formulas remain unchanged with a save warning.
+- Pivots: calculated formulas use aggregated field totals, survive refresh,
+  schema roundtrip and recovery; source-field/unknown/circular references
+  are refused. Date boundaries include leap day and month/quarter/year
+  transitions. Both new dialogs are exercised at 520 pixels.
+- PDF gates inspect actual output: a cropped embedded header logo has the
+  expected red pixels and no cropped blue pixels; visible legacy notes
+  print while hidden ones do not; a long end-of-sheet note continues across
+  pages through its final marker. No owner workbook was opened.
+- Ribbon squeeze and the desktop menu validator pass, including explicit
+  M90 command identities. The default 1280/520 structural fixtures were
+  deliberately regenerated and are unchanged. All **13 M90 PNGs** were
+  inspected: Solver parameters/results at both widths, its constraint and
+  options dialogs, Answer Report, sparkline insertion/cells/contextual tab
+  at both widths, and calculated-field/date-filter dialogs at 520.
+
+The optional owner-workbook cases remain unrun: nine QtTest cases need
+`QQO_SAMPLE_XLSX`. Microsoft Excel itself, first/even header-picture
+variants and modern threaded-comment layouts remain manual checks; see
+[QindaCalc](qindacalc.md) for the implementation's limits.
+
+Desktop checks for the owner: activate Solver and Sparkline commands from
+the panel; keep/undo a solution in a copy of a workbook; verify its Solver
+model, sparkline groups and calculated pivot formulas in Excel; compare
+first/odd/even headers and note placement on exported PDF with Excel.
+
 ## M87 Diagram gates (D-095)
 
 Qualified on qinda (Portage QindaTK 0.1.0-r17, Qt 6.11.1) in one tree built

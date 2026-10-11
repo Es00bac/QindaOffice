@@ -59,6 +59,7 @@ CalcHost::CalcHost()
     createDataToolActions();   // Text to Columns, Flash Fill, … (M78)
     createCondFormatActions(); // every conditional-format command (M78)
     createViewActions();       // Split, New Window, Custom Views (M82)
+    createM90Actions();        // Solver, sparklines, table design (M90)
     createAssistant();
     insertMenus();
     insertFeatureMenus();
@@ -67,6 +68,7 @@ CalcHost::CalcHost()
     insertPageLayoutMenus();
     insertDataToolMenus();
     insertViewMenus();
+    insertM90Menus();
     wireEditCommands();
     // Undo of a sheet insert/delete (or a load) changes the sheet list.
     connect(m_document, &SpreadsheetDocument::structureChanged, this, [this] {
@@ -201,6 +203,7 @@ void CalcHost::syncFromCursor()
     syncPageLayoutFromCursor(); // M78
     syncDataToolsFromCursor();  // M78
     syncViewsFromCursor();      // M82
+    syncM90FromCursor();        // M90
 }
 
 void CalcHost::commitInput(const CellAddr &addr, const QString &input)
