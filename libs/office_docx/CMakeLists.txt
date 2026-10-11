@@ -20,6 +20,7 @@ add_library(office_docx STATIC
     src/docx_graphics_diagram.cpp
     src/docx_graphics_diagram_new.cpp
     src/docx_graphics_write.cpp
+    src/docx_math.cpp src/docx_math.h
     src/docx_format.cpp
     src/docx_format.h
     src/docx_list_edit.cpp
@@ -102,6 +103,6 @@ target_include_directories(office_docx
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 )
 
-target_link_libraries(office_docx PUBLIC office_ooxml show_model Qt6::Core Qt6::Gui)
+target_link_libraries(office_docx PUBLIC office_ooxml office_math show_model Qt6::Core Qt6::Gui PRIVATE Qt6::GuiPrivate)
 
 qqo_set_strict_warnings(office_docx)

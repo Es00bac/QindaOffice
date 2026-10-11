@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "math_box.h"
 
-#include <QGlyphRun>
 #include <QPainter>
 #include <QPen>
 
@@ -30,9 +29,7 @@ QRectF Box::inkBounds() const
     }
     switch (type) {
     case Type::Glyphs:
-        for (qsizetype i = 0; i < glyphs.size() && i < positions.size(); ++i) {
-            out = unite(out, font.boundingRect(glyphs.at(i)).translated(positions.at(i)));
-        }
+        out = path.boundingRect();
         break;
     case Type::Rule:
     case Type::Placeholder:
@@ -60,16 +57,9 @@ void Box::paint(QPainter &painter, const QPointF &origin) const
     }
     switch (type) {
     case Type::Glyphs:
-        if (!glyphs.isEmpty()) {
-            QGlyphRun run;
-            run.setRawFont(font);
-            run.setGlyphIndexes(glyphs);
-            run.setPositions(positions);
-            painter.save();
-            painter.setPen(color);
-            painter.drawGlyphRun(origin, run);
-            painter.restore();
-        }
+        // Frozen outlines survive arbitrary scene-graph transforms and PDF
+        // paint engines without sharing Qt's thread-affine font engines.
+        painter.fillPath(path.translated(origin), color);
         break;
     case Type::Rule:
         painter.fillRect(rect.translated(origin), color);

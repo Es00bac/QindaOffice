@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "docx_math.h"
 #include "docx_text.h"
 
 #include "docx_format.h"
@@ -289,6 +290,7 @@ std::unique_ptr<QTextDocument> instantiateHeaderFooter(const QTextDocument &docu
 std::unique_ptr<QTextDocument> instantiateHeaderFooter(const QTextDocument &document, const PageFieldValues &values)
 {
     std::unique_ptr<QTextDocument> copy(document.clone());
+    installMathLayout(copy.get());
     copyResources(document, copy.get());
     struct Field {
         int position;

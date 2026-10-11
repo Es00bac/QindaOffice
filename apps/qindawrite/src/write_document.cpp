@@ -3,6 +3,7 @@
 
 #include "docx_style_edit.h"
 #include "docx_text.h"
+#include "docx_math.h"
 #include "page_geometry.h"
 #include "docx_float.h"
 #include "write_endnotes.h"
@@ -18,7 +19,7 @@
 namespace QindaOffice::Apps::Write {
 
 WriteDocument::WriteDocument()
-    : m_text(std::make_unique<QTextDocument>())
+    : m_text([] { auto text = std::make_unique<QTextDocument>(); Docx::installMathLayout(text.get()); return text; }())
     , m_sections(std::make_unique<SectionLayout>(m_text.get(), &m_parts))
     , m_keepRules(std::make_unique<KeepRules>(m_text.get()))
 {
@@ -376,6 +377,7 @@ QTextDocument *WriteDocument::storyDocument(int section, bool footer, Docx::Head
 std::unique_ptr<QTextDocument> WriteDocument::newStory() const
 {
     auto story = std::make_unique<QTextDocument>();
+    Docx::installMathLayout(story.get());
     story->setDefaultFont(headerFont(*m_text));
     story->setDocumentMargin(0);
     story->clearUndoRedoStacks();

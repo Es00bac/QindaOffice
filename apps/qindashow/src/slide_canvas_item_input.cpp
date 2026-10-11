@@ -247,6 +247,8 @@ void SlideCanvasItem::mouseDoubleClickEvent(QMouseEvent *event)
             ++column;
         }
         beginCellEdit(target, row, column);
+    } else if (shape && shape->kind == ShowModel::ShapeKind::Equation) {
+        emit equationEditRequested(target);
     } else {
         beginTextEdit(target);
     }

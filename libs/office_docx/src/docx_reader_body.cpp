@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Paragraphs and lists of a .docx body (runs: docx_reader_runs.cpp).
 
+#include "docx_math.h"
 #include "docx_controls.h"
 #include "docx_format.h"
 #include "docx_properties.h"
@@ -11,6 +12,7 @@
 #include "ooxml_units.h"
 
 #include <QFontMetricsF>
+#include <QScopeGuard>
 #include <QTextBlock>
 #include <QTextDocument>
 #include <QTextTable>
@@ -65,10 +67,18 @@ BodyReader::BodyReader(ReadEnv &env, QTextDocument *document, QString part)
     , m_document(document)
     , m_part(std::move(part))
 {
+    installMathLayout(document);
 }
 
 void BodyReader::readDocument(const XmlElement &container)
 {
+    // AGENT-GUARD: the math adapter installs a real layout before import.
+    // Qt must not lay out a table between cell construction/merge/format
+    // steps: intermediate cell maps and repeated reflow are pathological.
+    // Resume the caller's layout policy only after the entire story exists.
+    const bool layoutEnabled = m_document->isLayoutEnabled();
+    m_document->setLayoutEnabled(false);
+    const auto restoreLayout = qScopeGuard([&] { m_document->setLayoutEnabled(layoutEnabled); });
     QTextCursor cursor(m_document);
     ContainerState state;
     readBlocks(container, cursor, state);

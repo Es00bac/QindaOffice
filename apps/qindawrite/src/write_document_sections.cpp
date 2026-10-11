@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "docx_math.h"
 // WriteDocument (write_document.h), M88 (D-096): Word sections — their
 // settings with Undo, the canvas and pads that lay them out
 // (write_sections.h), every page's frame, the headers and footers each
@@ -287,6 +288,7 @@ void WriteDocument::setLinkedToPrevious(int section, bool footer, Docx::HeaderFo
         // Word copies what the section showed into a story of its own.
         const QTextDocument *shown = m_sections->story(section, footer, slot);
         other.reset(shown != nullptr ? shown->clone() : nullptr);
+        if (other) Docx::installMathLayout(other.get());
         if (!other) {
             other = newStory();
         }

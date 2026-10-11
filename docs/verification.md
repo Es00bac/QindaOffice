@@ -5804,3 +5804,57 @@ behind an extension chevron is a command the user never sees.
       and no command disappears.
 - [ ] QindaCalc with a chart open: type into cells — the chart re-renders
       in place; its window does not disappear, move or jump to the front.
+
+## M92b equation app gates (D-107)
+
+`tst_write_equations` and `tst_show_equations` instantiate the real windows
+and shared equation dialog. They cover draft cancellation, one-step document
+undo/redo, all 23 templates, native import/edit/save/reopen, unknown OMML,
+keyboard slot navigation, conversion history, adjacent equations and typed text,
+math baseline metrics, cloned
+stories, DOCX/PPTX schemas, shape clipboard/FODP, and PDF output. Editor and
+page grabs at 1280 and 520 px must be inspected. Show's compact canvas must
+retain at least 300 logical pixels of width and show glyph ink in addition to
+fraction rules. Math tests also construct layouts on a worker thread, then
+paint them on the GUI thread after the worker exits, and verify enlarged glyphs.
+`tst_docx_import_layout` reuses the 80-row mixed-section native save/reopen
+case with a 30-second timeout; it caught repeated whole-table layout after
+the equation adapter installed its layout early. Import now suspends layout
+through the final Word metric/list passes and restores caller policy.
+Existing app menu-export, ribbon/squeeze and structural-fixture tests remain required.
+
+Qualification on qinda, 2026-10-10, Qt 6.11.1 and frozen QindaTK
+`e6837dc5` (build-tree package, no installation): **73/73 CTest targets,
+714 Qt checks passed, 0 failed, 2 skipped**, 1195.03 seconds. This covers
+every public DOCX, equation-library, Write, Show and slide-model target plus
+the bounded import gate. The skips are the two optional owner-document
+render/page-count probes in `tst_write_docx`; no private corpus was opened.
+The import gate completed in 1.61 seconds. `tst_show_layouts_ui` passed but
+logged twelve menu-reset warnings (Review/AI/Settings/Help, three scene
+resets); the normal UI and menu-export targets logged none.
+
+That broad pass preceded the final assembled-glyph winding-fill and visible
+error-message refinements. The new bracket regression demonstrably failed
+before the fix and passed afterward: every image row through each tall square
+bracket now has ink. The four library and both app equation targets, plus
+both UI/fixture/squeeze and menu-export targets, were relinked and rerun for
+those final refinements: **10/10 CTest, 206 Qt checks passed, 0 failed or
+skipped**, 312.87 seconds, with no QML warnings. A subsequent test-only
+addition covers the DrawingML-styled 28-point plus that the old renderer
+lost at 2×; the full math-layout target passed **9 Qt checks**, including
+explicit ink checks at DPR 1, 2 and 3. No app or renderer source changed
+after the ten-target pass.
+
+Reviewed: math sample sheets at 1×/2×, the styled PowerPoint expression at
+1×/2×/3×, and both apps' equation editors and document pages at 1280/520.
+The final ten sheet/app captures are byte-identical to the inspected images.
+Evidence is on qinda under
+`/mnt/archive/qindaoffice-validation-20261010/m92b/resume/`:
+`ctest.log` (broad), `final-ctest.log`, `powerpoint-dpi-ctest.log`, and
+`final-grabs/`. Synthetic DOCX/PPTX checks used the ECMA Transitional
+schemas through `QQO_OOXML_SCHEMA_DIR` and `xmllint`; generated PDFs were
+rendered and their ink checked.
+
+Manual checks remain: real Word/PowerPoint open/edit/save, desktop panel
+activation, print dialogs, dark/light themes, and non-Latin input methods.
+Never launch into the owner's live desktop without permission.

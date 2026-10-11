@@ -389,6 +389,7 @@ OfficeWindow {
         onTableApplied: function(rows, columns) { window.write.insertTable(rows, columns) }
         onColumnsApplied: function(columns, gutter) { window.write.insertColumns(columns, gutter) }
     }
+    EquationDialog { session: window.write.equations }
     SymbolDialog { id: symbolDialog; symbols: window.write.symbols; onSymbolPicked: function(text) { window.write.insertSymbol(text) } }
     HyperlinkDialog { id: hyperlinkDialog; onLinkApplied: function(url, label) { window.write.insertHyperlink(url, label) } }
     FootnoteDialog {

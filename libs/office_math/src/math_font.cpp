@@ -62,15 +62,13 @@ QRawFont rawForFamily(const QString &family, bool bold, bool italic)
     return QRawFont::fromFont(font);
 }
 
-// Process-wide cache of sized raw fonts by (family, bold, italic, size).
+// QRawFont is thread-affine; each render/layout thread owns its font cache.
 QRawFont cachedRaw(const QString &family, bool bold, bool italic, qreal pixelSize)
 {
-    static QMutex mutex;
-    static QHash<QString, QRawFont> bases;
-    static QHash<QString, QRawFont> sized;
+    thread_local QHash<QString, QRawFont> bases;
+    thread_local QHash<QString, QRawFont> sized;
     const QString key = family + QLatin1Char('|') + QChar(bold ? u'b' : u'-') + QChar(italic ? u'i' : u'-');
     const QString sizedKey = key + QLatin1Char('|') + QString::number(sizeKey(pixelSize));
-    QMutexLocker lock(&mutex);
     if (const auto it = sized.constFind(sizedKey); it != sized.constEnd()) {
         return *it;
     }
@@ -126,9 +124,7 @@ QStringList MathFont::candidateFamilies(const QString &requestedFamily)
 
 MathFont MathFont::open(const QString &requestedFamily)
 {
-    static QMutex mutex;
-    static QHash<QString, MathFont> opened;
-    QMutexLocker lock(&mutex);
+    thread_local QHash<QString, MathFont> opened;
     if (const auto it = opened.constFind(requestedFamily); it != opened.constEnd()) {
         return *it;
     }

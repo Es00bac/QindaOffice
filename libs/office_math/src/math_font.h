@@ -15,9 +15,10 @@
 // y growing DOWN (Qt's convention): a glyph's ascent is -bounds.top().
 //
 // AGENT-GUARD: needs a QGuiApplication (QRawFont::fromFont). Opened fonts
-// and their per-size QRawFonts are cached process-wide behind mutexes, so
-// layouts on different threads may share them; never hand out a QRawFont
-// for mutation.
+// and their per-size QRawFonts are cached per thread. MathFont/GlyphInfo
+// and StretchedGlyph stay on their creating thread (Qt QRawFont contract).
+// EquationLayout freezes glyph outlines and can be painted on another thread.
+// Never hand out a cached QRawFont for mutation.
 
 #include "math_table.h"
 

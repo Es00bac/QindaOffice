@@ -14,7 +14,6 @@
 #include <QList>
 #include <QPainterPath>
 #include <QPointF>
-#include <QRawFont>
 #include <QRectF>
 
 #include <vector>
@@ -38,12 +37,12 @@ public:
     int slot = -1;       // index of the argument slot this box is (layout bookkeeping)
     std::vector<Box> children;
 
-    // Glyphs
-    QRawFont font;
+    // Glyph ids/positions are diagnostic; path holds frozen vector outlines.
+    // No QRawFont survives layout: Qt raw fonts must stay on their thread.
     QList<quint32> glyphs;
     QList<QPointF> positions; // glyph origins relative to the box origin
     QColor color;
-    // Rule: rect; Stroke: path stroked `pen` wide; Placeholder: rect
+    // Glyphs: filled path; Rule: rect; Stroke: path stroked `pen` wide; Placeholder: rect
     QRectF rect;
     QPainterPath path;
     qreal pen = 0;

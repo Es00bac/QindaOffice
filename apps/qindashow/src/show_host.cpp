@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "show_host.h"
+#include "show_equations.h"
 
 #include "presentation_controller.h"
 #include "preferences.h"
@@ -76,6 +77,7 @@ ShowHost::ShowHost()
     createEditing(); // M67: before the menus, which name its commands
     createDesign();  // M75: likewise
     createSlideShow(); // M91: likewise
+    m_equations = new ShowEquations(this);
     insertMenus();
     designMenus();
     wireCanvasUndo();

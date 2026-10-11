@@ -142,6 +142,8 @@ QtObject {
             { id: "links", label: qsTr("Links"), items: [{ action: "insertHyperlinkAction", size: "large" }] },
             { id: "text", label: qsTr("Text"), items: [
                 "insertColumnsAction", { action: "insertHorizontalRuleAction", iconName: "minus" },
+                { action: "writeInsertEquationAction", iconName: "sigma" },
+                { action: "writeEditEquationAction", iconName: "sigma" },
                 { action: "insertSymbolAction", iconName: "omega" }, { action: "insertDateAction", iconName: "calendar" },
                 { action: "insertTimeAction", iconName: "clock" }] },
             { id: "references", label: qsTr("References"), items: [

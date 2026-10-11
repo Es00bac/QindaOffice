@@ -5,6 +5,7 @@
 // becomes when its source part is gone.
 
 #include "pptx_write_shapes.h"
+#include "pptx_equations.h"
 
 #include "render_parts.h"
 
@@ -242,7 +243,7 @@ QString defaultName(const Shape &shape, quint32 id)
     }
     static const char *const kNames[] = {"TextBox", "Rectangle", "Oval",  "Straight Connector", "Straight Arrow Connector",
                                          "Picture", "Shape",     "Table", "Chart",              "Group",
-                                         "Object"};
+                                         "Object", "Equation"};
     return QStringLiteral("%1 %2").arg(QLatin1String(kNames[int(shape.kind)])).arg(id > 1 ? id - 1 : id);
 }
 
@@ -331,6 +332,8 @@ XmlElementPtr pictureFallback(PartWriter &out, const Shape &shape, quint32 id)
 XmlElementPtr generateShape(PartWriter &out, const Shape &shape, quint32 id)
 {
     switch (shape.kind) {
+    case ShapeKind::Equation:
+        return generateEquation(out, shape, id);
     case ShapeKind::TextBox:
     case ShapeKind::Rectangle:
     case ShapeKind::Ellipse:

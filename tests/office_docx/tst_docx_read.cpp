@@ -373,7 +373,8 @@ void DocxReadTest::preservesWhatItCannotEdit()
     QCOMPARE(chart.stringProperty(Docx::kInlineLabel), QStringLiteral("Chart"));
     QCOMPARE(chart.toImageFormat().width(), 200.0);
     const QTextBlock math = doc->body.begin().next();
-    QCOMPARE(math.text(), QStringLiteral("x=2"));
+    QCOMPARE(math.text(), QString(QChar::ObjectReplacementCharacter));
+    QCOMPARE(math.begin().fragment().charFormat().objectType(), QTextFormat::UserObject + 1);
     QVERIFY(math.begin().fragment().charFormat().stringProperty(Docx::kInlineXml).contains(QStringLiteral("oMath")));
     QVERIFY(!doc->parts.warnings.isEmpty());
     QVERIFY(doc->parts.warnings.first().contains(QStringLiteral("chart")));

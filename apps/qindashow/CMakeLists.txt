@@ -67,6 +67,7 @@ qt_add_qml_module(qindashow_app
         src/show_design_tab.cpp src/show_design_tab.h
         src/show_document.cpp src/show_document.h
         src/show_effect_options.cpp src/show_effect_options.h
+        src/show_equations.cpp src/show_equations.h
         src/show_export.cpp src/show_export.h
         src/show_host.cpp src/show_host.h
         src/show_host_ai.cpp

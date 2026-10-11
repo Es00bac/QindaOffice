@@ -22,6 +22,8 @@ add_library(show_model STATIC
     src/chart_interchange.h
     src/chart_interchange.cpp
     src/chart_interchange_write.cpp
+    src/show_equation.cpp src/show_equation.h
+    src/pptx_equations.cpp src/pptx_equations.h
     src/chart_edit.cpp
     src/chart_edit.h
     src/chart_painter.cpp
@@ -162,7 +164,7 @@ target_include_directories(show_model
 # through the suite's own xlsx writer (chart_workbook.h) — a library-to-
 # library link like books_io's and plan_output's; still no Quick, no
 # desktop archives.
-target_link_libraries(show_model PUBLIC Qt6::Core Qt6::Gui KF6::Archive office_ooxml PRIVATE calc_io)
+target_link_libraries(show_model PUBLIC Qt6::Core Qt6::Gui KF6::Archive office_ooxml office_math PRIVATE calc_io)
 
 qqo_set_strict_warnings(show_model)
 

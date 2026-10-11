@@ -5,6 +5,41 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-107: Shared equation drafts with native document objects
+
+**Date:** 2026-10-10 · **Status:** accepted · **Milestone:** M92b.
+
+Write and Show share one `office_quick` equation dialog and painted editor,
+backed by `office_math::EquationEditor`. Window-scoped stable actions expose
+Insert/Edit and all 23 structure templates. Draft history is independent of
+the document; Apply commits once and Cancel leaves the document unchanged.
+OMML is the preservation format. Switching input spelling does not mutate it;
+explicit linear conversion is undoable and warns of representational limits.
+
+Write uses an inline QTextDocument object and a small Qt GuiPrivate layout
+subclass to supply exact equation ascent/descent. Register the layout before
+attaching geometry observers, including cloned stories and merge output.
+Suspend layout throughout DOCX story import and the final metric/list passes,
+then restore caller policy, so bulk table construction does not trigger
+repeated whole-table reflow.
+Show uses an appended shape kind, a14 native math with a compatibility picture,
+and the shared vector layout for every output. Neither format library gains
+a Qt Quick dependency. Existing compound PowerPoint text/math boxes remain
+whole preserved objects, preventing destructive text-only edits.
+
+Qt raw fonts remain in thread-local caches, following the
+[QRawFont thread-affinity contract](https://doc.qt.io/qt-6/qrawfont.html).
+Equation layouts freeze glyph outlines instead of retaining font engines.
+They can cross render threads and paint under arbitrary transforms; the
+actual enlarged Show canvas caught glyph loss missed by unscaled image tests.
+The font-size/slot metrics and the vector outlines come from the same font.
+Joined extender outlines use winding fill: OpenType's intentional overlap
+must remain solid instead of cancelling at every bracket assembly seam.
+
+Narrow Show windows select a separately persisted compact dock workspace,
+with one top inspector tab group, preserving the wide workspace's arrangement.
+See [equations.md](equations.md) for the editor and interchange contract.
+
 ## D-109: Paint long Word documents in a bounded viewport tile
 
 **Date:** 2026-10-10 · **Status:** accepted (QindaWrite large-document

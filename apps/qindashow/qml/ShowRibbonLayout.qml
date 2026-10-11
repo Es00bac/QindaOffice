@@ -120,7 +120,8 @@ QtObject {
                 { id: "actionButtonsMenu", label: qsTr("Action Buttons"), iconName: "mouse-pointer", menu: actionButtonIds }] },
             { id: "links", label: qsTr("Links"), items: [
                 { action: "showInsertLinkAction", size: "large" }, { action: "showInsertActionAction", size: "large" }] },
-            { id: "textInsert", label: qsTr("Text"), items: [{ action: "showInsertTextBoxAction", size: "large" }] },
+            { id: "textInsert", label: qsTr("Text"), items: [{ action: "showInsertTextBoxAction", size: "large" },
+                { action: "showInsertEquationAction", iconName: "sigma" }, { action: "showEditEquationAction", iconName: "sigma" }] },
             { id: "commentsInsert", label: qsTr("Comments"), items: [{ action: "showNewCommentAction", size: "large" }] },
             { id: "media", label: qsTr("Media"), items: [
                 { action: "showInsertVideoAction", size: "large" }, { action: "showInsertAudioAction", size: "large" }] }

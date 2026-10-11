@@ -165,7 +165,7 @@ void countShape(const ShapeScope &scope, const Shape &shape)
         return;
     }
     static const char *const kNames[] = {"text box", "rectangle", "ellipse", "line", "arrow", "picture",
-                                         "autoshape", "table", "chart", "group", "preserved"};
+                                         "autoshape", "table", "chart", "group", "preserved", "equation"};
     ++scope.report->shapes;
     ++scope.report->kinds[QLatin1String(kNames[int(shape.kind)])];
     if (shape.kind == ShapeKind::Preserved) {

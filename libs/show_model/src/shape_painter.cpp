@@ -6,6 +6,7 @@
 
 #include "preset_geometry.h"
 #include "render_parts.h"
+#include "show_equation.h"
 #include "text_painter.h"
 
 #include <QImage>
@@ -366,6 +367,9 @@ void paintShape(QPainter *painter, const Shape &shape)
         painter->translate(-rect.center());
     }
     switch (shape.kind) {
+    case ShapeKind::Equation:
+        paintEquation(painter, shape);
+        break;
     case ShapeKind::Line:
     case ShapeKind::Arrow:
         paintLine(painter, shape);

@@ -7,6 +7,7 @@
 
 #include "write_host.h"
 #include "write_graphics.h"
+#include "write_equations.h"
 
 #include "docx_text.h"
 #include "page_text_item.h"
@@ -118,6 +119,7 @@ void WriteHost::insertMenus()
 
     QList<MenuNode> insertItems = m_format->insertMenuItems();
     insertItems += m_graphics->insertItems();
+    insertItems += m_equations->menuItems();
     insertItems.append(MenuNode::action(m_tableLayout->textToTableId()));
     insertItems.append(MenuNode::separator());
     insertItems += m_typography->insertMenuItems();

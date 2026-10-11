@@ -23,11 +23,14 @@ public:
     [[nodiscard]] MathPosition position() const { return m_position; }
     [[nodiscard]] MathPosition anchor() const { return m_anchor; }
     [[nodiscard]] bool hasSelection() const { return m_position != m_anchor; }
+    [[nodiscard]] Argument selectedArgument() const;
     [[nodiscard]] bool canUndo() const { return !m_undo.isEmpty(); }
     [[nodiscard]] bool canRedo() const { return !m_redo.isEmpty(); }
 
     // Load a fresh owned draft and clear history.
     void reset(const Equation &equation);
+    // Replace the whole draft as one undoable edit (linear-format conversion).
+    void replaceEquation(const Equation &equation);
     bool setPosition(const MathPosition &position, bool extend = false);
     bool insertText(const QString &text);
     bool insertStructure(const Structure &structure);

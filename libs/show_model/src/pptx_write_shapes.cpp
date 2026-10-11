@@ -3,6 +3,7 @@
 // (pptx_write_shapes.h).
 
 #include "pptx_write_shapes.h"
+#include "pptx_equations.h"
 
 #include "ooxml_units.h"
 
@@ -442,7 +443,9 @@ XmlElementPtr writeShape(PartWriter &out, const Shape &shape, quint32 id)
             setId(*e, id);
             return e;
         }
-        return patchShape(out, shape, source, id);
+        auto patched = patchShape(out, shape, source, id);
+        if (shape.kind == ShapeKind::Equation && patched) patchEquation(out, *patched, shape, id);
+        return patched;
     }
     if ((shape.kind == ShapeKind::Preserved || shape.kind == ShapeKind::Chart) && !shape.preserved.isEmpty()
         && out.session.copier != nullptr && out.session.source->contains(shape.preserved.part)) {

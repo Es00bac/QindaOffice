@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "docx_math.h"
 // MailMergeController (write_mailmerge.h): merge fields, rules, Address
 // Block, Greeting Line, Match Fields, Update Labels, Check for Errors and
 // Preview Results.
@@ -294,6 +295,7 @@ void MailMergeController::refreshPreview()
         return;
     }
     auto preview = std::make_unique<QTextDocument>();
+    Docx::installMathLayout(preview.get());
     preview->setUndoRedoEnabled(false);
     Docx::MergeRequest request;
     request.main = m_document->textDocument();

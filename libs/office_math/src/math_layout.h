@@ -16,7 +16,9 @@
 // high-DPI QImage plus where the baseline lies in it, for hosts that embed
 // an equation as a picture. Nothing here touches the model.
 //
-// Threading: reentrant; needs a QGuiApplication (fonts). See math_font.h.
+// Threading: construction uses the calling thread's fonts and needs a
+// QGuiApplication. The completed immutable layout holds vector outlines,
+// not QRawFont engines, and can be painted on another thread. See math_font.h.
 
 #include "math_box.h"
 #include "math_model.h"

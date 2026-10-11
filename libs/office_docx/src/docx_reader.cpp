@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "docx_reader.h"
+#include <QScopeGuard>
 
 #include "docx_comments.h"
 #include "docx_controls.h"
@@ -194,6 +195,16 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
         document->setDefaultTextOption(option);
     };
 
+    // AGENT-GUARD: imported tables are formatted again by the Word metric
+    // and list passes below. With an installed math layout, each intermediate
+    // edit otherwise triggers a whole-table layout (hundreds of times for an
+    // 80-row table). Keep all stories suspended through those final passes.
+    const bool bodyLayoutEnabled = body->isLayoutEnabled();
+    body->setLayoutEnabled(false);
+    const auto restoreLayouts = qScopeGuard([&] {
+        body->setLayoutEnabled(bodyLayoutEnabled);
+        forEachStory(*parts, [](HeaderFooter &story) { story.document->setLayoutEnabled(true); });
+    });
     const bool undo = body->isUndoRedoEnabled();
     body->setUndoRedoEnabled(false);
     body->clear();
@@ -241,6 +252,7 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
                 continue;
             }
             target.document = std::make_unique<QTextDocument>();
+            target.document->setLayoutEnabled(false);
             target.document->setUndoRedoEnabled(false);
             prepare(target.document.get());
             detail::BodyReader headerReader(env, target.document.get(), part);

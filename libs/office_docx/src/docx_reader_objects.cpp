@@ -8,6 +8,8 @@
 
 #include "docx_float.h"
 #include "docx_graphics.h"
+#include "docx_math.h"
+#include "docx_format.h"
 #include "docx_properties.h"
 #include "docx_reader_p.h"
 #include "docx_styles.h"
@@ -34,7 +36,6 @@ const QString kA = QString::fromUtf16(Ooxml::Ns::A);
 const QString kR = QString::fromUtf16(Ooxml::Ns::R);
 const QString kV = QString::fromUtf16(Ooxml::Ns::V);
 const QString kO = QString::fromUtf16(Ooxml::Ns::O);
-const QString kM = QString::fromUtf16(Ooxml::Ns::M);
 const QString kMC = QString::fromUtf16(Ooxml::Ns::MC);
 
 // Namespaces whose mc:Choice the reader can show (as a picture or box).
@@ -324,27 +325,9 @@ void BodyReader::insertPicture(QTextCursor &cursor, const QTextImageFormat &imag
 
 void BodyReader::readMath(const XmlElement &math, QTextCursor &cursor, InlineState &inl, ContainerState &state)
 {
-    // Equations are kept verbatim and shown as their linear text in italics.
-    QString text;
-    std::function<void(const XmlElement &)> walk = [&](const XmlElement &e) {
-        for (const XmlElement *c : e.elements()) {
-            if (c->ns == kM && c->name == u"t") {
-                text += c->text();
-            } else {
-                walk(*c);
-            }
-        }
-    };
-    walk(math);
-    QTextCharFormat format;
-    format.setFontItalic(true);
-    format.setFontFamilies({QStringLiteral("Cambria Math")});
-    format.setProperty(kInlineXml, Ooxml::serializeFragment(math));
-    format.setProperty(kInlineSourcePart, m_part);
-    format.setProperty(kInlineSerial, m_env.nextIsland++);
-    format.setProperty(kInlineLabel, QStringLiteral("Equation"));
-    m_env.approximations[QStringLiteral("equation")] += 1;
-    insertText(cursor, text.isEmpty() ? QStringLiteral("[equation]") : text, format, inl, state);
+    const QTextCharFormat surrounding = charFormatFromRPr(inl.paragraphRunProperties.get(), m_env.theme);
+    const QTextCharFormat format = equationFormat(Ooxml::serializeFragment(math), surrounding, m_part, m_env.nextIsland++);
+    insertObject(cursor, format, inl, state);
 }
 
 } // namespace QindaOffice::Docx::detail

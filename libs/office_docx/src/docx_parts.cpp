@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "docx_model.h"
+#include "docx_math.h"
 
 #include "docx_float.h"
 #include "docx_sections.h"
@@ -13,6 +14,7 @@ void cloneStory(const HeaderFooter &from, HeaderFooter &to)
     to.unlinked = from.unlinked;
     if (from.document) {
         to.document.reset(from.document->clone());
+        installMathLayout(to.document.get());
         if (hasFloatingPictures(*to.document)) {
             installPictureHandler(to.document.get());
         }

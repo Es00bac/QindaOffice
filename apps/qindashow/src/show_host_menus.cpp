@@ -92,6 +92,7 @@ void ShowHost::insertMenus()
                            MenuNode::submenu(QStringLiteral("showSlideShowMenu"), tr("Slide Sho&w"), m_slideShow->menuItems()));
 
     QList<MenuNode> insertItems = m_toolbox->insertMenuItems();
+    insertItems += {a("showInsertEquationAction"), a("showEditEquationAction")};
     insertItems += {MenuNode::action(QString::fromLatin1(TableActionId::kInsertTable)), MenuNode::separator()};
     insertItems += m_actionSettings->insertMenuItems(); // M91: Link, Action, Action Buttons
     insertItems += {MenuNode::separator(), MenuNode::action(QStringLiteral("showAppearOnClickAction"))};

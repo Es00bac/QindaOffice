@@ -25,6 +25,7 @@
 
 #include "assistant_controller.h"
 #include "document_host.h"
+#include "equation_session.h"
 #include "presentation.h"
 #include "presentation_controller.h"
 #include "show_document.h"
@@ -56,6 +57,7 @@ class ShowComments;
 class ShowDesignActions;
 class ShowDesignTab;
 class ShowEffectOptions;
+class ShowEquations;
 class ShowExport;
 class ShowMasterView;
 class ShowMedia;
@@ -119,7 +121,9 @@ class ShowHost : public Quick::DocumentHost {
     Q_PROPERTY(QindaOffice::Apps::Show::ShowSlideShow *slideShow READ slideShow CONSTANT)
     Q_PROPERTY(QindaOffice::Apps::Show::ShowActionSettings *actionSettings READ actionSettings CONSTANT)
     Q_PROPERTY(QindaOffice::Apps::Show::ShowExport *exporter READ exporter CONSTANT)
+    Q_PROPERTY(QindaOffice::Quick::EquationSession *equations READ equations CONSTANT)
 public:
+    Quick::EquationSession *equations() const;
     ShowHost();
     ~ShowHost() override;
 
@@ -309,6 +313,7 @@ private:
     ShowSlideLayouts *m_layouts = nullptr;
     ShowSlideShow *m_slideShow = nullptr;
     ShowActionSettings *m_actionSettings = nullptr;
+    ShowEquations *m_equations = nullptr;
     ShowExport *m_export = nullptr;
     ShowEffectOptions *m_effects = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;

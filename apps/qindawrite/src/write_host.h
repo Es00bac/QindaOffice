@@ -17,6 +17,7 @@
 
 #include "assistant_controller.h"
 #include "document_host.h"
+#include "equation_session.h"
 #include "write_document.h"
 
 #include "page_text_item.h"
@@ -46,6 +47,7 @@ class ParagraphController;
 class TableLayoutController;
 class SpellChecker;
 class TableController;
+class WriteEquations;
 class WriteReviewActions;
 class WriteComments;
 class WriteControls;
@@ -106,7 +108,9 @@ class WriteHost : public Quick::DocumentHost {
     // (write_section_commands.h).
     Q_PROPERTY(QObject *sections READ sectionsObject CONSTANT)
     Q_PROPERTY(QObject *graphics READ graphicsObject CONSTANT)
+    Q_PROPERTY(QindaOffice::Quick::EquationSession *equations READ equations CONSTANT)
 public:
+    Quick::EquationSession *equations() const;
     WriteHost();
     ~WriteHost() override;
 
@@ -281,6 +285,7 @@ private:
     // write_host_ai.cpp
     void createAssistant();
 
+    WriteEquations *m_equations = nullptr;
     WriteDocument *m_document = nullptr;
     PageTextControl *m_control = nullptr;
     const QStringList m_fontFamilies;

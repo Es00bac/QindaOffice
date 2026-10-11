@@ -8,9 +8,10 @@
 // borders and shading, pictures with their original bytes, hyperlinks,
 // bookmarks, page/date fields, footnote markers, tracked insertions and
 // deletions. Everything else (text boxes, shapes, charts, SmartArt,
-// equations, OLE objects, comments, endnotes) is preserved verbatim and
+// OLE objects, comments, endnotes) is preserved verbatim and
 // shown approximately; WordParts::warnings says what.
 //
+// M92b: equations become native OMML inline objects with shared math layout.
 // Page layout, headers/footers (rich, per slot), footnote texts, pictures and
 // the source package land in `parts`.
 //

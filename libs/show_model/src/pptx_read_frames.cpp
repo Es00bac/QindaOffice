@@ -7,6 +7,7 @@
 // mc:AlternateContent, an OLE object's picture, or a labelled box.
 
 #include "pptx_read_shapes.h"
+#include "pptx_equations.h"
 
 #include "pptx_reader.h"
 
@@ -192,6 +193,7 @@ Shape readAlternateContent(const ShapeScope &scope, const Ooxml::XmlElementPtr &
     if (s.children.empty()) {
         s.imagePng = fallbackPicture(scope.ctx, *element);
     }
+    readEquation(s, *element);
     return s;
 }
 

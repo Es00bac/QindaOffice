@@ -6,13 +6,60 @@ QQuickRootItem#ShowWindow
         DockHost#showDock
           DockZone#dockZone_bottom [hidden]
           DockZone#dockZone_center [hidden]
-          DockZone#dockZone_left
-            DockDivider#dockDivider_left_0
-              QQuickRectangle#dockDivider_left_0_focus [hidden]
-            Flex#dockLane_left_0
+          DockZone#dockZone_left [hidden]
+          DockZone#dockZone_right [hidden]
+          DockZone#dockZone_top
+            DockDivider#dockDivider_top_0
+              QQuickRectangle#dockDivider_top_0_focus [hidden]
+            Flex#dockLane_top_0
               DockFrame#dockFrame_slides
                 Box#panelBody
-                  DockTabStrip#dockTabStrip_slides [hidden]
+                  DockTabStrip#dockTabStrip_slides
+                    QQuickTabButton#dockTab_slide
+                      QQuickRectangle#dockTabFocus_slide [hidden]
+                    QQuickTabButton#dockTab_slides
+                      QQuickRectangle#dockTabFocus_slides [hidden]
+                  QQuickItem#dockContent_slide [hidden]
+                    QQuickItem#dockPanelContent_slide [hidden]
+                      SlidePanel#slidePanel [hidden]
+                        Box#propertyEditor [hidden]
+                          ComboBox#slideTransitionCombo [hidden]
+                            QQuickText#comboDisplayText [hidden]
+                          QQuickRectangle#boxFocusRing [hidden]
+                        Caption#propertyLabel [hidden]
+                        CheckBox#slideAdvanceAfter [hidden]
+                        CheckBox#slideAdvanceOnClick [hidden]
+                        LayoutGallery#layoutGallery [hidden]
+                          Card#layoutCard_1 [hidden]
+                            IconButton#layoutNewSlide_1 [hidden]
+                            QQuickRectangle#boxFocusRing [hidden]
+                            SlideThumbItem#layoutThumb_1 [hidden]
+                          Card#layoutCard_2 [hidden]
+                            IconButton#layoutNewSlide_2 [hidden]
+                            QQuickRectangle#boxFocusRing [hidden]
+                            SlideThumbItem#layoutThumb_2 [hidden]
+                          Card#layoutCard_3 [hidden]
+                            IconButton#layoutNewSlide_3 [hidden]
+                            QQuickRectangle#boxFocusRing [hidden]
+                            SlideThumbItem#layoutThumb_3 [hidden]
+                          Card#layoutCard_4 [hidden]
+                            IconButton#layoutNewSlide_4 [hidden]
+                            QQuickRectangle#boxFocusRing [hidden]
+                            SlideThumbItem#layoutThumb_4 [hidden]
+                          Card#layoutCard_5 [hidden]
+                            IconButton#layoutNewSlide_5 [hidden]
+                            QQuickRectangle#boxFocusRing [hidden]
+                            SlideThumbItem#layoutThumb_5 [hidden]
+                          Card#layoutCard_6 [hidden]
+                            IconButton#layoutNewSlide_6 [hidden]
+                            QQuickRectangle#boxFocusRing [hidden]
+                            SlideThumbItem#layoutThumb_6 [hidden]
+                        NumberField#slideAdvanceSeconds [hidden]
+                          Caption#numberLabel [hidden]
+                          QQuickItem#numberStepDown [hidden]
+                          QQuickItem#numberStepUp [hidden]
+                          QQuickText#numberMixedPlaceholder [hidden]
+                          QQuickTextInput#numberInput [hidden]
                   QQuickItem#dockContent_slides
                     QQuickItem#dockPanelContent_slides
                       MasterPane#masterPane [hidden]
@@ -30,63 +77,6 @@ QQuickRootItem#ShowWindow
                   IconButton#panelFloat
                   Overline#panelTitle
                   QQuickRectangle#boxFocusRing [hidden]
-          DockZone#dockZone_right
-            DockDivider#dockDivider_right_0
-              QQuickRectangle#dockDivider_right_0_focus [hidden]
-            Flex#dockLane_right_0
-              DockFrame#dockFrame_slide
-                Box#panelBody
-                  DockTabStrip#dockTabStrip_slide [hidden]
-                  QQuickItem#dockContent_slide
-                    QQuickItem#dockPanelContent_slide
-                      SlidePanel#slidePanel
-                        Box#propertyEditor
-                          ComboBox#slideTransitionCombo
-                            QQuickText#comboDisplayText
-                          QQuickRectangle#boxFocusRing [hidden]
-                        Caption#propertyLabel
-                        CheckBox#slideAdvanceAfter
-                        CheckBox#slideAdvanceOnClick
-                        LayoutGallery#layoutGallery
-                          Card#layoutCard_1
-                            IconButton#layoutNewSlide_1
-                            QQuickRectangle#boxFocusRing [hidden]
-                            SlideThumbItem#layoutThumb_1
-                          Card#layoutCard_2
-                            IconButton#layoutNewSlide_2
-                            QQuickRectangle#boxFocusRing [hidden]
-                            SlideThumbItem#layoutThumb_2
-                          Card#layoutCard_3
-                            IconButton#layoutNewSlide_3
-                            QQuickRectangle#boxFocusRing [hidden]
-                            SlideThumbItem#layoutThumb_3
-                          Card#layoutCard_4
-                            IconButton#layoutNewSlide_4
-                            QQuickRectangle#boxFocusRing [hidden]
-                            SlideThumbItem#layoutThumb_4
-                          Card#layoutCard_5
-                            IconButton#layoutNewSlide_5
-                            QQuickRectangle#boxFocusRing [hidden]
-                            SlideThumbItem#layoutThumb_5
-                          Card#layoutCard_6
-                            IconButton#layoutNewSlide_6
-                            QQuickRectangle#boxFocusRing [hidden]
-                            SlideThumbItem#layoutThumb_6
-                        NumberField#slideAdvanceSeconds
-                          Caption#numberLabel [hidden]
-                          QQuickItem#numberStepDown [hidden]
-                          QQuickItem#numberStepUp [hidden]
-                          QQuickText#numberMixedPlaceholder [hidden]
-                          QQuickTextInput#numberInput
-                  QQuickRectangle#boxFocusRing [hidden]
-                Box#panelHeader
-                  IconButton#dockPlacement_slide
-                  IconButton#panelClose
-                  IconButton#panelCollapse
-                  IconButton#panelFloat
-                  Overline#panelTitle
-                  QQuickRectangle#boxFocusRing [hidden]
-          DockZone#dockZone_top [hidden]
           QQuickItem#dockCanvas
             Flex#dockZone_overlay [hidden]
             SlideEditor#slideEditor

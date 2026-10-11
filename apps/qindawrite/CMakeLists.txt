@@ -76,6 +76,7 @@ qt_add_qml_module(qindawrite_app
         src/page_text_accessible.cpp src/page_text_accessible.h
         src/page_text_control.cpp src/page_text_control.h
         src/page_text_control_clipboard.cpp
+        src/page_typing_format.cpp src/page_typing_format.h
         src/page_text_item.cpp src/page_text_item.h src/page_text_paint.cpp
         src/pdf_exporter.cpp src/pdf_exporter.h
         src/spell_checker.cpp src/spell_checker.h
@@ -85,6 +86,7 @@ qt_add_qml_module(qindawrite_app
         src/table_layout.cpp src/table_layout.h
         src/write_graphics.cpp src/write_graphics.h
         src/write_borders.cpp src/write_borders.h
+        src/write_equations.cpp src/write_equations.h
         src/write_font.cpp src/write_font.h
         src/write_lists.cpp src/write_lists.h src/write_lists_dialogs.cpp
         src/write_navigation.cpp src/write_navigation.h

@@ -76,6 +76,23 @@ void EquationEditor::reset(const Equation &equation)
     edited();
 }
 
+void EquationEditor::replaceEquation(const Equation &equation)
+{
+    remember();
+    m_equation = equation.clone();
+    if (m_equation.lines.isEmpty()) m_equation.lines.append(Argument{});
+    m_position = {};
+    m_anchor = {};
+    edited();
+}
+
+Argument EquationEditor::selectedArgument() const
+{
+    const Argument *slot = slotArgument(m_equation, m_position);
+    return slot && m_position.sameSlot(m_anchor)
+        ? slice(*slot, qMin(m_position.offset, m_anchor.offset), qMax(m_position.offset, m_anchor.offset)) : Argument{};
+}
+
 bool EquationEditor::setPosition(const MathPosition &position, bool extend)
 {
     const Argument *slot = slotArgument(m_equation, position);

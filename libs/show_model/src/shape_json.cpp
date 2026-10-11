@@ -13,6 +13,10 @@ QJsonObject shapeToJson(const Shape &shape)
 {
     QJsonObject object;
     object.insert(QStringLiteral("kind"), int(shape.kind));
+    if (shape.kind == ShapeKind::Equation) {
+        object.insert(QStringLiteral("equationXml"), shape.equationXml);
+        object.insert(QStringLiteral("equationSize"), shape.equationSize);
+    }
     object.insert(QStringLiteral("rect"),
                   QJsonArray{shape.rect.x(), shape.rect.y(), shape.rect.width(), shape.rect.height()});
     object.insert(QStringLiteral("rotation"), shape.rotation);
@@ -96,11 +100,13 @@ Shape shapeFromJson(const QJsonObject &object)
 {
     Shape shape;
     shape.kind = ShapeKind(qBound(0, object.value(QStringLiteral("kind")).toInt(int(ShapeKind::TextBox)),
-                                  int(ShapeKind::Preserved)));
+                                  int(ShapeKind::Equation)));
     const QJsonArray rect = object.value(QStringLiteral("rect")).toArray();
     if (rect.size() == 4) {
         shape.rect = QRectF(rect[0].toDouble(), rect[1].toDouble(), rect[2].toDouble(), rect[3].toDouble());
     }
+    shape.equationXml = object.value(QStringLiteral("equationXml")).toString();
+    shape.equationSize = qBound<qreal>(6, object.value(QStringLiteral("equationSize")).toDouble(24), 144);
     shape.rotation = object.value(QStringLiteral("rotation")).toDouble();
     shape.fill = Json::color(object.value(QStringLiteral("fill")), Qt::transparent);
     shape.stroke = Json::color(object.value(QStringLiteral("stroke")), Qt::black);

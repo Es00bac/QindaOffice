@@ -119,7 +119,8 @@ OfficeWindow {
         id: dock
         objectName: "showDock"
         model: Tk.DockModel { storageKey: "qindashow/window" }
-        workspace: "show"
+        readonly property bool compact: width < Tk.Theme.size.dialogWidth * 1.5
+        workspace: compact ? "showCompact" : "show"
         canvas: SlideEditor {
             id: editor
             showHost: window.showHost
@@ -128,8 +129,9 @@ OfficeWindow {
             panelId: "slides"
             title: qsTr("Slides")
             iconName: "layout-list"
-            zone: "left"
-            extent: 220
+            zone: dock.compact ? "top" : "left"
+            group: dock.compact ? "showInspector" : ""
+            extent: dock.compact ? Tk.Theme.size.control * 5 : 220
             minWidth: 160
             closable: true
             // M75: the Slide Master view shows the masters and layouts here.
@@ -150,8 +152,10 @@ OfficeWindow {
             panelId: "slide"
             title: qsTr("Slide")
             iconName: "layout-template"
-            zone: "right"
-            extent: 280
+            zone: dock.compact ? "top" : "right"
+            group: dock.compact ? "showInspector" : ""
+            groupActive: !dock.compact
+            extent: dock.compact ? Tk.Theme.size.control * 5 : 280
             minWidth: 200
             closable: true
             SlidePanel { showHost: window.showHost }
@@ -160,7 +164,7 @@ OfficeWindow {
             panelId: "comments"
             title: qsTr("Comments")
             iconName: "message-square"
-            zone: "right"
+            zone: dock.compact ? "overlay" : "right"
             mode: "hidden"
             extent: 300
             minWidth: 220
@@ -170,7 +174,7 @@ OfficeWindow {
             panelId: "formatBackground"
             title: qsTr("Format Background")
             iconName: "paint-bucket"
-            zone: "right"
+            zone: dock.compact ? "overlay" : "right"
             mode: "hidden"
             extent: 300
             minWidth: 220
@@ -180,7 +184,7 @@ OfficeWindow {
             panelId: "textStyles"
             title: qsTr("Text Styles")
             iconName: "type"
-            zone: "right"
+            zone: dock.compact ? "overlay" : "right"
             mode: "hidden"
             extent: 300
             minWidth: 220
@@ -190,7 +194,7 @@ OfficeWindow {
             panelId: "assistant"
             title: qsTr("Assistant")
             iconName: "sparkles"
-            zone: "right"
+            zone: dock.compact ? "overlay" : "right"
             mode: "hidden"
             extent: 320
             minWidth: 240
@@ -204,6 +208,8 @@ OfficeWindow {
             window.host.actions.setChecked("showMasterTextStylesAction", !hidden.includes("textStyles"))
         }
     }
+
+    EquationDialog { session: window.showHost.equations }
 
     // The show: a fullscreen player on this window's screen, a presenter
     // view on another screen when one exists. Both exist only while the

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "docx_math.h"
 // MailMergeController (write_mailmerge.h): Finish & Merge — the merged
 // document in a new window, printed or as a PDF, and the e-mail messages
 // handed to QindaMail one recipient at a time.
@@ -59,6 +60,7 @@ std::pair<int, int> MailMergeController::rangeOf(const QVariantMap &range) const
 std::shared_ptr<QTextDocument> MailMergeController::mergedDocument(const QVariantMap &range, Docx::MergeResult *result)
 {
     auto out = std::make_shared<QTextDocument>();
+    Docx::installMathLayout(out.get());
     out->setUndoRedoEnabled(false);
     const auto [first, last] = rangeOf(range);
     Docx::MergeRequest request;

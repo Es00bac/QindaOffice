@@ -55,6 +55,7 @@ endfunction()
 qt_add_library(office_quick STATIC)
 
 set(office_quick_qml
+    qml/EquationDialog.qml
     qml/AboutDialog.qml
     qml/CloseConsentDialog.qml
     qml/FindBar.qml
@@ -87,6 +88,8 @@ qt_add_qml_module(office_quick
     RESOURCE_PREFIX /qt/qml
     DEPENDENCIES QtQuick QindaTK
     SOURCES
+        src/equation_session.cpp src/equation_session.h
+        src/equation_canvas.cpp src/equation_canvas.h
         src/action_model.cpp src/action_model.h
         src/agent_runtime.cpp src/agent_runtime.h
         src/document_host_agent.cpp
@@ -143,6 +146,7 @@ target_include_directories(office_quick
 # Wayland appmenu announcement (Qt 6.11 private API).
 target_link_libraries(office_quick
     PUBLIC
+        office_math
         Qt6::Core
         Qt6::Concurrent
         Qt6::Gui

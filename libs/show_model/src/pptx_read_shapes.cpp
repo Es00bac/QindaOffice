@@ -3,6 +3,7 @@
 // inheritance (pptx_read_shapes.h).
 
 #include "pptx_read_shapes.h"
+#include "pptx_equations.h"
 
 #include "pptx_origin.h"
 #include "preset_geometry.h"
@@ -10,6 +11,7 @@
 #include "pptx_reader.h"
 
 #include "ooxml_units.h"
+#include "ooxml_namespaces.h"
 
 #include <QBuffer>
 #include <QFileInfo>
@@ -219,6 +221,12 @@ Shape readSp(const ShapeScope &scope, const Ooxml::XmlElementPtr &element, const
     }
     if (s.kind == ShapeKind::TextBox || s.kind == ShapeKind::Rectangle || s.kind == ShapeKind::Ellipse) {
         s.adjust.clear();
+    }
+    if (!readEquation(s, e) && e.descendant(QString::fromUtf16(Ooxml::Ns::A14), u"m")) {
+        Shape preview = s;
+        s.kind = ShapeKind::Preserved;
+        s.preserved = {Ooxml::serializeFragment(e), scope.ctx.part, QStringLiteral("Mixed equation text")};
+        s.children = {preview}; s.childRect = s.rect; s.paragraphs.clear();
     }
     // A SmartArt drawing shape (dsp:sp) lays its text out in its own box
     // (dsp:txXfrm): render it as the shape plus a text box over that box.

@@ -83,7 +83,7 @@ Box Layouter::glyphBox(const GlyphInfo &glyph, const QColor &color) const
 {
     Box b;
     b.type = Box::Type::Glyphs;
-    b.font = glyph.font;
+    b.path = glyph.font.pathForGlyph(glyph.glyph);
     b.glyphs = {glyph.glyph};
     b.positions = {QPointF(0, 0)};
     b.color = color;
@@ -101,7 +101,11 @@ Box Layouter::stretchedBox(const StretchedGlyph &glyph, const QColor &color) con
 {
     Box b;
     b.type = Box::Type::Glyphs;
-    b.font = glyph.font;
+    // OpenType extender glyphs intentionally overlap. Winding fill keeps
+    // those joins solid; odd-even fill cuts holes at every overlap seam.
+    b.path.setFillRule(Qt::WindingFill);
+    for (qsizetype i = 0; i < glyph.glyphs.size() && i < glyph.positions.size(); ++i)
+        b.path.addPath(glyph.font.pathForGlyph(glyph.glyphs.at(i)).translated(glyph.positions.at(i)));
     b.glyphs = glyph.glyphs;
     b.positions = glyph.positions;
     b.color = color;

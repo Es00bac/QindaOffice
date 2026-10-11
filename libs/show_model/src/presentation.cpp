@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "presentation.h"
+#include "math_omml.h"
+#include "math_linear.h"
 
 #include <QRegularExpression>
 
@@ -155,6 +157,10 @@ TableRegion Table::regionAt(int row, int column) const
 
 QString Shape::displayText() const
 {
+    if (kind == ShapeKind::Equation) {
+        const auto equation = Math::readOmmlFragment(equationXml);
+        return equation ? Math::toLinear(*equation) : QString();
+    }
     QString out;
     appendParagraphs(out, paragraphs);
     for (const TableRow &row : table.rows) {
@@ -184,6 +190,7 @@ bool Shape::holdsText() const
     case ShapeKind::Table:
     case ShapeKind::Chart:
     case ShapeKind::Group:
+    case ShapeKind::Equation:
     case ShapeKind::Preserved:
         return false;
     }

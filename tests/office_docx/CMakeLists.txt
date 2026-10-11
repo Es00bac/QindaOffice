@@ -25,3 +25,10 @@ endforeach()
 
 # Graphics check the edited embedded workbook through calc_io.
 target_link_libraries(tst_docx_graphics PRIVATE calc_io)
+# M92b: the preinstalled equation layout must not reflow an 80-row table
+# for each cell/Word-metric mutation during import. Reuse the real native
+# read/write/read gate with a bounded wall time (normally below two seconds).
+add_test(NAME tst_docx_import_layout COMMAND tst_docx_sections unchangedSaveKeepsEverySection)
+set_tests_properties(tst_docx_import_layout PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 30)

@@ -164,6 +164,7 @@ public:
     void paint(QPainter *painter) override;
 
 signals:
+    void equationEditRequested(const QString &shapeId);
     void shapeInserted(const QString &shapeId);
     void shapeRemoved(int index, const ShowModel::Shape &removed);
     void shapeGeometryEdited(const QString &shapeId, const QRectF &oldRect, const QRectF &newRect);

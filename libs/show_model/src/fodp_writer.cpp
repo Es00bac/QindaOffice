@@ -121,7 +121,7 @@ void writeShape(QXmlStreamWriter &xml, StyleRegistry &styles, const Shape &shape
         return;
     }
     if (shape.kind == ShapeKind::Table || shape.kind == ShapeKind::Chart || shape.kind == ShapeKind::Group
-        || shape.kind == ShapeKind::Preserved) {
+        || shape.kind == ShapeKind::Preserved || shape.kind == ShapeKind::Equation) {
         // LibreOffice sees a picture of what QindaShow draws; qq:shape keeps
         // the shape itself.
         xml.writeStartElement(QStringLiteral("draw:frame"));

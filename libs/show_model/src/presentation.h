@@ -55,6 +55,7 @@ enum class ShapeKind {
     Chart,     // Shape::chart drawn from cached values; the frame is preserved (edits: D-076)
     Group,     // Shape::children in the Shape::childRect coordinate space
     Preserved, // Office content QindaShow cannot edit (SmartArt, media, OLE, ink, …)
+    Equation,  // M92b: native OMML, rendered by office_math
 };
 
 // How a shape arrives when its build step is reached. Appear is the M8
@@ -230,6 +231,8 @@ struct Shape {
     ImageInfo image;
     Table table;
     ChartData chart;
+    QString equationXml;   // self-contained native m:oMath / m:oMathPara
+    qreal equationSize = 24; // surrounding font size, points
     // Group members; the render-only fallback of Preserved content.
     // AGENT-GUARD: std::vector, not QList — Qt's operator== detection on
     // QList<Shape> recurses into Shape itself and silently deletes

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_host.h"
+#include "write_equations.h"
 #include "write_comments.h"
 #include "write_controls.h"
 #include "docx_list_edit.h"
@@ -108,12 +109,13 @@ WriteHost::WriteHost()
             [this](const QString &text) { showStatusMessage(text, 6000); });
     connect(m_control, &PageTextControl::cursorPositionChanged, this, [this] { emit rulerChanged(); });
     connect(m_control, &PageTextControl::doubleClicked, this, [this](int position) {
-        static_cast<void>(m_graphics->editAt(position) || m_review->editFootnoteAt(position) || m_notes->editEndnoteAt(position));
+        static_cast<void>(m_equations->editAt(position) || m_graphics->editAt(position) || m_review->editFootnoteAt(position) || m_notes->editEndnoteAt(position));
     });
     connect(m_document, &WriteDocument::pageSetupChanged, this, [this] {
         emit pageSetupChanged();
         emit rulerChanged();
     });
+    m_equations = new WriteEquations(this);
     createMailings(); // M77 (D-086): write_host_m77.cpp
     createTextActions();
     createAssistant();
