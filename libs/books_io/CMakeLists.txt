@@ -34,6 +34,7 @@ add_library(books_io STATIC
     src/iif_import_lists.cpp
     src/iif_import_orders.cpp
     src/iif_import_p.h
+    src/iif_import_time.cpp
     src/iif_import_transactions.cpp
     src/iif_import_tx_p.h
     src/iif_reader.cpp

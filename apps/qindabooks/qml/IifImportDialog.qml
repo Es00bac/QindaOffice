@@ -11,7 +11,7 @@ import QindaOffice.Books.App
 // shown is exactly what Import will do: the lists added or already here,
 // each transaction type as documents or journal entries, what is already in
 // the books, the accounts the company lacks (map each to one of its own),
-// and every refused transaction with its line numbers. Import then makes a
+// and every refused record with its line numbers. Import then makes a
 // backup copy and posts everything as one batch.
 Tk.Dialog {
     id: dialog
@@ -56,6 +56,23 @@ Tk.Dialog {
         refresh()
     }
     function importNow() { answer = books.importIif(fileUrl, options()); return answer }
+    function readyText(summary) {
+        let parts = []
+        if (summary.posted > 0) parts.push(qsTr("%n transaction(s) ready.", "", summary.posted))
+        if (summary.timeAdded === 1) parts.push(qsTr("One time activity ready."))
+        else if (summary.timeAdded > 1) parts.push(qsTr("%1 time activities ready.").arg(summary.timeAdded))
+        return parts.length ? parts.join(" ") : qsTr("Lists ready.")
+    }
+    function importedText(summary) {
+        let parts = []
+        if (summary.posted > 0)
+            parts.push(qsTr("%n transaction(s) posted (%1 of debits).", "", summary.posted).arg(summary.postedText))
+        if (summary.timeAdded === 1) parts.push(qsTr("One time activity imported."))
+        else if (summary.timeAdded > 1) parts.push(qsTr("%1 time activities imported.").arg(summary.timeAdded))
+        if (!parts.length) parts.push(qsTr("Lists imported."))
+        parts.push(qsTr("The books as they were before are saved at %1.").arg(summary.backupPath))
+        return parts.join(" ")
+    }
     onAccepted: {
         if (done) return
         if (preview === null) { fileDialog.open(); return }
@@ -79,8 +96,7 @@ Tk.Dialog {
             variant: dialog.done ? "success" : "danger"
             title: dialog.done ? qsTr("Imported") : qsTr("Nothing imported")
             text: dialog.answer === null ? "" : dialog.done
-                  ? qsTr("%n transaction(s) posted (%1 of debits). The books as they were before are saved at %2.", "",
-                         dialog.answer.posted).arg(dialog.answer.postedText).arg(dialog.answer.backupPath)
+                  ? dialog.importedText(dialog.answer)
                   : String(dialog.answer.error || "")
         }
         Tk.Notice {
@@ -88,18 +104,19 @@ Tk.Dialog {
             visible: dialog.preview !== null && dialog.answer === null
             variant: dialog.preview !== null && dialog.preview.ok !== true ? "danger" : dialog.refused.length > 0 ? "warning" : "info"
             title: dialog.preview !== null && dialog.preview.ok !== true ? qsTr("This file cannot be imported")
-                   : qsTr("Ready to import %n transaction(s)", "", dialog.preview !== null ? dialog.preview.posted : 0)
+                   : qsTr("Ready to import QuickBooks data")
             text: dialog.preview === null ? "" : dialog.preview.ok !== true ? String(dialog.preview.error || "")
-                  : dialog.refused.length > 0 ? qsTr("%n transaction(s) cannot be imported as they are; see below.", "", dialog.refused.length)
-                  : qsTr("Every transaction in the file balances and every account is known.")
+                  : dialog.refused.length > 0 ? qsTr("%n record(s) cannot be imported as they are; see below.", "", dialog.refused.length)
+                  : dialog.readyText(dialog.preview)
         }
         Tk.Grid {
             visible: dialog.preview !== null && dialog.preview.ok === true
-            columns: "2fr 3fr"
+            columns: dialog.width < Tk.Theme.size.dialogWidth * 1.5 ? "1fr" : "2fr 3fr"
             columnGap: Tk.Theme.space.lg
+            rowGap: Tk.Theme.space.lg
             Tk.DataTable {
                 objectName: "iifLists"
-                implicitHeight: Tk.Theme.size.row * 7
+                implicitHeight: Tk.Theme.size.row * 9
                 model: dialog.shown !== null ? (dialog.shown.lists || []) : []
                 columns: [
                     Tk.TableColumn { key: "label"; title: qsTr("List"); flex: 1 },
@@ -110,7 +127,8 @@ Tk.Dialog {
             }
             Tk.DataTable {
                 objectName: "iifTransactions"
-                implicitHeight: Tk.Theme.size.row * 7
+                implicitHeight: dialog.preview !== null && dialog.preview.posted === 0
+                                ? Tk.Theme.size.row * 3 : Tk.Theme.size.row * 7
                 model: dialog.shown !== null ? (dialog.shown.transactions || []) : []
                 emptyText: qsTr("No transactions in this file")
                 columns: [
@@ -147,7 +165,7 @@ Tk.Dialog {
             }
         }
         Tk.Caption { visible: dialog.unmapped.length > 0; wrapMode: Text.Wrap; text: qsTr("Map each one to an account here, or add it to the chart of accounts and choose the file again.") }
-        Tk.SectionHeader { visible: dialog.refused.length > 0; title: qsTr("Refused transactions") }
+        Tk.SectionHeader { visible: dialog.refused.length > 0; title: qsTr("Refused records") }
         Repeater {
             objectName: "iifRefused"
             model: dialog.refused.slice(0, 30)
@@ -182,7 +200,7 @@ Tk.Dialog {
                 id: skipBox
                 objectName: "iifSkipRefused"
                 visible: dialog.refused.length > 0
-                text: qsTr("Import the rest and leave out the %n refused transaction(s)", "", dialog.refused.length)
+                text: qsTr("Import the rest and leave out the %n refused record(s)", "", dialog.refused.length)
             }
         }
     }

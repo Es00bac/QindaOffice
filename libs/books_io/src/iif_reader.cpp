@@ -102,11 +102,17 @@ IifDocument parse(const QByteArray &bytes)
         record.type = first;
         record.line = lineNo;
         if (first != QLatin1String("ENDTRNS")) {
-            if (!headers.contains(first)) {
+            // AGENT-NOTE: Intuit's Pro Timer IIF instructions show a
+            // !TIMEACCT header followed by TIMEACT data rows. Other exports
+            // use !TIMEACT; both name the same fields.
+            const QString header = first == QLatin1String("TIMEACT") && !headers.contains(first)
+                                       && headers.contains(QStringLiteral("TIMEACCT"))
+                ? QStringLiteral("TIMEACCT") : first;
+            if (!headers.contains(header)) {
                 doc.problems << QStringLiteral("line %1: a %2 row before any !%2 header").arg(lineNo).arg(first);
                 continue;
             }
-            const QStringList &names = headers.value(first);
+            const QStringList &names = headers.value(header);
             for (qsizetype i = 0; i < names.size(); ++i) {
                 if (!names.at(i).isEmpty()) {
                     record.fields.insert(names.at(i), fields.value(i + 1));

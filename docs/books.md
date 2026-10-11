@@ -754,9 +754,21 @@ UTF-8 else Windows-1252.
   customer:job), `PAID Y` imports one closed, and an order already in the
   books (vendor, date, number, total) is skipped. Before M68 these blocks
   were refused for an unmapped account.
+- **Employees and time (M98).** `EMP` imports name, contact fields and active
+  state into the employee list without importing payroll identity or pay
+  setup. `TIMEACT` rows (also `TIMEACCT` headers) import dated durations,
+  worker, customer:job, service item, class, notes and the not-billable or
+  unbilled-billable state. A counted match against existing time lets two
+  identical rows in one file both arrive, while a second import adds neither.
+  Already-billed time, time transferred to payroll, unknown billing states
+  and records whose date, duration or required references do not read are
+  refused with line numbers. Those states need invoice or paycheck links the
+  IIF row does not supply; they are not silently made billable again. Preview
+  shows employee and time counts separately from ledger postings. See
+  [D-106](decisions.md#d-106-import-quickbooks-employee-and-time-rows-without-inventing-billing-links).
 - **One batch, previewed.** The import runs in one SQL transaction; the
   preview is the same run rolled back, so its counts are what Import does.
-  Import refuses while any transaction is refused unless the user chooses
+  Import refuses while any record is refused unless the user chooses
   to leave those out, and makes a timestamped backup copy first (postings
   are never undone, D-045; the copy is the way back).
 
@@ -1120,6 +1132,10 @@ purchase-order form, IIF `PURCHORDR`, durations in CSV and Excel) and the
 alignment case of `tst_books_io_checks`; `tst_qindabooks_m68` and
 `tst_qindabooks_m68_dialogs` — see
 [verification](verification.md#m68-books-gates-d-077).
+M98 (D-106): `tst_books_io_iif_time` (preview, repeated rows, second import,
+billed-row refusal), the existing IIF and service import tests, and
+`tst_qindabooks_dialogs` with the IIF time preview and import at 1280/520 —
+see [verification](verification.md#m98-books-iif-gates-d-106).
 M71 (D-081): `tests/books_payroll/` (`tst_payroll_tables`,
 `tst_payroll_federal`, `tst_payroll_colorado`, `tst_payroll_paycheck`,
 `tst_payroll_estimates`, `tst_payroll_calendar`, `tst_payroll_custom` — the

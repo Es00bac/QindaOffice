@@ -44,6 +44,7 @@ struct Context {
 [[nodiscard]] QString systemRoleFor(const QString &name, int accountType, const QString &extra);
 
 void importLists(Context &ctx, const QList<IifRecord> &rows);
+void importEmployeesAndTime(Context &ctx, const QList<IifRecord> &rows);
 void importTransactions(Context &ctx, const QList<IifTransaction> &transactions);
 // After the transactions: HIDDEN accounts become inactive where they can.
 void deactivateHidden(Context &ctx);

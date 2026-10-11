@@ -22,6 +22,9 @@ qqo_add_books_io_test(tst_books_io_export)
 # M63 (D-071): QuickBooks IIF import (lists, transactions, preview, mapping,
 # idempotence, the export round trip) and QuickBooks Online list CSVs.
 qqo_add_books_io_test(tst_books_io_iif)
+# M98: employee and time-activity rows, counted duplicates and refusal of
+# already-billed time that cannot retain its invoice link.
+qqo_add_books_io_test(tst_books_io_iif_time)
 # M63 (D-071 item 7): voucher check printing (words, builder, refusals,
 # one check per page with the values where the stock expects them).
 qqo_add_books_io_test(tst_books_io_checks)

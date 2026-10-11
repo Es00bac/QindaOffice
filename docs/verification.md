@@ -1,6 +1,28 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Verification
 
+## M98 Books IIF gates (D-106)
+
+On qinda with the frozen QindaTK r18 SDK, the focused
+`tst_books_io_iif_time`, `tst_books_io_iif`,
+`tst_qindabooks_essentials` and `tst_qindabooks_dialogs` CTests passed
+**4/4**, zero failures. The employee/time gate verifies that an Intuit
+`!TIMEACCT` header with `TIMEACT` rows parses, preview rolls back,
+duplicate-looking source rows remain distinct on first import, a repeat
+adds none, and billed/unknown-status time refuses the whole strict batch.
+The real dialog shows employee and time counts, imports one time entry,
+and runs at 1280 and 520 px. After stacking the two tables at 520 px,
+the affected service and dialog targets passed again **2/2**. The final
+`qindabooks_iif_time_preview_{1280,520}.png` grabs were inspected: the
+list names, counts, status, and Import control are readable at both widths.
+Default-window fixtures did not change. The test data are synthetic; no
+private company file was copied or changed.
+
+The remaining manual gate is a real QuickBooks Desktop employee/time IIF
+export, plus an explicit decision on how to handle already-billed and
+payroll-transferred rows from that file. The importer refuses those rows
+today rather than inventing an invoice or paycheck link.
+
 ## QindaWrite long-document display (D-109)
 
 `tst_write_long_pages` opens a 35-page synthetic document at 1280 and

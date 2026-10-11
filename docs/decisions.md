@@ -40,6 +40,35 @@ Narrow Show windows select a separately persisted compact dock workspace,
 with one top inspector tab group, preserving the wide workspace's arrangement.
 See [equations.md](equations.md) for the editor and interchange contract.
 
+## D-106: Import QuickBooks employee and time rows without inventing billing links
+
+**Date:** 2026-10-10 · **Status:** accepted · **Milestone:** M98.
+
+QindaBooks already imported IIF lists, ledger transactions and purchase
+orders, but its parser treated employee and time-activity rows as unrecognized
+lists. A time row marked billed cannot safely become ordinary unbilled time:
+QindaBooks derives that state from a live invoice line, and an IIF time row
+does not carry the invoice link. The same problem applies to time transferred
+to payroll. Importing either as unbilled could charge or pay it twice.
+
+The existing single-transaction preview/import reads `EMP` into the minimal
+employee list and `TIMEACT` time into `TimeTracking`. The reader accepts the
+`!TIMEACCT` header with `TIMEACT` rows shown in [Intuit's Pro Timer IIF
+instructions](https://quickbooks.intuit.com/learn-support/en-us/help-article/cash-flow/features-discontinued-quickbooks-desktop-2022-22/L5otYyqZk_US_en_US),
+as well as `!TIMEACT`. Status 0 is not billable; 1 is billable and needs a
+customer:job and service item. Status 2, an unknown status, invalid time, and
+time transferred to payroll are refused with source line numbers. The user
+can leave refused records out explicitly; otherwise the whole batch rolls
+back. Employee payroll identity and pay setup stay out of this import. A
+counted semantic signature preserves repeated identical activities in one
+file but skips them when the file is imported again.
+
+The preview and result name employee and time counts separately from ledger
+postings. Narrow dialogs stack the list and transaction tables so names and
+counts remain readable. The company-file schema does not change. The still
+open Books work—job costing, billable expenses, rate levels and blank-stock
+checks—remains explicit in [books.md](books.md#out-of-scope--plainly).
+
 ## D-109: Paint long Word documents in a bounded viewport tile
 
 **Date:** 2026-10-10 · **Status:** accepted (QindaWrite large-document

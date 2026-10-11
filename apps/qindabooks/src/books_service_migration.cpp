@@ -6,7 +6,7 @@
 // AGENT-CONTRACT (QML, IifImportDialog.qml): previewIif / importIif take
 // {accountMap: {"QuickBooks name": accountId}, autoApply (default true),
 // skipRefused} and answer {ok, committed, error, backupPath, posted,
-// postedText, lists[{key, label, added, existing, skipped}],
+// postedText, timeAdded, lists[{key, label, added, existing, skipped}],
 // transactions[{type, count, documents, journal, duplicates, refused}],
 // refused[{firstLine, lastLine, type, reason}], unmapped[{name, lines,
 // linesText}], notes[]}.
@@ -79,13 +79,16 @@ QVariantMap BooksService::runIif(const QUrl &fileUrl, const QVariantMap &options
     out.insert(QStringLiteral("committed"), report.committed);
     out.insert(QStringLiteral("backupPath"), backup);
     out.insert(QStringLiteral("posted"), report.posted);
+    out.insert(QStringLiteral("timeAdded"), report.timeActivities.added);
     out.insert(QStringLiteral("postedText"), moneyFormat().text(report.postedDebits));
     out.insert(QStringLiteral("lists"),
                QVariantList{listRow(QStringLiteral("accounts"), tr("Accounts"), report.accounts),
                             listRow(QStringLiteral("customers"), tr("Customers"), report.customers),
                             listRow(QStringLiteral("vendors"), tr("Vendors"), report.vendors),
+                            listRow(QStringLiteral("employees"), tr("Employees"), report.employees),
                             listRow(QStringLiteral("items"), tr("Products and services"), report.items),
-                            listRow(QStringLiteral("classes"), tr("Classes"), report.classes)});
+                            listRow(QStringLiteral("classes"), tr("Classes"), report.classes),
+                            listRow(QStringLiteral("timeActivities"), tr("Time activities"), report.timeActivities)});
     QVariantList types;
     for (const IifTypeCount &t : report.transactions) {
         types << QVariantMap{{QStringLiteral("type"), t.type},         {QStringLiteral("count"), t.count},
@@ -116,9 +119,16 @@ QVariantMap BooksService::runIif(const QUrl &fileUrl, const QVariantMap &options
     out.insert(QStringLiteral("unmapped"), unmapped);
     out.insert(QStringLiteral("notes"), report.notes);
     if (report.committed) {
+        QString detail;
+        if (report.posted > 0) detail = tr("%n transaction(s) posted.", nullptr, report.posted);
+        if (report.timeActivities.added == 1) detail += tr(" One time activity imported.");
+        else if (report.timeActivities.added > 1)
+            detail += tr(" %1 time activities imported.").arg(report.timeActivities.added);
+        detail = detail.trimmed();
+        if (detail.isEmpty()) detail = tr("Lists imported.");
+        detail += tr(" A copy of the books from before the import is in your backups.");
         emit notify(tr("Imported from QuickBooks"),
-                    tr("%n transaction(s) posted. A copy of the books from before the import is in your backups.",
-                       nullptr, report.posted),
+                    detail,
                     QStringLiteral("success"));
     }
     return out;

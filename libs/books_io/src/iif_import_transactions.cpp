@@ -395,6 +395,7 @@ IifImportReport IifImport::run(CompanyFile &file, const QByteArray &iif, const I
     }
     IifInternal::Context ctx(file, options, report);
     IifInternal::importLists(ctx, doc.lists);
+    IifInternal::importEmployeesAndTime(ctx, doc.lists);
     IifInternal::importTransactions(ctx, doc.transactions);
     IifInternal::deactivateHidden(ctx);
     report.ok = true;
@@ -403,7 +404,7 @@ IifImportReport IifImport::run(CompanyFile &file, const QByteArray &iif, const I
     }
     if (!report.refused.isEmpty() && !options.skipRefused) {
         report.ok = false;
-        report.error = QStringLiteral("%1 transaction(s) were refused, so nothing was imported.").arg(report.refused.size());
+        report.error = QStringLiteral("%1 IIF record(s) were refused, so nothing was imported.").arg(report.refused.size());
         return report;
     }
     if (!batch.commit()) {

@@ -6,7 +6,8 @@
 // ours, sub-accounts as "Parent:Child", QuickBooks' own A/R, A/P,
 // Undeposited Funds, Sales Tax Payable, Retained Earnings and Opening Bal
 // Equity mapped onto this company's system accounts), CUST, VEND, INVITEM,
-// CLASS — then every TRNS/SPL/ENDTRNS transaction.
+// CLASS and EMP — then TIMEACT (also !TIMEACCT) and every
+// TRNS/SPL/ENDTRNS transaction.
 //
 // AGENT-CONTRACT (the ledger matches the file): a transaction is refused,
 // with its line numbers, when its rows do not sum to zero, a date or
@@ -25,6 +26,9 @@
 // orders — vendor, number, expected date, ship-to, lines with item,
 // quantity, rate and customer:job; PAID Y imports one closed — and one
 // already in the books (vendor, date, number, total) is skipped.
+// M98 (D-106): employee contact details and unbilled time come through the
+// engine's existing records. Already-billed or payroll-transferred time is
+// refused: the IIF row lacks the invoice/paycheck link needed to preserve it.
 //
 // AGENT-CONTRACT (one batch): the whole import runs in ONE SQL transaction.
 // options.commit == false is a dry run — the very same work, rolled back —
@@ -90,8 +94,10 @@ struct IifImportReport {
     IifListCount accounts;
     IifListCount customers;
     IifListCount vendors;
+    IifListCount employees;
     IifListCount items;
     IifListCount classes;
+    IifListCount timeActivities;
     QList<IifTypeCount> transactions; // in the order types first appear
     QList<IifRefusal> refused;
     QList<IifUnmappedAccount> unmappedAccounts;

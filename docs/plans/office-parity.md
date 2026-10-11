@@ -344,6 +344,8 @@ styles — each kept in `.qdiagram` and carried through `.vsdx`.
 
 | **M95** Mail everyday workflows (D-103) | Mailbox-scoped Quick Steps for ordered flag/read/category/copy/move and reviewed reply/forward drafts; recurring occurrence edits and invitations; Outlook recurrence exceptions; toolkit calendar MIME, notifications, ManageSieve and CalDAV category adapters | Fake-provider action ordering and refusal, recurrence identity and iTIP MIME, real-window Quick Steps at 1280/520, fixtures/grabs; see [verification.md](../verification.md#m95-mail-workflow-gates-d-103). Open: arbitrary server-side rule editing, audience-specific Sieve vacation replies, manual provider checks. |
 
+| **M98** Books employee/time IIF migration (D-106) | `EMP` contact details and `TIMEACT`/`TIMEACCT` time through the existing books engine, single-batch preview/commit, counted duplicate handling, refusal when invoice/payroll links cannot be preserved | Synthetic IIF engine and existing import/service suites, real-window preview/import at 1280/520 with reviewed grabs; see [verification.md](../verification.md#m98-books-iif-gates-d-106). Open: job costing, billable expenses, billing rate levels, blank-stock MICR checks and the M71 tax/payment limits. |
+
 Every milestone follows AGENTS.md: ≤ 500 lines per file, tests headless,
 docs in the same commit, a `docs/decisions.md` entry, fixtures and grabs
 looked at, the desktop launch only with the owner's consent.

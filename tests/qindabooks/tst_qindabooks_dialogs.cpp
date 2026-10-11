@@ -268,6 +268,43 @@ private slots:
         saveGrab(scene.window, str("qindabooks_iif_done"));
         QVERIFY(!find(scene.host.books()->parties(str("vendor")), str("name"), str("Lakeside Properties")).isEmpty());
     }
+
+    void iifEmployeeTimePreview_data()
+    {
+        QTest::addColumn<int>("width");
+        QTest::newRow("wide") << 1280;
+        QTest::newRow("narrow") << 520;
+    }
+
+    void iifEmployeeTimePreview()
+    {
+        QFETCH(int, width);
+        WindowScene scene(QSize(width, 840));
+        QVERIFY2(scene.window != nullptr, qPrintable(scene.error));
+        QVERIFY(QTest::qWaitForWindowExposed(scene.window));
+        QObject *dialog = scene.openThrough(str("booksImportIifAction"), str("iifImportDialog"));
+        QVERIFY(dialog != nullptr);
+        const QUrl url = write(scene.dir, str("time.iif"),
+            "!ACCNT\tNAME\tACCNTTYPE\nACCNT\tConsulting Income\tINC\n"
+            "!CUST\tNAME\nCUST\tHarbor Clinic\n!EMP\tNAME\nEMP\tAda Lee\n"
+            "!INVITEM\tNAME\tINVITEMTYPE\tACCNT\tPRICE\n"
+            "INVITEM\tConsulting\tSERV\tConsulting Income\t90.00\n"
+            "!TIMEACT\tDATE\tJOB\tEMP\tITEM\tDURATION\tBILLINGSTATUS\n"
+            "TIMEACT\t10/04/2026\tHarbor Clinic\tAda Lee\tConsulting\t1:30\t1\n");
+        WindowScene::call(dialog, "choose", url);
+        QTRY_VERIFY(dialog->property("preview").toMap().value(str("ok")).toBool());
+        const QVariantMap preview = dialog->property("preview").toMap();
+        QCOMPARE(find(preview.value(str("lists")).toList(), str("key"), str("employees")).value(str("added")).toInt(), 1);
+        QCOMPARE(find(preview.value(str("lists")).toList(), str("key"), str("timeActivities")).value(str("added")).toInt(), 1);
+        QCOMPARE(preview.value(str("timeAdded")).toInt(), 1);
+        QVERIFY(dialog->property("primaryEnabled").toBool());
+        QTest::qWait(250);
+        saveGrab(scene.window, str("qindabooks_iif_time_preview_%1").arg(width));
+        const QVariantMap answer = WindowScene::call(dialog, "importNow").toMap();
+        QVERIFY2(answer.value(str("committed")).toBool(), qPrintable(answer.value(str("error")).toString()));
+        QCOMPARE(answer.value(str("timeAdded")).toInt(), 1);
+        QCOMPARE(scene.host.books()->timeEntries({}).size(), 1);
+    }
 };
 
 BOOKS_APP_TEST_MAIN(QindaBooksDialogsTest)

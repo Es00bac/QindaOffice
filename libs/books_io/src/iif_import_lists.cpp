@@ -422,7 +422,8 @@ void importLists(Context &ctx, const QList<IifRecord> &rows)
             } else {
                 ctx.klass(r.value(QStringLiteral("NAME")));
             }
-        } else if (r.type != QLatin1String("ACCNT")) {
+        } else if (r.type != QLatin1String("ACCNT") && r.type != QLatin1String("EMP")
+                   && r.type != QLatin1String("TIMEACT") && r.type != QLatin1String("TIMEACCT")) {
             ++other[r.type];
         }
     }
