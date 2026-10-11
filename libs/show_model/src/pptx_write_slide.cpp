@@ -55,7 +55,9 @@ XmlElementPtr carried(PartWriter &out, const XmlElement *element, const QString 
 
 QList<BuildEntry> sorted(QList<BuildEntry> builds)
 {
-    std::sort(builds.begin(), builds.end(), [](const BuildEntry &a, const BuildEntry &b) { return a.shapeId < b.shapeId; });
+    std::sort(builds.begin(), builds.end(), [](const BuildEntry &a, const BuildEntry &b) {
+        return a.shapeId != b.shapeId ? a.shapeId < b.shapeId : a.exit < b.exit;
+    });
     return builds;
 }
 
@@ -258,10 +260,16 @@ XmlElementPtr slideElement(PartWriter &out, const Slide &slide, QHash<QString, q
         colorMap->appendElement(nsA(), QStringLiteral("masterClrMapping"));
     }
     XmlElementPtr transition;
-    if (carry && source->transitionXml && slide.transition == source->transition) {
+    const bool keptTransition = carry && source->transitionXml && slide.transition == source->transition;
+    if (keptTransition) {
         transition = carried(out, source->transitionXml.get(), source->part);
     } else {
         transition = transitionElement(slide.transition);
+    }
+    // M91 (D-099): Advance Slide, written where it changed (a kept
+    // transition keeps its own spelling while the timing is what was read).
+    if (!keptTransition || source->advanceAfterMs != slide.advanceAfterMs || source->advanceOnClick != slide.advanceOnClick) {
+        applyAdvance(transition, slide.advanceAfterMs, slide.advanceOnClick);
     }
     // Builds: the source's timing while the builds (and, M75, every media
     // shape's playback) are what was read.
@@ -275,20 +283,23 @@ XmlElementPtr slideElement(PartWriter &out, const Slide &slide, QHash<QString, q
             const MediaInfo &m = shape.media;
             if (written.at(i) != 0) {
                 media.append({written.at(i), m.kind, m.autoPlay ? 0 : shape.buildStep, m.autoPlay, m.loop,
-                              m.hideWhenStopped, m.volume, m.durationMs});
+                              m.hideWhenStopped, m.volume, m.durationMs, m.narration});
             }
             const Shape *was = carry && shape.origin && written.at(i) == shape.nvId ? &shape.origin->pristine : nullptr;
             mediaChanged = mediaChanged || was == nullptr || was->media != m || was->buildStep != shape.buildStep;
             continue; // a media shape's step is its play click, not a build
         }
         if (shape.buildStep > 0 && written.at(i) != 0) {
-            current.append({written.at(i), shape.buildStep, shape.animation, shape.animationMs});
+            current.append({written.at(i), shape.buildStep, shape.animation, shape.animationMs, shape.animationDirection, false});
+        }
+        if (shape.exit.isSet() && written.at(i) != 0) { // M91
+            const ShapeExit &exit = shape.exit;
+            current.append({written.at(i), exit.step, exit.animation, exit.durationMs, exit.direction, true});
         }
         if (carry && written.at(i) != 0 && written.at(i) == shape.nvId) {
             for (const BuildEntry &build : source->builds) {
                 if (build.shapeId == shape.nvId) {
-                    const int ms = build.durationMs > 0 ? qBound(50, build.durationMs, 5000) : 350;
-                    expected.append({build.shapeId, build.step, build.animation, ms});
+                    expected.append({build.shapeId, build.step, build.animation, buildDuration(build), build.direction, build.exit});
                 }
             }
         }

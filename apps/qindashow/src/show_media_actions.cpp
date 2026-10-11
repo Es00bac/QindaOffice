@@ -63,6 +63,16 @@ MenuNode a(const char *id)
     return MenuNode::action(QString::fromLatin1(id));
 }
 
+// The bookmarks' times for the show (M91).
+QVariantList bookmarkTimes(const ShowModel::MediaInfo &media)
+{
+    QVariantList times;
+    for (const ShowModel::MediaBookmark &bookmark : media.bookmarks) {
+        times.append(bookmark.timeMs);
+    }
+    return times;
+}
+
 int nextStep(const ShowModel::Slide &slide)
 {
     int highest = 0;
@@ -129,6 +139,8 @@ ShowMedia::ShowMedia(ShowHost *host)
     });
     connect(make(MediaId::kPoster, tr("Poster &Frame from File…"), "image-plus"), &ActionEntry::triggered, this,
             &ShowMedia::posterRequested);
+    connect(make(MediaId::kTrim, tr("&Trim, Fade and Bookmarks…"), "scissors"), &ActionEntry::triggered, this,
+            &ShowMedia::editRequested);
     connect(host->canvas(), &SlideCanvasItem::selectionChanged, this, [this] {
         setPlaying(false);
         sync();
@@ -146,7 +158,8 @@ QList<MenuNode> ShowMedia::playbackMenuItems() const
 {
     return {MenuNode::submenu(QStringLiteral("showPlaybackMenu"), tr("Pla&yback"),
                               {a(MediaId::kPlay), MenuNode::separator(), a(MediaId::kOnClick), a(MediaId::kAutomatically),
-                               a(MediaId::kLoop), a(MediaId::kHide), MenuNode::separator(), a(MediaId::kPoster)})};
+                               a(MediaId::kLoop), a(MediaId::kHide), MenuNode::separator(), a(MediaId::kTrim),
+                               a(MediaId::kPoster)})};
 }
 
 QUrl ShowMedia::surface() const
@@ -225,7 +238,7 @@ QVariantList ShowMedia::slideMedia(int row) const
         return list;
     }
     for (const ShowModel::Shape &shape : deck->slides.at(row).shapes) {
-        if (!shape.media.isMedia()) {
+        if (!shape.media.isMedia() || (shape.media.narration && !deck->showSettings.narration)) {
             continue;
         }
         const QRectF r = shape.rect.normalized();
@@ -241,9 +254,62 @@ QVariantList ShowMedia::slideMedia(int row) const
                                 {QStringLiteral("step"), shape.media.autoPlay ? 0 : shape.buildStep},
                                 {QStringLiteral("loop"), shape.media.loop},
                                 {QStringLiteral("hideWhenStopped"), shape.media.hideWhenStopped},
-                                {QStringLiteral("volume"), shape.media.volume}});
+                                {QStringLiteral("volume"), shape.media.volume},
+                                // M91: where it plays from and to, its fades, its bookmarks.
+                                {QStringLiteral("startMs"), shape.media.trimStartMs},
+                                {QStringLiteral("endMs"), shape.media.trimEndMs > 0 && shape.media.durationMs > 0
+                                                              ? qMax(0, shape.media.durationMs - shape.media.trimEndMs) : 0},
+                                {QStringLiteral("trimEndMs"), shape.media.trimEndMs},
+                                {QStringLiteral("fadeInMs"), shape.media.fadeInMs},
+                                {QStringLiteral("fadeOutMs"), shape.media.fadeOutMs},
+                                {QStringLiteral("bookmarks"), bookmarkTimes(shape.media)}});
     }
     return list;
+}
+
+QVariantMap ShowMedia::mediaEdits() const
+{
+    const ShowModel::Shape *shape = selectedMedia();
+    if (shape == nullptr) {
+        return {};
+    }
+    QVariantList bookmarks;
+    for (const ShowModel::MediaBookmark &bookmark : shape->media.bookmarks) {
+        bookmarks.append(QVariantMap{{QStringLiteral("name"), bookmark.name}, {QStringLiteral("timeMs"), bookmark.timeMs}});
+    }
+    const ShowModel::MediaInfo &m = shape->media;
+    return {{QStringLiteral("name"), m.name},
+            {QStringLiteral("durationMs"), m.durationMs},
+            {QStringLiteral("trimStartMs"), m.trimStartMs},
+            {QStringLiteral("trimEndMs"), m.trimEndMs},
+            {QStringLiteral("fadeInMs"), m.fadeInMs},
+            {QStringLiteral("fadeOutMs"), m.fadeOutMs},
+            {QStringLiteral("bookmarks"), bookmarks}};
+}
+
+bool ShowMedia::applyMediaEdits(const QVariantMap &edits)
+{
+    const ShowModel::Shape *shape = selectedMedia();
+    if (shape == nullptr) {
+        return false;
+    }
+    const int duration = shape->media.durationMs > 0 ? shape->media.durationMs : 24 * 3600 * 1000;
+    ShowModel::MediaInfo media = shape->media;
+    media.trimStartMs = qBound(0, edits.value(QStringLiteral("trimStartMs"), media.trimStartMs).toInt(), duration);
+    media.trimEndMs = qBound(0, edits.value(QStringLiteral("trimEndMs"), media.trimEndMs).toInt(), duration - media.trimStartMs);
+    media.fadeInMs = qMax(0, edits.value(QStringLiteral("fadeInMs"), media.fadeInMs).toInt());
+    media.fadeOutMs = qMax(0, edits.value(QStringLiteral("fadeOutMs"), media.fadeOutMs).toInt());
+    if (edits.contains(QStringLiteral("bookmarks"))) {
+        media.bookmarks.clear();
+        for (const QVariant &value : edits.value(QStringLiteral("bookmarks")).toList()) {
+            const QVariantMap bookmark = value.toMap();
+            media.bookmarks.append({bookmark.value(QStringLiteral("name")).toString(),
+                                    qBound(0, bookmark.value(QStringLiteral("timeMs")).toInt(), duration)});
+        }
+        std::stable_sort(media.bookmarks.begin(), media.bookmarks.end(),
+                         [](const ShowModel::MediaBookmark &a, const ShowModel::MediaBookmark &b) { return a.timeMs < b.timeMs; });
+    }
+    return editSelected(tr("Trim and fade"), [&media](ShowModel::Shape &edited) { edited.media = media; });
 }
 
 bool ShowMedia::insertFile(const QUrl &url, bool audio)
@@ -332,7 +398,8 @@ void ShowMedia::sync()
 {
     m_syncing = true;
     const ShowModel::Shape *shape = selectedMedia();
-    for (const char *id : {MediaId::kPlay, MediaId::kOnClick, MediaId::kAutomatically, MediaId::kLoop, MediaId::kHide, MediaId::kPoster}) {
+    for (const char *id : {MediaId::kPlay, MediaId::kOnClick, MediaId::kAutomatically, MediaId::kLoop, MediaId::kHide, MediaId::kPoster,
+                           MediaId::kTrim}) {
         m_actions.value(QString::fromLatin1(id))->setEnabled(shape != nullptr);
     }
     const bool canInsert = m_host->canvas()->slide() != nullptr;

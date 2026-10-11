@@ -292,6 +292,10 @@ MediaInfo readMediaInfo(const ShapeScope &scope, const Ooxml::XmlElement *nvPr)
             media.name = QFileInfo(data.partName).fileName();
         }
     }
+    if (const auto *narration = nvPr->descendant(QStringLiteral("http://schemas.microsoft.com/office/powerpoint/2012/main"), u"isNarration")) {
+        media.narration = narration->attr(u"val") == u"1" || narration->attr(u"val") == u"true";
+    }
+    readMediaEdits(embedded, media); // M91: trim, fades, bookmarks
     const MediaProbe probe = probeMedia(media.data, media.name);
     if (media.mime.isEmpty()) {
         media.mime = probe.mime;

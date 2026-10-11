@@ -2,6 +2,7 @@
 // Review comments in QindaShow (show_comments.h).
 
 #include "show_comments.h"
+#include <cmath>
 
 #include "action_model.h"
 #include "menu_tree.h"
@@ -123,6 +124,9 @@ QVariantList ShowComments::comments() const
             }
             thread.insert(QStringLiteral("anchor"), shape != nullptr ? (shape->name.isEmpty() ? tr("a shape") : shape->name)
                                                                      : tr("this slide"));
+            const QPointF point = shape != nullptr ? shape->rect.topLeft() + c.position : c.position;
+            thread.insert(QStringLiteral("x"), point.x());
+            thread.insert(QStringLiteral("y"), point.y());
             thread.insert(QStringLiteral("replies"), QVariantList());
             threadAt.insert(c.id, list.size());
             list.append(thread);
@@ -248,6 +252,24 @@ bool ShowComments::edit(const QString &id, const QString &text)
             }
         }
         return false;
+    });
+}
+
+bool ShowComments::setPosition(const QString &id, qreal x, qreal y)
+{
+    if (!std::isfinite(x) || !std::isfinite(y)) return false;
+    const QSizeF size = m_host->showDocument()->presentation()->slideSize;
+    const QPointF point(qBound(0.0, x, size.width()), qBound(0.0, y, size.height()));
+    return changeSlide(tr("Move comment"), [&](ShowModel::Slide &slide) {
+        bool changed = false;
+        for (auto &comment : slide.comments) {
+            if ((comment.id == id && !comment.isReply()) || comment.parentId == id) {
+                changed = changed || comment.position != point || !comment.shapeId.isEmpty();
+                comment.shapeId.clear();
+                comment.position = point;
+            }
+        }
+        return changed;
     });
 }
 

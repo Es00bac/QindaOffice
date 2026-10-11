@@ -314,7 +314,7 @@ void PptxReadTest::styleMatrixConnectorAndHyperlink()
     // fontRef: white text.
     QCOMPARE(styled.paragraphs.first().runs.first().color, QColor(Qt::white));
     QCOMPARE(styled.paragraphs.first().alignment, int(Qt::AlignHCenter));
-    QCOMPARE(styled.hyperlink, QStringLiteral("https://example.org/qindashow"));
+    QCOMPARE(styled.click.link, QStringLiteral("https://example.org/qindashow"));
     const Shape &connector = slide.shapes.at(2);
     QCOMPARE(connector.kind, ShapeKind::Arrow);
     QVERIFY(connector.connector);

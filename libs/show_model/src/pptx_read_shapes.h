@@ -95,5 +95,8 @@ void recordOrigin(const ShapeScope &scope, const Ooxml::XmlElementPtr &element, 
 // A unique model id for an Office shape id within the scope.
 [[nodiscard]] QString shapeIdFor(const ShapeScope &scope, quint32 nvId);
 void countShape(const ShapeScope &scope, const Shape &shape);
+// M91 (D-099, pptx_media_edits.cpp): a medium's Trim, Fade Duration and
+// bookmarks from its p14:media (nullptr: none).
+void readMediaEdits(const Ooxml::XmlElement *media, MediaInfo &info);
 
 } // namespace QindaOffice::Show::Pptx

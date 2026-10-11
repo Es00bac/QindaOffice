@@ -8,6 +8,7 @@
 #include <QJsonDocument>
 #include <QScreen>
 #include <QTextBlock>
+#include <QTextCursor>
 #include <QTextDocument>
 
 #include <cmath>
@@ -176,6 +177,63 @@ QTextDocument *documentFromParagraphs(const QList<ShowModel::TextParagraph> &par
         }
     }
     return document;
+}
+
+void setHyperlink(QTextDocument &document, int from, int to, const QString &link, const QColor &color)
+{
+    // The pieces first (one format each), then the changes: editing while
+    // walking the fragments would invalidate them.
+    struct Piece {
+        int start;
+        int end;
+        QTextCharFormat format;
+    };
+    QList<Piece> pieces;
+    for (QTextBlock block = document.begin(); block != document.end(); block = block.next()) {
+        for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it) {
+            const QTextFragment fragment = it.fragment();
+            const int start = qMax(from, fragment.position());
+            const int end = qMin(to, fragment.position() + fragment.length());
+            if (fragment.isValid() && start < end) {
+                pieces.append({start, end, fragment.charFormat()});
+            }
+        }
+    }
+    const qreal scale = screenScale();
+    for (const Piece &piece : std::as_const(pieces)) {
+        std::optional<ShowModel::TextParagraph> holder = unstash(piece.format.property(kRunStash));
+        ShowModel::TextRun run = holder && !holder->runs.isEmpty() ? holder->runs.first() : ShowModel::TextRun();
+        if (!holder) {
+            run.pointSize = piece.format.fontPointSize() > 0 ? piece.format.fontPointSize() * scale : run.pointSize;
+            run.color = piece.format.foreground().color();
+        }
+        run.hyperlink = link;
+        QTextCharFormat format = piece.format;
+        if (!link.isEmpty()) {
+            run.underline = QStringLiteral("sng");
+            run.color = color;
+            format.setFontUnderline(true);
+            format.setForeground(color);
+        }
+        format.setProperty(kRunStash, stashRun(run));
+        QTextCursor cursor(&document);
+        cursor.setPosition(piece.start);
+        cursor.setPosition(piece.end, QTextCursor::KeepAnchor);
+        cursor.setCharFormat(format);
+    }
+}
+
+QString hyperlinkAt(const QTextDocument &document, int position)
+{
+    const QTextBlock block = document.findBlock(position);
+    for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it) {
+        const QTextFragment fragment = it.fragment();
+        if (fragment.isValid() && fragment.contains(position)) {
+            const std::optional<ShowModel::TextParagraph> holder = unstash(fragment.charFormat().property(kRunStash));
+            return holder && !holder->runs.isEmpty() ? holder->runs.first().hyperlink : QString();
+        }
+    }
+    return {};
 }
 
 } // namespace QindaOffice::Apps::Show

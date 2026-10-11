@@ -139,6 +139,10 @@ struct RelatedData {
 
 // A hyperlink element (a:hlinkClick) as the model spells it.
 [[nodiscard]] QString hyperlinkFrom(const PartContext &ctx, const Ooxml::XmlElement *hlink);
+// M91 (D-099, pptx_actions.cpp): an a:hlinkClick / a:hlinkHover /
+// a:hlinkMouseOver as action settings — the link, the program / file /
+// deck a verb names, the ScreenTip, the highlight, the sound.
+[[nodiscard]] ShowAction actionFrom(const PartContext &ctx, const Ooxml::XmlElement *hlink);
 
 // QindaShow's layout name for an Office layout type (ST_SlideLayoutType).
 [[nodiscard]] QString appLayoutName(const QString &type);

@@ -31,11 +31,15 @@ struct ShapeSource {
 };
 
 // A shape's build as read from p:timing (nvId → step/animation/duration).
+// M91 (D-099): the Effect Options direction (presetSubtype; 0 = the
+// effect's default) and exit effects (`exit`, presetClass="exit").
 struct BuildEntry {
     quint32 shapeId = 0;
     int step = 0;
     ShapeAnimation animation = ShapeAnimation::Appear;
     int durationMs = 0;
+    int direction = 0;
+    bool exit = false;
     bool operator==(const BuildEntry &) const = default;
 };
 
@@ -51,6 +55,7 @@ struct MediaEntry {
     bool hideWhenStopped = false;
     int volume = 80; // percent
     int durationMs = 0;
+    bool narration = false;
     bool operator==(const MediaEntry &) const = default;
 };
 
@@ -76,6 +81,9 @@ struct SlideSource {
     QString commentsPart;
     bool modernComments = false;
     quint32 creationId = 0;
+    // M91 (D-099): Advance Slide as read (p:transition @advTm / @advClick).
+    int advanceAfterMs = -1;
+    bool advanceOnClick = true;
     bool operator==(const SlideSource &) const = default;
 };
 
@@ -104,6 +112,10 @@ struct DeckSource {
     QString presentationPart;          // "ppt/presentation.xml"
     Ooxml::XmlElementPtr presentation; // p:presentation as read
     QHash<QString, QString> slideIds;  // source slide part → model slide id
+    // M91 (D-099): the show settings as read (presProps.xml's p:showPr —
+    // carried byte for byte while the model still equals them) and its part.
+    ShowSettings showSettings = ShowSettings::fileDefaults();
+    QString presPropsPart;
 };
 
 } // namespace QindaOffice::Show

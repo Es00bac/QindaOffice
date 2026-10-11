@@ -19,9 +19,13 @@
 # (tst_pptx_review), audio and video (tst_pptx_media, with LibreOffice).
 # M82 (D-091): New Slide on the deck's layouts, Layout, Reset, Duplicate,
 # Reuse Slides and a template's masters (tst_pptx_slides, with LibreOffice).
+# M91 (D-099): action settings, custom shows, Set Up Slide Show, timings,
+# media trim / fades / bookmarks, effect directions and exits, the show's
+# order and what a click hits (tst_pptx_show); Create a Video through the
+# system's ffmpeg, checked with ffprobe (tst_video_export; skipped without).
 foreach(name IN ITEMS tst_show_model tst_fodp tst_pptx_read tst_pptx_write tst_pptx_tables tst_pptx_charts tst_show_effects
                       tst_pptx_design tst_pptx_masters tst_pptx_review tst_pptx_media tst_pptx_slides
-                      tst_pptx_chart_combo)
+                      tst_pptx_chart_combo tst_pptx_show tst_pptx_playback tst_video_export tst_show_narration)
     add_executable(${name} ${name}.cpp)
     target_link_libraries(${name} PRIVATE show_model office_ooxml Qt6::Test Qt6::Gui)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/tests)

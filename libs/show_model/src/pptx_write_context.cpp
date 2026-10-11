@@ -147,24 +147,9 @@ void PartWriter::carry(Ooxml::XmlElement &element, const QString &sourcePart)
 
 Ooxml::XmlElementPtr PartWriter::hyperlink(const QString &target)
 {
-    if (target.isEmpty()) {
-        return nullptr;
-    }
-    auto link = std::make_shared<Ooxml::XmlElement>(nsA(), QStringLiteral("hlinkClick"));
-    if (target.startsWith(QLatin1Char('#'))) {
-        const QString slidePart = session.slideParts.value(target.mid(1));
-        if (slidePart.isEmpty()) {
-            return nullptr; // the slide is gone
-        }
-        link->setAttribute(nsR(), QStringLiteral("id"), relate(relType("slide"), slidePart));
-        link->setAttribute(QString(), QStringLiteral("action"), QStringLiteral("ppaction://hlinksldjump"));
-    } else if (target.startsWith(QLatin1String("ppaction:"))) {
-        link->setAttribute(nsR(), QStringLiteral("id"), QString());
-        link->setAttribute(QString(), QStringLiteral("action"), target);
-    } else {
-        link->setAttribute(nsR(), QStringLiteral("id"), relate(relType("hyperlink"), target, true));
-    }
-    return link;
+    ShowAction link;
+    link.link = target;
+    return action(link, QStringLiteral("hlinkClick"));
 }
 
 quint32 PartWriter::claim(quint32 wanted)

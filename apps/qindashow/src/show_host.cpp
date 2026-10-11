@@ -75,6 +75,7 @@ ShowHost::ShowHost()
     createAssistant();
     createEditing(); // M67: before the menus, which name its commands
     createDesign();  // M75: likewise
+    createSlideShow(); // M91: likewise
     insertMenus();
     designMenus();
     wireCanvasUndo();

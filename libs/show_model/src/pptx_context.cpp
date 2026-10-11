@@ -110,23 +110,9 @@ RelatedData relatedData(const PartContext &ctx, const QString &relationshipId)
 
 QString hyperlinkFrom(const PartContext &ctx, const Ooxml::XmlElement *hlink)
 {
-    if (hlink == nullptr) {
-        return {};
-    }
-    const QString id = hlink->attribute(nsR(), u"id");
-    const QString action = hlink->attr(u"action");
-    if (!id.isEmpty() && ctx.package) {
-        if (const std::optional<Ooxml::Relationship> rel = ctx.package->relationship(ctx.part, id)) {
-            if (rel->external) {
-                return rel->target;
-            }
-            const QString target = ctx.package->targetPart(ctx.part, *rel);
-            if (ctx.slideIds != nullptr && ctx.slideIds->contains(target)) {
-                return QLatin1Char('#') + ctx.slideIds->value(target);
-            }
-        }
-    }
-    return action;
+    // M91: through the action reader, so a verb that names a program or a
+    // file reads as the verb — never as an address to open.
+    return actionFrom(ctx, hlink).link;
 }
 
 namespace {

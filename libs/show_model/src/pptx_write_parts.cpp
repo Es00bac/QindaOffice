@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pptx_write_parts.h"
 
+#include "pptx_show.h"
+
 #include "pptx_write_shapes.h"
 #include "pptx_write_styles.h"
 #include "pptx_write_text.h"
@@ -316,8 +318,8 @@ PresentationParts generatePresentationParts(WriteSession &session)
     Ooxml::PackageWriter &w = session.writer;
     PresentationParts parts;
     parts.presProps = QStringLiteral("ppt/presProps.xml");
-    w.addPart(parts.presProps, document(QStringLiteral("<p:presentationPr %1/>").arg(QLatin1String(kNamespaces))),
-              pml("presProps+xml"));
+    // M91 (D-099): Set Up Slide Show, as PowerPoint always writes it.
+    w.addXmlPart(parts.presProps, *presentationPropertiesElement(session.deck.showSettings, nullptr), pml("presProps+xml"));
     parts.viewProps = QStringLiteral("ppt/viewProps.xml");
     w.addPart(parts.viewProps,
               document(QStringLiteral(R"(<p:viewPr %1><p:normalViewPr><p:restoredLeft sz="15620"/><p:restoredTop sz="94660"/></p:normalViewPr><p:slideViewPr><p:cSldViewPr snapToGrid="0"><p:cViewPr varScale="1"><p:scale><a:sx n="100" d="100"/><a:sy n="100" d="100"/></p:scale><p:origin x="0" y="0"/></p:cViewPr><p:guideLst/></p:cSldViewPr></p:slideViewPr><p:notesTextViewPr><p:cViewPr><p:scale><a:sx n="1" d="1"/><a:sy n="1" d="1"/></p:scale><p:origin x="0" y="0"/></p:cViewPr></p:notesTextViewPr><p:gridSpacing cx="76200" cy="76200"/></p:viewPr>)")

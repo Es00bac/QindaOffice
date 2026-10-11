@@ -70,4 +70,13 @@ Ooxml::XmlElement *convertPlot(Ooxml::XmlElement &plotArea, Ooxml::XmlElement *p
 void lineGeometry(const Shape &shape, QRectF *rect, bool *flipH, bool *flipV);
 [[nodiscard]] QString defaultName(const Shape &shape, quint32 id);
 
+// ---- M91 (D-099), pptx_media_edits.cpp: Trim, Fade Duration, bookmarks ----
+// Written into p14:media (its trim, fade and bmkLst children; the reader's
+// side is readMediaEdits, pptx_read_shapes.h).
+void writeMediaEdits(Ooxml::XmlElement &media, const MediaInfo &info);
+// p15 narration marker on p:nvPr; standard audio timing also carries isNarration.
+void writeNarration(Ooxml::XmlElement &nvPr, bool narration);
+// The p14:media of a p:pic, or nullptr.
+[[nodiscard]] Ooxml::XmlElement *p14Media(Ooxml::XmlElement &pic);
+
 } // namespace QindaOffice::Show::Pptx

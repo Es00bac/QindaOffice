@@ -20,11 +20,13 @@
 // show_host_menus.cpp (the menu tree, the context menu, the AI menu),
 // show_host_ai.cpp (assistant, inline actions, deck generation),
 // show_host_editing.cpp (M67, D-076: tables, chart data, the notes pane,
-// the presenter view on one screen).
+// the presenter view on one screen), show_host_show.cpp (M91, D-099: the
+// show's start and end, actions leaving the show, the Slide Show tab).
 
 #include "assistant_controller.h"
 #include "document_host.h"
 #include "presentation.h"
+#include "presentation_controller.h"
 #include "show_document.h"
 #include "slide_canvas_item.h"
 
@@ -47,16 +49,19 @@ class ModelCatalog;
 namespace QindaOffice::Apps::Show {
 
 class ChartDataEditor;
-class PresentationController;
+class ShowActionSettings;
 class ShowArrangeActions;
 class ShowBackground;
 class ShowComments;
 class ShowDesignActions;
 class ShowDesignTab;
+class ShowEffectOptions;
+class ShowExport;
 class ShowMasterView;
 class ShowMedia;
 class ShowSections;
 class ShowSlideLayouts;
+class ShowSlideShow;
 class ShowTableActions;
 class ShowToolbox;
 
@@ -70,6 +75,9 @@ class ShowHost : public Quick::DocumentHost {
     Q_MOC_INCLUDE("show_media_actions.h")
     Q_MOC_INCLUDE("show_sections.h")
     Q_MOC_INCLUDE("show_slide_layouts.h")
+    Q_MOC_INCLUDE("show_action_settings.h")
+    Q_MOC_INCLUDE("show_export.h")
+    Q_MOC_INCLUDE("show_slide_show.h")
     QML_ELEMENT
     QML_UNCREATABLE("Created by the application.")
     Q_PROPERTY(int slideCount READ slideCount NOTIFY deckChanged)
@@ -105,6 +113,12 @@ class ShowHost : public Quick::DocumentHost {
     // M82 (D-091): New Slide on the deck's layouts, Layout, Reset, Reuse
     // Slides, a template's masters (show_slide_layouts.h).
     Q_PROPERTY(QindaOffice::Apps::Show::ShowSlideLayouts *layouts READ slideLayouts CONSTANT)
+    // M91 (D-099): the Slide Show tab (custom shows, Set Up, timings,
+    // rehearsal), Insert ▸ Action / Link and the action buttons, and the
+    // video and picture exports.
+    Q_PROPERTY(QindaOffice::Apps::Show::ShowSlideShow *slideShow READ slideShow CONSTANT)
+    Q_PROPERTY(QindaOffice::Apps::Show::ShowActionSettings *actionSettings READ actionSettings CONSTANT)
+    Q_PROPERTY(QindaOffice::Apps::Show::ShowExport *exporter READ exporter CONSTANT)
 public:
     ShowHost();
     ~ShowHost() override;
@@ -126,6 +140,11 @@ public:
     [[nodiscard]] ShowComments *comments() const { return m_comments; }
     [[nodiscard]] ShowMedia *media() const { return m_media; }
     [[nodiscard]] ShowSlideLayouts *slideLayouts() const { return m_layouts; }
+    [[nodiscard]] ShowSlideShow *slideShow() const { return m_slideShow; }
+    [[nodiscard]] ShowActionSettings *actionSettings() const { return m_actionSettings; }
+    [[nodiscard]] ShowExport *exporter() const { return m_export; }
+    // The window's in-place text editor (M91: Insert ▸ Link reads its selection).
+    [[nodiscard]] QObject *editorItem() const { return m_editor; }
     // M75: the deck's slide at the current row (not the canvas's slide,
     // which in the Slide Master view is a master or layout); nullptr when
     // the deck has none.
@@ -171,8 +190,19 @@ public:
     [[nodiscard]] QStringList fontFamilies() const;
     [[nodiscard]] bool reducedMotion() const;
     // ---- the show ----
+    // From the current slide (Shift+F5; the tests' entry point).
     Q_INVOKABLE void startShow();
+    // M91 (D-099): From Beginning (F5), a custom show, a rehearsal.
+    void startShow(const PresentationController::Options &options);
+    Q_INVOKABLE void startShowFromBeginning();
     Q_INVOKABLE void endShow();
+    // M91: an action's address or file (PresentationController::
+    // openRequested). Web and e-mail addresses go to the desktop's URL
+    // handler; a file asks first (fileConsentRequested) and a program is
+    // refused; anything else is a notice (showNotice).
+    Q_INVOKABLE void openActionTarget(const QString &address, bool file);
+    // The presenter agreed to open `path`.
+    Q_INVOKABLE void openFileConfirmed(const QString &path);
     // ---- tables, charts (show_host_editing.cpp) ----
     Q_INVOKABLE void insertTable(int rows, int columns);
     Q_INVOKABLE void splitCells(int columns, int rows);
@@ -223,6 +253,9 @@ signals:
     void splitCellsRequested(int columns, int rows, int maxColumns, int maxRows);
     void tableShadingRequested(const QColor &current);
     void chartDataRequested();
+    // M91: the show asks before opening a file; tells what it did not do.
+    void fileConsentRequested(const QString &path);
+    void showNotice(const QString &text);
 
 protected:
     [[nodiscard]] QString filterString() const override;
@@ -251,6 +284,8 @@ private:
     [[nodiscard]] QList<Quick::MenuNode> chartMenuItems() const;
     // show_host_design.cpp (M75)
     void createDesign();
+    // show_host_show.cpp (M91)
+    void createSlideShow();
     void designMenus();
     void pushSlideList(const ShowModel::Presentation &before, const QString &label);
 
@@ -272,6 +307,10 @@ private:
     ShowComments *m_comments = nullptr;
     ShowMedia *m_media = nullptr;
     ShowSlideLayouts *m_layouts = nullptr;
+    ShowSlideShow *m_slideShow = nullptr;
+    ShowActionSettings *m_actionSettings = nullptr;
+    ShowExport *m_export = nullptr;
+    ShowEffectOptions *m_effects = nullptr;
     Ai::ModelCatalog *m_catalog = nullptr;
     Ai::AssistantController *m_assistant = nullptr;
     Ai::InlineActionFlow *m_inline = nullptr;

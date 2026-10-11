@@ -12,6 +12,7 @@
 
 #include "presentation.h"
 
+class QColor;
 class QObject;
 class QTextDocument;
 
@@ -29,5 +30,12 @@ namespace QindaOffice::Apps::Show {
 [[nodiscard]] QTextDocument *documentFromParagraphs(const QList<ShowModel::TextParagraph> &paragraphs,
                                                     QObject *parent = nullptr,
                                                     const ShowModel::TextRun *emptyLook = nullptr);
+
+// M91 (D-099), Insert ▸ Link on the text selected in the editor: every run
+// of [from, to) gets `link` (show_text.h's spelling; empty removes it) and,
+// with a link, PowerPoint's look for one — underlined, in `color`.
+void setHyperlink(QTextDocument &document, int from, int to, const QString &link, const QColor &color);
+// The link of the text at `position` (empty: none).
+[[nodiscard]] QString hyperlinkAt(const QTextDocument &document, int position);
 
 } // namespace QindaOffice::Apps::Show

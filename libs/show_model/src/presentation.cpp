@@ -21,6 +21,38 @@ void appendParagraphs(QString &out, const QList<TextParagraph> &paragraphs)
 
 } // namespace
 
+int effectiveDirection(ShapeAnimation animation, int direction)
+{
+    if (direction != 0) {
+        return direction;
+    }
+    switch (animation) {
+    case ShapeAnimation::FlyInLeft: return Direction::Left;
+    case ShapeAnimation::FlyInRight: return Direction::Right;
+    case ShapeAnimation::FlyInTop: return Direction::Top;
+    case ShapeAnimation::FlyInBottom: return Direction::Bottom;
+    case ShapeAnimation::Wipe: return Direction::Bottom;
+    case ShapeAnimation::Split: return Direction::VerticalOut;
+    case ShapeAnimation::Peek: return Direction::Bottom;
+    case ShapeAnimation::Float: return Direction::Top; // Float Up: the way it moves
+    default: return 0;
+    }
+}
+
+ShapeAnimation flyInFor(int direction)
+{
+    if ((direction & Direction::Top) != 0) {
+        return ShapeAnimation::FlyInTop;
+    }
+    if (direction == Direction::Left) {
+        return ShapeAnimation::FlyInLeft;
+    }
+    if (direction == Direction::Right) {
+        return ShapeAnimation::FlyInRight;
+    }
+    return ShapeAnimation::FlyInBottom;
+}
+
 bool PreservedXml::operator==(const PreservedXml &other) const
 {
     if (label != other.label) {

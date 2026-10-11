@@ -120,6 +120,36 @@ Tk.Flex {
                             wrapMode: Text.Wrap
                             text: qsTr("On %1").arg(card.modelData.anchor)
                         }
+                        Tk.Flex {
+                            direction: Tk.Flex.Row
+                            gap: Tk.Theme.space.xs
+                            wrap: Tk.Flex.Wrap
+                            Tk.NumberField {
+                                objectName: "commentPositionX_" + card.modelData.id
+                                label: qsTr("X")
+                                suffix: qsTr(" pt")
+                                from: 0
+                                value: card.modelData.x
+                                decimals: 1
+                                onValueModified: function(next) {
+                                    const id = card.modelData.id, y = card.modelData.y
+                                    // Changing the list destroys this field; finish its edit first.
+                                    Qt.callLater(function() { panel.comments.setPosition(id, next, y) })
+                                }
+                            }
+                            Tk.NumberField {
+                                objectName: "commentPositionY_" + card.modelData.id
+                                label: qsTr("Y")
+                                suffix: qsTr(" pt")
+                                from: 0
+                                value: card.modelData.y
+                                decimals: 1
+                                onValueModified: function(next) {
+                                    const id = card.modelData.id, x = card.modelData.x
+                                    Qt.callLater(function() { panel.comments.setPosition(id, x, next) })
+                                }
+                            }
+                        }
                         Repeater {
                             model: card.modelData.replies
                             // A reply hangs off its thread with a rule on the left.

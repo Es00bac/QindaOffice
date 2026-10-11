@@ -11,7 +11,9 @@ import QindaOffice.Show
 // count, a click collapses or expands it (a view state, not saved), a
 // double-click renames it, right-click shows the Section menu — and the
 // rows come from ShowSections.rows; a slide dragged past a header joins
-// that section (show_model's moveSlideInSections).
+// that section (show_model's moveSlideInSections). M91 (D-099): a slide's
+// rehearsed timing shows under it, and a hidden slide is dimmed and marked
+// (the show skips it; it is edited like any other).
 Tk.Scroll {
     id: sorter
     required property ShowHost showHost
@@ -99,6 +101,10 @@ Tk.Scroll {
                     Tk.Card {
                         id: card
                         readonly property int slideRow: row.modelData.slide
+                        // M91: its timing ("00:05") and whether the show skips it.
+                        readonly property string timing: sorter.showHost.deckRevision >= 0 ? sorter.showHost.slideShow.timingText(slideRow) : ""
+                        readonly property bool hidden: sorter.showHost.deckRevision >= 0 && sorter.showHost.slideShow.slides[slideRow] !== undefined
+                                                       && sorter.showHost.slideShow.slides[slideRow].hidden
                         objectName: "slideThumb_" + slideRow
                         interactive: true
                         selected: slideRow === sorter.showHost.currentSlide
@@ -114,8 +120,16 @@ Tk.Scroll {
                                 revision: sorter.showHost.deckRevision
                                 implicitWidth: 160
                                 implicitHeight: 90
+                                opacity: card.hidden ? 0.45 : 1
                             }
                             Tk.Caption { text: (card.slideRow + 1) + ". " + sorter.showHost.slideTitle(card.slideRow); width: 160 }
+                            Tk.Flex {
+                                direction: Tk.Flex.Row
+                                gap: Tk.Theme.space.xs
+                                visible: card.timing.length > 0 || card.hidden
+                                Tk.Badge { objectName: "slideHidden_" + card.slideRow; visible: card.hidden; text: qsTr("Hidden") }
+                                Tk.Caption { objectName: "slideTiming_" + card.slideRow; visible: card.timing.length > 0; text: card.timing }
+                            }
                         }
                         MouseArea {
                             anchors.fill: parent

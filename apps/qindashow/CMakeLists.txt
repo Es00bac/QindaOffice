@@ -4,29 +4,41 @@
 # STATIC library with the app's QML module (URI QindaOffice.Show) so the
 # tests instantiate the real window; the executable is main.cpp over it.
 set(qindashow_qml
+    qml/ActionSettingsDialog.qml
     qml/ApplyMasterDialog.qml
     qml/ChartDataDialog.qml
+    qml/CommentPins.qml
     qml/CommentEntry.qml
     qml/CommentsPane.qml
+    qml/CustomShowsDialog.qml
+    qml/DefineShowDialog.qml
+    qml/ExportPicturesDialog.qml
     qml/FormatBackgroundPane.qml
     qml/InsertTableDialog.qml
     qml/LayoutGallery.qml
+    qml/LinkDialog.qml
     qml/MasterDialog.qml
     qml/MasterPane.qml
+    qml/MediaEditDialog.qml
     qml/NotesPane.qml
     qml/PlayerMedia.qml
     qml/PresenterView.qml
+    qml/RehearsalBar.qml
     qml/ReuseSlidesDialog.qml
+    qml/SetUpShowDialog.qml
+    qml/ShowOverlays.qml
     qml/ShowPlayer.qml
     qml/ShowWindow.qml
     qml/ShowRibbonLayout.qml
     qml/SlideCanvasView.qml
     qml/SlideEditor.qml
     qml/SlidePanel.qml
+    qml/SlideShowDialogs.qml
     qml/SlideSizeDialog.qml
     qml/SlideSorter.qml
     qml/SplitCellsDialog.qml
     qml/TextStylesPane.qml
+    qml/VideoExportDialog.qml
 )
 foreach(qml_file IN LISTS qindashow_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
@@ -42,6 +54,7 @@ qt_add_qml_module(qindashow_app
     SOURCES
         src/pdf_export.cpp src/pdf_export.h
         src/presentation_controller.cpp src/presentation_controller.h
+        src/show_action_settings.cpp src/show_action_settings.h
         src/show_ai.cpp src/show_ai.h
         src/show_arrange.cpp src/show_arrange.h
         src/show_arrange_menus.cpp
@@ -53,6 +66,8 @@ qt_add_qml_module(qindashow_app
         src/show_design_actions.cpp src/show_design_actions.h
         src/show_design_tab.cpp src/show_design_tab.h
         src/show_document.cpp src/show_document.h
+        src/show_effect_options.cpp src/show_effect_options.h
+        src/show_export.cpp src/show_export.h
         src/show_host.cpp src/show_host.h
         src/show_host_ai.cpp
         src/show_host_design.cpp
@@ -60,12 +75,16 @@ qt_add_qml_module(qindashow_app
         src/show_tools.cpp src/show_tools.h
         src/slide_factory.h
         src/show_host_menus.cpp
+        src/show_host_show.cpp
         src/show_host_slides.cpp
+        src/show_links.cpp
         src/show_master_actions.cpp
         src/show_master_view.cpp src/show_master_view.h
         src/show_media_actions.cpp src/show_media_actions.h
+        src/show_rehearsal.cpp src/show_rehearsal.h
         src/show_sections.cpp src/show_sections.h
         src/show_slide_layouts.cpp src/show_slide_layouts.h
+        src/show_slide_show.cpp src/show_slide_show.h
         src/show_table_actions.cpp src/show_table_actions.h
         src/show_toolbox.cpp src/show_toolbox.h
         src/slide_canvas_item.cpp src/slide_canvas_item.h

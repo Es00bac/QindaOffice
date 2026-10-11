@@ -4,6 +4,7 @@
 #include "pptx_review.h"
 
 #include "ooxml_namespaces.h"
+#include "ooxml_units.h"
 
 #include <QUuid>
 
@@ -159,6 +160,11 @@ QByteArray modernPart(const Slide &slide, quint32 creationId, quint32 sldId, con
         set(*e, "created", date(comment.created));
         if (parent == nullptr) {
             anchor(*e, slide, comment, creationId, sldId, writtenIds);
+            // MS-PPTX CT_Comment: anchor, pos, replies, text. Coordinates are
+            // relative to the slide or drawing object named by the anchor.
+            XmlElement &pos = e->appendElement(nsP188(), QStringLiteral("pos"));
+            set(pos, "x", QString::number(qRound64(Ooxml::Units::ptToEmu(comment.position.x()))));
+            set(pos, "y", QString::number(qRound64(Ooxml::Units::ptToEmu(comment.position.y()))));
             threads.insert(comment.id, e.get());
             e->appendElement(textBody(comment.text));
             list->appendElement(e);

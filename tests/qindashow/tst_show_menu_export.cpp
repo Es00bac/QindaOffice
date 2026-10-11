@@ -46,7 +46,7 @@ private slots:
             titles.append(item.text);
         }
         QCOMPARE(titles, (QStringList{QStringLiteral("File"), QStringLiteral("Edit"), QStringLiteral("View"),
-                                      QStringLiteral("Slide"), QStringLiteral("Insert"), QStringLiteral("Shape"),
+                                      QStringLiteral("Slide"), QStringLiteral("Slide Show"), QStringLiteral("Insert"), QStringLiteral("Shape"),
                                       QStringLiteral("Arrange"), QStringLiteral("Table"), QStringLiteral("Design"),
                                       QStringLiteral("Review"), QStringLiteral("AI"), QStringLiteral("Settings"),
                                       QStringLiteral("Help")}));

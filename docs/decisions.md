@@ -129,6 +129,34 @@ page; the blank page of an odd / even start is shown (Word's Print Layout
 hides it). QindaTK gaps: none — the dialogs and the contextual tab use
 existing controls.
 
+## D-099: Actions, custom shows, rehearsed timings and video export in QindaShow (M91)
+
+**Date:** 2026-10-10 · **Status:** accepted. Details: [QindaShow](qindashow.md).
+
+**Context.** PowerPoint navigation, custom shows and presentation setup had no
+editable equivalents; slide timings, media edits and effect directions needed
+native round trips and the slide show needed to honour them.
+
+**Decision.** Keep action/settings/media data in `show_model` and PowerPoint's
+own package structures. Window-owned controllers expose persistent action ids
+shared by menus, ribbon and panel. The player follows explicit playlists and a
+return stack for nested custom shows. Rehearsal uses a monotonic, injectable
+clock and commits timings as one undo step. Programs/macros are preserved but
+never executed; external file actions ask before dispatch through the desktop.
+Narration markers (`p:audio/@isNarration`, `p15:isNarration`) govern playback
+and movie audio independently of ordinary sounds. Comment pins expose slide
+positions in the editor, with one-step undo and native comment coordinates.
+Video export uses a deck snapshot on a worker and the shared slide renderer,
+feeding Portage's system ffmpeg. Cancellation removes partial output; successful
+replacement uses QSaveFile to preserve the prior export on failure.
+
+**Consequences.** Settings and new content round-trip through native PowerPoint
+markup, with schema and package tests. Video substitutes cross-fades for other
+transitions and paints embedded video's poster; embedded slide audio is mixed.
+No new toolkit controls or installation paths are introduced. Headless UI gates
+exercise the real dialogs and narrow ribbon; desktop playback, URL handlers and
+a PowerPoint desktop round trip remain manual gates.
+
 ## D-095: QindaDiagram: Visio's everyday drawing tools
 
 **Date:** 2026-10-09 · **Status:** accepted (owner request: every app at par

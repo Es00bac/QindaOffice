@@ -128,7 +128,9 @@ void readNonVisual(const ShapeScope &scope, const Ooxml::XmlElement *cNvPr, Shap
     shape.name = cNvPr->attr(u"name");
     shape.description = cNvPr->attr(u"descr");
     shape.hidden = Ooxml::Units::parseOnOff(cNvPr->attr(u"hidden"), false);
-    shape.hyperlink = hyperlinkFrom(scope.ctx, cNvPr->child(nsA(), u"hlinkClick"));
+    // M91 (D-099): action settings on click and on mouse-over.
+    shape.click = actionFrom(scope.ctx, cNvPr->child(nsA(), u"hlinkClick"));
+    shape.hover = actionFrom(scope.ctx, cNvPr->child(nsA(), u"hlinkHover"));
 }
 
 QString shapeIdFor(const ShapeScope &scope, quint32 nvId)

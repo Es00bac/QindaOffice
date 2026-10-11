@@ -26,9 +26,24 @@ namespace QindaOffice::Show::Pptx {
 [[nodiscard]] QString transitionName(const Ooxml::XmlElement *transition);
 // A p:transition for one of the player's names; nullptr for "cut".
 [[nodiscard]] Ooxml::XmlElementPtr transitionElement(const QString &name);
+// M91 (D-099): Advance Slide — p:transition's @advTm (-1 when absent) and
+// @advClick, read from the transition (or the mc:AlternateContent around
+// it); applyAdvance() writes them into every p:transition `transition`
+// holds, making a bare <p:transition/> when a slide without an effect has
+// a timing (or does not advance on a click).
+void readAdvance(const Ooxml::XmlElement *transition, int *advanceAfterMs, bool *advanceOnClick);
+void applyAdvance(Ooxml::XmlElementPtr &transition, int advanceAfterMs, bool advanceOnClick);
 
-// The entrance builds of the main sequence, one step per click.
+// The entrance builds of the main sequence, one step per click (M91: and
+// each shape's exit, BuildEntry::exit).
 [[nodiscard]] QList<BuildEntry> readBuilds(const Ooxml::XmlElement *timing);
+// How long the model plays a build as read: its longest behaviour within
+// 50..5000 ms, 350 ms when it names none (the reader and the writer's
+// "still what was read" check agree through this).
+[[nodiscard]] inline int buildDuration(const BuildEntry &build)
+{
+    return build.durationMs > 0 ? qBound(50, build.durationMs, 5000) : 350;
+}
 // A p:timing playing `builds` and `media` (M75: each media shape's play
 // command in the main sequence — at its click, or with the slide — and its
 // media node); nullptr when there is nothing to play.

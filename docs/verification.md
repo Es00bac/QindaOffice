@@ -54,6 +54,47 @@ Columns remain preserved as Word markup but displayed in one column.
 Very tall paragraphs or rows in a shorter section and page-relative
 floating pictures retain the limitations in [word-interchange.md](word-interchange.md#known-limits).
 
+## M91 gates (D-099): actions, shows, media and export
+
+Verified on qinda, 2026-10-10, Qt 6.11.1 and system QindaTK r17. Builds used
+`~/scratch/qqo/qq-build`, unchanged parallelism, nice 19 and idle I/O; tests
+ran offscreen/software with the same priority. No live desktop was launched.
+
+- **28/28 CTest executables; 251 QtTest cases passed, zero failures/skips**
+  (17 show_model executables / 152 cases and 11 QindaShow executables / 99
+  cases; counts include each QtTest setup/cleanup). Final run: 178.56 seconds.
+- `QQO_OOXML_SCHEMA_DIR=/home/cabewse/scratch/qqo/ecma-xsd`: package/schema
+  gates passed, including action settings, text links, custom shows, show
+  properties, transition timing, trim/fades/bookmarks, effect directions,
+  narration flags and preserved source parts. Existing LibreOffice tests pass.
+- System ffmpeg/ffprobe: three visible slides produce 75 frames at 64×36,
+  2.5 seconds, with mixed audio; Show Without Narration removes the narrated
+  track. Cancel preserves a previous destination and removes temporary output.
+- Real-window tests cover action/link dialogs and undo, custom show definition
+  and ordering, Set Up Show, hidden-slide navigation, custom-show return,
+  executable refusal/file consent, rehearsal pause/repeat/keep and one-step
+  undo, media edits/bookmarks, effects, picture export and comment positions
+  saved to PowerPoint. Presenter highlights align with the preview; action
+  audio has only one owner across the two show windows.
+- Ribbon squeeze and the desktop menu-export validator pass. The 1280/520
+  fixtures gained only the 11 expected named items at each width. Regenerated
+  deliberately, diff reviewed, then `tst_show_ui structuralFixtures` passed
+  again without update mode (3/3 cases including setup/cleanup).
+- Inspected 1280/520 grabs of Action Settings, Custom Shows, Define Custom
+  Show, Set Up Show, rehearsal, video export and media editing; inspected the
+  main windows, comment pins/position fields and all twelve action glyphs.
+  Logs and synthetic PNGs: `/mnt/archive/qindaoffice-validation-20261010/m91/`
+  on qinda. All changed hand-written source files are at most 500 nonblank lines.
+
+Known integration follow-up: r17 emits the existing NumberField binding-loop
+warnings; the coordinated r18 toolkit rebuild must requalify consumers. The
+pre-existing 520 px document canvas remains squeezed between both docks; a
+responsive dock layout is tracked for the next application UI pass. M91 dialogs
+and ribbon commands fit at that width. Actual PowerPoint interoperability,
+audible media, URL/file handlers and multiple physical screens remain manual
+checks. Video export uses poster frames for embedded video and cross-fades for
+non-cut transitions; [QindaShow](qindashow.md) documents the remaining limits.
+
 ## Build gates (every milestone)
 
 ```

@@ -64,7 +64,20 @@ QJsonObject shapeToJson(const Shape &shape)
                                                               shape.childRect.width(), shape.childRect.height()});
     }
     object.insert(QStringLiteral("connector"), shape.connector);
-    object.insert(QStringLiteral("hyperlink"), shape.hyperlink);
+    // M91 (D-099): action settings; M62's "hyperlink" is the click's link.
+    object.insert(QStringLiteral("hyperlink"), shape.click.link);
+    if (!shape.click.isEmpty()) {
+        object.insert(QStringLiteral("click"), Json::action(shape.click));
+    }
+    if (!shape.hover.isEmpty()) {
+        object.insert(QStringLiteral("hover"), Json::action(shape.hover));
+    }
+    if (shape.animationDirection != 0) {
+        object.insert(QStringLiteral("animationDirection"), shape.animationDirection);
+    }
+    if (shape.exit.isSet()) {
+        object.insert(QStringLiteral("exit"), Json::exit(shape.exit));
+    }
     if (!shape.preserved.isEmpty()) {
         object.insert(QStringLiteral("preserved"),
                       QJsonArray{shape.preserved.fragment, shape.preserved.part, shape.preserved.label});
@@ -149,7 +162,16 @@ Shape shapeFromJson(const QJsonObject &object)
                                  childRect[3].toDouble());
     }
     shape.connector = object.value(QStringLiteral("connector")).toBool();
-    shape.hyperlink = object.value(QStringLiteral("hyperlink")).toString();
+    if (object.contains(QStringLiteral("click"))) {
+        shape.click = Json::action(object.value(QStringLiteral("click")).toObject());
+    } else {
+        shape.click.link = object.value(QStringLiteral("hyperlink")).toString();
+    }
+    shape.hover = Json::action(object.value(QStringLiteral("hover")).toObject());
+    shape.animationDirection = object.value(QStringLiteral("animationDirection")).toInt();
+    if (object.contains(QStringLiteral("exit"))) {
+        shape.exit = Json::exit(object.value(QStringLiteral("exit")).toObject());
+    }
     const QJsonArray preserved = object.value(QStringLiteral("preserved")).toArray();
     if (preserved.size() == 3) {
         shape.preserved = {preserved.at(0).toString(), preserved.at(1).toString(), preserved.at(2).toString()};
