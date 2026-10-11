@@ -87,10 +87,23 @@ private slots:
         const QRectF mathLeft = scene.control()->cursorRect(beforeEquation);
         const QRectF mathRight = scene.control()->cursorRect(afterEquation);
         QVERIFY(mathRight.x() > mathLeft.x());
-        const QPointF mathPoint(mathLeft.x() + (mathRight.x() - mathLeft.x()) * 0.75, mathLeft.center().y());
+        const qreal mathX = mathLeft.x() + (mathRight.x() - mathLeft.x()) * 0.75;
+        // The following graphic can make the line much taller than the
+        // equation. Pick a point on the equation's actual painted hit area.
+        QPointF mathPoint(-1, -1);
+        for (int y = int(mathLeft.top()) + 1; y < mathLeft.bottom(); ++y) {
+            const QPointF candidate(mathX, y);
+            if (scene.doc->textDocument()->documentLayout()->hitTest(candidate, Qt::ExactHit) == 0) {
+                mathPoint = candidate; break;
+            }
+        }
+        QVERIFY(mathPoint.y() >= 0);
+        QSignalSpy mathHit(scene.control(), &Apps::Write::PageTextControl::doubleClicked);
         QMouseEvent mathDoubleClick(QEvent::MouseButtonDblClick, mathPoint, mathPoint,
                                     Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
         QVERIFY(scene.control()->processEvent(&mathDoubleClick));
+        QCOMPARE(mathHit.size(), 1);
+        QCOMPARE(mathHit.first().first().toInt(), 0);
         QVERIFY(scene.host.equations()->active());
         scene.host.equations()->cancel();
         QSignalSpy graphicEditor(graphics, &Apps::Write::GraphicsController::dialogRequested);
@@ -102,6 +115,8 @@ private slots:
         QMouseEvent doubleClick(QEvent::MouseButtonDblClick, point, point,
                                 Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
         QVERIFY(scene.control()->processEvent(&doubleClick));
+        QCOMPARE(mathHit.size(), 2);
+        QCOMPARE(mathHit.last().first().toInt(), 1);
         QCOMPARE(graphicEditor.size(), 1);
         QVERIFY(!scene.host.equations()->active());
     }

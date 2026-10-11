@@ -5880,6 +5880,7 @@ undo/redo, all 23 templates, native import/edit/save/reopen, unknown OMML,
 keyboard slot navigation, conversion history, adjacent equations and typed text,
 and exact double-click dispatch when a graphic immediately follows an equation,
 including ordinary text immediately before an equation,
+with the mouse event placed in each object's exact painted hit area,
 graphic replacement by equation through DOCX save/reopen,
 math baseline metrics, cloned
 stories, DOCX/PPTX schemas, shape clipboard/FODP, and PDF output. Editor and
