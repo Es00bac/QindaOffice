@@ -293,6 +293,10 @@ void PageTextItem::mousePressEvent(QMouseEvent *event)
         event->accept(); // Preview Results is read-only (M77)
         return;
     }
+    if (event->button() == Qt::LeftButton && event->modifiers().testFlag(Qt::ControlModifier) && m_control && !isEditingStory()) {
+        const QString href = m_control->anchorAt(viewToDoc(event->position()));
+        if (href.startsWith(QLatin1Char('#'))) { emit internalLinkActivated(href.mid(1)); event->accept(); return; }
+    }
     if (event->button() == Qt::LeftButton && m_story != nullptr && m_story->isOpen()) {
         forwardStoryMouse(event);
         return;

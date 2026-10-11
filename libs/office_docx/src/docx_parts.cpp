@@ -57,6 +57,7 @@ WordParts cloneWordParts(const WordParts &parts)
     out.comments = parts.comments;
     out.sourceCommentIds = parts.sourceCommentIds;
     out.contentControls = parts.contentControls;
+    out.bibliography = parts.bibliography;
     out.media = parts.media;
     out.source = parts.source;
     out.sourceSectionXml = parts.sourceSectionXml;

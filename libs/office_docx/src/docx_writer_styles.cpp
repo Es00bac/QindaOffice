@@ -99,6 +99,7 @@ const char *definition(const QString &id)
     if (id == u"ListParagraph") {
         return R"(<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:uiPriority w:val="34"/><w:qFormat/><w:pPr><w:ind w:left="720"/><w:contextualSpacing/></w:pPr></w:style>)";
     }
+    if (id == u"TOCHeading") return R"(<w:style w:type="paragraph" w:styleId="TOCHeading"><w:name w:val="TOC Heading"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:rPr><w:b/><w:sz w:val="32"/></w:rPr></w:style>)";
     if (id == u"Caption") {
         return R"(<w:style w:type="paragraph" w:styleId="Caption"><w:name w:val="caption"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="35"/><w:unhideWhenUsed/><w:qFormat/><w:pPr><w:spacing w:after="200" w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:i/><w:iCs/><w:color w:val="44546A"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr></w:style>)";
     }
@@ -162,6 +163,10 @@ QString builtInStyleId(int writeStyleId)
 
 XmlElementPtr builtInStyle(const QString &styleId)
 {
+    if (styleId.startsWith(u"TOC") && styleId.mid(3).toInt() >= 1 && styleId.mid(3).toInt() <= 9) {
+        const auto xml = QStringLiteral(R"(<w:style w:type="paragraph" w:styleId="%1"><w:name w:val="toc %2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/></w:style>)").arg(styleId).arg(styleId.mid(3)).toUtf8();
+        return parseWithW(xml.constData());
+    }
     const char *xml = definition(styleId);
     return xml != nullptr ? parseWithW(xml) : nullptr;
 }

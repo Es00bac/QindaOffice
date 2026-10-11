@@ -139,11 +139,8 @@ int BodyReader::readBlockItems(const XmlElement &container, QTextCursor &cursor,
             if (const int inner = readBlockItems(*e, cursor, state); inner >= 0) {
                 last = inner;
             }
-        } else if (e->ns == kW && e->name == u"bookmarkStart") {
-            const QString name = wAttr(e, u"name");
-            if (!name.isEmpty() && name != u"_GoBack") {
-                state.pendingAnchors.append(name);
-            }
+        } else if (e->ns == kW && (e->name == u"bookmarkStart" || e->name == u"bookmarkEnd")) {
+            bookmarkRange(*e, state);
         } else if (e->ns == kW && (e->name == u"commentRangeStart" || e->name == u"commentRangeEnd")) {
             commentRange(*e); // a comment can span paragraphs
         } else if (e->ns == kW && e->name == u"sectPr") {

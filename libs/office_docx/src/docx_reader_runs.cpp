@@ -6,6 +6,7 @@
 
 
 #include "docx_float.h"
+#include "docx_reference_fields.h"
 #include "docx_format.h"
 #include "docx_merge_fields.h"
 #include "docx_notes.h"
@@ -140,7 +141,14 @@ QString BodyReader::currentHref(const InlineState &inl, const ContainerState &st
     if (!inl.href.isEmpty()) {
         return inl.href;
     }
+    const auto referenceHref = [](const QString &code) {
+        const auto tokens = fieldTokens(code); const QString type = tokens.value(0).toUpper();
+        return (type == u"REF" || type == u"PAGEREF") && tokens.contains(QStringLiteral("\\h"))
+            ? QLatin1Char('#') + tokens.value(1) : QString();
+    };
+    for (auto it = inl.simpleFields.crbegin(); it != inl.simpleFields.crend(); ++it) if (const QString href = referenceHref(*it); !href.isEmpty()) return href;
     for (auto it = state.fields.crbegin(); it != state.fields.crend(); ++it) {
+        if (it->inResult) if (const QString href = referenceHref(it->instruction); !href.isEmpty()) return href;
         if (it->inResult && fieldType(it->instruction) == u"HYPERLINK") {
             return hyperlinkTarget(it->instruction);
         }
@@ -212,8 +220,20 @@ void BodyReader::readInline(const XmlElement &parent, QTextCursor &cursor, Inlin
                 inl.href = hyperlinkTarget(instr);
             }
             inl.simpleFields.append(instr);
+            auto reference = referenceField(instr);
+            if (const QString lock = wAttr(e, u"fldLock"); !lock.isEmpty()) {
+                Ooxml::XmlElement begin(kW, QStringLiteral("fldChar"));
+                begin.setAttribute(kW, QStringLiteral("fldCharType"), QStringLiteral("begin")); begin.setAttribute(kW, QStringLiteral("fldLock"), lock);
+                reference.insert(QStringLiteral("beginXml"), Ooxml::serializeFragment(begin));
+            }
+            inl.simpleReferences.append(reference);
+            const int resultStart = cursor.position();
             readInline(*e, cursor, inl, state);
+            if (cursor.position() == resultStart && !isMergeField(instr) && fieldType(instr) != u"HYPERLINK") {
+                QTextCharFormat empty; empty.setProperty(kEmptyReference, true); insertText(cursor, QString(QChar(0x200B)), empty, inl, state);
+            }
             inl.simpleFields.removeLast();
+            inl.simpleReferences.removeLast();
             inl.href = saved;
         } else if (n == u"ins" || n == u"moveTo") {
             const QString saved = inl.insertAuthor;
@@ -238,11 +258,8 @@ void BodyReader::readInline(const XmlElement &parent, QTextCursor &cursor, Inlin
             readInline(*e, cursor, inl, state);
         } else if (n == u"commentRangeStart" || n == u"commentRangeEnd") {
             commentRange(*e);
-        } else if (n == u"bookmarkStart") {
-            const QString name = wAttr(e, u"name");
-            if (!name.isEmpty() && name != u"_GoBack") {
-                state.pendingAnchors.append(name);
-            }
+        } else if (n == u"bookmarkStart" || n == u"bookmarkEnd") {
+            bookmarkRange(*e, state);
         }
         // pPr, proofErr, bookmarkEnd, permStart/End: nothing to show.
     }
@@ -255,6 +272,8 @@ void BodyReader::readFieldChar(const XmlElement &fldChar, QTextCursor &cursor, c
     if (type == u"begin") {
         ContainerState::Field field;
         field.nested = inFieldInstruction(state);
+        field.referenceId = referenceField({}).value(QStringLiteral("id")).toString();
+        field.beginXml = Ooxml::serializeFragment(fldChar);
         state.fields.append(field);
     } else if (type == u"separate") {
         if (!state.fields.isEmpty()) {
@@ -269,6 +288,11 @@ void BodyReader::readFieldChar(const XmlElement &fldChar, QTextCursor &cursor, c
         if (field.nested && !state.fields.isEmpty() && !state.fields.last().inResult) {
             state.fields.last().instruction += QStringLiteral("{ ") + code + QStringLiteral(" }");
             return;
+        }
+        if (!field.produced && !inFieldInstruction(state) && !code.isEmpty() && !isMergeField(code) && fieldType(code) != u"HYPERLINK") {
+            QTextCharFormat empty = format; empty.setProperty(kEmptyReference, true);
+            inl.simpleReferences.append(QVariantMap{{QStringLiteral("id"), field.referenceId}, {QStringLiteral("code"), code}, {QStringLiteral("beginXml"), field.beginXml}});
+            insertText(cursor, QString(QChar(0x200B)), empty, inl, state); inl.simpleReferences.removeLast();
         }
         // A merge rule Word writes without a result (NEXT, NEXTIF, SKIPIF),
         // or a merge field whose result is empty, shows Word's label.
@@ -369,6 +393,7 @@ QTextCharFormat BodyReader::prepareFormat(QTextCharFormat format, InlineState &i
         format.setAnchorNames(state.pendingAnchors);
         state.pendingAnchors.clear();
     }
+    prepareReferences(format, inl, state);
     const QString field = currentField(inl, state);
     if (!field.isEmpty()) {
         format.setProperty(kFieldInstruction, field);

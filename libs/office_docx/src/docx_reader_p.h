@@ -66,6 +66,8 @@ public:
         const CellContext *cell = nullptr;
         struct Field {
             QString instruction;
+            QString referenceId;
+            QString beginXml;
             bool inResult = false;
             // Begun inside another field's code (IF { MERGEFIELD … }): its
             // code joins the outer one's in braces, as Word's field-code
@@ -88,6 +90,7 @@ public:
     struct InlineState {
         QString href;
         QStringList simpleFields;
+        QVariantList simpleReferences;
         QString insertAuthor;
         QString deleteAuthor;
         QDateTime revisionDate;
@@ -156,6 +159,9 @@ private:
     // Comments whose w:commentRangeStart was read and whose end was not:
     // the runs in between carry their ids (kCommentIds, docx_comments.h).
     QStringList m_openComments;
+    QMap<QString, QString> m_openBookmarks;
+    void bookmarkRange(const Ooxml::XmlElement &marker, ContainerState &state);
+    void prepareReferences(QTextCharFormat &format, const InlineState &inl, ContainerState &state);
     void commentRange(const Ooxml::XmlElement &marker);
     // Content controls the reader is inside (docx_controls.h): block-level
     // ones tag paragraphs and tables (kBlockControls), inline ones runs

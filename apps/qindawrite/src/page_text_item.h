@@ -84,6 +84,7 @@ public:
     void setMergeHighlight(bool on);
 
 signals:
+    void internalLinkActivated(const QString &bookmark);
     void pageCountChanged();
     void maxPaintHeightChanged();
     void viewZoomChanged();

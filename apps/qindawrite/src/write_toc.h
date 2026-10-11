@@ -16,6 +16,7 @@
 #include <QList>
 #include <QString>
 #include <QTextFormat>
+#include <QVariantMap>
 
 class QTextCursor;
 class QTextDocument;
@@ -29,7 +30,8 @@ inline constexpr int kTocBlockProperty = QTextFormat::UserProperty + 7;
 
 struct TocEntry {
     QString text;
-    int level = 1;   // 1..6, from the heading style
+    QString bookmark;
+    int level = 1;   // 1..9, from the heading style or imported outline level
     int page = 1;    // 1-based
     int position = 0; // document position of the heading block
 };
@@ -41,10 +43,11 @@ struct TocEntry {
 // Writes the table at `at`, replacing a previous generated table if the
 // cursor is inside one. Returns the number of entries written.
 int insertTableOfContents(QTextDocument *document, const PageGeometry &geometry,
-                          const QTextCursor &at);
+                          const QTextCursor &at, const QVariantMap &options = {});
 
 // Rebuilds the FIRST generated table in the document in place (Update).
-// Returns -1 when the document has no table of contents yet.
-int updateTableOfContents(QTextDocument *document, const PageGeometry &geometry);
+// Returns -1 without a table, -2 for a locked/unsupported imported table.
+int updateTableOfContents(QTextDocument *document, const PageGeometry &geometry, const QVariantMap &options = {});
+[[nodiscard]] QVariantMap tableOfContentsOptions(const QTextDocument &document);
 
 } // namespace QindaOffice::Apps::Write

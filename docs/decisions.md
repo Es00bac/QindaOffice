@@ -185,6 +185,25 @@ earlier actions have succeeded; POP3 and local mail cannot promise IMAP folder
 operations. Quick Steps do not send messages, and this milestone does not add
 an editor for arbitrary server-side mail rules or separate Sieve replies by
 audience. See [mail.md](mail.md#everyday-mail-and-calendar-workflows-m95).
+## D-102: Word reference identity stays in native document structures
+
+**Date:** 2026-10-10 · **Status:** accepted · **Milestone:** M94.
+
+Document-local sources use Word's bibliography custom XML. Citations,
+bibliographies, sequence captions, cross-references and tables of contents use
+native Word fields with cached display results. Occurrence IDs, nested field
+stacks and bookmark ranges live in text formats, so formatting, Undo/Redo,
+recovery and save/reopen share one model. Sources are an owned `WordParts`
+value with a matching text-undo item. Unknown source fields/styles, unknown
+field codes and locked results remain preserved; only explicitly supported
+local renderers refresh results. No online lookup or global CSL dependency.
+
+The run writer is a separate cohesive module and emits field boundaries across
+paragraphs. Reference pages refresh only on explicit commands after pagination.
+Native caption-number references use a bookmark around the `SEQ` result;
+`REF \n` denotes paragraph numbering and is not used for new caption numbers.
+The screen, print and PDF share the existing paragraph tab-leader painter.
+See [Word references](word-references.md) for scope and contracts.
 
 ## D-101: Native Word graphics reuse the shared DrawingML model
 

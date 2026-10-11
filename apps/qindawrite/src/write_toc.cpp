@@ -2,6 +2,10 @@
 #include "write_toc.h"
 
 #include "docx_properties.h"
+#include "docx_reference_fields.h"
+#include "docx_paragraph_format.h"
+#include "write_reference_edit.h"
+#include <QUuid>
 
 static_assert(QindaOffice::Apps::Write::kTocBlockProperty == QindaOffice::Docx::kWriteTocBlockProperty);
 
@@ -12,17 +16,24 @@ static_assert(QindaOffice::Apps::Write::kTocBlockProperty == QindaOffice::Docx::
 #include <QTextBlock>
 #include <QTextCursor>
 #include <QTextDocument>
+#include <QTextFrame>
 
 namespace QindaOffice::Apps::Write {
 
 namespace {
 
-// 1..6 for a heading block, 0 for anything else. Title counts as level 1:
+// 1..9 for a heading block, 0 for anything else. Title counts as level 1:
 // a document's title belongs at the top of its own contents list.
 int headingLevelOf(const QTextBlock &block)
 {
-    if (block.blockFormat().hasProperty(kTocBlockProperty)) {
+    if (block.blockFormat().stringProperty(Docx::kParagraphStyleId).startsWith(u"TOC") || block.blockFormat().hasProperty(kTocBlockProperty)) {
         return 0; // never index the table of contents itself
+    }
+    for (auto it = block.begin(); !it.atEnd(); ++it) for (const auto &field : it.fragment().charFormat().property(Docx::kReferenceFields).toList())
+        if (Docx::referenceType(field.toMap().value(QStringLiteral("code")).toString()) == u"TOC") return 0;
+    if (block.blockFormat().hasProperty(Docx::kOutlineLevel)) {
+        const int level = block.blockFormat().intProperty(Docx::kOutlineLevel);
+        return level >= 0 && level < 9 ? level + 1 : 0;
     }
     const int style = classifyBlockStyle(block);
     switch (style) {
@@ -57,6 +68,14 @@ qreal blockTop(const QTextDocument *document, const QTextBlock &block)
 // or the first run in the document when `position` is negative.
 bool findTocRun(const QTextDocument *document, int position, int *from, int *to)
 {
+    for (const auto &span : Docx::referenceSpans(*document)) {
+        if (Docx::referenceType(span.field.value(QStringLiteral("code")).toString()) != u"TOC") continue;
+        if (position < 0 || (position >= span.start && position <= span.end)) {
+            *from = document->findBlock(span.start).position(); *to = document->findBlock(span.end - 1).position() + document->findBlock(span.end - 1).length() - 1;
+            if (const auto previous = document->findBlock(*from).previous(); previous.isValid() && (previous.blockFormat().hasProperty(kTocBlockProperty) || previous.blockFormat().stringProperty(Docx::kParagraphStyleId) == u"TOCHeading")) *from = previous.position();
+            return true;
+        }
+    }
     QTextBlock start;
     for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
         if (!block.blockFormat().hasProperty(kTocBlockProperty)) {
@@ -96,35 +115,60 @@ bool findTocRun(const QTextDocument *document, int position, int *from, int *to)
 }
 
 // Writes the entries at the cursor. The caller owns the edit block.
-void writeEntries(QTextCursor &cursor, const QList<TocEntry> &entries)
+int writeEntries(QTextCursor &cursor, const QList<TocEntry> &entries, const QVariantMap &options, qreal width)
 {
-    QTextBlockFormat heading;
-    heading.setProperty(kTocBlockProperty, 1);
-    QTextCharFormat headingChar;
-    headingChar.setFontWeight(QFont::Bold);
-    headingChar.setFontPointSize(16);
-    cursor.setBlockFormat(heading);
-    cursor.setCharFormat(headingChar);
-    cursor.insertText(QObject::tr("Contents"));
-
+    const int first = qBound(1, options.value(QStringLiteral("first"), 1).toInt(), 9);
+    const int last = qBound(first, options.value(QStringLiteral("last"), 6).toInt(), 9);
+    const bool links = options.value(QStringLiteral("links"), true).toBool();
+    const bool leaders = options.value(QStringLiteral("leaders"), true).toBool();
+    const QString code = QStringLiteral("TOC \\o \"%1-%2\"%3 \\z \\u").arg(first).arg(last).arg(links ? QStringLiteral(" \\h") : QString());
+    const QVariantMap field = Docx::referenceField(code);
+    QTextBlockFormat heading; heading.setProperty(Docx::kParagraphStyleId, QStringLiteral("TOCHeading")); heading.setProperty(kTocBlockProperty, 1); heading.setProperty(Docx::kTocOptions, options);
+    QTextCharFormat headingChar; headingChar.setFontWeight(QFont::Bold); headingChar.setFontPointSize(16);
+    cursor.setBlockFormat(heading); cursor.setCharFormat(headingChar); cursor.insertText(QObject::tr("Contents"));
+    int count = 0;
     for (const TocEntry &entry : entries) {
-        QTextBlockFormat block;
-        block.setProperty(kTocBlockProperty, 1);
-        // Indent by level and put a right-aligned tab at the text width, so
-        // the page numbers line up in a column like a printed contents page.
-        block.setLeftMargin(16.0 * (entry.level - 1));
-        QList<QTextOption::Tab> tabs;
-        QTextOption::Tab tab;
-        tab.type = QTextOption::RightTab;
-        tab.position = 560 - 16.0 * (entry.level - 1);
-        tab.delimiter = QLatin1Char('.');
-        tabs.append(tab);
-        block.setTabPositions(tabs);
-        QTextCharFormat plain;
-        plain.setFontWeight(entry.level == 1 ? QFont::DemiBold : QFont::Normal);
-        cursor.insertBlock(block, plain);
-        cursor.insertText(entry.text + QLatin1Char('\t') + QString::number(entry.page));
+        if (entry.level < first || entry.level > last) continue;
+        const QString bookmark = entry.bookmark;
+        QTextBlockFormat block; block.setProperty(Docx::kParagraphStyleId, QStringLiteral("TOC%1").arg(entry.level)); block.setProperty(kTocBlockProperty, 1); block.setProperty(Docx::kTocOptions, options);
+        block.setLeftMargin(16.0 * (entry.level - first));
+        Docx::setTabStops(block, {{qRound(width * 15), QStringLiteral("right"), leaders ? QStringLiteral("dot") : QStringLiteral("none")}});
+        QTextCharFormat plain; plain.setFontWeight(entry.level == first ? QFont::DemiBold : QFont::Normal);
+        plain.setProperty(Docx::kReferenceFields, QVariantList{field});
+        if (links) { plain.setAnchor(true); plain.setAnchorHref(QLatin1Char('#') + bookmark); }
+        cursor.insertBlock(block, plain); cursor.insertText(entry.text + QLatin1Char('\t'), plain);
+        auto page = plain;
+        page.setProperty(Docx::kReferenceFields, QVariantList{field, Docx::referenceField(QStringLiteral("PAGEREF %1 \\h").arg(bookmark))});
+        cursor.insertText(QString::number(entry.page), page); ++count;
     }
+    if (count == 0) {
+        QTextCharFormat empty; empty.setProperty(Docx::kReferenceFields, QVariantList{field}); empty.setProperty(Docx::kEmptyReference, true);
+        cursor.insertBlock(heading, empty); cursor.insertText(QString(QChar(0x200B)), empty);
+    }
+    return count;
+}
+QList<TocEntry> bookmarkedHeadings(QTextDocument *document, const PageGeometry &geometry)
+{
+    auto entries = collectHeadings(document, geometry);
+    for (auto &entry : entries) {
+        QTextCursor c(document); c.setPosition(entry.position); c.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+        QStringList names = c.charFormat().property(Docx::kBookmarkRanges).toStringList();
+        for (const QString &name : names) if (name.startsWith(u"_QindaToc_")) { entry.bookmark = name; break; }
+        if (entry.bookmark.isEmpty()) {
+            entry.bookmark = QStringLiteral("_QindaToc_") + QUuid::createUuid().toString(QUuid::Id128).left(24);
+            names.append(entry.bookmark); QTextCharFormat f; f.setProperty(Docx::kBookmarkRanges, names); c.mergeCharFormat(f);
+        }
+    }
+    return entries;
+}
+void refreshPages(QTextDocument *document, const PageGeometry &geometry)
+{
+    // Explicit refresh only, after edits have paginated. Join the transaction
+    // so Undo removes both the TOC and the cached page-number corrections.
+    document->documentLayout()->documentSize();
+    QTextCursor edit(document); edit.joinPreviousEditBlock();
+    Docx::Bibliography empty; refreshReferences(*document, empty, geometry.pageHeight(), true);
+    edit.endEditBlock();
 }
 
 } // namespace
@@ -153,14 +197,14 @@ QList<TocEntry> collectHeadings(const QTextDocument *document, const PageGeometr
 }
 
 int insertTableOfContents(QTextDocument *document, const PageGeometry &geometry,
-                          const QTextCursor &at)
+                          const QTextCursor &at, const QVariantMap &options)
 {
     if (document == nullptr) {
         return 0;
     }
-    const QList<TocEntry> entries = collectHeadings(document, geometry);
     QTextCursor cursor = at;
     cursor.beginEditBlock();
+    const QList<TocEntry> entries = bookmarkedHeadings(document, geometry);
     int from = 0;
     int to = 0;
     if (findTocRun(document, cursor.position(), &from, &to)) {
@@ -183,16 +227,17 @@ int insertTableOfContents(QTextDocument *document, const PageGeometry &geometry,
             cursor.insertBlock();
         }
     }
-    writeEntries(cursor, entries);
+    const int count = writeEntries(cursor, entries, options, geometry.pageSize().width() - document->rootFrame()->frameFormat().leftMargin() - document->rootFrame()->frameFormat().rightMargin());
     // Leave the user a normal paragraph after the table, or everything they
     // type next inherits the TOC's block property and joins the table.
     QTextBlockFormat plainBlock;
     cursor.insertBlock(plainBlock, QTextCharFormat());
     cursor.endEditBlock();
-    return int(entries.size());
+    refreshPages(document, geometry);
+    return count;
 }
 
-int updateTableOfContents(QTextDocument *document, const PageGeometry &geometry)
+int updateTableOfContents(QTextDocument *document, const PageGeometry &geometry, const QVariantMap &requested)
 {
     if (document == nullptr) {
         return -1;
@@ -202,15 +247,42 @@ int updateTableOfContents(QTextDocument *document, const PageGeometry &geometry)
     if (!findTocRun(document, -1, &from, &to)) {
         return -1;
     }
-    const QList<TocEntry> entries = collectHeadings(document, geometry);
+    for (const auto &span : Docx::referenceSpans(*document)) {
+        const auto tokens = Docx::fieldTokens(span.field.value(QStringLiteral("code")).toString());
+        if (tokens.value(0).toUpper() != u"TOC") continue;
+        if (referenceLocked(span.field)) return -2;
+        if (requested.isEmpty()) for (qsizetype i = 1; i < tokens.size(); ++i) {
+            if (tokens.at(i) == u"\\h" || tokens.at(i) == u"\\z" || tokens.at(i) == u"\\u") continue;
+            if (tokens.at(i) == u"\\o" && i + 1 < tokens.size()) { ++i; continue; }
+            return -2;
+        }
+        break;
+    }
+    const auto options = requested.isEmpty() ? tableOfContentsOptions(*document) : requested;
     QTextCursor cursor(document);
     cursor.beginEditBlock();
+    const QList<TocEntry> entries = bookmarkedHeadings(document, geometry);
     cursor.setPosition(from);
     cursor.setPosition(to, QTextCursor::KeepAnchor);
     cursor.removeSelectedText();
-    writeEntries(cursor, entries);
+    const int count = writeEntries(cursor, entries, options, geometry.pageSize().width() - document->rootFrame()->frameFormat().leftMargin() - document->rootFrame()->frameFormat().rightMargin());
     cursor.endEditBlock();
-    return int(entries.size());
+    refreshPages(document, geometry);
+    return count;
+}
+
+QVariantMap tableOfContentsOptions(const QTextDocument &document)
+{
+    for (auto b = document.begin(); b.isValid(); b = b.next()) if (b.blockFormat().hasProperty(Docx::kTocOptions)) return b.blockFormat().property(Docx::kTocOptions).toMap();
+    for (const auto &span : Docx::referenceSpans(document)) {
+        const auto tokens = Docx::fieldTokens(span.field.value(QStringLiteral("code")).toString());
+        if (tokens.value(0).toUpper() != u"TOC") continue;
+        const auto range = tokens.value(tokens.indexOf(QStringLiteral("\\o")) + 1).split(QLatin1Char('-'));
+        const auto tabs = Docx::tabStops(document.findBlock(span.start).blockFormat());
+        return {{QStringLiteral("first"), range.value(0).toInt()}, {QStringLiteral("last"), range.value(1).toInt()},
+                {QStringLiteral("links"), tokens.contains(QStringLiteral("\\h"))}, {QStringLiteral("leaders"), !tabs.isEmpty() && tabs.last().leader == u"dot"}};
+    }
+    return {{QStringLiteral("first"), 1}, {QStringLiteral("last"), 3}, {QStringLiteral("links"), true}, {QStringLiteral("leaders"), true}};
 }
 
 } // namespace QindaOffice::Apps::Write

@@ -726,3 +726,10 @@ form (check box, list, calendar, placeholder) through the real window and render
 review (`QQO_WRITE_RENDER_DOCX` + `QQO_GRAB_DIR`). `tests/qindanote/tst_note_word`
 exports a page with every block kind and ink, validates it, reads it back
 (`QQO_GRAB_DIR` keeps the `.docx` for a look in Word or LibreOffice).
+
+## References (M94, D-102)
+
+Word bibliography custom XML, native citation/bibliography/sequence/reference/TOC
+fields and real bookmark ranges now have an editable document-local model.
+See [Word references](word-references.md) for supported workflows, source
+preservation, explicit refresh and the bounded author-date/numeric renderers.

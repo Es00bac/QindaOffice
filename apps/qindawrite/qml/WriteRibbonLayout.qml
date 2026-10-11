@@ -171,8 +171,19 @@ QtObject {
                 { action: "writePictureLayoutAction", iconName: "move" }] }
         ] },
         { id: "references", label: qsTr("References"), keyTip: "S", groups: [
+            { id: "citations", label: qsTr("Citations and Bibliography"), items: [
+                { action: "writeCitationAction", size: "large", iconName: "quote" },
+                { action: "writeSourcesAction", iconName: "library" },
+                { action: "writeEditCitationAction", iconName: "pencil" },
+                { action: "writeBibliographyAction", iconName: "book-open" }] },
+            { id: "captions", label: qsTr("Captions and References"), items: [
+                { action: "writeCaptionAction", size: "large", iconName: "text-cursor-input" },
+                { action: "writeCrossReferenceAction", iconName: "link" },
+                { action: "writeRefreshReferencesAction", iconName: "refresh-cw" },
+                { action: "writeFollowReferenceAction", iconName: "corner-down-right" }] },
             { id: "tableOfContents", label: qsTr("Table of Contents"), items: [
                 { action: "insertTocAction", size: "large", iconName: "list-tree" },
+                { action: "writeTocOptionsAction", iconName: "settings-2" },
                 { action: "updateTocAction", iconName: "refresh-cw" }] },
             { id: "footnotes", label: qsTr("Footnotes"), items: [
                 { action: "insertFootnoteAction", size: "large" },

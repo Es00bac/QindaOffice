@@ -13,6 +13,7 @@
 // move-only. Threading: GUI thread, like the body document.
 
 #include "docx_mailmerge.h"
+#include "docx_bibliography.h"
 #include "docx_notes.h"
 #include "ooxml_package.h"
 #include "ooxml_properties.h"
@@ -201,6 +202,7 @@ struct WordParts {
     // Mail merge (M77, D-086, docx_mailmerge.h): the merge settings and
     // what the source said; the source's own w:mailMerge is kept while they
     // are equal.
+    Bibliography bibliography; // document-local sources and preserved native b:Sources
     MailMergeSettings mailMerge;
     MailMergeSettings importedMailMerge;
 

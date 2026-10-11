@@ -5,6 +5,9 @@
 # tests instantiate the real window; the executable is main.cpp over it.
 set(qindawrite_qml
     qml/GraphicDialog.qml
+    qml/SourceFields.qml
+    qml/SourcesDialog.qml
+    qml/ReferenceDialog.qml
     qml/AddressBlockDialog.qml
     qml/ConvertNotesDialog.qml
     qml/DuplicatesDialog.qml
@@ -85,6 +88,10 @@ qt_add_qml_module(qindawrite_app
         src/table_data.cpp src/table_data.h
         src/table_layout.cpp src/table_layout.h
         src/write_graphics.cpp src/write_graphics.h
+        src/write_document_references.cpp
+        src/write_references.cpp src/write_references.h
+        src/write_reference_commands.cpp
+        src/write_reference_edit.cpp src/write_reference_edit.h
         src/write_borders.cpp src/write_borders.h
         src/write_equations.cpp src/write_equations.h
         src/write_font.cpp src/write_font.h

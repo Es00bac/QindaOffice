@@ -287,6 +287,7 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
         }
     }
 
+    const QSet<QString> bibliographyParts = writeBibliography(parts.bibliography, source, env.writer, kMain);
     // Parts carried over verbatim from the source document.
     if (source && env.copier) {
         static const QStringList kCarry{
@@ -314,7 +315,7 @@ QByteArray docxBytes(const QTextDocument &body, const WordParts &parts, const Wr
                 continue; // written from the model above
             }
             const QString target = source->targetPart(env.sourceMain, rel);
-            if (target.isEmpty()) {
+            if (target.isEmpty() || bibliographyParts.contains(target)) {
                 continue;
             }
             env.writer.addRelationship(kMain, rel.type, env.copier->copyPart(target));

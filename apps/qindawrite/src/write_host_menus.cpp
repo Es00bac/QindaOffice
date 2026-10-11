@@ -8,6 +8,7 @@
 #include "write_host.h"
 #include "write_graphics.h"
 #include "write_equations.h"
+#include "write_references.h"
 
 #include "docx_text.h"
 #include "page_text_item.h"
@@ -125,6 +126,7 @@ void WriteHost::insertMenus()
     insertItems += m_typography->insertMenuItems();
     insertItems.append(MenuNode::separator());
     insertItems += m_review->insertMenuItems();
+    insertItems.append(MenuNode::submenu(QStringLiteral("writeReferencesMenu"), tr("&References"), m_references->menuItems()));
     insertItems += m_notes->menuItems(); // M77: Insert Endnote, Footnote and Endnote, Convert
     insertItems.append(MenuNode::separator());
     insertItems += headerFooterMenuItems();

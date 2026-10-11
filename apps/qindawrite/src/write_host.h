@@ -59,6 +59,7 @@ class NotesController;
 class PictureLayoutController;
 class SectionsController;
 class GraphicsController;
+class ReferencesController;
 
 class WriteHost : public Quick::DocumentHost {
     Q_OBJECT
@@ -109,6 +110,7 @@ class WriteHost : public Quick::DocumentHost {
     Q_PROPERTY(QObject *sections READ sectionsObject CONSTANT)
     Q_PROPERTY(QObject *graphics READ graphicsObject CONSTANT)
     Q_PROPERTY(QindaOffice::Quick::EquationSession *equations READ equations CONSTANT)
+    Q_PROPERTY(QObject *references READ referencesObject CONSTANT)
 public:
     Quick::EquationSession *equations() const;
     WriteHost();
@@ -137,6 +139,7 @@ public:
     [[nodiscard]] NotesController *notesController() const { return m_notes; }
     [[nodiscard]] PictureLayoutController *pictureLayoutController() const { return m_pictureLayout; }
     [[nodiscard]] GraphicsController *graphicsController() const { return m_graphics; }
+    [[nodiscard]] ReferencesController *referencesController() const { return m_references; }
     [[nodiscard]] SectionsController *sectionsController() const { return m_sections; }
     // A Word package opened in a window of its own, untitled and unsaved
     // (a merged document, an envelope, a label sheet — M77): the next
@@ -274,6 +277,7 @@ private:
     [[nodiscard]] QObject *pictureLayoutObject() const;
     [[nodiscard]] QObject *sectionsObject() const;
     [[nodiscard]] QObject *graphicsObject() const;
+    [[nodiscard]] QObject *referencesObject() const;
     void insertPageField(bool total);
     void syncStoryActions();
     void createSpellingEntries();
@@ -310,6 +314,7 @@ private:
     PictureLayoutController *m_pictureLayout = nullptr;
     SectionsController *m_sections = nullptr;
     GraphicsController *m_graphics = nullptr;
+    ReferencesController *m_references = nullptr;
     std::shared_ptr<QTextDocument> m_printOverride;
     WriteReviewActions *m_review = nullptr;
     SpellChecker *m_spell = nullptr;

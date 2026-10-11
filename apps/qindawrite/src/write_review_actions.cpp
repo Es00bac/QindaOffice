@@ -181,7 +181,7 @@ void WriteReviewActions::updateToc()
 {
     const int entries = updateTableOfContents(m_document->textDocument(), geometryOf(m_document));
     if (entries < 0) {
-        emit message(tr("This document has no table of contents yet"));
+        emit message(entries == -2 ? tr("This table of contents is locked or uses unsupported options; its saved result is preserved.") : tr("This document has no table of contents yet"));
         return;
     }
     m_document->textDocument()->setModified(true);

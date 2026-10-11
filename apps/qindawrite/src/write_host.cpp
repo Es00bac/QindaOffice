@@ -34,6 +34,7 @@
 #include "write_notes.h"
 #include "write_section_commands.h"
 #include "write_graphics.h"
+#include "write_references.h"
 
 #include <QClipboard>
 #include <QFontDatabase>
@@ -84,6 +85,8 @@ WriteHost::WriteHost()
     m_painter = new FormatPainter(m_control, m_document, actions(), this);
     m_navigation = new NavigationModel(m_control, m_document, actions(), this);
     // M88 (D-096): Word's sections — breaks, orientation, header options.
+    m_references = new ReferencesController(m_control, m_document, actions(), this);
+    connect(m_references, &ReferencesController::message, this, [this](const QString &text) { showStatusMessage(text, 6000); });
     m_graphics = new GraphicsController(m_control, m_document, actions(), this);
     connect(m_graphics, &GraphicsController::message, this, [this](const QString &text) { showStatusMessage(text, 6000); });
     m_sections = new SectionsController(m_control, m_document, actions(), this);
@@ -128,6 +131,7 @@ WriteHost::WriteHost()
 }
 
 QObject *WriteHost::graphicsObject() const { return m_graphics; }
+QObject *WriteHost::referencesObject() const { return m_references; }
 
 WriteHost::~WriteHost()
 {
@@ -143,6 +147,7 @@ void WriteHost::attachPage(PageTextItem *item)
     if (item == nullptr) {
         return;
     }
+    connect(item, &PageTextItem::internalLinkActivated, m_references, [this](const QString &bookmark) { m_references->follow(bookmark); });
     item->attach(m_document, m_control);
     m_revisions->setInputTarget(item);
     m_pictureLayout->setPictureTool(item->pictures());

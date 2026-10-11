@@ -12,6 +12,13 @@
 # Qt Core/Gui + office_ooxml + show_model; no Quick, no desktop archives, so its tests
 # run anywhere.
 add_library(office_docx STATIC
+    src/docx_bibliography.h
+    src/docx_bibliography.cpp
+    src/docx_bibliography_xml.cpp
+    src/docx_reference_fields.h
+    src/docx_reference_fields.cpp
+    src/docx_reader_references.cpp
+    src/docx_writer_runs.cpp
     src/docx_graphics.h
     src/docx_graphics_p.h
     src/docx_graphics.cpp

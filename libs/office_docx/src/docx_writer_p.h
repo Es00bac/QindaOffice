@@ -5,6 +5,7 @@
 // and the per-save bookkeeping every part writer shares.
 
 #include "docx_model.h"
+#include "docx_reference_fields.h"
 #include "docx_sections.h"
 #include "docx_styles.h"
 #include "ooxml_copier.h"
@@ -146,6 +147,12 @@ private:
     const QTextDocument *m_document;
     QString m_part;
     QStringList m_openComments;
+    QHash<QString, ReferenceSpan> m_referenceSpans;
+    QHash<QString, QList<ReferenceSpan>> m_referenceOccurrences;
+    QMap<QString, BookmarkRange> m_bookmarkRanges;
+    QHash<QString, QString> m_bookmarkIds;
+    QHash<QString, QString> m_bookmarkFieldOwners;
+    QHash<QString, QStringList> m_fieldBookmarks;
     QHash<QString, QString> m_controlTexts; // content control key → its text now
 };
 

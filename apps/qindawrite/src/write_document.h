@@ -150,6 +150,9 @@ public:
     // Both kinds' texts at once, as an undo item of the edit block the
     // caller has open (inserting, editing, deleting, converting notes):
     // Undo and Redo swap the tables with the marks in the text.
+    // Source catalog swaps participate in the same text undo transaction.
+    void setBibliography(const Docx::Bibliography &data);
+    void swapBibliography(const Docx::Bibliography &data);
     void setNoteTexts(QHash<QString, QString> footnotes, QHash<QString, QString> endnotes);
     // Swaps the tables without an undo item (the undo item's own swap).
     void swapNoteTexts(QHash<QString, QString> footnotes, QHash<QString, QString> endnotes);

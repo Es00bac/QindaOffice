@@ -1,6 +1,51 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Verification
 
+## M94 native Word references gates (D-102)
+
+Qualified on qinda from `finish/m94-write-references`, based on integration
+`af7bac0`, with the frozen QindaTK M98b build-tree package. Builds used
+`~/scratch/qqo/qq-build` and unchanged configured parallelism; all tests ran
+headlessly with nice 19 / idle I/O priority. The ten-target suite passed
+**10/10 in 68.47 s: 101 Qt checks passed, zero failed**. The two optional
+owner-corpus checks in `tst_write_docx` were intentionally skipped because no
+owner documents were supplied. The new reference targets passed **19/19 Qt
+checks with no skips** (Docx references 9, Write references 10). After a final
+null-page guard and dead-code cleanup, the rebuilt references/control rerun
+also passed **2/2 in 49.76 s** (18 Qt checks, zero failures or skips).
+
+Targets: `tst_docx_references`, `tst_docx_read`, `tst_docx_write`,
+`tst_write_references`, `tst_write_control`, `tst_write_ui`,
+`tst_write_review`, `tst_write_menu_export`, `tst_write_docx`, and
+`tst_write_mailings`. Coverage includes native source/custom-XML schemas,
+unchanged source bytes and unknown fields, multi-paragraph/nested field
+identity, empty and copied field occurrences, bookmark ranges, source CRUD,
+citation edit/tag rename/style/Undo/Redo/recovery, caption renumbering,
+text/number/page cross-references, locked/unsupported fields, reopened TOC
+options and refresh, and ordinary typing after a citation. The real source
+editor's New/Save/Delete buttons and field bindings run at both widths.
+
+LibreOffice independently rendered three synthetic documents (bibliography,
+captions/references, and TOC). The caption test asserts the exact separate
+number and page result lines: adding a second `w:hyperlink` around a native
+`PAGEREF \h` cache duplicated the number in LibreOffice, so the native field
+now owns its hyperlink. Caption-number bookmarks surround the entire `SEQ`
+field. Write's PDF path was also inspected.
+
+Reviewed **19 PNGs**: the five reference dialogs at 1280/520, References
+ribbons at both widths, a populated TOC document, Write PDF, three LibreOffice
+PDF pages, and both default-window fixtures. Commands stay visible at 520 px;
+TOC links, level selection and dot leaders remain readable. The default
+structural fixtures are unchanged and pass without fixture-update mode.
+Evidence is retained on qinda in
+`/mnt/archive/qindaoffice-validation-20261010/m94/` (qualified build/tests,
+JUnit, final focused Qt output and `grabs/`). Source was synchronized with checksum
+rsync before each build; no private corpus was copied or opened.
+
+Manual follow-up: Microsoft Word desktop refresh comparison and live print
+portal/device behavior. Full CSL/style catalogs, online/global source
+libraries, chapter-based caption numbering, indexes and tables of authorities
+remain outside this bounded milestone; unsupported native markup is retained.
 ## M98 Books IIF gates (D-106)
 
 On qinda with the frozen QindaTK r18 SDK, the focused

@@ -127,6 +127,7 @@ bool readDocx(std::shared_ptr<const Ooxml::Package> package, QTextDocument *body
 
     *parts = WordParts();
     parts->source = package;
+    parts->bibliography = readBibliography(package);
     parts->properties = Ooxml::readCoreProperties(*package);
 
     detail::ReadEnv env;

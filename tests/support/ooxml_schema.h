@@ -73,6 +73,7 @@ inline QString schemaForRoot(const Ooxml::XmlElement &root)
     if (root.ns == QStringView(Ns::DGM)) {
         return QStringLiteral("dml-diagram.xsd");
     }
+    if (root.ns == u"http://schemas.openxmlformats.org/officeDocument/2006/bibliography") return QStringLiteral("shared-bibliography.xsd");
     if (root.ns == QStringView(Ns::EP)) {
         return QStringLiteral("shared-documentPropertiesExtended.xsd");
     }
@@ -91,6 +92,7 @@ inline const QSet<QString> &ecmaNamespaces()
         QString::fromUtf16(Ns::M), QString::fromUtf16(Ns::V), QString::fromUtf16(Ns::O),
         QString::fromUtf16(Ns::W10), QString::fromUtf16(Ns::XML), QString::fromUtf16(Ns::EP),
         QString::fromUtf16(Ns::VT),
+        QStringLiteral("http://schemas.openxmlformats.org/officeDocument/2006/bibliography"),
         QStringLiteral("http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"),
         QStringLiteral("http://schemas.openxmlformats.org/drawingml/2006/chartDrawing"),
         QStringLiteral("urn:schemas-microsoft-com:office:excel"),

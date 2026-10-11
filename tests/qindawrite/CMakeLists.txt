@@ -15,7 +15,7 @@
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(POPPLER_QT6 REQUIRED poppler-qt6)
 
-foreach(name IN ITEMS tst_write_graphics tst_write_equations tst_write_control tst_write_view tst_write_ui tst_write_typography
+foreach(name IN ITEMS tst_write_references tst_write_graphics tst_write_equations tst_write_control tst_write_view tst_write_ui tst_write_typography
                       tst_write_review tst_write_menu_export tst_write_formats tst_write_probe_pagination
                       tst_write_tools tst_write_docx tst_write_pagination tst_write_story tst_write_picture
                       tst_write_comments tst_write_tables tst_write_formatting tst_write_controls
@@ -31,7 +31,7 @@ foreach(name IN ITEMS tst_write_graphics tst_write_equations tst_write_control t
     set_tests_properties(${name} PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
 endforeach()
-foreach(name IN ITEMS tst_write_view tst_write_sections tst_write_graphics tst_write_equations)
+foreach(name IN ITEMS tst_write_references tst_write_view tst_write_sections tst_write_graphics tst_write_equations)
     target_link_libraries(${name} PRIVATE ${POPPLER_QT6_LIBRARIES})
     target_include_directories(${name} PRIVATE ${POPPLER_QT6_INCLUDE_DIRS})
     target_compile_options(${name} PRIVATE ${POPPLER_QT6_CFLAGS_OTHER})
