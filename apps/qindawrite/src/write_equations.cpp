@@ -63,7 +63,8 @@ void WriteEquations::commit(const QString &xml)
     // An equation replacing a graphic must inherit ordinary typing style,
     // never the graphic's drawing identity or source-part reference.
     const QTextCharFormat plain = typingFormat(m_target);
-    const auto format = Docx::equationFormat(xml, plain, old.stringProperty(Docx::kInlineSourcePart),
+    const auto format = Docx::equationFormat(xml, plain,
+                                            replacing ? old.stringProperty(Docx::kInlineSourcePart) : QString(),
                                             replacing ? old.intProperty(Docx::kInlineSerial) : 0);
     m_target.beginEditBlock();
     m_target.insertText(QString(QChar::ObjectReplacementCharacter), format);

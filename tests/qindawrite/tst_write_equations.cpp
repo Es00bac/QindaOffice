@@ -39,6 +39,24 @@ void apply(Scene &scene) { QVERIFY(QMetaObject::invokeMethod(popup(scene), "acce
 class WriteEquationsTest : public QObject {
     Q_OBJECT
 private slots:
+    void textBesideEquationDoesNotOpenEquation()
+    {
+        Scene scene; QVERIFY2(scene.ready(), qPrintable(scene.error));
+        QTextCursor cursor(scene.doc->textDocument()); cursor.insertText(QStringLiteral("a"));
+        scene.control()->setTextCursor(cursor);
+        QVERIFY(scene.host.actions()->trigger(QStringLiteral("writeInsertEquationAction")));
+        QVERIFY(scene.host.equations()->convert(QStringLiteral("x"), false)); apply(scene);
+        QTextCursor left(scene.doc->textDocument()), right(scene.doc->textDocument());
+        right.setPosition(1);
+        const QRectF first = scene.control()->cursorRect(left);
+        const QRectF second = scene.control()->cursorRect(right);
+        QVERIFY(second.x() > first.x());
+        const QPointF point(first.x() + (second.x() - first.x()) * 0.75, first.center().y());
+        QMouseEvent doubleClick(QEvent::MouseButtonDblClick, point, point,
+                                Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QVERIFY(scene.control()->processEvent(&doubleClick));
+        QVERIFY(!scene.host.equations()->active());
+    }
     void replacingGraphicWithEquationSavesAsMath()
     {
         Scene scene; QVERIFY2(scene.ready(), qPrintable(scene.error));

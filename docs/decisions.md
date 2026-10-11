@@ -44,7 +44,8 @@ menu/keyboard editing may also inspect the character before the caret.
 This keeps adjacent graphic clicks from opening the equation editor.
 The text control uses Qt's exact hit before WordUnderCursor, which otherwise
 groups adjacent object replacements into one selection. Fuzzy caret hits can
-name the next object when the click lands in a glyph's right half.
+name the next object when the click lands in a glyph's right half, even when
+the glyph is ordinary text; object dispatch only uses exact hits.
 Equation insertion uses the surrounding typing format; replacing a graphic
 must not carry its drawing identity into the math object or DOCX writer.
 

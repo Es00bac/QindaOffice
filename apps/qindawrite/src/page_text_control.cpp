@@ -417,13 +417,15 @@ bool PageTextControl::mouse(QMouseEvent *event)
                 return true;
             }
         }
-        const int hit = cursorForPosition(pos).position();
         m_cursor = cursorForPosition(pos);
         m_cursor.select(QTextCursor::WordUnderCursor);
         m_dragging = false;
         m_formatPinned = false;
         cursorSettled(false);
-        emit doubleClicked(hit);
+        // A fuzzy caret on the right half of ordinary text can name the
+        // next inline object. Only an exact character hit may dispatch an
+        // object editor (or a note marker).
+        if (exact >= 0) emit doubleClicked(exact);
         return true;
     }
     if (event->type() == QEvent::MouseMove) {
