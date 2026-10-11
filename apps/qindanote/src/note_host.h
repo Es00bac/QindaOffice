@@ -109,6 +109,12 @@ public:
     [[nodiscard]] NoteSection *currentSection() const;
     // Writes the open page to disk now (debounced normally).
     Q_INVOKABLE void flushPersist();
+    Q_INVOKABLE QVariantMap pageVersions() const;
+    Q_INVOKABLE QVariantMap pageVersionPreview(const QString &id) const;
+    Q_INVOKABLE QVariantMap savePageVersion();
+    Q_INVOKABLE QVariantMap restorePageVersion(const QString &id);
+    Q_INVOKABLE QVariantMap deletePageVersion(const QString &id);
+    Q_INVOKABLE QVariantMap keepPageVersions(bool enabled);
 
     // Find / replace across the notebook (titles and typed text).
     Q_INVOKABLE bool findNext(const QString &needle, bool caseSensitive);
@@ -219,6 +225,7 @@ public:
     Q_INVOKABLE void createTagSummaryPage();
 
 signals:
+    void pageVersionsRequested();
     void currentPageChanged();
     // The window opens the matching dialog and answers through the
     // invokables above.

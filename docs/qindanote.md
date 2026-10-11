@@ -145,7 +145,7 @@ the open one, in its order:
 - **Subpages** (Page ▸ Make Subpage, Ctrl+Alt+]; Promote Subpage,
   Ctrl+Alt+[): a page indents under the page above it, two levels deep at
   most; the navigator shows the indent.
-- Page versions are not kept (not cheap enough for this milestone).
+- M96 keeps bounded page versions; see below.
 
 ## Exports
 
@@ -218,6 +218,22 @@ envelope of `office_ink`); its `blocks` object is QindaNote's:
 - Pictures inside formatted text are inline only (no floating or resizing
   handles); separate picture blocks keep their M21 behaviour.
 - No OCR, no handwriting recognition: ink and pictures are not searched.
-- No page versions; no Dock to Desktop (out of scope).
+- No Dock to Desktop (out of scope).
 - QindaTK gaps found (reported, not worked around in the toolkit): see
   [D-093](decisions.md#d-093-qindanote-formatted-typing-tags-search-import).
+
+## Page versions (M96, D-104)
+
+Page ▸ Page Versions lists the open page's retained snapshots, newest first,
+with a read-only first-sheet preview. Save Version Now captures the current
+page. Restore Version retains current content and restores the selected
+version as one undoable edit, including ink, formatted blocks, tags, title
+and paper. Delete Version asks before removing that one snapshot.
+
+Saved pages keep their prior content before autosave, at most once every
+five minutes. Each page retains at most 32 snapshots and 256 MiB in total;
+a snapshot is limited to 64 MiB. The notebook checkbox disables automatic
+versions without deleting existing history. Untitled notebooks must be
+saved first. Save As includes retained history and linked notebook assets.
+Versions store asset references, so externally modified or deleted files
+are not reconstructed. Missing or damaged snapshots report an error.

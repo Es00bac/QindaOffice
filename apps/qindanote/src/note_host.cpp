@@ -126,6 +126,7 @@ void NoteHost::insertMenus()
         {MenuNode::action(QStringLiteral("notePageNew")),
          MenuNode::action(QStringLiteral("noteSectionNew")),
          MenuNode::action(QStringLiteral("notePageDuplicate")), MenuNode::separator(),
+         MenuNode::action(QStringLiteral("notePageVersionsAction")), MenuNode::separator(),
          MenuNode::action(QStringLiteral("notePageNext")),
          MenuNode::action(QStringLiteral("notePagePrevious")), MenuNode::separator(),
          MenuNode::action(QStringLiteral("notePageRename")),

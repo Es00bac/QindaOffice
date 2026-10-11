@@ -37,7 +37,7 @@ bool NoteDocument::save(const QString &path, QString *error)
         if (!m_notebook.create(target, error)) {
             return false;
         }
-    } else if (QFileInfo(target).absolutePath() != QFileInfo(m_notebook.directory()).absolutePath()
+    } else if (QDir(target).absolutePath() != QDir(m_notebook.directory()).absolutePath()
                && !m_notebook.copyStructure(target, error)) {
         // Save As to a different directory: materialise the notebook there.
         return false;

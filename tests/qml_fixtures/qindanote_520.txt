@@ -20,16 +20,24 @@ QQuickRootItem#NoteWindow
                         TreeRow#navPage_<id>
                           Caption#rowSecondary [hidden]
                           Label#rowText
+                          QQuickDropArea#treeDropArea
                           QQuickItem#treeChevron
                           QQuickRectangle#rowFocusRing [hidden]
+                          QQuickRectangle#treeDragGhost [hidden]
+                          QQuickRectangle#treeDropFrame [hidden]
+                          QQuickRectangle#treeDropLine [hidden]
                           QQuickRectangle#treeFocusRing [hidden]
                           TextField#treeEditor [hidden]
                             IconButton#fieldClear [hidden]
                         TreeRow#navSection_<id>
                           Caption#rowSecondary [hidden]
                           Label#rowText
+                          QQuickDropArea#treeDropArea
                           QQuickItem#treeChevron
                           QQuickRectangle#rowFocusRing [hidden]
+                          QQuickRectangle#treeDragGhost [hidden]
+                          QQuickRectangle#treeDropFrame [hidden]
+                          QQuickRectangle#treeDropLine [hidden]
                           QQuickRectangle#treeFocusRing [hidden]
                           TextField#treeEditor [hidden]
                             IconButton#fieldClear [hidden]
@@ -328,6 +336,7 @@ QQuickRootItem#NoteWindow
               RibbonSlot#ribbonItem_inkColour
                 ColorButton#noteColorButton
                   QQuickRectangle#colorButtonSwatch
+                    QQuickRectangle#colorButtonNoColorMark [hidden]
               RibbonSlot#ribbonItem_inkWidth
                 ComboBox#noteWidthCombo
                   QQuickText#comboDisplayText

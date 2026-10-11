@@ -44,9 +44,14 @@ set(QINDANOTE_ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/note_session_drafts.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/notebook.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/notebook.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/notebook_pages.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/notebook_storage_p.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_versions.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/note_versions.h
     PARENT_SCOPE)
 
 set(qindanote_qml
+    qml/NoteVersionsDialog.qml
     qml/NoteLinkDialog.qml
     qml/NoteSearchPanel.qml
     qml/NoteTableDialog.qml
@@ -102,7 +107,9 @@ qt_add_qml_module(qindanote_app
         src/note_tools.cpp src/note_tools.h
         src/note_agent.h src/note_agent_state.cpp src/note_agent_actions.cpp
         src/note_evidence.h src/note_evidence.cpp src/note_session_drafts.cpp
-        src/notebook.cpp src/notebook.h
+        src/notebook.cpp src/notebook.h src/notebook_pages.cpp src/notebook_storage_p.h
+        src/note_versions.cpp src/note_versions.h
+        src/note_host_versions.cpp src/note_page_item_versions.cpp
         src/note_clipboard.cpp src/note_clipboard.h
         src/note_host_format.cpp src/note_host_pages.cpp src/note_host_tags.cpp
         src/note_import.cpp src/note_import.h
