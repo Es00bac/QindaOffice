@@ -177,9 +177,10 @@ private slots:
         Connection c;
         QVERIFY(c.open(scratch, false, true, nullptr));
         QCOMPARE(c.scalar(str("SELECT count(*) FROM donations")).toInt(), 0);
-        // M80 (D-089 §4): a lookup is a combo or list box beside the toolkit's
-        // designer, so the mirror leaves it out.
-        QCOMPARE(c.scalar(str("SELECT count(*) FROM pragma_table_info('donations') WHERE name='donor_id'")).toInt(), 0);
+        // M89: positioned lookup controls bind their visible label to the
+        // mirror field; the source database keeps the typed foreign key.
+        QCOMPARE(c.scalar(str("SELECT type FROM pragma_table_info('donations') WHERE name='donor_id'")).toString(),
+                 str("TEXT"));
         QCOMPARE(c.scalar(str("SELECT type FROM pragma_table_info('donations') WHERE name='amount'")).toString(),
                  str("CURRENCY"));
         QCOMPARE(c.scalar(str("SELECT \"notnull\" FROM pragma_table_info('donations') WHERE name='amount'")).toInt(), 1);

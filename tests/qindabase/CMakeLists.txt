@@ -23,7 +23,7 @@ endforeach()
 
 # M89 (D-097): forms on QindaTK's positioned controls through the service
 # (tst_qindabase_m89) and the real window (tst_qindabase_ui_m89).
-foreach(name IN ITEMS tst_qindabase_m89 tst_qindabase_ui_m89)
+foreach(name IN ITEMS tst_qindabase_m89 tst_qindabase_ui_m89 tst_qindabase_events)
     add_executable(${name} ${name}.cpp base_app_test_support.h)
     target_link_libraries(${name} PRIVATE qindabase_app qindabase_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)

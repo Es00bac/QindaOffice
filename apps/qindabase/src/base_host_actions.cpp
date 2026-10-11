@@ -99,6 +99,7 @@ constexpr Command kCommands[] = {
     {"baseQueryParametersAction", QT_TRANSLATE_NOOP("BaseHost", "&Parameters…"), "", "circle-question-mark"},
     {"baseFormAddSubformAction", QT_TRANSLATE_NOOP("BaseHost", "Add &Subform…"), "", "layers"},
     {"baseFormAddButtonAction", QT_TRANSLATE_NOOP("BaseHost", "Add &Button…"), "", "mouse-pointer-2"},
+    {"baseFormEventsAction", QT_TRANSLATE_NOOP("BaseHost", "Form &Events…"), "", "workflow"},
     // Macro design (contextual, M80)
     {"baseMacroRunAction", QT_TRANSLATE_NOOP("BaseHost", "&Run Macro"), "", "play"},
     {"baseMacroAddActionAction", QT_TRANSLATE_NOOP("BaseHost", "&Add Action"), "", "list-plus"},
@@ -244,6 +245,7 @@ void BaseHost::insertMenus()
                                                       a("baseQueryTypeMakeTableAction"), a("baseQueryClearAction"),
                                                       MenuNode::separator(), a("baseFormPreviewAction"),
                                                       a("baseFormAddSubformAction"), a("baseFormAddButtonAction"),
+                                                      a("baseFormEventsAction"),
                                                       a("baseReportRefreshAction"), a("baseReportGroupSortAction"),
                                                       MenuNode::separator(), a("baseMacroRunAction"),
                                                       a("baseMacroAddActionAction"), a("baseMacroDeleteActionAction"),
@@ -336,6 +338,7 @@ void BaseHost::syncEnablement()
     actions()->setEnabled({id("baseFileSaveAction"), id("baseFileRemoveAction")}, hasFile);
     actions()->setEnabled(id("baseFormPreviewAction"), form);
     actions()->setEnabled({id("baseFormAddSubformAction"), id("baseFormAddButtonAction")}, form && writable);
+    actions()->setEnabled(id("baseFormEventsAction"), form && writable && m_designHistory);
     actions()->setEnabled(id("baseReportRefreshAction"), db && m_view == QLatin1String("report"));
     actions()->setEnabled(id("baseReportGroupSortAction"), db && m_view == QLatin1String("report") && !m_report.isNull());
     // Undo/redo: the designer's history while one is active, else the database's.

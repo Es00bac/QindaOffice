@@ -104,7 +104,7 @@ QtObject {
             { id: "layout", label: qsTr("Layout"), items: [
                 { action: "baseFormPreviewAction", size: "large" }, "baseReportRefreshAction", "baseReportGroupSortAction"] },
             { id: "controls", label: qsTr("Controls"), items: [
-                { action: "baseFormAddSubformAction", size: "large" }, "baseFormAddButtonAction"] },
+                { action: "baseFormAddSubformAction", size: "large" }, "baseFormAddButtonAction", "baseFormEventsAction"] },
             { id: "output", label: qsTr("Output"), items: [
                 { action: "filePrintAction", size: "large" },
                 { action: "filePrintPreviewAction", iconName: "eye" }, "baseExportPdfAction"] }

@@ -39,6 +39,8 @@ set(qindabase_qml
     qml/MacroActionRow.qml
     qml/MacroRunner.qml
     qml/FormView.qml
+    qml/FormEventBridge.qml
+    qml/FormEventsDialog.qml
     qml/FormDesignBridge.qml
     qml/FormSubform.qml
     qml/FormControlDialog.qml

@@ -87,6 +87,8 @@ add_library(base_engine STATIC
     src/base_links.h
     src/base_macro.cpp
     src/base_macro.h
+    src/base_macro_flow.cpp
+    src/base_macro_flow.h
     src/base_money.cpp
     src/base_objects.cpp
     src/base_objects.h

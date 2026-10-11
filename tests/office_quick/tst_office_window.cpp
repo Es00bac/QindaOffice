@@ -40,6 +40,44 @@ class OfficeWindowTest final : public QObject {
     }
 
 private slots:
+    void asynchronousAppCloseGateCanRefuseThenContinue()
+    {
+        QQmlApplicationEngine engine;
+        engine.addImportPath(QStringLiteral(QQO_QINDATK_QML_ROOT));
+        DocumentHost host;
+        QQmlComponent component(&engine);
+        component.setData(R"qml(
+import QtQuick
+import QindaOffice.Shell
+OfficeWindow {
+    width: 400; height: 300
+    property int attempts: 0
+    property var completion: null
+    beforeClose: function(done) { ++attempts; completion = done }
+    function finish(ready) { completion(ready) }
+    Rectangle { objectName: "content" }
+}
+)qml", QUrl(QStringLiteral("close-gate.qml")));
+        auto *window = qobject_cast<QQuickWindow *>(component.createWithInitialProperties(
+            {{QStringLiteral("host"), QVariant::fromValue(&host)}}));
+        QVERIFY2(window, qPrintable(component.errorString()));
+        host.attachWindow(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        window->close();
+        window->close();
+        QCOMPARE(window->property("attempts").toInt(), 1);
+        QVERIFY(window->isVisible());
+        QVERIFY(!host.closeAuthorized());
+        QMetaObject::invokeMethod(window, "finish", Q_ARG(QVariant, false));
+        QVERIFY(window->isVisible());
+        window->close();
+        QCOMPARE(window->property("attempts").toInt(), 2);
+        QMetaObject::invokeMethod(window, "finish", Q_ARG(QVariant, true));
+        QTRY_VERIFY(!window->isVisible());
+        QVERIFY(host.closeAuthorized());
+        delete window;
+    }
+
     void hostTeardownDestroysWindowBeforeBindingsLoseHost()
     {
         QQmlApplicationEngine engine;

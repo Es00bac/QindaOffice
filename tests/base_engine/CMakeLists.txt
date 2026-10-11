@@ -25,6 +25,7 @@ qqo_add_base_test(tst_base_rules)
 qqo_add_base_test(tst_base_query_m80)
 qqo_add_base_test(tst_base_access_sql)
 qqo_add_base_test(tst_base_macro_report)
+qqo_add_base_test(tst_base_macro_flow)
 # M86 (D-094): calculated fields, value lists, Allow Zero Length, Hyperlink
 # and Large Number; the Indexes dialog; query wizards, unions and
 # subqueries; report intervals, levels, running sums and page control; data

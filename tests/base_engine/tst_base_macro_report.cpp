@@ -100,7 +100,7 @@ private slots:
         loop.steps = {{str("runMacro"), {{str("macro"), str("New Donor")}}}};
         QVERIFY(checkMacro(*db.file, loop).isEmpty());
         QCOMPARE(checkMacro(*db.file, loop, str("New Donor")).first(), str("Step 1 (RunMacro): a macro cannot run itself."));
-        QCOMPARE(macroActions().size(), 14);
+        QCOMPARE(macroActions().size(), 21); // M97 adds seven conditional/event actions.
         QVERIFY(macroAction(str("applyFilter"))->arguments.first().required);
     }
 

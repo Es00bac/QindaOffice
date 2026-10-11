@@ -5,6 +5,33 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-105: Form events and bounded macro control flow in QindaBase (M97)
+
+**Date:** 2026-10-10 · **Status:** accepted.
+
+Form and control event bindings belong to the form's saved design, so the
+form designer's Undo and Save own them. A named macro can handle Open,
+Current, Before Update, After Update, Close, control change and button click.
+Before Update completes or cancels before the engine writes the record.
+Event recursion and macro execution are bounded and fail visibly.
+
+Macro expressions use the existing Access expression compiler over one
+bound draft record plus window-local typed TempVars. SetValue changes a
+draft field; it does not write SQL. Currency temporaries retain their type
+and integer minor units. If/Else/EndIf are structurally validated; nested
+named macros retain depth and run limits. No arbitrary SQL or VBA bridge
+is introduced. UI and service gates prove cancellation prevents a write,
+restored design Undo does not replay events, and bindings survive save/reopen.
+Distinct nested events may run (a button can close its form); repeating the
+same event is refused. A bounded pool keeps asynchronous callbacks attached
+to a valid runner after the event completes.
+
+OfficeWindow exposes an optional asynchronous beforeClose callback. Base
+uses it for the active form's Close event before the ordinary document
+Save/Discard/Cancel flow. A pending callback suppresses repeated close
+requests, and veto leaves the window visible. Apps without a callback keep
+the existing close behavior.
+
 ## D-100: Office equations through a shared OMML model and OpenType MATH layout
 
 **Date:** 2026-10-10 · **Status:** accepted · **Milestone:** M92.

@@ -1,6 +1,33 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Verification
 
+## M97 form-event gates (D-105)
+
+The focused seven-target gate passed, including the shared OfficeWindow
+asynchronous close hook, macro catalog and typed expressions, menu export,
+M80/M89 UI workflows and the real form-event workflow at 1280 and 520 px.
+Nested button/Close events complete; 25 sequential macro calls return their
+depth to zero, while recursive calls stop at the depth limit. Before Update
+cancellation leaves the database unchanged, SetValue applies before the
+save, and typed currency TempVars retain exact minor units.
+
+Both Form Events dialog captures were inspected: all bindings and Apply
+remain contained at 1280 and 520 px. All **31 Base regression targets are
+qualified** against frozen QindaTK `e6837dc5`. The first run passed 28/31;
+two obsolete lookup assertions were corrected to the M89 contract (visible
+labels plus separately retained typed keys), and both structural fixtures
+were updated for positioned forms, value-list cell editors and tree drag/drop
+items. The default datasheet windows were reviewed at both widths.
+
+The final four-target rerun passed **4/4** in 180.43 s, including the three
+corrected targets and the expanded event suite (**6 Qt checks, zero failures
+or skips**). A native close request exercises Base's Close-event veto; the
+shared OfficeWindow gate separately proves asynchronous refusal, acceptance
+and duplicate-request suppression. Source checksums match the qualification
+tree. Evidence on qinda is `~/scratch/qqo/m97-final-qualification.log`,
+`m97-final-rerun-tests.log`, and the retained `m97-base-all-qt.log`;
+captures are in `/mnt/archive/qindaoffice-validation-20261010/m97/`.
+
 ## M92 equation library gates (D-100)
 
 Resumed from the preserved M92 source on 2026-10-10. `tst_math_omml`,
