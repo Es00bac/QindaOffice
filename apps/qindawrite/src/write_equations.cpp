@@ -2,6 +2,7 @@
 #include "write_equations.h"
 #include "write_host.h"
 #include "page_text_control.h"
+#include "page_typing_format.h"
 #include "docx_math.h"
 #include "docx_properties.h"
 namespace QindaOffice::Apps::Write {
@@ -43,7 +44,12 @@ void WriteEquations::begin(bool existing)
 }
 bool WriteEquations::editAt(int position)
 {
-    QTextCursor cursor(m_host->control()->document()); cursor.setPosition(position);
+    QTextCursor cursor(m_host->control()->document());
+    if (position < 0 || position >= cursor.document()->characterCount() - 1) return false;
+    // AGENT-GUARD: A double-click names one exact inline object. The menu
+    // command may probe the previous character from a caret, but doing that
+    // here steals clicks on a graphic immediately after an equation.
+    cursor.setPosition(position); cursor.setPosition(position + 1, QTextCursor::KeepAnchor);
     const auto found = Docx::equationAt(cursor);
     if (found.isNull()) return false;
     m_host->control()->setTextCursor(found); begin(true); return true;
@@ -54,16 +60,16 @@ void WriteEquations::commit(const QString &xml)
     const auto old = m_target.charFormat();
     const bool replacing = m_target.hasSelection() && Docx::isEquation(old);
     if (replacing && old.stringProperty(Docx::kInlineXml) == xml) return;
-    const auto format = Docx::equationFormat(xml, old, old.stringProperty(Docx::kInlineSourcePart),
+    // An equation replacing a graphic must inherit ordinary typing style,
+    // never the graphic's drawing identity or source-part reference.
+    const QTextCharFormat plain = typingFormat(m_target);
+    const auto format = Docx::equationFormat(xml, plain, old.stringProperty(Docx::kInlineSourcePart),
                                             replacing ? old.intProperty(Docx::kInlineSerial) : 0);
     m_target.beginEditBlock();
     m_target.insertText(QString(QChar::ObjectReplacementCharacter), format);
     m_target.endEditBlock();
     m_host->control()->setTextCursor(m_target);
     // Following typing must not inherit the custom object's preservation XML.
-    QTextCharFormat plain = old;
-    plain.setObjectType(QTextFormat::NoObject);
-    for (int key : {Docx::kInlineXml, Docx::kInlineSourcePart, Docx::kInlineSerial, Docx::kInlineLabel}) plain.clearProperty(key);
     m_host->control()->setCurrentCharFormat(plain);
     sync();
 }

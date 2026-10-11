@@ -39,6 +39,11 @@ must remain solid instead of cancelling at every bracket assembly seam.
 Narrow Show windows select a separately persisted compact dock workspace,
 with one top inspector tab group, preserving the wide workspace's arrangement.
 See [equations.md](equations.md) for the editor and interchange contract.
+Double-click editing selects only the object at the reported character;
+menu/keyboard editing may also inspect the character before the caret.
+This keeps adjacent graphic clicks from opening the equation editor.
+Equation insertion uses the surrounding typing format; replacing a graphic
+must not carry its drawing identity into the math object or DOCX writer.
 
 ## D-106: Import QuickBooks employee and time rows without inventing billing links
 

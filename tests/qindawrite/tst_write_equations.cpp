@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "write_test_support.h"
 #include "docx_math.h"
+#include "docx_graphics.h"
 #include "docx_properties.h"
 #include "docx_reader.h"
 #include "docx_writer.h"
@@ -13,6 +14,7 @@
 #include "support/ooxml_schema.h"
 #include "support/quick_dump.h"
 #include "qindawrite/src/pdf_exporter.h"
+#include "qindawrite/src/write_graphics.h"
 #include <QAbstractTextDocumentLayout>
 #include <QTextBlock>
 #include <QTextLayout>
@@ -36,6 +38,37 @@ void apply(Scene &scene) { QVERIFY(QMetaObject::invokeMethod(popup(scene), "acce
 class WriteEquationsTest : public QObject {
     Q_OBJECT
 private slots:
+    void replacingGraphicWithEquationSavesAsMath()
+    {
+        Scene scene; QVERIFY2(scene.ready(), qPrintable(scene.error));
+        auto *graphics = scene.host.graphicsController(); QVERIFY(graphics);
+        QVERIFY(graphics->insert(QStringLiteral("chart")));
+        QVERIFY(scene.host.actions()->trigger(QStringLiteral("writeInsertEquationAction")));
+        QVERIFY(scene.host.equations()->convert(QStringLiteral("x+1"), false)); apply(scene);
+        const auto equation = firstEquation(scene.doc->textDocument()); QVERIFY(!equation.isNull());
+        QVERIFY(!equation.charFormat().hasProperty(Docx::kGraphicKind));
+        QString error;
+        const auto bytes = Docx::docxBytes(*scene.doc->textDocument(), scene.doc->parts(), {}, &error);
+        QVERIFY2(!bytes.isEmpty(), qPrintable(error));
+        QTextDocument reopened; Docx::WordParts parts;
+        QVERIFY2(Docx::readDocx(Ooxml::Package::fromData(bytes), &reopened, &parts, &error), qPrintable(error));
+        QVERIFY(!firstEquation(&reopened).isNull());
+    }
+    void adjacentGraphicDoubleClickEditsExactObject()
+    {
+        Scene scene; QVERIFY2(scene.ready(), qPrintable(scene.error));
+        QVERIFY(scene.host.actions()->trigger(QStringLiteral("writeInsertEquationAction")));
+        QVERIFY(scene.host.equations()->convert(QStringLiteral("x"), false)); apply(scene);
+        QTextCursor afterEquation(scene.doc->textDocument());
+        afterEquation.setPosition(1); scene.control()->setTextCursor(afterEquation);
+        auto *graphics = scene.host.graphicsController(); QVERIFY(graphics);
+        QVERIFY(graphics->insert(QStringLiteral("shape")));
+        QCOMPARE(scene.doc->textDocument()->toPlainText().size(), 2);
+        QSignalSpy graphicEditor(graphics, &Apps::Write::GraphicsController::dialogRequested);
+        scene.control()->doubleClicked(1);
+        QCOMPARE(graphicEditor.size(), 1);
+        QVERIFY(!scene.host.equations()->active());
+    }
     void unreadableEquationReportsAnErrorWithoutChangingDocument()
     {
         Scene scene; QVERIFY2(scene.ready(), qPrintable(scene.error));
