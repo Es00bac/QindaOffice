@@ -1,6 +1,28 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Verification
 
+## M92 equation library gates (D-100)
+
+Resumed from the preserved M92 source on 2026-10-10. `tst_math_omml`,
+`tst_math_layout`, `tst_math_linear` and `tst_math_editor` are the headless
+gates. Schema checks use `QQO_OOXML_SCHEMA_DIR`; capture sheets use
+`QQO_GRAB_DIR`. Final qualification on qinda passed **4/4 CTest targets**, **142 Qt
+checks, zero failures and zero skips** (50 OMML, 6 layout, 77 linear
+format, 9 editor). `shared-math.xsd` validated the Word-shaped samples
+and all 23 inserted templates. The latest library and test sources were
+checksum-compared with the qualification tree. Both `office_math_1x.png`
+and `office_math_2x.png` were inspected: fraction rules, radicals, stretched
+brackets, limits, matrices, accents and styled runs are contained and
+legible. The first sample sheet overlapped tall equations; its row spacing
+was corrected and both densities reviewed again. No owner documents, desktop windows or external typesetter
+are used by these tests.
+
+The tests cover preserved and edited OMML, every structure family, all 23
+insertion templates against the Office math schema, font MATH metrics,
+fraction/script placement, growing brackets, matrix alignment, caret hit
+testing, 72 text round trips, Unicode deletion, selection wrapping, owned
+snapshots and undo/redo. Captures must be checked at both 1× and 2×.
+
 ## Build gates (every milestone)
 
 ```

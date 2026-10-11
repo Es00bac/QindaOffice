@@ -2,6 +2,8 @@
 add_subdirectory(office_core)
 add_subdirectory(office_ooxml)
 add_subdirectory(office_docx)
+# M92 (D-100): Office equations.
+add_subdirectory(office_math)
 add_subdirectory(office_quick)
 add_subdirectory(calc_engine)
 add_subdirectory(calc_io)
