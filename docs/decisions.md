@@ -5,6 +5,29 @@ Durable cross-cutting choices, newest first. Each entry: context, decision,
 consequences. For desktop-level architecture see
 `container-wm/docs/wiki/adr/`.
 
+## D-110: Print only the selected queue and document pages
+
+**Date:** 2026-10-12 · **Status:** accepted.
+
+The desktop owns CUPS/driver setup while Office owns selecting and rendering
+the user's job. Qt can retain a default when asked for an unavailable queue;
+the old service also reported success before ending the painter. Require an
+explicit exact queue and successful backend completion, retain errors in a
+dialog, and offer setup guidance plus a refresh action in the shared QindaTK
+print dialog. A queued job is not proof of physical output.
+
+QindaWrite's renderer now observes the inclusive original page range without
+renumbering headers/footers. To avoid printing a selected landscape section
+on the first document page's portrait paper, DocumentHost/PrintJob have an
+optional GUI-thread page-layout callback, capturing the same document as the
+renderer. It resolves the first selected page before painting and rejects a
+range beyond the document. Existing fixed-paper app interfaces remain valid.
+Unchanged orientation follows that first page; a changed orientation remains
+an explicit override. Preview and PDF apply the same configured range.
+
+See [Printing](printing.md) for ownership, completion semantics, headless
+regression gates and the explicit one-page hardware opt-in.
+
 ## D-107: Shared equation drafts with native document objects
 
 **Date:** 2026-10-10 · **Status:** accepted · **Milestone:** M92b.

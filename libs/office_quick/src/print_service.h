@@ -26,6 +26,9 @@ class QPrinter;
 namespace QindaOffice::Quick {
 
 using PrintRenderCallback = std::function<void(QPrinter *printer, QPainter *painter)>;
+// GUI-thread callback, owned by the job; captured document data must outlive it.
+// A 1-based original document page maps to its paper; invalid means no such page.
+using PrintPageLayoutCallback = std::function<QPageLayout(int page)>;
 
 class PrinterModel : public QAbstractListModel {
     Q_OBJECT
@@ -75,6 +78,9 @@ public:
     // the print dialog's orientation over it. The render draws its own
     // margins; the layout's are taken as given.
     void setPageLayout(const QPageLayout &layout);
+    // Variable-paper documents resolve the first selected page BEFORE painting.
+    // An unchanged orientation follows that page; explicit changes override it.
+    void setPageLayoutCallback(PrintPageLayoutCallback callback);
 
     [[nodiscard]] QString printerName() const { return m_printerName; }
     void setPrinterName(const QString &name);
@@ -106,6 +112,7 @@ signals:
 private:
     void configure(QPrinter *printer) const;
     void setLastError(const QString &error);
+    bool validateSettings();
 
     PrintRenderCallback m_render;
     QString m_printerName;
@@ -115,8 +122,10 @@ private:
     int m_fromPage = 0;
     int m_toPage = 0;
     bool m_landscape = false;
+    bool m_orientationOverridden = false;
     int m_pageCount = 0;
     std::optional<QPageLayout> m_pageLayout;
+    PrintPageLayoutCallback m_pageLayoutCallback;
     // The page layout (when the document gave one) with the job's orientation.
     void applyPageLayout(QPrinter *printer) const;
     class Private;

@@ -149,7 +149,8 @@ void drawPageDecoration(QPainter *painter, const QRectF &pageRect, const PageDec
 }
 
 void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDocument *document,
-                         const std::function<QSizeF(const QSizeF &)> &newPage, const PageDecoration &decoration)
+                         const std::function<QSizeF(const QSizeF &)> &newPage, const PageDecoration &decoration,
+                         int fromPage, int toPage)
 {
     // Probe-verified pattern (tst_write_probe_pagination): per page scale,
     // move the page's canvas region to the origin, clip, draw; newPage
@@ -158,10 +159,12 @@ void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDoc
     const QSizeF canvas = document->pageSize();
     const QAbstractTextDocumentLayout *layout = document->documentLayout();
     const int pages = decoration.pageCount(qMax(1, int(std::ceil(layout->documentSize().height() / canvas.height()))));
+    const int first = qMax(0, fromPage - 1);
+    const int last = toPage > 0 ? qMin(toPage, pages) : pages;
     QSizeF target = targetPixels;
-    for (int i = 0; i < pages; ++i) {
+    for (int i = first; i < last; ++i) {
         const PageFrame frame = decoration.frame(i, canvas);
-        if (i > 0 && newPage != nullptr) {
+        if (i > first && newPage != nullptr) {
             const QSizeF next = newPage(frame.size);
             if (next.isValid() && !next.isEmpty()) {
                 target = next;

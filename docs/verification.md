@@ -1,6 +1,27 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Verification
 
+## Printing reliability (D-110)
+
+The focused gates are `tst_print_service` and `tst_write_print`; the latter
+isolates CUPS by default and never prints. They cover missing queues without
+default fallback, invalid ranges, backend finalization, QindaWrite original
+page numbers and selected-section paper, plus the real Print action's setup,
+refresh and persistent error dialog. Capture and inspect the 520 px dialogs
+with `QQO_GRAB_DIR=build/print-grabs`. The configured-queue dialog inspection
+and generated one-page hardware test are explicit separate opt-ins documented
+in [Printing](printing.md); only observing the physical page and queue state
+closes the hardware gate.
+
+Verified 2026-10-12: `tst_print_service` (9 passed), `tst_write_print`
+(6 passed, 2 explicit opt-in skips), its configured-printer read-only case
+(3 passed), `tst_write_view` (9 passed), and the focused
+`tst_write_sections pdfPagesTakeTheirSectionsSize` case (3 passed).
+The full legacy sections suite passed all six behavior cases but exceeded
+the 60-second gate during its final large-document `grabs` case; it was not
+repeated. The new print dialog's empty/error 520 px and configured-printer
+1280/520 px captures were inspected. Physical output remains a separate gate.
+
 ## M94 native Word references gates (D-102)
 
 Qualified on qinda from `finish/m94-write-references`, based on integration

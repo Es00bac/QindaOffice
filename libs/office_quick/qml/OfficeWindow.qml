@@ -250,7 +250,14 @@ Tk.AppWindow {
     PrintDialog {
         id: printDialog
         onPrinted: function(ok) {
-            window.host.showStatusMessage(ok ? qsTr("Sent to the printer") : job.lastError, ok ? 5000 : 8000)
+            if (ok) {
+                window.host.showStatusMessage(qsTr("Sent to the printer queue"), 5000)
+            } else {
+                message.title = qsTr("Printing failed")
+                message.text = job.lastError
+                message.variant = "danger"
+                message.open()
+            }
         }
     }
     PrintPreview {

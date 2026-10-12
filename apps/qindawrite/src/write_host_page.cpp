@@ -136,6 +136,20 @@ std::optional<QPageLayout> WriteHost::printPageLayout() const
     return paperFor(m_printOverride ? m_printOverride->pageSize() : m_document->pageFrame(0).size);
 }
 
+Quick::PrintPageLayoutCallback WriteHost::printPageLayoutCallback() const
+{
+    if (m_printOverride) {
+        const std::shared_ptr<QTextDocument> other = m_printOverride;
+        return [other](int page) {
+            return page <= other->pageCount() ? paperFor(other->pageSize()) : QPageLayout();
+        };
+    }
+    const WriteDocument *doc = m_document;
+    return [doc](int page) {
+        return page <= doc->pageFrames().size() ? paperFor(doc->pageFrame(page - 1).size) : QPageLayout();
+    };
+}
+
 Quick::PrintRenderCallback WriteHost::printRenderCallback() const
 {
     if (m_printOverride) {
@@ -158,7 +172,7 @@ Quick::PrintRenderCallback WriteHost::printRenderCallback() const
                     printer->newPage();
                     return QSizeF(printer->width(), printer->height());
                 },
-                decoration);
+                decoration, printer->fromPage(), printer->toPage());
         };
     }
     const WriteDocument *doc = m_document;
@@ -173,7 +187,7 @@ Quick::PrintRenderCallback WriteHost::printRenderCallback() const
                 printer->newPage();
                 return QSizeF(printer->width(), printer->height());
             },
-            doc->decoration());
+            doc->decoration(), printer->fromPage(), printer->toPage());
     };
 }
 

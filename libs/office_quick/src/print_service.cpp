@@ -130,6 +130,9 @@ void PrintJob::setFromPage(int page)
         return;
     }
     m_fromPage = page;
+    if (m_pageLayoutCallback && !m_orientationOverridden) {
+        m_landscape = m_pageLayoutCallback(qMax(1, page)).orientation() == QPageLayout::Landscape;
+    }
     emit settingsChanged();
 }
 
@@ -149,6 +152,7 @@ void PrintJob::setLandscape(bool landscape)
         return;
     }
     m_landscape = landscape;
+    m_orientationOverridden = true;
     emit settingsChanged();
 }
 
@@ -175,10 +179,33 @@ void PrintJob::setPageLayout(const QPageLayout &layout)
     m_pageLayout = layout;
 }
 
+void PrintJob::setPageLayoutCallback(PrintPageLayoutCallback callback)
+{
+    m_pageLayoutCallback = std::move(callback);
+    m_orientationOverridden = false;
+    if (m_pageLayoutCallback) {
+        m_landscape = m_pageLayoutCallback(qMax(1, m_fromPage)).orientation() == QPageLayout::Landscape;
+        emit settingsChanged();
+    }
+}
+
+bool PrintJob::validateSettings()
+{
+    if ((m_fromPage != 0 || m_toPage != 0) && (m_fromPage < 1 || m_toPage < m_fromPage)) {
+        setLastError(tr("Choose a page range whose last page is not before its first page."));
+        return false;
+    }
+    if (m_pageLayoutCallback && !m_pageLayoutCallback(qMax(1, m_fromPage)).isValid()) {
+        setLastError(tr("The selected page range starts after the end of the document."));
+        return false;
+    }
+    return true;
+}
+
 void PrintJob::applyPageLayout(QPrinter *printer) const
 {
-    if (m_pageLayout.has_value()) {
-        QPageLayout layout = *m_pageLayout;
+    if (m_pageLayoutCallback || m_pageLayout.has_value()) {
+        QPageLayout layout = m_pageLayoutCallback ? m_pageLayoutCallback(qMax(1, m_fromPage)) : *m_pageLayout;
         layout.setOrientation(m_landscape ? QPageLayout::Landscape : QPageLayout::Portrait);
         printer->setPageLayout(layout);
         return;
@@ -201,6 +228,9 @@ bool PrintJob::preparePreview()
         setLastError(tr("Nothing to print"));
         return false;
     }
+    if (!validateSettings()) {
+        return false;
+    }
     d->pdf = std::make_unique<QTemporaryFile>(QDir::tempPath()
                                               + QStringLiteral("/qindaoffice-preview-XXXXXX.pdf"));
     if (!d->pdf->open()) {
@@ -211,7 +241,7 @@ bool PrintJob::preparePreview()
     QPrinter printer(QPrinter::HighResolution);
     printer.setOutputFormat(QPrinter::PdfFormat);
     printer.setOutputFileName(d->pdf->fileName());
-    applyPageLayout(&printer);
+    configure(&printer);
     {
         QPainter painter(&printer);
         if (!painter.isActive()) {
@@ -219,6 +249,10 @@ bool PrintJob::preparePreview()
             return false;
         }
         m_render(&printer, &painter);
+        if (!painter.end()) {
+            setLastError(tr("Could not finish rendering the preview"));
+            return false;
+        }
     }
     m_previewPdf = d->pdf->fileName();
 #ifdef QQO_HAVE_POPPLER
@@ -278,9 +312,25 @@ bool PrintJob::print()
         setLastError(tr("Nothing to print"));
         return false;
     }
-    QPrinter printer(QPrinter::HighResolution);
-    if (!m_printerName.isEmpty()) {
-        printer.setPrinterName(m_printerName);
+    if (!validateSettings()) {
+        return false;
+    }
+    // AGENT-GUARD: QPrinter can keep the default when a name is invalid.
+    // Never let a removed/renamed selection silently print somewhere else.
+    if (m_printerName.isEmpty()) {
+        setLastError(tr("Choose a printer before printing."));
+        return false;
+    }
+    const QPrinterInfo info = QPrinterInfo::printerInfo(m_printerName);
+    if (info.isNull() || info.printerName() != m_printerName) {
+        setLastError(tr("Printer %1 is unavailable. Check the connection and printer settings, then refresh the printer list.")
+                         .arg(m_printerName));
+        return false;
+    }
+    QPrinter printer(info, QPrinter::HighResolution);
+    if (!printer.isValid() || printer.printerName() != m_printerName || printer.outputFormat() != QPrinter::NativeFormat) {
+        setLastError(tr("Could not open printer %1.").arg(m_printerName));
+        return false;
     }
     configure(&printer);
     QPainter painter(&printer);
@@ -289,6 +339,12 @@ bool PrintJob::print()
         return false;
     }
     m_render(&printer, &painter);
+    // Submission happens at end(), not at the first successful paint call.
+    const bool finished = painter.end();
+    if (!finished || printer.printerState() == QPrinter::Error || printer.printerState() == QPrinter::Aborted) {
+        setLastError(tr("Could not submit the print job to %1. Check the printer queue and try again.").arg(m_printerName));
+        return false;
+    }
     setLastError({});
     return true;
 }
@@ -299,10 +355,13 @@ bool PrintJob::exportPdf(const QString &path)
         setLastError(tr("Nothing to export"));
         return false;
     }
+    if (!validateSettings()) {
+        return false;
+    }
     QPrinter printer(QPrinter::HighResolution);
     printer.setOutputFormat(QPrinter::PdfFormat);
     printer.setOutputFileName(path);
-    applyPageLayout(&printer);
+    configure(&printer);
     QPainter painter(&printer);
     // AGENT-GUARD: report honestly — an unwritable target must not return
     // true while the render goes to an inactive painter.
@@ -311,6 +370,10 @@ bool PrintJob::exportPdf(const QString &path)
         return false;
     }
     m_render(&printer, &painter);
+    if (!painter.end()) {
+        setLastError(tr("Could not finish writing %1").arg(path));
+        return false;
+    }
     setLastError({});
     return true;
 }

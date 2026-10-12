@@ -246,6 +246,7 @@ protected:
     // The first page's paper (M88: each later page sets its own).
     [[nodiscard]] bool printPrefersLandscape() const override;
     [[nodiscard]] std::optional<QPageLayout> printPageLayout() const override;
+    [[nodiscard]] Quick::PrintPageLayoutCallback printPageLayoutCallback() const override;
 
 private:
     // write_host.cpp

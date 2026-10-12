@@ -27,10 +27,11 @@ namespace QindaOffice::Apps::Write {
 // device pixels (an invalid size keeps the last). This is THE pagination
 // loop shared by the PDF exporter and the print path, so all outputs match
 // the screen; the optional decoration draws headers/footers into the
-// margins and gives each page its frame.
+// margins and gives each page its frame. The inclusive 1-based range (0
+// means unbounded) retains original page numbers and never emits skipped pages.
 void renderDocumentPages(QPainter *painter, const QSizeF &targetPixels, QTextDocument *document,
                          const std::function<QSizeF(const QSizeF &)> &newPage,
-                         const PageDecoration &decoration = {});
+                         const PageDecoration &decoration = {}, int fromPage = 0, int toPage = 0);
 
 // Draws one page's header/footer into `pageRect` (document coordinates,
 // already translated to the page being painted). `omit` is a header or

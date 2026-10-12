@@ -106,6 +106,7 @@ PrintJob *DocumentHost::createPrintJob()
     if (const std::optional<QPageLayout> layout = printPageLayout()) {
         m_printJob->setPageLayout(*layout);
     }
+    m_printJob->setPageLayoutCallback(printPageLayoutCallback());
     return m_printJob;
 }
 

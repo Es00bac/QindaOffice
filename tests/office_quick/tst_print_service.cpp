@@ -69,7 +69,8 @@ private slots:
         job.setFromPage(2);
         job.setToPage(2);
         QVERIFY(job.preparePreview());
-        QVERIFY(job.pageCount() >= 1);
+        QCOMPARE(job.pageCount(), 1);
+        QVERIFY(job.page(0, 72.0).pixelColor(30, 30).blue() > 200);
     }
 
     void printerModelListsWithoutCrashing()
@@ -93,15 +94,55 @@ private slots:
         QCOMPARE(job.copies(), 3);
         QVERIFY(job.landscape());
         QVERIFY(settings.count() >= 3);
-        job.setRender(twoPages());
+        bool rendered = false;
+        job.setRender([&rendered](QPrinter *, QPainter *) { rendered = true; });
         QVERIFY(!job.print());
+        QVERIFY(job.lastError().contains(QStringLiteral("no-such-printer")));
+        QVERIFY(!rendered);
+    }
+
+    void requiresAnExplicitPrinter()
+    {
+        PrintJob job;
+        bool rendered = false;
+        job.setRender([&rendered](QPrinter *, QPainter *) { rendered = true; });
+        QVERIFY(!job.print());
+        QVERIFY(job.lastError().contains(QStringLiteral("Choose a printer")));
+        QVERIFY(!rendered);
+    }
+
+    void rejectsAnInvertedRangeBeforeRendering()
+    {
+        PrintJob job;
+        bool rendered = false;
+        job.setRender([&rendered](QPrinter *, QPainter *) { rendered = true; });
+        job.setFromPage(3);
+        job.setToPage(2);
+        QTemporaryDir dir;
+        QVERIFY(!job.exportPdf(dir.filePath(QStringLiteral("invalid.pdf"))));
+        QVERIFY(!QFileInfo::exists(dir.filePath(QStringLiteral("invalid.pdf"))));
+        QVERIFY(!job.preparePreview());
+        QVERIFY(!job.print());
+        QVERIFY(!rendered);
+    }
+
+    void finalizationMustSucceedBeforeReportingSuccess()
+    {
+        PrintJob job;
+        job.setRender([](QPrinter *, QPainter *painter) { painter->end(); });
+        QTemporaryDir dir;
+        QVERIFY(!job.exportPdf(dir.filePath(QStringLiteral("ended.pdf"))));
         QVERIFY(!job.lastError().isEmpty());
+        QVERIFY(!job.preparePreview());
     }
 };
 
 int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
+    // A regression in the missing-name guard must never reach a live default.
+    QTemporaryDir printerFixture;
+    qputenv("CUPS_SERVER", printerFixture.filePath(QStringLiteral("no-cups.sock")).toUtf8());
     QGuiApplication app(argc, argv);
     PrintServiceTest test;
     return QTest::qExec(&test, argc, argv);

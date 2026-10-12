@@ -20,7 +20,7 @@ foreach(name IN ITEMS tst_write_references tst_write_graphics tst_write_equation
                       tst_write_tools tst_write_docx tst_write_pagination tst_write_story tst_write_picture
                       tst_write_comments tst_write_tables tst_write_formatting tst_write_controls
                       tst_write_lists tst_write_styles tst_write_mailings tst_write_endnotes tst_write_wrap
-                      tst_write_probe_sections tst_write_sections tst_write_long_pages)
+                      tst_write_probe_sections tst_write_sections tst_write_long_pages tst_write_print)
     add_executable(${name} ${name}.cpp write_test_support.h)
     target_link_libraries(${name} PRIVATE qindawrite_app qindawrite_appplugin Qt6::Test)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/tests)
@@ -31,7 +31,7 @@ foreach(name IN ITEMS tst_write_references tst_write_graphics tst_write_equation
     set_tests_properties(${name} PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
 endforeach()
-foreach(name IN ITEMS tst_write_references tst_write_view tst_write_sections tst_write_graphics tst_write_equations)
+foreach(name IN ITEMS tst_write_references tst_write_view tst_write_sections tst_write_graphics tst_write_equations tst_write_print)
     target_link_libraries(${name} PRIVATE ${POPPLER_QT6_LIBRARIES})
     target_include_directories(${name} PRIVATE ${POPPLER_QT6_INCLUDE_DIRS})
     target_compile_options(${name} PRIVATE ${POPPLER_QT6_CFLAGS_OTHER})

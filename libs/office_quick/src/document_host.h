@@ -174,6 +174,9 @@ protected:
     // M78 (D-087): the paper a new print job starts on (QindaCalc: the
     // sheet's Page Setup paper size); nullopt keeps the printer's default.
     [[nodiscard]] virtual std::optional<QPageLayout> printPageLayout() const { return std::nullopt; }
+    // Optional variable-paper resolver, with the same capture lifetime as the
+    // render callback. Resolves the original page selected by a print range.
+    [[nodiscard]] virtual PrintPageLayoutCallback printPageLayoutCallback() const { return {}; }
     // AGENT-CONTRACT (OfficeApplication::openPaths, D-042): a host WITHOUT a
     // document (MailHost) receives the paths and URLs the app is launched
     // or handed with here (mailto:, webcal:, .ics, .eml) instead of

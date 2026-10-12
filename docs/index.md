@@ -10,6 +10,8 @@ lists what exists today.
 
 - [Verification](verification.md) — build/test gates and the on-desktop
   manual checklist.
+- [Printing](printing.md) — system printer setup, queue selection, refresh,
+  failure feedback and QindaWrite page ranges, with isolated and hardware gates.
 - [Decisions](decisions.md) — ADR-lite log of durable cross-cutting choices.
 - [Office parity program](plans/office-parity.md) — M60–M65/D-068: Microsoft
   Office and QuickBooks interchange, measured gaps per app, milestones; the
